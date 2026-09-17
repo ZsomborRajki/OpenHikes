@@ -13,9 +13,11 @@
 //  the behaviour: faded and beneath the hiker's own route when it is somebody
 //  else's suggestion, full strength when it is the hike they are looking at.
 //  A line is not an accessibility element and cannot be hit-tested by MapKit,
-//  so the way in has to be found by hand. And a line is rebuilt wholesale, so
-//  the guard against churning every overlay on an identical answer is load
-//  bearing rather than a nicety.
+//  so the way in has to be found by hand — the half of that which knows what a
+//  shared hike is lives here, and the gesture and the order it asks the two
+//  kinds of line in are in `MapCoordinatorTests+RouteTap.swift`. And a line is
+//  rebuilt wholesale, so the guard against churning every overlay on an
+//  identical answer is load bearing rather than a nicety.
 //
 
 import CoreLocation
@@ -325,51 +327,11 @@ extension MapCoordinatorTests {
     }
 
     // MARK: - Tapping one
-
-    /// MapKit hit-tests annotations and never overlays, so without the
-    /// recognizer the lines would be scenery.
-    @Test("building the map installs the tap recognizer once")
-    func theTapRecognizerIsInstalledOnce() {
-        #if os(iOS)
-        let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(), coordinator)
-        defer { detach(map) }
-
-        let installed = map.gestureRecognizers?.filter { $0 === coordinator.communityRouteTap }
-        #expect(installed?.count == 1)
-
-        coordinator.installCommunityRouteTap(on: map)
-
-        let afterSecondCall = map.gestureRecognizers?.filter { recognizer in
-            recognizer === coordinator.communityRouteTap
-        }
-        #expect(afterSecondCall?.count == 1, "a second recognizer would open one preview twice")
-        #endif
-    }
-
-    /// The recognizer observes and never consumes, and both defaults are
-    /// against that.
-    ///
-    /// `cancelsTouchesInView` is true by default and fires whenever the
-    /// recognizer *recognizes* a tap — which is every tap on the map, hit or
-    /// miss — so the touch under it is cancelled in whatever view it landed
-    /// on. That took photo-pin callouts out of service until
-    /// `PhotoUITests.testOpensTheGalleryFromAPhotoPinOnTheMap` said so, and
-    /// nothing in this bundle would have noticed: the behaviour is invisible
-    /// from the coordinator's side and belongs to a feature this file is not
-    /// about. Hence a flag assertion, which is the cheap half of that lesson.
-    @Test("the tap recognizer never consumes a touch")
-    func theTapRecognizerObservesOnly() throws {
-        #if os(iOS)
-        let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(), coordinator)
-        defer { detach(map) }
-
-        let recognizer = try #require(coordinator.communityRouteTap)
-        #expect(!recognizer.cancelsTouchesInView, "a callout under the tap has to keep its touch")
-        #expect(!recognizer.delaysTouchesEnded, "nothing here needs to arrive before the view's own touch")
-        #endif
-    }
+    //
+    // The recognizer itself, the claim check and the order the two kinds of
+    // line are asked in belong to `MapCoordinatorTests+RouteTap.swift`, which
+    // is where they moved when the hiker's own route became tappable too.
+    // What is left here is the half that knows what a shared hike is.
 
     /// The gesture this whole file exists for: a thumb on the faded line opens
     /// the hike it belongs to.
@@ -432,41 +394,5 @@ extension MapCoordinatorTests {
         defer { detach(map) }
 
         #expect(coordinator.communityListing(forTapAt: CGPoint(x: 100, y: 100), in: map) == nil)
-    }
-
-    /// A recognizer on the map view sees a touch whatever the view under it
-    /// does with it, so a tap on the "my location" button would otherwise open
-    /// a preview *as well as* recentring the map.
-    @Test("a tap on a map control is not a tap on a line")
-    func aTapOnAControlIsNotATapOnALine() async throws {
-        #if os(iOS)
-        let browser = await browserWithLines(
-            [.stub(id: "ridge")],
-            outlines: ["ridge": Self.line()]
-        )
-        let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(community: browser), coordinator)
-        defer { detach(map) }
-        await settle(until: "the line to reach the map") {
-            !coordinator.communityRoutes.isEmpty
-        }
-        map.setRegion(Self.communityRegion(), animated: false)
-
-        // Put the tracking button squarely on the line, which is the case a
-        // hit-test has to resolve and a distance cannot.
-        let button = try #require(coordinator.trackingButton)
-        let onTheLine = map.convert(
-            CLLocationCoordinate2D(latitude: Area.latitude, longitude: Area.longitude),
-            toPointTo: map
-        )
-        #expect(
-            coordinator.communityListing(forTapAt: onTheLine, in: map)?.id == "ridge",
-            "the line is where the button is about to be"
-        )
-        button.translatesAutoresizingMaskIntoConstraints = true
-        button.frame = CGRect(x: onTheLine.x - 22, y: onTheLine.y - 22, width: 44, height: 44)
-
-        #expect(coordinator.communityListing(forTapAt: onTheLine, in: map) == nil)
-        #endif
     }
 }

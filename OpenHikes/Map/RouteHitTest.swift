@@ -1,13 +1,19 @@
 //
-//  CommunityRouteHitTest.swift
+//  RouteHitTest.swift
 //  OpenHikes
 //
-//  Which shared trail a thumb landed on.
+//  Which line a thumb landed on.
 //
 //  MapKit has no notion of tapping an overlay: annotations are views and get
 //  taps for free, and a polyline is drawn pixels. So the map's tap recognizer
 //  has to answer the question itself — and the question is *which line is
 //  nearest, and is it near enough to have been meant*.
+//
+//  Asked about two kinds of line, which is why this knows about neither. The
+//  hiker's own selected route is one of them and the shared hikes around it
+//  are the rest; what they have in common is a list of points and a thumb, and
+//  that is the whole of what is here. Who wins when a thumb is near both is
+//  ``MapView/Coordinator/routeTapTarget(at:in:)``, not this.
 //
 //  ## Why screen space, and why that is not an approximation
 //
@@ -19,26 +25,28 @@
 //  honest anyway. So the caller projects each line's points through the map
 //  once and the maths happens where the tolerance already lives.
 //
-//  The cost of that projection is bounded by construction rather than by luck:
-//  at most ``CommunityBrowser``'s result limit of lines, each at most
-//  ``CommunityRouteOutline/maximumPoints`` long, which is why the outline has
-//  a point budget at all. A six-hour recording and a stroll around a lake cost
-//  the same tap.
+//  Map-point space was measured as the cheaper alternative and refused. It is
+//  exact under rotation and wrong under pitch — 48% off at the screen edges of
+//  a tilted camera, which is two fingertips — and a hit-test that quietly
+//  stops working when the map is tilted is worse than one that costs the 2.2
+//  ms the projection was measured at. See
+//  ``MapView/Coordinator/routeTapTarget(at:in:)`` for the guard that keeps an
+//  ordinary miss from paying it.
 //
 //  ## Nearest rather than first
 //
-//  Two published trails sharing a valley floor overlap on screen at any zoom
-//  that shows both, and the hiker aiming at one of them is aiming at the
-//  pixels under their thumb rather than at whichever the query returned first.
-//  So every line within tolerance is measured and the closest wins; ordering
-//  decides nothing.
+//  Two lines sharing a valley floor overlap on screen at any zoom that shows
+//  both, and the hiker aiming at one of them is aiming at the pixels under
+//  their thumb rather than at whichever the query returned first. So every
+//  line within tolerance is measured and the closest wins; ordering decides
+//  nothing.
 //
 
 import CoreGraphics
 
 /// Point-to-polyline distance in screen points, and the pick that follows
 /// from it.
-nonisolated enum CommunityRouteHitTest {
+nonisolated enum RouteHitTest {
     /// The index of the line nearest `point`, or `nil` when none is within
     /// `tolerance`.
     ///

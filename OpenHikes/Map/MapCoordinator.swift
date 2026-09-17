@@ -25,6 +25,14 @@ extension MapView {
         private var isObservingLocation = false
         var routeID: UUID?
         var routeOverlay: MKPolyline?
+        /// The drawn route's points, kept beside the polyline MapKit owns
+        /// because the two are asked different questions — the same split, for
+        /// the same reason, as ``CommunityRouteDrawing``: MapKit draws the
+        /// first, and a tap projects the second through the map to find out
+        /// what a thumb landed on. Reading them back out of an `MKPolyline`
+        /// means a `getCoordinates` call into a buffer on every tap, for
+        /// points this already had.
+        var routeCoordinates: [CLLocationCoordinate2D] = []
         /// The stretches of the drawn route that were inferred rather than
         /// measured. Separate overlays because MapKit styles a polyline as a
         /// whole, and this is the one part of the line that has to be drawn
@@ -218,12 +226,17 @@ extension MapView {
         /// fits its route once rather than on every later rebuild.
         var fittedPreviewListingID: String?
 
+        /// Where a tap on the hiker's own drawn route goes. Weak for the
+        /// reason ``community`` is: the coordinator outlives nothing and owns
+        /// nothing. See ``DrawnRouteTap``.
+        weak var drawnRouteTap: DrawnRouteTap?
+
         #if canImport(UIKit)
-        /// The recognizer that answers a tap on a shared hike's line, held so
-        /// installing it twice cannot open one preview twice. MapKit hit-tests
+        /// The recognizer that answers a tap on any line drawn here, held so
+        /// installing it twice cannot open one screen twice. MapKit hit-tests
         /// annotations and never overlays, so this is the whole of how a line
-        /// is tappable at all.
-        var communityRouteTap: UITapGestureRecognizer?
+        /// is tappable at all — see `MapCoordinator+RouteTap.swift`.
+        var routeTapRecognizer: UITapGestureRecognizer?
         #endif
 
         #if canImport(UIKit)

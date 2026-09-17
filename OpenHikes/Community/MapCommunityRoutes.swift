@@ -42,8 +42,10 @@
 //
 //  MapKit gives annotations taps for free and overlays nothing at all — a
 //  polyline is drawn pixels with no view and no hit-testing — so a tap on a
-//  line has to be answered by hand. ``CommunityRouteHitTest`` is the geometry;
-//  this file is the part that needs a map.
+//  line has to be answered by hand. ``RouteHitTest`` is the geometry,
+//  `MapCoordinator+RouteTap.swift` owns the gesture and decides between these
+//  lines and the hiker's own, and what is left here is the part that knows
+//  which shared hike a projected line belongs to.
 //
 //  The pins are kept alongside, and not out of caution. A line is not an
 //  accessibility element and cannot be one: VoiceOver reaches a shared hike
@@ -88,13 +90,6 @@ extension MapView.Coordinator {
     /// The open preview's own line: full strength and a little wider, because
     /// its screen no longer draws the route anywhere else.
     private static let previewedRouteWidth: CGFloat = 5
-    /// How far from a line a tap may land and still count, in screen points.
-    ///
-    /// About a fingertip, and deliberately more than the line is wide: a
-    /// three-point line nobody could hit is a line that is not tappable, and
-    /// the hit-test resolves the overlap this creates by taking the nearest.
-    static let communityTapTolerancePoints: CGFloat = 22
-
     /// Observes the lines the browser is showing and applies them
     /// imperatively, then re-registers — the same arrangement
     /// ``observeCommunityPins(_:on:)`` uses, and for the same reason: an
@@ -253,127 +248,33 @@ extension MapView.Coordinator {
 // MARK: - Tapping one
 
 #if canImport(UIKit)
-extension MapView.Coordinator: UIGestureRecognizerDelegate {
-    /// Adds the recognizer that answers a tap on a shared hike's line.
-    ///
-    /// Idempotent for the reason the observations are: `makeMapView` runs once
-    /// per map, but nothing here should depend on that, and a second
-    /// recognizer would open the same preview twice.
-    func installCommunityRouteTap(on mapView: MKMapView) {
-        guard communityRouteTap == nil else { return }
-        let recognizer = UITapGestureRecognizer(
-            target: self,
-            action: #selector(handleCommunityRouteTap(_:))
-        )
-        // Alongside MapKit's own recognizers rather than instead of them: this
-        // one answers a question about overlays, and a tap that hits no line
-        // must still do everything a tap on the map did before — dismissing a
-        // callout most visibly.
-        recognizer.delegate = self
-        // **This recognizer observes and never consumes**, and both of these
-        // are what make that true rather than merely intended.
-        //
-        // `cancelsTouchesInView` defaults to *true*, and it does not mean "when
-        // this recognizer acts on the tap" — it means whenever it recognizes
-        // one, which here is every tap anywhere on the map. The touch is then
-        // cancelled in whatever view was under it, so a photo pin's callout
-        // stops opening the gallery and a button stops being a button. That
-        // shipped for exactly as long as it took
-        // `PhotoUITests.testOpensTheGalleryFromAPhotoPinOnTheMap` to run.
-        //
-        // `delaysTouchesEnded` defaults to true too, which would hold every
-        // `touchesEnded` on the map back until this recognizer resolved.
-        // Nothing here needs to arrive first.
-        recognizer.cancelsTouchesInView = false
-        recognizer.delaysTouchesEnded = false
-        communityRouteTap = recognizer
-        mapView.addGestureRecognizer(recognizer)
-    }
-
-    func gestureRecognizer(
-        _: UIGestureRecognizer,
-        shouldRecognizeSimultaneouslyWith _: UIGestureRecognizer
-    ) -> Bool {
-        true
-    }
-
-    @objc func handleCommunityRouteTap(_ recognizer: UITapGestureRecognizer) {
-        guard recognizer.state == .ended,
-              let mapView = recognizer.view as? MKMapView
-        else { return }
-        guard let listing = communityListing(
-            forTapAt: recognizer.location(in: mapView),
-            in: mapView
-        ) else { return }
-        community?.open(listing)
-    }
-
+extension MapView.Coordinator {
     /// The shared hike a tap at `point` landed on, if any.
     ///
-    /// Split from the handler above because this is the half worth asserting
-    /// on and a `UITapGestureRecognizer` is the half that cannot be: its state
-    /// and its location are read-only and set by the touch system, so a suite
-    /// driving the handler would have to fake UIKit rather than the map. What
-    /// is left in the handler is the three lines that turn a gesture into this
-    /// call.
+    /// Asked by ``routeTapTarget(at:in:)``, which owns the recognizer, the
+    /// claim check and the order the two kinds of line are asked in — see
+    /// `MapCoordinator+RouteTap.swift`. This half is the one that knows what a
+    /// shared hike is, and it is the half worth asserting on: a
+    /// `UITapGestureRecognizer`'s state and location are read-only and set by
+    /// the touch system, so a suite driving the gesture would have to fake
+    /// UIKit rather than the map.
     func communityListing(
         forTapAt point: CGPoint,
         in mapView: MKMapView
     ) -> CommunityListing? {
         guard !communityRoutes.isEmpty else { return nil }
-        guard !isTapClaimed(at: point, in: mapView) else { return nil }
         // At most a page of lines, each at most an outline's point budget —
-        // see ``CommunityRouteHitTest``, which is sized against exactly that.
+        // see ``RouteHitTest``, which is sized against exactly that.
         // The previewed line is the one that can be longer, and it is one.
         let projected = communityRoutes.map { drawing in
             drawing.coordinates.map { mapView.convert($0, toPointTo: mapView) }
         }
-        guard let index = CommunityRouteHitTest.nearest(
+        guard let index = RouteHitTest.nearest(
             to: point,
             among: projected,
-            tolerance: Self.communityTapTolerancePoints
+            tolerance: Self.lineTapTolerancePoints
         ) else { return nil }
         return communityRoutes[index].line.listing
-    }
-
-    /// Whether something on top of the map has a better claim to this tap.
-    ///
-    /// A marker, a callout, the tracking button, the camera pill, *Search this
-    /// area*, the credit line — all of them are views, all of them sit over the
-    /// lines, and a tap that opens a preview *as well as* pressing a button is
-    /// a tap that did two things. A recognizer on the map view sees those
-    /// touches whatever the view under them does with them, so this is the
-    /// whole of what stops it.
-    ///
-    /// The walk up the hierarchy rather than a test of the hit view alone is
-    /// because every one of these is a tree: what a tap actually lands on is a
-    /// label inside a button inside an annotation view.
-    ///
-    /// The four named views are named because none of them is a `UIControl` —
-    /// `MKUserTrackingButton` is a plain `UIView`, and the other three are this
-    /// app's own containers with the buttons *inside* them. Testing for
-    /// `UIControl` alone would let a tap on the padding around a button through
-    /// while catching the button itself, which is the sort of difference
-    /// nobody can see and everybody hits.
-    private func isTapClaimed(at point: CGPoint, in mapView: MKMapView) -> Bool {
-        var view = mapView.hitTest(point, with: nil)
-        while let current = view, current !== mapView {
-            if current is MKAnnotationView || current is UIControl { return true }
-            if isOwnControl(current) { return true }
-            view = current.superview
-        }
-        return false
-    }
-
-    /// Whether `view` is one of the controls this map puts over its own
-    /// drawing. Identity rather than type, because the coordinator already
-    /// holds each one.
-    private func isOwnControl(_ view: UIView) -> Bool {
-        if view === trackingButton || view === areaSearchControl { return true }
-        #if os(iOS)
-        if view === photoControls || view === attributionView { return true }
-        #endif
-        return false
     }
 }
 #endif
