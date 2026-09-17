@@ -41,6 +41,28 @@ import Foundation
 import OrderedCollections
 import os
 
+/// What a geometry pass came back with.
+///
+/// A type rather than an array because *a line is missing* has two meanings
+/// and only one of them is a reason to drop the row — see
+/// ``CuratedTrailSourcing/completed(_:)``. The rows and the refusal travel
+/// together for the reason ``CommunityNearbyAnswer``'s two fields do: a caller
+/// that reads only the first draws exactly what it drew before, and the
+/// caption under *Search this area* is the second one's whole audience.
+nonisolated struct CuratedCompletion: Equatable, Sendable {
+    /// The listed routes in listing order — drawn where a line arrived, and
+    /// lineless where one was refused.
+    var trails: [CuratedTrail]
+    /// Why a line is missing, when the reason is a refusal rather than a route
+    /// with nothing to draw. `nil` when every line that could be drawn was.
+    var outage: CuratedTrailOutage?
+
+    init(trails: [CuratedTrail], outage: CuratedTrailOutage? = nil) {
+        self.trails = trails
+        self.outage = outage
+    }
+}
+
 /// Where the community list's curated hikes come from.
 ///
 /// A protocol for the same reason ``CommunityTransporting`` is one: the
@@ -65,19 +87,27 @@ nonisolated protocol CuratedTrailSourcing: Sendable {
     @concurrent
     func listings(near area: CommunitySearchArea, limit: Int) async throws -> [CuratedTrail]
 
-    /// The routes in `listed` with their lines filled in, dropping the ones
-    /// that have none.
+    /// The routes in `listed` with their lines filled in, and what happened to
+    /// the ones without.
     ///
     /// **Partial by contract**, and the listing order is preserved: it is
     /// nearest first, which is the whole answer to the question the hiker
-    /// asked. A route whose ways could not be assembled into one walkable line
-    /// is absent rather than present as a name with a blank where its distance
-    /// should be — see ``CuratedTrailDecoding/minimumConnectedShare``.
+    /// asked.
+    ///
+    /// A line can be missing for two reasons and they are not the same thing,
+    /// which is what ``CuratedCompletion`` exists to say. A route whose ways
+    /// could not be assembled into one walkable line — deleted, or too
+    /// fragmented to draw — is *absent*, permanently, rather than present as a
+    /// name with a blank where its distance should be; see
+    /// ``CuratedTrailDecoding/minimumConnectedShare``. A route whose line was
+    /// **refused** is a different case: this minute's weather on a
+    /// volunteer-run API, about a row the listing pass already paid for. That
+    /// one is kept, without its line, and the refusal is reported beside it.
     ///
     /// This is also what ``trails(matching:limit:)`` later searches, because
     /// these are the rows that were actually offered.
     @concurrent
-    func completed(_ listed: [CuratedTrail]) async throws -> [CuratedTrail]
+    func completed(_ listed: [CuratedTrail]) async throws -> CuratedCompletion
 
     /// Curated hikes from the last searched area whose name matches `query`.
     ///
@@ -326,26 +356,62 @@ extension CuratedTrailSource {
         return nearest
     }
 
-    /// Fills in each listed route's line, dropping the ones that have none.
+    /// Fills in each listed route's line, keeping a row whose line was refused
+    /// and dropping one that has none to draw.
     ///
-    /// A route with no line is left out rather than shown without one, and
-    /// that is a stricter rule than the published half follows — there, a
-    /// missing outline costs a line and leaves the pin standing, because the
-    /// hike itself is still openable and still has a distance of its own. A
-    /// curated route has neither: its length *is* the line's length, so a row
-    /// without one would be a name and a blank.
+    /// **The two are not the same thing, and a search used to lose both.** A
+    /// route that cannot be assembled into one walkable line has nothing to
+    /// offer a hiker: its length *is* its line's length, so the row would be a
+    /// name and a blank for ever, and it stays out. A route whose geometry
+    /// pass was *refused* is a row the listing pass already paid a slot for,
+    /// about a trail that is really there — Overpass allows a handful of slots
+    /// per address and one search spends two of them, so a refusal on the
+    /// second is an ordinary afternoon rather than an exotic one. Throwing
+    /// that page away meant a hiker who had just spent a search got an empty
+    /// list; keeping it means they get the names, the pins and what the
+    /// signpost says, and the line arrives when they open one — see
+    /// ``MergedCommunityTransport/detail(for:downloadingInto:)``, which
+    /// fetches the geometry of the one route being opened.
     ///
     /// What comes back is what ``trails(matching:limit:)`` then searches,
-    /// because these are the rows that were offered — a route the search had
-    /// no room to draw is not one the hiker can be shown a distance for.
-    func completed(_ listed: [CuratedTrail]) async throws -> [CuratedTrail] {
-        let known = try await trails(of: listed.map(\.relationID))
+    /// lineless rows included: they were offered, so they are findable.
+    func completed(_ listed: [CuratedTrail]) async throws -> CuratedCompletion {
+        let gathered = await gather(listed.map(\.relationID))
+        // A superseded search is not an outage and must not be reported as
+        // one — see ``CuratedTrailOutage/init(_:)``. It is also not an answer,
+        // so it leaves the way it arrived rather than as a page of lineless
+        // rows nobody is waiting for.
+        if let refusal = gathered.refusal, refusal is CancellationError { throw refusal }
         // Built from what the fetch answered rather than read back out of the
         // cache, so eviction during this very call cannot quietly shorten the
         // list the hiker is looking at.
-        let answer = listed.compactMap { known[$0.relationID] }
+        let answer = listed.compactMap { trail -> CuratedTrail? in
+            if let drawn = gathered.found[trail.relationID] { return drawn }
+            // No line, so which of the two is it? A relation Overpass has
+            // already said it has nothing to draw for is the permanent one and
+            // stays out even here — the refusal is about the rest of the page,
+            // not about this route, and a row that could never be drawn is no
+            // better for being kept.
+            guard gathered.refusal != nil, !isKnownAbsent(trail.relationID) else { return nil }
+            return trail
+        }
         lastAnswer = answer
-        return answer
+        return CuratedCompletion(
+            trails: answer,
+            outage: gathered.refusal.flatMap(CuratedTrailOutage.init)
+        )
+    }
+
+    /// Whether the cache holds *Overpass has nothing to draw for this* about
+    /// `relationID`.
+    ///
+    /// Only the in-memory cache can hold that answer — see ``CachedTrail`` —
+    /// so this is a miss for a relation nobody has asked about this session,
+    /// which is the right answer: unknown is not the same as undrawable, and
+    /// only the latter keeps a row off the list.
+    private func isKnownAbsent(_ relationID: Int64) -> Bool {
+        if case .absent = cachedTrails[relationID] { return true }
+        return false
     }
 
     /// `@concurrent` rather than actor-isolated like everything around it, and
@@ -372,12 +438,40 @@ extension CuratedTrailSource {
     }
 
     func trails(of relationIDs: [Int64]) async throws -> [Int64: CuratedTrail] {
-        var answer: [Int64: CuratedTrail] = [:]
+        let gathered = await gather(relationIDs)
+        // Partial rather than nothing, when there is something to be partial
+        // with. A geometry pass refused after the listing pass got through
+        // would otherwise throw away every line this device already had — and
+        // this is partial by contract, so a short answer is one its callers
+        // already know how to draw. Only an answer with nothing in it at all
+        // has the refusal as its whole content.
+        if let refusal = gathered.refusal, gathered.found.isEmpty { throw refusal }
+        return gathered.found
+    }
+
+    /// Every route of `relationIDs` this device or Overpass can produce, and
+    /// the refusal that stopped the rest.
+    ///
+    /// Split from ``trails(of:)`` because the two callers need different
+    /// halves of the same work and one of them cannot be told by a `throw`.
+    /// `trails(of:)` answers *the lines*, and a refusal it can be partial
+    /// about is one it swallows; ``completed(_:)`` answers *the rows*, and
+    /// there the difference between a line that is missing because Overpass
+    /// refused and one missing because there is nothing to draw decides
+    /// whether the hiker sees the row at all. A swallowed refusal took that
+    /// decision away from it, and the page went with it.
+    ///
+    /// Never throws, cancellation included: a cancelled fetch is carried out
+    /// as the refusal, and the callers decide what it means to them.
+    private func gather(
+        _ relationIDs: [Int64]
+    ) async -> (found: [Int64: CuratedTrail], refusal: (any Error)?) {
+        var found: [Int64: CuratedTrail] = [:]
         var missing: [Int64] = []
         for relationID in relationIDs.uniqued() {
             switch cachedTrails[relationID] {
             case .trail(let trail):
-                answer[relationID] = trail
+                found[relationID] = trail
                 touch(relationID)
             case .absent:
                 touch(relationID)
@@ -390,21 +484,15 @@ extension CuratedTrailSource {
                     missing.append(relationID)
                     continue
                 }
-                answer[relationID] = stored
+                found[relationID] = stored
                 cache(.trail(stored), for: relationID)
             }
         }
-        guard !missing.isEmpty else { return answer }
+        guard !missing.isEmpty else { return (found, nil) }
         do {
             try checkRateLimit()
         } catch {
-            // Partial rather than nothing, when there is something to be
-            // partial with. A geometry pass refused after the listing pass
-            // got through would otherwise throw away every line this device
-            // already had — and ``completed(_:)`` is partial by contract, so
-            // a short answer is one its caller already knows how to draw.
-            guard answer.isEmpty else { return answer }
-            throw error
+            return (found, error)
         }
 
         // Chunked because ``CuratedTrailQuery/geometryQuery(ids:)`` answers
@@ -412,19 +500,15 @@ extension CuratedTrailSource {
         // map can hold more curated pins than one batch holds routes.
         for chunk in missing.chunks(ofCount: CuratedTrailQuery.geometryBatchLimit) {
             do {
-                answer.merge(try await fetch(Array(chunk))) { _, fetched in fetched }
+                found.merge(try await fetch(Array(chunk))) { _, fetched in fetched }
             } catch {
-                // The same rule the rate-limit check above follows, and it has
-                // to be stated here too rather than only up front: a second
-                // chunk refused must not throw away the first one's lines.
-                // Without this the twenty-sixth pin on a map could cost the
-                // twenty-five that had already arrived — and they are cached,
-                // so the answer is free.
-                guard answer.isEmpty else { return answer }
-                throw error
+                // A second chunk refused keeps the first one's lines, and
+                // stops: the refusal is about the address rather than about
+                // the chunk, so the ones after it would be refused too.
+                return (found, error)
             }
         }
-        return answer
+        return (found, nil)
     }
 
     /// One geometry pass over `ids`, cached in memory and written to disk.

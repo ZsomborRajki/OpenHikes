@@ -131,6 +131,53 @@ extension MergedCommunityTransportTests {
         #expect(answer.listings.map(\.id) == ["listing-a"], "the published half is untouched")
     }
 
+    /// **The page the listing pass paid for, when the geometry pass is
+    /// refused.** One search spends two of the handful of slots an address
+    /// gets, so this is the ordinary shape of a rate limit rather than an
+    /// exotic one — and the rows are real trails the cheap pass already found.
+    /// They arrive without their lines and with the refusal beside them; the
+    /// caption says so, and opening one fetches its line.
+    @Test("a refused geometry pass still answers with the listed rows")
+    func aRefusedGeometryPassStillAnswers() async throws {
+        let merged = Self.merged(
+            published: [Self.published("listing-a", metresNorth: Offset.far)],
+            curated: [
+                Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest),
+                Self.trail(Relation.almbach, named: "Almbachklamm", metresNorth: Offset.near),
+            ]
+        )
+        merged.overpass.geometryResult = .refused(.rateLimited(retryAfter: 60))
+
+        let answer = try await Self.answer(merged)
+
+        #expect(
+            answer.listings.count == 3,
+            "the published hike and both listed routes, lines or no lines"
+        )
+        #expect(
+            answer.listings.filter(\.isCurated).allSatisfy { $0.drawnDistanceMeters == nil },
+            "a row with no line has no length, and says nothing rather than zero"
+        )
+        #expect(answer.curated == .outage(.rateLimited(retryAfter: 60)))
+    }
+
+    /// The geometry pass failing outright — a conformance that throws, or a
+    /// search superseded mid-pass — is still the older, emptier answer: there
+    /// are no rows to keep, because nothing came back to keep them from.
+    @Test("a geometry pass that throws leaves the published half standing")
+    func aThrownGeometryPassLeavesThePublishedHalf() async throws {
+        let merged = Self.merged(
+            published: [Self.published("listing-a", metresNorth: Offset.near)],
+            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)]
+        )
+        merged.overpass.geometryResult = .thrown(TrailGraphProviderError.server(statusCode: 504))
+
+        let answer = try await Self.answer(merged)
+
+        #expect(answer.listings.map(\.id) == ["listing-a"])
+        #expect(answer.curated == .outage(.unavailable))
+    }
+
     /// What a refused search draws instead of nothing: the routes this device
     /// downloaded the last time it was asked about somewhere near here.
     @Test("a refused search falls back to the routes already on the device")

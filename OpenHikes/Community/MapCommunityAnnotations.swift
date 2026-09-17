@@ -69,12 +69,19 @@ final class CommunityMapAnnotation: NSObject, MKAnnotation {
     /// this callout opens, where it can be a link. See
     /// ``CommunityHikeView/curatedAttribution``.
     private static func calloutSubtitle(for listing: CommunityListing) -> String {
-        let distance = Measurement(value: listing.distanceMeters, unit: UnitLength.meters)
-            .formatted(.measurement(width: .abbreviated, usage: .road))
+        // A curated pin whose line was refused has no length to give, and the
+        // callout says the half it does have rather than *0 m* beside it —
+        // see ``CommunityListing/drawnDistanceMeters``.
+        let distance = listing.drawnDistanceMeters.map { metres in
+            Measurement(value: metres, unit: UnitLength.meters)
+                .formatted(.measurement(width: .abbreviated, usage: .road))
+        }
         if let shape = listing.curatedFacts?.shape {
+            guard let distance else { return shape.displayName }
             return String(localized: "\(distance) · \(shape.displayName)")
         }
-        guard !listing.authorName.isEmpty else { return distance }
+        guard !listing.authorName.isEmpty else { return distance ?? "" }
+        guard let distance else { return String(localized: "by \(listing.authorName)") }
         return String(localized: "\(distance) · by \(listing.authorName)")
     }
 }

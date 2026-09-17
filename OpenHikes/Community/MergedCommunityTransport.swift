@@ -151,9 +151,7 @@ nonisolated extension MergedCommunityTransport {
         // completing when the published half has already spent the page.
         let curatedRows = scope == .publishedOnly || room == 0
             ? CuratedAttempt.notAsked
-            : await attemptCurated {
-                try await curated.completed(Array(listed.trails.prefix(room)))
-            }
+            : await complete(Array(listed.trails.prefix(room)))
 
         let (rows, failure) = merge(
             published: publishedAnswer,
@@ -529,6 +527,45 @@ nonisolated private extension MergedCommunityTransport {
             """
         )
         return CuratedAttempt(trails: stored, outage: outage)
+    }
+
+    /// The geometry pass, with its refusal reported rather than raised.
+    ///
+    /// Thinner than ``attemptCurated(_:)`` and deliberately separate from it,
+    /// because the pass it wraps now reports for itself: a refused line no
+    /// longer costs the row it belongs to — see
+    /// ``CuratedTrailSourcing/completed(_:)`` — so ``CuratedCompletion``
+    /// arrives carrying both halves and this only has to put them in the shape
+    /// the merge takes.
+    ///
+    /// The `catch` is still load-bearing. A conformance may throw, a
+    /// cancellation does, and a search superseded mid-geometry must leave as a
+    /// cancellation rather than as a page of lineless rows nobody is waiting
+    /// for — which is exactly what ``CuratedTrailOutage/init(_:)`` refusing a
+    /// `CancellationError` arranges here.
+    func complete(_ listed: [CuratedTrail]) async -> CuratedAttempt {
+        let completion: CuratedCompletion
+        do {
+            completion = try await curated.completed(listed)
+        } catch {
+            let outage = CuratedTrailOutage(error)
+            if outage != nil {
+                Self.logger.error(
+                    "Curated geometry unavailable: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+            return CuratedAttempt(trails: [], outage: outage)
+        }
+        if completion.outage != nil {
+            let drawn = completion.trails.count { !$0.route.isEmpty }
+            Self.logger.notice(
+                """
+                Overpass drew \(drawn, privacy: .public) lines of \
+                \(listed.count, privacy: .public); the rest are offered without one.
+                """
+            )
+        }
+        return CuratedAttempt(trails: completion.trails, outage: completion.outage)
     }
 
     /// The curated half, which is allowed to fail without ending the request.
