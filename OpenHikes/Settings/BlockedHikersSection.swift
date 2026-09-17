@@ -82,7 +82,7 @@ struct BlockedHikersSection: View {
             .accessibilityElement(children: .combine)
             Spacer()
             Button("Unblock") { blocks.unblock(author.id) }
-                .buttonStyle(.bordered)
+                .glassButtonStyle()
                 .accessibilityLabel("Unblock \(name(of: author))")
                 .accessibilityIdentifier("unblock-hiker")
         }

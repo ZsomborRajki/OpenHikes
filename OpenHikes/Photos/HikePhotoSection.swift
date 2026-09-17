@@ -110,7 +110,7 @@ struct HikePhotoSection: View {
             Label("Find Photos of This Hike", systemImage: "sparkle.magnifyingglass")
                 .font(.subheadline)
         }
-        .buttonStyle(.bordered)
+        .glassButtonStyle()
         // Deliberately not prefixed `hike-photo-`: the performance suite
         // counts the gallery's tiles by that prefix, and a button that is not
         // a photo answering to it would be counted as one.

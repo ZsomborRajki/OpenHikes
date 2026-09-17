@@ -713,7 +713,7 @@ private extension CommunityHikeView {
                 // had already been removed.
                 loadTask = Task { await load() }
             }
-            .buttonStyle(.bordered)
+            .glassButtonStyle()
             .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
@@ -933,7 +933,7 @@ private extension CommunityHikeView {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .prominentGlassButtonStyle()
             .disabled(isImporting)
             .accessibilityIdentifier("community-import-button")
 

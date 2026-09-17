@@ -132,7 +132,11 @@ struct PhotoDiscoverySheet: View {
         // pushes a container's identifier down onto every descendant, which
         // would leave every cell answering to this name instead of its own.
         .accessibilityIdentifier("photo-discovery-grid")
-        .safeAreaInset(edge: .bottom) { selectionBar }
+        // `safeAreaBar` rather than `safeAreaInset`: the bar is chrome over a
+        // scrolling grid, so it takes the system's Liquid Glass background and
+        // the scroll-edge behaviour that goes with it, instead of the flat
+        // `.bar` material it used to paint on itself.
+        .safeAreaBar(edge: .bottom) { selectionBar }
     }
 
     private var selectionBar: some View {
@@ -308,7 +312,7 @@ private struct DiscoveryEmptyState: View {
         Button("Select More Photos\u{2026}") {
             Task { await controller.selectMorePhotos(in: hike, from: presenter) }
         }
-        .buttonStyle(.borderedProminent)
+        .prominentGlassButtonStyle()
         .accessibilityIdentifier("photo-discovery-select-more-button")
     }
 
@@ -402,7 +406,6 @@ private struct DiscoverySelectionBar: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
         }
-        .background(.bar)
     }
 
     /// What is left on screen when a copy did not go through.

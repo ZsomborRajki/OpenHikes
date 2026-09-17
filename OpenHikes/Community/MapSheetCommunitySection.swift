@@ -327,7 +327,7 @@ extension MapSheetHikes {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             Button("Try Again") { community.retry() }
-                .buttonStyle(.bordered)
+                .glassButtonStyle()
                 .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -385,7 +385,7 @@ extension MapSheetHikes {
                         .foregroundStyle(.secondary)
                 }
                 Button("Try Again") { community.retry() }
-                    .buttonStyle(.bordered)
+                    .glassButtonStyle()
                     .padding(.top, 2)
             case .loading, .refreshing:
                 Text("Looking for community hikes…")
