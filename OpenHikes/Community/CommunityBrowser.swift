@@ -41,6 +41,11 @@
 //  The one request the hiker does not have to confirm is the first: selecting
 //  the *Community* tab is itself the confirmation, and asking twice for one
 //  intention would be a worse bargain than the automatic re-query ever was.
+//  That first request asks OpenStreetMap as well as CloudKit, for the same
+//  reason — see ``CommunityNearbyScope``. A tab that opened with half its
+//  sources was a tab that opened looking empty wherever the other half was the
+//  answer, and the button that filled it in was a second question about an
+//  area the hiker had already asked about.
 //
 //  Leaving the tab calls ``stopBrowsing()``, which takes the list off the map
 //  and stops anything being offered — but **keeps the rows**, so coming back
@@ -249,21 +254,22 @@ final class CommunityBrowser {
     /// so `@Observable` filters the same-value writes a run of settles
     /// produces — see *Render isolation, in practice*.
     private(set) var areaPrompt: CommunityAreaPrompt = .settled
-    /// Why the last search that asked for OpenStreetMap trails has none, when
-    /// that is a failure rather than an answer.
+    /// What the last search that asked for OpenStreetMap trails has to say
+    /// about them: that they were refused, or that this area has none.
     ///
     /// Observed, and drawn beside the *Search this area* pill rather than over
     /// the rows — see ``MapCommunitySearchControl``. It is not a
     /// ``CommunityBrowseState``: the request succeeded, the list underneath is
     /// real, and the button stays enabled, because the one thing a
     /// rate-limited hiker can still usefully do is search this area for the
-    /// hikes people published in it.
+    /// hikes people published in it — and the one thing a hiker in an empty
+    /// area can do is search a different one.
     ///
     /// Written only by a ``CommunityNearbyScope/withCuratedTrails`` answer, so
     /// a refill after a block cannot clear a limit that is still running, and
     /// cleared by leaving the tab. `Equatable` so `@Observable` filters the
     /// same-value writes a run of refused taps produces.
-    private(set) var curatedOutage: CuratedTrailOutage?
+    private(set) var curatedNotice: CuratedTrailNotice?
     /// What to call the area the list is answering about, once something has
     /// answered. `nil` until then, and for a launch with no ``areaNames``.
     private(set) var areaName: String?
@@ -402,9 +408,9 @@ final class CommunityBrowser {
         // The opt-in that arrived before the map did — see ``startBrowsing()``.
         if wantsFirstRegion, case .offer(let area) = action {
             wantsFirstRegion = false
-            // The published half only, like the opt-in it is finishing. See
+            // Both halves, like the opt-in it is finishing. See
             // ``startBrowsing()``.
-            commit(area, from: .publishedOnly)
+            commit(area, from: .withCuratedTrails)
             return
         }
         offer(action)
@@ -461,10 +467,11 @@ final class CommunityBrowser {
     /// `.tooFarOut` still asks nothing, which is what the pill being disabled
     /// above the ceiling says on screen.
     ///
-    /// **This is the tap OpenStreetMap is asked on, and the only one.** Every
-    /// other path into ``commit(_:from:)`` asks for the published hikes alone
-    /// — see ``CommunityNearbyScope`` for what that costs and why the
-    /// distinction is the question's rather than the transport's.
+    /// **This tap asks OpenStreetMap**, as do the other two a hiker makes to
+    /// reach the trails — opening the tab, and *Try Again*. What does not is
+    /// the refill the app runs after a block: see ``CommunityNearbyScope`` for
+    /// what a curated question costs and why the distinction is the
+    /// question's rather than the transport's.
     func searchVisibleArea() {
         // A second question while the first is unanswered buys nothing and
         // costs an Overpass listing pass: ``perform(_:describing:about:matching:from:)``
@@ -487,16 +494,14 @@ final class CommunityBrowser {
     /// The one request nobody has to confirm — the tab selection that gets
     /// here *is* the confirmation. See this file's header.
     ///
-    /// **Unless the last visit's rows are still here**, which is the case that
-    /// used to lose the OpenStreetMap half of a list. That unconfirmed request
-    /// exists so the tab is never opened onto nothing; with rows kept there is
-    /// no nothing to open onto, and asking anyway would replace a merged list
-    /// with a ``CommunityNearbyScope/publishedOnly`` one — the curated routes
-    /// gone from an area the hiker had just searched, for a request they did
-    /// not make. So a return visit asks for nothing and only re-reads the map:
-    /// the rows stand under the area name they arrived with, and if the map
-    /// moved while they were away the pill offers the new area the ordinary
-    /// way.
+    /// **Unless the last visit's rows are still here.** That unconfirmed
+    /// request exists so the tab is never opened onto nothing; with rows kept
+    /// there is no nothing to open onto, and asking anyway would spend a
+    /// CloudKit query and two Overpass round trips to replace an area's
+    /// answer with the same area's answer. So a return visit asks for nothing
+    /// and only re-reads the map: the rows stand under the area name they
+    /// arrived with, and if the map moved while they were away the pill offers
+    /// the new area the ordinary way.
     func startBrowsing() {
         guard !isBrowsing else { return }
         policy.startBrowsing()
@@ -528,12 +533,15 @@ final class CommunityBrowser {
         }
         switch policy.action(for: latestRegion) {
         case .offer(let area):
-            // The hiker's own published hikes, and not OpenStreetMap. Opening
-            // the tab is one tap standing in for a question nobody typed, and
-            // two Overpass round trips is not what it should buy — the pill it
-            // raises is right there, and that tap is the one that asks. See
-            // ``CommunityNearbyScope``.
-            commit(area, from: .publishedOnly)
+            // Both halves, because this is a hiker arriving at the trails.
+            // Opening the tab used to buy the published hikes alone, on the
+            // argument that one selection should not spend two Overpass round
+            // trips — but the *Community* tab **is** the trails, so what that
+            // saved was a list that opened looking empty wherever the trails
+            // were the answer, and the tap on *Search this area* that fixed it
+            // spent a second CloudKit query asking the same question again.
+            // See ``CommunityNearbyScope``.
+            commit(area, from: .withCuratedTrails)
         case .tooFarOut:
             // Saying so is better than an empty list, which would read as
             // "there are none near you".
@@ -558,12 +566,14 @@ final class CommunityBrowser {
     ///
     /// This used to empty ``nearbyResults`` and forget ``resultsArea``, and
     /// that is what made a searched area come back blank: ``startBrowsing()``
-    /// then re-asked as ``CommunityNearbyScope/publishedOnly``, which skips
+    /// then re-asked, and at the time it re-asked as
+    /// ``CommunityNearbyScope/publishedOnly``, which skips
     /// ``CuratedTrailSource`` entirely — see ``MergedCommunityTransport``'s
     /// `listCurated`, which returns before the cache is read. So the curated
     /// half of a list the hiker had just paid two Overpass round trips for
-    /// disappeared on a tab switch, and no amount of caching could have
-    /// answered it, because nothing asked.
+    /// disappeared on a tab switch. The opt-in asks for both halves now, so
+    /// that particular loss is gone twice over — but keeping the rows is still
+    /// what makes a return visit free.
     ///
     /// Keeping them is cheaper than every alternative — no request, no new
     /// cache, nothing to invalidate — and the objection recorded in
@@ -601,7 +611,7 @@ final class CommunityBrowser {
         // running will say so again on the next tap — ``CuratedTrailSource``
         // refuses one without a round trip — and a caption left standing over
         // a list nobody is looking at is a caption nothing will ever clear.
-        curatedOutage = nil
+        curatedNotice = nil
         state = .idle
     }
 
@@ -853,7 +863,7 @@ final class CommunityBrowser {
     ///   same reason — an answer is published only while it is still an answer
     ///   to what is being asked. `nil` for a nearby search.
     /// - Parameter scope: Which sources the nearby question covered, carried
-    ///   through so ``curatedOutage`` is only ever written by a request that
+    ///   through so ``curatedNotice`` is only ever written by a request that
     ///   asked about OpenStreetMap. A published-only refresh has nothing to
     ///   say about a rate limit and must not clear one that still stands.
     ///   `nil` for a title search.
@@ -925,10 +935,11 @@ final class CommunityBrowser {
             resultsArea = area
             requestOutlines(for: results)
             // Only a question that asked about OpenStreetMap may answer for
-            // it. A `nil` here from a published-only refresh means "not asked"
-            // rather than "fine", and writing it would take the notice off the
-            // button while the address was still rate-limited.
-            if scope == .withCuratedTrails { curatedOutage = answer.curatedOutage }
+            // it. ``CuratedTrailOutcome/notAsked`` from a published-only
+            // refresh means exactly that, and writing its `nil` notice would
+            // take the caption off the button while the address was still
+            // rate-limited.
+            if scope == .withCuratedTrails { curatedNotice = answer.curated.notice }
             // The header describes these rows from here on. If MapKit has
             // already said what this area is called, say it; if it has not,
             // say nothing rather than keep the last area's name — the geocode

@@ -15,10 +15,12 @@
 //
 //  The reason the cost is worth a suite: Overpass is volunteer-run, allows a
 //  handful of slots per address and answers a busy one with a `429`. Every
-//  nearby request used to reach it — opening the tab, retrying, refilling
-//  after a block — so a hiker who never touched *Search this area* could still
-//  be rate-limited by the app on their behalf. A regression here is silent
-//  until somebody else's quota runs out.
+//  nearby request used to reach it, refills after a block included — requests
+//  nobody made, against somebody else's quota. What is pinned now is the line
+//  between the two: the three things a hiker does to reach the trails ask for
+//  them, and the request the app makes for itself does not. A regression
+//  either way is silent — one spends a stranger's quota, the other opens the
+//  trails tab without the trails.
 //
 
 import CoreLocation
@@ -65,20 +67,22 @@ struct CommunityCuratedScopeTests {
     }
 }
 
-// MARK: - Only the tap asks OpenStreetMap
+// MARK: - A hiker's own taps ask OpenStreetMap
 
 extension CommunityCuratedScopeTests {
-    /// The opt-in is one tap standing in for a question nobody typed. It buys
-    /// the hikes people published; it does not buy two Overpass round trips.
-    @Test("opening the tab asks for the published hikes alone")
-    func optingInIsPublishedOnly() async {
+    /// Selecting the tab is a hiker asking for the trails, and the tab is
+    /// where the trails are. It briefly bought the published hikes alone, and
+    /// what that saved was a list that opened looking empty wherever the
+    /// OpenStreetMap half was the answer.
+    @Test("opening the tab asks for the curated trails too")
+    func optingInAsksOverpass() async {
         let transport = StubCommunityTransport()
         _ = await browsing(transport)
 
-        #expect(transport.recording.nearbyScopes == [.publishedOnly])
+        #expect(transport.recording.nearbyScopes == [.withCuratedTrails])
     }
 
-    /// The one tap that asks for both, and the reason the button exists.
+    /// The tap the button exists for, asking about somewhere new.
     @Test("Search this area asks for the curated trails too")
     func takingTheOfferAsksOverpass() async {
         let transport = StubCommunityTransport()
@@ -88,7 +92,7 @@ extension CommunityCuratedScopeTests {
         browser.searchVisibleArea()
         await settle(browser)
 
-        #expect(transport.recording.nearbyScopes == [.publishedOnly, .withCuratedTrails])
+        #expect(transport.recording.nearbyScopes == [.withCuratedTrails, .withCuratedTrails])
     }
 
     /// A tap with no offer standing is the same tap — it goes through
@@ -107,7 +111,7 @@ extension CommunityCuratedScopeTests {
 
         #expect(
             transport.recording.nearbyScopes
-                == [.publishedOnly, .withCuratedTrails, .withCuratedTrails]
+                == [.withCuratedTrails, .withCuratedTrails, .withCuratedTrails]
         )
     }
 
@@ -126,7 +130,7 @@ extension CommunityCuratedScopeTests {
         browser.refreshAfterBlock()
         await settle(browser)
 
-        #expect(transport.recording.nearbyScopes == [.publishedOnly, .publishedOnly])
+        #expect(transport.recording.nearbyScopes == [.withCuratedTrails, .publishedOnly])
     }
 }
 
@@ -174,9 +178,36 @@ extension CommunityCuratedScopeTests {
     }
 }
 
-// MARK: - What a refusal says
+// MARK: - What the caption says
 
 extension CommunityCuratedScopeTests {
+    /// The one a hiker meets most often, and the one that used to read as a
+    /// broken service. The search worked; there is nothing waymarked near
+    /// there; the answer is to look somewhere else, which is what the caption
+    /// now says.
+    @Test("an area with no OpenStreetMap trails in it captions the pill")
+    func anEmptyAreaCaptionsThePill() async {
+        let transport = StubCommunityTransport()
+        transport.listingsResult = .success([.stub(id: "theirs")])
+        transport.curatedOutcome = .trails(0)
+        let browser = await browsing(transport)
+
+        #expect(browser.curatedNotice == .noTrailsHere)
+        #expect(browser.state == .loaded, "an empty half is not a failed search")
+        #expect(browser.nearbyListings.map(\.id) == ["theirs"], "the published half is untouched")
+    }
+
+    /// The count is the listing pass's, not the page's, so a search that found
+    /// trails says nothing even when the merge had no room to draw them.
+    @Test("a search that found trails captions nothing")
+    func foundTrailsCaptionNothing() async {
+        let transport = StubCommunityTransport()
+        transport.curatedOutcome = .trails(12)
+        let browser = await browsing(transport)
+
+        #expect(browser.curatedNotice == nil)
+    }
+
     /// The notice the button draws, and the two things that must not happen
     /// beside it: the request is not a failure, and the rows that did arrive
     /// stay where they are.
@@ -184,13 +215,13 @@ extension CommunityCuratedScopeTests {
     func rateLimitIsReportedBesideTheRows() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub(id: "theirs", authorID: "author-1")])
-        transport.curatedOutage = .rateLimited(retryAfter: 60)
+        transport.curatedOutcome = .outage(.rateLimited(retryAfter: 60))
         let browser = await browsing(transport)
 
         browser.searchVisibleArea()
         await settle(browser)
 
-        #expect(browser.curatedOutage == .rateLimited(retryAfter: 60))
+        #expect(browser.curatedNotice == .outage(.rateLimited(retryAfter: 60)))
         #expect(browser.state == .loaded, "the published half answered, so the search worked")
         #expect(browser.nearbyListings.map(\.id) == ["theirs"])
     }
@@ -200,17 +231,17 @@ extension CommunityCuratedScopeTests {
     @Test("a search that reaches OpenStreetMap again clears the notice")
     func aGoodSearchClearsTheNotice() async {
         let transport = StubCommunityTransport()
-        transport.curatedOutage = .rateLimited(retryAfter: 60)
+        transport.curatedOutcome = .outage(.rateLimited(retryAfter: 60))
         let browser = await browsing(transport)
         browser.searchVisibleArea()
         await settle(browser)
-        #expect(browser.curatedOutage != nil)
+        #expect(browser.curatedNotice != nil)
 
-        transport.curatedOutage = nil
+        transport.curatedOutcome = .trails(4)
         browser.retry()
         await settle(browser)
 
-        #expect(browser.curatedOutage == nil)
+        #expect(browser.curatedNotice == nil)
     }
 
     /// The correction that makes the scope worth carrying past the transport.
@@ -223,17 +254,17 @@ extension CommunityCuratedScopeTests {
         let transport = StubCommunityTransport()
         let blocks = CommunityBlockList.scratch()
         transport.listingsResult = .success([.stub(id: "theirs", authorID: "author-1")])
-        transport.curatedOutage = .rateLimited(retryAfter: 60)
+        transport.curatedOutcome = .outage(.rateLimited(retryAfter: 60))
         let browser = await browsing(transport, blocks: blocks)
         browser.searchVisibleArea()
         await settle(browser)
-        #expect(browser.curatedOutage == .rateLimited(retryAfter: 60))
+        #expect(browser.curatedNotice == .outage(.rateLimited(retryAfter: 60)))
 
         blocks.block(.stub(authorID: "author-1"))
         browser.refreshAfterBlock()
         await settle(browser)
 
-        #expect(browser.curatedOutage == .rateLimited(retryAfter: 60))
+        #expect(browser.curatedNotice == .outage(.rateLimited(retryAfter: 60)))
     }
 
     /// The caption belongs to the tab that drew it. A limit still running says
@@ -243,15 +274,15 @@ extension CommunityCuratedScopeTests {
     @Test("leaving the tab takes the notice with it")
     func leavingTheTabClearsTheNotice() async {
         let transport = StubCommunityTransport()
-        transport.curatedOutage = .unavailable
+        transport.curatedOutcome = .outage(.unavailable)
         let browser = await browsing(transport)
         browser.searchVisibleArea()
         await settle(browser)
-        #expect(browser.curatedOutage == .unavailable)
+        #expect(browser.curatedNotice == .outage(.unavailable))
 
         browser.stopBrowsing()
 
-        #expect(browser.curatedOutage == nil)
+        #expect(browser.curatedNotice == nil)
     }
 }
 

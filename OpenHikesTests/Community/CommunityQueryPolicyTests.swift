@@ -217,9 +217,11 @@ struct CommunityQueryPolicyTests {
     /// re-opting in should ask again rather than show a list from wherever the
     /// map used to be — was answered by ``CommunityBrowser`` keeping its rows
     /// and the area they describe. Forgetting here is what made a returning
-    /// hiker's list come back without its OpenStreetMap half: the region read
-    /// as a new question and the re-ask was
-    /// ``CommunityNearbyScope/publishedOnly``.
+    /// hiker's list come back without its OpenStreetMap half: at the time, the
+    /// region read as a new question and the re-ask was
+    /// ``CommunityNearbyScope/publishedOnly``. The re-ask would be a merged
+    /// one today, which makes this a question of cost rather than of rows —
+    /// two Overpass round trips for an area already answered.
     @Test("switching browsing off keeps the last query")
     func stoppingRemembers() {
         var policy = CommunityQueryPolicy()
