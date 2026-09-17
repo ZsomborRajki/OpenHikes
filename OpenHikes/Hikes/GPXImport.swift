@@ -22,10 +22,17 @@ nonisolated enum GPXImport {
     /// A `<wpt>` the file marked as a photograph: where one was taken, and
     /// when. See ``GPXExport/appendPhotographs(_:to:)`` for the other end.
     ///
-    /// No picture, and no field that could hold one. GPX carries a place and a
-    /// time; the pixels live under ``HikePhotoStore`` and never enter the
-    /// file, which is why the export writes no `<link>` either. What this
-    /// becomes is a ``HikePhoto`` with ``HikePhoto/isPlaceOnly`` set.
+    /// No picture, and no field that could hold one. GPX carries a place and
+    /// a time; what this becomes is a ``HikePhoto`` with
+    /// ``HikePhoto/isPlaceOnly`` set.
+    ///
+    /// **`<link>` is ignored, including one this app wrote.** The plain `.gpx`
+    /// export writes none, because nothing travels beside that file;
+    /// ``HikeArchive`` does, because in a `.zip` the picture really is at the
+    /// `href`. This importer is handed a lone `.gpx` by ``GPXInbox`` and has
+    /// no archive around it to resolve a relative path against, so a link here
+    /// would point at nothing. Reading an archive back in is a separate piece
+    /// of work on the inbox rather than on this parser.
     struct Photograph: Sendable {
         let coordinate: CLLocationCoordinate2D
         let elevation: Double?
