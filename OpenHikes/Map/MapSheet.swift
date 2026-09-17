@@ -271,7 +271,8 @@ struct MapSheet: View {
     }
 
     /// Profile/settings entry point, sitting to the right of the search field —
-    /// like Apple Maps' account button.
+    /// where Apple Maps puts its account button, but drawn as a gear because
+    /// what it opens is Settings, not a profile.
     ///
     /// The circular glass here is the real button style rather than a glass
     /// background under a `.plain` button, so it picks up the press and
@@ -281,7 +282,7 @@ struct MapSheet: View {
             searchFocused = false
             showSettings = true
         } label: {
-            Image(systemName: "person.crop.circle")
+            Image(systemName: "gearshape")
                 .font(.title2)
                 .foregroundStyle(.secondary)
                 .minimumTapTarget()
