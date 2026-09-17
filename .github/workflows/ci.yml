@@ -549,16 +549,17 @@ jobs:
       # rest of the domain — `CommunityListingTextTests`,
       # `CommunityQueryPolicyTests`, `CommunityRouteOverlapTests` and the other
       # pure value-type suites — is synchronous, so a sanitizer has no second
-      # thread to watch. Measured at 664 tests in 62 suites in 9.8 seconds
+      # thread to watch. Measured at 695 tests in 64 suites in 10.2 seconds
       # locally, with no race reported.
       #
       # A mistyped identifier here is silently ignored rather than rejected, so
       # a suite added to this list and never run looks exactly like one that
       # passes. Nested suites need their enclosing type — hence
-      # `WidgetFeedSuites`, which is where `BackgroundDeliveryTests` lives and
-      # which is why 55 entries resolve to 62 suites rather than 55.
+      # `WidgetFeedSuites`, which is the enclosing type for nine suites that
+      # share the App Group file, and which is why 55 entries resolve to 64
+      # suites rather than 55.
       #
-      # 62 is the guard, and the step after the run is what enforces it: an
+      # 64 is the guard, and the step after the run is what enforces it: an
       # identifier that resolves to nothing changes nothing about the exit
       # status, so the count has to be read out of the result bundle or it is
       # not a guard at all. Deliberately not the *test* count, which rises
@@ -701,17 +702,23 @@ jobs:
       # rise means the list grew without this number growing with it, and the
       # next fall would then be measured against a stale pin.
       #
-      # WidgetFeedSuites includes the nested Trail walk end boundary suite;
-      # selecting that parent now runs 62 suites in total.
+      # The rise this number has to be raised for is usually not a new line
+      # in the list above. `WidgetFeedSuites` is an enclosing type, and a
+      # suite written into an `extension WidgetFeedSuites` — as the nested
+      # Trail walk end boundary, background delivery, background tracking
+      # selection, proximity and region gate suites all are — is selected by
+      # a line that is already there. Selecting that one parent runs ten of
+      # the 64 suites, so adding a nested suite moves this number with no
+      # change to the list at all.
       #
-      # Tests are a floor for the reason the comment above gives: 664 run
-      # today, and 625 sits far enough below that removing a test does not
+      # Tests are a floor for the reason the comment above gives: 695 run
+      # today, and 655 sits far enough below that removing a test does not
       # turn the build red on its own, while a suite emptied out under a name
       # that still resolves does. Raise it when the measured number rises.
       - name: Check the sanitized selection actually ran
         env:
-          EXPECTED_SUITES: "62"
-          TEST_FLOOR: "625"
+          EXPECTED_SUITES: "64"
+          TEST_FLOOR: "655"
         run: |
           set -o pipefail
           xcrun xcresulttool get test-results tests \
