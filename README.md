@@ -2,7 +2,7 @@
 
 OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone. It imports GPX tracks, records live hikes, displays them on a MapKit map, provides route statistics and an interactive elevation profile, and keeps selected map areas available offline.
 
-That is local-first with one deliberate exception. There is no OpenHikes account and no server holding your hikes: everything lives on the device, and what syncs travels through the hiker's own private iCloud database. The exception is sharing a hike, which publishes it — by name, on purpose, one hike at a time — to a public CloudKit database other people browse. `OpenHikes/PrivacyInfo.xcprivacy` and [the privacy policy](https://zsomborrajki.github.io/OpenHikes/privacy/) describe exactly what that sends.
+That is local-first with one deliberate exception. There is no OpenHikes account and no server holding your hikes: everything lives on the device, and what syncs travels through the hiker's own private iCloud database. The exception is sharing a hike, which publishes it to a public CloudKit database other people browse. `OpenHikes/PrivacyInfo.xcprivacy` and [the privacy policy](https://zsomborrajki.github.io/OpenHikes/privacy/) describe exactly what that sends.
 
 ## Features
 
