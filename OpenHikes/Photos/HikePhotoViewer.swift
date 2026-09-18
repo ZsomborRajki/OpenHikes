@@ -24,11 +24,18 @@
 //  The two failures are not the same news either. A file that is here and
 //  unreadable may be readable in a moment, so that page offers to ask again or
 //  to take the row that claims the file out of the hike. A file that is not
-//  here has nothing to wait for: photo pixels stay on the device the photo
-//  was added on — see *Settled decisions* in the repository instructions — so
-//  that
+//  here has nothing to wait for: photo pixels stay on the device the photo was
+//  added on — see *Settled decisions* in the repository instructions — so that
 //  page explains itself and offers nothing, because both of the other page's
 //  buttons would be lies about what pressing them does.
+//
+//  The toolbar is held to that same rule, which it is easy not to be: it is
+//  drawn once for the screen rather than per page, so a button that suits the
+//  picture in front of the hiker is not thereby a button that suits the next
+//  one. *Share* is the one this bites — a page with no file behind it would
+//  otherwise raise the share sheet and then fail inside it, which is the
+//  failure arriving after the gesture rather than in place of it. Which pages
+//  have a file is ``HikePhotoViewer/shareablePhotos``.
 //
 
 import CoreLocation
@@ -60,6 +67,23 @@ struct HikePhotoViewer: View {
     /// with the row, and photo pixels stay on the device the photo was added
     /// on — so this device is the only place they were.
     @State private var showDeleteConfirmation = false
+
+    /// The photographs whose files are on this device, as the pages that drew
+    /// them found out.
+    ///
+    /// What *Share* is offered on. `ShareLink` builds its item up front and
+    /// only reaches the file when the system asks the exporter for it — by
+    /// which time the sheet is up and the only thing left to do is throw
+    /// ``HikePhotoFile/NotOnThisDevice``, in front of a hiker who has already
+    /// chosen who they were sending it to. So the question is asked before the
+    /// button is offered rather than after it is pressed.
+    ///
+    /// Filled from the pages' own loads rather than by a check of its own, for
+    /// two reasons that agree: every page already learns this on the way to
+    /// drawing itself — a decode that returned a picture is a file that is
+    /// there — and ``HikePhotoStore/hasImage(for:)`` asserts it is off the
+    /// main thread, which is exactly where a toolbar's condition is evaluated.
+    @State private var shareablePhotos: Set<UUID> = []
 
     /// The sorted gallery, read once per body pass and handed down.
     ///
@@ -155,7 +179,14 @@ struct HikePhotoViewer: View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: 0) {
                 ForEach(photos) { photo in
-                    HikePhotoPage(photo: photo, store: store) { delete(photo) }
+                    HikePhotoPage(
+                        photo: photo,
+                        store: store,
+                        onFileFound: { found in
+                            noteFile(for: photo.id, found: found)
+                        },
+                        onRemove: { delete(photo) }
+                    )
                         .containerRelativeFrame(.horizontal)
                         .id(photo.id)
                 }
@@ -299,8 +330,15 @@ struct HikePhotoViewer: View {
         // Beside *show me where this was* rather than beyond the spacer below,
         // because the two belong together: both take the photograph somewhere
         // and neither destroys it. The capsule around the pair is what says so.
+        // Absent rather than disabled on a page with no file behind it. A
+        // disabled button is still an offer — it says *not now* about
+        // something that is never going to be available here — and the page
+        // underneath is already saying the whole of it. See
+        // ``shareablePhotos``, and note that it arrives with the picture: the
+        // button is not there for the moment a page is still loading, which is
+        // the same moment there is nothing on screen to share.
         ToolbarItem(placement: .topBarTrailing) {
-            if let current, let position {
+            if let current, let position, shareablePhotos.contains(current.id) {
                 SharePhotoButton(
                     photo: current,
                     hikeTitle: hike.displayTitle,
@@ -351,6 +389,19 @@ struct HikePhotoViewer: View {
             in: photos
         ) else { return }
         withAnimation { currentID = photos[target].id }
+    }
+
+    /// Remembers what a page's load found out about its file.
+    ///
+    /// By identifier rather than by index, because pages are recycled and the
+    /// answer belongs to the photograph rather than to the position it was
+    /// read at.
+    private func noteFile(for id: UUID, found: Bool) {
+        if found {
+            shareablePhotos.insert(id)
+        } else {
+            shareablePhotos.remove(id)
+        }
     }
 
     private func delete(_ photo: HikePhoto) {
@@ -472,6 +523,14 @@ private struct SharePhotoButton: View {
 private struct HikePhotoPage: View {
     let photo: HikePhoto
     let store: HikePhotoStore
+    /// Tells the viewer whether this photograph's file is on this device,
+    /// which is what its *Share* is offered on.
+    ///
+    /// Answered from here because the load below already answers it, and a
+    /// second look at the disk would be both a duplicate and a main-thread
+    /// file check that ``HikePhotoStore`` refuses. The mapping is
+    /// ``Self/hasFile(_:)``.
+    var onFileFound: (Bool) -> Void
     /// Takes this photo's row out of the hike, for the case where its file is
     /// not coming back.
     ///
@@ -514,7 +573,13 @@ private struct HikePhotoPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: Attempt(photo: photo.id, count: attempt)) {
             display = .loading
+            // Nothing is known about the file while the load is in flight, and
+            // *unknown* is reported as *no*: a page recycled onto this photo
+            // must not inherit the last one's answer, and a button offered on
+            // a guess is the thing this is here to stop.
+            onFileFound(false)
             display = await HikePhotoLoader.display(for: photo, in: store)
+            onFileFound(Self.hasFile(display))
         }
     }
 
@@ -624,6 +689,21 @@ private struct HikePhotoPage: View {
         // same reason: without it the title and the description are black on
         // black.
         .environment(\.colorScheme, .dark)
+    }
+
+    /// Whether `display` means there is a file on this device behind the row.
+    ///
+    /// ``PhotoUnavailability/unreadable`` counts, and deliberately: the file is
+    /// there, the share sheet copies it without decoding it, and the hiker
+    /// sending their own damaged file somewhere it may still be recoverable is
+    /// a reasonable thing to let them do. The other two states have no file at
+    /// all — one on another device, one that was never a photograph — and
+    /// nothing to hand over.
+    private static func hasFile(_ display: PhotoDisplay) -> Bool {
+        switch display {
+        case .ready, .unavailable(.unreadable): true
+        case .loading, .unavailable(.notOnThisDevice), .unavailable(.placeOnly): false
+        }
     }
 
     private static let recoverySpacing: CGFloat = 16
