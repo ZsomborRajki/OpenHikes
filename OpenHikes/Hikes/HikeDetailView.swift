@@ -487,22 +487,33 @@ private extension HikeDetailView {
                             }
                         }
                 } else {
-                    HStack(alignment: .firstTextBaseline, spacing: 0) {
-                        Text(hike.displayTitle)
-                            .font(.title2.bold())
-                            .accessibilityAddTraits(.isHeader)
-                        shareButton
-                        archiveButton
-                        communityShareButton
-                        renameButton
-                    }
+                    Text(hike.displayTitle)
+                        .font(.title2.bold())
+                        .accessibilityAddTraits(.isHeader)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Text(hike.date.formatted(date: .complete, time: .omitted))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                dateAndActions
             }
+        }
+    }
 
-            Spacer()
+    /// The four glyphs used to follow the name on its own line, where their
+    /// tap targets — 44pt each, so up to 176pt of the row — left a long title
+    /// wrapping after a word or two. They sit on the date's line instead: the
+    /// date is the shortest text on the screen, so it leaves them room without
+    /// the name having to give any up, and the name now gets the full width.
+    private var dateAndActions: some View {
+        HStack(spacing: 0) {
+            Text(hike.date.formatted(date: .abbreviated, time: .omitted))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 8)
+
+            shareButton
+            archiveButton
+            communityShareButton
+            renameButton
         }
     }
 
