@@ -744,7 +744,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 45
     # Gating. The trial this job was admitted on ran from 2026-08-15 to
     # 2026-09-06 and produced 192 completed runs with zero failures, at the
     # job level and at the step level both — the `if: failure()` upload below
@@ -761,10 +761,17 @@ jobs:
     # upload the bundle unconditionally for a while and read the reruns out of
     # it — do not infer it from a green job.
     #
-    # This is also the slowest job in the workflow: 18m0s median, 21m34s p90,
-    # 24m51s p99 against the 30-minute timeout above. Raise the timeout rather
-    # than let a slow run start reporting as a real failure; a timeout that
-    # fires at p99 gates on the runner's mood, not on the VoiceOver contract.
+    # This is also the slowest job in the workflow, and it has got slower.
+    # The numbers it was admitted on were 18m0s median, 21m34s p90 and 24m51s
+    # p99; over the 26 runs of it that completed up to 2026-09-18 they are
+    # 25m24s median, 28m12s p90 and 29m54s longest — that longest one is a
+    # *green* run that finished six seconds inside a 30-minute gate, and five
+    # of the 26 came within two minutes of it. Nothing had timed out yet, which
+    # is the point: the gate was about to start failing runs for the runner's
+    # mood rather than for the VoiceOver contract, which is exactly what the
+    # note here said to raise it rather than wait for. So 45, chosen to sit
+    # clear of the drift and not against it. Re-measure before trusting these
+    # figures; they are a reading of one fortnight, not a property of the job.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
