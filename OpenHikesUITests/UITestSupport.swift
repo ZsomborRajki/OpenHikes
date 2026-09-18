@@ -742,12 +742,25 @@ extension XCTestCase {
         }
     }
 
+    /// Confirms an edit with the keyboard's own return key.
+    ///
+    /// For a field whose screen has no keyboard toolbar, which the hike title
+    /// deliberately has not: see the comment on its `submitLabel` for what an
+    /// accessory that comes and goes with the field costs. Asking
+    /// ``commitKeyboardEdit(in:)`` there spends its whole timeout looking for
+    /// a *Done* that is never coming, and then does exactly this.
+    @MainActor
+    func submitKeyboardEdit(in app: XCUIApplication) {
+        app.typeText("\n")
+    }
+
     /// Confirms an edit through the keyboard's own Done button, falling back
     /// to a return key.
     ///
     /// The toolbar button is the reliable one: it calls the commit directly,
     /// where a newline depends on the field having a submit action wired to
-    /// it, and lands on whatever has focus if it does not.
+    /// it, and lands on whatever has focus if it does not. For a screen that
+    /// has no such button, ``submitKeyboardEdit(in:)`` is the one to ask.
     @MainActor
     func commitKeyboardEdit(in app: XCUIApplication) {
         let toolbarDone = app.toolbars.buttons["Done"]
