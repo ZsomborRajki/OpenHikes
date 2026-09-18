@@ -126,6 +126,14 @@ xcrun simctl status_bar "$udid" override \
     --batteryState charged \
     --batteryLevel 100
 
+# Whether the two frames that drive the real photo library have anything to
+# drive it with. Handed to the tests rather than guessed at by them: they skip
+# on 0 and assert on 1, so this script is the only thing that can make them run
+# — and a machine without `Screenshots/Stamped`, which the repository does not
+# carry, skips those two instead of failing them. `TEST_RUNNER_` is
+# xcodebuild's own prefix for passing a variable through to the test runner.
+export TEST_RUNNER_OPENHIKES_STAMPED_LIBRARY=0
+
 if [[ "$skip_photos" == false && -d "$photo_dir" ]]; then
     photos=("$photo_dir"/*.[jJ][pP][gG] "$photo_dir"/*.[jJ][pP][eE][gG])
     added=0
@@ -144,6 +152,7 @@ if [[ "$skip_photos" == false && -d "$photo_dir" ]]; then
     if [[ $added -gt 0 ]]; then
         xcrun simctl privacy "$udid" grant photos "$app_bundle_id"
         echo "Granted photo library access to $app_bundle_id."
+        export TEST_RUNNER_OPENHIKES_STAMPED_LIBRARY=1
     fi
 fi
 
@@ -203,8 +212,12 @@ capture_pass() {
 
     # `plutil -extract` rather than jq: jq is not a dependency of this
     # repository, and plutil reads JSON on every Mac that can build the project.
+    # The outer loop walks *tests*, and its condition asks whether the manifest
+    # has an entry at that index — not whether that entry has an attachment.
+    # Asking about `attachments.0` stopped the whole walk at the first test
+    # that shot nothing, which silently dropped every frame after it.
     local test_index=0 attachment_index exported readable frame
-    while exported="$(/usr/bin/plutil -extract "$test_index.attachments.0.exportedFileName" raw -o - "$manifest" 2>/dev/null)"; do
+    while /usr/bin/plutil -extract "$test_index" raw -o /dev/null -- "$manifest" 2>/dev/null; do
         attachment_index=0
         while exported="$(/usr/bin/plutil -extract "$test_index.attachments.$attachment_index.exportedFileName" raw -o - "$manifest" 2>/dev/null)"; do
             readable="$(/usr/bin/plutil -extract "$test_index.attachments.$attachment_index.suggestedHumanReadableName" raw -o - "$manifest" 2>/dev/null)"
