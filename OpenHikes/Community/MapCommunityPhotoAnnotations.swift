@@ -107,7 +107,15 @@ final class CommunityPhotoCalloutPreview: UIControl {
     private let imageView = UIImageView()
     /// Which photograph is on screen, so a decode that lands after the view
     /// has been recycled onto another pin is dropped rather than drawn.
-    private var photoID: Int?
+    ///
+    /// The whole photograph rather than its ``CommunityPreviewPhoto/index``,
+    /// which is what this was. An index numbers a picture *within one
+    /// preview*, and these views are pooled across previews: closing one hike
+    /// and opening another hands pin 0 a recycled view whose remembered index
+    /// is already 0, so the reload below was skipped and the callout showed
+    /// the previous hike's photograph — under a tap that opens this hike's
+    /// gallery.
+    private var shown: CommunityPreviewPhoto?
     private var loadTask: Task<Void, Never>?
     private var onTap: ((Int) -> Void)?
 
@@ -127,8 +135,8 @@ final class CommunityPhotoCalloutPreview: UIControl {
     func show(_ photo: CommunityPreviewPhoto, onTap: @escaping (Int) -> Void) {
         self.onTap = onTap
         accessibilityLabel = Self.label(for: photo)
-        guard photoID != photo.index else { return }
-        photoID = photo.index
+        guard shown != photo else { return }
+        shown = photo
         showPlaceholder("photo")
         loadTask?.cancel()
         loadTask = Task { [weak self] in
@@ -139,7 +147,7 @@ final class CommunityPhotoCalloutPreview: UIControl {
                 photo.fileURL,
                 maxPixelSize: Int(Self.previewWidth * 3)
             )
-            guard let self, photoID == photo.index else { return }
+            guard let self, shown == photo else { return }
             guard let decoded else {
                 // The file is in a directory this app wrote a moment ago, so
                 // this is the screen having been torn down mid-flight far more
@@ -181,8 +189,8 @@ final class CommunityPhotoCalloutPreview: UIControl {
     }
 
     @objc private func handleTap() {
-        guard let photoID else { return }
-        onTap?(photoID)
+        guard let shown else { return }
+        onTap?(shown.index)
     }
 
     /// A glyph rather than a spinner, for the reason the strip's tiles use
@@ -256,6 +264,9 @@ extension MapView.Coordinator {
         if !communityPhotoAnnotations.isEmpty {
             mapView.removeAnnotations(communityPhotoAnnotations)
             communityPhotoAnnotations = []
+            // One of them may have been the open callout — see
+            // ``refreshOpenCallout(on:)``.
+            refreshOpenCallout(on: mapView)
         }
         guard !photos.isEmpty else { return }
         let annotations = photos.map(CommunityPhotoMapAnnotation.init)

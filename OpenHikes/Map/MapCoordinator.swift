@@ -756,7 +756,11 @@ extension MapView.Coordinator {
         // `canShowCallout = false` doesn't reliably suppress MapKit's own
         // callout for the blue dot, so deselect immediately to dismiss it.
         guard view.annotation is MKUserLocation else {
-            withdrawAreaSearchForCallout(open: true)
+            // `canShowCallout` because a selection is not a callout: the route
+            // highlight's own dots are selectable and draw nothing, and a tap
+            // on one that took *Search this area* away would be the pill
+            // getting out of the way of something that is not there.
+            withdrawAreaSearchForCallout(open: view.canShowCallout)
             return
         }
         mapView.deselectAnnotation(view.annotation, animated: false)
