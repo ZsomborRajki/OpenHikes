@@ -2,7 +2,8 @@
 //  MapCoordinator+TrackingButton.swift
 //  OpenHikes
 //
-//  Where the "my location" button sits, and when it gets out of the way.
+//  The "my location" button: what it is made of, where it sits, and when it
+//  gets out of the way.
 //
 //  MapKit gives the button no placement of its own on iOS, and this app puts a
 //  persistent sheet over the bottom of the map, so the button has to ride above
@@ -230,4 +231,80 @@ extension MapView.Coordinator {
         guard fadeDistance > 0 else { return 0 }
         return max(0, 1 - encroachment / fadeDistance)
     }
+
+    #if canImport(UIKit)
+    /// Colours the arrow for what tracking is currently doing.
+    ///
+    /// The button used to be accent green at all times, which spent the one
+    /// colour the app reserves for "this is on" on a control that is almost
+    /// always off — and spent it against map tiles, where it could not be read
+    /// (see ``MapView/makeTrackingButton(for:_:)``). Now the capsule carries
+    /// the legibility and the glyph carries the state: label colour at rest,
+    /// accent while the map is following the hiker.
+    ///
+    /// `.label` rather than a fixed grey because it is on glass, not on the
+    /// map: the surface and the glyph turn over together with the appearance,
+    /// so the pair stays legible whatever the tiles underneath are doing.
+    func applyTrackingTint(for mode: MKUserTrackingMode) {
+        guard let trackingGlyph else { return }
+        let tint: UIColor = mode == .none ? .label : UIColor(Color.accentColor)
+        guard trackingGlyph.tintColor != tint else { return }
+        trackingGlyph.tintColor = tint
+    }
+
+    /// Tracking turning on or off is the only thing that changes the glyph's
+    /// colour, and MapKit reports it here whether the button or the app asked
+    /// for it — a pan that drops out of `.follow` included.
+    func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {
+        applyTrackingTint(for: mode)
+    }
+    #endif
 }
+
+#if os(iOS)
+extension MapView {
+    /// The "my location" button, inside a glass capsule of its own.
+    ///
+    /// `MKUserTrackingButton` arrives with no chrome: it draws its glyph
+    /// straight onto whatever the map is showing, in the tint it inherits —
+    /// the app's accent green. That reads on a dark surface and not much
+    /// anywhere else, because the accent follows the *interface* appearance
+    /// while these tiles do not follow anything: `openStreetMap`,
+    /// `stadiaOutdoors` and `thunderforestOutdoors` are light-styled at every
+    /// hour and in either mode, so dark mode put a bright green arrow
+    /// (`#44EE6E`, 1.5:1) on a white map. Reported by the user 2026-09-18.
+    ///
+    /// So the contrast is carried by a surface rather than by the glyph, which
+    /// is what the camera pill and *Search this area* already do — same
+    /// effect, same corner, same 44pt — and the column of controls now reads
+    /// as one set instead of two pills and a loose arrow. The glyph's own
+    /// colour is then free to say something: see
+    /// ``MapView/Coordinator/applyTrackingTint(for:)``.
+    func makeTrackingButton(
+        for mapView: MKMapView,
+        _ coordinator: Coordinator
+    ) -> UIVisualEffectView {
+        let tracking = MKUserTrackingButton(mapView: mapView)
+        tracking.translatesAutoresizingMaskIntoConstraints = false
+        // Belt and braces: the button has no background of its own today, and
+        // one appearing behind a capsule would show as a square inside it.
+        tracking.backgroundColor = .clear
+
+        let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+        glass.translatesAutoresizingMaskIntoConstraints = false
+        glass.cornerConfiguration = .capsule()
+        glass.contentView.addSubview(tracking)
+
+        NSLayoutConstraint.activate([
+            glass.widthAnchor.constraint(equalToConstant: MapPhotoControlsView.controlSize),
+            glass.heightAnchor.constraint(equalToConstant: MapPhotoControlsView.controlSize),
+            tracking.centerXAnchor.constraint(equalTo: glass.contentView.centerXAnchor),
+            tracking.centerYAnchor.constraint(equalTo: glass.contentView.centerYAnchor),
+        ])
+
+        coordinator.trackingGlyph = tracking
+        coordinator.applyTrackingTint(for: mapView.userTrackingMode)
+        return glass
+    }
+}
+#endif
