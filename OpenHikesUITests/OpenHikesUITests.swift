@@ -169,7 +169,9 @@ nonisolated final class OpenHikesUITests: XCTestCase {
             "the field should hold the new name and nothing of the old one, "
                 + "said \"\(field.value as? String ?? "")\""
         )
-        commitKeyboardEdit(in: app)
+        // The return key, not a keyboard *Done*: this screen has no keyboard
+        // toolbar, and the comment where it used to be says what it cost.
+        submitKeyboardEdit(in: app)
 
         XCTAssertTrue(
             app.navigationBars[Self.renamedHikeName]

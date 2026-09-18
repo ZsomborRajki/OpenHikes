@@ -322,9 +322,20 @@ private extension CommunityReviewView {
                     .disabled(isDeciding)
                     .focused($isEditingTitle)
                     .submitLabel(.done)
-                    // The same *Done* the hike's own title field carries, and
-                    // here it is the difference between reaching the decision
-                    // and not. This screen is a `Form` in a sheet that rests
+                    // The hike's own title field used to carry the same
+                    // *Done* and does not any more — a keyboard accessory that
+                    // arrives and leaves with its field stops the app ever
+                    // reporting itself idle, at 60 seconds a gesture, which is
+                    // what issue #539 was. This one is safe for the reason
+                    // that one was not, and it was measured rather than
+                    // assumed: the field and the accessory are both always in
+                    // this hierarchy, and
+                    // `testAReviewerCanCorrectTheTitleBeforePublishing` runs
+                    // clean at 20.5s on the simulator that took 677.9s over
+                    // the rename.
+                    //
+                    // It stays because here it is the difference between
+                    // reaching the decision and not. This screen is a `Form` in a sheet that rests
                     // at half height: the keyboard covers what is left of it,
                     // *Publish* and *Decline* are at the foot, and a `Form`
                     // builds its rows lazily — so a reviewer who has just
