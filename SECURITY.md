@@ -51,7 +51,8 @@ reporting:
   non-reviewer's call **succeeded** is.
 - **`CommunitySubmissionNotice`** — the reviewer's queue. `_icloud` create,
   and read and write granted to the `reviewer` role and to nobody else. It
-  carries a reference to a submission and no other field. This is the one type
+  carries a reference to whatever is waiting — a hike submission or a photo
+  submission, exactly one of the two — and no other field. This is the one type
   in the schema that is indexed on purpose, and its read grant is what makes
   that safe — a query returns the rows the caller may read, which for
   everybody but the reviewer is none. **Any read of this type by an account
@@ -63,6 +64,20 @@ reporting:
 - **`CommunityHike.authorID`** is deliberately unindexed as well: blocking is
   applied on the device, so the field is never a predicate, and indexing it
   would let anybody enumerate one person's published hikes.
+- **`CommunityPhotoSubmission`** — photographs offered to a hike, or to a
+  waymarked OpenStreetMap route, that is already public. The same two-type
+  shape as above and the same grants: `_world` read, `_icloud` create,
+  `_creator` **read only**, `WRITE` to the `reviewer` role and to nobody else,
+  and **no index at all**. Every finding described for `CommunityHikeSubmission`
+  is a finding here word for word.
+- **`CommunityPhotoContribution`** — the published set of contributed
+  photographs. `_world` read; create and write granted to the reviewer's admin
+  role alone, as on `CommunityHike`. It carries two queryable fields on purpose —
+  `listing`, so opening a hike can ask which contributions are about it, and
+  `photoSubmission`, so a contributor's own device can ask whether theirs is
+  live — and both queries need a name that is already public or that only the
+  author holds. Its `authorID` is unindexed for the reason `CommunityHike`'s
+  is, and a query on it is the same enumeration finding.
 
 **Known and accepted, so a report of it is not new:** an unreviewed submission
 is readable by anyone holding its record name — unguessable, and not

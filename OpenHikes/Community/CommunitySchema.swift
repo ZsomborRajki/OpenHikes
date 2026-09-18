@@ -234,7 +234,9 @@
 
 import Foundation
 
-/// Record type and field names for the two public-database types.
+/// Record type and field names for the public-database types: the two pairs
+/// — a hike and its submission, a contributed photo set and its submission —
+/// and the reviewer's notice that names whichever is waiting.
 ///
 /// Spelled out as constants for the same reason
 /// ``CloudSyncCoordinator/containerIdentifier`` is: these are a storage

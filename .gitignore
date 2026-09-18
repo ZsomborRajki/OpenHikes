@@ -45,7 +45,3 @@ Screenshots/Output/
 Screenshots/Output-*/
 Screenshots/Photos/
 Screenshots/Stamped/
-
-# Python bytecode — `python3 -m py_compile` and the unittest run under
-# `Scripts/tests/` both write it beside the source.
-__pycache__/

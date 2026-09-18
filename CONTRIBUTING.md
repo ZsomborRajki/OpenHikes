@@ -59,7 +59,7 @@ swift test --package-path OpenHikesShared
 `Scripts/install-git-hooks.sh` installs an opt-in pre-push hook that runs the
 linter for you.
 
-Changing something under `Scripts/` rather than the app? CI gates on those too,
+Changing something under `Scripts/` rather than the app? CI runs those too,
 and none of the commands above touches them:
 
 ```sh
