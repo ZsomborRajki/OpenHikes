@@ -41,7 +41,7 @@ extension TrailWidgetProvider {
     static let placeholderSnapshot = SharedTrailSnapshot(
         hikeID: UUID(),
         title: "Trail",
-        tintHex: "#34C759",
+        tintHex: "#1B7F3B",
         totalDistanceMeters: Placeholder.totalDistanceMeters,
         polyline: [
             .init(latitude: Placeholder.lat0, longitude: Placeholder.lon0),
