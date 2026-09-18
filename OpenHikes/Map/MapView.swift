@@ -227,6 +227,26 @@ struct MapView: MapViewRepresentable, Equatable {
         guard coordinator.tileSourceKey != key else { return }
         coordinator.tileSourceKey = key
 
+        #if os(iOS)
+        // The chrome on this map follows the *map*, not the interface.
+        //
+        // Every raster provider here is light-styled at every hour —
+        // `openStreetMap`, `stadiaOutdoors` and `thunderforestOutdoors` all
+        // draw a whiteish page in either appearance — so in dark mode the
+        // controls over them were resolving dark against light tiles. The
+        // tracking button's glass came out mid-grey with a white arrow on it,
+        // 2.25:1, and the camera and *Search this area* pills did the same.
+        // Forcing the light appearance for as long as those tiles are drawn
+        // puts every control back on the side of the contrast it was designed
+        // for: 17.5:1 for that arrow, measured.
+        //
+        // `.unspecified` for the system base map, and that is the whole reason
+        // this is decided here rather than once at build time: `appleMaps` is
+        // the one provider that *does* turn over with the appearance, so it is
+        // also the one whose chrome should.
+        mapView.overrideUserInterfaceStyle = tileSource == nil ? .unspecified : .light
+        #endif
+
         // Before the early return below: the system base map is a change of
         // credit too — MapKit draws its own **Legal** link, so ours has to go
         // away rather than keep crediting a provider that is no longer drawn.
@@ -281,20 +301,19 @@ struct MapView: MapViewRepresentable, Equatable {
         mapView.showsZoomControls = true
         mapView.showsPitchControl = true
         #elseif os(iOS)
-        let tracking = MKUserTrackingButton(mapView: mapView)
-        tracking.translatesAutoresizingMaskIntoConstraints = false
-        mapView.addSubview(tracking)
-        coordinator.trackingButton = tracking
+        let glass = makeTrackingButton(for: mapView, coordinator)
+        mapView.addSubview(glass)
+        coordinator.trackingButton = glass
 
         let initialTrackingButtonY: CGFloat = 400
         // The bottom is pinned to the map's top (full-screen space) so its constant
         // is a global Y that the sheet observation drives as the sheet is dragged.
-        let bottom = tracking.bottomAnchor.constraint(equalTo: mapView.topAnchor, constant: initialTrackingButtonY)
+        let bottom = glass.bottomAnchor.constraint(equalTo: mapView.topAnchor, constant: initialTrackingButtonY)
         coordinator.trackingBottomConstraint = bottom
 
         let guide = makeControlsGuide(in: mapView, coordinator)
         NSLayoutConstraint.activate([
-            tracking.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -Self.controlInset),
+            glass.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -Self.controlInset),
             bottom,
         ])
 
@@ -311,28 +330,6 @@ struct MapView: MapViewRepresentable, Equatable {
     }
 
     #if os(iOS)
-    /// The safe area the map's own controls are aligned to, which is the
-    /// device's own until a ``MapSidePanel`` takes the leading edge.
-    ///
-    /// The leading constraint is kept so the panel's width can be spent on
-    /// it later; the other three edges stay against the device's safe area.
-    private func makeControlsGuide(in mapView: MKMapView, _ coordinator: Coordinator) -> UILayoutGuide {
-        let safeArea = mapView.safeAreaLayoutGuide
-        let controls = UILayoutGuide()
-        mapView.addLayoutGuide(controls)
-
-        let leading = controls.leadingAnchor.constraint(equalTo: safeArea.leadingAnchor)
-        let trailing = controls.trailingAnchor.constraint(equalTo: safeArea.trailingAnchor)
-        coordinator.controlsLeadingConstraint = leading
-
-        NSLayoutConstraint.activate([
-            leading,
-            trailing,
-            controls.topAnchor.constraint(equalTo: safeArea.topAnchor),
-            controls.bottomAnchor.constraint(equalTo: safeArea.bottomAnchor),
-        ])
-        return controls
-    }
 
     /// The credit line, on the leading edge just above the sheet, riding it
     /// exactly as the "my location" button and the camera pill do. It stays on
@@ -676,3 +673,30 @@ struct MapView: MapViewRepresentable, Equatable {
     #endif
 
 }
+
+#if os(iOS)
+private extension MapView {
+    /// The safe area the map's own controls are aligned to, which is the
+    /// device's own until a ``MapSidePanel`` takes the leading edge.
+    ///
+    /// The leading constraint is kept so the panel's width can be spent on
+    /// it later; the other three edges stay against the device's safe area.
+    private func makeControlsGuide(in mapView: MKMapView, _ coordinator: Coordinator) -> UILayoutGuide {
+        let safeArea = mapView.safeAreaLayoutGuide
+        let controls = UILayoutGuide()
+        mapView.addLayoutGuide(controls)
+
+        let leading = controls.leadingAnchor.constraint(equalTo: safeArea.leadingAnchor)
+        let trailing = controls.trailingAnchor.constraint(equalTo: safeArea.trailingAnchor)
+        coordinator.controlsLeadingConstraint = leading
+
+        NSLayoutConstraint.activate([
+            leading,
+            trailing,
+            controls.topAnchor.constraint(equalTo: safeArea.topAnchor),
+            controls.bottomAnchor.constraint(equalTo: safeArea.bottomAnchor),
+        ])
+        return controls
+    }
+}
+#endif

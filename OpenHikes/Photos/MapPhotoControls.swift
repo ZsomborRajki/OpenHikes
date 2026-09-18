@@ -31,8 +31,10 @@ import UIKit
 /// — where it sits is decided by ``MapView/Coordinator/applySheetTop(on:)``,
 /// which positions it and the tracking button together.
 final class MapPhotoControlsView: UIView {
-    /// Matches the tracking button's height, so the two controls line up
-    /// across the map rather than merely sitting near each other.
+    /// The height every floating control on this map shares, so they line up
+    /// across it rather than merely sitting near each other. The tracking
+    /// button's capsule takes its size from here too — see
+    /// ``MapView/makeTrackingButton(for:_:)``.
     static let controlSize: CGFloat = 44
     /// Under the 4pt gap between the two buttons, so they are separate targets
     /// at rest and their glass merges into one shape — the same relationship

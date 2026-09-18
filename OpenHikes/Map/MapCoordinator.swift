@@ -110,7 +110,16 @@ extension MapView {
         #if canImport(UIKit)
         /// The "my location" button itself, so the clamp that keeps it out of
         /// the top safe area can measure it rather than assume its size.
+        ///
+        /// The glass capsule, not the `MKUserTrackingButton` inside it — see
+        /// ``MapView/makeTrackingButton(for:_:)``. That is the view with the
+        /// control's real size and the one the sheet moves and fades, and the
+        /// tap-claim walk up the hierarchy reaches it from anything the button
+        /// puts under a finger.
         weak var trackingButton: UIView?
+        /// The button inside that capsule, held only to recolour its glyph as
+        /// tracking turns on and off — see ``applyTrackingTint(for:)``.
+        weak var trackingGlyph: MKUserTrackingButton?
         #endif
 
         weak var sheetMetrics: SheetMetrics?
