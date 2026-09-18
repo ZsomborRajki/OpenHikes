@@ -281,6 +281,9 @@ extension MapView.Coordinator {
         if !photoAnnotations.isEmpty {
             mapView.removeAnnotations(photoAnnotations)
             photoAnnotations = []
+            // One of them may have been the open callout — see
+            // ``refreshOpenCallout(on:)``.
+            refreshOpenCallout(on: mapView)
         }
         guard !pins.isEmpty else { return }
         let annotations = pins.map(PhotoMapAnnotation.init)

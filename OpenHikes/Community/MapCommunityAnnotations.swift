@@ -134,6 +134,9 @@ extension MapView.Coordinator {
         if !communityAnnotations.isEmpty {
             mapView.removeAnnotations(communityAnnotations)
             communityAnnotations = []
+            // One of them may have been the open callout — see
+            // ``refreshOpenCallout(on:)``.
+            refreshOpenCallout(on: mapView)
         }
         guard !listings.isEmpty else { return }
         let annotations = listings.map(CommunityMapAnnotation.init)

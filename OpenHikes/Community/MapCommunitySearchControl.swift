@@ -614,6 +614,26 @@ extension MapView.Coordinator {
         applyAreaSearchVisibility(animated: true)
     }
 
+    /// Asks the map itself whether a callout is still up, rather than waiting
+    /// to be told.
+    ///
+    /// `didDeselect` is the ordinary way one closes, and it is not the only
+    /// way: taking a selected annotation off the map takes its callout with it
+    /// — which is what backing out of a preview does to every photo pin on it
+    /// — and MapKit does not reliably report that as a deselection. Without
+    /// this, a hiker who opened a photo pin's callout and then left the
+    /// preview would find *Search this area* gone for the rest of the session,
+    /// which is the Community tab's one verb. Called wherever annotations are
+    /// removed, where `selectedAnnotations` is the answer rather than a guess.
+    /// `canShowCallout` for the same reason `didSelect` asks it: a route dot
+    /// left selected is a selection with nothing drawn above it.
+    func refreshOpenCallout(on mapView: MKMapView) {
+        let open = mapView.selectedAnnotations.contains { annotation in
+            mapView.view(for: annotation)?.canShowCallout == true
+        }
+        withdrawAreaSearchForCallout(open: open)
+    }
+
     private func applyAreaSearchVisibility(animated: Bool) {
         #if os(iOS)
         guard let areaSearchControl else { return }
