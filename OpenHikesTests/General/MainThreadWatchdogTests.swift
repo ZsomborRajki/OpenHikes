@@ -39,6 +39,18 @@
 //  the bound — rather than taking the first one and hoping — is the same
 //  "wait on the positive effect" rule the rest of this bundle follows.
 //
+//  The *upper* bound on that length went the same way, and later. Asserting
+//  the reported stall against the requested block assumed the block was the
+//  only thing holding main, which the paragraph below already says is false:
+//  this host does SwiftData and CloudKit work of its own, and one of its own
+//  stalls landing against the block is reported — correctly — as their sum.
+//  CI failed on exactly that, a 2.697s reading of a 1.346s block. So the bound
+//  is measured now rather than assumed: from the last cycle logged before the
+//  block to the moment main answers again, which is the whole window any
+//  honest stall for that attempt has to fit inside. A stall is also attributed
+//  to the attempt that provoked it, because one reported after its grace ran
+//  out was being checked against the *next* attempt's block.
+//
 //  One thing deliberately not asserted: that an *idle* main thread is never
 //  called a stall. It cannot be asserted from inside the process being
 //  measured. The host is a real app doing SwiftData and CloudKit work of its
@@ -81,11 +93,36 @@ nonisolated private final class CycleLog: Sendable {
         }
     }
 
-    /// The first stall of at least `minimum`, if one has been reported.
-    func firstStall(atLeast minimum: Duration) -> Duration? {
-        entries.withLock { logged -> Duration? in
-            for entry in logged {
-                if let stall = entry.stall, stall >= minimum { return stall }
+    /// When the most recent cycle was logged, or `nil` before there are any.
+    ///
+    /// The anchor an attempt's bound is measured from: the watchdog posts its
+    /// next ping after this instant, so no stall it goes on to report can have
+    /// begun before it.
+    var latestInstant: ContinuousClock.Instant? {
+        entries.withLock { $0.last?.at }
+    }
+
+    /// The first stall of at least `minimum` logged after `index` cycles, with
+    /// the instant its cycle was logged, if one has been reported.
+    ///
+    /// Scoped to one attempt rather than to the whole log, and that is not
+    /// tidiness. A block's stall is sometimes reported after the grace this
+    /// test waits for it, so it lands in the log while the *next* attempt is
+    /// measuring its period. Scanning from the beginning picked that stall up
+    /// on the later attempt and checked it against the later attempt's block,
+    /// which is a comparison between two different provocations — and the
+    /// larger the earlier block, the more certainly it failed.
+    ///
+    /// The instant comes back with it because the bound is measured to it: the
+    /// watchdog had stopped timing by the time it logged the cycle, so a stall
+    /// reported there cannot be longer than the run-up to it.
+    func firstStall(
+        atLeast minimum: Duration,
+        after index: Int
+    ) -> (stall: Duration, at: ContinuousClock.Instant)? {
+        entries.withLock { logged -> (Duration, ContinuousClock.Instant)? in
+            for entry in logged.dropFirst(index) {
+                if let stall = entry.stall, stall >= minimum { return (stall, entry.at) }
             }
             return nil
         }
@@ -146,11 +183,21 @@ struct MainThreadWatchdogTests {
     /// generous rather than tuned.
     private static let reportGrace: Duration = .seconds(2)
 
-    /// Room above the block for the reported figure: the watchdog only sees
-    /// main answer on its next retry tick, and it times from before the block
-    /// began. Wide, because what it guards against is a figure wrong by a
-    /// whole cycle or accumulated across several.
-    private static let lengthSlack: Duration = .seconds(1)
+    /// Room above the window an attempt's stall could honestly have occupied,
+    /// for the retry tick the watchdog notices main answering on and for the
+    /// hop back onto main once it does.
+    ///
+    /// Small because the window it is added to is now measured rather than
+    /// assumed — see ``stallIsReported``. The figure this replaced was a
+    /// second of room above the *requested block*, which asserted something
+    /// the watchdog never promised: it times from its own last ping, not from
+    /// the moment this test began blocking, so anything else holding main in
+    /// between is inside the stall it reports and outside the block. This
+    /// file's header records a 1.34s stall observed while a test did nothing
+    /// but sleep, and the host is a real app doing SwiftData and CloudKit work
+    /// — so one of those landing against a ~1.3s block produced a perfectly
+    /// correct 2.7s reading and a red suite on CI.
+    private static let lengthSlack: Duration = .milliseconds(500)
 
     /// Installs `log` for the duration of `body`, then takes it back off.
     private func observing(_ log: CycleLog, _ body: () async -> Void) async {
@@ -200,6 +247,7 @@ struct MainThreadWatchdogTests {
         let log = CycleLog()
         var observed: Duration?
         var block: Duration = .zero
+        var window: Duration = .zero
         var attempts = 0
 
         await observing(log) {
@@ -211,15 +259,29 @@ struct MainThreadWatchdogTests {
                 // blocking from — the next ping goes out one ping interval
                 // later, which is inside a block sized from that period.
                 guard await awaitCycles(2, in: log, before: deadline),
-                      let period = log.latestPeriod else { break }
+                      let period = log.latestPeriod,
+                      let anchor = log.latestInstant else { break }
                 attempts += 1
                 block = min(period + Self.minimumStall + Self.provocationMargin, Self.blockCap)
 
+                // Everything this attempt is allowed to report has to fit
+                // between the last cycle logged before the block and the cycle
+                // that reports the stall. The watchdog's next ping goes out
+                // after `anchor`, so no stall it reports here can have started
+                // earlier; and it has stopped timing by the time it hands the
+                // cycle over, so none can end later. That window is the honest
+                // bound — wider than the block by however long anything *else*
+                // held main in between, which is the part the old assertion
+                // against the block alone denied could happen.
+                let mark = log.count
                 blockMainThread(for: block)
 
                 let grace = ContinuousClock.now + max(period, Self.reportGrace)
                 _ = await awaitCycles(1, in: log, before: min(deadline, grace))
-                observed = log.firstStall(atLeast: Self.minimumStall)
+                if let found = log.firstStall(atLeast: Self.minimumStall, after: mark) {
+                    observed = found.stall
+                    window = found.at - anchor
+                }
             }
         }
 
@@ -232,8 +294,11 @@ struct MainThreadWatchdogTests {
             """
         )
         #expect(
-            stall <= block + Self.lengthSlack,
-            "a \(block) block was reported as a stall of \(stall)"
+            stall <= window + Self.lengthSlack,
+            """
+            a \(block) block inside a \(window) window of unanswered main was \
+            reported as a stall of \(stall)
+            """
         )
     }
 }
