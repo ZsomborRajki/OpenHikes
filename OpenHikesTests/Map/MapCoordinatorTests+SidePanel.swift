@@ -64,6 +64,60 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// The panel's width is spent once, and the map beside it is used.
+    ///
+    /// `setVisibleMapRect(_:edgePadding:animated:)` frames into the map's
+    /// *layout margins* rather than its bounds, and ``MapView`` writes the
+    /// panel's width into the leading one so MapKit's own compass and scale
+    /// clear it. A fit that also spends the panel in its own padding therefore
+    /// asks for it twice — 800-odd points of an 874-point-wide map — and what
+    /// comes back is not a cramped picture but a wrong one: the route was
+    /// drawn from 756 points to 917, which is to say off the trailing edge of
+    /// the screen. ``sidePanelRouteFit`` above does not catch it, because a
+    /// route pushed past the trailing edge still clears the panel.
+    ///
+    /// So this asserts the other half: that what was fitted is *on* the map
+    /// beside the panel, and takes a real share of it rather than a sliver.
+    @Test("a landscape fit uses the map beside the panel", arguments: [false, true])
+    func sidePanelRouteFitUsesTheMapBesideIt(rightToLeft: Bool) {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let view = mapView(sidePanelInset: MapSidePanelLayout.mapInset)
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        map.frame = CGRect(x: 0, y: 0, width: 874, height: 402)
+        map.semanticContentAttribute = rightToLeft ? .forceRightToLeft : .forceLeftToRight
+        view.update(map, coordinator)
+        map.layoutIfNeeded()
+        // The corners of a walk's bounding box, rather than the near-flat line
+        // above: how much of the screen a fit uses is a question a shape has to
+        // be asked, and a route with no height of its own cannot answer it.
+        let coordinates = [
+            CLLocationCoordinate2D(latitude: 47.66, longitude: 12.83),
+            CLLocationCoordinate2D(latitude: 47.70, longitude: 12.93),
+        ]
+        coordinator.routeOverlay = MKPolyline(coordinates: coordinates, count: coordinates.count)
+
+        coordinator.fitToCurrentRoute(map, animated: false)
+
+        let points = coordinates.map { map.convert($0, toPointTo: map) }
+        let drawn = CGRect(
+            x: points.map(\.x).min() ?? 0,
+            y: points.map(\.y).min() ?? 0,
+            width: abs(points[1].x - points[0].x),
+            height: abs(points[1].y - points[0].y)
+        )
+        let besideThePanel = map.bounds.width - MapSidePanelLayout.mapInset
+        #expect(drawn.minX >= 0, "the fitted route must be on the map")
+        #expect(drawn.maxX <= map.bounds.width, "at both ends")
+        #expect(drawn.minY >= 0 && drawn.maxY <= map.bounds.height)
+        #expect(
+            drawn.width >= besideThePanel * 0.5,
+            "and should fill the map it was given, not a sliver of its far edge"
+        )
+        #endif
+    }
+
     /// Landscape has no sheet, so the leading-edge stack belongs at the bottom
     /// of the map rather than a sheet's height above it.
     ///

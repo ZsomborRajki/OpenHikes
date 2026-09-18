@@ -223,6 +223,40 @@ struct PhotoMapPinTests {
         #expect(controller.pins.isEmpty)
     }
 
+    /// The order the gallery actually asks in: it is pushed *over* the screen
+    /// that owns the pins, so by the time its button is pressed they have
+    /// already been taken off the map. A request cleared by that would never be
+    /// answered.
+    @Test("a selection survives the pins being off the map")
+    func aSelectionOutlivesADetach() {
+        let controller = PhotoMapPinController()
+        let photo = Self.photo(at: Self.bend, offset: 0)
+        let token = controller.attach([photo]) { _ in /* unused */ }
+        controller.detach(token: token)
+
+        controller.select(photo.id)
+
+        #expect(controller.selection?.photoID == photo.id)
+    }
+
+    /// Pressing *Show on map*, dismissing the callout and pressing it again is
+    /// two requests. Compared by value, the second would look like the one the
+    /// map has already answered and the callout would stay shut.
+    @Test("asking for the same pin twice is two requests")
+    func askingForTheSamePinTwiceIsTwoRequests() {
+        let controller = PhotoMapPinController()
+        let photo = Self.photo(at: Self.bend, offset: 0)
+        controller.attach([photo]) { _ in /* unused */ }
+
+        controller.select(photo.id)
+        let first = controller.selection
+        controller.select(photo.id)
+
+        #expect(first != nil)
+        #expect(controller.selection != first)
+        #expect(controller.selection?.photoID == photo.id)
+    }
+
     private static func photo(
         at coordinate: CLLocationCoordinate2D?,
         offset: TimeInterval

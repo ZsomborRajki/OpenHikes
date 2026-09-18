@@ -160,6 +160,8 @@ nonisolated final class PhotoUITests: XCTestCase {
         )
         XCTAssertTrue(app.buttons["Next photo"].isEnabled)
 
+        assertGalleryToolbarArrangement(in: app)
+
         // The trash button is an offer. The file goes with the row and photo
         // pixels stay on the device the photo was added on, so the
         // destructive step is behind a question.

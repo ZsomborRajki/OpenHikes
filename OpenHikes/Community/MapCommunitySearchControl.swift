@@ -595,6 +595,25 @@ extension MapView.Coordinator {
         }
     }
 
+    /// Takes the *Search this area* pill off the map while a callout is open,
+    /// and puts it back when one closes.
+    ///
+    /// The two float over the same corner, and MapKit draws a callout *above*
+    /// its pin — so a pin the camera has framed near the top of the map opens
+    /// underneath the pill. On a photo pin that is the pill sitting on the
+    /// picture, and an invisible half of it swallowing the tap that opens the
+    /// gallery, which is the whole of what the callout is for.
+    ///
+    /// Not specific to photographs, and deliberately: every callout on this map
+    /// is something the hiker has just opened and is reading, and the pill is a
+    /// standing offer that can wait. Reachable by hand for as long as pins have
+    /// been tappable — *Show on map* opening one is what made it easy to see.
+    func withdrawAreaSearchForCallout(open: Bool) {
+        guard hasOpenCallout != open else { return }
+        hasOpenCallout = open
+        applyAreaSearchVisibility(animated: true)
+    }
+
     private func applyAreaSearchVisibility(animated: Bool) {
         #if os(iOS)
         guard let areaSearchControl else { return }
@@ -603,7 +622,9 @@ extension MapView.Coordinator {
         // the moment the hiker switches back to their own hikes — where a
         // control offering to search for published trails would be offering
         // to fill a list that is not there.
-        let visible = community?.isBrowsing == true
+        // ...and not while a callout is standing where it draws — see
+        // ``withdrawAreaSearchForCallout(open:)``.
+        let visible = community?.isBrowsing == true && !hasOpenCallout
         // Above the ceiling it stays put and stops answering. `zoomIn` has
         // something to say and nothing to do; the list's footer says it, and
         // a pill that disappeared at a zoom level would be reporting policy by

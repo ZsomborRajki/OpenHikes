@@ -433,7 +433,10 @@ struct CommunityHikeView: View {
                 // The same filtered answer the strip is drawing, so the pins
                 // and the pages agree about which picture is which — coming
                 // back from the gallery is exactly when the two can differ.
-                browser.previewPhotosLoaded(visible(detail).previewPhotos, of: listing)
+                // Which is also why the gallery a tapped pin opens is built
+                // from this same value: a pin and the page it opens have to be
+                // one picture. See ``publishPhotoPins(_:)``.
+                publishPhotoPins(visible(detail))
             }
         }
         .onDisappear {
@@ -1001,7 +1004,7 @@ private extension CommunityHikeView {
             // only count — see ``MapCommunityPhotoAnnotations``. Alongside the
             // line rather than after the analysis, for the same reason: it is
             // already in hand and costs nothing to hand over.
-            browser.previewPhotosLoaded(detail.previewPhotos, of: listing)
+            publishPhotoPins(detail)
             // Started rather than awaited, so the round trip to Overpass runs
             // alongside the walk of the route below instead of behind it. It
             // is also what a retry re-runs: a first attempt that failed has

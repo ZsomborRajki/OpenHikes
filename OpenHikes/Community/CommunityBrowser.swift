@@ -202,6 +202,14 @@ final class CommunityBrowser {
     /// a pin from outliving the files behind it — see
     /// ``CommunityPreviewPhoto/fileURL``.
     private var previewedPhotos: [CommunityPreviewPhoto] = []
+    /// Which photo pin the map should open the callout on, or `nil` if nothing
+    /// has asked. Observed alongside ``photoPins``.
+    private(set) var photoPinSelection: CommunityPhotoPinSelection?
+    @ObservationIgnored private var nextPhotoPinSelectionToken = 0
+    /// What a tap on a photo pin's picture opens, registered by the preview
+    /// screen — the only thing that has the gallery to open. Retired with the
+    /// pins, so a tap can never reach a screen that has gone.
+    @ObservationIgnored private var previewPhotoOpener: ((Int) -> Void)?
     /// Which preview is open, whether or not its route has arrived.
     ///
     /// Separate from ``previewedRoute`` because the two are set at different
@@ -1181,6 +1189,7 @@ extension CommunityBrowser {
         // own: these pins point at files in the previous screen's download
         // directory, which that screen deletes on its way out.
         previewedPhotos = []
+        previewPhotoOpener = nil
     }
 
     /// The open preview has its route. The map draws this one properly.
@@ -1211,12 +1220,40 @@ extension CommunityBrowser {
     /// change while the screen stays put: a reviewer removing a photograph
     /// republishes the pins against the same route. Matched on the listing for
     /// the same reason that one is.
+    /// - Parameter onOpen: What a tap on a pin's picture opens, or `nil` from a
+    ///   screen that has no gallery behind its pins.
     func previewPhotosLoaded(
         _ photos: [CommunityPreviewPhoto],
-        of listing: CommunityListing
+        of listing: CommunityListing,
+        onOpen: ((Int) -> Void)?
     ) {
         guard previewedListingID == listing.id else { return }
         previewedPhotos = photos
+        previewPhotoOpener = onOpen
+    }
+
+    /// Opens the preview's gallery at the photograph a pin was tapped on, if a
+    /// preview is still listening. A tap that lands after the screen went is
+    /// dropped rather than pushed onto whatever replaced it — the same guard
+    /// ``PhotoMapPinController/open(_:)`` makes, for the same reason.
+    ///
+    /// Also dropped where the screen that published the pins has no gallery to
+    /// open, which is the reviewer's — see ``CommunityPhotoReviewView``, whose
+    /// strip is a list of decisions rather than a way into the pictures.
+    func openPreviewPhoto(_ index: Int) {
+        previewPhotoOpener?(index)
+    }
+
+    /// Asks the map to open a photograph's pin, so a reviewer sent to the map
+    /// from the gallery arrives at a callout rather than at one marker among
+    /// several. Outlives the gallery's dismissal for the reason
+    /// ``PhotoMapPinController/select(_:)`` does.
+    func selectPhotoPin(_ index: Int) {
+        nextPhotoPinSelectionToken += 1
+        photoPinSelection = CommunityPhotoPinSelection(
+            index: index,
+            token: nextPhotoPinSelectionToken
+        )
     }
 
     func previewClosed(_ listing: CommunityListing) {
@@ -1224,5 +1261,6 @@ extension CommunityBrowser {
         previewedListingID = nil
         previewedRoute = nil
         previewedPhotos = []
+        previewPhotoOpener = nil
     }
 }

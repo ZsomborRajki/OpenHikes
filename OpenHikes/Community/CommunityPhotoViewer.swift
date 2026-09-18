@@ -77,6 +77,10 @@ struct CommunityPhotoViewer: View {
     /// place on the map, so the sheet gets out of the way rather than snapping
     /// back over the pin it was asked to reveal.
     var onShowOnMap: () -> Void = { /* no-op default */ }
+    /// Where the preview's photo pins are published, so *Show on map* can open
+    /// the one it is sending the reviewer to. `nil` in a preview or a test with
+    /// no map behind it.
+    var community: CommunityBrowser?
     var selection = CommunityPhotoSelection()
     /// Everything the per-photograph menu needs, or `nil` for a launch without
     /// a transport — where the menu would be a promise the launch cannot keep,
@@ -225,10 +229,12 @@ struct CommunityPhotoViewer: View {
     @ToolbarContentBuilder
     private func toolbarContent(_ current: CommunityGalleryPhoto?) -> some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
-            if let coordinate = current?.coordinate {
+            if let current, let coordinate = current.coordinate {
                 CommunityPhotoMapButton(
+                    index: current.index,
                     coordinate: coordinate,
                     mapController: mapController,
+                    community: community,
                     onShowOnMap: onShowOnMap
                 )
             }
@@ -340,7 +346,9 @@ struct CommunityPhotoViewer: View {
 /// ``HikePhotoViewer``'s version. That one has to put a marker on the map
 /// because nothing else is standing for the photograph; here the preview
 /// already drew a pin for every anchored picture, and a second marker on top
-/// of it would be two things standing for one photograph.
+/// of it would be two things standing for one photograph. What this does
+/// instead is *open* that pin, so the reviewer lands on the photograph they
+/// were looking at rather than on one camera among several.
 ///
 /// "Out of the way" is the whole sheet rather than just this screen. Popping
 /// alone restores the height the preview was being read at, which on a screen
@@ -348,8 +356,10 @@ struct CommunityPhotoViewer: View {
 /// so the sheet is asked to collapse first and the pop finds that decision
 /// already made.
 private struct CommunityPhotoMapButton: View {
+    let index: Int
     let coordinate: CLLocationCoordinate2D
     var mapController: MapController
+    var community: CommunityBrowser?
     let onShowOnMap: () -> Void
 
     @Environment(\.dismiss)
@@ -368,6 +378,9 @@ private struct CommunityPhotoMapButton: View {
                     longitudinalMeters: Self.regionMeters
                 )
             )
+            // Asked for here and answered after the dismiss below — see
+            // ``CommunityBrowser/selectPhotoPin(_:)``.
+            community?.selectPhotoPin(index)
             onShowOnMap()
             dismiss()
         } label: {

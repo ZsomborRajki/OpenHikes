@@ -88,7 +88,7 @@ extension CommunityHikeView {
             // rather than an append, so the strip and the pins are always the
             // same answer to the same question — which is why it is the
             // filtered detail that goes, exactly as the strip draws one.
-            browser.previewPhotosLoaded(visible(detail).previewPhotos, of: listing)
+            publishPhotoPins(visible(detail))
         }
     }
 
@@ -112,6 +112,21 @@ extension CommunityHikeView {
     /// Nothing is thrown away — ``CommunityHikeView/phase`` keeps every set
     /// that arrived — so unblocking a contributor from Settings brings their
     /// photographs back without a second download.
+    /// Hands the map where this hike's photographs were taken, and what a tap
+    /// on one of those pins opens.
+    ///
+    /// One call rather than three copies of two, because the pair has to stay
+    /// a pair: the pins and the gallery a pin opens are both read out of the
+    /// same `detail`, so a pin can never open a page of a different picture.
+    /// That is the same agreement the strip and the pins already keep, and it
+    /// is why what goes in is whichever `detail` the caller is drawing —
+    /// ``visible(_:)``'s answer everywhere the hiker can see it.
+    func publishPhotoPins(_ detail: CommunityHikeDetail) {
+        browser.previewPhotosLoaded(detail.previewPhotos, of: listing) { index in
+            onOpenPhoto(detail.galleryPhotos, index)
+        }
+    }
+
     func visible(_ detail: CommunityHikeDetail) -> CommunityHikeDetail {
         detail.excluding(
             authors: blockList.blockedIDs,

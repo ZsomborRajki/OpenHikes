@@ -388,7 +388,13 @@ private extension CommunityPhotoReviewView {
             removedPhotos.insert(index)
         }
         guard case .loaded(let contribution) = phase else { return }
-        browser.previewPhotosLoaded(keptPreviewPhotos(of: contribution), of: pending.prospectiveListing)
+        // No opener: this screen's strip decides what stays rather than
+        // showing what is there, so its pins have no gallery to open.
+        browser.previewPhotosLoaded(
+            keptPreviewPhotos(of: contribution),
+            of: pending.prospectiveListing,
+            onOpen: nil
+        )
     }
 
     /// Where the photographs that are still going were taken.
@@ -484,9 +490,11 @@ private extension CommunityPhotoReviewView {
             try Task.checkCancellation()
             phase = .loaded(contribution)
             photoCount = contribution.photoFileURLs.count
+            // No opener, for the reason `toggleRemoval(of:)` gives.
             browser.previewPhotosLoaded(
                 keptPreviewPhotos(of: contribution),
-                of: pending.prospectiveListing
+                of: pending.prospectiveListing,
+                onOpen: nil
             )
         } catch is CancellationError {
             // The screen has gone. Nothing to report a failure on, and nobody

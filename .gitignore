@@ -38,6 +38,14 @@ buildServer.json
 # same `xcodebuild ... -resultBundlePath` command locally.
 TestResults/
 
+# Screenshot working files. The captured PNGs are build output, and the
+# photographs are somebody else's stock images that do not belong in this
+# repository's history — see Screenshots/README.md.
+Screenshots/Output/
+Screenshots/Output-*/
+Screenshots/Photos/
+Screenshots/Stamped/
+
 # Python bytecode — `python3 -m py_compile` and the unittest run under
 # `Scripts/tests/` both write it beside the source.
 __pycache__/

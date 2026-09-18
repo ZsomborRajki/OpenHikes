@@ -93,6 +93,17 @@ nonisolated struct PhotoMapPin: Hashable, Identifiable, Sendable {
     }
 }
 
+/// A request that the map open one pin's callout.
+///
+/// Tokened rather than compared by photo: asking twice for the same photograph
+/// is two requests, and without the token the second would look to the map like
+/// the one it has already answered — which is exactly the case a hiker hits by
+/// pressing *Show on map*, dismissing the callout and pressing it again.
+nonisolated struct PinSelection: Equatable, Sendable {
+    let photoID: UUID
+    let token: Int
+}
+
 /// The photo pins currently drawn on the map, and the way back from one of
 /// them into the gallery it came from.
 ///
@@ -112,12 +123,17 @@ final class PhotoMapPinController {
     /// photo redraws MapKit's annotations and no SwiftUI view.
     private(set) var pins: [PhotoMapPin] = []
 
+    /// Which pin the map should open the callout on, or `nil` if nothing has
+    /// asked. Observed alongside ``pins``.
+    private(set) var selection: PinSelection?
+
     /// Where the previews are decoded from. Injectable so a test can point the
     /// pins at its own sandbox rather than at the app's photo directory.
     @ObservationIgnored let store: HikePhotoStore
 
     @ObservationIgnored private var openPhoto: ((UUID) -> Void)?
     @ObservationIgnored private var activeToken: Int?
+    @ObservationIgnored private var nextSelectionToken = 0
     @ObservationIgnored private var nextToken = 0
     /// What the claiming screen last published, kept apart from ``pins`` so a
     /// screen that is being navigated away from can have its pins taken off the
@@ -169,6 +185,21 @@ final class PhotoMapPinController {
     func open(_ photoID: UUID) {
         guard hasHostScreen else { return }
         openPhoto?(photoID)
+    }
+
+    /// Asks the map to open a photo's pin, so a hiker sent to the map from the
+    /// gallery arrives at a callout rather than at a marker they have to find
+    /// and tap.
+    ///
+    /// Deliberately not guarded on ``hasHostScreen``, and deliberately not
+    /// cleared by ``detach(token:)``: the only caller is the gallery, which is
+    /// pushed *over* the screen that owns the pins — so at the moment this is
+    /// called they have already been taken off the map, and the request has to
+    /// outlive that to be applied when they come back. The map holds it until
+    /// a pin matches, which is what makes the order of the two safe.
+    func select(_ photoID: UUID) {
+        nextSelectionToken += 1
+        selection = PinSelection(photoID: photoID, token: nextSelectionToken)
     }
 
     /// Takes the pins off the map for as long as the sheet has no screen

@@ -248,9 +248,16 @@ struct SettingsView: View {
 
     // MARK: Background tracking
 
-    /// iOS-only: this is what feeds the Home Screen widget while OpenHikes
-    /// isn't open. Off by default — turning it
+    /// iOS-only: this is what feeds the Home Screen widget and the Live
+    /// Activity while OpenHikes isn't open. Off by default — turning it
     /// on is what first triggers the system's Always-location prompt.
+    ///
+    /// **The footer and `NSLocationAlwaysAndWhenInUseUsageDescription` say the
+    /// same thing on purpose**, and both name both surfaces. That string is
+    /// the whole of what App Review reads about Always access — see *Notes for
+    /// App Review* in `APP_REVIEW.md` — and a switch whose own description
+    /// claimed less than the prompt would be the app disagreeing with itself
+    /// in the one place a reviewer compares the two.
     @ViewBuilder private var backgroundTrackingSection: some View {
         #if os(iOS)
         Section {
@@ -267,8 +274,11 @@ struct SettingsView: View {
             Text("Background Tracking")
         } footer: {
             Text(
-                "Keeps your Home Screen widget showing your progress along the selected trail"
-                + " even when OpenHikes isn't open, using occasional, low-power location updates."
+                """
+                Keeps your Home Screen widget and Live Activity showing your \
+                progress along the selected trail even when OpenHikes isn't \
+                open, using occasional, low-power location updates.
+                """
             )
         }
         #endif
