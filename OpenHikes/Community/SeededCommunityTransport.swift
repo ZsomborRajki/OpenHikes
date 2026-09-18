@@ -684,9 +684,26 @@ nonisolated extension SeededCommunityTransport {
     /// One coordinate for all of them rather than a spread, because what a
     /// scenario asserts about these is that they *have* a place at all: the
     /// merged pin set is what is under test, not the arithmetic of a walk.
+    ///
+    /// A queue entry's own place, which is the trailhead: a notice is reviewed
+    /// on its own screen, with no trail drawn under it. What is published onto
+    /// a hike goes to that hike instead — see ``contributedPhotoCoordinate``.
     static let photoCoordinate = CLLocationCoordinate2D(
         latitude: startLatitude,
         longitude: startLongitude
+    )
+
+    /// Where the lake hike's contributed photographs stand.
+    ///
+    /// The lake's own start rather than the bare trailhead, which is what this
+    /// was. ``SeededCommunitySpread`` moved every listing off the trailhead so
+    /// the markers stop decluttering into one, and a contributed pin left
+    /// behind stands half a kilometre from the line it is a photograph of —
+    /// with *Show on map* framing a piece of hillside that has no trail on it.
+    /// That is the mismatch that file's header exists to forbid.
+    static let contributedPhotoCoordinate = CLLocationCoordinate2D(
+        latitude: startLatitude + spreadLatitude(of: lakeTitle),
+        longitude: startLongitude + spreadLongitude(of: lakeTitle)
     )
 
     /// The published set the lake hike carries, built around whichever files
@@ -699,7 +716,7 @@ nonisolated extension SeededCommunityTransport {
             authorID: contributorAuthorID,
             publishedAt: publishedDate,
             photoPins: files.map { _ in
-                CommunityPhotoPin(capturedAt: hikeDate, coordinate: photoCoordinate)
+                CommunityPhotoPin(capturedAt: hikeDate, coordinate: contributedPhotoCoordinate)
             },
             photoFileURLs: files,
             photosOnRecord: files.count

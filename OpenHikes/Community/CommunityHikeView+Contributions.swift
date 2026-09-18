@@ -112,6 +112,13 @@ extension CommunityHikeView {
     /// Nothing is thrown away — ``CommunityHikeView/phase`` keeps every set
     /// that arrived — so unblocking a contributor from Settings brings their
     /// photographs back without a second download.
+    func visible(_ detail: CommunityHikeDetail) -> CommunityHikeDetail {
+        detail.excluding(
+            authors: blockList.blockedIDs,
+            contributions: review?.takenDownContributions ?? []
+        )
+    }
+
     /// Hands the map where this hike's photographs were taken, and what a tap
     /// on one of those pins opens.
     ///
@@ -125,12 +132,5 @@ extension CommunityHikeView {
         browser.previewPhotosLoaded(detail.previewPhotos, of: listing) { index in
             onOpenPhoto(detail.galleryPhotos, index)
         }
-    }
-
-    func visible(_ detail: CommunityHikeDetail) -> CommunityHikeDetail {
-        detail.excluding(
-            authors: blockList.blockedIDs,
-            contributions: review?.takenDownContributions ?? []
-        )
     }
 }

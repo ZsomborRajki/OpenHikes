@@ -178,6 +178,14 @@ clock.timeZone = TimeZone(identifier: "UTC")
 print("\(track.count) track points, stamping \(photos.count) photo(s)")
 var written = 0
 for (index, photo) in photos.enumerated() {
+    // `anchors` can only offer as many points as the track has, so a track
+    // shorter than the photo list runs out — a trap rather than a message,
+    // which is not what a script should do to somebody who pointed it at the
+    // wrong `.gpx`.
+    guard index < points.count else {
+        fail("\(trackURL.lastPathComponent) has only \(track.count) usable point(s) "
+            + "for \(photos.count) photo(s)")
+    }
     let point = points[index]
     // Numbered so the photo library's own ordering matches the walk's.
     let name = String(format: "%02d-%@", index + 1, photo.lastPathComponent)
