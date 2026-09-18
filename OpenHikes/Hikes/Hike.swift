@@ -51,7 +51,7 @@ final class Hike {
     var date = Date.distantPast
     /// Route tint, stored as "#RRGGBB" or "#RRGGBBAA". The alpha is used only for
     /// the map polyline; other UI reads ``tintOpaque``.
-    var tintHex: String = "#34C759"
+    var tintHex: String = "#1B7F3B"
     /// Map polyline width, in points.
     var routeWidth: Double = 3
     /// How the map draws this route's line — see ``RouteLinePattern``. Stored
@@ -301,7 +301,7 @@ final class Hike {
         distanceMeters: Double,
         id: UUID = UUID(),
         date: Date = .now,
-        tintHex: String = "#34C759",
+        tintHex: String = "#1B7F3B",
         routeWidth: Double = 3,
         routeLinePatternID: String = RouteLinePattern.default.rawValue,
         symbol: String = "figure.hiking",

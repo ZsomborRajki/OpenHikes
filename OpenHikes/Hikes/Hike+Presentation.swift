@@ -37,7 +37,7 @@ extension Hike {
     /// on the declaration, so the model keeps its own copy and this exists for
     /// the callers — the Live Activity among them — that need the same answer
     /// without a `Hike` in hand.
-    static let defaultTintHex = "#34C759"
+    static let defaultTintHex = "#1B7F3B"
 
     /// A random, visually distinct route color, so each newly imported hike
     /// gets its own default tint instead of always green.
