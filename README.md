@@ -10,19 +10,23 @@ That is local-first with one deliberate exception. There is no OpenHikes account
 - **Live recording.** Background location, pause and resume, crash-safe recovery, motion-aware fix handling and barometric elevation fusion.
 - **Recording controls.** Start, pause, resume, stop and check a recording through Siri, Shortcuts or Spotlight, plus a state-aware start/stop control in Control Center.
 - **Trail matching and review.** Bounded live matching against a cached OpenStreetMap walking graph, then a post-recording review where every section the matcher moved or found ambiguous can be kept, handed back to the raw GPS trace, or swapped for an alternative.
+- **Walking a trail.** A saved hike can be walked as well as read. Following one accrues the coverage of its route as the walk goes, pauses and resumes with it, and ends in a summary — coverage, active time, the furthest point reached — that stays in that hike's own History.
+- **Surface and difficulty.** What OpenStreetMap knows about a route underfoot, and how demanding it is, folded into the handful of categories a hiker plans around: the Swiss Alpine Club's six grades and a short surface vocabulary. Measured once, the first time a hike is opened, and simply absent when the map has nothing to say about that valley.
 - **Maps.** OpenStreetMap, Stadia Outdoors and Thunderforest Outdoors tile providers, plus an Apple Maps option that draws MapKit's own base map. Passive tile auto-save for browsed areas, and bulk offline downloads where the provider's terms permit them.
 - **Photos.** Pictures taken on a walk or picked from the library, pinned to where on the trail they were taken, shown as a gallery strip and as map pins. Photos taken with the system camera during a recording are found afterwards and matched against the recording's own timestamps. Granting access to only some photos is handled rather than treated as a refusal.
 - **Live context.** Current location, trail auto-follow with a progress readout, and search across saved hikes and MapKit place suggestions. WeatherKit conditions sit over the map as a badge that opens the current reading and the next twelve hours in full; temperatures, speeds, distances and elevations are spelled in the units the reader's own locale uses.
 - **Home Screen widget.** Trail progress, a climb/descent/high-point stat line, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
 - **Live Activity.** The same figures on the Lock Screen and in the Dynamic Island while a recording runs or a trail is being followed, ticking their own clock so a walk costs no updates while it is simply going well.
 - **iCloud sync.** Hikes and their metadata follow the hiker across their own devices, through their own private CloudKit database. Photo files and the tile cache stay on the device that produced them.
-- **Community hikes.** Shared hikes are found by panning the map and asking, or by typing a name, and are drawn as lines rather than only as pins. Opening one shows the same statistics a hike of your own gets; saving it copies its route and photographs into your library. Publishing your own is free and is reviewed by a person before anyone else can see it; every published hike can be reported or its author blocked, and a hiker can ask for their own to be taken down. Browsing needs no account.
+- **Health.** A finished hike is written into the hiker's own Health store as a workout, behind a switch that is off until they turn it on. The app only ever writes: it asks for no read access at all.
+- **Community hikes.** Shared hikes are found by panning the map and asking, or by typing a name, and are drawn as lines rather than only as pins. Opening one shows the same statistics a hike of your own gets; saving it copies its route and photographs into your library. Publishing your own is free and is reviewed by a person before anyone else can see it; every published hike can be reported or its author blocked, and a hiker can ask for their own to be taken down. Browsing needs no account. Photographs travel the other way too: pictures brought back from a trail somebody else published — or from a waymarked OpenStreetMap route, which has none of its own — can be offered to it, are reviewed the same way a hike is, and carry the name of whoever took them. Saving such a hike brings the contributed photographs home with it.
 - **Waymarked trails from OpenStreetMap.** The same list also offers the signposted routes OpenStreetMap already knows about nearby, so it has something in it before anyone has published anything. They carry what a signpost carries and a stranger's upload cannot — the blaze to follow, whether it loops back to the car, and the two places it runs between — and they are marked as coming from OpenStreetMap rather than from a person: there is no author to credit or block, no photographs, and a link to the route's own page for anyone who wants to correct it. Long-distance paths are left out; what is offered is the length of a day.
 
 ## Requirements
 
-- Xcode 26.5 or later. Every target deploys to iOS 26.0, which is also what
-  `OpenHikesShared/Package.swift` declares; CI builds on Xcode 26.6.
+- Xcode 26.5 or later — development is on Xcode 27. Every target deploys to
+  iOS 26.0, which is also what `OpenHikesShared/Package.swift` declares; CI
+  builds on Xcode 26.6.
 - An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container, the push entitlement and HealthKit.
 - iPhone only. Every target sets `TARGETED_DEVICE_FAMILY = 1`.
 
@@ -79,30 +83,35 @@ xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
 swift test --package-path OpenHikesShared
 
 # Simulator UI automation, across three simulator clones; --serial for one,
-# and --list shows the available tests
+# and --list shows the available tests. A second run on the same machine needs
+# its own of both: --device <name|udid> and --derived-data <path>
 Scripts/run-ui-tests.sh --all
 
 # Strict SwiftLint, the same one CI runs; --fix applies what it can correct
 Scripts/lint.sh
 
 # The shell scripts' own tests, against stubbed xcrun/xcodebuild — nothing is
-# built and no simulator is touched. CI fails a merge on this one too.
+# built and no simulator is touched. CI runs this one too.
 Scripts/run-script-tests.sh
 ```
 
 Against a cold simulator, `xcodebuild test` fails with "The test runner hung before establishing connection" after several minutes without a single test having reported — which is why the boot is the first line above rather than an optional one.
 
+The device name is the one thing these commands do not share with CI. `iPhone 18 Pro` is the Pro model an iOS 27 runtime ships, so an Xcode 26 install has no such simulator: name whichever device your own runtimes do have, which is what `.github/workflows/ci.yml` does when it pins `iPhone 17 Pro` for its Xcode 26.6 runner image.
+
 Unit and integration tests use Swift Testing; `OpenHikesUITests` uses XCUITest, because Apple's UI automation and launch metrics are not available through Swift Testing.
 
 `brew install xcbeautify periphery xcode-build-server` installs the optional tooling. None of it is required: each tool is used if present and skipped if not. `periphery` has to be the version in `.periphery-version` or newer — run it through `Scripts/periphery.sh`, which checks that first, because an older Periphery reads none of `.periphery.yml` and reports a clean scan anyway. `xcode-build-server` is per-machine — run `xcode-build-server config -project OpenHikes.xcodeproj -scheme OpenHikes` locally, and again after adding or renaming a target.
 
-CI runs strict SwiftLint, the shared package suite in both debug and release, the app and widget unit tests with a coverage floor, warning-free debug and release builds, an unsigned device archive, the concurrency suites under Thread Sanitizer, and both accessibility UI classes. CodeQL and a dependency review run beside it. The functional UI automation stays out, because it leans on real gestures and timing-sensitive waits that a shared runner makes slow and flaky — run it locally before a change that touches recording, the map or render isolation.
+CI runs strict SwiftLint, the shell scripts' own smoke tests, the shared package suite in both debug and release, the app and widget unit tests with a coverage floor, warning-free debug and release builds, an unsigned device archive, the concurrency suites under Thread Sanitizer, and both accessibility UI classes. CodeQL and a dependency review run beside it. The functional UI automation stays out, because it leans on real gestures and timing-sensitive waits that a shared runner makes slow and flaky — run it locally before a change that touches recording, the map or render isolation.
 
 ## Documentation
 
 - [`AGENTS.md`](AGENTS.md) and [`.github/copilot-instructions.md`](.github/copilot-instructions.md) — the architecture, the conventions, the energy policies, and the decisions already settled.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — the short version for a first change.
-- [`SECURITY.md`](SECURITY.md) — how to report a vulnerability privately.
+- [`SECURITY.md`](SECURITY.md) — how to report a vulnerability privately, and what the public community database grants to whom.
+- [`Screenshots/README.md`](Screenshots/README.md) — capturing the App Store screenshot set, and the route and photographs the frames are built from.
+- [`APP_REVIEW.md`](APP_REVIEW.md) — the notes the App Store listing carries for its reviewer, including why the app asks for background location.
 - [Issues](https://github.com/ZsomborRajki/OpenHikes/issues) — the open work: bugs, missing features, and product decisions that are still open.
 
 ## Project layout
@@ -112,11 +121,11 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | Path | Purpose |
 |---|---|
 | `OpenHikes/App/` | App entry point, shared app model, configuration, deep-link routing, root navigation. |
-| `OpenHikes/Hikes/` | Persisted hike model, GPX import and export, route profile, statistics, hike screens. |
+| `OpenHikes/Hikes/` | Persisted hike model, GPX import and export, route profile, statistics, the surface and difficulty breakdowns, walks along a saved trail and their history, hike screens. |
 | `OpenHikes/Recording/` | Live recording, recovery journal, sensors, trail matching, recording UI. |
 | `OpenHikes/Map/` | MapKit bridge, map state, search, location tracking, map rendering. |
 | `OpenHikes/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, overlay rendering. |
-| `OpenHikes/Community/` | Publishing a hike to the public database, browsing and searching what other people published, the waymarked routes fetched from OpenStreetMap that fill the same list, the map's lines and pins for both, importing one, reporting and blocking. |
+| `OpenHikes/Community/` | Publishing a hike to the public database, browsing and searching what other people published, the waymarked routes fetched from OpenStreetMap that fill the same list, the map's lines and pins for both, importing one, offering photographs to a trail that is already public, reviewing what is waiting, reporting and blocking. |
 | `OpenHikes/Photos/` | Capture and import, library discovery and time-to-place matching, the file store, trail anchoring, gallery, viewer and map pins. |
 | `OpenHikes/Health/` | Writing a finished hike into the hiker's own Health store, behind a switch and behind a seam that keeps HealthKit out of the tests. |
 | `OpenHikes/Sync/` | iCloud sync status and control, and the settings key-value mirror. |
@@ -127,11 +136,14 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | `OpenHikes/LiveActivity/` | When a Lock Screen activity starts, updates and ends, behind a seam that keeps ActivityKit out of the tests. |
 | `OpenHikes/Intents/` | App Intents for controlling and querying a recording, the Siri and Spotlight shortcuts they are offered through, and the seam they perform behind. |
 | `OpenHikes/General/` | Cross-domain extensions and diagnostics. |
+| `OpenHikes/SimulatedLocations/` | The bundled GPX routes the simulated hike and the screenshot capture play back. |
 | `OpenHikesShared/` | Domain-foldered local Swift package shared by the app and widget. |
 | `OpenWidget/` | iOS Home Screen widget and the Live Activity's Lock Screen and Dynamic Island views. |
 | `OpenHikesTests/`, `OpenWidgetTests/` | App-hosted tests mirroring the app's domain folders. |
 | `OpenHikesUITests/` | Simulator UI automation, location spoofing, launch metrics. |
-| `Scripts/` | The gates and tools a contributor runs by hand: lint, the UI-test runner, the simulated hike, and the three checks CI fails a merge on. |
+| `Scripts/` | The gates and tools a contributor runs by hand: lint, the UI-test runner, the simulated hike, the App Store screenshot capture and its photo stamper, and the checks CI runs beside them. |
+| `Screenshots/` | The App Store screenshot set: what each frame has to say, how it is captured, and where its photographs come from. |
+| `docs/` | The published GitHub Pages site — the privacy, terms and support pages the App Store listing links. Not a documentation folder. |
 | `ci_scripts/` | Xcode Cloud hooks, run automatically by name. |
 
 ## License

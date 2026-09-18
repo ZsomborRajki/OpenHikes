@@ -343,14 +343,16 @@ Each of these looks like a finding and has already been investigated. Re-opening
 
 ## Documentation
 
-Four files with distinct jobs, plus the issue tracker. Keep a fact in exactly
-one of them.
+A handful of files with distinct jobs, plus the issue tracker. Keep a fact in
+exactly one of them.
 
 - `README.md` is for someone who just found the repository: what the app is, what it needs, how to build and run it, and how it is laid out. Engineering rationale does not belong there.
 - `AGENTS.md` is a pointer, not a source: it sends an agent here and repeats only the handful of rules that are tripped over before this file is read. Anything it says has to already be true here.
 - `.github/copilot-instructions.md` — this file — holds the durable conventions, commands, architecture rules and settled decisions, including all migration/reset policy and CloudKit schema deployment notes.
-- `docs/` is the published GitHub Pages site (`main:/docs`) and nothing else: `privacy/` and `terms/`, the two pages the App Store listing links. It is not a documentation folder. `CONTRIBUTING.md` lived there and was served as raw markdown — `.nojekyll` means nothing in `docs/` is rendered — while its actual readers were on github.com; it is at the repository root now, beside `README.md` and `SECURITY.md`. A new prose document belongs at the root; only something the website serves belongs in `docs/`.
+- `docs/` is the published GitHub Pages site (`main:/docs`) and nothing else: `privacy/`, `terms/` and `support/`, the three pages the App Store listing links. It is not a documentation folder. `CONTRIBUTING.md` lived there and was served as raw markdown — `.nojekyll` means nothing in `docs/` is rendered — while its actual readers were on github.com; it is at the repository root now, beside `README.md` and `SECURITY.md`. A new prose document belongs at the root; only something the website serves belongs in `docs/`.
 - `APP_REVIEW.md` is the text of App Store Connect's *App Review Information → Notes* field, and the only place the background-location justification is written out: Always access is the widget and the Live Activity, opt-in behind Background Trail Tracking, and the `location` background mode is the recorder. It is a claim about the submitted binary rather than prose, so a change to what runs in the background — or to which switch controls it — updates it in the same commit, alongside the purpose string in `OpenHikes/Info.plist` and the toggle's own footer, which have to keep saying the same thing.
+- `CONTRIBUTING.md` and `SECURITY.md` are the two files GitHub itself surfaces. `CONTRIBUTING.md` is the short path to a first change and points at this file rather than repeating it; `SECURITY.md` is how to report a vulnerability privately, and owns the reader-facing account of what the public community database grants to whom — the argument for those grants stays in `OpenHikes/Community/CommunitySchema.swift`.
+- `Screenshots/README.md` owns the App Store screenshot set: what each frame has to say, the route and photographs behind them, and why the capture claims a simulator of its own. `Scripts/screenshots.sh` is documented there and nowhere else.
 - **Open work lives in GitHub issues, not in a checked-in list.** Missing features, product decisions that are still open, and claims no test can settle are issues on `ZsomborRajki/OpenHikes`. A document does not accumulate a to-do list beside them.
 
 Cite these documents from source comments by *section name*, never by finding number or quoted figure. Numbered citations went stale within a single revision — comments referring to "Finding 1" and "Finding 2" survived the findings being renumbered, and quoted millisecond figures the documents no longer contained.
