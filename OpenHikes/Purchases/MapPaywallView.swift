@@ -129,6 +129,15 @@ struct MapPaywallView: View {
             // Ours rather than `.storeButton(.visible, for: .restorePurchases)`
             // — see this file's header for why the distinction matters.
             .storeButton(.hidden, for: .restorePurchases)
+            // `SubscriptionStoreView` draws a dismiss button of its own as
+            // soon as it finds itself in a sheet, and this screen is only ever
+            // in one. With the toolbar's `Close` below that made two controls
+            // doing the same thing on the same screen — the unlabelled glyph
+            // floating over the marketing copy, and the word in the navigation
+            // bar. The toolbar one stays: it is titled, it sits where every
+            // other sheet in the app puts its cancel, and it is beside the
+            // `OpenHikes Pro` title a customer is matching against a charge.
+            .storeButton(.hidden, for: .cancellation)
             // `safeAreaBar` rather than `safeAreaInset`, for the reason
             // ``PhotoDiscoverySheet``'s selection bar gives: the system draws
             // the glass and handles the scroll edge, so the row stops carrying
