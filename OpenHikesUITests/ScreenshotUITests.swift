@@ -89,11 +89,6 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         CLLocationCoordinate2D(latitude: 47.596134, longitude: 12.982391),
     ]
 
-    /// Where the nearby frame parks the sheet: far enough down to leave a band
-    /// of map with pins in it, high enough that the list underneath is still
-    /// most of the picture.
-    private static let nearbySheetTop: CGFloat = 0.62
-
     /// How many times ``revealCommunityPins(in:atLeast:)`` re-measures and
     /// pans before giving up.
     private static let centringPasses = 5
@@ -191,14 +186,14 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// is what hands them to the map — and collapsing a sheet does not dismiss
     /// it, which is what lets this frame have both the pins and the map.
     @MainActor
-    func testCapturesTrailWithPhotoPins() {
+    func testCapturesTrailWithPhotoPins() throws {
         let app = launchApp(arguments: [
             "--ui-test-expanded-sheet",
             "--ui-test-import-gpx=\(Self.routeFixture)",
             "--ui-test-weather",
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
-        importDiscoveredPhotos(in: app, selecting: Self.pinnedPhotoIndexes)
+        try importDiscoveredPhotos(in: app, selecting: Self.pinnedPhotoIndexes)
 
         let zoom = app.buttons["Zoom"]
         XCTAssertTrue(
@@ -243,14 +238,14 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// stand-in library, which is the right thing for every other suite in
     /// this bundle and exactly wrong here.
     @MainActor
-    func testCapturesPhotosAlongTheTrail() {
+    func testCapturesPhotosAlongTheTrail() throws {
         let app = launchApp(arguments: [
             "--ui-test-expanded-sheet",
             "--ui-test-import-gpx=\(Self.routeFixture)",
             "--ui-test-weather",
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
-        importDiscoveredPhotos(in: app)
+        try importDiscoveredPhotos(in: app)
         scrollIntoView(element("hike-photo-strip", in: app), in: app)
         capture(app, as: .photos)
     }
@@ -258,13 +253,14 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// The nearby list: published hikes and waymarked OpenStreetMap routes in
     /// one answer, with the pins that say where they are.
     ///
-    /// The sheet has to go up and then come back down, and neither half is
-    /// avoidable. The *My Hikes | Community* picker only exists once the sheet
-    /// is past its compact detent, so the scenario cannot reach the Community
-    /// half without `--ui-test-expanded-sheet`; and a full-height sheet leaves
-    /// no map for pins to stand in — and `XCUIElement.pinch` pivots on the
-    /// element's centre, which under a full-height sheet is the sheet, so the
-    /// zoom below would drag that instead of the map.
+    /// `--ui-test-expanded-sheet` rests the sheet at its *middle* detent, and
+    /// that is the whole of the sheet handling this frame needs: the
+    /// *My Hikes | Community* picker only exists once the sheet is past its
+    /// compact detent, and the middle detent still leaves the top half of the
+    /// screen as map for the pins to stand in. The frame is not dragged any
+    /// lower deliberately — the list is most of what this screenshot is of,
+    /// and ``revealCommunityPins(in:atLeast:)`` pans the pins into the band
+    /// above the sheet rather than making the band bigger.
     @MainActor
     func testCapturesNearbyTrails() {
         let app = launchCommunity(scenario: .curated)
@@ -414,6 +410,37 @@ nonisolated final class ScreenshotUITests: XCTestCase {
 extension ScreenshotUITests {
     // MARK: - Support
 
+    /// Whether `Scripts/screenshots.sh` seeded this simulator's photo library
+    /// and granted access to it.
+    ///
+    /// Told rather than discovered, and the telling is the point.
+    /// `Screenshots/Stamped` holds the hiker's own photographs and is
+    /// deliberately not in the repository — see `.gitignore` and
+    /// `Screenshots/README.md` — so the two frames that drive the real
+    /// library have a fixture that most machines running this bundle do not
+    /// have. Without this they failed there: a bare `xcodebuild test`, or
+    /// ⌘U in Xcode, went red on a missing photograph rather than on
+    /// anything the branch had done.
+    ///
+    /// A *skip* rather than a softer assertion, because the alternative is
+    /// worse in the other direction: a test that quietly passes when its
+    /// fixture is absent is a frame that stops being checked the day the
+    /// library stops being seeded. `TEST_RUNNER_` is xcodebuild's own prefix
+    /// for this — it strips it and hands the rest to the runner — so the
+    /// script says *yes* and nothing else can.
+    static var hasStampedLibrary: Bool {
+        ProcessInfo.processInfo.environment["OPENHIKES_STAMPED_LIBRARY"] == "1"
+    }
+
+    /// What a machine without the fixture is told, which is how to get it.
+    static let noStampedLibrary = """
+        No stamped photo library on this simulator. These two frames import \
+        photographs through the real library and the real matcher, which \
+        Scripts/screenshots.sh seeds from Screenshots/Stamped before it runs \
+        them — a directory the repository does not carry. Run them through \
+        that script rather than on their own.
+        """
+
     /// Attaches the stamped library photographs to the open hike, through the
     /// real discovery sheet.
     ///
@@ -427,7 +454,8 @@ extension ScreenshotUITests {
     private func importDiscoveredPhotos(
         in app: XCUIApplication,
         selecting indexes: [Int] = []
-    ) {
+    ) throws {
+        try XCTSkipUnless(Self.hasStampedLibrary, Self.noStampedLibrary)
         let discover = element("photo-discovery-button", in: app)
         XCTAssertTrue(
             scrollIntoView(discover, in: app),
@@ -781,22 +809,6 @@ extension ScreenshotUITests {
             .completed,
             "the sheet should have come to rest at its compact detent"
         )
-    }
-
-    /// The first element in `query` whose label contains `text`.
-    ///
-    /// The route's own title is what every frame here waits on, and it is
-    /// matched loosely on purpose: the sheet, the row and the detail screen
-    /// each spell the hike's name with something else around it, and a frame
-    /// that waited for one exact string would be a frame that silently
-    /// stopped being taken when the layout moved a dash.
-    @MainActor
-    private static func firstElement(
-        labelled text: String,
-        among query: XCUIElementQuery
-    ) -> XCUIElement {
-        let predicate = NSPredicate(format: "label CONTAINS[c] %@", text)
-        return query.containing(predicate).firstMatch
     }
 
     /// Attaches `app`'s current screen to the result bundle under `frame`'s
