@@ -63,10 +63,10 @@ final class CommunityPhotoMapAnnotation: NSObject, MKAnnotation {
 
     let photo: CommunityPreviewPhoto
     @objc dynamic let coordinate: CLLocationCoordinate2D
-    /// A callout needs a title to open at all. "Photo" is the whole of what
-    /// the map has to say — the picture below it is the content, the same
-    /// division ``PhotoMapAnnotation`` makes.
-    @objc let title: String?
+    /// Deliberately absent, the same division ``PhotoMapAnnotation`` makes: the
+    /// picture below is the callout's content, and heading a photograph with
+    /// the word "Photo" says nothing it has not already said.
+    @objc let title: String? = nil
     /// When it was taken, which is the one fact about somebody else's
     /// photograph this app actually knows. It is also what the share sheet
     /// promised went with the picture, so saying it here is the app showing
@@ -76,28 +76,26 @@ final class CommunityPhotoMapAnnotation: NSObject, MKAnnotation {
     init(photo: CommunityPreviewPhoto) {
         self.photo = photo
         coordinate = photo.coordinate
-        title = String(localized: "Photo")
         subtitle = HikeFormat.timestamp(photo.capturedAt)
         super.init()
     }
 }
 
 #if os(iOS)
-/// The picture inside a community photo pin's callout.
+/// The picture inside a community photo pin's callout, and the way into the
+/// gallery.
 ///
-/// A plain view rather than a control, which is the one real difference from
-/// ``PhotoCalloutPreview``: that one opens the hiker's gallery at the photo it
-/// is showing, and this one opens nothing.
+/// A `UIControl` for the reason ``PhotoCalloutPreview`` is, and now with the
+/// same job: it opens ``CommunityPhotoViewer`` at the photograph it is showing.
 ///
-/// There *is* a gallery to open now — ``CommunityPhotoViewer``, reached from
-/// the strip on the sheet in front of this map — so this is a deliberate
-/// asymmetry rather than an absence. The strip is where a hike's photographs
-/// are listed in order and is the thing a hiker is reading when they want to
-/// see one properly; this pin's whole job is to answer *where*, and a tap that
-/// opened a full-screen viewer over a preview would be a third screen deep
-/// into a hike nobody has decided to keep yet. Revisit it as a change to what
-/// a map callout is for, not as a gap left by the viewer.
-final class CommunityPhotoCalloutPreview: UIView {
+/// This used to open nothing, on the argument that a pin's whole job is to
+/// answer *where* and that the strip on the sheet is where pictures are looked
+/// at properly. What that argument missed is the direction people arrive from:
+/// somebody who has found a photograph on the map has already decided which
+/// one they want, and sending them back to a strip to find it again is asking
+/// them to do the pin's work twice. The map is now a way in as well as an
+/// answer, for a stranger's hike as much as for the hiker's own.
+final class CommunityPhotoCalloutPreview: UIControl {
     /// The same 4:3 box ``PhotoCalloutPreview`` uses, for the same reason: wide
     /// enough to read as a photograph, narrow enough that MapKit's callout
     /// does not have to stretch around it.
@@ -111,6 +109,7 @@ final class CommunityPhotoCalloutPreview: UIView {
     /// has been recycled onto another pin is dropped rather than drawn.
     private var photoID: Int?
     private var loadTask: Task<Void, Never>?
+    private var onTap: ((Int) -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -125,7 +124,8 @@ final class CommunityPhotoCalloutPreview: UIView {
     /// Points the preview at a photograph. Cheap to call again with the same
     /// one — MapKit re-runs `viewFor` on every reselect, and re-decoding there
     /// would flash the picture the reviewer is already looking at.
-    func show(_ photo: CommunityPreviewPhoto) {
+    func show(_ photo: CommunityPreviewPhoto, onTap: @escaping (Int) -> Void) {
+        self.onTap = onTap
         accessibilityLabel = Self.label(for: photo)
         guard photoID != photo.index else { return }
         photoID = photo.index
@@ -173,8 +173,16 @@ final class CommunityPhotoCalloutPreview: UIView {
             imageView.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
 
+        addTarget(self, action: #selector(handleTap), for: .touchUpInside)
+
         isAccessibilityElement = true
+        accessibilityTraits = .button
         accessibilityIdentifier = "community-photo-pin-preview"
+    }
+
+    @objc private func handleTap() {
+        guard let photoID else { return }
+        onTap?(photoID)
     }
 
     /// A glyph rather than a spinner, for the reason the strip's tiles use
@@ -192,8 +200,8 @@ final class CommunityPhotoCalloutPreview: UIView {
     }
 
     /// VoiceOver cannot describe a photograph, so it says the one thing this
-    /// app knows about this one — and does not offer to open it, because
-    /// nothing here does.
+    /// app knows about this one, and the button trait above says what happens
+    /// if you open it.
     private static func label(for photo: CommunityPreviewPhoto) -> String {
         String(localized: "Photo taken \(HikeFormat.timestamp(photo.capturedAt))")
     }
@@ -219,8 +227,13 @@ extension MapView.Coordinator {
 
     private func trackCommunityPhotoPins(_ browser: CommunityBrowser, on mapView: MKMapView) {
         applyCommunityPhotoPins(browser.photoPins, on: mapView)
+        // After the pins, always — see `applyPhotoPinSelection(_:on:)`, which
+        // this mirrors and for the same reason: the gallery that asks is
+        // pushed over the screen that owns them.
+        applyCommunityPhotoPinSelection(browser.photoPinSelection, on: mapView)
         withObservationTracking {
             _ = browser.photoPins
+            _ = browser.photoPinSelection
         } onChange: { [weak self, weak mapView, weak browser] in
             let coordinator = self
             let map = mapView
@@ -250,6 +263,22 @@ extension MapView.Coordinator {
         mapView.addAnnotations(annotations)
     }
 
+    /// Opens a pin's callout because the gallery asked for it. The community
+    /// counterpart of `applyPhotoPinSelection(_:on:)`, down to keeping a
+    /// request whose pin is not on the map yet.
+    func applyCommunityPhotoPinSelection(
+        _ selection: CommunityPhotoPinSelection?,
+        on mapView: MKMapView
+    ) {
+        guard let selection,
+              appliedCommunityPhotoPinSelection != selection.token else { return }
+        guard let annotation = communityPhotoAnnotations.first(
+            where: { $0.photo.index == selection.index }
+        ) else { return }
+        appliedCommunityPhotoPinSelection = selection.token
+        mapView.selectAnnotation(annotation, animated: true)
+    }
+
     /// A camera in a marker, with the photograph in the callout it opens.
     ///
     /// The app's tint, like the hike markers beside it and for the same
@@ -272,13 +301,20 @@ extension MapView.Coordinator {
         view.markerTintColor = .tintColor
         let preview = view.detailCalloutAccessoryView as? CommunityPhotoCalloutPreview
             ?? CommunityPhotoCalloutPreview()
-        preview.show(annotation.photo)
+        preview.show(annotation.photo) { [weak self, weak mapView] index in
+            // Closed before the gallery opens, like the hiker's own pins: the
+            // callout belongs to a map the sheet is about to cover, and one
+            // left standing is what they come back to when they pop the viewer.
+            mapView?.deselectAnnotation(annotation, animated: true)
+            self?.community?.openPreviewPhoto(index)
+        }
         view.detailCalloutAccessoryView = preview
         #endif
         // Never hidden by a neighbour — see this file's header.
         view.displayPriority = .required
-        // MapKit would otherwise speak "Photo" alone, which says nothing about
-        // whose walk this picture is of.
+        // The pin carries no title now, so without this MapKit would speak the
+        // capture time alone, which says nothing about whose walk this picture
+        // is of.
         view.accessibilityLabel = String(
             localized: "Community hike photo, taken \(HikeFormat.timestamp(annotation.photo.capturedAt))"
         )

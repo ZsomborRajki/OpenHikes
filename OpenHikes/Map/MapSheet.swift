@@ -403,6 +403,7 @@ struct MapSheet: View {
             startIndex: startIndex,
             mapController: mapController,
             onShowOnMap: presentation.restAtMiddleWhenFullHeightScreenPops,
+            community: appModel.community,
             selection: presentation.communityPhotoSelection(for: route),
             // Absent on a launch with no transport, which is every hosted
             // suite and every UI scenario that did not ask for one — the rule
@@ -459,6 +460,7 @@ struct MapSheet: View {
                 onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
                 onOpenWalk: { walk in presentation.path.append(.walk(walk)) },
                 onZoomToRoute: presentation.makeRoomForTheMap,
+                isSheetCompact: presentation.isCompact,
                 interaction: presentation.hikeInteraction(for: hike)
             )
         case let .communityHike(listing):
@@ -488,6 +490,7 @@ struct MapSheet: View {
                 highlight: highlight,
                 mapController: mapController,
                 onShowOnMap: presentation.restAtMiddleWhenFullHeightScreenPops,
+                photoPins: photoPins,
                 selection: presentation.photoSelection(for: route)
             )
         case let .walk(walk):

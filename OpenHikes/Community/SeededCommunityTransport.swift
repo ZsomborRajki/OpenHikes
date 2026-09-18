@@ -779,8 +779,8 @@ nonisolated extension SeededCommunityTransport {
             hikeDate: hikeDate,
             distanceMeters: distanceMeters,
             photoCount: photoCount,
-            latitude: startLatitude,
-            longitude: startLongitude,
+            latitude: startLatitude + spreadLatitude(of: title),
+            longitude: startLongitude + spreadLongitude(of: title),
             publishedAt: publishedDate
         )
     }
@@ -818,7 +818,9 @@ nonisolated private extension SeededCommunityTransport {
     /// and the duration all come off these, and leaving them out would mean
     /// asserting on a page the real one never shows.
     static func route(of listing: CommunityListing) -> [RouteCoordinate] {
-        let offset = Double(abs(listing.id.hashValue % 5)) * stepLatitude
+        let index = Double(spreadIndex(title: listing.title))
+        let offset = index * listingSpreadLatitude
+        let longitudeOffset = index.truncatingRemainder(dividingBy: 2) * listingSpreadLongitude
         // Hoisted out of the closure below rather than written inline: with
         // the optional unwrap in place the whole `RouteCoordinate` expression
         // stopped type-checking in reasonable time. Every seeded listing is a
@@ -829,7 +831,7 @@ nonisolated private extension SeededCommunityTransport {
             let elapsed = Double(step)
             return RouteCoordinate(
                 latitude: startLatitude + offset + elapsed * stepLatitude,
-                longitude: startLongitude + elapsed * stepLongitude,
+                longitude: startLongitude + longitudeOffset + elapsed * stepLongitude,
                 elevation: baseElevation + elapsed * elevationStep,
                 timestamp: start.addingTimeInterval(elapsed * secondsPerPoint)
             )

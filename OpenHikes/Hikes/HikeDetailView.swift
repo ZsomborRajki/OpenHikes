@@ -58,6 +58,15 @@ struct HikeDetailView: View {
     var onOpenWalk: (HikeWalk) -> Void = { _ in /* no-op default */ }
     /// Collapses the sheet so the map is visible when zooming to the route.
     var onZoomToRoute: () -> Void = { /* no-op default */ }
+    /// Whether the sheet this screen is pushed into is resting at its smallest
+    /// detent, where only the search field's worth of height is on screen.
+    ///
+    /// The one thing of this screen's that reaches down there is the section
+    /// picker — see ``segmentPicker`` for what it does about it. A plain
+    /// `Bool` rather than the presentation itself, and no new cost: the sheet's
+    /// own body already reads ``SheetPresentation/isCompact`` for its hikes
+    /// list, so this screen is rebuilt on that transition either way.
+    var isSheetCompact = false
 
     /// The active tile source, mirrored from Settings so offline downloads use the
     /// same provider (and API key) the map is currently drawing.
@@ -120,6 +129,9 @@ struct HikeDetailView: View {
     /// the selected section and an unfinished rename. Read only by this screen.
     @Bindable var interaction = HikeDetailInteraction()
     private static let storedBytesRefreshDebounce: Duration = .seconds(5)
+    /// How long the section picker takes to fade as the sheet settles at,
+    /// or leaves, its smallest detent. See ``segmentPicker``.
+    private static let compactFadeDuration: TimeInterval = 0.2
 
     /// Built once per hike in `.task`, never in `init`. Scrubbing then resolves
     /// points in O(log n).
@@ -321,6 +333,20 @@ struct HikeDetailView: View {
     /// `Details | History`. *History* rather than *Walks* because it holds
     /// partial completions as well as full ones. Above the scroll view rather
     /// than inside it, so it stays put while either face scrolls.
+    ///
+    /// **Hidden, not removed, at the compact detent.** Eighty points of sheet
+    /// is a navigation bar and about twenty points more, and those twenty are
+    /// exactly where this sits — so a sheet dragged down to peek at the map
+    /// kept the top of the segmented control poking out over it. Taking the
+    /// picker out of the stack instead would pull the scroll view up by its
+    /// height and put the top of the elevation section in that same sliver:
+    /// the same leak, with a different thing leaking. It would also change the
+    /// spacing the other detents are read at, which is the one thing this must
+    /// not touch.
+    ///
+    /// `allowsHitTesting` along with the opacity, because the sliver is
+    /// tappable: without it, a tap aimed at the sheet's chrome down there
+    /// switches a section the hiker cannot see.
     private var segmentPicker: some View {
         Picker("Section", selection: $interaction.segment) {
             ForEach(HikeDetailSegment.allCases) { face in
@@ -331,6 +357,11 @@ struct HikeDetailView: View {
         .accessibilityIdentifier("walk-segment")
         .padding(.horizontal)
         .padding(.vertical, 8)
+        .opacity(isSheetCompact ? 0 : 1)
+        .allowsHitTesting(!isSheetCompact)
+        // The flag flips when the drag settles rather than as it moves, so
+        // without this the picker blinks out a frame after the sheet stops.
+        .animation(.easeInOut(duration: Self.compactFadeDuration), value: isSheetCompact)
     }
 }
 

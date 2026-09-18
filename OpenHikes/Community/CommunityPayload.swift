@@ -88,6 +88,16 @@ nonisolated struct CommunityPreviewPhoto: Identifiable, Hashable, Sendable {
     }
 }
 
+/// A request that the map open one community photo pin's callout.
+///
+/// The ``CommunityPreviewPhoto/index`` counterpart of ``PinSelection``, and
+/// tokened for the same reason: asking twice for the same photograph is two
+/// requests, and the second must not look like one already answered.
+nonisolated struct CommunityPhotoPinSelection: Equatable, Sendable {
+    let index: Int
+    let token: Int
+}
+
 /// One photograph of a shared hike, as its gallery pages through them.
 ///
 /// The difference from ``CommunityPreviewPhoto`` is which photographs are in

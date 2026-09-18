@@ -26,13 +26,15 @@
 //
 //  Two things make this more than theoretical.
 //
-//  **The four location strings live in `project.pbxproj`**, as
-//  `INFOPLIST_KEY_…` build settings rather than in a plist — and that file is
-//  the one place the repository instructions tell contributors not to edit, so
-//  it is touched rarely and by tools, and a lost line would be invisible in
-//  review. Nothing listed the permission strings in one place. This does, by
-//  reading the *merged* dictionary the build produces, which is where both
-//  halves finally meet.
+//  **Nothing else lists the permission strings in one place.** This does, and
+//  it reads the *merged* dictionary the build produces rather than the file —
+//  a string can reach the bundle from `OpenHikes/Info.plist` or from an
+//  `INFOPLIST_KEY_…` build setting, and the merged dictionary is where the two
+//  halves meet. They all live in the plist today, which is also the one of the
+//  two a reviewer of a diff can see: `GENERATE_INFOPLIST_FILE` is `NO` here
+//  (an Xcode 27 crash workaround — see the repository instructions), so an
+//  `INFOPLIST_KEY_…` setting added back would be inert, and reading the
+//  bundle is what would say so.
 //
 //  **`RecordHike` is a matched pair of string literals** — a plist dictionary
 //  key and an argument at the call site. It is asserted against
@@ -71,9 +73,9 @@ struct InfoPlistContractTests {
     /// no reason — which is a rejection as reliably as a missing key is a
     /// broken feature.
     ///
-    /// The first two are `INFOPLIST_KEY_…` settings in `project.pbxproj` and
-    /// the rest are in `OpenHikes/Info.plist`. That split is exactly why they
-    /// are listed together here.
+    /// All of them are in `OpenHikes/Info.plist`, and the merged dictionary is
+    /// read anyway — see this file's header for why the source of a string is
+    /// not something this test should have an opinion about.
     @Test("every usage description the app can trigger is present and says something", arguments: [
         "NSLocationWhenInUseUsageDescription",
         "NSLocationAlwaysAndWhenInUseUsageDescription",

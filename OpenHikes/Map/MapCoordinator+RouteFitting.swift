@@ -39,6 +39,12 @@
 //  one, so the conversion between them — including the safe area the panel is
 //  positioned inside — belongs in exactly one place.
 //
+//  And MapKit does not measure that padding from the edge of the map: it
+//  measures it from the map's layout margins, which ``MapView`` has already
+//  pushed off the leading edge for the panel's sake. The panel is therefore
+//  easy to pay for twice, and a camera asked for more padding than it has map
+//  does not come back cramped — it comes back wrong. See ``setVisible``.
+//
 
 import MapKit
 
@@ -126,8 +132,31 @@ extension MapView.Coordinator {
         return height - restY
     }
 
-    /// Applies `edgePadding`, having first made sure there is a viewport left
-    /// to apply it to.
+    /// Applies `edgePadding`, having first taken off what MapKit is going to
+    /// add back and made sure there is a viewport left to apply it to.
+    ///
+    /// ## What MapKit counts twice
+    ///
+    /// `setVisibleMapRect(_:edgePadding:animated:)` frames into the map's
+    /// **layout margins**, not into its bounds: whatever is passed here is
+    /// added to `directionalLayoutMargins` rather than measured from the edge
+    /// of the view. Those margins are not incidental — ``MapView`` sets the
+    /// leading one to the width of ``MapSidePanel`` so MapKit's own compass and
+    /// scale clear it — so in landscape the panel was being paid for twice, at
+    /// 344 points a go. On an iPhone 18 Pro that is 884 points of left padding
+    /// on an 874-point-wide map: no viewport at all, and
+    /// `setVisibleMapRect` answers a request like that with a camera that puts
+    /// the route off the trailing edge of the screen. Measured on a route that
+    /// should have spanned 466–814 points: it was drawn from 756 to 917.
+    ///
+    /// So the margins are subtracted before the call and added back by MapKit
+    /// during it, which leaves the *effective* padding equal to what the
+    /// caller asked for on every edge where the margin is the smaller of the
+    /// two. Where it is larger — the trailing edge in landscape, where a
+    /// device's own safe area already exceeds the route's 60 points of air —
+    /// the margin wins, which is right: something is drawn there.
+    ///
+    /// ## And why it is still clamped
     ///
     /// `setVisibleMapRect(_:edgePadding:animated:)` is undefined when the
     /// padding exceeds the view, and the padding here is the sum of two
@@ -135,15 +164,56 @@ extension MapView.Coordinator {
     /// neither of which knows how small the other has left the map. On an
     /// iPhone SE in landscape that sum is most of the width. So the padding is
     /// scaled to fit rather than trusted: a cramped viewport is a worse picture
-    /// than a generous one, and either is a picture.
+    /// than a generous one, and either is a picture. The size it is scaled to
+    /// fit is the map less its margins, for the same reason the subtraction
+    /// above happens at all — that is the box MapKit is actually framing into.
     private func setVisible(
         _ rect: MKMapRect,
         on mapView: MKMapView,
         edgePadding: MapEdgeInsets,
         animated: Bool
     ) {
-        let clamped = Self.clamped(edgePadding, toFit: mapView.bounds.size)
+        let margins = Self.layoutMargins(of: mapView)
+        let residual = MapEdgeInsets(
+            top: max(0, edgePadding.top - margins.top),
+            left: max(0, edgePadding.left - margins.left),
+            bottom: max(0, edgePadding.bottom - margins.bottom),
+            right: max(0, edgePadding.right - margins.right)
+        )
+        let framed = CGSize(
+            width: max(0, mapView.bounds.width - margins.left - margins.right),
+            height: max(0, mapView.bounds.height - margins.top - margins.bottom)
+        )
+        let clamped = Self.clamped(residual, toFit: framed)
         mapView.setVisibleMapRect(rect, edgePadding: clamped.platformInsets, animated: animated)
+    }
+
+    /// The map's own layout margins, per *physical* edge.
+    ///
+    /// The map's are directional — ``MapView/applyBuiltInControlMargins(to:)``
+    /// writes the panel into the leading one — and everything a camera move
+    /// spends is physical, so this is the same leading-to-left conversion
+    /// ``obstructionInsets(in:)`` makes, against the same layout direction.
+    ///
+    /// Read rather than recomputed from ``sidePanelInset``: the getter returns
+    /// the margins MapKit will actually frame into, which is the set value
+    /// *plus* the safe area it is inset from — 356 points becomes 418 on a
+    /// phone held sideways — and a second copy of that arithmetic here would
+    /// be a second thing to keep true.
+    private static func layoutMargins(of mapView: MKMapView) -> MapEdgeInsets {
+        #if canImport(UIKit)
+        let margins = mapView.directionalLayoutMargins
+        let rightToLeft = mapView.effectiveUserInterfaceLayoutDirection == .rightToLeft
+        return MapEdgeInsets(
+            top: margins.top,
+            left: rightToLeft ? margins.trailing : margins.leading,
+            bottom: margins.bottom,
+            right: rightToLeft ? margins.leading : margins.trailing
+        )
+        #else
+        // `NSView` has no layout margins, so there is nothing to take off.
+        return MapEdgeInsets()
+        #endif
     }
 
     /// Scales `insets` down, per axis, until each leaves at least

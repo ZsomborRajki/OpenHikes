@@ -40,10 +40,10 @@ nonisolated enum SeededHike {
 nonisolated enum SeededCuratedTrail {
     /// Fully tagged: `roundtrip=yes`, an `osmc:symbol`, both ends, a via, an
     /// operator and a website.
-    static let loopTitle = "Seeded Ridge Loop"
+    static let loopTitle = "Lattenberg Rundweg"
     /// Nothing but a name and a network, so its shape is derived from the
     /// line's two ends and it has no waymark at all.
-    static let pathTitle = "Seeded Valley Path"
+    static let pathTitle = "Schwarzbach Steig"
 
     static let allTitles = [loopTitle, pathTitle]
 

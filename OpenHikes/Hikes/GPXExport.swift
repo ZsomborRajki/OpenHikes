@@ -399,6 +399,35 @@ nonisolated extension GPXExport {
         ) + suffix
     }
 
+    /// What one photograph is called on its way to a share sheet, e.g.
+    /// `Thumsee Loop-3.jpeg`.
+    ///
+    /// Its own entry point rather than ``archiveStem(for:)`` because a share of
+    /// a single picture has no `Track` to hand and does not need one: what
+    /// names it is the hike and its place in the gallery, which is what the
+    /// viewer's own title already says. The sanitising and the byte bound are
+    /// shared, so a hike whose name would make a bad `.gpx` makes a bad
+    /// photograph name in exactly the same way and is cut at the same
+    /// grapheme.
+    ///
+    /// Numbered rather than dated: a walk's photographs share its date, so a
+    /// date would send a dozen files to the same name.
+    static func photoFileName(
+        hikeTitle: String,
+        position: Int,
+        pathExtension: String
+    ) -> String {
+        let suffix = "-\(position)"
+        // The dot as well as the extension — both are part of what the name
+        // has to leave room for.
+        let extensionBytes = pathExtension.utf8.count + 1
+        let stem = fileStem(
+            for: hikeTitle,
+            availableUTF8Bytes: maximumFileNameUTF8Bytes - suffix.utf8.count - extensionBytes
+        )
+        return "\(stem)\(suffix).\(pathExtension)"
+    }
+
     /// The `.gpx` and the `.zip` extensions weigh the same; this is the bound
     /// either of them has to leave room for.
     private static let archiveSuffixBytes = 4

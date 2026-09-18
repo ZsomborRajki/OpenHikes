@@ -110,6 +110,78 @@ extension MapCoordinatorTests {
         #expect(coordinator.photoAnnotations.first === original)
     }
 
+    /// *Show on map* frames a coordinate; what has to be standing there when
+    /// the hiker arrives is their photograph, not a marker among markers that
+    /// they have to work out and tap. The callout is the difference.
+    @Test("a selection from the gallery opens that pin's callout")
+    func aSelectionOpensThatPinsCallout() async {
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+
+        let atBend = Self.photo(at: Self.bend, offset: 0)
+        let atSummit = Self.photo(at: Self.summit, offset: 60)
+        photoPins.attach([atBend, atSummit]) { _ in /* unused */ }
+        await settle(until: "the photo pins to reach the map") {
+            coordinator.photoAnnotations.count == 2
+        }
+
+        photoPins.select(atSummit.id)
+
+        await settle(until: "the summit pin's callout to open") {
+            map.selectedAnnotations.contains { annotation in
+                (annotation as? PhotoMapAnnotation)?.pin.id == atSummit.id
+            }
+        }
+    }
+
+    /// The order the gallery asks in — see
+    /// ``PhotoMapPinController/select(_:)``. A request that arrived while the
+    /// pins were off the map has to be answered when they come back, or
+    /// *Show on map* opens nothing every single time.
+    @Test("a selection made before the pins arrive is answered when they do")
+    func aSelectionWaitsForItsPin() async {
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+
+        let photo = Self.photo(at: Self.bend, offset: 0)
+        photoPins.select(photo.id)
+        photoPins.attach([photo]) { _ in /* unused */ }
+
+        await settle(until: "the pin to arrive and open") {
+            map.selectedAnnotations.contains { annotation in
+                (annotation as? PhotoMapAnnotation)?.pin.id == photo.id
+            }
+        }
+    }
+
+    /// A callout the hiker has closed must stay closed. The pins are
+    /// republished for reasons of their own — a photo taken, a screen coming
+    /// back — and an answered request that reapplied would reopen it under them.
+    @Test("an answered selection is not applied a second time")
+    func anAnsweredSelectionIsNotReapplied() async throws {
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+
+        let photo = Self.photo(at: Self.bend, offset: 0)
+        photoPins.attach([photo]) { _ in /* unused */ }
+        await settle(until: "the photo pin to reach the map") {
+            !coordinator.photoAnnotations.isEmpty
+        }
+        photoPins.select(photo.id)
+        await settle(until: "the pin's callout to open") {
+            !map.selectedAnnotations.isEmpty
+        }
+
+        let annotation = try #require(coordinator.photoAnnotations.first)
+        map.deselectAnnotation(annotation, animated: false)
+        coordinator.applyPhotoPinSelection(photoPins.selection, on: map)
+
+        #expect(map.selectedAnnotations.isEmpty)
+    }
+
     /// The pin is built out of MapKit's pieces on purpose — see the file
     /// header. A custom `MKAnnotationView` here would look the same in a
     /// screenshot and behave differently in every other respect.
@@ -135,6 +207,9 @@ extension MapCoordinatorTests {
         // it to declutter.
         #expect(view.displayPriority == .required)
         #expect(view.detailCalloutAccessoryView is PhotoCalloutPreview)
+        // Titleless on purpose: the picture in the accessory is the callout's
+        // content, and a header reading "Photo" over a photograph says nothing.
+        #expect(annotation.title == nil)
         #expect(view.accessibilityIdentifier == "photo-pin")
         #expect(view.accessibilityLabel?.isEmpty == false)
         #endif

@@ -602,7 +602,13 @@ private extension CommunityReviewView {
             removedPhotos.insert(index)
         }
         guard case .loaded(let detail) = phase else { return }
-        browser.previewPhotosLoaded(keptPreviewPhotos(of: detail), of: pending.prospectiveListing)
+        // No opener: this screen's strip decides what stays rather than showing
+        // what is there, so its pins have no gallery to open.
+        browser.previewPhotosLoaded(
+            keptPreviewPhotos(of: detail),
+            of: pending.prospectiveListing,
+            onOpen: nil
+        )
     }
 
     /// Where the photographs that are still going were taken.
@@ -720,9 +726,11 @@ private extension CommunityReviewView {
             // is, even though there can be none this early: one expression for
             // *what the map shows* is one fewer place for the strip and the
             // pins to drift apart.
+            // No opener, for the reason `toggleRemoval(of:)` gives.
             browser.previewPhotosLoaded(
                 keptPreviewPhotos(of: detail),
-                of: pending.prospectiveListing
+                of: pending.prospectiveListing,
+                onOpen: nil
             )
         } catch is CancellationError {
             // The screen has gone. Nothing to report a failure on, and nobody

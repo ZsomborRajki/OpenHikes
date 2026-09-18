@@ -184,6 +184,10 @@ extension MapView {
 
         var photoAnnotations: [PhotoMapAnnotation] = []
         weak var photoPinController: PhotoMapPinController?
+        /// The last ``PinSelection`` token a pin actually answered, so a
+        /// republish of the same pins does not reopen a callout the hiker has
+        /// since dismissed. See `applyPhotoPinSelection(_:on:)`.
+        var appliedPhotoPinSelection: Int?
         /// Guards `observePhotoPins` for the same reason the two flags above
         /// guard theirs — a second registration can never be cancelled.
         var isObservingPhotoPins = false
@@ -218,6 +222,9 @@ extension MapView {
         /// everything that reads this. Empty whenever no preview is up, which
         /// is almost always.
         var communityPhotoAnnotations: [CommunityPhotoMapAnnotation] = []
+        /// The last ``CommunityPhotoPinSelection`` token a pin answered — the
+        /// counterpart of ``appliedPhotoPinSelection``, and for the same reason.
+        var appliedCommunityPhotoPinSelection: Int?
         /// The shared hikes' own lines, drawn faded beneath the hiker's route
         /// — see `MapCommunityRoutes.swift`, which owns everything that reads
         /// this.
@@ -231,6 +238,9 @@ extension MapView {
         var isObservingCommunityRoutes = false
         /// The same, for the *Search this area* pill's visibility.
         var isObservingAreaPrompt = false
+        /// Whether a callout is open, which the pill has to get out of the way
+        /// of — see `withdrawAreaSearchForCallout(on:)`.
+        var hasOpenCallout = false
         /// The last preview the camera was moved for, so opening one hike
         /// fits its route once rather than on every later rebuild.
         var fittedPreviewListingID: String?
@@ -745,8 +755,18 @@ extension MapView.Coordinator {
     func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
         // `canShowCallout = false` doesn't reliably suppress MapKit's own
         // callout for the blue dot, so deselect immediately to dismiss it.
-        guard view.annotation is MKUserLocation else { return }
+        guard view.annotation is MKUserLocation else {
+            withdrawAreaSearchForCallout(open: true)
+            return
+        }
         mapView.deselectAnnotation(view.annotation, animated: false)
+    }
+
+    /// The other half of the line above: the pill comes back when the callout
+    /// the hiker was reading goes.
+    func mapView(_ mapView: MKMapView, didDeselect view: MKAnnotationView) {
+        guard !(view.annotation is MKUserLocation) else { return }
+        withdrawAreaSearchForCallout(open: false)
     }
 
     #if canImport(UIKit)

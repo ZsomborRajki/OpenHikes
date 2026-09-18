@@ -38,10 +38,11 @@ final class PhotoMapAnnotation: NSObject, MKAnnotation {
 
     let pin: PhotoMapPin
     @objc dynamic let coordinate: CLLocationCoordinate2D
-    /// The callout needs a title to open at all. Kept minimal — "Photo" is all
-    /// the map needs to say, since the picture itself is the callout's content
-    /// and the date it names nothing else on the map cares about.
-    @objc let title: String?
+    /// Deliberately absent. The callout's content is the photograph itself,
+    /// and a header reading "Photo" over a photograph says nothing the picture
+    /// has not already said. MapKit draws the callout around the detail
+    /// accessory on its own once there is nothing to head it with.
+    @objc let title: String? = nil
     /// Only set where a point has more than one photo, so the callout admits
     /// that the picture above it is the first of several rather than the only
     /// one.
@@ -50,7 +51,6 @@ final class PhotoMapAnnotation: NSObject, MKAnnotation {
     init(pin: PhotoMapPin) {
         self.pin = pin
         coordinate = pin.coordinate
-        title = String(localized: "Photo")
         subtitle = pin.count > 1
             ? String(localized: "First of \(pin.count) photos taken here")
             : nil
@@ -252,8 +252,13 @@ extension MapView.Coordinator {
     private func trackPhotoPins(_ controller: PhotoMapPinController, on mapView: MKMapView) {
         photoPinController = controller
         applyPhotoPins(controller.pins, on: mapView)
+        // After the pins, always: a selection asked for while they were off the
+        // map — which is every one, since the gallery is pushed over the screen
+        // that owns them — can only be applied once they are back.
+        applyPhotoPinSelection(controller.selection, on: mapView)
         withObservationTracking {
             _ = controller.pins
+            _ = controller.selection
         } onChange: { [weak self, weak mapView, weak controller] in
             let coordinator = self
             let map = mapView
@@ -281,6 +286,24 @@ extension MapView.Coordinator {
         let annotations = pins.map(PhotoMapAnnotation.init)
         photoAnnotations = annotations
         mapView.addAnnotations(annotations)
+    }
+
+    /// Opens a pin's callout because the gallery asked for it.
+    ///
+    /// A request for a pin that is not on the map is kept rather than dropped:
+    /// the pins are republished a moment later when the screen that owns them
+    /// comes back, and this runs again then. Which also means the token is
+    /// recorded only once a pin has actually answered.
+    func applyPhotoPinSelection(
+        _ selection: PinSelection?,
+        on mapView: MKMapView
+    ) {
+        guard let selection, appliedPhotoPinSelection != selection.token else { return }
+        guard let annotation = photoAnnotations.first(
+            where: { $0.pin.photo.id == selection.photoID }
+        ) else { return }
+        appliedPhotoPinSelection = selection.token
+        mapView.selectAnnotation(annotation, animated: true)
     }
 
     /// Recolours the markers in place when the route's tint moves, so a colour
@@ -312,8 +335,8 @@ extension MapView.Coordinator {
         // one to declutter would answer the "show me where this was taken"
         // button with an empty map.
         view.displayPriority = .required
-        // MapKit would otherwise speak the callout's title, which is a bare
-        // date and says nothing about what is standing on the trail.
+        // The pin carries no title now, so without this MapKit would speak the
+        // subtitle alone, or nothing at all where a point holds one photo.
         view.accessibilityLabel = Self.markerLabel(for: annotation.pin)
         view.accessibilityIdentifier = "photo-pin"
         applyMarkerTint(to: view)

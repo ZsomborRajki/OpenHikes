@@ -46,6 +46,9 @@ struct HikePhotoViewer: View {
     /// on the map, so the sheet can get out of the way rather than snapping
     /// back over the coordinate it was asked to reveal.
     var onShowOnMap: () -> Void = { /* no-op default */ }
+    /// The pins on the map, so *Show on map* can open the one it is sending
+    /// the hiker to. `nil` in a preview or a test that has no map behind it.
+    var photoPins: PhotoMapPinController?
     var store: HikePhotoStore = .shared
 
     var selection = PhotoViewerSelection()
@@ -102,7 +105,12 @@ struct HikePhotoViewer: View {
         // scheme's label colour and is black on black.
         .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
-        .toolbar { toolbarContent(currentIndex.map { photos[$0] }) }
+        .toolbar {
+            toolbarContent(
+                currentIndex.map { photos[$0] },
+                position: currentIndex.map { $0 + 1 }
+            )
+        }
         .accessibilityIdentifier("photo-viewer")
         .onAppear {
             // Assigning the scroll position before the scroll view exists is
@@ -272,14 +280,32 @@ struct HikePhotoViewer: View {
     }
 
     @ToolbarContentBuilder
-    private func toolbarContent(_ current: HikePhoto?) -> some ToolbarContent {
+    private func toolbarContent(
+        _ current: HikePhoto?,
+        position: Int?
+    ) -> some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             if let current, let coordinate = current.coordinate {
                 ShowPhotoOnMapButton(
+                    photoID: current.id,
                     coordinate: coordinate,
                     highlight: highlight,
                     mapController: mapController,
+                    photoPins: photoPins,
                     onShowOnMap: onShowOnMap
+                )
+            }
+        }
+        // Beside *show me where this was* rather than beyond the spacer below,
+        // because the two belong together: both take the photograph somewhere
+        // and neither destroys it. The capsule around the pair is what says so.
+        ToolbarItem(placement: .topBarTrailing) {
+            if let current, let position {
+                SharePhotoButton(
+                    photo: current,
+                    hikeTitle: hike.displayTitle,
+                    position: position,
+                    store: store
                 )
             }
         }
@@ -350,7 +376,9 @@ struct HikePhotoViewer: View {
 /// The camera is framed on the coordinate at a fixed, close span rather than
 /// re-fitted to the whole route: the point of the button is to see where one
 /// photo was taken, and a route-wide fit would put it back in the middle of
-/// everything.
+/// everything. The pin standing there is opened too, so what the hiker arrives
+/// at is the photograph they were looking at rather than a marker among markers
+/// that they have to work out and tap.
 ///
 /// "Out of the way" is the whole sheet, not just this screen. Popping alone
 /// restores the height the hike was being read at, which on a screen that had
@@ -358,9 +386,11 @@ struct HikePhotoViewer: View {
 /// sheet is asked to collapse first, and the pop then finds that decision
 /// already made.
 private struct ShowPhotoOnMapButton: View {
+    let photoID: UUID
     let coordinate: CLLocationCoordinate2D
     var highlight: RouteHighlight
     var mapController: MapController
+    var photoPins: PhotoMapPinController?
     let onShowOnMap: () -> Void
 
     @Environment(\.dismiss)
@@ -379,6 +409,10 @@ private struct ShowPhotoOnMapButton: View {
                     longitudinalMeters: Self.regionMeters
                 )
             )
+            // Asked for here and answered after the dismiss below: the pins
+            // belong to the screen this one is pushed over, so they are off the
+            // map until it comes back. See ``PhotoMapPinController/select(_:)``.
+            photoPins?.select(photoID)
             onShowOnMap()
             dismiss()
         } label: {
@@ -386,6 +420,46 @@ private struct ShowPhotoOnMapButton: View {
         }
         .accessibilityLabel("Show where this photo was taken")
         .accessibilityIdentifier("photo-show-on-map-button")
+    }
+}
+
+/// Hands the photograph itself to the share sheet.
+///
+/// The stored file rather than a re-encode, and named after the hike and the
+/// page rather than after the store's own file — see ``HikePhotoFile``, which
+/// argues both.
+///
+/// Built here rather than inside ``HikePhotoFile`` because the two facts it
+/// needs are on this side of the main actor: the photograph is a `@Model` and
+/// the position is the viewer's own, and what crosses into the exporter is a
+/// path and a string.
+private struct SharePhotoButton: View {
+    let photo: HikePhoto
+    let hikeTitle: String
+    let position: Int
+    let store: HikePhotoStore
+
+    var body: some View {
+        ShareLink(
+            item: HikePhotoFile(
+                source: store.url(for: photo),
+                suggestedName: GPXExport.photoFileName(
+                    hikeTitle: hikeTitle,
+                    position: position,
+                    pathExtension: store.url(for: photo).pathExtension
+                )
+            ),
+            preview: SharePreview(
+                // What the viewer's own title says, so the sheet's header and
+                // the screen behind it agree about which picture is going.
+                String(localized: "Photo \(position)"),
+                icon: Image(systemName: "photo")
+            )
+        ) {
+            Image(systemName: "square.and.arrow.up")
+        }
+        .accessibilityLabel("Share photo")
+        .accessibilityIdentifier("photo-share-button")
     }
 }
 
