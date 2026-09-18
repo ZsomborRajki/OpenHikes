@@ -38,16 +38,23 @@ nonisolated enum SeededWalkFixture {
         /// The hour of the morning it set off at.
         let hour: Int
         let minute: Int
+        /// How it stopped, which is the word the row prints beside the
+        /// percentage — see ``WalkRow/outcome(_:)``. Part of the fixture
+        /// rather than assumed, because the two walks below stopped for
+        /// different reasons and a 100% walk labelled *Ended* is a row the
+        /// app itself would never write.
+        let endReason: TrailWalkEndReason
     }
 
-    /// Half the route, walked yesterday and ended by the hiker.
+    /// Half the route, ended by the hiker partway along.
     private static let halfLoop = Walk(
         name: "HalfLoop",
         fraction: 0.5,
         activeSeconds: 45 * 60,
         daysAgo: 3,
         hour: 10,
-        minute: 15
+        minute: 15,
+        endReason: .ended
     )
 
     /// The whole route, finished. The hours are a real pace for the ten
@@ -63,7 +70,11 @@ nonisolated enum SeededWalkFixture {
         // newest one.
         daysAgo: 1,
         hour: 8,
-        minute: 40
+        minute: 40,
+        // What the app writes for a walk that reached the route's end, and the
+        // only reason that reads *Completed*. A frame captioned "a trail
+        // walked end to end" cannot be a row saying the hiker stopped.
+        endReason: .reachedEnd
     )
 
     private static let all = [halfLoop, fullLoop]
@@ -118,7 +129,7 @@ nonisolated enum SeededWalkFixture {
             coveredIntervals: [0, covered],
             furthestDistanceMeters: covered,
             routeDistanceMeters: routeDistance,
-            endReason: .ended
+            endReason: fixture.endReason
         )
         context.insert(walk)
         walk.hike = hike
