@@ -524,21 +524,10 @@ private extension CommunityReviewView {
     }
 
     func failureSection(_ failure: CommunityFailure) -> some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(failure.localizedDescription)
-                if let suggestion = failure.recoverySuggestion {
-                    Text(suggestion)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                Button("Try Again") {
-                    phase = .loading
-                    loadTask = Task { await load() }
-                }
-            }
+        CommunityRetryableFailureSection(failure: failure, identifier: "review-failure") {
+            phase = .loading
+            loadTask = Task { await load() }
         }
-        .accessibilityIdentifier("review-failure")
     }
 }
 
