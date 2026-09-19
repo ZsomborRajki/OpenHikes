@@ -88,8 +88,15 @@ struct OpenHikesApp: App {
             // ``SharedHikeCataloguePublisher``.
             SharedHikeCataloguePublisher.publish(
                 from: coordinator,
-                container: appModel.container
+                container: appModel.container,
+                watch: appModel.watchLink
             )
+            // The watch's own link, started here rather than in a `.task` for
+            // the reason the intent registration above is: `WCSession` can
+            // wake this process to deliver a walk a hiker recorded hours ago,
+            // and a session activated by a view is a session that does not
+            // exist on that launch.
+            appModel.watchLink?.activate()
             // The Live Activity's own buttons, registered the same way and for
             // the same reason: the intent type is compiled into the widget
             // extension and performed here.

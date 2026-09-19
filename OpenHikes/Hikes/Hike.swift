@@ -422,6 +422,13 @@ extension Hike {
         set { mutableLocalState?.ownsRecordingDraft = newValue }
     }
 
+    /// The watch recording this hike was imported from, if it was — see
+    /// ``HikeLocalState/watchSessionID`` for why the fact is device-local.
+    var watchSessionID: UUID? {
+        get { localState?.watchSessionID }
+        set { mutableLocalState?.watchSessionID = newValue }
+    }
+
     /// Removes the sidecar, for a hike on its way out of the store.
     ///
     /// Explicit because the two rows are in different stores and so cannot be
