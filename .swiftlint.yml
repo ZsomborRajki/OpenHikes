@@ -12,6 +12,7 @@ included:
   - OpenHikesShared/Tests
   - OpenWidget
   - OpenWidgetTests
+  - OpenHikesWatch
 
 excluded:
   - .build
@@ -21,7 +22,7 @@ excluded:
   # A git worktree or scratch checkout placed inside the repository is a second
   # copy of every source file, and SwiftLint's walk does not skip hidden
   # directories on its own — it stays out of one here only because `included:`
-  # above scopes the walk to the seven target roots. That guard lapses whenever
+  # above scopes the walk to the eight target roots. That guard lapses whenever
   # paths are passed on the command line, which is exactly how the SwiftLint
   # build-tool plugin invokes it: `included:` stops applying, and `excluded:`
   # applies only under `--force-exclude`. So exclude the shape of the hazard —
