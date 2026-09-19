@@ -36,6 +36,13 @@ xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
 
 # The standalone shared package
 swift test --package-path OpenHikesShared
+
+# The watch app alone — the faster loop while working on it. Building the
+# `OpenHikes` scheme above already compiles it, because it is a dependency of
+# the app and embedded in it, so there is no way to break the watch that
+# leaves the three gates green.
+xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikesWatch \
+  -destination 'generic/platform=watchOS Simulator'
 ```
 
 **The boot is part of the test command, not a refinement of it.** A cold
@@ -97,6 +104,11 @@ gives this one its own device and `--derived-data <path>` its own build.
 - **One test class or `@Suite` per file,** and tests use Swift Testing except in
   `OpenHikesUITests`. Both halves are enforced: `single_test_class` for
   `XCTestCase`, and the `one_suite_per_file` custom rule for `@Suite`.
+- **`OpenHikesWatch` has no test bundle, and a watch simulator is in no gate.**
+  Anything on the watch worth asserting belongs in `OpenHikesShared`, where
+  `swift test` reaches it on the macOS host; what stays on the watch is Core
+  Location, HealthKit and SwiftUI. See *The watch app* in the instructions
+  file.
 - **No fixed sleeps as barriers.** Wait on the effect, never on a duration.
 - **Documentation is owned by exactly one file each.** Before adding a fact to a
   second place, read the *Documentation* section of the instructions file.

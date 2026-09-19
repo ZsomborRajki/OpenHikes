@@ -1,6 +1,6 @@
 # OpenHikes
 
-OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone. It imports GPX tracks, records live hikes, displays them on a MapKit map, provides route statistics and an interactive elevation profile, and keeps selected map areas available offline.
+OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone, with a companion app for Apple Watch. It imports GPX tracks, records live hikes, displays them on a MapKit map, provides route statistics and an interactive elevation profile, and keeps selected map areas available offline.
 
 That is local-first with one deliberate exception. There is no OpenHikes account and no server holding your hikes: everything lives on the device, and what syncs travels through the hiker's own private iCloud database. The exception is sharing a hike, which publishes it to a public CloudKit database other people browse. `OpenHikes/PrivacyInfo.xcprivacy` and [the privacy policy](https://zsomborrajki.github.io/OpenHikes/privacy/) describe exactly what that sends.
 
@@ -17,6 +17,7 @@ That is local-first with one deliberate exception. There is no OpenHikes account
 - **Live context.** Current location, trail auto-follow with a progress readout, and search across saved hikes and MapKit place suggestions. WeatherKit conditions sit over the map as a badge that opens the current reading and the next twelve hours in full; temperatures, speeds, distances and elevations are spelled in the units the reader's own locale uses.
 - **Home Screen widget.** Trail progress, a climb/descent/high-point stat line, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
 - **Live Activity.** The same figures on the Lock Screen and in the Dynamic Island while a recording runs or a trail is being followed, ticking their own clock so a walk costs no updates while it is simply going well.
+- **Apple Watch.** A trail imported on the phone is sent to the watch and walked from the wrist: the route drawn as a line, how far along you are, how much is left, and how far off the trail you have wandered — matched on the watch itself, so it keeps working with the phone in a rucksack or out of range. The watch also records a hike on its own, with a workout session keeping it running through a six-hour walk and the screen dark, and hands the finished walk to the phone when it is next in range. A walk that cannot be sent yet waits on the watch until it can.
 - **iCloud sync.** Hikes and their metadata follow the hiker across their own devices, through their own private CloudKit database. Photo files and the tile cache stay on the device that produced them.
 - **Health.** A finished hike is written into the hiker's own Health store as a workout, behind a switch that is off until they turn it on. The app only ever writes: it asks for no read access at all.
 - **Community hikes.** Shared hikes are found by panning the map and asking, or by typing a name, and are drawn as lines rather than only as pins. Opening one shows the same statistics a hike of your own gets; saving it copies its route and photographs into your library. Publishing your own is free and is reviewed by a person before anyone else can see it; every published hike can be reported or its author blocked, and a hiker can ask for their own to be taken down. Browsing needs no account. Photographs travel the other way too: pictures brought back from a trail somebody else published — or from a waymarked OpenStreetMap route, which has none of its own — can be offered to it, are reviewed the same way a hike is, and carry the name of whoever took them. Saving such a hike brings the contributed photographs home with it.
@@ -28,13 +29,16 @@ That is local-first with one deliberate exception. There is no OpenHikes account
   iOS 26.0, which is also what `OpenHikesShared/Package.swift` declares; CI
   builds on Xcode 26.6.
 - An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container, the push entitlement and HealthKit.
-- iPhone only. Every target sets `TARGETED_DEVICE_FAMILY = 1`.
+- iPhone, plus an optional Apple Watch app. The phone targets set
+  `TARGETED_DEVICE_FAMILY = 1`; `OpenHikesWatch` sets `4` and deploys to
+  watchOS 26.0. The watch app is embedded in the phone app, so building the
+  `OpenHikes` scheme builds it too.
 
 OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia and Thunderforest require build-time API keys *and* a paid subscription with each vendor, whose terms forbid using them free of charge in a shipping app — in OpenHikes they sit behind a monthly subscription, OpenHikes Pro, which is what pays for them, along with saving a whole route's Stadia map for offline use — Thunderforest's licence reserves pre-caching for a plan this app is not on. Everything else in the app, the community feature included, is free. A build without keys shows them locked, and OpenStreetMap keeps working.
 
 ## Setup
 
-1. Open `OpenHikes.xcodeproj` and set your development team for `OpenHikes` and `OpenWidgetExtension`.
+1. Open `OpenHikes.xcodeproj` and set your development team for `OpenHikes`, `OpenWidgetExtension` and `OpenHikesWatch`.
 2. Enable WeatherKit for the app's App ID in Certificates, Identifiers & Profiles, in both **App Services** and **App Capabilities**, then refresh its signing assets. The capability and entitlement are checked in, but Apple still returns HTTP 401 until the App ID itself is enabled.
 3. If your team cannot use `group.tappium.com.OpenHikes`, replace it in both entitlement files and in `SharedStore.appGroupID`.
 4. HealthKit needs no portal step in the ordinary case: the capability and both usage strings are checked in, and the App ID picks it up when Xcode refreshes signing assets. Enable it by hand in **App Capabilities** if signing refuses. The app only ever *writes* a finished hike into the hiker's own store — `HealthKitWorkoutWriter` asks for share types and no read types — and the switch is off until they turn it on.
@@ -70,9 +74,15 @@ Scripts/simulate-hike.sh stop           # stop and clear location playback
 xcrun simctl boot "iPhone 18 Pro" || true
 xcrun simctl bootstatus "iPhone 18 Pro" -b
 
-# Build the app and its embedded widget
+# Build the app, its embedded widget and the watch app. The watch target is a
+# dependency of the app, so this compiles it for watchOS as well — there is no
+# separate build to remember, and no way to break it without breaking this.
 xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikes \
   -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
+
+# The watch app on its own, which is the faster loop while working on it
+xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikesWatch \
+  -destination 'generic/platform=watchOS Simulator'
 
 # Unit and integration tests, app and widget
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
@@ -137,8 +147,10 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | `OpenHikes/Intents/` | App Intents for controlling and querying a recording, the Siri and Spotlight shortcuts they are offered through, and the seam they perform behind. |
 | `OpenHikes/General/` | Cross-domain extensions and diagnostics. |
 | `OpenHikes/SimulatedLocations/` | The bundled GPX routes the simulated hike and the screenshot capture play back. |
-| `OpenHikesShared/` | Domain-foldered local Swift package shared by the app and widget. |
+| `OpenHikes/Watch/` | The phone's half of the watch link: sending the hiker's trails and one trail's geometry, and keeping the walks the watch recorded. |
+| `OpenHikesShared/` | Domain-foldered local Swift package shared by the app, the widget and the watch. |
 | `OpenWidget/` | iOS Home Screen widget and the Live Activity's Lock Screen and Dynamic Island views. |
+| `OpenHikesWatch/` | The watchOS app: the link to the phone, the trail being followed, and recording a hike on the watch alone. |
 | `OpenHikesTests/`, `OpenWidgetTests/` | App-hosted tests mirroring the app's domain folders. |
 | `OpenHikesUITests/` | Simulator UI automation, location spoofing, launch metrics. |
 | `Scripts/` | The gates and tools a contributor runs by hand: lint, the UI-test runner, the simulated hike, the App Store screenshot capture and its photo stamper, and the checks CI runs beside them. |
