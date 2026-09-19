@@ -120,9 +120,10 @@ nonisolated enum WatchWalkImport {
                 boundary: fix.resumesAfterPause ? .paused : nil
             )
         }
+        let measured = measuredDistance(of: route)
         let hike = Hike(
             title: HikeTitle.watchRecording(trailName: walk.title, recordedAt: walk.startedAt),
-            distanceMeters: measuredDistance(of: route),
+            distanceMeters: measured,
             date: walk.startedAt,
             tintHex: Hike.randomTintHex(),
             route: route
@@ -146,7 +147,7 @@ nonisolated enum WatchWalkImport {
         logger.debug(
             """
             Kept a walk from the watch: \
-            \(Int(measuredDistance(of: route)), privacy: .public) m measured against \
+            \(Int(measured), privacy: .public) m measured against \
             \(Int(walk.distanceMeters), privacy: .public) m reported
             """
         )

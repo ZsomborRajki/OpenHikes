@@ -84,6 +84,14 @@ final class WatchRecorder: NSObject {
     /// location managers on a watch is twice the radio for one hiker.
     var onFix: (@MainActor (CLLocation) -> Void)?
 
+    /// Called once whenever a recording ends with a walk on the disk queue.
+    ///
+    /// A callback rather than the return of ``stop()`` alone, because ``stop()``
+    /// is not always the hiker's: a workout session that fails takes the
+    /// recording down with it, and the walk it leaves behind has to be offered
+    /// to the phone by the same path a hiker's own Stop uses.
+    var onWalkQueued: (@MainActor (WatchRecordedWalk) -> Void)?
+
     @ObservationIgnored private let store: WatchStore
     @ObservationIgnored private let healthStore = HKHealthStore()
     @ObservationIgnored private let locations = CLLocationManager()
@@ -108,7 +116,12 @@ final class WatchRecorder: NSObject {
 
     /// Starts a recording, optionally naming the trail being walked.
     func start(trailHikeID: UUID? = nil, title: String? = nil) async {
-        guard !phase.isActive else { return }
+        // `.preparing` counts, and is the half that is easy to miss: this
+        // suspends on a permission prompt the hiker can take as long as they
+        // like over, and two taps before it resolves would otherwise start a
+        // second `HKWorkoutSession`, leak the first unended and reset the
+        // accumulator under a recording that was already running.
+        guard phase != .preparing, !phase.isActive else { return }
         phase = .preparing
         self.trailHikeID = trailHikeID
         trailTitle = title
@@ -170,6 +183,7 @@ final class WatchRecorder: NSObject {
             return nil
         }
         phase = .saved(walk)
+        onWalkQueued?(walk)
         return walk
     }
 
