@@ -6,8 +6,8 @@
 //
 //  Rows are ``SharedHikeSummary``s — a name, a date and a length, which is
 //  what a picker row shows everywhere else in this project. Tapping one asks
-//  the phone for its geometry; the trail that arrives is drawn by
-//  ``TrailFollowView``.
+//  the phone for its geometry; the trail that arrives opens as a map in
+//  ``TrailMapScreen``.
 //
 
 import OpenHikesShared
@@ -28,7 +28,7 @@ struct TrailListView: View {
                     // way — and so a row is an ordinary `NavigationLink` with
                     // the traits the system gives one.
                     NavigationLink {
-                        TrailFollowView(hikeID: hike.id, name: hike.name)
+                        TrailMapScreen(hikeID: hike.id, name: hike.name)
                     } label: {
                         TrailRow(hike: hike)
                     }
