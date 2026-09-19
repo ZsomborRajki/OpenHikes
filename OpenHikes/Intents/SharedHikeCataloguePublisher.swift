@@ -49,20 +49,36 @@ nonisolated enum SharedHikeCataloguePublisher {
     /// Fire-and-forget and silent on failure, for the reason the Spotlight
     /// sweep beside it is: nothing a hiker does depends on this having worked
     /// this second, and the next sweep puts it right.
-    static func publish(from coordinator: HikeIntentCoordinator, container: ModelContainer) {
+    ///
+    /// - Parameter watch: the watch link, which is handed the *same* list
+    ///   rather than being given a sweep of its own. Two independent readings
+    ///   of one library is how the two come to disagree, and the disagreement
+    ///   would be visible: a hiker's watch offering a trail their widget's
+    ///   picker does not. One sweep, one list, two consumers — which is the
+    ///   argument this type's header already makes about writing per change.
+    static func publish(
+        from coordinator: HikeIntentCoordinator,
+        container: ModelContainer,
+        watch: WatchSessionCoordinator? = nil
+    ) {
         Task.detached(priority: .utility) {
-            await publishCatalogue(from: coordinator)
+            await publishCatalogue(from: coordinator, watch: watch)
             await publishPinnedTrails(container: container)
         }
     }
 
     /// The list the pickers read.
-    static func publishCatalogue(from coordinator: HikeIntentCoordinator) async {
+    static func publishCatalogue(
+        from coordinator: HikeIntentCoordinator,
+        watch: WatchSessionCoordinator? = nil
+    ) async {
         do {
             let summaries = try await MainActor.run {
                 try coordinator.finishedHikes().map(HikeEntity.summary(of:))
             }
-            SharedStore.saveHikeCatalogue(SharedHikeCatalogue(hikes: summaries))
+            let catalogue = SharedHikeCatalogue(hikes: summaries)
+            SharedStore.saveHikeCatalogue(catalogue)
+            if let watch { await watch.publish(catalogue) }
         } catch {
             Self.logger.debug(
                 "Hike catalogue publish failed: \(error.localizedDescription, privacy: .public)"

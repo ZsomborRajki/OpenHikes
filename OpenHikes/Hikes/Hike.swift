@@ -422,6 +422,21 @@ extension Hike {
         set { mutableLocalState?.ownsRecordingDraft = newValue }
     }
 
+    /// The watch recording this hike was imported from, if it was — see
+    /// ``HikeLocalState/watchSessionID`` for why the fact is device-local.
+    var watchSessionID: UUID? {
+        get { localState?.watchSessionID }
+        set { mutableLocalState?.watchSessionID = newValue }
+    }
+
+    /// This hike's place in a hand-ordered list — see
+    /// ``HikeLocalState/listOrder`` for why the order does not sync, and
+    /// ``HikeListOrder`` for what `nil` means.
+    var listOrder: Int? {
+        get { localState?.listOrder }
+        set { mutableLocalState?.listOrder = newValue }
+    }
+
     /// Removes the sidecar, for a hike on its way out of the store.
     ///
     /// Explicit because the two rows are in different stores and so cannot be

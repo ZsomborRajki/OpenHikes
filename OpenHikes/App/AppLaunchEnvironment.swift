@@ -30,6 +30,9 @@ nonisolated enum AppLaunchEnvironment {
         let communityScenarioName: String?
         let simulatesOffline: Bool
         let seededPhotoCount: Int
+        /// How many bare hikes a launch asked for — see
+        /// ``AppLaunchEnvironment/seededLibraryHikeCount``.
+        let seededLibraryHikeCount: Int
         /// `nil` unless a launch asked for a walk fixture — see
         /// ``AppLaunchEnvironment/seededWalkFixtureName``.
         let seededWalkFixtureName: String?
@@ -63,6 +66,7 @@ nonisolated enum AppLaunchEnvironment {
             communityScenarioName = nil
             simulatesOffline = false
             seededPhotoCount = 0
+            seededLibraryHikeCount = 0
             seededWalkFixtureName = nil
             seededMetricsReportCount = 0
             failsFirstSave = false
@@ -81,6 +85,7 @@ nonisolated enum AppLaunchEnvironment {
         private static let communityPrefix = "--ui-test-community="
         private static let offlineArgument = "--ui-test-offline"
         private static let seedPhotosPrefix = "--ui-test-seed-photos="
+        private static let seedHikesPrefix = "--ui-test-seed-hikes="
         private static let seedWalksPrefix = "--ui-test-seed-walks="
         private static let seedMetricsPrefix = "--ui-test-seed-metrics="
         private static let failFirstSaveArgument = "--ui-test-fail-first-save"
@@ -94,6 +99,10 @@ nonisolated enum AppLaunchEnvironment {
         /// Enough to fill the strip and force it to scroll, and few enough
         /// that a scenario seeding them does not spend its budget encoding.
         private static let maximumSeededPhotos = 24
+        /// Enough to drag one row past several others and still see both
+        /// ends of the list, and few enough that seeding them is not what a
+        /// scenario spends its time on.
+        private static let maximumSeededLibraryHikes = 12
         /// One metrics digest and one diagnostic report is already both shapes
         /// the screen draws; past that a scenario is only re-reading itself.
         private static let maximumSeededMetricsReports = 8
@@ -140,6 +149,12 @@ nonisolated enum AppLaunchEnvironment {
                 prefix: Self.seedPhotosPrefix,
                 isUITesting: isUITesting,
                 limit: Self.maximumSeededPhotos
+            )
+            seededLibraryHikeCount = Self.count(
+                in: arguments,
+                prefix: Self.seedHikesPrefix,
+                isUITesting: isUITesting,
+                limit: Self.maximumSeededLibraryHikes
             )
             seededWalkFixtureName = Self.fixtureName(
                 in: arguments,
@@ -303,6 +318,13 @@ nonisolated enum AppLaunchEnvironment {
     /// the real store, the real files on disk and the real decode path; only
     /// the pixels are invented.
     static let seededPhotoCount = configuration.seededPhotoCount
+    /// How many plain hikes to put in the library before anything else runs.
+    ///
+    /// A list scenario needs *several* hikes and does not care what is in
+    /// them — the GPX fixture makes exactly one, and importing it repeatedly
+    /// would spend a scenario's budget parsing the same file. See
+    /// ``SeededLibraryFixture``.
+    static let seededLibraryHikeCount = configuration.seededLibraryHikeCount
 
     /// The name of a walk fixture to attach to the hike a launch imports, or
     /// `nil` for none — see `SeededWalkFixture` for the names.

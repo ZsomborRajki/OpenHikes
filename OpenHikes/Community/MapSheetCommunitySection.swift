@@ -99,6 +99,44 @@ extension MapSheetHikes {
         CommunityImport.importedByListing(in: hikes)
     }
 
+    /// The hand-ordered places of community rows, by listing id.
+    ///
+    /// In memory, and deliberately: these are *results*, not a library. They
+    /// are re-asked whenever the map moves, so an order kept on disk would
+    /// outlive the answer it described and start arranging a different set of
+    /// hikes. Within a session the ids are stable, so a hiker who put three
+    /// rows in the order they mean to walk them keeps that while they browse.
+    ///
+    /// A listing nobody has moved has no entry and keeps the place the search
+    /// gave it, after everything that was placed by hand.
+    func arrangedCommunity(_ listings: [CommunityListing]) -> [CommunityListing] {
+        guard !community.handOrder.isEmpty else { return listings }
+        let ordered = listings.enumerated().sorted { first, second in
+            let left = community.handOrder[first.element.id] ?? Int.max
+            let right = community.handOrder[second.element.id] ?? Int.max
+            if left != right { return left < right }
+            return first.offset < second.offset
+        }
+        return ordered.map(\.element)
+    }
+
+    /// Applies a drag within one section, and numbers that section's rows.
+    ///
+    /// Per section rather than across both: the two are different kinds of
+    /// answer, and a row dragged out of one and into the other would be
+    /// claiming to be something it is not.
+    func moveCommunity(
+        _ displayed: [CommunityListing],
+        from offsets: IndexSet,
+        to destination: Int
+    ) {
+        var moved = displayed
+        moved.move(fromOffsets: offsets, toOffset: destination)
+        for (index, listing) in moved.enumerated() {
+            community.handOrder[listing.id] = index
+        }
+    }
+
     /// Where a tapped listing goes.
     ///
     /// A hike the hiker has already imported opens as *their* hike, not as
@@ -125,16 +163,130 @@ extension MapSheetHikes {
     var communityList: some View {
         List {
             reviewSection
+            if community.nearbyListings.isEmpty {
+                Section {
+                    communityEmptyRow
+                } header: {
+                    communitySectionHeader
+                } footer: {
+                    communitySectionFooter
+                }
+            } else {
+                sharedSection
+                curatedSection
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .environment(\.editMode, communityEditMode)
+    }
+
+    /// The browser's reorder flag, as the environment wants it.
+    ///
+    /// A derived binding rather than a second piece of state: `EditMode` is
+    /// what `List` reads, `isReordering` is what the browse session holds, and
+    /// two stored values would be one too many to keep in agreement.
+    var communityEditMode: Binding<EditMode> {
+        Binding(
+            get: { community.isReordering ? .active : .inactive },
+            set: { community.isReordering = $0 == .active }
+        )
+    }
+
+    /// Hikes people published, above the ones a database knows about.
+    ///
+    /// Two sections rather than one ranked list, because the two are not the
+    /// same kind of answer and a hiker reading a row needs to know which they
+    /// are looking at: one is somebody's walk, with their photographs and
+    /// their description on it, and the other is a way marked on
+    /// OpenStreetMap that nobody here has been down. Ranking them together
+    /// buried the first kind under the second wherever a mapped area is
+    /// dense, which is most places worth walking.
+    ///
+    /// Empty sections are absent rather than empty: a heading over nothing is
+    /// a claim that there is a kind of answer here when there is not.
+    @ViewBuilder var sharedSection: some View {
+        let listings = arrangedCommunity(sharedListings)
+        if !listings.isEmpty {
             Section {
-                communitySectionContent
+                // A failure over rows that are still on screen. The empty
+                // state is the only place a failure used to be reported, so a
+                // refresh that failed on top of a good list said nothing at
+                // all — and since the rows are deliberately kept, the section
+                // looked like it had simply answered. It has not: these are
+                // the previous area's hikes, and the header says so.
+                if case .failed(let failure) = community.state {
+                    communityRefreshFailureRow(failure)
+                }
+                ForEach(listings) { listing in
+                    communityRow(listing)
+                }
+                .onMove { offsets, destination in
+                    moveCommunity(listings, from: offsets, to: destination)
+                }
             } header: {
                 communitySectionHeader
             } footer: {
                 communitySectionFooter
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
+    }
+
+    /// The ways OpenStreetMap knows about, under the walks people shared.
+    @ViewBuilder var curatedSection: some View {
+        let listings = arrangedCommunity(curatedListings)
+        if !listings.isEmpty {
+            Section {
+                ForEach(listings) { listing in
+                    communityRow(listing)
+                }
+                .onMove { offsets, destination in
+                    moveCommunity(listings, from: offsets, to: destination)
+                }
+            } header: {
+                HStack(spacing: 8) {
+                    Text("From OpenStreetMap")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 0)
+                }
+                .textCase(nil)
+            }
+        }
+    }
+
+    /// Walks people published here.
+    var sharedListings: [CommunityListing] {
+        community.nearbyListings.filter { !$0.isCurated }
+    }
+
+    /// Ways OpenStreetMap has, which nobody here has walked.
+    var curatedListings: [CommunityListing] {
+        community.nearbyListings.filter(\.isCurated)
+    }
+
+    func communityRow(_ listing: CommunityListing) -> some View {
+        Button {
+            openListing(listing)
+        } label: {
+            CommunityHikeRow(
+                listing: listing,
+                isImported: importedHikes[listing.id] != nil
+            )
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        // The same offer the hiker's own rows make, for the same reason: a
+        // long press is where a hiker looks for "let me move this", and a
+        // gesture of our own would fire the button under it instead.
+        .contextMenu {
+            Button {
+                withAnimation { community.isReordering = true }
+            } label: {
+                Label("Reorder List", systemImage: "arrow.up.arrow.down")
+            }
+        }
     }
 
     /// Submissions waiting for a person, above the published ones.
@@ -241,34 +393,6 @@ extension MapSheetHikes {
     ///
     /// No opt-in row among them any more: reaching this list at all means the
     /// tab was selected, and that selection is the opt-in.
-    @ViewBuilder var communitySectionContent: some View {
-        if community.nearbyListings.isEmpty {
-            communityEmptyRow
-        } else {
-            // A failure over rows that are still on screen. The empty state
-            // below is the only place a failure used to be reported, so a
-            // refresh that failed on top of a good list said nothing at all —
-            // and since the rows are deliberately kept, the section looked
-            // like it had simply answered. It has not: these are the previous
-            // area's hikes, and the header says so.
-            if case .failed(let failure) = community.state {
-                communityRefreshFailureRow(failure)
-            }
-            ForEach(community.nearbyListings) { listing in
-                Button {
-                    openListing(listing)
-                } label: {
-                    CommunityHikeRow(
-                        listing: listing,
-                        isImported: importedHikes[listing.id] != nil
-                    )
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
     /// The place the rows are about, and whether more are coming.
     ///
     /// Naming the area is the other half of taking the chip away. *Nearby*

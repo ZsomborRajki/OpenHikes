@@ -775,6 +775,12 @@ private extension OpenHikesView {
     /// tie two unrelated scenarios together.
     func seedRequestedLaunchFixtures() async {
         #if DEBUG
+        // First, so a scenario that also imports a GPX gets the imported hike
+        // *above* these: it is the newest, and the list is newest-first.
+        SeededLibraryFixture.seed(
+            count: AppLaunchEnvironment.seededLibraryHikeCount,
+            in: modelContext
+        )
         if AppLaunchEnvironment.stubsWeather {
             appModel.weatherManager.applyUITestSnapshot()
         }

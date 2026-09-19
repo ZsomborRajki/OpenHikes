@@ -9,11 +9,20 @@ The main project requires Xcode 26.5+, the iOS 26.0 platform, and a development 
 xcrun simctl boot "iPhone 18 Pro" || true
 xcrun simctl bootstatus "iPhone 18 Pro" -b
 
-# Build the app and its embedded widget target
+# Build the app, its embedded widget and the watch app. The watch target is a
+# dependency of the app, so this compiles it for watchOS too.
 xcodebuild build \
   -project OpenHikes.xcodeproj \
   -scheme OpenHikes \
   -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
+
+# The watch app alone, which is the faster loop while working on it. There is
+# no watch test bundle — see "The watch app" below for why, and for where the
+# testable half of it lives instead.
+xcodebuild build \
+  -project OpenHikes.xcodeproj \
+  -scheme OpenHikesWatch \
+  -destination 'generic/platform=watchOS Simulator'
 
 # Run the two app-hosted unit bundles: the default local gate, ~20 seconds
 xcodebuild test \
@@ -122,7 +131,7 @@ The *purchase* half of that failure is fixed in the app rather than by this chec
 
 ## Architecture
 
-- Following Apple's Food Truck and Backyard Birds samples, `OpenHikes/` is organized by product domain rather than generic `Managers`, `Models`, and `Views` layers. `App/` is the composition root; `Hikes/`, `Recording/`, `Map/`, `Tiles/`, `Photos/`, `Weather/`, `Purchases/`, `Sync/`, `Settings/`, `Health/`, `Reminders/`, `LiveActivity/`, `Intents/` and `General/` own their related models, services, and views. `Community/` is the sixteenth and has a bullet of its own below, because what makes it different is not where it sits.
+- Following Apple's Food Truck and Backyard Birds samples, `OpenHikes/` is organized by product domain rather than generic `Managers`, `Models`, and `Views` layers. `App/` is the composition root; `Hikes/`, `Recording/`, `Map/`, `Tiles/`, `Photos/`, `Weather/`, `Purchases/`, `Sync/`, `Settings/`, `Health/`, `Reminders/`, `LiveActivity/`, `Intents/`, `Watch/` and `General/` own their related models, services, and views. `Community/` is the seventeenth and has a bullet of its own below, because what makes it different is not where it sits.
 - `OpenHikesApp` creates one `OpenHikesModel` and injects it through the SwiftUI environment. That model owns the single `ModelContainer` plus long-lived location, weather, background tracking, auto-save, cloud sync, and recording dependencies; `OpenHikesView` owns transient selection, map presentation, and navigation state. `Hike` is the persisted source of truth, while `RouteProfile` is the precomputed distance/elevation index used by both chart scrubbing and GPS route matching. Stopping a recording that the matcher moved or found ambiguous ends in `.reviewing` rather than in the store: `RouteReviewSection.sections(in:)` groups the per-fix legs into reviewable sections, `RecordingRouteReview` holds the per-section `TrailRouteChoice`, and only `saveReviewedRecording()` writes the `Hike`.
 - The map is an imperative MapKit subsystem behind `MapView`. `MapView.Coordinator` observes stable controller objects and updates `MKMapView` directly. Tile drawing flows through `CachingTileOverlayRenderer` and `TileOverlay` into `TileCache`; passive durable saves go through `AutoSaveTileStore`, while policy-permitted bulk downloads go through `OfflineTileDownloader`.
 - `Community/` is the one part of the app that writes to a database other people read, and is deliberately separate from `Sync/`. `Sync/` reports on SwiftData's mirroring of the hiker's own hikes into their **private** CloudKit database; `Community/` is hand-written `CKRecord` work against the **public** database of the same container, with its own transport protocol, its own record types, and no contact with the `ModelContainer` at all. `CommunityPublisher` uploads a hike, `CommunityBrowser` holds what the searched area found, `CommunityQueryPolicy` decides whether a pan is worth *offering* to re-ask about, `CommunitySearchArea` is the circle one answer covers, `CommunityAreaName` says what to call it, `MapCommunityAnnotations` draws the results on the map that asked and `MapCommunitySearchControl` is the *Search this area* button, `MapCommunityRoutes` draws where each of those results actually *goes* — `CommunityRouteOutline` is the kilobyte-sized copy of a route that makes that affordable to fetch and `CommunityRouteHitTest` is what turns a tap on one of those lines into a hike, since MapKit hit-tests annotations and never overlays, `CommunityPageBudget` decides how many pages one request may spend once blocked rows are taken out of it, `CommunityImport` turns a published hike into an ordinary `Hike`, `CommunityReport` composes the message a hiker reports one with — which reaches the reviewer by mail rather than through the transport, for the reason given below — `CommunityBlockList` holds the authors this device has hidden, which is the browse lists' filter and needs no account, no network and no record type of its own, `CuratedTrailSource` is the OpenStreetMap half of the list and `CuratedTrailStore` is what it keeps on disk between launches, with `CommunityNearbyAnswer` carrying the scope a nearby question asks with and the `CuratedTrailOutage` a refused half reports back, and the review path is `CommunityReviewQueue` (what is waiting), `CommunityPendingSubmission` (one queue entry, carrying the fields publishing will write) and `CommunityReviewView` (where one is decided) — with the transport's reviewer half in `CloudKitCommunityTransport+Reviewing.swift`, split from its sibling for length alone. See *The community feature* below for the two record types and why there are two.
@@ -158,7 +167,7 @@ The *purchase* half of that failure is fixed in the app rather than by this chec
 - The Control Center toggle is the one intent declared in `OpenHikesShared`: the control extension has to compile its action type while the system still performs it in the app's process. It delegates through `HikeRecordingControlHandling`, whose app registration points back to the same `HikeIntentCoordinator`; the shared package never owns a second recording state. Its `StaticControlConfiguration` projects the App Group recording payload to start/stop, and `RecordingSharedStateStore` reloads that control alongside the widget timeline whenever the payload changes. The toggle is the one entry point that reads `HikeRecorder.phase` itself before delegating, so it settles automatic recovery first for the reason the rest of the coordinator does — and more sharply, since a Control Center tap is the likeliest of all to launch the process purely to perform an intent. It takes the same two foreground-only prompts as seriously as start and resume do: it reports `requiresForegroundAuthorization` when `HikeIntentAuthorization.needsForeground` holds, and the intent then `continueInForeground(_:)`s and calls back with `canPromptForLocation: true` — a re-run through `needsToContinueInForegroundError` would find the same unanswered authorization, because nothing between the two runs asked Core Location. This build proves App Intents metadata extraction from the shared package for both products, but it does not add or validate a `LiveActivityIntent`.
 - Keep persisted identifiers stable: provider IDs, `SettingsKey` strings, `CloudSyncCoordinator.containerIdentifier`, `SharedStore.appGroupID`, widget kind, cache-key shape, and deep-link format are shared across launches, devices or targets. Update all entitlements/consumers together if an App Group or CloudKit container contract changes. CloudKit schema changes follow *Schema and migration policy*.
 - Both unit-test bundles are hosted by the app, so it launches and runs its `.task`s before any test does. Startup work that writes shared state — today `OpenHikesView.restoreLastSelectedHike()`, which publishes a widget payload — must stay behind the `isRunningTests` guard, or it races the suites that assert on that state. The same guard is what keeps the test host from mirroring to the developer's real iCloud account, since it builds its own container at launch. UI tests run out-of-process and identify the app-under-test with `--ui-testing`. `Fixture.hike(in:configure:)` inserts before it runs `configure`, and must keep doing so: `Hike`'s device-local passthroughs are a silent no-op on a row with no `modelContext`.
-- The app ships for iPhone only: every target declares `SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"` and `TARGETED_DEVICE_FAMILY = 1`. An embedded extension's device family has to stay a subset of its host's, so `OpenWidget` moves with the app rather than independently. The `canImport(UIKit)`/`canImport(AppKit)` aliases and `#if os(iOS)` guards in the existing sources are kept — they cost nothing and are what a later iPad, Mac or visionOS target would be rebuilt from — but nothing verifies those paths compile any more, so treat them as unbuilt rather than supported.
+- The app ships for iPhone, with a watchOS companion and nothing else. The phone targets declare `SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"` and `TARGETED_DEVICE_FAMILY = 1`; an embedded extension's device family has to stay a subset of its host's, so `OpenWidget` moves with the app rather than independently. `OpenHikesWatch` is the exception and is a different kind of thing: `SUPPORTED_PLATFORMS = "watchos watchsimulator"`, `TARGETED_DEVICE_FAMILY = 4`, `WATCHOS_DEPLOYMENT_TARGET = 26.0`, and a `WKCompanionAppBundleIdentifier` naming the app. It is embedded through the app's *Embed Watch Content* phase and is a target dependency of it, which is what makes `xcodebuild build -scheme OpenHikes` compile it too — so the existing `builds` matrix and the archive job gate it without a job of their own, and there is no way to break the watch that leaves CI green. The `canImport(UIKit)`/`canImport(AppKit)` aliases and `#if os(iOS)` guards in the existing sources are kept — they cost nothing and are what a later iPad, Mac or visionOS target would be rebuilt from — but nothing verifies those paths compile any more, so treat them as unbuilt rather than supported. watchOS is not in that category: it builds on every run.
 - A composite row is one accessibility element, not four. `HikeRow`, `StatTile`, `DetailRow` and the settings rows hide their decoration and expose a single label/value pair, so a UI test locates a row by its identifier plus a label prefix (`hikeRow(titled:)` in `UITestSupport.swift`) rather than by the `staticTexts` inside it. Selection that is drawn only as a tint or a checkmark also carries `.isSelected`; a glyph-only button carries its own `accessibilityLabel` and a `minimumTapTarget()`. Anything decorative is `.accessibilityHidden(true)`, and a `Text` that interpolates an SF Symbol needs a spoken label beside it. An identifier on a container is worse than none: SwiftUI pushes it down onto every descendant, so it both smothers the leaf identifiers underneath it and makes a whole section answer to one name — which is why the surface and difficulty sections carry theirs on the bar alone. `AccessibilityUITests` and `AccessibilityLabelUITests` are what enforce this.
 - `OpenHikes/PrivacyInfo.xcprivacy` is part of the shipping contract, not documentation. It declares four required-reason API codes — `CA92.1` for the app's own `UserDefaults`, `C617.1` and `3B52.1` for file timestamps inside the app's containers and through the document picker, and `35F9.1` for system uptime used as an elapsed-time measurement — plus `NSPrivacyTracking: false` and an empty tracking-domain array. An upload without it is rejected with ITMS-91053, and the rejection names the API rather than the manifest, so reaching for a new required-reason API means adding its code here in the same change. The collected-data array is **not** empty and has not been since Community shipped: publishing a hike sends a precise route, photographs, free text, the creator identifier moderation acts on, and the walk's timing — each declared linked, for app functionality, and not for tracking. `PrivacyManifestTests` reads the bundled manifest and pins that set, so a collected type added or dropped fails there rather than at an upload; App Store Connect's own privacy answers are separate and are not updated by the manifest. `OpenHikes/` is a file-system-synchronized group whose only membership exception is `Info.plist`, so the manifest is bundled with no `project.pbxproj` edit. Apple's authoritative code list is the DocC JSON behind `NSPrivacyAccessedAPITypeReasons`; the rendered HTML page is JavaScript-only and cannot be read by a fetch. `OpenWidgetExtension` deliberately carries **no** manifest of its own: it was audited and calls none of the required-reason APIs — `SharedStore` enumerates with `includingPropertiesForKeys: nil` and reads no timestamp, and the widget touches no `UserDefaults` and no uptime — so a manifest there would declare reasons the binary does not use. If a future upload rejection names the extension, that audit is what changed.
 - `Info.plist` declares `NSSupportsLiveActivities`, without which `Activity.request` throws and nothing appears — the failure is silent from the hiker's side. `NSSupportsLiveActivitiesFrequentUpdates` is deliberately *absent*: this app updates on the hiker's own movement at a 20-second floor, which is well inside the ordinary budget, and asking for the frequent-update allowance would trade a battery warning in Settings for a rate nothing here wants. The hiker's own switch is `SettingsKey.liveActivitiesEnabled`, on by default; the system's per-app switch is read separately through `areActivitiesEnabled`, and both have to say yes.
@@ -310,6 +319,138 @@ The target is a **string** — a `CommunityIdentity`, so a record name and `osm:
 **`CommunityPublisher.maximumPhotos` is 36, and it was 12.** The argument for twelve was the bill — the public database's asset quota and every later reader's download — and the bill is a forecast: nothing is published yet, so the quota it bounds is being spent by nobody. It is the **first number to bring back down** if that changes, and the cheapest lever there is: it is read in one place on the way up and quoted rather than restated everywhere else, so lowering it changes what new uploads carry and nothing about what is already published. `docs/privacy/` and `docs/terms/` both quote it in words and have to move with it. Raising it **required a second ceiling**, and the two bound different things: `CloudKitCommunityTransport.maximumContributions` is 20 and bounds the *query*, while `maximumContributedPhotos` is 60 and bounds the *download* — twenty sets of thirty-six is seven hundred assets for one tap on a row. The download budget is spent **before** the fetch, against `CommunityPhotoContribution.photoCount`, which is on the published record precisely so the question can be asked without the assets, and it takes a **prefix** rather than filtering: skipping an over-large set would let a later, smaller one jump ahead of an earlier one and make a hike's gallery depend on what happened to fit. The first set is always taken however large, so a hike whose only contribution is over budget draws it rather than nothing.
 
 **Still missing before this can ship.** Both halves of Guideline 1.2 are built — reporting (#248) and blocking (#249) — and the 24-hour commitment is described in `docs/privacy/`; the App Store listing has to describe them too. The schema half is done and verified in both environments: `CommunityHike.authorID` exists, `CommunityHike.submission` is QUERYABLE — without which every shared hike reads as *waiting for review* forever, however many are published — and `CommunityHikeSubmission` carries no index at all, `routeOutline` included (#272). **The `authorID`-by-hand hazard is gone**: the app reads it off the submission's `creatorUserRecordID` and writes it itself, so a reviewer can no longer forget the one field whose absence publishes an invisible hike. **What is left is not schema, and so no export covers it.** The development container carries `CommunitySubmissionNotice` and the submission type's `GRANT WRITE TO reviewer` as of 2026-09-14, and **production carries both**: it was promoted on 2026-09-15, which this paragraph went on denying for a day afterwards — re-export before believing any sentence in it. And the `reviewer` role's **membership** is a `Users.roles` field on a record, set per environment in the Console: a role that exists in production is not the same thing as an account that can publish there, and promoting the schema does not carry membership across. `cktool`'s management token reads schema and not records, so neither can be checked by an export — only by publishing something and looking. One thing nobody has established: the `Users` type grants `WRITE TO "_creator"`, and `roles` is a field on it. Whether CloudKit special-cases that field server-side decides whether an account can add *itself* to `reviewer`, which is the assumption every grant in this schema rests on. Test it before trusting the role in production. A submission uploaded before `routeOutline` existed simply has no line; nothing has to be backfilled. **The contribution pair is deployed in both environments, as of 2026-09-16.** `CommunityPhotoSubmission`, `CommunityPhotoContribution` and `CommunitySubmissionNotice.photoSubmission` were imported into development that day with `xcrun cktool import-schema` from this machine — export, edit that file, import it back, because the import is declarative and whole-file — and **verified by re-export**, which is the only check there is. The indexes came back exactly as intended and nothing else came with them: `CommunityPhotoContribution` carries `listing` QUERYABLE, `photoSubmission` QUERYABLE and `publishedAt` SORTABLE, and `CommunityPhotoSubmission` carries none at all, `___recordID` included. Import rather than let a first save auto-create them, which is why this was done before anybody published anything: an auto-created type arrives with `GRANT WRITE TO "_creator"` and every field QUERYABLE, SEARCHABLE and SORTABLE, which is both halves of what this schema exists to refuse. `photoSubmission` QUERYABLE is the one that is easy to leave out and impossible to notice — `contribution(of:)` filters on it, and without it every contributor's own screen reads *waiting for review* for good, exactly as `CommunityHike.submission`'s absence once did to a shared hike. **Production was promoted from the Console the same day** — `cktool` still has no promote subcommand, so that step is a button and always will be — and both environments exported byte-identical at that point, `md5 0ebc2f4450be3dba85283442acf7eaaa`. Two things a promote does not settle, and neither is schema. The `reviewer` role's **membership** is a `Users.roles` field on a record, set per environment in the Console, so an account that may publish in development may not in production; `cktool`'s management token reads schema and not records, so no export can check it. **`CD_Hike`'s two missing columns are now deployed in both environments, as of 2026-09-17** (#491). `communityPhotoSubmissionID` and `communityPhotoContributionID` were absent from both for a day — SwiftData creates a mirrored column only when a save carries a non-nil value, and nothing had contributed photographs against a real container yet — which was the four-field `CD_Hike` gap of 2026-09-13 in miniature. **It was closed a different way, and the method is the reusable part: a mirrored `CD_` column can be declared by hand and does not need the device round trip.** Export development, insert the lines, `validate-schema`, `import-schema --environment development`, then promote — no build had to run and no contribution had to be sent. A `String?` on a `@Model` mirrors to `STRING QUERYABLE SEARCHABLE SORTABLE`, which held for eight of eight optional strings already on `Hike`. The cost of the shortcut, stated so it is weighed rather than forgotten: a hand-declared column is an *inferred* shape and not one observed coming out of SwiftData, and a wrong column in production cannot be removed without a reset — so prefer letting a development build set the field once before promoting. Both environments now export byte-identical, `md5 796a197ba5150718ed9077abc9bf7299`, and a full diff of `CD_Hike` against `Hike`'s persisted properties finds no remaining gap. `MirroredCloudKitSchemaTests` will not catch it — it compares two local descriptions and never reads a container, which is the whole reason that gap reached a release once already. Nothing in the photo-contribution work adds to it: `HikePhoto`'s new fields live inside the `CD_photos` blob and need no column at all.
+
+## The watch app
+
+`OpenHikesWatch` is a watchOS 26 companion, embedded in the phone app and
+built with it. Read this before changing anything under `OpenHikesWatch/`,
+`OpenHikes/Watch/` or `OpenHikesShared/Sources/OpenHikesShared/Watch/`.
+
+**One recording has one owner, and the owner is whichever device started it.**
+This is the question issue #509 named as the unresolved one. The two
+directions are *not* symmetrical, and the difference is the whole answer — so
+read both halves before changing either.
+
+**Watch → phone: a recording in progress never crosses.** A watch recording is
+the watch's from the first fix to the last: `HikeRecorder` is never told about
+it, never enters a phase for it, and has no draft to recover for it. There is
+deliberately **no payload for a watch recording in progress**. Streaming one
+would make both devices able to answer "is a hike being recorded?", which is
+exactly what the recorder is the single authority to prevent — and it would
+have to be reconciled across a link that is out of range for most of a walk,
+against a durable draft, a crash-recovery path and a trail matcher on one side
+and a workout session on the other. A finished walk arriving as a track to
+import is not a fourth answer; it is the same thing an imported GPX is, which
+is why `WatchWalkImport` follows `HikeImport` down to the off-main write and
+the commit before anything is told there is a hike.
+
+**Phone → watch: the recording is mirrored, and the watch drives it.** This
+direction is safe for the reason the other is not, and the argument above must
+not be read as ruling it out. Going this way there is still exactly **one**
+authority, `HikeRecorder`: the watch holds no state for the phone's recording,
+reconciles nothing and recovers nothing. It is a fourth *surface* on that one
+object — beside the Live Activity, the Control Center toggle and the Siri
+phrases — rather than a fourth answer kept beside it. Everything it reads and
+every button it presses goes through `HikeIntentCoordinator`, which is what
+those other three already go through, so the watch shows exactly what Siri
+says and cannot spell the four rules that seam owns a fifth way.
+`WatchRecordingMirror` is the whole of it.
+
+Three things about that mirror are decisions rather than mechanics. Its loop
+runs **only while the watch app is reachable**, which on iOS means in the
+foreground — only while somebody is looking at it, so a paired watch in a
+pocket costs nothing. It publishes on a **twenty-second floor**, the Live
+Activity's, and sends nothing when no figure a hiker reads has moved; the
+*clock* is not sent at all but anchored once and ticked by the watch, which is
+the same move the Live Activity makes and is what keeps a quiet walk free. And
+a **command takes the message door with a reply handler and has no transfer
+fallback**: a fact delivered late is still a fact, but a button delivered late
+is a hike that starts ten minutes after the hiker gave up. Out of range, the
+watch says so and disables the buttons.
+
+**The precedence rule, and the hole in it.** A phone recording outranks the
+watch's own — the same argument the instructions make for a recording
+outranking a followed trail, that it is the one that would be *lost* — so the
+watch shows the phone's and refuses to start one of its own while it is
+running. The reverse is deliberately **not** guarded: the phone is never told
+about a watch recording while it runs, so it cannot refuse on that basis. The
+guard lives where the information is. A hiker who starts on the phone while
+their watch is already recording gets two walks; what they also get is the
+phone's recording appearing on the watch's own screen, which is as far as this
+design can honestly go without creating the second authority the first half of
+this section exists to prevent.
+
+**The link is `WCSession`, and which door a payload goes through is a
+decision.** The hiker's library crosses as the *application context*, which is
+latest-wins — there is one current answer and the ones in between are
+worthless. Everything else crosses as `transferUserInfo`, including the trail
+request, which could use the interactive door and does not: what comes back is
+tens of kilobytes that has to be a transfer anyway, and `sendMessage` fails
+outright the moment a phone goes out of range, which on a walk is most of the
+time. `WatchLink` in the shared package is the only place either side encodes
+or decodes one of these, and it exposes one pair of functions per
+`WatchMessageKind` rather than a generic pair, so a payload cannot be put in an
+envelope labelled as something else.
+
+**A recorded walk exists nowhere else, so it is written before it is sent.**
+`WatchStore` puts it on a disk queue the moment the recording stops and removes
+it only on a `WatchWalkReceipt`. `transferUserInfo` guarantees delivery and
+guarantees nothing about how many times, so the import is idempotent on
+`HikeLocalState.watchSessionID` — device-local, for the reason `healthWorkoutID`
+is — and a walk the phone already has still earns a receipt. Withholding one
+would leave the watch offering the same transfer forever.
+
+**The watch matches against the trail itself.** `WatchRouteTracker` projects a
+fix onto the one polyline it was handed; it is not `TrailMatcher` and must not
+grow toward it. What it does share with the phone are the constants —
+`matchThresholdMeters`, `tieBreakToleranceMeters`, `courseAgreementDegrees` and
+the continuity window are `RouteProfile`'s figures, and
+`WatchFixPolicyParityTests` fails when one of them moves and the other does
+not. A hiker looking at a phone and a watch on the same walk must not be told
+they are on the trail by one and off it by the other. The out-and-back is
+settled by the hiker's **course**, not by continuity: an out-and-back is
+symmetric about its turn, so the two candidates are equidistant from the last
+match as well as from the hiker, and continuity alone cannot choose.
+
+**The workout session is not about Health.** It is what keeps the process
+running with the wrist down; watchOS suspends an ordinary app within seconds,
+and `workout-processing` in `WKBackgroundModes` is claimed by starting an
+`HKWorkoutSession` and by nothing else. The builder is **discarded** on every
+path out of a recording rather than finished, because `HealthKitWorkoutWriter`
+on the phone already writes a finished hike to Health and two writers would put
+two workouts there for one walk. The one thing the session is read for is the
+hiker's heart rate.
+
+**There is no watch test bundle, and that is a constraint rather than an
+omission.** A `HKWorkoutSession` cannot be driven by a suite, no CI gate runs a
+watch simulator, and a watchOS unit bundle would need a host on a device
+nothing here has. So the half worth testing is pushed down into the shared
+package, where `swift test` covers it on the macOS host in milliseconds:
+`WatchRouteTracker`, `WatchWalkAccumulator`, `WatchFixPolicy` and `WatchLink`
+are all value types with suites. What is left in `OpenHikesWatch/` is Core
+Location, HealthKit and SwiftUI — frameworks, not decisions — and anything that
+becomes a decision belongs on the other side of that line. The phone's half is
+covered by `OpenHikesTests/Watch/`.
+
+**Render isolation applies here too, and for a sharper reason.**
+`WatchRecordingStats` and `WatchFollowState` are the stable `@Observable`
+objects the per-fix figures live on, and only the leaf views showing them read
+a property. On a phone the cost of getting this wrong is a frame; on a watch it
+is the battery that has to outlast the walk those figures describe.
+`WatchRootView` reads nothing at all.
+
+**What the first version deliberately does not do.** No map and no tiles — a
+basemap is hundreds of kilobytes per trail across a Bluetooth link for a screen
+an inch wide, and issue #509 already argued the first version would be figures
+and a trail-shaped line; `TrailGlyphView` draws exactly that and is public for
+this. No complications, no Smart Stack widget and no Double Tap. No watch-side
+community, photographs, weather or offline maps. Following a trail *without*
+recording gets a live position only while the app is on screen, because the
+alternative is starting a workout session nobody asked for. And the mirror
+carries `LiveRecordingReport`'s figures and no others — no climb, no pace, no
+heart rate from the phone's side — because that report is the phone's one
+description of a live recording and growing a second for the watch is the
+thing this design is built to avoid.
 
 ## Settled decisions — do not re-raise
 

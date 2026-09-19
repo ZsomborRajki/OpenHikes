@@ -95,6 +95,41 @@ final class HikeLocalState {
     /// files are; that ordering is argued in `HikeDeletion.swift`.
     var healthWorkoutID: UUID?
 
+    /// The watch recording this hike was imported from, or `nil` for a hike
+    /// that came from anywhere else.
+    ///
+    /// This is what makes the import idempotent, and it is why the column
+    /// exists at all: `transferUserInfo` guarantees delivery and guarantees
+    /// nothing about *how many times* — a receipt lost on the way back leaves
+    /// the watch holding a walk it will offer again on the next connection.
+    /// Recognising the second arrival is the difference between that being
+    /// free and it being a duplicate hike a hiker has to find and delete.
+    ///
+    /// Here rather than on ``Hike`` for the reason ``healthWorkoutID`` is: it
+    /// names something outside the synced store — a session on a watch paired
+    /// with *this* phone, which is the only device that will ever receive that
+    /// transfer. A second phone mirroring the column would learn an identifier
+    /// it can do nothing with, and, unlike the tile arrays, there is no sweep
+    /// that could notice.
+    ///
+    /// See `WatchWalkImport`, which is the only writer and the only reader.
+    var watchSessionID: UUID?
+
+    /// This hike's place in a hand-ordered list, or `nil` while the list is
+    /// still in date order.
+    ///
+    /// Device-local because a hand-ordered library is a statement about *this*
+    /// phone's list. The position is also the one thing here that a second
+    /// device could disagree about harmlessly — two phones with different
+    /// orders are two hikers' worth of preference, not a conflict — and
+    /// mirroring it would buy an ordering fight on every sync for something
+    /// neither device can be wrong about.
+    ///
+    /// Set for **every** hike at once, by the first drag, or for none of them:
+    /// a list that is half hand-ordered has no answer for where the rest go.
+    /// See ``HikeListOrder``, which owns both halves of that.
+    var listOrder: Int?
+
     init(hikeID: UUID) {
         self.hikeID = hikeID
     }
