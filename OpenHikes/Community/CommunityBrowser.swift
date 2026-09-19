@@ -279,6 +279,23 @@ final class CommunityBrowser {
     /// so `@Observable` filters the same-value writes a run of refused taps
     /// produces.
     private(set) var curatedNotice: CuratedTrailNotice?
+
+    /// Where the hiker has put community rows by hand, by listing id.
+    ///
+    /// Here rather than in the view for two reasons. It outlives any one copy
+    /// of a `struct View`, so an order does not evaporate when the sheet
+    /// rebuilds; and this object is what *owns* the results being ordered — a
+    /// second place holding opinions about them could only come to disagree
+    /// with the list they describe.
+    ///
+    /// In memory, and deliberately: these are results, re-asked whenever the
+    /// map moves. An order kept on disk would outlive the answer it described
+    /// and start arranging a different set of hikes. Within a session the ids
+    /// are stable, so an order set while browsing survives the browsing.
+    var handOrder: [String: Int] = [:]
+    /// Whether the community list is in reorder mode. UI state, kept beside
+    /// the order it edits so the two cannot be separated.
+    var isReordering = false
     /// What to call the area the list is answering about, once something has
     /// answered. `nil` until then, and for a launch with no ``areaNames``.
     private(set) var areaName: String?
@@ -637,9 +654,7 @@ final class CommunityBrowser {
     /// A write to the value the pill draws rather than a flag on the control,
     /// so the caption and the model cannot disagree about whether there is
     /// anything to say — see ``MapCommunitySearchControl``.
-    func dismissCuratedNotice() {
-        curatedNotice = nil
-    }
+    func dismissCuratedNotice() { curatedNotice = nil }
 
     /// Asks again about the current region, ignoring the thresholds.
     ///
