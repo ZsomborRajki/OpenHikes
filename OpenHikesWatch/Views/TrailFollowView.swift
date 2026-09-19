@@ -154,6 +154,32 @@ private struct FollowFigures: View {
             Text(WidgetFormat.length(meters: trail.totalDistanceMeters) + " in all")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+            climb
+        }
+    }
+
+    /// The trail's own climb and descent, which the phone measures over the
+    /// *whole* route before it decimates it — see `WatchTrailPackaging`.
+    ///
+    /// Beneath the grid rather than in it, because every figure up there moves
+    /// with the hiker and these two do not: they are facts about the trail,
+    /// the same for the whole walk, and they are what a hiker checks before
+    /// setting off rather than while walking.
+    ///
+    /// Both or neither: the phone fills them from one pass that reports
+    /// nothing at all for a route whose points carry no heights, and an
+    /// imported GPX without elevation is the ordinary way that happens. A
+    /// "0 m" drawn for it would read as flat rather than as unknown.
+    @ViewBuilder private var climb: some View {
+        if let gain = trail.elevationGainMeters, let loss = trail.elevationLossMeters {
+            let up = WidgetFormat.elevation(meters: gain)
+            let down = WidgetFormat.elevation(meters: loss)
+            Text("\(Image(systemName: "arrow.up.right")) \(up)   \(Image(systemName: "arrow.down.right")) \(down)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                // Spelled out, because two arrows and two numbers read aloud
+                // as four figures with nothing to tell them apart.
+                .accessibilityLabel("\(up) of climb, \(down) of descent")
         }
     }
 

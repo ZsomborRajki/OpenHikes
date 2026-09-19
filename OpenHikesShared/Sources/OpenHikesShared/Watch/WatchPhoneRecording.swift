@@ -26,6 +26,14 @@
 //  so the two cannot come to disagree about what a hike in progress looks
 //  like.
 //
+//  It is also why nothing here says *which* hike is running. A session id and
+//  a start date would be identity for the watch to reconcile against, and
+//  there is nothing to reconcile: the phone is the only authority, every
+//  reading replaces the one before it, and a button's reply carries the state
+//  that button produced. `LiveRecordingReport` carries neither, so the only
+//  way to fill them would be to widen the description Siri reads for a screen
+//  that draws neither of them.
+//
 //  ## The clock is not sent
 //
 //  ``elapsedSeconds`` is the walk's clock *as of* ``updatedAt``, and the watch
@@ -65,9 +73,6 @@ public struct WatchPhoneRecording: SharedPayload, Equatable {
     public let schemaVersion: Int
 
     public var state: State
-    /// `nil` while ``state`` is `idle`.
-    public var sessionID: UUID?
-    public var startedAt: Date?
     /// The walk's clock as of ``updatedAt``. See this file's header.
     public var elapsedSeconds: TimeInterval
     public var distanceMeters: Double
@@ -85,8 +90,6 @@ public struct WatchPhoneRecording: SharedPayload, Equatable {
         state: State,
         elapsedSeconds: TimeInterval = 0,
         distanceMeters: Double = 0,
-        sessionID: UUID? = nil,
-        startedAt: Date? = nil,
         trailName: String? = nil,
         isTrailNameStale: Bool = false,
         updatedAt: Date = .now
@@ -94,8 +97,6 @@ public struct WatchPhoneRecording: SharedPayload, Equatable {
         self.state = state
         self.elapsedSeconds = elapsedSeconds
         self.distanceMeters = distanceMeters
-        self.sessionID = sessionID
-        self.startedAt = startedAt
         self.trailName = trailName
         self.isTrailNameStale = isTrailNameStale
         self.updatedAt = updatedAt
