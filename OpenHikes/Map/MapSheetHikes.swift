@@ -254,7 +254,13 @@ private extension MapSheetHikes {
             // and an order is a way of looking at what is already there. It
             // also gave the segmented control back the width it was competing
             // for.
-            if !community.isBrowsing { sortBar }
+            if community.isBrowsing {
+                // The community half has no orders to choose between, only a
+                // hand-made one — so the bar is just the way back out of it.
+                communityReorderBar
+            } else {
+                sortBar
+            }
 
             selectedList
         }
@@ -387,13 +393,14 @@ private extension MapSheetHikes {
 
     var sortMenu: some View {
         Menu {
-            // The hand-made order, and the only place it is named. It is shown
-            // as the current choice when it is in force and offered as one
-            // never — a hiker makes it by dragging, not by picking it from a
-            // list of orders it is not one of.
+            // The hand-made order is never offered here — a hiker makes it by
+            // dragging, not by picking it out of a list of orders it is not
+            // one of. While it is in force nothing is ticked at all, which is
+            // what keeps every entry a change: see ``sortSelection``.
             Picker("Order", selection: sortSelection) {
                 ForEach(HikeListSort.menuOrder) { option in
-                    Label(option.title, systemImage: option.symbol).tag(option)
+                    Label(option.title, systemImage: option.symbol)
+                        .tag(HikeListSort?.some(option))
                 }
             }
             .pickerStyle(.inline)
@@ -415,10 +422,20 @@ private extension MapSheetHikes {
 
     /// Picking an order also gives up a hand-made one — see ``HikeListOrder``,
     /// whose header says why the two cannot both be in force.
-    var sortSelection: Binding<HikeListSort> {
+    ///
+    /// Optional, and `nil` while a hand-made order is in force, for two
+    /// reasons that are really one. A tick beside *Newest First* on a list
+    /// the hiker has dragged into their own order is a claim the list is
+    /// contradicting; and it is the entry they would reach for to go *back*
+    /// to it, which a picker asked to select the value it already holds is
+    /// entitled to ignore. With nothing selected, every entry in the menu is
+    /// a change, and the only way out of *Your Order* is not the one door
+    /// that might be nailed shut.
+    var sortSelection: Binding<HikeListSort?> {
         Binding(
-            get: { sort },
+            get: { isCustomOrder ? nil : sort },
             set: { chosen in
+                guard let chosen else { return }
                 if HikeListOrder.isCustom(hikes) { HikeListOrder.reset(hikes) }
                 sortID = chosen.rawValue
                 orderRevision += 1
