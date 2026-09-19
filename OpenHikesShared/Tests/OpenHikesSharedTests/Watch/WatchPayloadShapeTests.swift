@@ -50,6 +50,22 @@ struct WatchPayloadShapeTests {
         )
     }
 
+    @Test("the trail paths' wire shape is unchanged")
+    func trailPathsShapeIsUnchanged() throws {
+        try expectShape(
+            of: Fixture.trailPaths,
+            named: "WatchTrailPaths",
+            versionedBy: "WatchTrailPaths.currentSchemaVersion",
+            matches: [
+                "hikeID: string",
+                "paths[][].latitude: number",
+                "paths[][].longitude: number",
+                "schemaVersion: number",
+                "sentAt: number",
+            ]
+        )
+    }
+
     @Test("the trail request's wire shape is unchanged")
     func trailRequestShapeIsUnchanged() throws {
         try expectShape(
@@ -209,6 +225,7 @@ struct WatchPayloadShapeTests {
         case .libraryDigest: try WatchLink.message(Fixture.libraryDigest)
         case .trailRequest: try WatchLink.message(Fixture.trailRequest)
         case .trailPackage: try WatchLink.message(Fixture.trailPackage)
+        case .trailPaths: try WatchLink.message(Fixture.trailPaths)
         case .recordedWalk: try WatchLink.message(Fixture.recordedWalk)
         case .walkReceipt: try WatchLink.message(Fixture.walkReceipt)
         case .libraryRequest: try WatchLink.message(Fixture.libraryRequest)
@@ -229,6 +246,7 @@ struct WatchPayloadShapeTests {
             PayloadShapeFixture.Named(name: "WatchTrailRequest", value: trailRequest),
             PayloadShapeFixture.Named(name: "WatchLibraryDigest", value: libraryDigest),
             PayloadShapeFixture.Named(name: "WatchLibraryRequest", value: libraryRequest),
+            PayloadShapeFixture.Named(name: "WatchTrailPaths", value: trailPaths),
             PayloadShapeFixture.Named(name: "WatchRecordedWalk", value: recordedWalk),
             PayloadShapeFixture.Named(name: "WatchWalkReceipt", value: walkReceipt),
             PayloadShapeFixture.Named(name: "WatchPhoneRecording", value: phoneRecording),
@@ -253,6 +271,17 @@ struct WatchPayloadShapeTests {
         static let trailRequest = WatchTrailRequest(hikeID: hikeID)
 
         static let libraryRequest = WatchLibraryRequest()
+
+        static let trailPaths = WatchTrailPaths(
+            hikeID: hikeID,
+            paths: [
+                [
+                    SharedTrailSnapshot.CodableCoordinate(latitude: 47.6961, longitude: 12.8543),
+                    SharedTrailSnapshot.CodableCoordinate(latitude: 47.6972, longitude: 12.8559),
+                ],
+            ],
+            sentAt: stamp
+        )
 
         static let libraryDigest = WatchLibraryDigest(
             hikes: [

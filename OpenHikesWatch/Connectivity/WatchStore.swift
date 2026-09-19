@@ -60,6 +60,7 @@ struct WatchStore: Sendable {
 
     private var digestURL: URL { directory.appendingPathComponent("library.json") }
     private var trailURL: URL { directory.appendingPathComponent("trail.json") }
+    private var pathsURL: URL { directory.appendingPathComponent("paths.json") }
     private var queueDirectory: URL {
         directory.appendingPathComponent("outbound", isDirectory: true)
     }
@@ -97,6 +98,20 @@ struct WatchStore: Sendable {
 
     func save(_ package: WatchTrailPackage) {
         write(package, to: trailURL)
+    }
+
+    /// The footpaths around the trail the watch is holding, if any arrived.
+    ///
+    /// One set at a time, keyed to nothing: the trail file next to it is also
+    /// one at a time, and a reader checks the hike id rather than trusting the
+    /// pairing. Kept on disk with the trail for the same reason the trail is —
+    /// so a watch out of range opens the map it had rather than an empty one.
+    func loadPaths() -> WatchTrailPaths? {
+        read(WatchTrailPaths.self, from: pathsURL)
+    }
+
+    func save(_ paths: WatchTrailPaths) {
+        write(paths, to: pathsURL)
     }
 
     // MARK: Walks waiting for the phone

@@ -39,6 +39,12 @@ final class WatchModel {
     private(set) var library: WatchLibraryDigest
     /// The trail the watch holds, if any.
     private(set) var trail: WatchTrailPackage?
+    /// The footpaths around ``trail``, when the phone has sent any.
+    ///
+    /// Held beside the trail rather than inside it because they arrive
+    /// separately and may never arrive at all — see ``WatchTrailPaths``. Read
+    /// only by the map, which is the one view that draws them.
+    private(set) var trailPaths: WatchTrailPaths?
     /// How many finished walks are still waiting for the phone.
     private(set) var queuedWalkCount: Int
     /// What the *phone's* recorder is doing, as far as this watch knows.
@@ -77,7 +83,13 @@ final class WatchModel {
         self.store = store
         recorder = WatchRecorder(store: store)
         library = store.loadLibrary()
-        trail = store.loadTrail()
+        let storedTrail = store.loadTrail()
+        trail = storedTrail
+        // The network the last trail came with, so a watch out of range opens
+        // the map it had rather than a bare line. Dropped if it describes some
+        // other trail, which a half-finished write could leave behind.
+        let storedPaths = store.loadPaths()
+        trailPaths = storedPaths?.hikeID == storedTrail?.hikeID ? storedPaths : nil
         queuedWalkCount = store.queuedWalks().count
         if let trail { tracker = WatchRouteTracker(trail) }
         recorder.onFix = { [weak self] location in self?.advanceFollow(with: location) }
@@ -121,6 +133,18 @@ final class WatchModel {
         }
         follow.clear()
         link.requestTrail(hikeID)
+    }
+
+    /// The footpaths to draw under `trail`, as coordinates.
+    ///
+    /// Answered here rather than in the view so the id check and the mapping
+    /// happen once per trail rather than once per redraw — and so a view never
+    /// has to decide whether a network belongs to the trail it is drawing.
+    func mapNetwork(for trail: WatchTrailPackage) -> [[CLLocationCoordinate2D]] {
+        guard let trailPaths, trailPaths.hikeID == trail.hikeID else { return [] }
+        return trailPaths.paths.map { path in
+            path.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+        }
     }
 
     /// Starts the live position feed for a trail being followed without a
@@ -249,7 +273,17 @@ final class WatchModel {
             guard digest.sentAt >= library.sentAt else { return }
             library = digest
             store.save(digest)
+        case .paths(let paths):
+            // Only for the trail on screen. A network that arrives after the
+            // hiker has moved on describes ground they are no longer looking
+            // at, and drawing it over a different trail is worse than drawing
+            // nothing.
+            guard paths.hikeID == trail?.hikeID else { return }
+            trailPaths = paths
+            store.save(paths)
         case .trail(let package):
+            // The network belongs to the trail that has just been replaced.
+            if trailPaths?.hikeID != package.hikeID { trailPaths = nil }
             trail = package
             tracker = WatchRouteTracker(package)
             follow.clear()

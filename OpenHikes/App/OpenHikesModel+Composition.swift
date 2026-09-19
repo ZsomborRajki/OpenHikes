@@ -165,9 +165,12 @@ extension OpenHikesModel {
     /// mid-suite would be written into whatever store the host happened to
     /// build. There is nothing here a UI test can drive either: it would need
     /// a second device on the other end of the link.
-    static func makeWatchLink(container: ModelContainer) -> WatchSessionCoordinator? {
+    static func makeWatchLink(
+        container: ModelContainer,
+        graphs: (any TrailGraphProviding)?
+    ) -> WatchSessionCoordinator? {
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
-        return WatchSessionCoordinator(container: container)
+        return WatchSessionCoordinator(container: container, graphs: graphs)
     }
 }
 

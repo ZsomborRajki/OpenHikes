@@ -59,6 +59,10 @@ public enum WatchMessageKind: String, Codable, Sendable, CaseIterable {
     case recordingCommand = "recordingCommand"
     /// Phone → watch. The trail's geometry, answering a request.
     case trailPackage = "trailPackage"
+    /// Phone → watch. The footpaths around a trail, drawn under it. Its own
+    /// kind rather than a field on the package, so the route is never held up
+    /// by an Overpass request — see ``WatchTrailPaths``.
+    case trailPaths = "trailPaths"
     /// Watch → phone. "Send me this trail's line."
     case trailRequest = "trailRequest"
     /// Phone → watch. "That walk is saved; you can let it go."
@@ -209,6 +213,14 @@ public extension WatchLink {
 
     static func libraryRequest(from message: [String: Any]) throws(WatchLinkFailure) -> WatchLibraryRequest {
         try payload(WatchLibraryRequest.self, of: .libraryRequest, from: message)
+    }
+
+    static func message(_ paths: WatchTrailPaths) throws -> [String: Any] {
+        try message(.trailPaths, paths)
+    }
+
+    static func trailPaths(from message: [String: Any]) throws(WatchLinkFailure) -> WatchTrailPaths {
+        try payload(WatchTrailPaths.self, of: .trailPaths, from: message)
     }
 
     static func message(_ recording: WatchPhoneRecording) throws -> [String: Any] {
