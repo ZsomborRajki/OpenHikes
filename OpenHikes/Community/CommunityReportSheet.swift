@@ -90,13 +90,9 @@ struct CommunityReportSheet: View {
                     noteSection
                     commitmentSection
                 case .handedOff:
-                    handedOffSection
-                    messageSection
-                    editAgainSection
+                    outcomeSections(.handedOff)
                 case .noMailApp:
-                    noMailAppSection
-                    messageSection
-                    editAgainSection
+                    outcomeSections(.noMailApp)
                 }
             }
             .navigationTitle(contribution == nil ? "Report Hike" : "Report Photo")
@@ -204,91 +200,23 @@ private extension CommunityReportSheet {
 // MARK: - After the handoff
 
 private extension CommunityReportSheet {
-    /// Something took the URL. Deliberately worded as *opened in* rather than
-    /// *waiting in*: see this file's header for why the Boolean behind this
-    /// does not support the stronger claim.
-    var handedOffSection: some View {
-        Section {
-            VStack(spacing: 8) {
-                Image(systemName: "envelope")
-                    .font(.largeTitle)
-                    .foregroundStyle(.tint)
-                    .accessibilityHidden(true)
-                Text("Opened in your mail app")
-                    .font(.headline)
-                Text("The report reaches the reviewer only once you send it there.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("community-report-handed-off")
-        }
-    }
-
-    var noMailAppSection: some View {
-        Section {
-            VStack(spacing: 8) {
-                Image(systemName: "envelope.badge.shield.half.filled")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                Text("No mail app answered")
-                    .font(.headline)
-                Text("Nothing on this device offered to write the message.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("community-report-no-mail-app")
-        }
-    }
-
-    /// The report itself, kept reachable after *either* outcome.
-    ///
-    /// Shown after a successful handoff too, and that is the point rather than
-    /// clutter: no message may have been composed at all, and a hiker who
-    /// finds their mail app asking them to set up an account has otherwise
-    /// lost everything they typed.
-    var messageSection: some View {
-        Section {
-            Text(report.plainText)
-                .font(.footnote.monospaced())
-                .textSelection(.enabled)
-                .accessibilityIdentifier("community-report-fallback-text")
-            #if canImport(UIKit)
-            Button {
-                UIPasteboard.general.string = report.plainText
-            } label: {
-                Label("Copy Report", systemImage: "doc.on.doc")
-            }
-            .accessibilityIdentifier("community-report-copy")
-            #endif
-        } header: {
-            Text("Send this to \(CommunityReport.recipient)")
-        } footer: {
-            Text("""
-            If no message opened — no mail account set up, or you closed the \
-            draft — copy this and send it yourself.
-            """)
-        }
-    }
-
-    /// The way back to the form, so a second attempt does not mean typing the
-    /// complaint again.
-    ///
-    /// The reason and the note are `@State` on this sheet and survive the
-    /// round trip, so this really is the report the hiker already wrote.
-    var editAgainSection: some View {
-        Section {
-            Button("Back to the Report") { phase = .editing }
-                .accessibilityIdentifier("community-report-edit-again")
-        }
+    /// Shared with ``CommunityWithdrawalSheet`` — see
+    /// ``CommunityMailOutcomeSections``, which the two of them had written
+    /// twice.
+    func outcomeSections(_ outcome: CommunityMailOutcome) -> some View {
+        CommunityMailOutcomeSections(
+            outcome: outcome,
+            noun: "Report",
+            plainText: report.plainText,
+            identifiers: .init(
+                handedOff: "community-report-handed-off",
+                noMailApp: "community-report-no-mail-app",
+                fallbackText: "community-report-fallback-text",
+                copy: "community-report-copy",
+                editAgain: "community-report-edit-again"
+            ),
+            editAgain: { phase = .editing }
+        )
     }
 }
 
