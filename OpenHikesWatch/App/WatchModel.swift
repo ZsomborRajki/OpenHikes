@@ -39,8 +39,6 @@ final class WatchModel {
     private(set) var library: WatchLibraryDigest
     /// The trail the watch holds, if any.
     private(set) var trail: WatchTrailPackage?
-    /// Set while a trail has been asked for and has not arrived.
-    private(set) var awaitingTrail: UUID?
     /// How many finished walks are still waiting for the phone.
     private(set) var queuedWalkCount: Int
     /// What the *phone's* recorder is doing, as far as this watch knows.
@@ -73,6 +71,7 @@ final class WatchModel {
         queuedWalkCount = store.queuedWalks().count
         if let trail { tracker = WatchRouteTracker(trail) }
         recorder.onFix = { [weak self] location in self?.advanceFollow(with: location) }
+        recorder.onWalkQueued = { [weak self] walk in self?.walkQueued(walk) }
     }
 
     /// Starts the link and sends whatever is already waiting.
@@ -92,7 +91,6 @@ final class WatchModel {
             // phone arrives with the next digest-driven request instead.
             return
         }
-        awaitingTrail = hikeID
         follow.clear()
         link.requestTrail(hikeID)
     }
@@ -185,16 +183,25 @@ final class WatchModel {
         follow.clear()
     }
 
-    /// Stops, and sends the walk if it survived being stopped.
+    /// Stops. The walk, if there was one, goes through ``walkQueued(_:)``.
     func stopRecording() {
-        guard let walk = recorder.stop() else {
-            queuedWalkCount = store.queuedWalks().count
-            return
-        }
+        recorder.stop()
+        // The too-short and out-of-storage paths leave nothing on the queue
+        // and never reach the hook, so the count is refreshed either way.
         queuedWalkCount = store.queuedWalks().count
-        link.send(walk)
         // A walk along a trail leaves the hiker where they finished it, which
         // is where they are. Nothing is cleared.
+    }
+
+    /// Offers a walk the recorder has just put on the disk queue.
+    ///
+    /// The hook rather than ``stopRecording()``'s own return value, because a
+    /// recording does not always end with the hiker's Stop: a workout session
+    /// that fails takes it down, and the walk it leaves behind would otherwise
+    /// sit on disk until the next launch or the next reachability change.
+    private func walkQueued(_ walk: WatchRecordedWalk) {
+        queuedWalkCount = store.queuedWalks().count
+        link.send(walk)
     }
 
     // MARK: The link
@@ -213,7 +220,6 @@ final class WatchModel {
             tracker = WatchRouteTracker(package)
             follow.clear()
             store.save(package)
-            if awaitingTrail == package.hikeID { awaitingTrail = nil }
         case .walkKept(let sessionID):
             store.removeWalk(sessionID)
             queuedWalkCount = store.queuedWalks().count

@@ -75,7 +75,13 @@ nonisolated enum WatchTrailPackaging {
             return WatchTrailPoint(
                 latitude: coordinate.latitude,
                 longitude: coordinate.longitude,
-                elevationMeters: coordinate.elevation
+                // Filtered the way every other encoder in this app filters a
+                // route's heights — `GPXExport` and `CommunityRoutePayload`
+                // both do it — because a non-finite one reaches the store and
+                // `JSONEncoder` refuses it. Unfiltered, a single `nan`
+                // silently sinks the whole transfer and leaves the watch
+                // waiting for a trail that will never arrive.
+                elevationMeters: coordinate.elevation.flatMap { $0.isFinite ? $0 : nil }
             )
         }
         let totals = RouteElevationTotals(of: input.route)

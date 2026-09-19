@@ -7,18 +7,23 @@
 //  ## Two recordings, and which one the screen is about
 //
 //  A hike can be running on the phone or on this watch, and the screen shows
-//  whichever it is. **The phone's takes precedence**, for the same reason the
-//  repository instructions give for a recording outranking a followed trail:
-//  it is the one that would be *lost*. A watch recording is something the
-//  hiker can start again in two taps; a phone recording has a durable draft, a
-//  trail matcher and a route review behind it, and a screen that hid it behind
-//  a Start button would invite exactly the second hike that ruins the walk.
+//  whichever it is. **A phone recording outranks an idle watch**, for the same
+//  reason the repository instructions give for a recording outranking a
+//  followed trail: it is the one that would be *lost*. A watch that hid a
+//  running phone recording behind a Start button would invite exactly the
+//  second hike that ruins the walk.
 //
-//  They are never both offered. Starting on the watch is refused while the
-//  phone is recording — see ``WatchModel/isPhoneRecording`` — and the reverse
-//  is not guarded, because the phone is deliberately never told about a watch
-//  recording while it runs. That asymmetry is the honest one: the guard lives
-//  where the information is.
+//  **What outranks both is a recording running on this watch**, and that is
+//  not a contradiction of the rule above but the same rule applied where it
+//  bites hardest. Starting on the watch is refused while the phone is
+//  recording — see ``WatchModel/isPhoneRecording`` — but the reverse is
+//  deliberately *not* guarded, because the phone is never told about a watch
+//  recording while it runs. So the two can overlap, and when they do this
+//  screen is the **only** place the watch's own recording can be paused or
+//  stopped: hiding it would leave a workout session and a GPS feed running
+//  with no way to end them. The phone's recording is reachable from the phone,
+//  its Live Activity, Control Center and Siri; the watch's is reachable from
+//  here and nowhere else.
 //
 //  ## What this body may read
 //
@@ -41,7 +46,9 @@ struct WatchRecordingView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
-                if let phone = model.phoneRecording, phone.isActive {
+                if let phone = model.phoneRecording,
+                   phone.isActive,
+                   !model.recorder.phase.isActive {
                     PhoneRecordingPanel(recording: phone)
                 } else {
                     watchRecording

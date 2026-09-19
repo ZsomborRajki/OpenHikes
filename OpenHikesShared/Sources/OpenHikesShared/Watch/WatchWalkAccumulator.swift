@@ -145,6 +145,13 @@ public struct WatchWalkAccumulator: Sendable, Equatable {
 
         let resumes = isResuming
         isResuming = false
+        // A receiver can report a non-finite altitude, and this app has seen
+        // one — the phone's own sensor gate checks `altitude.isFinite` beside
+        // the vertical accuracy for exactly that. Dropped here rather than
+        // carried onto the fix, because `JSONEncoder` refuses a non-finite
+        // `Double`: one would make the *whole* finished walk unwritable and
+        // unsendable, which on a watch is the only copy there is.
+        let height = elevationMeters.flatMap { $0.isFinite ? $0 : nil }
         if let previous = fixes.last, !resumes {
             distanceMeters += WatchGeodesy.distanceMeters(
                 fromLatitude: previous.latitude,
@@ -154,14 +161,14 @@ public struct WatchWalkAccumulator: Sendable, Equatable {
             )
             activeSeconds += timestamp.timeIntervalSince(previous.timestamp)
         }
-        accumulateElevation(elevationMeters, bridging: !resumes)
+        accumulateElevation(height, bridging: !resumes)
         fixes.append(
             WatchRecordedFix(
                 latitude: latitude,
                 longitude: longitude,
                 timestamp: timestamp,
                 horizontalAccuracy: horizontalAccuracy,
-                elevationMeters: elevationMeters,
+                elevationMeters: height,
                 resumesAfterPause: resumes && !fixes.isEmpty
             )
         )

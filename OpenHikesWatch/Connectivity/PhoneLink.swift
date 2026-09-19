@@ -143,7 +143,16 @@ final class PhoneLink: NSObject {
             // The reply arrives on a background queue and is decoded there,
             // for the reason every delivery below is: `[String: Any]` is not
             // `Sendable` and must not cross to the main actor.
-            guard let outcome = try? WatchLink.commandOutcome(from: reply) else { return }
+            guard let outcome = try? WatchLink.commandOutcome(from: reply) else {
+                // The phone answers with an *empty* dictionary on every path
+                // it cannot encode an outcome on, precisely so this watch is
+                // not left waiting — so a reply that will not decode has to
+                // end the wait here too. Dropped, it would leave
+                // `pendingCommand` set and every button disabled until
+                // reachability moved.
+                onMainActor { self?.deliverRefusal(of: command, saying: "Your iPhone couldn't answer that.") }
+                return
+            }
             onMainActor { self?.onDelivery?(.commandOutcome(outcome)) }
         } errorHandler: { [weak self] error in
             Self.logger.debug("A command failed: \(error.localizedDescription, privacy: .public)")

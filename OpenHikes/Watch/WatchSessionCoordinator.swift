@@ -93,8 +93,25 @@ final class WatchSessionCoordinator: NSObject {
     /// this object exists — see ``register(_:)``.
     @ObservationIgnored private var mirror: WatchRecordingMirror?
 
+    /// Walks whose import is in flight, by the session they came from.
+    ///
+    /// ``WatchWalkImport``'s ledger recognises a repeat that arrives *after*
+    /// the first was saved; this is what recognises one that arrives while it
+    /// is still being saved. `transferUserInfo` can deliver the same walk
+    /// twice — a lost receipt is the ordinary cause — and two arrivals land as
+    /// two tasks that would both fetch before either inserted.
+    @ObservationIgnored private var importsInFlight: Set<UUID> = []
+
     #if canImport(WatchConnectivity)
     @ObservationIgnored private var session: WCSession?
+    /// The library that arrived before the session could take one.
+    ///
+    /// `updateApplicationContext` is refused until activation has completed,
+    /// and the one sweep that publishes runs from `OpenHikesApp.init` — before
+    /// `activate()` has even been called, let alone finished. Without this the
+    /// watch's list would miss the launch that produced it, and there is no
+    /// second sweep behind it.
+    @ObservationIgnored private var pendingCatalogue: SharedHikeCatalogue?
     #endif
 
     init(container: ModelContainer) {
@@ -140,7 +157,11 @@ final class WatchSessionCoordinator: NSObject {
     /// sweep puts it right.
     func publish(_ catalogue: SharedHikeCatalogue) {
         #if canImport(WatchConnectivity)
-        guard let session, session.activationState == .activated else { return }
+        guard let session, session.activationState == .activated else {
+            pendingCatalogue = catalogue
+            return
+        }
+        pendingCatalogue = nil
         let digest = WatchLibraryDigest(
             hikes: Array(catalogue.hikes.prefix(WatchLibraryDigest.hikeBudget))
         )
@@ -174,8 +195,13 @@ final class WatchSessionCoordinator: NSObject {
     }
 
     private func keep(_ walk: WatchRecordedWalk) {
+        guard importsInFlight.insert(walk.sessionID).inserted else {
+            Self.logger.debug("A walk from the watch arrived while the same one was still being saved")
+            return
+        }
         Task { [container] in
             let outcome = await WatchWalkImport.store(walk, in: container)
+            importsInFlight.remove(walk.sessionID)
             guard outcome.deservesReceipt else {
                 Self.logger.error(
                     "A walk from the watch was refused; no receipt sent, so the watch keeps it"
@@ -203,6 +229,18 @@ final class WatchSessionCoordinator: NSObject {
             SharedStore.loadHikeCatalogue()
         }.value
         publish(catalogue)
+    }
+
+    /// Publishes the library that arrived before the session was activated.
+    ///
+    /// Silent when there is none, and harmless when activation failed:
+    /// ``publish(_:)`` simply holds it again.
+    private func flushPendingCatalogue() {
+        #if canImport(WatchConnectivity)
+        guard let pending = pendingCatalogue else { return }
+        pendingCatalogue = nil
+        publish(pending)
+        #endif
     }
 
     private func send(_ package: WatchTrailPackage) {
@@ -298,7 +336,19 @@ nonisolated extension WatchSessionCoordinator: WCSessionDelegate {
             Self.logger.error("Watch session activation failed: \(error.localizedDescription, privacy: .public)")
         }
         let installed = session.isWatchAppInstalled
-        onMainActor { [weak self] in self?.isWatchAppInstalled = installed }
+        let reachable = session.isReachable
+        onMainActor { [weak self] in
+            guard let self else { return }
+            isWatchAppInstalled = installed
+            // This is the first moment either of the next two can work.
+            // `publish(_:)` was called from `OpenHikesApp.init` before
+            // `activate()` was, so it had nothing to send through; and the
+            // mirror is otherwise started only by a *change* of reachability,
+            // which a watch app already in the foreground when this process
+            // launched never produces.
+            flushPendingCatalogue()
+            mirror?.reachabilityChanged(to: reachable)
+        }
     }
 
     /// Required on iOS, where a session can be handed to a different watch.
