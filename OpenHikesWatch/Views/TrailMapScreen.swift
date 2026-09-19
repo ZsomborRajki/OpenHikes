@@ -59,10 +59,55 @@ import SwiftUI
 /// they are is still said exactly, in the figures.
 @MapContentBuilder
 func trailMapContent(coordinates: [CLLocationCoordinate2D], tint: Color) -> some MapContent {
+    // A dark casing under the coloured line, drawn first so the line sits on
+    // top of it. The phone's `TrailStroke` has done this since the beginning
+    // and the watch was the one place going without: a 3 pt line in a hike's
+    // own tint is legible over grass and invisible over a lake, a road, or a
+    // shaded north face, and the hiker does not get to choose which of those
+    // the next kilometre is drawn on. The casing is what makes the route the
+    // same line everywhere.
+    MapPolyline(coordinates: coordinates)
+        .stroke(
+            .black.opacity(casingOpacity),
+            style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
+        )
     MapPolyline(coordinates: coordinates)
         .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+    // Which end is which, which a line alone never says. On an out-and-back
+    // the two are the same place and one marker covers the other, which is
+    // the truth about an out-and-back; on a loop they are the gate you parked
+    // at, and on a point-to-point they are the difference between walking the
+    // route and walking it backwards.
+    //
+    // The titles are hidden rather than left off: a marker needs a name for
+    // the accessibility tree and a watch screen has no room to print one. Two
+    // words beside two 8 pt marks cost more of the map than the marks do.
+    if let start = coordinates.first {
+        Annotation("Start", coordinate: start) {
+            Circle()
+                .fill(tint)
+                .frame(width: 8, height: 8)
+                .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+        }
+        .annotationTitles(.hidden)
+    }
+    if let finish = coordinates.last, coordinates.count > 1 {
+        Annotation("Finish", coordinate: finish) {
+            Image(systemName: "flag.checkered")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.white)
+                .shadow(radius: 2)
+        }
+        .annotationTitles(.hidden)
+    }
     UserAnnotation()
 }
+
+/// How dark the casing under the route is.
+///
+/// Enough to separate the line from whatever it crosses, and not so much that
+/// the route reads as a black line with a coloured core on a dark basemap.
+private let casingOpacity = 0.45
 
 extension WatchTrailPackage {
     var mapCoordinates: [CLLocationCoordinate2D] {
