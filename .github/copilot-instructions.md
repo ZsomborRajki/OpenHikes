@@ -327,17 +327,58 @@ built with it. Read this before changing anything under `OpenHikesWatch/`,
 `OpenHikes/Watch/` or `OpenHikesShared/Sources/OpenHikesShared/Watch/`.
 
 **One recording has one owner, and the owner is whichever device started it.**
-This is the question issue #509 named as the unresolved one, and it is
-answered rather than deferred. A watch recording is the watch's from the first
-fix to the last: `HikeRecorder` is never told about it, never enters a phase
-for it, and has no draft to recover for it. There is deliberately **no payload
-for a recording in progress** — nothing streams, nothing is mirrored, and the
-phone learns about the walk when it is finished. Streaming a live one would
-make both devices able to answer "is a hike being recorded?", which is exactly
-what the recorder is the single authority to prevent; a finished walk arriving
-as a track to import is not a fourth answer, it is the same thing an imported
-GPX is. `WatchWalkImport` follows `HikeImport` for that reason, down to the
-off-main write and the commit before anything is told there is a hike.
+This is the question issue #509 named as the unresolved one. The two
+directions are *not* symmetrical, and the difference is the whole answer — so
+read both halves before changing either.
+
+**Watch → phone: a recording in progress never crosses.** A watch recording is
+the watch's from the first fix to the last: `HikeRecorder` is never told about
+it, never enters a phase for it, and has no draft to recover for it. There is
+deliberately **no payload for a watch recording in progress**. Streaming one
+would make both devices able to answer "is a hike being recorded?", which is
+exactly what the recorder is the single authority to prevent — and it would
+have to be reconciled across a link that is out of range for most of a walk,
+against a durable draft, a crash-recovery path and a trail matcher on one side
+and a workout session on the other. A finished walk arriving as a track to
+import is not a fourth answer; it is the same thing an imported GPX is, which
+is why `WatchWalkImport` follows `HikeImport` down to the off-main write and
+the commit before anything is told there is a hike.
+
+**Phone → watch: the recording is mirrored, and the watch drives it.** This
+direction is safe for the reason the other is not, and the argument above must
+not be read as ruling it out. Going this way there is still exactly **one**
+authority, `HikeRecorder`: the watch holds no state for the phone's recording,
+reconciles nothing and recovers nothing. It is a fourth *surface* on that one
+object — beside the Live Activity, the Control Center toggle and the Siri
+phrases — rather than a fourth answer kept beside it. Everything it reads and
+every button it presses goes through `HikeIntentCoordinator`, which is what
+those other three already go through, so the watch shows exactly what Siri
+says and cannot spell the four rules that seam owns a fifth way.
+`WatchRecordingMirror` is the whole of it.
+
+Three things about that mirror are decisions rather than mechanics. Its loop
+runs **only while the watch app is reachable**, which on iOS means in the
+foreground — only while somebody is looking at it, so a paired watch in a
+pocket costs nothing. It publishes on a **twenty-second floor**, the Live
+Activity's, and sends nothing when no figure a hiker reads has moved; the
+*clock* is not sent at all but anchored once and ticked by the watch, which is
+the same move the Live Activity makes and is what keeps a quiet walk free. And
+a **command takes the message door with a reply handler and has no transfer
+fallback**: a fact delivered late is still a fact, but a button delivered late
+is a hike that starts ten minutes after the hiker gave up. Out of range, the
+watch says so and disables the buttons.
+
+**The precedence rule, and the hole in it.** A phone recording outranks the
+watch's own — the same argument the instructions make for a recording
+outranking a followed trail, that it is the one that would be *lost* — so the
+watch shows the phone's and refuses to start one of its own while it is
+running. The reverse is deliberately **not** guarded: the phone is never told
+about a watch recording while it runs, so it cannot refuse on that basis. The
+guard lives where the information is. A hiker who starts on the phone while
+their watch is already recording gets two walks; what they also get is the
+phone's recording appearing on the watch's own screen, which is as far as this
+design can honestly go without creating the second authority the first half of
+this section exists to prevent.
 
 **The link is `WCSession`, and which door a payload goes through is a
 decision.** The hiker's library crosses as the *application context*, which is
@@ -402,11 +443,14 @@ is the battery that has to outlast the walk those figures describe.
 basemap is hundreds of kilobytes per trail across a Bluetooth link for a screen
 an inch wide, and issue #509 already argued the first version would be figures
 and a trail-shaped line; `TrailGlyphView` draws exactly that and is public for
-this. No complications, no Smart Stack widget and no Double Tap. No Live
-Activity mirroring. No watch-side community, photographs, weather or offline
-maps. Following a trail *without* recording gets a live position only while the
-app is on screen, because the alternative is starting a workout session nobody
-asked for.
+this. No complications, no Smart Stack widget and no Double Tap. No watch-side
+community, photographs, weather or offline maps. Following a trail *without*
+recording gets a live position only while the app is on screen, because the
+alternative is starting a workout session nobody asked for. And the mirror
+carries `LiveRecordingReport`'s figures and no others — no climb, no pace, no
+heart rate from the phone's side — because that report is the phone's one
+description of a live recording and growing a second for the watch is the
+thing this design is built to avoid.
 
 ## Settled decisions — do not re-raise
 
