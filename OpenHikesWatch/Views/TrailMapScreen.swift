@@ -58,22 +58,7 @@ import SwiftUI
 /// how sure the receiver is, it reads as what it is. How far off the trail
 /// they are is still said exactly, in the figures.
 @MapContentBuilder
-func trailMapContent(
-    coordinates: [CLLocationCoordinate2D],
-    network: [[CLLocationCoordinate2D]],
-    tint: Color
-) -> some MapContent {
-    // The other paths first, so everything else is drawn over them. Thin,
-    // pale and uncoloured on purpose: they are the answer to "where does that
-    // fork go", not things to follow, and a network in the trail's own colour
-    // would make four lines look equally like the route.
-    ForEach(Array(network.enumerated()), id: \.offset) { _, path in
-        MapPolyline(coordinates: path)
-            .stroke(
-                .white.opacity(networkOpacity),
-                style: networkStroke
-            )
-    }
+func trailMapContent(coordinates: [CLLocationCoordinate2D], tint: Color) -> some MapContent {
     // A dark casing under the coloured line, drawn first so the line sits on
     // top of it. The phone's `TrailStroke` has done this since the beginning
     // and the watch was the one place going without: a 3 pt line in a hike's
@@ -117,25 +102,6 @@ func trailMapContent(
     }
     UserAnnotation()
 }
-
-/// Thin and dashed, which is how a map says "a path, but not your path".
-private let networkStroke = StrokeStyle(
-    lineWidth: networkLineWidth,
-    lineCap: .round,
-    lineJoin: .round,
-    dash: networkDash
-)
-private let networkLineWidth = 1.5
-/// Four points of line to three of gap — short enough that a dash still
-/// reads as a line at the zoom a whole route is framed at.
-private let networkDash: [CGFloat] = [4, 3]
-
-/// How present the surrounding footpaths are.
-///
-/// Faint enough that the route is never in question and the basemap's own
-/// labels still read through them, strong enough to be visible on the dark
-/// ground they are usually drawn over.
-private let networkOpacity = 0.55
 
 /// How dark the casing under the route is.
 ///
@@ -184,11 +150,7 @@ struct TrailMapScreen: View {
 
     @ViewBuilder private var content: some View {
         if let trail = model.trail, trail.hikeID == hikeID, trail.isDrawable {
-            TrailMapFull(
-                trail: trail,
-                network: model.mapNetwork(for: trail),
-                isShowingFigures: $isShowingFigures
-            )
+            TrailMapFull(trail: trail, isShowingFigures: $isShowingFigures)
                 .sheet(isPresented: $isShowingFigures) {
                     NavigationStack { TrailDetailView(trail: trail) }
                 }
@@ -271,8 +233,6 @@ private struct TrailMapFull: View {
     )
 
     let trail: WatchTrailPackage
-    /// The footpaths around the trail, already matched to it by the model.
-    let network: [[CLLocationCoordinate2D]]
 
     @Binding var isShowingFigures: Bool
 
@@ -288,11 +248,7 @@ private struct TrailMapFull: View {
 
     var body: some View {
         Map(position: $camera) {
-            trailMapContent(
-                coordinates: trail.mapCoordinates,
-                network: network,
-                tint: trail.mapTint
-            )
+            trailMapContent(coordinates: trail.mapCoordinates, tint: trail.mapTint)
         }
         .mapStyle(Self.hikingStyle)
         .accessibilityLabel("Map of \(trail.title)")

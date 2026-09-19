@@ -111,7 +111,7 @@ final class OpenHikesModel {
     /// screen use the same one the browser does.
     let communityTransport: (any CommunityTransporting)?
     /// The link to a paired Apple Watch, or `nil` for a launch that must not
-    /// open one — see ``makeWatchLink(container:graphs:)``.
+    /// open one — see ``makeWatchLink(container:)``.
     ///
     /// Held here rather than built where it is used because it is long-lived
     /// and has exactly one instance: `WCSession.default` is a singleton, its
@@ -165,7 +165,7 @@ final class OpenHikesModel {
             activeRecordingHikeID: { [weak hikeRecorder] in hikeRecorder?.currentHike?.id }
         )
         self.communityTransport = communityTransport
-        watchLink = Self.makeWatchLink(container: container, graphs: trailGraphProvider)
+        watchLink = Self.makeWatchLink(container: container)
         communityBlocks = CommunityBlockList(defaults: defaults)
         community = Self.makeCommunityBrowser(transport: communityTransport, blocks: communityBlocks)
         // The same transport the browser got, or the same `nil`: a launch that

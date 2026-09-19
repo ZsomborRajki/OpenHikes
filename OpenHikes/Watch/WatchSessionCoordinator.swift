@@ -46,7 +46,6 @@
 //  isolation boundary.
 //
 
-import CoreLocation
 import Foundation
 import OpenHikesShared
 import os
@@ -98,12 +97,6 @@ final class WatchSessionCoordinator: NSObject {
     /// holds it weakly: it is registered with `AppDependencyManager` and this
     /// object must not be what keeps it alive.
     @ObservationIgnored private weak var intents: HikeIntentCoordinator?
-    /// Where the footpaths around a trail come from — the same walking graph a
-    /// recording is matched against, so nothing new is fetched for a trail the
-    /// hiker has already opened or walked. `nil` on a launch with no provider,
-    /// and the watch then gets the route and no network, which is what it drew
-    /// before this existed.
-    @ObservationIgnored private let graphs: (any TrailGraphProviding)?
 
     /// Walks whose import is in flight, by the session they came from.
     ///
@@ -126,9 +119,8 @@ final class WatchSessionCoordinator: NSObject {
     @ObservationIgnored private var pendingCatalogue: SharedHikeCatalogue?
     #endif
 
-    init(container: ModelContainer, graphs: (any TrailGraphProviding)? = nil) {
+    init(container: ModelContainer) {
         self.container = container
-        self.graphs = graphs
         super.init()
     }
 
@@ -205,52 +197,7 @@ final class WatchSessionCoordinator: NSObject {
             }
             guard let input, let package = await WatchTrailPackaging.package(from: input) else { return }
             await MainActor.run { self.send(package) }
-            // After the route and never before it. Building the network may
-            // need an Overpass request, which is a volunteer-run service that
-            // is sometimes slow and sometimes rate-limited; a hiker at a
-            // trailhead should have the line drawn while that is happening,
-            // and a map with only the line is exactly what the watch drew
-            // before this existed.
-            await self.sendPaths(around: input)
         }
-    }
-
-    /// Sends the footpaths around a trail, when there are any to send.
-    ///
-    /// Silent about everything that can go wrong — no graph cached and no
-    /// network to fetch one, Overpass busy, nothing in OSM here — because none
-    /// of them is a failure a hiker can act on. The route is already drawn, and
-    /// the map without this is the one they had before.
-    private func sendPaths(around input: WatchTrailPackaging.Input) async {
-        guard let graphs else { return }
-        let route = input.route.map { point in
-            CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
-        }
-        guard let graph = await Self.graph(covering: route, from: graphs) else { return }
-        let hikeID = input.hikeID
-        let built = Task.detached(priority: .utility) {
-            WatchPathNetwork.paths(from: graph, along: route, hikeID: hikeID)
-        }
-        guard let network = await built.value, network.isDrawable else { return }
-        Self.logger.debug("Sending \(network.pointCount, privacy: .public) path point(s) to the watch")
-        send(network)
-    }
-
-    /// The cached graph if it covers the route, and a downloaded one if not.
-    ///
-    /// The same policy ``HikeTrailAnalysis`` uses for a hike's surface
-    /// breakdown, and for the same reason: a partial graph is indistinguishable
-    /// from a region OSM has nothing in, and a network drawn with a hole in it
-    /// tells a hiker there is no path where there is one.
-    private static func graph(
-        covering route: [CLLocationCoordinate2D],
-        from provider: any TrailGraphProviding
-    ) async -> TrailGraph? {
-        if await provider.hasCompleteCachedGraph(covering: route),
-           let cached = try? await provider.cachedGraph(covering: route) {
-            return cached
-        }
-        return try? await provider.graph(covering: route)
     }
 
     private func keep(_ walk: WatchRecordedWalk) {
@@ -321,16 +268,6 @@ final class WatchSessionCoordinator: NSObject {
 
     private func send(_ receipt: WatchWalkReceipt) {
         transfer { try WatchLink.message(receipt) }
-    }
-
-    /// The footpaths around a trail, as a transfer like the trail itself.
-    ///
-    /// Guaranteed delivery rather than a message, for the reason every other
-    /// phone→watch payload uses one: the watch may not be reachable when this
-    /// is ready, and a network that arrives a minute late is still the map the
-    /// hiker wanted. See ``WatchTrailPaths``.
-    private func send(_ paths: WatchTrailPaths) {
-        transfer { try WatchLink.message(paths) }
     }
 
     /// Performs a command and replies with what happened.
@@ -522,10 +459,6 @@ nonisolated extension WatchSessionCoordinator: WCSessionDelegate {
         }
         do {
             switch kind {
-            case .trailPaths:
-                // Phone → watch, and this is the phone. Its own message
-                // coming back would mean the watch had echoed it.
-                Self.logger.debug("Trail paths arrived at the phone, which is where they are sent from")
             case .trailRequest:
                 let request = try WatchLink.trailRequest(from: message)
                 onMainActor { [weak self] in self?.sendTrail(request.hikeID) }
