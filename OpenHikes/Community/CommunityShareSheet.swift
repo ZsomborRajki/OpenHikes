@@ -599,20 +599,7 @@ private extension CommunityShareSheet {
     }
 
     func failureSection(_ failure: CommunityFailure) -> some View {
-        Section {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(failure.localizedDescription)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.red)
-                if let suggestion = failure.recoverySuggestion {
-                    Text(suggestion)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("community-share-failure")
-        }
+        CommunityFailureNotice(failure: failure, identifier: "community-share-failure")
     }
 
     var sentSection: some View {

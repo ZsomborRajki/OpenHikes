@@ -317,21 +317,10 @@ private extension CommunityPhotoReviewView {
     }
 
     func failureSection(_ failure: CommunityFailure) -> some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(failure.localizedDescription)
-                if let suggestion = failure.recoverySuggestion {
-                    Text(suggestion)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                Button("Try Again") {
-                    phase = .loading
-                    loadTask = Task { await load() }
-                }
-            }
+        CommunityRetryableFailureSection(failure: failure, identifier: "photo-review-failure") {
+            phase = .loading
+            loadTask = Task { await load() }
         }
-        .accessibilityIdentifier("photo-review-failure")
     }
 }
 

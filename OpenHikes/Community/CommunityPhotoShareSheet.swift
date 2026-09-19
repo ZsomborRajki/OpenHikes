@@ -398,20 +398,7 @@ private extension CommunityPhotoShareSheet {
     }
 
     func failureSection(_ failure: CommunityFailure) -> some View {
-        Section {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(failure.localizedDescription)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.red)
-                if let suggestion = failure.recoverySuggestion {
-                    Text(suggestion)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("community-photos-failure")
-        }
+        CommunityFailureNotice(failure: failure, identifier: "community-photos-failure")
     }
 
     var sentSection: some View {
