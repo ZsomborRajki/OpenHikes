@@ -49,6 +49,21 @@ struct MapSheetHikes: View, Equatable {
     /// built from. Cleared by the dialog's own dismissal, so *Cancel*, a tap
     /// outside and the swipe sliding shut all land in the same place.
     @State private var pendingDeletion: Hike?
+    /// Whether the list is in reorder mode.
+    ///
+    /// Entered by a long press on a row rather than by a button, which is the
+    /// gesture a hiker reaches for — but the dragging itself is `List`'s own,
+    /// and `List` only offers it in edit mode. A long press with no edit mode
+    /// behind it does nothing at all: `HikeOrderUITests` asserted exactly that
+    /// before this existed, and the row came back to where it started.
+    @State private var editMode: EditMode = .inactive
+    /// Bumped by a drag, and read by ``hikesList`` for nothing but that.
+    ///
+    /// The hand-ordered positions are device-local — see
+    /// ``HikeLocalState/listOrder`` — and SwiftData's observation does not
+    /// reach across stores, so a move writes rows this view would never be
+    /// told about. This is the telling.
+    @State private var orderRevision = 0
 
     let searchText: String
     let isSearchFocused: Bool
@@ -274,6 +289,7 @@ private extension MapSheetHikes {
     var hikeActions: some View {
         GlassStack(spacing: Self.actionGlassSpacing) {
             HStack(spacing: 8) {
+                orderButton
                 #if os(iOS)
                 recordButton
                 #endif
@@ -321,6 +337,50 @@ private extension MapSheetHikes {
     }
     #endif
 
+    /// The way back to date order, and the only sign that the list is not in
+    /// it.
+    ///
+    /// Absent until the hiker has dragged something, which is what makes it an
+    /// answer rather than a decoration: a list in date order has nothing to
+    /// reset and nothing to explain. Its appearance is how somebody who
+    /// dragged a row by accident finds the way back.
+    @ViewBuilder var orderButton: some View {
+        if editMode == .active {
+            // The way out, and the only one: in edit mode a row's tap belongs
+            // to the list rather than to the hike, so a hiker who cannot leave
+            // cannot open anything either.
+            Button {
+                withAnimation { editMode = .inactive }
+            } label: {
+                Text("Done")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.tint)
+                    .padding(.horizontal, 12)
+                    .frame(height: Self.actionGlyphSize)
+                    .glassSurface(.regular.interactive(), in: .capsule)
+                    .minimumTapTarget()
+            }
+            .accessibilityIdentifier("hike-order-done-button")
+        } else if HikeListOrder.isCustom(hikes) {
+            Menu {
+                Button {
+                    HikeListOrder.reset(hikes)
+                    orderRevision += 1
+                } label: {
+                    Label("Sort by Newest First", systemImage: "calendar")
+                }
+            } label: {
+                Image(systemName: "arrow.up.arrow.down")
+                    .foregroundStyle(.tint)
+                    .frame(width: Self.actionGlyphSize, height: Self.actionGlyphSize)
+                    .glassSurface(.regular.interactive(), in: .circle)
+                    .minimumTapTarget()
+            }
+            .accessibilityLabel("Your order")
+            .accessibilityIdentifier("hike-order-button")
+        }
+    }
+
     var importButton: some View {
         Button {
             onImport()
@@ -346,19 +406,65 @@ private extension MapSheetHikes {
     /// not the chip: the picker says which list is showing and the community
     /// half still costs nothing until it is selected.
     var hikesList: some View {
-        List {
+        // Read once per pass and handed to both the pin and the rows: asking
+        // `status(for:)` inside the `ForEach` would ask it per row per pass,
+        // and the answer is a property of the list.
+        let activeID = activeHikeID
+        // `orderRevision` is read for its effect rather than its value. The
+        // positions live in `HikeLocalState`, a store no `@Query` observes, so
+        // a drag writes something nothing here would notice; bumping it is how
+        // the list is told to arrange itself again. See ``HikeListOrder``.
+        let arranged = orderRevision >= 0
+            ? HikeListOrder.arrange(hikes, activeHikeID: activeID)
+            : hikes
+
+        return List {
             if hikes.isEmpty {
                 emptyState
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             } else {
-                ForEach(hikes) { hike in
+                ForEach(arranged) { hike in
                     hikeRow(hike)
+                        // The hike being walked right now is not a place in a
+                        // library, it is the thing happening — so it is pinned
+                        // above the list and cannot be dragged out of it.
+                        .moveDisabled(hike.id == activeID)
+                        // A context menu rather than a long-press gesture of
+                        // our own, and the reason is what a bare
+                        // `LongPressGesture` on these rows actually did: the
+                        // row is a `Button`, so the press still fired it and
+                        // the app pushed the hike instead of offering to move
+                        // it. `HikeOrderUITests` caught that. The context menu
+                        // is the platform's own long press, and it suppresses
+                        // the button underneath it.
+                        .contextMenu {
+                            Button {
+                                withAnimation { editMode = .active }
+                            } label: {
+                                Label("Reorder Hikes", systemImage: "arrow.up.arrow.down")
+                            }
+                        }
+                }
+                .onMove { offsets, destination in
+                    HikeListOrder.move(arranged, from: offsets, to: destination)
+                    orderRevision += 1
                 }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .environment(\.editMode, $editMode)
+    }
+
+    /// The hike being recorded or walked right now, if there is one.
+    ///
+    /// Derived from the badge rather than from a second reading of the
+    /// recorder and the walk session: a row that says *Recording* and a row
+    /// that sorts to the top must be the same row, and there is one rule for
+    /// that already.
+    var activeHikeID: UUID? {
+        hikes.first { status(for: $0) != nil }?.id
     }
 
     func hikeRow(_ hike: Hike) -> some View {

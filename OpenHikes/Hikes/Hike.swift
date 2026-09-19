@@ -429,6 +429,14 @@ extension Hike {
         set { mutableLocalState?.watchSessionID = newValue }
     }
 
+    /// This hike's place in a hand-ordered list — see
+    /// ``HikeLocalState/listOrder`` for why the order does not sync, and
+    /// ``HikeListOrder`` for what `nil` means.
+    var listOrder: Int? {
+        get { localState?.listOrder }
+        set { mutableLocalState?.listOrder = newValue }
+    }
+
     /// Removes the sidecar, for a hike on its way out of the store.
     ///
     /// Explicit because the two rows are in different stores and so cannot be
