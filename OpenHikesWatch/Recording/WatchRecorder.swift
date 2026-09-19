@@ -102,6 +102,10 @@ final class WatchRecorder: NSObject {
     @ObservationIgnored private var startedAt = Date.now
     @ObservationIgnored private var trailHikeID: UUID?
     @ObservationIgnored private var trailTitle: String?
+    /// The start that is waiting for the hiker to answer the location prompt.
+    /// Resumed by ``locationManagerDidChangeAuthorization(_:)`` and by nothing
+    /// else; `nil` whenever no start is waiting.
+    @ObservationIgnored private var authorizationWaiter: CheckedContinuation<CLAuthorizationStatus, Never>?
 
     init(store: WatchStore) {
         self.store = store
@@ -196,14 +200,17 @@ final class WatchRecorder: NSObject {
     // MARK: Permissions
 
     private func requestPermissions() async -> Bool {
-        switch locations.authorizationStatus {
-        case .notDetermined:
-            locations.requestWhenInUseAuthorization()
-        case .denied, .restricted:
-            phase = .failed("OpenHikes needs location access to record a hike.")
-            return false
+        switch await locationAuthorization() {
         case .authorizedWhenInUse, .authorizedAlways:
             break
+        case .denied, .restricted, .notDetermined:
+            // Said out loud rather than started anyway. Without this the
+            // recording ran: a workout session holding the app awake, a
+            // location feed nothing was ever delivered to, "Finding your
+            // position…" for as long as the hiker left it, and "that walk was
+            // too short to keep" at the end of it.
+            phase = .failed("OpenHikes needs location access to record a hike.")
+            return false
         @unknown default:
             break
         }
@@ -225,6 +232,40 @@ final class WatchRecorder: NSObject {
             phase = .failed("OpenHikes needs permission to start a workout, which is what keeps a recording running.")
             return false
         }
+    }
+
+    /// The hiker's answer to the location prompt, asked for if it has not
+    /// been asked for yet.
+    ///
+    /// `requestWhenInUseAuthorization()` returns the instant it is called and
+    /// says nothing about what was chosen, so a start that merely called it
+    /// and carried on would be a start that proceeds on a denial. The answer
+    /// arrives at the delegate, and this is what waits for it — the same
+    /// shape the app's own recorder takes, which also holds a start open
+    /// until the grant lands.
+    private func locationAuthorization() async -> CLAuthorizationStatus {
+        let status = locations.authorizationStatus
+        guard status == .notDetermined else { return status }
+        locations.requestWhenInUseAuthorization()
+        return await withCheckedContinuation { continuation in
+            // Nothing can have interleaved between the request above and this
+            // closure — both run without suspending on this actor — but the
+            // re-read costs nothing and makes that an assumption the code
+            // does not depend on.
+            let settled = locations.authorizationStatus
+            if settled == .notDetermined {
+                authorizationWaiter = continuation
+            } else {
+                continuation.resume(returning: settled)
+            }
+        }
+    }
+
+    /// Lets a waiting start go, once there is something to tell it.
+    private func authorizationSettled(as status: CLAuthorizationStatus) {
+        guard status != .notDetermined, let waiter = authorizationWaiter else { return }
+        authorizationWaiter = nil
+        waiter.resume(returning: status)
     }
 
     // MARK: The workout session
@@ -348,6 +389,11 @@ nonisolated extension WatchRecorder: CLLocationManagerDelegate {
                 }
             }
         }
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        onMainActor { [weak self] in self?.authorizationSettled(as: status) }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
