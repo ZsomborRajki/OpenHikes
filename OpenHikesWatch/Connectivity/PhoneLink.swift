@@ -254,6 +254,15 @@ nonisolated extension PhoneLink: WCSessionDelegate {
             self?.isCompanionInstalled = installed
             self?.onDelivery?(.reachabilityChanged(reachable))
         }
+        // The context that was already waiting, which nothing else will ever
+        // hand us. `didReceiveApplicationContext` reports a *change*, and the
+        // ordinary first launch has none to report: the phone published its
+        // library while this app did not yet exist, so the newest context is
+        // sitting in `receivedApplicationContext` and the delegate stays
+        // silent. Without this the watch says "open OpenHikes on your iPhone"
+        // at a phone that is open, until something on it publishes again.
+        let waiting = session.receivedApplicationContext
+        if !waiting.isEmpty { deliver(waiting) }
     }
 
     func sessionReachabilityDidChange(_ session: WCSession) {
