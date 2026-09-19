@@ -130,6 +130,21 @@ final class HikeLocalState {
     /// See ``HikeListOrder``, which owns both halves of that.
     var listOrder: Int?
 
+    /// This hike's total climb and descent in metres, worked out once and kept.
+    ///
+    /// `nil` until something has needed them. They are not on ``Hike`` because
+    /// they are not facts a second device would disagree about — they are a
+    /// *cache* of what the route already says, and a cache belongs on the
+    /// device that paid for it. Recomputing them on another phone costs one
+    /// pass over a route it already has.
+    ///
+    /// Cached at all because the alternative is worse than it looks:
+    /// ``Hike/routeStatistics`` walks every point of every route, and sorting
+    /// a library by climb would do that for every hike on every redraw. See
+    /// ``HikeListMetrics``, which fills these off the main actor.
+    var climbMeters: Double?
+    var descentMeters: Double?
+
     init(hikeID: UUID) {
         self.hikeID = hikeID
     }

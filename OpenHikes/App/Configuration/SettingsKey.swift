@@ -20,6 +20,11 @@ import Foundation
 /// UserDefaults / `@AppStorage` key shared between the settings UI and the map.
 nonisolated enum SettingsKey {
     static let tileProviderID = "settings.tileProviderID"
+    /// How the hike list is ordered — see ``HikeListSort``. A preference about
+    /// this screen on this device rather than a fact about the library, so it
+    /// sits here with the other settings rather than travelling with the
+    /// hikes.
+    static let hikeListSort = "settings.hikeListSort"
     /// Whether Background Trail Tracking is on, read by `BackgroundTrailTracker`
     /// at launch to decide whether to re-arm significant-change monitoring.
     static let backgroundTrackingEnabled = "settings.backgroundTrackingEnabled"
