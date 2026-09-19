@@ -151,6 +151,26 @@ extension OpenHikesModel {
     }
 }
 
+// MARK: - The watch
+
+extension OpenHikesModel {
+    /// The link to a paired Apple Watch, or `nil` for a launch that must not
+    /// open one.
+    ///
+    /// `isRunningTests` rather than `isHostingTests`, and stricter than the
+    /// Live Activity's rule for the reason the Health writer's is: a
+    /// `WCSession` is a *singleton with one delegate slot*, so a hosted suite
+    /// that opened one would take every delivery away from the real install
+    /// running beside it on the same device — and, worse, a walk arriving
+    /// mid-suite would be written into whatever store the host happened to
+    /// build. There is nothing here a UI test can drive either: it would need
+    /// a second device on the other end of the link.
+    static func makeWatchLink(container: ModelContainer) -> WatchSessionCoordinator? {
+        guard !AppLaunchEnvironment.isRunningTests else { return nil }
+        return WatchSessionCoordinator(container: container)
+    }
+}
+
 // MARK: - Opening the store
 
 extension OpenHikesModel {

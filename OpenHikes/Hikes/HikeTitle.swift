@@ -82,6 +82,24 @@ nonisolated enum HikeTitle {
             ?? bounded(fileURL.deletingPathExtension().lastPathComponent)
             ?? ""
     }
+
+    /// The name a walk recorded on the watch gets: the trail it was walked
+    /// along, otherwise the day it was walked on.
+    ///
+    /// Here rather than inside `WatchWalkImport` for the reason
+    /// ``imported(trackName:fileURL:)`` is here rather than inside
+    /// `HikeImport`: which source wins is a decision, a suite should be able
+    /// to drive it without a `ModelContainer`, and a name arriving from
+    /// another device is the sender's exactly as a GPX `<name>` is.
+    ///
+    /// The date fallback rather than an empty string, because this name is
+    /// also the only thing distinguishing two free recordings in a list —
+    /// where an import at least has the file it came from to fall back to.
+    static func watchRecording(trailName: String?, recordedAt: Date) -> String {
+        bounded(trailName) ?? bounded(
+            "Watch Hike, " + recordedAt.formatted(date: .abbreviated, time: .shortened)
+        ) ?? ""
+    }
 }
 
 /// What a name typed into a field means for the hike behind it.
