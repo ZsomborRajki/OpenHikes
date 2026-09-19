@@ -173,9 +173,11 @@ nonisolated enum RouteGeometry {
     /// isn't constant on an oblate earth — roughly 110_570 m at the equator
     /// against 111_690 m at the poles — and this one figure stands in for
     /// both. So it is only for sizing a buffer already an order of magnitude
-    /// larger than that spread: ``TileBoundingBox/padded(byMeters:)`` and the
-    /// radius ``TrailRegion`` registers. Anything that has to be right on the
-    /// ground goes through ``distanceMeters(from:to:)`` instead.
+    /// larger than that spread: ``TileBoundingBox/padded(byMeters:)``, the
+    /// radius ``TrailRegion`` registers, and the one
+    /// ``CommunityQueryPolicy`` reads off the visible span. Anything that has
+    /// to be right on the ground goes through ``distanceMeters(from:to:)``
+    /// instead.
     static let metersPerDegreeLatitude: Double = 111_320
 
     /// Great-circle distance without allocating Core Location objects per leg.
