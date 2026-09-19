@@ -53,6 +53,9 @@ enum PhoneDelivery: Sendable {
     /// the refusal sentence if there was one.
     case commandOutcome(WatchCommandOutcome)
     case library(WatchLibraryDigest)
+    /// The footpaths around the trail on screen, which arrive after it and
+    /// sometimes not at all — see ``WatchTrailPaths``.
+    case paths(WatchTrailPaths)
     /// What the phone's own recorder is doing, pushed or answered.
     case phoneRecording(WatchPhoneRecording)
     /// The link's own state changed — reachability, or an activation that
@@ -318,6 +321,9 @@ nonisolated extension PhoneLink: WCSessionDelegate {
             case .trailPackage:
                 let package = try WatchLink.trailPackage(from: message)
                 onMainActor { [weak self] in self?.onDelivery?(.trail(package)) }
+            case .trailPaths:
+                let paths = try WatchLink.trailPaths(from: message)
+                onMainActor { [weak self] in self?.onDelivery?(.paths(paths)) }
             case .walkReceipt:
                 let receipt = try WatchLink.walkReceipt(from: message)
                 onMainActor { [weak self] in self?.onDelivery?(.walkKept(receipt.sessionID)) }
