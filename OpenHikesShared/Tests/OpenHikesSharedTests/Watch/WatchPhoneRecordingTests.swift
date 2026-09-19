@@ -34,12 +34,12 @@ struct WatchPhoneRecordingTests {
         #expect(recording.clockAnchor == nil)
     }
 
-    @Test("idle is neither running nor paused, and carries no session")
+    @Test("idle is neither running nor paused, and has no clock")
     func idleCarriesNothing() {
         let recording = WatchPhoneRecording.idle(at: Fixture.stamp)
         #expect(!recording.isActive)
-        #expect(recording.sessionID == nil)
         #expect(recording.clockAnchor == nil)
+        #expect(recording.distanceMeters == 0)
     }
 
     @Test("both active states read as active")
