@@ -67,13 +67,9 @@ struct CommunityWithdrawalSheet: View {
                     noteSection
                     whatHappensSection
                 case .handedOff:
-                    handedOffSection
-                    messageSection
-                    editAgainSection
+                    outcomeSections(.handedOff)
                 case .noMailApp:
-                    noMailAppSection
-                    messageSection
-                    editAgainSection
+                    outcomeSections(.noMailApp)
                 }
             }
             .navigationTitle("Ask for Removal")
@@ -150,80 +146,22 @@ private extension CommunityWithdrawalSheet {
 // MARK: - After the handoff
 
 private extension CommunityWithdrawalSheet {
-    var handedOffSection: some View {
-        Section {
-            VStack(spacing: 8) {
-                Image(systemName: "envelope")
-                    .font(.largeTitle)
-                    .foregroundStyle(.tint)
-                    .accessibilityHidden(true)
-                Text("Opened in your mail app")
-                    .font(.headline)
-                Text("The request reaches the reviewer only once you send it there.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("community-withdrawal-handed-off")
-        }
-    }
-
-    var noMailAppSection: some View {
-        Section {
-            VStack(spacing: 8) {
-                Image(systemName: "envelope.badge.shield.half.filled")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                Text("No mail app answered")
-                    .font(.headline)
-                Text("Nothing on this device offered to write the message.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("community-withdrawal-no-mail-app")
-        }
-    }
-
-    /// The request itself, kept reachable after *either* outcome — and it
-    /// carries the two record names, which is the one thing on this screen a
-    /// hiker cannot reconstruct from memory.
-    var messageSection: some View {
-        Section {
-            Text(composed.plainText)
-                .font(.footnote.monospaced())
-                .textSelection(.enabled)
-                .accessibilityIdentifier("community-withdrawal-fallback-text")
-            #if canImport(UIKit)
-            Button {
-                UIPasteboard.general.string = composed.plainText
-            } label: {
-                Label("Copy Request", systemImage: "doc.on.doc")
-            }
-            .accessibilityIdentifier("community-withdrawal-copy")
-            #endif
-        } header: {
-            Text("Send this to \(CommunityReport.recipient)")
-        } footer: {
-            Text("""
-            If no message opened — no mail account set up, or you closed the \
-            draft — copy this and send it yourself.
-            """)
-        }
-    }
-
-    var editAgainSection: some View {
-        Section {
-            Button("Back to the Request") { phase = .editing }
-                .accessibilityIdentifier("community-withdrawal-edit-again")
-        }
+    /// Shared with ``CommunityReportSheet`` — see
+    /// ``CommunityMailOutcomeSections``.
+    func outcomeSections(_ outcome: CommunityMailOutcome) -> some View {
+        CommunityMailOutcomeSections(
+            outcome: outcome,
+            noun: "Request",
+            plainText: composed.plainText,
+            identifiers: .init(
+                handedOff: "community-withdrawal-handed-off",
+                noMailApp: "community-withdrawal-no-mail-app",
+                fallbackText: "community-withdrawal-fallback-text",
+                copy: "community-withdrawal-copy",
+                editAgain: "community-withdrawal-edit-again"
+            ),
+            editAgain: { phase = .editing }
+        )
     }
 }
 
