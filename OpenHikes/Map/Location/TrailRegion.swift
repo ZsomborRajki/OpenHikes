@@ -42,13 +42,6 @@ import Foundation
 /// The system holds the geometry against the identifier it was registered
 /// under, and a launch asks it for the answer rather than recomputing one.
 nonisolated struct TrailRegion: Equatable, Sendable {
-    /// Ground metres in one degree of latitude — and, scaled by the cosine of
-    /// the latitude, in one degree of longitude. Rough (the earth isn't a
-    /// sphere), the same figure ``TileBoundingBox`` sizes its padding with,
-    /// and for the same reason: this only ever sizes a slack buffer that is
-    /// already an order of magnitude larger than the error.
-    private static let metersPerDegreeLatitude: Double = 111_320
-
     /// How far outside the trail's own extent still counts as near it.
     ///
     /// Ten kilometres, which is about a quarter of an hour of driving and is
@@ -105,7 +98,9 @@ nonisolated struct TrailRegion: Equatable, Sendable {
         guard let box = TileBoundingBox(route: route) else { return nil }
 
         let centerLatitude = (box.southLat + box.northLat) / 2
-        let centerLongitude = Self.normalized(box.westLon + box.lonSpan / 2)
+        // Back into `[-180, 180)`, which is where ``TileBoundingBox/westLon``
+        // lives and where CoreLocation wants a centre.
+        let centerLongitude = RouteGeometry.normalizedLongitude(box.westLon + box.lonSpan / 2)
 
         // Half the box's own diagonal, then the slack on top. A degree of
         // longitude is shortest at the poles, so the half-span that matters is
@@ -117,9 +112,9 @@ nonisolated struct TrailRegion: Equatable, Sendable {
         let widestLatitude = box.southLat <= 0 && box.northLat >= 0
             ? 0
             : min(abs(box.southLat), abs(box.northLat))
-        let halfHeightMeters = (box.northLat - box.southLat) / 2 * Self.metersPerDegreeLatitude
+        let halfHeightMeters = (box.northLat - box.southLat) / 2 * RouteGeometry.metersPerDegreeLatitude
         let halfWidthMeters = box.lonSpan / 2
-            * Self.metersPerDegreeLatitude
+            * RouteGeometry.metersPerDegreeLatitude
             * cos(widestLatitude * .pi / 180)
 
         let radius = (halfHeightMeters * halfHeightMeters + halfWidthMeters * halfWidthMeters)
@@ -127,13 +122,5 @@ nonisolated struct TrailRegion: Equatable, Sendable {
         guard radius <= Self.maximumRadiusMeters else { return nil }
 
         self.init(latitude: centerLatitude, longitude: centerLongitude, radiusMeters: radius)
-    }
-
-    /// Longitude brought back into `[-180, 180)`, which is where
-    /// ``TileBoundingBox/westLon`` lives and where CoreLocation wants a centre.
-    private static func normalized(_ longitude: Double) -> Double {
-        var wrapped = (longitude + 180).truncatingRemainder(dividingBy: 360)
-        if wrapped < 0 { wrapped += 360 }
-        return wrapped - 180
     }
 }

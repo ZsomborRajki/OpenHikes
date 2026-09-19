@@ -159,7 +159,24 @@ nonisolated struct RouteCoordinate: Codable, Hashable, Sendable {
 }
 
 nonisolated enum RouteGeometry {
+    /// Mean earth radius, for the great-circle work below. Deliberately not
+    /// the figure ``metersPerDegreeLatitude`` is rounded from: a distance
+    /// between two fixes wants the mean radius, a padding buffer wants the
+    /// equatorial one, and the two differ by about 125 metres a degree.
     private static let earthRadiusMeters = 6_371_008.8
+
+    /// Ground metres in one degree of latitude — and, scaled by the cosine of
+    /// the latitude, in one degree of longitude.
+    ///
+    /// ``Mercator/equatorialCircumferenceMeters`` over 360, rounded, which is
+    /// strictly a degree of *longitude* at the equator. A degree of latitude
+    /// isn't constant on an oblate earth — roughly 110_570 m at the equator
+    /// against 111_690 m at the poles — and this one figure stands in for
+    /// both. So it is only for sizing a buffer already an order of magnitude
+    /// larger than that spread: ``TileBoundingBox/padded(byMeters:)`` and the
+    /// radius ``TrailRegion`` registers. Anything that has to be right on the
+    /// ground goes through ``distanceMeters(from:to:)`` instead.
+    static let metersPerDegreeLatitude: Double = 111_320
 
     /// Great-circle distance without allocating Core Location objects per leg.
     static func distanceMeters(
@@ -273,6 +290,12 @@ nonisolated enum RouteGeometry {
         return normalized
     }
 
+    /// Longitude brought back into `[-180, 180)`.
+    ///
+    /// The one copy. ``TileBoundingBox`` and ``TrailRegion`` each grew their
+    /// own, and one of those had drifted into a different arrangement of the
+    /// same arithmetic — agreeing with this one everywhere either is called,
+    /// which is exactly the kind of agreement that holds until it doesn't.
     static func normalizedLongitude(_ longitude: Double) -> Double {
         var normalized = longitude.truncatingRemainder(dividingBy: 360)
         if normalized >= 180 { normalized -= 360 }

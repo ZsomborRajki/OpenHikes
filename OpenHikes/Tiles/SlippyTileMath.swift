@@ -57,10 +57,6 @@ nonisolated enum SlippyTileMath {
 /// points is shorter. Latitude is bounded and doesn't wrap, so it stays a plain
 /// interval.
 nonisolated struct TileBoundingBox: Sendable {
-    /// Ground metres in one degree of latitude — and, scaled by the cosine of
-    /// the latitude, in one degree of longitude. Rough (the earth isn't a
-    /// sphere), but this only ever sizes a padding buffer.
-    private static let metersPerDegreeLatitude: Double = 111_320
     private static let minimumCosineLatitude: Double = 0.01
 
     let southLat: Double
@@ -102,7 +98,7 @@ nonisolated struct TileBoundingBox: Sendable {
                 gapWest = longitudes[index - 1]
             }
         }
-        westLon = Self.normalized(gapWest + widestGap)
+        westLon = RouteGeometry.normalizedLongitude(gapWest + widestGap)
         lonSpan = 360 - widestGap
     }
 
@@ -118,7 +114,8 @@ nonisolated struct TileBoundingBox: Sendable {
         guard lonSpan < 360 - 360 / Double(n) else { return (0, n) }
 
         let first = SlippyTileMath.wrap(SlippyTileMath.tileX(westLon, z: z), to: n)
-        let last = SlippyTileMath.wrap(SlippyTileMath.tileX(Self.normalized(westLon + lonSpan), z: z), to: n)
+        let eastLon = RouteGeometry.normalizedLongitude(westLon + lonSpan)
+        let last = SlippyTileMath.wrap(SlippyTileMath.tileX(eastLon, z: z), to: n)
         var count = last - first + 1
         // The east edge lies west of the west edge in column numbering — the box
         // runs through the antimeridian.
@@ -166,25 +163,18 @@ nonisolated struct TileBoundingBox: Sendable {
     /// scaled by the box's mid-latitude. Padding a cyclic span can only ever
     /// reach the whole way round, never overshoot into a second lap.
     func padded(byMeters meters: CLLocationDistance) -> Self {
-        let latitudePadding = meters / Self.metersPerDegreeLatitude
+        let latitudePadding = meters / RouteGeometry.metersPerDegreeLatitude
         let midLatitudeRadians = (southLat + northLat) / 2 * .pi / 180
         let cosClamped = max(cos(midLatitudeRadians), Self.minimumCosineLatitude)
-        let longitudePadding = meters / (cosClamped * Self.metersPerDegreeLatitude)
+        let longitudePadding = meters / (cosClamped * RouteGeometry.metersPerDegreeLatitude)
 
         return Self(
             // Clamped to the projection's own domain rather than to ±90: a box
             // padded past the Mercator limit has no more world to include.
             southLat: max(southLat - latitudePadding, -Mercator.latitudeLimit),
             northLat: min(northLat + latitudePadding, Mercator.latitudeLimit),
-            westLon: Self.normalized(westLon - longitudePadding),
+            westLon: RouteGeometry.normalizedLongitude(westLon - longitudePadding),
             lonSpan: min(lonSpan + 2 * longitudePadding, 360)
         )
-    }
-
-    private static func normalized(_ longitude: Double) -> Double {
-        var value = longitude.truncatingRemainder(dividingBy: 360)
-        if value >= 180 { value -= 360 }
-        if value < -180 { value += 360 }
-        return value
     }
 }
