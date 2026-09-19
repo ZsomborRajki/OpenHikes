@@ -123,12 +123,25 @@ private struct RecordAlongTrailButton: View {
     var body: some View {
         switch model.recorder.phase {
         case .idle, .failed, .saved:
-            Button {
-                Task { await model.startRecording(alongTrail: true) }
-            } label: {
-                Label("Record This Hike", systemImage: "record.circle")
+            if model.isPhoneRecording {
+                // Said rather than offered. ``WatchModel/startRecording(alongTrail:)``
+                // refuses while the phone is recording — two hikes for one
+                // walk is the failure a hiker finds afterwards in their
+                // library — so a button here was one that could be pressed
+                // and did nothing at all. The Record screen is where the
+                // phone's own recording can be seen and driven, which is the
+                // same rule it applies to its own Start.
+                Label("Your iPhone is recording", systemImage: "iphone.radiowaves.left.and.right")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Button {
+                    Task { await model.startRecording(alongTrail: true) }
+                } label: {
+                    Label("Record This Hike", systemImage: "record.circle")
+                }
+                .tint(.red)
             }
-            .tint(.red)
         case .preparing:
             ProgressView()
         case .recording, .paused:

@@ -154,8 +154,27 @@ final class PhoneLink: NSObject {
     /// yet — a message would fail outright, a transfer waits. The answer comes
     /// back as an ordinary application context, so nothing here has to match a
     /// reply to a request.
+    ///
+    /// At most one at a time. ``WatchModel/askForLibraryIfEmpty()`` asks at
+    /// launch, on every reachability change and every time the app comes to
+    /// the front, and the case it exists for is exactly the one where no
+    /// answer arrives — a companion that is gone, or a phone that is never
+    /// brought near. `transferUserInfo` keeps what it is handed across
+    /// relaunches and reboots, so without this a watch in that state builds
+    /// an unbounded pile of identical requests that all arrive at once the
+    /// day a phone finally appears. One outstanding request already says
+    /// everything a second would.
     func requestLibrary() {
+        guard !hasOutstandingLibraryRequest else { return }
         transfer { try WatchLink.message(WatchLibraryRequest()) }
+    }
+
+    /// Whether a library request is already sitting in `WCSession`'s queue.
+    private var hasOutstandingLibraryRequest: Bool {
+        guard let session else { return false }
+        return session.outstandingUserInfoTransfers.contains { pending in
+            WatchLink.kind(of: pending.userInfo) == .libraryRequest
+        }
     }
 
     /// Presses a button on the phone's recorder.
