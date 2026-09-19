@@ -160,7 +160,7 @@ nonisolated struct CommunityPendingPhotos: Identifiable, Hashable, Sendable {
 /// One value per *contribution*, not per photograph, because the credit, the
 /// author and the two record names are facts about the set: they are what a
 /// report names, what a block is keyed on, and what a takedown deletes.
-nonisolated struct CommunityPhotoContribution: Identifiable, Hashable, Sendable {
+nonisolated struct CommunityPhotoContribution: Identifiable, Hashable, Sendable, CommunityReviewSubject {
     /// The `CommunityPhotoContribution` record's name — what a takedown
     /// deletes and what a report quotes.
     var id: String
@@ -238,6 +238,12 @@ nonisolated struct CommunityPhotoContribution: Identifiable, Hashable, Sendable 
     /// - Parameter offset: Where this set starts in the merged gallery, so a
     ///   contributed pin and a contributed page agree about which picture they
     ///   are both about. See ``CommunityHikeDetail/galleryPhotos``.
+    /// ``CommunityReviewSubject``'s spelling, numbered from zero: on a
+    /// review screen there is nothing before these — a contribution under
+    /// review is not sitting after a hike's own pictures the way it will be
+    /// once it is published.
+    var reviewPreviewPhotos: [CommunityPreviewPhoto] { previewPhotos(startingAt: 0) }
+
     func previewPhotos(startingAt offset: Int) -> [CommunityPreviewPhoto] {
         guard isConsistent else { return [] }
         return zip(photoPins, photoFileURLs).enumerated().compactMap { index, pair in
