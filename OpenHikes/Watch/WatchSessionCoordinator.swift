@@ -15,14 +15,23 @@
 //  * Answers a ``WatchTrailRequest`` with the trail's geometry.
 //  * Takes a ``WatchRecordedWalk`` and keeps it, then sends a receipt so the
 //    watch can let go of it.
+//  * Mirrors *this phone's* recording to the watch and performs the buttons
+//    the watch sends back, both through ``WatchRecordingMirror``.
 //
 //  ## What it deliberately does not do
 //
-//  It does not know that a recording exists. `HikeRecorder` is the single
-//  authority on whether *this phone* is recording, and a watch recording is
-//  not this phone's — see ``WatchRecordedWalk``'s header for why there is one
-//  owner per recording rather than a shared phase. Nothing here reads the
-//  recorder, and nothing here can start or stop one.
+//  The last of those is the phone→watch direction, and it is the only
+//  direction in which a recording is shared. A watch recording is never
+//  mirrored here: it is the watch's from the first fix to the last, and the
+//  phone learns about it as a finished track. ``WatchRecordedWalk``'s header
+//  argues why, and ``WatchPhoneRecording``'s argues why the reverse is safe —
+//  the short of it is that going this way there is still exactly one
+//  authority, `HikeRecorder`, and the watch is a fourth surface on it rather
+//  than a fourth answer beside it.
+//
+//  Nothing here reaches that recorder directly. Every read and every command
+//  goes through `HikeIntentCoordinator`, which is what the Control Center
+//  toggle and every Siri phrase already go through.
 //
 //  It also holds no `ModelContext`. Everything it writes goes through
 //  ``WatchWalkImport``, off the main actor, against a context built and
@@ -45,6 +54,30 @@ import SwiftData
 import WatchConnectivity
 #endif
 
+/// `WCSession`'s reply handler, carried to the main actor.
+///
+/// The handler is `([String: Any]) -> Void` and `[String: Any]` is not
+/// `Sendable`, so the closure is not either and cannot cross an isolation
+/// boundary on its own — while the work that produces the answer is the
+/// recorder's and is main-actor by definition. This is the same box
+/// `SystemHikeActivityPresenter` puts an `Activity` in for the same reason,
+/// and it is safe on the same grounds: `WCSession` documents the handler as
+/// callable from any queue, and every path through ``WatchSessionCoordinator``
+/// calls it exactly once.
+///
+/// `nonisolated` on the struct is load-bearing, not decoration:
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` would otherwise make the box
+/// itself main-actor isolated and unable to leave.
+nonisolated struct ReplyBox: @unchecked Sendable {
+    private let handler: ([String: Any]) -> Void
+
+    init(_ handler: @escaping ([String: Any]) -> Void) {
+        self.handler = handler
+    }
+
+    func send(_ message: [String: Any]) { handler(message) }
+}
+
 @MainActor
 @Observable
 final class WatchSessionCoordinator: NSObject {
@@ -55,6 +88,10 @@ final class WatchSessionCoordinator: NSObject {
     private(set) var isWatchAppInstalled = false
 
     @ObservationIgnored private let container: ModelContainer
+    /// The phone's recording, as the watch sees and drives it. Built lazily
+    /// because it needs the intent coordinator, which is registered after
+    /// this object exists — see ``register(_:)``.
+    @ObservationIgnored private var mirror: WatchRecordingMirror?
 
     #if canImport(WatchConnectivity)
     @ObservationIgnored private var session: WCSession?
@@ -63,6 +100,21 @@ final class WatchSessionCoordinator: NSObject {
     init(container: ModelContainer) {
         self.container = container
         super.init()
+    }
+
+    /// Hands over the seam a watch's buttons reach the recorder through.
+    ///
+    /// Separate from `init` because the two are built at different moments:
+    /// this object is the model's and the coordinator is assembled in
+    /// `OpenHikesApp.init` from the model's own recorder. Until this is
+    /// called the watch can still fetch trails and send walks; what it cannot
+    /// do is see or drive a recording, which is the correct behaviour for a
+    /// launch that has not registered one — a hosted test bundle's, for
+    /// instance.
+    func register(_ coordinator: HikeIntentCoordinator) {
+        mirror = WatchRecordingMirror(coordinator: coordinator) { [weak self] recording in
+            self?.send(recording)
+        }
     }
 
     /// Starts the session, if this device can have one.
@@ -161,6 +213,55 @@ final class WatchSessionCoordinator: NSObject {
         transfer { try WatchLink.message(receipt) }
     }
 
+    /// Performs a command and replies with what happened.
+    ///
+    /// An empty reply on any failure rather than none at all: the watch has
+    /// disabled the button it pressed until an answer arrives, and a reply
+    /// handler that is never called leaves it that way until the system times
+    /// it out.
+    private func answer(_ command: WatchRecordingCommand, through reply: ReplyBox) {
+        guard let mirror else {
+            reply.send([:])
+            return
+        }
+        Task {
+            let outcome = await mirror.perform(command)
+            do {
+                reply.send(try WatchLink.message(outcome))
+            } catch {
+                Self.logger.error(
+                    "A command outcome could not be encoded: \(error.localizedDescription, privacy: .public)"
+                )
+                reply.send([:])
+            }
+        }
+    }
+
+    /// Pushes a recording reading to the watch.
+    ///
+    /// `sendMessage` rather than a transfer, and dropped outright when the
+    /// watch is not reachable. This is the one payload here that is *only*
+    /// meaningful now: a reading queued while the watch app was closed would
+    /// arrive describing a recording that has since moved on, and the watch
+    /// has nothing to draw it on anyway. The mirror only runs while the watch
+    /// is reachable for the same reason.
+    private func send(_ recording: WatchPhoneRecording) {
+        #if canImport(WatchConnectivity)
+        guard let session, session.isReachable else { return }
+        do {
+            session.sendMessage(try WatchLink.message(recording), replyHandler: nil) { error in
+                Self.logger.debug(
+                    "A recording reading did not reach the watch: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+        } catch {
+            Self.logger.error(
+                "A recording reading could not be encoded: \(error.localizedDescription, privacy: .public)"
+            )
+        }
+        #endif
+    }
+
     /// `transferUserInfo` for everything the phone sends back.
     ///
     /// Queued to the system's own container and retried across relaunches,
@@ -219,6 +320,51 @@ nonisolated extension WatchSessionCoordinator: WCSessionDelegate {
         onMainActor { [weak self] in self?.isWatchAppInstalled = installed }
     }
 
+    /// On iOS this says the watch app is in the *foreground*, which is exactly
+    /// the window in which mirroring a recording is worth anything.
+    func sessionReachabilityDidChange(_ session: WCSession) {
+        let reachable = session.isReachable
+        onMainActor { [weak self] in self?.mirror?.reachabilityChanged(to: reachable) }
+    }
+
+    /// A message that expects an answer, which is only ever a command.
+    ///
+    /// Commands take this door and nothing else — no transfer fallback. A
+    /// *fact* delivered late is still a fact; a **button** delivered late is a
+    /// hike that starts ten minutes after the hiker gave up and put their
+    /// watch down. When the phone is out of range the watch says so and
+    /// disables the buttons, which is the honest answer.
+    func session(
+        _ session: WCSession,
+        didReceiveMessage message: [String: Any],
+        replyHandler: @escaping ([String: Any]) -> Void
+    ) {
+        guard WatchLink.kind(of: message) == .recordingCommand else {
+            deliver(message)
+            replyHandler([:])
+            return
+        }
+        let reply = ReplyBox(replyHandler)
+        do {
+            let command = try WatchLink.recordingCommand(from: message)
+            onMainActor { [weak self] in
+                guard let self else {
+                    reply.send([:])
+                    return
+                }
+                answer(command, through: reply)
+            }
+        } catch {
+            Self.logger.error(
+                """
+                A command from the watch was refused: \
+                \(error.localizedDescription, privacy: .public)
+                """
+            )
+            reply.send([:])
+        }
+    }
+
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         deliver(message)
     }
@@ -241,7 +387,13 @@ nonisolated extension WatchSessionCoordinator: WCSessionDelegate {
             case .recordedWalk:
                 let walk = try WatchLink.recordedWalk(from: message)
                 onMainActor { [weak self] in self?.keep(walk) }
-            case .libraryDigest, .trailPackage, .walkReceipt:
+            case .recordingCommand:
+                // Handled by the reply-taking door above, which is the only
+                // one a command may arrive through. Reaching here means the
+                // watch sent one without a reply handler, and performing it
+                // would leave the watch with no answer.
+                Self.logger.debug("A recordingCommand arrived without a reply handler and was ignored")
+            case .commandOutcome, .libraryDigest, .phoneRecording, .trailPackage, .walkReceipt:
                 // The phone's own outgoing kinds. Arriving here means the
                 // watch echoed one back, which nothing does.
                 Self.logger.debug(

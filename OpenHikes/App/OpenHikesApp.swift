@@ -96,6 +96,12 @@ struct OpenHikesApp: App {
             // wake this process to deliver a walk a hiker recorded hours ago,
             // and a session activated by a view is a session that does not
             // exist on that launch.
+            //
+            // Handed the same coordinator everything else was, which is what
+            // lets a button on the watch reach this phone's recorder through
+            // the one seam the Control Center toggle and every Siri phrase
+            // already use — see `WatchRecordingMirror`.
+            appModel.watchLink?.register(coordinator)
             appModel.watchLink?.activate()
             // The Live Activity's own buttons, registered the same way and for
             // the same reason: the intent type is compiled into the widget
