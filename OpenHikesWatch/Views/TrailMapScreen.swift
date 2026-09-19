@@ -175,6 +175,15 @@ struct TrailMapScreen: View {
     }
 }
 
+/// Somewhere to keep the camera the map last settled on that is not view
+/// state.
+///
+/// See ``TrailMapFull/settled``: the value is written far more often than it
+/// is read, and nothing drawn depends on it.
+private final class SettledCamera {
+    var camera: MapCamera?
+}
+
 /// The map itself: the route, the hiker, the lock that keeps the hiker
 /// centred, and whatever the crown and a drag have done to the camera since.
 ///
@@ -244,7 +253,16 @@ private struct TrailMapFull: View {
 
     /// The last camera the map settled on, so unlocking can leave the view
     /// exactly where the lock left it rather than snapping back to the route.
-    @State private var settled: MapCamera?
+    ///
+    /// A box rather than `@State`, because this is written on every camera
+    /// change and read only when a button is pressed. While the lock is
+    /// following the hiker the camera settles once per fix, and a `@State`
+    /// write invalidates the view whether or not the body ever reads it —
+    /// which would redraw the map, the overlay and a fresh coordinate array
+    /// out of every route point, per fix, on a battery that has to outlast
+    /// the walk. `@State` on a plain reference type keeps the box alive
+    /// across redraws without making its contents a redraw trigger.
+    @State private var settled = SettledCamera()
 
     var body: some View {
         Map(position: $camera) {
@@ -253,7 +271,7 @@ private struct TrailMapFull: View {
         .mapStyle(Self.hikingStyle)
         .accessibilityLabel("Map of \(trail.title)")
         .onMapCameraChange(frequency: .onEnd) { context in
-            settled = context.camera
+            settled.camera = context.camera
             // A drag or a crown turn is MapKit telling us the hiker wants to
             // look somewhere else, and it says so by taking the position off
             // `.userLocation` itself. Letting the button follow that is what
@@ -329,7 +347,7 @@ private struct TrailMapFull: View {
                 // receiver has moved, it turns the map from the same heading
                 // it draws the dot's wedge with, and it stops when the hiker
                 // drags.
-                let fallback = settled.map { MapCameraPosition.camera($0) } ?? .automatic
+                let fallback = settled.camera.map { MapCameraPosition.camera($0) } ?? .automatic
                 camera = lock.isOn
                     ? .userLocation(followsHeading: lock == .heading, fallback: fallback)
                     : fallback
