@@ -29,11 +29,32 @@ struct TrailDetailView: View {
             VStack(spacing: 8) {
                 FollowFigures(trail: trail)
                 RecordAlongTrailButton()
+                MapStylePicker()
             }
             .padding(.horizontal, 4)
         }
         .navigationTitle(trail.title)
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// Which basemap the trail is drawn on.
+///
+/// Here rather than on the map, where the two buttons are already as many as
+/// a 44 mm screen holds — and this is a choice a hiker makes once a season
+/// rather than once a fork. See ``WatchMapStyle`` for why the choice is worth
+/// offering at all.
+private struct MapStylePicker: View {
+    @AppStorage(WatchSettingsKey.mapStyle)
+    private var styleID: String = WatchMapStyle.standard.rawValue
+
+    var body: some View {
+        Picker("Basemap", selection: $styleID) {
+            ForEach(WatchMapStyle.allCases) { style in
+                Text(style.title).tag(style.rawValue)
+            }
+        }
+        .pickerStyle(.navigationLink)
     }
 }
 

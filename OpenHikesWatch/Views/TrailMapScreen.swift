@@ -150,6 +150,11 @@ private struct TrailMapFull: View {
 
     @Binding var isShowingFigures: Bool
 
+    /// Remembered across walks, and read here rather than passed in: this is
+    /// the only view that draws a basemap.
+    @AppStorage(WatchSettingsKey.mapStyle)
+    private var styleID: String = WatchMapStyle.standard.rawValue
+
     /// `.automatic` frames the `MapPolyline`, which is what a trail should
     /// open as — the whole walk, before any of it has been done. It also keeps
     /// this view out of the business of a route straddling ±180°, where the
@@ -164,7 +169,7 @@ private struct TrailMapFull: View {
         Map(position: $camera) {
             trailMapContent(coordinates: trail.mapCoordinates, tint: trail.mapTint)
         }
-        .mapStyle(.standard(elevation: .flat))
+        .mapStyle(style.mapStyle)
         .accessibilityLabel("Map of \(trail.title)")
         .onMapCameraChange(frequency: .onEnd) { context in
             settled = context.camera
@@ -172,31 +177,77 @@ private struct TrailMapFull: View {
             // look somewhere else, and it says so by taking the position off
             // `.userLocation` itself. Letting the button follow that is what
             // stops it claiming a lock that is no longer holding.
-            if camera.positionedByUser { isFollowing = false }
+            if camera.positionedByUser { lock = .off }
         }
         .overlay(alignment: .bottom) { buttons }
     }
 
-    /// Whether the camera is locked to the hiker.
+    /// Whether the camera is locked to the hiker, and whether it turns with
+    /// them.
     ///
-    /// Off when a trail opens: the first question is "where does this go",
-    /// which is the whole route, and the lock answers the second one.
-    @State private var isFollowing = false
+    /// Three states rather than two, on one button, because a watch has room
+    /// for one more button and not two. Off when a trail opens: the first
+    /// question is "where does this go", which is the whole route, and the
+    /// lock answers the second one.
+    ///
+    /// `heading` is what a hiker means by "which way now" — the map turns so
+    /// the way ahead is up, and a fork that is left on the screen is left in
+    /// front of them. North-up is kept as its own step because it is the one
+    /// that can be checked against a printed map, and because a compass on a
+    /// wrist swinging through a walking stride is not always worth following.
+    private enum Lock {
+        case off, north, heading
+
+        var next: Self {
+            switch self {
+            case .off: .north
+            case .north: .heading
+            case .heading: .off
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .off: "location"
+            case .north: "location.fill"
+            case .heading: "location.north.line.fill"
+            }
+        }
+
+        var label: String {
+            switch self {
+            case .off: "Follow your location"
+            case .north: "Turn the map as you walk"
+            case .heading: "Stop following your location"
+            }
+        }
+
+        var isOn: Bool { self != .off }
+    }
+
+    @State private var lock: Lock = .off
+
+    private var style: WatchMapStyle {
+        WatchMapStyle(rawValue: styleID) ?? .standard
+    }
 
     private var buttons: some View {
         HStack(spacing: 6) {
             button(
-                symbol: isFollowing ? "location.fill" : "location",
-                label: isFollowing ? "Stop following your location" : "Follow your location",
-                tint: isFollowing ? Color.accentColor : .primary
+                symbol: lock.symbol,
+                label: lock.label,
+                tint: lock.isOn ? Color.accentColor : .primary
             ) {
-                isFollowing.toggle()
+                lock = lock.next
                 // Handing the follow to MapKit rather than re-centring on
                 // every fix ourselves: it owns the dot, it knows when the
-                // receiver has moved, and it stops when the hiker drags.
-                camera = isFollowing
-                    ? .userLocation(fallback: settled.map { .camera($0) } ?? .automatic)
-                    : settled.map { .camera($0) } ?? .automatic
+                // receiver has moved, it turns the map from the same heading
+                // it draws the dot's wedge with, and it stops when the hiker
+                // drags.
+                let fallback = settled.map { MapCameraPosition.camera($0) } ?? .automatic
+                camera = lock.isOn
+                    ? .userLocation(followsHeading: lock == .heading, fallback: fallback)
+                    : fallback
             }
             button(symbol: "list.bullet", label: "Trail figures", tint: .primary) {
                 isShowingFigures = true
