@@ -235,9 +235,9 @@ struct CommunityQueryPolicy {
     /// from "at the ceiling", which are different answers — see the guard
     /// there.
     static func visibleRadiusMeters(for region: MKCoordinateRegion) -> Double {
-        let metersPerDegreeLatitude: Double = 111_320
-        let latitudeMeters = region.span.latitudeDelta * metersPerDegreeLatitude
-        let longitudeMeters = region.span.longitudeDelta * metersPerDegreeLatitude
+        let metersPerDegree = RouteGeometry.metersPerDegreeLatitude
+        let latitudeMeters = region.span.latitudeDelta * metersPerDegree
+        let longitudeMeters = region.span.longitudeDelta * metersPerDegree
             * cos(region.center.latitude * .pi / 180)
         return max(latitudeMeters, abs(longitudeMeters)) / 2
     }
