@@ -43,6 +43,17 @@ final class WatchModel {
     private(set) var awaitingTrail: UUID?
     /// How many finished walks are still waiting for the phone.
     private(set) var queuedWalkCount: Int
+    /// What the *phone's* recorder is doing, as far as this watch knows.
+    ///
+    /// `nil` until a reading has arrived, which is a different thing from
+    /// idle: one means "nothing is recording on your iPhone" and the other
+    /// means "this watch has not been told". The screen says them differently.
+    private(set) var phoneRecording: WatchPhoneRecording?
+    /// The phone's last refusal, for the hiker to read once.
+    private(set) var commandRefusal: String?
+    /// Set while a button is waiting for the phone to answer, so the screen
+    /// can disable it rather than let a hiker press Stop three times.
+    private(set) var pendingCommand: WatchRecordingCommand.Action?
 
     let link = PhoneLink()
     let recorder: WatchRecorder
@@ -113,11 +124,39 @@ final class WatchModel {
         follow.update(position, at: location.timestamp)
     }
 
-    // MARK: Recording
+    // MARK: The phone's recording
+
+    /// Whether the phone is recording, as far as this watch has been told.
+    ///
+    /// Used to keep the watch from starting one of its own: two hikes for one
+    /// walk is the failure a hiker finds afterwards, in their library, with no
+    /// way to tell which is which. The guard lives here rather than on the
+    /// phone because this is the side that has the information — the phone is
+    /// never told about a watch recording while it runs, by design.
+    var isPhoneRecording: Bool { phoneRecording?.isActive == true }
+
+    /// Sends a button to the phone's recorder.
+    func command(_ action: WatchRecordingCommand.Action) {
+        guard pendingCommand == nil else { return }
+        commandRefusal = nil
+        pendingCommand = action
+        link.send(WatchRecordingCommand(action: action))
+    }
+
+    /// Clears a refusal the hiker has read.
+    func acknowledgeRefusal() { commandRefusal = nil }
+
+    // MARK: Recording on this watch
 
     /// Starts a recording, named after the trail being followed when there is
     /// one.
     func startRecording(alongTrail: Bool) async {
+        // Refused rather than merely hidden. The screen does not offer this
+        // while the phone is recording, but a reading can land between the tap
+        // and this call, and two hikes for one walk is the failure a hiker
+        // finds afterwards in their library with no way to tell which is
+        // which. See ``isPhoneRecording``.
+        guard !isPhoneRecording else { return }
         let along = alongTrail ? trail : nil
         await recorder.start(trailHikeID: along?.hikeID, title: along?.title)
     }
@@ -178,9 +217,33 @@ final class WatchModel {
         case .walkKept(let sessionID):
             store.removeWalk(sessionID)
             queuedWalkCount = store.queuedWalks().count
+        case .phoneRecording(let recording):
+            apply(recording)
+        case .commandOutcome(let outcome):
+            pendingCommand = nil
+            commandRefusal = outcome.refusal
+            apply(outcome.recording)
         case .reachabilityChanged(let isReachable):
-            if isReachable { drainQueue() }
+            if isReachable {
+                drainQueue()
+            } else {
+                // Out of range is not idle. Keeping the last reading and
+                // drawing it as current would be a stopwatch running on a
+                // screen whose phone might have stopped ten minutes ago; the
+                // screen says "out of range" from the link instead.
+                phoneRecording = nil
+                pendingCommand = nil
+            }
         }
+    }
+
+    /// Takes a reading, unless it is older than the one already held.
+    ///
+    /// A push and a command's reply can cross, and the reply is the one that
+    /// matters — it describes the state the hiker's own button produced.
+    private func apply(_ recording: WatchPhoneRecording) {
+        if let current = phoneRecording, recording.updatedAt < current.updatedAt { return }
+        phoneRecording = recording
     }
 
     /// Offers every queued walk again.
