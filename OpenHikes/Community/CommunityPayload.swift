@@ -390,7 +390,7 @@ nonisolated struct CommunityRouteLine: Identifiable, Hashable, Sendable {
 }
 
 /// A published hike's full contents, fetched when one is opened.
-nonisolated struct CommunityHikeDetail: Sendable {
+nonisolated struct CommunityHikeDetail: Sendable, CommunityReviewSubject {
     var listing: CommunityListing
     var route: [RouteCoordinate]
     var trackDescription: String?
@@ -513,6 +513,16 @@ nonisolated struct CommunityHikeDetail: Sendable {
     var previewPhotos: [CommunityPreviewPhoto] {
         ownPreviewPhotos + contributedPreviewPhotos
     }
+
+    /// ``CommunityReviewSubject``'s spelling.
+    ///
+    /// ``previewPhotos`` rather than ``ownPreviewPhotos``, which is what the
+    /// review screen has always passed and so is what this keeps. Worth a
+    /// second look: `ownPreviewPhotos` documents itself as the one the review
+    /// screen wants, and the two differ only for a detail carrying
+    /// contributed photographs — which a submission under review cannot have,
+    /// because nothing can contribute to a listing that does not exist yet.
+    var reviewPreviewPhotos: [CommunityPreviewPhoto] { previewPhotos }
 
     /// The hike author's own anchored photographs.
     ///
