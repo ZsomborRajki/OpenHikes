@@ -88,6 +88,24 @@ final class WatchModel {
     func start() {
         link.activate { [weak self] delivery in self?.apply(delivery) }
         drainQueue()
+        askForLibraryIfEmpty()
+    }
+
+    /// Asks the phone for the library, but only when there is nothing to show.
+    ///
+    /// The push half — an application context — covers every case but one: a
+    /// watch app installed while the phone app was *already running* has no
+    /// context waiting for it and no change coming, so it sat on an empty list
+    /// telling the hiker to open an app that was open. Asking costs one small
+    /// transfer and only happens when the list is empty, so a watch that has
+    /// its trails never sends it.
+    ///
+    /// Called at launch, whenever the phone comes back into range, and every
+    /// time the app comes to the front — a hiker who opens it again is a
+    /// hiker who is already wondering why the list is empty.
+    func askForLibraryIfEmpty() {
+        guard library.hikes.isEmpty else { return }
+        link.requestLibrary()
     }
 
     // MARK: Trails
@@ -252,7 +270,11 @@ final class WatchModel {
             commandRefusal = outcome.refusal
             apply(outcome.recording)
         case .reachabilityChanged(let isReachable):
+            // The phone is back. If this watch still has no trails, this is
+            // the moment to ask again rather than to keep waiting for a push
+            // that may have nothing to push.
             if isReachable {
+                askForLibraryIfEmpty()
                 drainQueue()
             } else {
                 // Out of range is not idle. Keeping the last reading and

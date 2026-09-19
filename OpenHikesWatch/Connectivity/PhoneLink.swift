@@ -147,6 +147,17 @@ final class PhoneLink: NSObject {
         walksInFlight.remove(sessionID)
     }
 
+    /// Asks the phone for the library, for a watch that has not been sent one.
+    ///
+    /// `transferUserInfo` rather than `sendMessage`, because the moment this
+    /// is needed most is a first launch where the phone may not be reachable
+    /// yet — a message would fail outright, a transfer waits. The answer comes
+    /// back as an ordinary application context, so nothing here has to match a
+    /// reply to a request.
+    func requestLibrary() {
+        transfer { try WatchLink.message(WatchLibraryRequest()) }
+    }
+
     /// Presses a button on the phone's recorder.
     ///
     /// No transfer fallback, deliberately — see this file's header. A command
@@ -297,6 +308,10 @@ nonisolated extension PhoneLink: WCSessionDelegate {
         }
         do {
             switch kind {
+            case .libraryRequest:
+                // Watch → phone, and this is the watch. Its own request
+                // coming back would mean the phone had echoed it.
+                Self.logger.debug("A library request arrived at the watch, which is where they are sent from")
             case .libraryDigest:
                 let digest = try WatchLink.libraryDigest(from: message)
                 onMainActor { [weak self] in self?.onDelivery?(.library(digest)) }

@@ -52,10 +52,20 @@ struct TrailListView: View {
                 description: Text("Install OpenHikes on the iPhone paired with this watch to send trails across.")
             )
         } else if model.library.sentAt == .distantPast {
+            // Two sentences, because the two cases want different things from
+            // the hiker. In range, the watch has already asked and the honest
+            // report is that it is waiting for an answer — telling somebody to
+            // open an app they have open is how this screen used to be wrong.
+            // Out of range there is nothing to wait for yet, and bringing the
+            // phone closer is the whole of what helps.
             ContentUnavailableView(
                 "Waiting for Your iPhone",
                 systemImage: "antenna.radiowaves.left.and.right",
-                description: Text("Open OpenHikes on your iPhone once, with it nearby, to send your trails over.")
+                description: Text(
+                    model.link.isReachable
+                        ? "Asking your iPhone for your trails…"
+                        : "Bring your iPhone nearby, with OpenHikes installed, to send your trails over."
+                )
             )
         } else {
             ContentUnavailableView(
