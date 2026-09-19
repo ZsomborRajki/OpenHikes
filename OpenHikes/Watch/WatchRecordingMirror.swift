@@ -72,6 +72,16 @@ final class WatchRecordingMirror {
         guard isReachable else {
             pump?.cancel()
             pump = nil
+            // Forgotten along with the loop, and this is load-bearing rather
+            // than tidiness. The watch drops its own copy the moment it loses
+            // the phone — an out-of-range reading is not a current one — so
+            // the first publish after it comes back is the only thing that
+            // refills that screen. Kept, the dedupe below would suppress
+            // exactly that publish whenever nothing a hiker can see had
+            // changed in between, which is a hiker standing still: their
+            // wrist would show no running hike at all until they moved a
+            // metre or the state changed.
+            lastPublished = nil
             return
         }
         guard pump == nil else { return }

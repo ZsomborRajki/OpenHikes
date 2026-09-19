@@ -92,6 +92,11 @@ final class WatchSessionCoordinator: NSObject {
     /// because it needs the intent coordinator, which is registered after
     /// this object exists — see ``register(_:)``.
     @ObservationIgnored private var mirror: WatchRecordingMirror?
+    /// The seam a fresh reading of the library is taken through, kept for
+    /// ``republishLibrary()``. Weak for the reason ``WatchRecordingMirror``
+    /// holds it weakly: it is registered with `AppDependencyManager` and this
+    /// object must not be what keeps it alive.
+    @ObservationIgnored private weak var intents: HikeIntentCoordinator?
 
     /// Walks whose import is in flight, by the session they came from.
     ///
@@ -129,6 +134,7 @@ final class WatchSessionCoordinator: NSObject {
     /// launch that has not registered one — a hosted test bundle's, for
     /// instance.
     func register(_ coordinator: HikeIntentCoordinator) {
+        intents = coordinator
         mirror = WatchRecordingMirror(coordinator: coordinator) { [weak self] recording in
             self?.send(recording)
         }
@@ -218,17 +224,30 @@ final class WatchSessionCoordinator: NSObject {
 
     /// Republishes the catalogue after this coordinator changed the library.
     ///
-    /// Reads the App Group's own copy rather than the store, because
-    /// `SharedHikeCataloguePublisher` has already written one and two
-    /// independent readings of the same library is how the two come to
-    /// disagree. The publisher's sweep runs at launch and is what fills it.
+    /// A fresh *sweep* rather than a re-read of the App Group's copy, which is
+    /// the difference between this working and this being a no-op:
+    /// `SharedHikeCataloguePublisher` has exactly one caller, at launch, so
+    /// the file on disk is by construction the library as it stood *before*
+    /// the walk that just arrived. Sending it again would send the same list
+    /// without the new hike in it, and the watch would not see the walk it
+    /// had recorded until the phone was launched again.
+    ///
+    /// Still one reading feeding both consumers, which is the property that
+    /// argument was really about: the sweep writes the App Group's copy and
+    /// hands the watch the same list, so the widget's picker and the watch
+    /// cannot disagree.
+    ///
+    /// Silent when nothing has registered an intent coordinator — a launch
+    /// that cannot read the library is one where nothing was saved either.
     private func republishLibrary() async {
-        // Off the main actor: this is a file read, and the caller is a
-        // delegate's task rather than anything on screen.
-        let catalogue = await Task.detached(priority: .utility) {
-            SharedStore.loadHikeCatalogue()
+        guard let coordinator = intents else { return }
+        // Detached for the reason the publisher's own entry point is: the
+        // sweep encodes the library and writes the App Group's file, and a
+        // `nonisolated async` call made from here would run on *this* actor
+        // under approachable concurrency — which is the main one.
+        await Task.detached(priority: .utility) { [weak self] in
+            await SharedHikeCataloguePublisher.publishCatalogue(from: coordinator, watch: self)
         }.value
-        publish(catalogue)
     }
 
     /// Publishes the library that arrived before the session was activated.
