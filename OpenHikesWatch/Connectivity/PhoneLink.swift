@@ -19,6 +19,14 @@
 //  * **The trail package** comes back as a user-info transfer. It is tens of
 //    kilobytes, which is past what an interactive message is for, and it must
 //    survive the app being backgrounded while it crosses.
+//  * **The phone's own recording** arrives as a message and is dropped when
+//    it cannot be delivered, which is the right shape for the one payload
+//    here that is only meaningful *now*: a reading queued while the watch app
+//    was closed would describe a recording that has since moved on.
+//  * **A button for the phone's recorder** goes out as a message with a reply
+//    handler and has no transfer fallback. A fact delivered late is still a
+//    fact; a button delivered late is a hike that starts ten minutes after
+//    the hiker gave up. Out of range, the watch says so and disables them.
 //  * **A finished walk** goes out as a user-info transfer and nothing else.
 //    `transferUserInfo` queues to disk in the system's own container and keeps
 //    trying across relaunches and reboots, which is the only guarantee worth
@@ -41,7 +49,12 @@ import WatchConnectivity
 
 /// What the link hands back to the model, already decoded.
 enum PhoneDelivery: Sendable {
+    /// The phone's answer to a button, carrying the state that resulted and
+    /// the refusal sentence if there was one.
+    case commandOutcome(WatchCommandOutcome)
     case library(WatchLibraryDigest)
+    /// What the phone's own recorder is doing, pushed or answered.
+    case phoneRecording(WatchPhoneRecording)
     /// The link's own state changed — reachability, or an activation that
     /// finished. Carried so the model can drain its queue the moment a phone
     /// comes back rather than on a timer.
@@ -105,6 +118,57 @@ final class PhoneLink: NSObject {
     /// takes it off ``WatchStore``'s queue.
     func send(_ walk: WatchRecordedWalk) {
         transfer { try WatchLink.message(walk) }
+    }
+
+    /// Presses a button on the phone's recorder.
+    ///
+    /// No transfer fallback, deliberately — see this file's header. A command
+    /// that cannot be delivered now is reported as refused rather than queued,
+    /// because the honest answer to "start a hike on a phone that is not
+    /// there" is that it did not happen.
+    func send(_ command: WatchRecordingCommand) {
+        guard let session, session.isReachable else {
+            deliverRefusal(of: command, saying: "Your iPhone is out of range.")
+            return
+        }
+        let encoded: [String: Any]
+        do {
+            encoded = try WatchLink.message(command)
+        } catch {
+            Self.logger.error("A command could not be encoded: \(error.localizedDescription, privacy: .public)")
+            deliverRefusal(of: command, saying: "That didn't reach your iPhone.")
+            return
+        }
+        session.sendMessage(encoded) { [weak self] reply in
+            // The reply arrives on a background queue and is decoded there,
+            // for the reason every delivery below is: `[String: Any]` is not
+            // `Sendable` and must not cross to the main actor.
+            guard let outcome = try? WatchLink.commandOutcome(from: reply) else { return }
+            onMainActor { self?.onDelivery?(.commandOutcome(outcome)) }
+        } errorHandler: { [weak self] error in
+            Self.logger.debug("A command failed: \(error.localizedDescription, privacy: .public)")
+            onMainActor { self?.deliverRefusal(of: command, saying: "That didn't reach your iPhone.") }
+        }
+    }
+
+    /// Answers a command the watch could not send, in the shape the phone
+    /// would have answered in.
+    ///
+    /// One path out for every failure, so the screen has exactly one thing to
+    /// handle: an outcome always arrives, and it always carries a state.
+    private func deliverRefusal(of command: WatchRecordingCommand, saying reason: String) {
+        onDelivery?(
+            .commandOutcome(
+                WatchCommandOutcome(
+                    commandID: command.id,
+                    // Idle rather than a guess: the watch cannot see the
+                    // phone, so it must not claim to know what its recorder
+                    // is doing.
+                    recording: .idle(),
+                    refusal: reason
+                )
+            )
+        )
     }
 
     /// Sends whatever `build` encodes, or logs why nothing went.
@@ -190,7 +254,13 @@ nonisolated extension PhoneLink: WCSessionDelegate {
             case .walkReceipt:
                 let receipt = try WatchLink.walkReceipt(from: message)
                 onMainActor { [weak self] in self?.onDelivery?(.walkKept(receipt.sessionID)) }
-            case .trailRequest, .recordedWalk:
+            case .phoneRecording:
+                let recording = try WatchLink.phoneRecording(from: message)
+                onMainActor { [weak self] in self?.onDelivery?(.phoneRecording(recording)) }
+            case .commandOutcome:
+                let outcome = try WatchLink.commandOutcome(from: message)
+                onMainActor { [weak self] in self?.onDelivery?(.commandOutcome(outcome)) }
+            case .recordingCommand, .recordedWalk, .trailRequest:
                 // The watch's own outgoing kinds. Arriving here means the
                 // phone echoed one back, which nothing does; ignoring it is
                 // the whole of the correct response.
