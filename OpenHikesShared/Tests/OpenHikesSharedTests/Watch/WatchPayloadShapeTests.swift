@@ -60,6 +60,16 @@ struct WatchPayloadShapeTests {
         )
     }
 
+    @Test("the library request's wire shape is unchanged")
+    func libraryRequestShapeIsUnchanged() throws {
+        try expectShape(
+            of: Fixture.libraryRequest,
+            named: "WatchLibraryRequest",
+            versionedBy: "WatchLibraryRequest.currentSchemaVersion",
+            matches: ["schemaVersion: number"]
+        )
+    }
+
     @Test("the library digest's wire shape is unchanged")
     func libraryDigestShapeIsUnchanged() throws {
         try expectShape(
@@ -201,6 +211,7 @@ struct WatchPayloadShapeTests {
         case .trailPackage: try WatchLink.message(Fixture.trailPackage)
         case .recordedWalk: try WatchLink.message(Fixture.recordedWalk)
         case .walkReceipt: try WatchLink.message(Fixture.walkReceipt)
+        case .libraryRequest: try WatchLink.message(Fixture.libraryRequest)
         case .phoneRecording: try WatchLink.message(Fixture.phoneRecording)
         case .recordingCommand: try WatchLink.message(Fixture.recordingCommand)
         case .commandOutcome: try WatchLink.message(Fixture.commandOutcome)
@@ -217,6 +228,7 @@ struct WatchPayloadShapeTests {
             PayloadShapeFixture.Named(name: "WatchTrailPackage", value: trailPackage),
             PayloadShapeFixture.Named(name: "WatchTrailRequest", value: trailRequest),
             PayloadShapeFixture.Named(name: "WatchLibraryDigest", value: libraryDigest),
+            PayloadShapeFixture.Named(name: "WatchLibraryRequest", value: libraryRequest),
             PayloadShapeFixture.Named(name: "WatchRecordedWalk", value: recordedWalk),
             PayloadShapeFixture.Named(name: "WatchWalkReceipt", value: walkReceipt),
             PayloadShapeFixture.Named(name: "WatchPhoneRecording", value: phoneRecording),
@@ -239,6 +251,8 @@ struct WatchPayloadShapeTests {
         )
 
         static let trailRequest = WatchTrailRequest(hikeID: hikeID)
+
+        static let libraryRequest = WatchLibraryRequest()
 
         static let libraryDigest = WatchLibraryDigest(
             hikes: [

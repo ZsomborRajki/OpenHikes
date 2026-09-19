@@ -41,6 +41,15 @@ public enum WatchMessageKind: String, Codable, Sendable, CaseIterable {
     case commandOutcome = "commandOutcome"
     /// Phone → watch. The hiker's trails, as a list to choose from.
     case libraryDigest = "libraryDigest"
+    /// Watch → phone. "Send me the list again."
+    ///
+    /// The pull half of the library. The push half is an application context,
+    /// which is the right transport for it and still leaves one case
+    /// uncovered: a watch app *installed while the phone app was already
+    /// running* has no context waiting for it and no change coming, so it sat
+    /// on an empty list telling the hiker to open an app that was open. This
+    /// is the watch saying so itself.
+    case libraryRequest = "libraryRequest"
     /// Phone → watch. What the phone's own recorder is doing, so the watch
     /// can show it and drive it. See ``WatchPhoneRecording``.
     case phoneRecording = "phoneRecording"
@@ -192,6 +201,14 @@ public extension WatchLink {
 
     static func walkReceipt(from message: [String: Any]) throws(WatchLinkFailure) -> WatchWalkReceipt {
         try payload(WatchWalkReceipt.self, of: .walkReceipt, from: message)
+    }
+
+    static func message(_ request: WatchLibraryRequest) throws -> [String: Any] {
+        try message(.libraryRequest, request)
+    }
+
+    static func libraryRequest(from message: [String: Any]) throws(WatchLinkFailure) -> WatchLibraryRequest {
+        try payload(WatchLibraryRequest.self, of: .libraryRequest, from: message)
     }
 
     static func message(_ recording: WatchPhoneRecording) throws -> [String: Any] {

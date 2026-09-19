@@ -138,6 +138,28 @@ public struct WatchTrailRequest: SharedPayload, Equatable {
     }
 }
 
+/// The watch asking for the library, because nothing sent it one.
+///
+/// The library is pushed as an application context, which is the right
+/// transport: one current answer, held by the system, delivered whenever the
+/// watch app next runs. What that cannot cover is a watch app installed while
+/// the phone app is *already running* — there is no context waiting for a
+/// process that did not exist when it was set, and no change coming while the
+/// phone sits idle. The watch showed an empty list telling the hiker to open
+/// an app that was open, and only a relaunch of the phone fixed it.
+///
+/// So the watch asks, rather than waiting to be told. Carries nothing but its
+/// version: there is one library and the phone knows which.
+public struct WatchLibraryRequest: SharedPayload, Equatable {
+    public static let currentSchemaVersion = 1
+
+    public let schemaVersion: Int
+
+    public init() {
+        schemaVersion = Self.currentSchemaVersion
+    }
+}
+
 /// The hiker's library, as the watch's list of trails to choose from.
 ///
 /// Carries ``SharedHikeSummary`` rows — the same four fields the widget's

@@ -393,7 +393,16 @@ nonisolated extension WatchSessionCoordinator: WCSessionDelegate {
     /// the window in which mirroring a recording is worth anything.
     func sessionReachabilityDidChange(_ session: WCSession) {
         let reachable = session.isReachable
-        onMainActor { [weak self] in self?.mirror?.reachabilityChanged(to: reachable) }
+        onMainActor { [weak self] in
+            self?.mirror?.reachabilityChanged(to: reachable)
+            // Belt and braces beside the watch's own request: a watch app
+            // coming to the front is the one moment its list is certainly
+            // being looked at, and a context costs nothing to set again. It
+            // also covers the watch's request being lost, which a transfer
+            // can be if the app is killed between sending and delivery.
+            guard reachable else { return }
+            Task { await self?.republishLibrary() }
+        }
     }
 
     /// A message that expects an answer, which is only ever a command.
@@ -453,6 +462,13 @@ nonisolated extension WatchSessionCoordinator: WCSessionDelegate {
             case .trailRequest:
                 let request = try WatchLink.trailRequest(from: message)
                 onMainActor { [weak self] in self?.sendTrail(request.hikeID) }
+            case .libraryRequest:
+                // A watch with no list, asking. Answered with a real sweep
+                // rather than the App Group's copy, for the reason
+                // ``republishLibrary()`` gives.
+                onMainActor { [weak self] in
+                    Task { await self?.republishLibrary() }
+                }
             case .recordedWalk:
                 let walk = try WatchLink.recordedWalk(from: message)
                 onMainActor { [weak self] in self?.keep(walk) }
