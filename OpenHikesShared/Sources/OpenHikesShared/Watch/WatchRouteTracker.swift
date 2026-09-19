@@ -121,6 +121,22 @@ public struct WatchRouteTracker: Sendable, Equatable {
         /// makes, so the two agree: GPS vertical noise is not a trail's
         /// elevation.
         public var trailElevationMeters: Double?
+        /// The point on the *trail* the fix was matched to, rather than the
+        /// coordinate the receiver reported.
+        ///
+        /// Carried on the reading because the scan has already worked it out:
+        /// it is the projection onto the winning segment, which is the same
+        /// arithmetic ``offRouteMeters`` is the length of. The alternative is
+        /// to hand a caller ``distanceAlongRouteMeters`` and have it find the
+        /// point again, and there is no cheap way to do that outside this
+        /// type — the cumulative distances that make it exact are private
+        /// here, and a caller without them can only guess at the line by
+        /// index, which is wrong by however unevenly the route was sampled.
+        ///
+        /// The same choice `SharedTrailSnapshot.LiveFix` makes, so a watch and
+        /// a widget draw the hiker in the same place: a dot at the raw fix
+        /// sits beside the line whenever GPS is noisy.
+        public var trailCoordinate: SharedTrailSnapshot.CodableCoordinate
         /// Whether the fix was inside ``matchThresholdMeters``.
         public var isOnTrail: Bool
     }
@@ -216,6 +232,7 @@ public struct WatchRouteTracker: Sendable, Equatable {
                 : 0,
             offRouteMeters: match.offRouteMeters,
             trailElevationMeters: match.elevationMeters,
+            trailCoordinate: match.coordinate,
             isOnTrail: isOnTrail
         )
     }
@@ -224,6 +241,9 @@ public struct WatchRouteTracker: Sendable, Equatable {
         var lineDistance: Double
         var offRouteMeters: Double
         var elevationMeters: Double?
+        /// Where on this segment the fix projected — the point the dot is
+        /// drawn at, found once here rather than looked up again later.
+        var coordinate: SharedTrailSnapshot.CodableCoordinate
         /// Whether this leg runs the way the hiker is going. `false` when
         /// there was no course to compare with, which makes it a tie-break
         /// nobody wins rather than one everybody does.
@@ -295,6 +315,7 @@ public struct WatchRouteTracker: Sendable, Equatable {
                     lineDistance: lineDistances[index] + segmentLength * projection.fraction,
                     offRouteMeters: projection.offRouteMeters,
                     elevationMeters: elevation(from: start, to: end, fraction: projection.fraction),
+                    coordinate: coordinate(from: start, to: end, fraction: projection.fraction),
                     runsWithTheHiker: runsWithTheHiker(projection, courseDegrees: courseDegrees)
                 )
             )
@@ -355,5 +376,30 @@ public struct WatchRouteTracker: Sendable, Equatable {
         case let (nil, high?): high
         case (nil, nil): nil
         }
+    }
+
+    /// The point part-way along a segment, interpolated the way the elevation
+    /// above is.
+    ///
+    /// Straight-line in latitude and longitude rather than along a great
+    /// circle, which is right at this scale: a decimated segment is metres to
+    /// a couple of hundred metres long, and the two differ by far less than
+    /// the width of the line this is drawn on.
+    ///
+    /// The longitude is interpolated along the *short* way round, so a
+    /// segment straddling the antimeridian gives a point on the segment
+    /// rather than one most of the way round the world.
+    private func coordinate(
+        from start: WatchTrailPoint,
+        to end: WatchTrailPoint,
+        fraction: Double
+    ) -> SharedTrailSnapshot.CodableCoordinate {
+        let longitudeDelta = WatchGeodesy.normalizedLongitudeDelta(end.longitude - start.longitude)
+        return SharedTrailSnapshot.CodableCoordinate(
+            latitude: start.latitude + (end.latitude - start.latitude) * fraction,
+            longitude: WatchGeodesy.normalizedLongitudeDelta(
+                start.longitude + longitudeDelta * fraction
+            )
+        )
     }
 }

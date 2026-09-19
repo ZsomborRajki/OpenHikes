@@ -141,6 +141,33 @@ struct WatchRouteTrackerTests {
         #expect(abs(elevation - 800) < 5)
     }
 
+    @Test("The matched point follows distance along the line, not position in the array")
+    func matchedPointIsNotTheIndexFraction() throws {
+        var tracker = WatchRouteTracker(Fixture.unevenPackage)
+        // Halfway along the one long segment, which is most of this route's
+        // length and the last of its four segments. Reading the line by index
+        // instead puts this seven-eighths of the way along it, back among the
+        // clustered points at the start — which is what decimating a route
+        // that was densely sampled at a switchback leaves behind.
+        let longitude = (Fixture.clusterEndLongitude + Fixture.endLongitude) / 2
+        let match = tracker.advance(latitude: Fixture.latitude, longitude: longitude)
+        let halfway = try #require(match)
+        #expect(halfway.isOnTrail)
+        #expect(abs(halfway.trailCoordinate.longitude - longitude) < 0.0005)
+        #expect(abs(halfway.trailCoordinate.latitude - Fixture.latitude) < 0.0005)
+    }
+
+    @Test("A segment across the antimeridian puts the dot on the segment")
+    func matchedPointCrossesTheAntimeridian() throws {
+        var tracker = WatchRouteTracker(Fixture.antimeridianPackage)
+        let match = tracker.advance(latitude: Fixture.latitude, longitude: 180)
+        let onTheLine = try #require(match)
+        #expect(onTheLine.isOnTrail)
+        // Interpolating the longitudes the long way round lands on the prime
+        // meridian instead — half a world from a segment 2 km long.
+        #expect(abs(abs(onTheLine.trailCoordinate.longitude) - 180) < 0.001)
+    }
+
     @Test("A package with one point has no line, and says so rather than guessing")
     func onePointIsNotALine() {
         var tracker = WatchRouteTracker(
@@ -208,6 +235,44 @@ struct WatchRouteTrackerTests {
                 points: [
                     WatchTrailPoint(latitude: latitude, longitude: startLongitude, elevationMeters: 600),
                     WatchTrailPoint(latitude: latitude, longitude: endLongitude, elevationMeters: 1000),
+                ]
+            )
+        }
+        /// The far end of a run of points a few metres apart, before the one
+        /// long segment that is the rest of the route.
+        static let clusterEndLongitude = 12.903
+
+        /// Points clustered at one end and sparse at the other, which is what
+        /// decimation leaves of a route sampled densely at a switchback and
+        /// thinly along the ridge after it. Index position and distance along
+        /// the line say different things here, which is the whole point.
+        static var unevenPackage: WatchTrailPackage {
+            WatchTrailPackage(
+                hikeID: UUID(),
+                title: "Uneven",
+                tintHex: "#1B7F3B",
+                totalDistanceMeters: 0,
+                points: [
+                    WatchTrailPoint(latitude: latitude, longitude: startLongitude),
+                    WatchTrailPoint(latitude: latitude, longitude: 12.901),
+                    WatchTrailPoint(latitude: latitude, longitude: 12.902),
+                    WatchTrailPoint(latitude: latitude, longitude: clusterEndLongitude),
+                    WatchTrailPoint(latitude: latitude, longitude: endLongitude),
+                ]
+            )
+        }
+
+        /// A short segment straddling ±180°, where subtracting the longitudes
+        /// says the two ends are most of a world apart.
+        static var antimeridianPackage: WatchTrailPackage {
+            WatchTrailPackage(
+                hikeID: UUID(),
+                title: "Dateline",
+                tintHex: "#1B7F3B",
+                totalDistanceMeters: 0,
+                points: [
+                    WatchTrailPoint(latitude: latitude, longitude: 179.99),
+                    WatchTrailPoint(latitude: latitude, longitude: -179.99),
                 ]
             )
         }

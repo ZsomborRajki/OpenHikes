@@ -109,22 +109,16 @@ private struct TrailShape: View {
     /// The same choice `SharedTrailSnapshot.LiveFix` makes. A dot drawn at the
     /// raw fix sits beside the line whenever GPS is noisy, which on a line
     /// this thin reads as a hiker who has left the trail.
+    ///
+    /// Read straight off the match rather than worked back out of its distance
+    /// along the trail. This screen cannot do the second one correctly: it
+    /// would have to turn metres into a point on a line whose points are not
+    /// evenly spaced, and the cumulative distances that make that exact belong
+    /// to ``WatchRouteTracker``, which has already walked them to find this
+    /// very point.
     private var liveFix: SharedTrailSnapshot.CodableCoordinate? {
         guard let position = model.follow.position, position.isOnTrail else { return nil }
-        return coordinate(atTrailMeters: position.distanceAlongRouteMeters)
-    }
-
-    /// The trail point nearest a distance along it.
-    ///
-    /// Walked rather than binary-searched, and deliberately: this runs once a
-    /// second over at most `WatchTrailPackage.pointBudget` points, and a
-    /// cumulative-distance index would be state to keep in sync with a package
-    /// that is replaced wholesale whenever one arrives.
-    private func coordinate(atTrailMeters target: Double) -> SharedTrailSnapshot.CodableCoordinate? {
-        guard trail.totalDistanceMeters > 0 else { return nil }
-        let fraction = min(1, max(0, target / trail.totalDistanceMeters))
-        let index = Int((Double(trail.points.count - 1) * fraction).rounded())
-        return trail.points[min(max(index, 0), trail.points.count - 1)].coordinate
+        return position.trailCoordinate
     }
 }
 
