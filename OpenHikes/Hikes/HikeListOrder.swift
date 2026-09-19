@@ -75,7 +75,11 @@ enum HikeListOrder {
                 return first.date > second.date
             }
         } else {
-            rest = unpinned.sorted { sort.sorts($0, before: $1) }
+            // Measured once each and then sorted on the measurements — see
+            // ``HikeListSort``'s header for what this costs when it is done
+            // the other way round.
+            let keyed = unpinned.map { (key: sort.key(for: $0), hike: $0) }
+            rest = keyed.sorted { sort.precedes($0.key, $1.key) }.map(\.hike)
         }
         return active.map { [$0] + rest } ?? rest
     }

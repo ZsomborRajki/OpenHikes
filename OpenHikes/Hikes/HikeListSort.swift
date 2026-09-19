@@ -15,6 +15,19 @@
 //  A hike whose figure is missing sorts last rather than as zero. Zero is a
 //  claim — a flat walk — and "not worked out yet" is not one.
 //
+//  ## Why the keys are worked out before the sort and not during it
+//
+//  Because three of the four readings are expensive and a sort asks for each of
+//  them *n log n* times. `walkCount` is a SwiftData relationship; climb is
+//  behind a sidecar fetch; and a locale-aware `compare` allocates on every
+//  call. Sorting a two-hundred-hike library by name that way is some sixteen
+//  hundred locale comparisons on the main actor, inside a body pass, every
+//  time the list is drawn.
+//
+//  So each hike is measured once — ``key(for:)`` — and the sort runs on plain
+//  `Double`s and `String`s. The readings drop from *n log n* to *n*, and what
+//  is left is comparisons of numbers.
+//
 
 import Foundation
 
@@ -78,52 +91,66 @@ enum HikeListSort: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Whether `first` comes before `second` in this order.
+    /// Everything this order needs from one hike, read once.
+    ///
+    /// `name` is empty for every order but ``alphabetical``, and `figure` is
+    /// `nil` for the two that sort on something else — filling either for an
+    /// order that does not read it would pay a relationship fault or a fold
+    /// for nothing.
+    struct Key {
+        /// Bigger is earlier. `nil` for a figure nothing has worked out, which
+        /// sorts last.
+        let figure: Double?
+        /// Folded for comparison — see ``HikeListSort/key(for:)``.
+        let name: String
+        /// The order underneath every other one.
+        let date: Date
+    }
+
+    /// Measures one hike for this order.
+    func key(for hike: Hike) -> Key {
+        switch self {
+        case .newest:
+            Key(figure: nil, name: "", date: hike.date)
+        case .alphabetical:
+            // Folded once here rather than compared with a locale n log n
+            // times: case and diacritics are removed so *Écrins* files under E
+            // where a hiker looks for it, and what is left compares as plain
+            // text. `.current` because the folding of a letter is a question
+            // about the reader's language, not about the string.
+            Key(
+                figure: nil,
+                name: hike.displayTitle.folding(
+                    options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                    locale: .current
+                ),
+                date: hike.date
+            )
+        case .longest:
+            Key(figure: hike.distanceMeters, name: "", date: hike.date)
+        case .mostWalked:
+            Key(figure: Double(hike.walkCount), name: "", date: hike.date)
+        case .hilliest:
+            Key(figure: hike.verticalMeters, name: "", date: hike.date)
+        }
+    }
+
+    /// Whether `first` comes before `second`, reading nothing but the keys.
     ///
     /// Ties fall back to the newest, which is the order underneath all of
     /// these: two hikes of the same length, or two that have never been
     /// walked, are still one walk older than the other.
-    func sorts(_ first: Hike, before second: Hike) -> Bool {
-        switch self {
-        case .newest:
-            first.date > second.date
-        case .alphabetical:
-            Self.compareNames(first, second)
-        case .longest:
-            Self.compare(first.distanceMeters, second.distanceMeters, first, second)
-        case .mostWalked:
-            Self.compare(Double(first.walkCount), Double(second.walkCount), first, second)
-        case .hilliest:
-            Self.compare(first.verticalMeters, second.verticalMeters, first, second)
+    func precedes(_ first: Key, _ second: Key) -> Bool {
+        if self == .alphabetical {
+            if first.name != second.name { return first.name < second.name }
+            return first.date > second.date
         }
-    }
-
-    /// Case- and diacritic-insensitive, so *Écrins* files under E where a
-    /// hiker looks for it rather than after Z.
-    private static func compareNames(_ first: Hike, _ second: Hike) -> Bool {
-        let order = first.displayTitle.compare(
-            second.displayTitle,
-            options: [.caseInsensitive, .diacriticInsensitive],
-            range: nil,
-            locale: .current
-        )
-        if order == .orderedSame { return first.date > second.date }
-        return order == .orderedAscending
-    }
-
-    /// Bigger first, with a missing figure last and the newest breaking ties.
-    private static func compare(
-        _ first: Double?,
-        _ second: Double?,
-        _ firstHike: Hike,
-        _ secondHike: Hike
-    ) -> Bool {
-        switch (first, second) {
+        switch (first.figure, second.figure) {
         case let (left?, right?):
-            left == right ? firstHike.date > secondHike.date : left > right
-        case (.some, nil): true
-        case (nil, .some): false
-        case (nil, nil): firstHike.date > secondHike.date
+            return left == right ? first.date > second.date : left > right
+        case (.some, nil): return true
+        case (nil, .some): return false
+        case (nil, nil): return first.date > second.date
         }
     }
 }
