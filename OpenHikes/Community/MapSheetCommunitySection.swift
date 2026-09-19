@@ -181,6 +181,32 @@ extension MapSheetHikes {
         .environment(\.editMode, communityEditMode)
     }
 
+    /// The way out of the community list's reorder mode, and the only one.
+    ///
+    /// The hiker's own list puts its *Done* in the sort bar, and that bar is
+    /// hidden while the community half is showing — so without this, tapping
+    /// *Reorder List* was a one-way door: edit mode makes a row's tap belong
+    /// to the `List` rather than to the listing under it, and
+    /// ``CommunityBrowser/isReordering`` outlives the sheet and the tab, so
+    /// nothing short of relaunching cleared it.
+    @ViewBuilder var communityReorderBar: some View {
+        if community.isReordering {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation { community.isReordering = false }
+                } label: {
+                    Label("Done Reordering", systemImage: "checkmark")
+                        .font(.footnote.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+                .accessibilityIdentifier("community-order-done-button")
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal)
+        }
+    }
+
     /// The browser's reorder flag, as the environment wants it.
     ///
     /// A derived binding rather than a second piece of state: `EditMode` is
