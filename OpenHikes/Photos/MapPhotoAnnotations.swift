@@ -61,14 +61,6 @@ final class PhotoMapAnnotation: NSObject, MKAnnotation {
 #if os(iOS)
 /// The picture inside a photo pin's callout, and the way into the gallery.
 final class PhotoCalloutPreview: UIControl {
-    /// Wide enough to read as a photograph and narrow enough that MapKit's
-    /// callout doesn't have to stretch around it, at the 4:3 a phone camera
-    /// produces.
-    private static let previewWidth: CGFloat = 180
-    private static let previewHeight: CGFloat = 135
-    private static let cornerRadius: CGFloat = 10
-    private static let placeholderPointSize: CGFloat = 28
-
     private let imageView = UIImageView()
     /// What the view is currently showing, so a decode that lands after the
     /// view has been recycled onto another pin is dropped rather than drawn.
@@ -138,7 +130,7 @@ final class PhotoCalloutPreview: UIControl {
     private func buildHierarchy() {
         translatesAutoresizingMaskIntoConstraints = false
         clipsToBounds = true
-        layer.cornerRadius = Self.cornerRadius
+        layer.cornerRadius = PhotoCalloutMetrics.cornerRadius
         layer.cornerCurve = .continuous
 
         imageView.translatesAutoresizingMaskIntoConstraints = false
@@ -149,8 +141,8 @@ final class PhotoCalloutPreview: UIControl {
         addSubview(imageView)
 
         NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: Self.previewWidth),
-            heightAnchor.constraint(equalToConstant: Self.previewHeight),
+            widthAnchor.constraint(equalToConstant: PhotoCalloutMetrics.previewWidth),
+            heightAnchor.constraint(equalToConstant: PhotoCalloutMetrics.previewHeight),
             imageView.leadingAnchor.constraint(equalTo: leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: trailingAnchor),
             imageView.topAnchor.constraint(equalTo: topAnchor),
@@ -175,7 +167,7 @@ final class PhotoCalloutPreview: UIControl {
         imageView.image = UIImage(
             systemName: symbolName,
             withConfiguration: UIImage.SymbolConfiguration(
-                pointSize: Self.placeholderPointSize
+                pointSize: PhotoCalloutMetrics.placeholderPointSize
             )
         )
     }
