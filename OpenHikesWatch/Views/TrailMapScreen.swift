@@ -139,21 +139,57 @@ struct TrailMapScreen: View {
 /// and its sheet with every one. It reads no live state of its own — MapKit
 /// moves its own dot — so a fix costs a camera write here and nothing above.
 private struct TrailMapFull: View {
-    /// How wide the floating buttons are drawn, and how far their ring is
-    /// lifted out of the material behind them. A watch tap target does not go
-    /// below 36 pt, and the ring is what keeps a circle findable over a light
-    /// basemap, where the material alone all but disappears.
+    /// How wide the floating buttons are *drawn*, and how far their ring is
+    /// lifted out of the material behind them. The ring is what keeps a circle
+    /// findable over a light basemap, where the material alone all but
+    /// disappears.
     private static let buttonSize = 36.0
     private static let ringOpacity = 0.2
+    /// How much invisible target is added around each one.
+    ///
+    /// The circle stays 36 pt because two bigger ones would cover the trail
+    /// they are drawn over, but a finger on a moving wrist is not a 36 pt
+    /// instrument — the tappable shape is 52 pt and the drawn one is not.
+    private static let buttonPadding = 8.0
+
+    /// What a hiker might actually walk to, and nothing else.
+    ///
+    /// Water and a lavatory are the two a long day turns on; a car park and a
+    /// bus stop are how the walk starts and ends; the rest is shelter and the
+    /// numbers worth having when something has gone wrong. The default draws
+    /// everything a city has, on 44 mm, over the trail.
+    private static let hikingPointsOfInterest: [MKPointOfInterestCategory] = [
+        .nationalPark, .park, .campground, .beach, .marina,
+        .restroom, .parking, .publicTransport,
+        .cafe, .restaurant, .hotel,
+        .hospital, .fireStation, .police,
+    ]
+
+    /// Apple's map, tuned as far as a hiking map as it goes.
+    ///
+    /// Realistic elevation because the relief is the half of a hiking map
+    /// Apple's vector layer does have: a trail contouring round a spur looks
+    /// like what it is rather than like a wiggle. Muted emphasis puts the
+    /// roads behind the route drawn over them.
+    ///
+    /// **There is no satellite option, and that is not an omission.** Apple's
+    /// own note on `MapStyle`: "In watchOS, depending on rendering
+    /// calculations, MapKit may render the map using the Standard map style
+    /// rather than requested Hybrid or Imagery styles." Measured on a watch
+    /// simulator, `.hybrid` came back pixel-identical to this — so the switch
+    /// that offered it was a control that did nothing, which is worse than not
+    /// offering the choice. Tiles of our own are not a way round it either:
+    /// `MKTileOverlay`, `MKTileOverlayRenderer` and `MKMapView` are all
+    /// `API_UNAVAILABLE(watchos)`.
+    private static let hikingStyle: MapStyle = .standard(
+        elevation: .realistic,
+        emphasis: .muted,
+        pointsOfInterest: .including(hikingPointsOfInterest)
+    )
 
     let trail: WatchTrailPackage
 
     @Binding var isShowingFigures: Bool
-
-    /// Remembered across walks, and read here rather than passed in: this is
-    /// the only view that draws a basemap.
-    @AppStorage(WatchSettingsKey.mapStyle)
-    private var styleID: String = WatchMapStyle.standard.rawValue
 
     /// `.automatic` frames the `MapPolyline`, which is what a trail should
     /// open as — the whole walk, before any of it has been done. It also keeps
@@ -169,7 +205,7 @@ private struct TrailMapFull: View {
         Map(position: $camera) {
             trailMapContent(coordinates: trail.mapCoordinates, tint: trail.mapTint)
         }
-        .mapStyle(style.mapStyle)
+        .mapStyle(Self.hikingStyle)
         .accessibilityLabel("Map of \(trail.title)")
         .onMapCameraChange(frequency: .onEnd) { context in
             settled = context.camera
@@ -227,12 +263,16 @@ private struct TrailMapFull: View {
 
     @State private var lock: Lock = .off
 
-    private var style: WatchMapStyle {
-        WatchMapStyle(rawValue: styleID) ?? .standard
-    }
-
+    /// The two controls, pushed to opposite corners.
+    ///
+    /// Apart rather than side by side, which is what they were: two 36 pt
+    /// circles six points apart are one target as far as a cold finger is
+    /// concerned, and pressing *figures* when *follow* was meant takes a hiker
+    /// off the map they were reading. The screen's own width is the cheapest
+    /// separation available, and it costs the map nothing — the corners are
+    /// where a route is least likely to be.
     private var buttons: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 0) {
             button(
                 symbol: lock.symbol,
                 label: lock.label,
@@ -249,11 +289,13 @@ private struct TrailMapFull: View {
                     ? .userLocation(followsHeading: lock == .heading, fallback: fallback)
                     : fallback
             }
+            Spacer(minLength: 0)
             button(symbol: "list.bullet", label: "Trail figures", tint: .primary) {
                 isShowingFigures = true
             }
         }
-        .padding(.bottom, 4)
+        .padding(.horizontal, 2)
+        .padding(.bottom, 2)
     }
 
     private func button(
@@ -269,6 +311,13 @@ private struct TrailMapFull: View {
                 .frame(width: Self.buttonSize, height: Self.buttonSize)
                 .background(.ultraThinMaterial, in: .circle)
                 .overlay(Circle().strokeBorder(.primary.opacity(Self.ringOpacity)))
+                // Padding *inside* the label and a shape over the result, so
+                // the target grows without the circle growing with it. The
+                // shape has to be said explicitly: a `Button` whose label is an
+                // image takes its hit area from what was drawn, and padding
+                // alone is transparent to a tap.
+                .padding(Self.buttonPadding)
+                .contentShape(.circle)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
