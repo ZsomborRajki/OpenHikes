@@ -31,6 +31,13 @@ nonisolated enum HikeListMetrics {
     /// redraw is worth asking for. Silent on failure: a library that cannot be
     /// measured is a library sorted with those hikes last, which is what a
     /// missing figure already means.
+    ///
+    /// A hike whose route carries no heights is measured again every time an
+    /// elevation order is chosen, because nothing is written for it and so it
+    /// is still missing next time. That is the honest cost of not inventing a
+    /// third state to remember "measured, and there was nothing there": the
+    /// sweep is off the main actor, and the alternative is a zero the sort
+    /// would read as a flat walk.
     @discardableResult static func fillElevation(
         for hikeIDs: [UUID],
         in container: ModelContainer
@@ -40,11 +47,18 @@ nonisolated enum HikeListMetrics {
         var wrote = false
         for hikeID in hikeIDs {
             guard let hike = hike(hikeID, in: context) else { continue }
-            let totals = ElevationTotals(route: hike.route)
+            let totals = elevationTotals(of: hike.route)
+            // A route carrying no heights, or one, is left unmeasured rather
+            // than filed as flat — see ``ElevationAccumulator/hasChange``.
+            // The accumulator's zero is the absence of a reading, and
+            // ``HikeListSort`` is built on the distinction: a missing figure
+            // sorts last, while zero is a claim that the walk was level. A
+            // GPX imported without `<ele>` has not made that claim.
+            guard totals.hasChange else { continue }
             guard let state = try? HikeLocalState.fetchExisting(for: hikeID, in: context)
                 ?? HikeLocalState.forHike(hikeID, in: context) else { continue }
-            state.climbMeters = totals.climbMeters
-            state.descentMeters = totals.descentMeters
+            state.climbMeters = totals.gainMeters
+            state.descentMeters = totals.lossMeters
             wrote = true
         }
         guard wrote else { return false }
@@ -65,30 +79,23 @@ nonisolated enum HikeListMetrics {
         return try? context.fetch(descriptor).first
     }
 
-    /// Climb and descent over a whole route.
+    /// Climb and descent over a whole route, measured the way the rest of the
+    /// app measures them.
     ///
-    /// Summed between consecutive points that carry a height rather than taken
-    /// as high minus low, which a rolling trail understates by every descent it
-    /// makes on the way up — the argument ``SharedTrailSnapshot`` and
-    /// `WatchTrailPackaging` both already make. Non-finite heights are skipped
-    /// rather than accumulated: one `nan` would poison the total and sort the
-    /// hike wherever `nan` happens to compare.
-    private struct ElevationTotals {
-        let climbMeters: Double
-        let descentMeters: Double
-
-        init(route: [RouteCoordinate]) {
-            var climb = 0.0
-            var descent = 0.0
-            var previous: Double?
-            for elevation in route.compactMap(\.elevation) where elevation.isFinite {
-                defer { previous = elevation }
-                guard let last = previous else { continue }
-                let change = elevation - last
-                if change > 0 { climb += change } else { descent -= change }
-            }
-            climbMeters = climb
-            descentMeters = descent
-        }
+    /// ``ElevationAccumulator`` rather than a fold of its own, and the
+    /// difference is not cosmetic. It counts a climb in *runs*, behind a three
+    /// metre reversal deadband, because summing `max(delta, 0)` integrates
+    /// sensor noise in one direction forever: a raw GPX wandering a metre or
+    /// two either side of level piles up hundreds of metres of climb it never
+    /// had, and the longer the route the more wrong the figure. A library
+    /// sorted on that would put a flat, noisy track above a mountain day, and
+    /// the cached number would disagree with the one the hike's own detail
+    /// screen draws — which is the whole reason that deadband lives in the
+    /// accumulator and not at a call site. Non-finite heights are skipped
+    /// there too, so one `nan` cannot poison a total.
+    private static func elevationTotals(of route: [RouteCoordinate]) -> ElevationAccumulator {
+        var accumulator = ElevationAccumulator()
+        for coordinate in route { accumulator.record(coordinate.elevation) }
+        return accumulator
     }
 }
