@@ -40,6 +40,10 @@ struct MapSheetHikes: View, Equatable {
     /// published hikes are already in the library.
     @Query(sort: \Hike.date, order: .reverse)
     var hikes: [Hike]
+    /// Only ever used to reach the container a background sweep opens its own
+    /// context on — see ``HikeListMetrics``. Nothing here writes through it.
+    @Environment(\.modelContext)
+    private var modelContext
     /// Keeps the matching-hike ranking across body passes — see ``HikeSearch``.
     @State private var hikeSearch = HikeSearch()
     /// The hike a swipe has asked to delete, while the dialog is up.
@@ -64,6 +68,11 @@ struct MapSheetHikes: View, Equatable {
     /// reach across stores, so a move writes rows this view would never be
     /// told about. This is the telling.
     @State private var orderRevision = 0
+    /// Which order the list is in, unless the hiker has dragged a row — see
+    /// ``HikeListOrder``. A preference about this screen rather than a fact
+    /// about the library, so it lives in settings and not on a hike.
+    @AppStorage(SettingsKey.hikeListSort)
+    private var sortID: String = HikeListSort.newest.rawValue
 
     let searchText: String
     let isSearchFocused: Bool
@@ -240,6 +249,13 @@ private extension MapSheetHikes {
             }
             .padding(.horizontal)
 
+            // Under the heading rather than beside it. The two circles up
+            // there are things a hiker *does* — record a walk, import a file —
+            // and an order is a way of looking at what is already there. It
+            // also gave the segmented control back the width it was competing
+            // for.
+            if !community.isBrowsing { sortBar }
+
             selectedList
         }
     }
@@ -289,7 +305,6 @@ private extension MapSheetHikes {
     var hikeActions: some View {
         GlassStack(spacing: Self.actionGlassSpacing) {
             HStack(spacing: 8) {
-                orderButton
                 #if os(iOS)
                 recordButton
                 #endif
@@ -337,49 +352,83 @@ private extension MapSheetHikes {
     }
     #endif
 
-    /// The way back to date order, and the only sign that the list is not in
-    /// it.
+    /// The row that says how the list is ordered, and offers the others.
     ///
-    /// Absent until the hiker has dragged something, which is what makes it an
-    /// answer rather than a decoration: a list in date order has nothing to
-    /// reset and nothing to explain. Its appearance is how somebody who
-    /// dragged a row by accident finds the way back.
-    @ViewBuilder var orderButton: some View {
-        if editMode == .active {
-            // The way out, and the only one: in edit mode a row's tap belongs
-            // to the list rather than to the hike, so a hiker who cannot leave
-            // cannot open anything either.
-            Button {
-                withAnimation { editMode = .inactive }
-            } label: {
-                Text("Done")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.tint)
-                    .padding(.horizontal, 12)
-                    .frame(height: Self.actionGlyphSize)
-                    .glassSurface(.regular.interactive(), in: .capsule)
-                    .minimumTapTarget()
-            }
-            .accessibilityIdentifier("hike-order-done-button")
-        } else if HikeListOrder.isCustom(hikes) {
-            Menu {
+    /// Always there, unlike the control it replaces, which appeared only once
+    /// the hiker had dragged something. An order a hiker cannot see is an order
+    /// they cannot change on purpose — and *Most Climb* is not a thing anybody
+    /// discovers by dragging a row.
+    ///
+    /// It states the current order rather than showing a bare glyph, because
+    /// the first question a list like this raises is "why is that one at the
+    /// top", and the answer belongs on screen next to it.
+    @ViewBuilder var sortBar: some View {
+        HStack(spacing: 8) {
+            if editMode == .active {
+                // The way out of reorder mode, and the only one: while it is
+                // on, a row's tap belongs to the list rather than to the hike,
+                // so a hiker who cannot leave cannot open anything either.
                 Button {
-                    HikeListOrder.reset(hikes)
-                    orderRevision += 1
+                    withAnimation { editMode = .inactive }
                 } label: {
-                    Label("Sort by Newest First", systemImage: "calendar")
+                    Label("Done Reordering", systemImage: "checkmark")
+                        .font(.footnote.weight(.semibold))
                 }
-            } label: {
-                Image(systemName: "arrow.up.arrow.down")
-                    .foregroundStyle(.tint)
-                    .frame(width: Self.actionGlyphSize, height: Self.actionGlyphSize)
-                    .glassSurface(.regular.interactive(), in: .circle)
-                    .minimumTapTarget()
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+                .accessibilityIdentifier("hike-order-done-button")
+            } else {
+                sortMenu
             }
-            .accessibilityLabel("Your order")
-            .accessibilityIdentifier("hike-order-button")
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal)
     }
+
+    var sortMenu: some View {
+        Menu {
+            // The hand-made order, and the only place it is named. It is shown
+            // as the current choice when it is in force and offered as one
+            // never — a hiker makes it by dragging, not by picking it from a
+            // list of orders it is not one of.
+            Picker("Order", selection: sortSelection) {
+                ForEach(HikeListSort.menuOrder) { option in
+                    Label(option.title, systemImage: option.symbol).tag(option)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isCustomOrder ? "hand.draw" : sort.symbol)
+                Text(isCustomOrder ? "Your Order" : sort.title)
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.semibold))
+            }
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.tint)
+            .minimumTapTarget()
+        }
+        .accessibilityLabel("Sort hikes")
+        .accessibilityValue(isCustomOrder ? "Your order" : sort.title)
+        .accessibilityIdentifier("hike-order-button")
+    }
+
+    /// Picking an order also gives up a hand-made one — see ``HikeListOrder``,
+    /// whose header says why the two cannot both be in force.
+    var sortSelection: Binding<HikeListSort> {
+        Binding(
+            get: { sort },
+            set: { chosen in
+                if HikeListOrder.isCustom(hikes) { HikeListOrder.reset(hikes) }
+                sortID = chosen.rawValue
+                orderRevision += 1
+            }
+        )
+    }
+
+    var sort: HikeListSort { HikeListSort(rawValue: sortID) ?? .newest }
+
+    var isCustomOrder: Bool { HikeListOrder.isCustom(hikes) }
 
     var importButton: some View {
         Button {
@@ -415,7 +464,7 @@ private extension MapSheetHikes {
         // a drag writes something nothing here would notice; bumping it is how
         // the list is told to arrange itself again. See ``HikeListOrder``.
         let arranged = orderRevision >= 0
-            ? HikeListOrder.arrange(hikes, activeHikeID: activeID)
+            ? HikeListOrder.arrange(hikes, activeHikeID: activeID, sort: sort)
             : hikes
 
         return List {
@@ -455,6 +504,34 @@ private extension MapSheetHikes {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .environment(\.editMode, $editMode)
+        // Only ever for the hikes an elevation order needs and nothing has,
+        // so an ordinary launch asks for nothing and a library measured once
+        // stays measured. See `HikeListMetrics` for why this cannot be done
+        // where the sorting is.
+        .task(id: TaskKey(sort: sort, count: hikes.count)) {
+            let missing = HikeListOrder.hikesMissingElevation(in: hikes, for: sort)
+            guard !missing.isEmpty else { return }
+            // Off this actor deliberately: the sweep opens its own context and
+            // may walk every route in the library, which is the one thing that
+            // must not happen where a list is drawn.
+            let container = modelContext.container
+            let filled = await Task.detached(priority: .utility) {
+                HikeListMetrics.fillElevation(for: missing, in: container)
+            }.value
+            if filled { orderRevision += 1 }
+        }
+    }
+
+    /// What a change of has to restart the elevation fill.
+    ///
+    /// The sort, because only two of them need figures; and the number of
+    /// hikes, because an import or a finished walk adds one nothing has
+    /// measured. Not the hikes themselves: a `Hike` changes on every tint
+    /// slider drag, and re-running a library sweep for that is the thing the
+    /// query isolation next door exists to prevent.
+    private struct TaskKey: Equatable {
+        let sort: HikeListSort
+        let count: Int
     }
 
     /// The hike being recorded or walked right now, if there is one.

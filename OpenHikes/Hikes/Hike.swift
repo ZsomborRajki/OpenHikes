@@ -437,6 +437,18 @@ extension Hike {
         set { mutableLocalState?.listOrder = newValue }
     }
 
+    /// The cached climb and descent — see ``HikeLocalState/climbMeters`` for
+    /// why they are cached and why the cache is device-local.
+    var climbMeters: Double? {
+        get { localState?.climbMeters }
+        set { mutableLocalState?.climbMeters = newValue }
+    }
+
+    var descentMeters: Double? {
+        get { localState?.descentMeters }
+        set { mutableLocalState?.descentMeters = newValue }
+    }
+
     /// Removes the sidecar, for a hike on its way out of the store.
     ///
     /// Explicit because the two rows are in different stores and so cannot be

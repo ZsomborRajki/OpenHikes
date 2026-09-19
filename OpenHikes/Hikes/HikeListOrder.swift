@@ -6,13 +6,17 @@
 //
 //  ## Two modes, and the list is only ever in one of them
 //
-//  A library is in date order until the hiker drags a row, and in *their*
-//  order from then on. There is no half-way state: the first drag writes a
-//  position for every hike, because a list where some rows have a place and
-//  others do not has no answer for where the others go. ``isCustom(_:)`` is
-//  that question, and it is asked of the hikes themselves rather than of a
-//  flag beside them — a flag can disagree with the rows it describes, and this
-//  cannot.
+//  A library is in one of ``HikeListSort``'s orders until the hiker drags a
+//  row, and in *their* order from then on. There is no half-way state: the
+//  first drag writes a position for every hike, because a list where some rows
+//  have a place and others do not has no answer for where the others go.
+//  ``isCustom(_:)`` is that question, and it is asked of the hikes themselves
+//  rather than of a flag beside them — a flag can disagree with the rows it
+//  describes, and this cannot.
+//
+//  Picking a sort is therefore also how a hand-made order is given up: the two
+//  cannot both be in force, and a menu that quietly kept the drag would leave a
+//  hiker choosing *Longest* and getting their own order back.
 //
 //  A hike added *after* that first drag has no position, and sorts to the top
 //  rather than the bottom: it is the newest thing the hiker has, and the
@@ -51,7 +55,11 @@ enum HikeListOrder {
     /// Stable by date within equal positions, so two hikes that somehow share
     /// a number — a store restored from a half-written state — do not swap
     /// places between redraws.
-    static func arrange(_ hikes: [Hike], activeHikeID: UUID?) -> [Hike] {
+    static func arrange(
+        _ hikes: [Hike],
+        activeHikeID: UUID?,
+        sort: HikeListSort = .newest
+    ) -> [Hike] {
         let rest: [Hike]
         let active = activeHikeID.flatMap { id in hikes.first { $0.id == id } }
         let unpinned = active == nil ? hikes : hikes.filter { $0.id != activeHikeID }
@@ -67,9 +75,19 @@ enum HikeListOrder {
                 return first.date > second.date
             }
         } else {
-            rest = unpinned.sorted { $0.date > $1.date }
+            rest = unpinned.sorted { sort.sorts($0, before: $1) }
         }
         return active.map { [$0] + rest } ?? rest
+    }
+
+    /// The hikes whose elevation figures a sort needs and nothing has.
+    ///
+    /// Asked before an elevation order is drawn, so the cache is filled for
+    /// what is missing and nothing else — see ``HikeListMetrics``. Empty for
+    /// every other order, which is what keeps them free.
+    static func hikesMissingElevation(in hikes: [Hike], for sort: HikeListSort) -> [UUID] {
+        guard sort.needsElevation else { return [] }
+        return hikes.filter { $0.climbMeters == nil || $0.descentMeters == nil }.map(\.id)
     }
 
     /// Applies a drag, and writes a position for every row while it is at it.
@@ -93,7 +111,7 @@ enum HikeListOrder {
         return moved
     }
 
-    /// Gives the list back to the date it was walked.
+    /// Gives the list back to whichever sort is chosen.
     static func reset(_ hikes: [Hike]) {
         for hike in hikes where hike.listOrder != nil {
             hike.listOrder = nil
