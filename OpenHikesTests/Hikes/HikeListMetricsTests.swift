@@ -34,7 +34,7 @@ struct HikeListMetricsTests {
 
         _ = HikeListMetrics.fillElevation(for: [hike.id], in: container)
 
-        let climb = try #require(saved(hike.id, in: container)?.climbMeters)
+        let climb = try #require(refetched(hike.id, in: container)?.climbMeters)
         #expect(climb < 10)
     }
 
@@ -47,7 +47,7 @@ struct HikeListMetricsTests {
 
         _ = HikeListMetrics.fillElevation(for: [hike.id], in: container)
 
-        let saved = try #require(saved(hike.id, in: container))
+        let saved = try #require(refetched(hike.id, in: container))
         let climb = try #require(saved.climbMeters)
         // Five hundred metres of genuine ascent, which no deadband should eat.
         #expect(climb > 400)
@@ -66,7 +66,7 @@ struct HikeListMetricsTests {
 
         _ = HikeListMetrics.fillElevation(for: [hike.id], in: container)
 
-        let saved = try #require(saved(hike.id, in: container))
+        let saved = try #require(refetched(hike.id, in: container))
         #expect(saved.climbMeters == nil)
         #expect(saved.descentMeters == nil)
     }
@@ -74,7 +74,13 @@ struct HikeListMetricsTests {
     /// The row as a *fresh* context sees it, which is the only way to tell a
     /// value that was written from one that is merely sitting in the context
     /// the sweep used.
-    private func saved(_ hikeID: UUID, in container: ModelContainer) -> Hike? {
+    ///
+    /// Not named `saved`, which is what the callers below call their results:
+    /// a local of the same name shadows this inside its own initializer, and
+    /// Xcode 26.6 on CI reads `saved(…)` as a call on the `Hike` being bound
+    /// rather than on this. It compiles locally on 27 and fails there — see
+    /// the toolchain note in the repository instructions.
+    private func refetched(_ hikeID: UUID, in container: ModelContainer) -> Hike? {
         let context = ModelContext(container)
         var descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
         descriptor.fetchLimit = 1
