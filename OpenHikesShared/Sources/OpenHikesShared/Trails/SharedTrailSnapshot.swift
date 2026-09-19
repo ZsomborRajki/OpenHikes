@@ -224,14 +224,26 @@ public func decimate<Element>(
     maxPoints: Int = 180,
     transform: (Element) -> SharedTrailSnapshot.CodableCoordinate
 ) -> [SharedTrailSnapshot.CodableCoordinate] {
-    guard elements.count > maxPoints, maxPoints > 1 else { return elements.map(transform) }
-    let lastIndex = elements.count - 1
-    let stride = Double(lastIndex) / Double(maxPoints - 1)
-    var result: [SharedTrailSnapshot.CodableCoordinate] = []
+    decimatedIndices(count: elements.count, maxPoints: maxPoints)
+        .map { transform(elements[$0]) }
+}
+
+/// Which indices ``decimate(_:maxPoints:transform:)`` keeps.
+///
+/// Extracted so a caller that needs *more than a coordinate* from each kept
+/// point — the watch's trail package wants the elevation there too — takes the
+/// same points rather than reimplementing the stride. Two implementations of
+/// one stride is two roundings that have to agree, and the cost of their
+/// disagreeing is a point drawn at one place and labelled with the height of
+/// another.
+public func decimatedIndices(count: Int, maxPoints: Int = 180) -> [Int] {
+    guard count > maxPoints, maxPoints > 1 else { return Array(0..<max(0, count)) }
+    let lastIndex = count - 1
+    let step = Double(lastIndex) / Double(maxPoints - 1)
+    var result: [Int] = []
     result.reserveCapacity(maxPoints)
     for i in 0..<maxPoints {
-        let index = min(Int((Double(i) * stride).rounded()), lastIndex)
-        result.append(transform(elements[index]))
+        result.append(min(Int((Double(i) * step).rounded()), lastIndex))
     }
     return result
 }

@@ -80,10 +80,12 @@
 //
 
 import AppIntents
+#if canImport(CoreSpotlight)
 import CoreSpotlight
+#endif
 import Foundation
 
-public struct HikeEntity: AppEntity, IndexedEntity {
+public struct HikeEntity: AppEntity {
     public static let typeDisplayRepresentation: TypeDisplayRepresentation = "Hike"
     public static let defaultQuery = HikeEntityQuery()
 
@@ -148,6 +150,20 @@ public struct HikeEntity: AppEntity, IndexedEntity {
         return "\(day) · \(length)"
     }
 }
+
+#if canImport(CoreSpotlight)
+/// Spotlight indexing, conditional because the framework is.
+///
+/// `IndexedEntity` is CoreSpotlight's, and CoreSpotlight is not in the watchOS
+/// SDK at all — not deprecated there, absent, so the import fails to resolve
+/// before any member is looked up. The conformance is separated from the type
+/// rather than the whole file being excluded because the *entity* is wanted on
+/// every platform: `HikeEntityQuery` below is what fills the widget's picker
+/// and answers Siri, and a watch that could not name a hike could not offer
+/// one either. What a watch loses is a Spotlight index it has no Spotlight to
+/// put one in.
+extension HikeEntity: IndexedEntity {}
+#endif
 
 /// How the system finds a hike: by identifier, by name, or by asking for
 /// something to suggest.

@@ -4,17 +4,22 @@ import PackageDescription
 /// Platforms track the app rather than trailing it. The app ships iOS 26.0
 /// only, so a shared target that still claimed iOS 18 would be refusing every
 /// API added since — silently, as an unavailability error at the one call site
-/// that reached for one. macOS and visionOS are named at the same level for
-/// the same reason: nothing builds them today (see the `canImport` guards in
-/// the sources), but if one ever does it should start where the app already
-/// is. `swift test` runs the suite on the macOS host, which CI pins to
-/// `macos-26`.
+/// that reached for one. watchOS is named because `OpenHikesWatch` genuinely
+/// builds against it and reads the payloads, the trail glyph and the
+/// formatters from here; the three files that are iOS-only concerns —
+/// the Control Center intent, the widget's configuration intent and the
+/// Spotlight-indexed entity behind it — say so with `#if`. macOS and visionOS
+/// are named at the same level for a weaker reason: nothing builds them today
+/// (see the `canImport` guards in the sources), but if one ever does it
+/// should start where the app already is. `swift test` runs the suite on the
+/// macOS host, which CI pins to `macos-26`.
 let package = Package(
     name: "OpenHikesShared",
     platforms: [
         .iOS(.v26),
         .macOS(.v26),
-        .visionOS(.v26)
+        .visionOS(.v26),
+        .watchOS(.v26)
     ],
     products: [
         .library(name: "OpenHikesShared", targets: ["OpenHikesShared"])
