@@ -105,6 +105,59 @@ struct WatchPayloadShapeTests {
         )
     }
 
+    @Test("the phone recording's wire shape is unchanged")
+    func phoneRecordingShapeIsUnchanged() throws {
+        try expectShape(
+            of: Fixture.phoneRecording,
+            named: "WatchPhoneRecording",
+            versionedBy: "WatchPhoneRecording.currentSchemaVersion",
+            matches: [
+                "distanceMeters: number",
+                "elapsedSeconds: number",
+                "isTrailNameStale: bool",
+                "schemaVersion: number",
+                "sessionID: string",
+                "startedAt: number",
+                "state: string",
+                "trailName: string",
+                "updatedAt: number",
+            ]
+        )
+    }
+
+    @Test("the recording command's wire shape is unchanged")
+    func recordingCommandShapeIsUnchanged() throws {
+        try expectShape(
+            of: Fixture.recordingCommand,
+            named: "WatchRecordingCommand",
+            versionedBy: "WatchRecordingCommand.currentSchemaVersion",
+            matches: ["action: string", "id: string", "schemaVersion: number"]
+        )
+    }
+
+    @Test("the command outcome's wire shape is unchanged")
+    func commandOutcomeShapeIsUnchanged() throws {
+        try expectShape(
+            of: Fixture.commandOutcome,
+            named: "WatchCommandOutcome",
+            versionedBy: "WatchCommandOutcome.currentSchemaVersion",
+            matches: [
+                "commandID: string",
+                "recording.distanceMeters: number",
+                "recording.elapsedSeconds: number",
+                "recording.isTrailNameStale: bool",
+                "recording.schemaVersion: number",
+                "recording.sessionID: string",
+                "recording.startedAt: number",
+                "recording.state: string",
+                "recording.trailName: string",
+                "recording.updatedAt: number",
+                "refusal: string",
+                "schemaVersion: number",
+            ]
+        )
+    }
+
     @Test("the walk receipt's wire shape is unchanged")
     func walkReceiptShapeIsUnchanged() throws {
         try expectShape(
@@ -152,6 +205,9 @@ struct WatchPayloadShapeTests {
         case .trailPackage: try WatchLink.message(Fixture.trailPackage)
         case .recordedWalk: try WatchLink.message(Fixture.recordedWalk)
         case .walkReceipt: try WatchLink.message(Fixture.walkReceipt)
+        case .phoneRecording: try WatchLink.message(Fixture.phoneRecording)
+        case .recordingCommand: try WatchLink.message(Fixture.recordingCommand)
+        case .commandOutcome: try WatchLink.message(Fixture.commandOutcome)
         }
         #expect(WatchLink.kind(of: message) == kind)
     }
@@ -167,6 +223,9 @@ struct WatchPayloadShapeTests {
             PayloadShapeFixture.Named(name: "WatchLibraryDigest", value: libraryDigest),
             PayloadShapeFixture.Named(name: "WatchRecordedWalk", value: recordedWalk),
             PayloadShapeFixture.Named(name: "WatchWalkReceipt", value: walkReceipt),
+            PayloadShapeFixture.Named(name: "WatchPhoneRecording", value: phoneRecording),
+            PayloadShapeFixture.Named(name: "WatchRecordingCommand", value: recordingCommand),
+            PayloadShapeFixture.Named(name: "WatchCommandOutcome", value: commandOutcome),
         ]
 
         static let trailPackage = WatchTrailPackage(
@@ -229,6 +288,27 @@ struct WatchPayloadShapeTests {
         )
 
         static let walkReceipt = WatchWalkReceipt(sessionID: sessionID)
+
+        static let phoneRecording = WatchPhoneRecording(
+            state: .recording,
+            elapsedSeconds: 9100.5,
+            distanceMeters: 8420.5,
+            sessionID: sessionID,
+            startedAt: stamp,
+            trailName: "Thumsee Loop",
+            isTrailNameStale: true,
+            updatedAt: stamp.addingTimeInterval(9450.5)
+        )
+
+        static let recordingCommand = WatchRecordingCommand(action: .pause, id: commandID)
+
+        static let commandOutcome = WatchCommandOutcome(
+            commandID: commandID,
+            recording: phoneRecording,
+            refusal: "That hike isn't running."
+        )
+
+        static let commandID = UUID(uuidString: "66666666-6666-6666-6666-666666666666") ?? UUID()
     }
 }
 

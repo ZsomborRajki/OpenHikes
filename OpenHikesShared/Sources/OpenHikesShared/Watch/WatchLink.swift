@@ -36,10 +36,18 @@ import Foundation
 /// What a message is. A `String` raw value for the reason every other wire
 /// enum here has one: legible in a log, and stable if the cases are reordered.
 public enum WatchMessageKind: String, Codable, Sendable, CaseIterable {
+    /// Phone → watch, as the *reply* to a command. What the phone did about
+    /// it, and the state that resulted either way.
+    case commandOutcome = "commandOutcome"
     /// Phone → watch. The hiker's trails, as a list to choose from.
     case libraryDigest = "libraryDigest"
+    /// Phone → watch. What the phone's own recorder is doing, so the watch
+    /// can show it and drive it. See ``WatchPhoneRecording``.
+    case phoneRecording = "phoneRecording"
     /// Watch → phone. A finished recording, to be kept as a hike.
     case recordedWalk = "recordedWalk"
+    /// Watch → phone. A button on the watch, for the phone's recorder.
+    case recordingCommand = "recordingCommand"
     /// Phone → watch. The trail's geometry, answering a request.
     case trailPackage = "trailPackage"
     /// Watch → phone. "Send me this trail's line."
@@ -184,5 +192,29 @@ public extension WatchLink {
 
     static func walkReceipt(from message: [String: Any]) throws(WatchLinkFailure) -> WatchWalkReceipt {
         try payload(WatchWalkReceipt.self, of: .walkReceipt, from: message)
+    }
+
+    static func message(_ recording: WatchPhoneRecording) throws -> [String: Any] {
+        try message(.phoneRecording, recording)
+    }
+
+    static func phoneRecording(from message: [String: Any]) throws(WatchLinkFailure) -> WatchPhoneRecording {
+        try payload(WatchPhoneRecording.self, of: .phoneRecording, from: message)
+    }
+
+    static func message(_ command: WatchRecordingCommand) throws -> [String: Any] {
+        try message(.recordingCommand, command)
+    }
+
+    static func recordingCommand(from message: [String: Any]) throws(WatchLinkFailure) -> WatchRecordingCommand {
+        try payload(WatchRecordingCommand.self, of: .recordingCommand, from: message)
+    }
+
+    static func message(_ outcome: WatchCommandOutcome) throws -> [String: Any] {
+        try message(.commandOutcome, outcome)
+    }
+
+    static func commandOutcome(from message: [String: Any]) throws(WatchLinkFailure) -> WatchCommandOutcome {
+        try payload(WatchCommandOutcome.self, of: .commandOutcome, from: message)
     }
 }
