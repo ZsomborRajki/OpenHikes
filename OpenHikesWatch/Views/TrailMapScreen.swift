@@ -43,24 +43,25 @@ import MapKit
 import OpenHikesShared
 import SwiftUI
 
-/// The trail's line, and the hiker on it when there is a match.
+/// The trail's line, and the system's own dot for the hiker.
+///
+/// `UserAnnotation` rather than the matched point this drew first, and the
+/// difference matters most in the case the lock exists for. The matched dot is
+/// the projection onto the trail, so it vanishes the moment a hiker steps off
+/// it — which is exactly when somebody looks at their wrist to ask where they
+/// are. The system's dot is where they actually stand, carries its own
+/// accuracy halo, and is what the camera can follow.
+///
+/// The argument for snapping still holds where it was made: on a 2 pt line
+/// with no basemap under it, a noisy fix beside the line reads as a hiker who
+/// has left the trail. On a map, with terrain either side and a halo saying
+/// how sure the receiver is, it reads as what it is. How far off the trail
+/// they are is still said exactly, in the figures.
 @MapContentBuilder
-func trailMapContent(
-    coordinates: [CLLocationCoordinate2D],
-    hiker: CLLocationCoordinate2D?,
-    tint: Color
-) -> some MapContent {
+func trailMapContent(coordinates: [CLLocationCoordinate2D], tint: Color) -> some MapContent {
     MapPolyline(coordinates: coordinates)
         .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-    if let hiker {
-        Annotation("You", coordinate: hiker) {
-            Circle()
-                .fill(.white)
-                .frame(width: 9, height: 9)
-                .overlay(Circle().strokeBorder(tint, lineWidth: 3))
-                .shadow(radius: 1)
-        }
-    }
+    UserAnnotation()
 }
 
 extension WatchTrailPackage {
@@ -69,29 +70,6 @@ extension WatchTrailPackage {
     }
 
     var mapTint: Color { Color(hex: tintHex) ?? .green }
-}
-
-extension WatchFollowState {
-    /// The point on the *trail* the hiker was matched to, rather than the
-    /// coordinate their receiver reported.
-    ///
-    /// The same choice `SharedTrailSnapshot.LiveFix` makes. A dot drawn at the
-    /// raw fix sits beside the line whenever GPS is noisy, which on a line
-    /// this thin reads as a hiker who has left the trail.
-    ///
-    /// Read straight off the match rather than worked back out of its distance
-    /// along the trail. Nothing here could do the second one correctly: it
-    /// would have to turn metres into a point on a line whose points are not
-    /// evenly spaced, and the cumulative distances that make that exact belong
-    /// to ``WatchRouteTracker``, which has already walked them to find this
-    /// very point.
-    var matchedCoordinate: CLLocationCoordinate2D? {
-        guard let position, position.isOnTrail else { return nil }
-        return CLLocationCoordinate2D(
-            latitude: position.trailCoordinate.latitude,
-            longitude: position.trailCoordinate.longitude
-        )
-    }
 }
 
 /// One trail, opened: the map, and the way to its figures.
@@ -107,13 +85,6 @@ struct TrailMapScreen: View {
 
     @Environment(WatchModel.self)
     private var model
-
-    /// How wide the figures button is drawn, and how far its ring is lifted
-    /// out of the material behind it. A watch tap target does not go below
-    /// 36 pt, and the ring is what keeps the circle findable over a light
-    /// basemap, where the material alone all but disappears.
-    private static let buttonSize = 36.0
-    private static let ringOpacity = 0.2
 
     @State private var isShowingFigures = false
 
@@ -134,32 +105,13 @@ struct TrailMapScreen: View {
 
     @ViewBuilder private var content: some View {
         if let trail = model.trail, trail.hikeID == hikeID, trail.isDrawable {
-            TrailMapFull(trail: trail)
-                .overlay(alignment: .bottom) { figuresButton }
+            TrailMapFull(trail: trail, isShowingFigures: $isShowingFigures)
                 .sheet(isPresented: $isShowingFigures) {
                     NavigationStack { TrailDetailView(trail: trail) }
                 }
         } else {
             waiting
         }
-    }
-
-    /// Over the map rather than under it, because the map is the screen: a row
-    /// beneath would cost it the height, and this is pressed once a walk
-    /// rather than once a minute.
-    private var figuresButton: some View {
-        Button {
-            isShowingFigures = true
-        } label: {
-            Image(systemName: "list.bullet")
-                .font(.body.weight(.semibold))
-                .frame(width: Self.buttonSize, height: Self.buttonSize)
-                .background(.ultraThinMaterial, in: .circle)
-                .overlay(Circle().strokeBorder(.primary.opacity(Self.ringOpacity)))
-        }
-        .buttonStyle(.plain)
-        .padding(.bottom, 4)
-        .accessibilityLabel("Trail figures")
     }
 
     private var waiting: some View {
@@ -178,30 +130,96 @@ struct TrailMapScreen: View {
     }
 }
 
-/// The map itself: the route, the hiker, and whatever the crown and a drag
-/// have done to the camera since.
+/// The map itself: the route, the hiker, the lock that keeps the hiker
+/// centred, and whatever the crown and a drag have done to the camera since.
+///
+/// Holds the camera, and everything that writes to it, for a reason the
+/// repository's render-isolation rule makes: a followed camera is rewritten as
+/// often as fixes arrive, and a screen that held it would redraw its buttons
+/// and its sheet with every one. It reads no live state of its own — MapKit
+/// moves its own dot — so a fix costs a camera write here and nothing above.
 private struct TrailMapFull: View {
+    /// How wide the floating buttons are drawn, and how far their ring is
+    /// lifted out of the material behind them. A watch tap target does not go
+    /// below 36 pt, and the ring is what keeps a circle findable over a light
+    /// basemap, where the material alone all but disappears.
+    private static let buttonSize = 36.0
+    private static let ringOpacity = 0.2
+
     let trail: WatchTrailPackage
 
-    @Environment(WatchModel.self)
-    private var model
+    @Binding var isShowingFigures: Bool
 
-    /// Held rather than recomputed per fix, so a match arriving does not drag
-    /// the map back from wherever the hiker has just moved it to. `.automatic`
-    /// frames the `MapPolyline` to begin with, which also keeps this view out
-    /// of the business of a route straddling ±180°, where the extremes of the
-    /// raw longitudes would zoom out to the whole planet.
+    /// `.automatic` frames the `MapPolyline`, which is what a trail should
+    /// open as — the whole walk, before any of it has been done. It also keeps
+    /// this view out of the business of a route straddling ±180°, where the
+    /// extremes of the raw longitudes would zoom out to the whole planet.
     @State private var camera: MapCameraPosition = .automatic
+
+    /// The last camera the map settled on, so unlocking can leave the view
+    /// exactly where the lock left it rather than snapping back to the route.
+    @State private var settled: MapCamera?
 
     var body: some View {
         Map(position: $camera) {
-            trailMapContent(
-                coordinates: trail.mapCoordinates,
-                hiker: model.follow.matchedCoordinate,
-                tint: trail.mapTint
-            )
+            trailMapContent(coordinates: trail.mapCoordinates, tint: trail.mapTint)
         }
         .mapStyle(.standard(elevation: .flat))
         .accessibilityLabel("Map of \(trail.title)")
+        .onMapCameraChange(frequency: .onEnd) { context in
+            settled = context.camera
+            // A drag or a crown turn is MapKit telling us the hiker wants to
+            // look somewhere else, and it says so by taking the position off
+            // `.userLocation` itself. Letting the button follow that is what
+            // stops it claiming a lock that is no longer holding.
+            if camera.positionedByUser { isFollowing = false }
+        }
+        .overlay(alignment: .bottom) { buttons }
+    }
+
+    /// Whether the camera is locked to the hiker.
+    ///
+    /// Off when a trail opens: the first question is "where does this go",
+    /// which is the whole route, and the lock answers the second one.
+    @State private var isFollowing = false
+
+    private var buttons: some View {
+        HStack(spacing: 6) {
+            button(
+                symbol: isFollowing ? "location.fill" : "location",
+                label: isFollowing ? "Stop following your location" : "Follow your location",
+                tint: isFollowing ? Color.accentColor : .primary
+            ) {
+                isFollowing.toggle()
+                // Handing the follow to MapKit rather than re-centring on
+                // every fix ourselves: it owns the dot, it knows when the
+                // receiver has moved, and it stops when the hiker drags.
+                camera = isFollowing
+                    ? .userLocation(fallback: settled.map { .camera($0) } ?? .automatic)
+                    : settled.map { .camera($0) } ?? .automatic
+            }
+            button(symbol: "list.bullet", label: "Trail figures", tint: .primary) {
+                isShowingFigures = true
+            }
+        }
+        .padding(.bottom, 4)
+    }
+
+    private func button(
+        symbol: String,
+        label: String,
+        tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: Self.buttonSize, height: Self.buttonSize)
+                .background(.ultraThinMaterial, in: .circle)
+                .overlay(Circle().strokeBorder(.primary.opacity(Self.ringOpacity)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
