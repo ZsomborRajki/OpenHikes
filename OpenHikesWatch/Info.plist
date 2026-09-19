@@ -49,6 +49,19 @@
 	<array>
 		<string>workout-processing</string>
 	</array>
+	<!-- An iOS key in a watchOS plist, and it has to be this one. CoreLocation
+	     refuses `allowsBackgroundLocationUpdates` with an exception unless the
+	     app is backgroundable for *location*, and the check reads
+	     UIBackgroundModes on watchOS too — WKBackgroundModes has no `location`
+	     value at all; WatchKit defines exactly one, above. Without this the app
+	     does not fail to record, it fails to *launch*: the flag is set in
+	     `WatchRecorder`'s init, which `WatchModel` builds from the @main App's
+	     state, so the throw lands in applicationDidFinishLaunching and the app
+	     dies before its first frame. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 	<key>NSHealthShareUsageDescription</key>
 	<string>OpenHikes reads your heart rate and energy from Health while you are recording a hike, so the watch can show them as you walk. Nothing else in Health is read.</string>
 	<key>NSHealthUpdateUsageDescription</key>
