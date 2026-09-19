@@ -78,8 +78,16 @@
 		<string>location</string>
 		<string>remote-notification</string>
 	</array>
+	<!-- The app's own green rather than the system's white, which is what an
+	     empty dictionary here gets you: a white rectangle between the tap and
+	     the map, at every launch, in both appearances. The colour is the one
+	     `LaunchBackground` carries, and it is a colour set rather than a
+	     literal so the dark variant is picked up without a second key. -->
 	<key>UILaunchScreen</key>
-	<dict/>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleDefault</string>
 	<key>UISupportedInterfaceOrientations~iphone</key>
