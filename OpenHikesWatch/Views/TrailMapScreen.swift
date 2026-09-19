@@ -1,36 +1,42 @@
 //
-//  TrailMapPanel.swift
+//  TrailMapScreen.swift
 //  OpenHikesWatch
 //
-//  The trail on Apple's own basemap, with the hiker on it.
+//  A trail opens as a map. The figures are a button away.
 //
-//  ## Why a real map here, when the widget ships a rendered image
+//  ## Why the map is the screen rather than a panel on one
+//
+//  Because it is what a hiker opened the trail for. The figures answer "how
+//  much is left"; the map answers "which way now", and that is the question
+//  asked at a fork with a watch already raised. A panel above a list made the
+//  hiker read the smaller of the two.
+//
+//  ## Why a real map at all, when the widget ships a rendered image
 //
 //  The objection recorded when this screen drew a bare line was transfer cost:
 //  a basemap image is hundreds of kilobytes per trail across a Bluetooth link,
 //  which is exactly what `TrailBasemapRenderer` pays on the phone so the iOS
 //  widget can draw one. MapKit on watchOS costs none of that — the watch
-//  fetches its own tiles, at the zoom the hiker is actually looking at, and
-//  caches them itself. The objection was to *shipping tiles over the link*,
-//  not to showing a map, and it does not apply to this.
+//  fetches its own tiles, at the zoom the hiker is looking at, and caches them
+//  itself. The objection was to *shipping tiles over the link*, not to showing
+//  a map.
 //
-//  What survives of it is the offline case, and the shape of the fallback is
-//  the reassuring part: `MapPolyline` draws whether or not a tile ever
-//  arrives, so a watch out of range shows the trail line on an empty basemap —
-//  which is the glyph this replaces, less the framing. It degrades to the old
-//  screen rather than to nothing.
+//  What survives of it is the offline case, and the fallback is reassuring:
+//  `MapPolyline` draws whether or not a tile ever arrives, so a watch out of
+//  range shows the trail line on an empty basemap — the glyph this replaced,
+//  less the framing. It degrades to the old screen rather than to nothing.
 //
 //  ## What may read what
 //
-//  Both views here read the live position, so both are their own views rather
-//  than pieces of ``TrailFollowView``'s body — the rule ``FollowFigures``
-//  follows next door. A fix redraws a map and a dot, not the screen around
-//  them.
+//  ``TrailMapFull`` reads the live position and is its own view for that
+//  reason; this screen reads only the trail, which changes when a package
+//  arrives. A fix redraws a map and a dot rather than the screen, the button
+//  and the sheet around them.
 //
 //  The route and the dot are built by a function taking plain values rather
-//  than by a view either of them owns: a `@MapContentBuilder` property on a
-//  view reads that view's `@Environment`, and reaching for it from *another*
-//  view's body would read an environment SwiftUI never injected.
+//  than by a view that owns them: a `@MapContentBuilder` property on a view
+//  reads that view's `@Environment`, and reaching for it from another view's
+//  body would read an environment SwiftUI never injected.
 //
 
 import MapKit
@@ -88,67 +94,103 @@ extension WatchFollowState {
     }
 }
 
-/// The trail drawn on a basemap, framed on the hiker once there is one.
-struct TrailMapPanel: View {
-    /// How tall the map is drawn on the following screen.
-    ///
-    /// Taller than the line it replaces, because a basemap with nothing but a
-    /// trail across it reads as a smear at glyph height, and still short
-    /// enough to leave the first figures on screen with it on a 40 mm watch.
-    private static let height = 104.0
-
-    /// How much ground the followed camera shows.
-    ///
-    /// Close enough that the next bend is a shape rather than a wiggle, wide
-    /// enough to see which way it goes before reaching it.
-    private static let followDistanceMeters = 900.0
-
-    let trail: WatchTrailPackage
+/// One trail, opened: the map, and the way to its figures.
+///
+/// Owns the whole trail's lifetime on screen — asking the phone for the
+/// geometry, starting the position feed, and stopping it on the way out. The
+/// figures are a *sheet* rather than a push for that reason: a push takes this
+/// view off screen, `onDisappear` would stop the feed the figures are made of,
+/// and the two would fight over it every time the button was pressed.
+struct TrailMapScreen: View {
+    let hikeID: UUID
+    let name: String
 
     @Environment(WatchModel.self)
     private var model
 
+    /// How wide the figures button is drawn, and how far its ring is lifted
+    /// out of the material behind it. A watch tap target does not go below
+    /// 36 pt, and the ring is what keeps the circle findable over a light
+    /// basemap, where the material alone all but disappears.
+    private static let buttonSize = 36.0
+    private static let ringOpacity = 0.2
+
+    @State private var isShowingFigures = false
+
     var body: some View {
-        Map(position: .constant(camera), interactionModes: []) {
-            trailMapContent(
-                coordinates: trail.mapCoordinates,
-                hiker: model.follow.matchedCoordinate,
-                tint: trail.mapTint
-            )
-        }
-        .mapStyle(.standard(elevation: .flat))
-        .frame(height: Self.height)
-        .clipShape(.rect(cornerRadius: 8))
-        .accessibilityLabel("Map of \(trail.title)")
+        content
+            .navigationTitle(name)
+            .navigationBarTitleDisplayMode(.inline)
+            .task {
+                model.selectTrail(hikeID)
+                model.startFollowing()
+            }
+            .onDisappear {
+                // Only when nothing is recording. A recording owns the feed
+                // and outlives this screen — which is the whole point of it.
+                if !model.recorder.phase.isActive { model.stopFollowing() }
+            }
     }
 
-    /// Framed on the hiker while there is a match, and on the whole trail
-    /// before the first fix lands.
-    ///
-    /// `.automatic` rather than a region worked out here: it frames the
-    /// `MapPolyline` itself, and does it without this view having to reason
-    /// about a route straddling ±180°, where the extremes of the raw
-    /// longitudes would zoom out to the whole planet.
-    private var camera: MapCameraPosition {
-        guard let hiker = model.follow.matchedCoordinate else { return .automatic }
-        return .camera(MapCamera(centerCoordinate: hiker, distance: Self.followDistanceMeters))
+    @ViewBuilder private var content: some View {
+        if let trail = model.trail, trail.hikeID == hikeID, trail.isDrawable {
+            TrailMapFull(trail: trail)
+                .overlay(alignment: .bottom) { figuresButton }
+                .sheet(isPresented: $isShowingFigures) {
+                    NavigationStack { TrailDetailView(trail: trail) }
+                }
+        } else {
+            waiting
+        }
+    }
+
+    /// Over the map rather than under it, because the map is the screen: a row
+    /// beneath would cost it the height, and this is pressed once a walk
+    /// rather than once a minute.
+    private var figuresButton: some View {
+        Button {
+            isShowingFigures = true
+        } label: {
+            Image(systemName: "list.bullet")
+                .font(.body.weight(.semibold))
+                .frame(width: Self.buttonSize, height: Self.buttonSize)
+                .background(.ultraThinMaterial, in: .circle)
+                .overlay(Circle().strokeBorder(.primary.opacity(Self.ringOpacity)))
+        }
+        .buttonStyle(.plain)
+        .padding(.bottom, 4)
+        .accessibilityLabel("Trail figures")
+    }
+
+    private var waiting: some View {
+        VStack(spacing: 6) {
+            ProgressView()
+            Text(
+                model.link.isReachable
+                    ? "Fetching this trail from your iPhone…"
+                    : "Waiting for your iPhone to come back in range…"
+            )
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 8)
     }
 }
 
-/// The same trail and the same dot, filling the screen and pannable.
-///
-/// Its own screen because the panel cannot be both: a `Map` that handles
-/// gestures inside the following screen's `ScrollView` takes the drags meant
-/// for the list it sits in, so the panel declares no interaction modes at all
-/// and this is where a hiker who wants to look around goes.
-struct TrailMapScreen: View {
+/// The map itself: the route, the hiker, and whatever the crown and a drag
+/// have done to the camera since.
+private struct TrailMapFull: View {
     let trail: WatchTrailPackage
 
     @Environment(WatchModel.self)
     private var model
 
-    /// Held rather than recomputed per fix, so a new match does not drag the
-    /// map back from wherever the hiker has just panned it to.
+    /// Held rather than recomputed per fix, so a match arriving does not drag
+    /// the map back from wherever the hiker has just moved it to. `.automatic`
+    /// frames the `MapPolyline` to begin with, which also keeps this view out
+    /// of the business of a route straddling ±180°, where the extremes of the
+    /// raw longitudes would zoom out to the whole planet.
     @State private var camera: MapCameraPosition = .automatic
 
     var body: some View {
@@ -160,7 +202,6 @@ struct TrailMapScreen: View {
             )
         }
         .mapStyle(.standard(elevation: .flat))
-        .navigationTitle(trail.title)
-        .navigationBarTitleDisplayMode(.inline)
+        .accessibilityLabel("Map of \(trail.title)")
     }
 }

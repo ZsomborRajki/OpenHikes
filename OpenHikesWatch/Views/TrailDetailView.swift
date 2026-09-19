@@ -1,84 +1,39 @@
 //
-//  TrailFollowView.swift
+//  TrailDetailView.swift
 //  OpenHikesWatch
 //
-//  One trail on a map with the hiker on it, and the four figures a hiker
-//  actually looks at their wrist for.
+//  The four figures a hiker looks at their wrist for, and the button that
+//  records the trail they are standing on.
 //
-//  ## Why a map now, when this shipped a bare line
-//
-//  The line was chosen against shipping a *rendered basemap over the link* —
-//  hundreds of kilobytes per trail across Bluetooth, which is what the iOS
-//  widget pays for its image. MapKit on watchOS fetches its own tiles and
-//  costs the link nothing, so that argument never applied to it; see
-//  ``TrailMapPanel``, which also explains what a watch out of range still
-//  draws. `TrailGlyphView` stays where it was always right: the widget.
+//  Presented as a sheet from ``TrailMapScreen``, which is what a trail opens
+//  as. This is the answer to "how much is left"; the map is the answer to
+//  "which way now", and that is the one asked at a fork with a watch already
+//  raised — so it gets the screen and this gets a button.
 //
 //  ## What each part may read
 //
-//  ``TrailMapPanel`` and ``FollowFigures`` each read ``WatchFollowState`` in
-//  their own body, so a fix redraws a map and four `Text`s rather than this
-//  screen around them.
+//  ``FollowFigures`` is the only view here that reads ``WatchFollowState``, so
+//  a fix redraws four `Text`s rather than this sheet and the button under it.
+//  The trail is handed in already resolved: nothing can open this without one,
+//  because the map screen is where a hiker waits for the package to arrive.
 //
 
 import OpenHikesShared
 import SwiftUI
 
-struct TrailFollowView: View {
-    let hikeID: UUID
-    let name: String
-
-    @Environment(WatchModel.self)
-    private var model
+struct TrailDetailView: View {
+    let trail: WatchTrailPackage
 
     var body: some View {
         ScrollView {
             VStack(spacing: 8) {
-                if let trail = model.trail, trail.hikeID == hikeID, trail.isDrawable {
-                    // The map is a link rather than a picture: it is the one
-                    // thing on this screen a hiker wants bigger, and the panel
-                    // itself cannot take a gesture without stealing the
-                    // scroll. See `TrailMapScreen`.
-                    NavigationLink {
-                        TrailMapScreen(trail: trail)
-                    } label: {
-                        TrailMapPanel(trail: trail)
-                    }
-                    .buttonStyle(.plain)
-                    FollowFigures(trail: trail)
-                    RecordAlongTrailButton()
-                } else {
-                    waiting
-                }
+                FollowFigures(trail: trail)
+                RecordAlongTrailButton()
             }
             .padding(.horizontal, 4)
         }
-        .navigationTitle(name)
+        .navigationTitle(trail.title)
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            model.selectTrail(hikeID)
-            model.startFollowing()
-        }
-        .onDisappear {
-            // Only when nothing is recording. A recording owns the feed and
-            // outlives this screen — which is the whole point of it.
-            if !model.recorder.phase.isActive { model.stopFollowing() }
-        }
-    }
-
-    private var waiting: some View {
-        VStack(spacing: 6) {
-            ProgressView()
-            Text(
-                model.link.isReachable
-                    ? "Fetching this trail from your iPhone…"
-                    : "Waiting for your iPhone to come back in range…"
-            )
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
-        }
-        .padding(.vertical, 24)
     }
 }
 
