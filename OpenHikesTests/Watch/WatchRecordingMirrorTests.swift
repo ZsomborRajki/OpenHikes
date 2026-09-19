@@ -101,6 +101,30 @@ final class WatchRecordingMirrorTests {
         #expect(published.readings.count == 1)
     }
 
+    @Test("a watch that went out of range is told again when it comes back")
+    func aReconnectedWatchIsToldAgain() async throws {
+        let published = Published()
+        let coordinator = makeCoordinator()
+        let mirror = makeMirror(publishing: published, coordinator: coordinator)
+        _ = try await coordinator.startRecording()
+        walk()
+        await mirror.publishCurrentState()
+
+        // Out of range, which is where a watch spends most of a walk. The
+        // watch drops its own copy at this point — an out-of-range reading is
+        // not a current one — so what the phone remembers having sent is no
+        // longer what the wrist is showing.
+        mirror.reachabilityChanged(to: false)
+        await mirror.publishCurrentState()
+
+        // Sent again although not one figure moved, which is the whole case:
+        // a hiker standing still is the ordinary way to come back into range,
+        // and a dedupe that swallowed this would leave the wrist showing no
+        // running hike at all until they walked a metre.
+        #expect(published.readings.count == 2)
+        #expect(published.readings.last?.state == .recording)
+    }
+
     @Test("pausing is sent even though the figures did not move")
     func aStateChangeIsAlwaysSent() async throws {
         let published = Published()
