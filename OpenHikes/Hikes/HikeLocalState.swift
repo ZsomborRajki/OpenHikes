@@ -115,6 +115,21 @@ final class HikeLocalState {
     /// See `WatchWalkImport`, which is the only writer and the only reader.
     var watchSessionID: UUID?
 
+    /// This hike's place in a hand-ordered list, or `nil` while the list is
+    /// still in date order.
+    ///
+    /// Device-local because a hand-ordered library is a statement about *this*
+    /// phone's list. The position is also the one thing here that a second
+    /// device could disagree about harmlessly — two phones with different
+    /// orders are two hikers' worth of preference, not a conflict — and
+    /// mirroring it would buy an ordering fight on every sync for something
+    /// neither device can be wrong about.
+    ///
+    /// Set for **every** hike at once, by the first drag, or for none of them:
+    /// a list that is half hand-ordered has no answer for where the rest go.
+    /// See ``HikeListOrder``, which owns both halves of that.
+    var listOrder: Int?
+
     init(hikeID: UUID) {
         self.hikeID = hikeID
     }
