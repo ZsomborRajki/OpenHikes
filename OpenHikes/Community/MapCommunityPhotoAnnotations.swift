@@ -96,14 +96,6 @@ final class CommunityPhotoMapAnnotation: NSObject, MKAnnotation {
 /// them to do the pin's work twice. The map is now a way in as well as an
 /// answer, for a stranger's hike as much as for the hiker's own.
 final class CommunityPhotoCalloutPreview: UIControl {
-    /// The same 4:3 box ``PhotoCalloutPreview`` uses, for the same reason: wide
-    /// enough to read as a photograph, narrow enough that MapKit's callout
-    /// does not have to stretch around it.
-    private static let previewWidth: CGFloat = 180
-    private static let previewHeight: CGFloat = 135
-    private static let cornerRadius: CGFloat = 10
-    private static let placeholderPointSize: CGFloat = 28
-
     private let imageView = UIImageView()
     /// Which photograph is on screen, so a decode that lands after the view
     /// has been recycled onto another pin is dropped rather than drawn.
@@ -145,7 +137,7 @@ final class CommunityPhotoCalloutPreview: UIControl {
             // so a picture that draws in the strip draws here.
             let decoded = await CommunityPhotoTile.decodeUIImage(
                 photo.fileURL,
-                maxPixelSize: Int(Self.previewWidth * 3)
+                maxPixelSize: Int(PhotoCalloutMetrics.previewWidth * 3)
             )
             guard let self, shown == photo else { return }
             guard let decoded else {
@@ -164,7 +156,7 @@ final class CommunityPhotoCalloutPreview: UIControl {
     private func buildHierarchy() {
         translatesAutoresizingMaskIntoConstraints = false
         clipsToBounds = true
-        layer.cornerRadius = Self.cornerRadius
+        layer.cornerRadius = PhotoCalloutMetrics.cornerRadius
         layer.cornerCurve = .continuous
 
         imageView.translatesAutoresizingMaskIntoConstraints = false
@@ -173,8 +165,8 @@ final class CommunityPhotoCalloutPreview: UIControl {
         addSubview(imageView)
 
         NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: Self.previewWidth),
-            heightAnchor.constraint(equalToConstant: Self.previewHeight),
+            widthAnchor.constraint(equalToConstant: PhotoCalloutMetrics.previewWidth),
+            heightAnchor.constraint(equalToConstant: PhotoCalloutMetrics.previewHeight),
             imageView.leadingAnchor.constraint(equalTo: leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: trailingAnchor),
             imageView.topAnchor.constraint(equalTo: topAnchor),
@@ -202,7 +194,7 @@ final class CommunityPhotoCalloutPreview: UIControl {
         imageView.image = UIImage(
             systemName: symbolName,
             withConfiguration: UIImage.SymbolConfiguration(
-                pointSize: Self.placeholderPointSize
+                pointSize: PhotoCalloutMetrics.placeholderPointSize
             )
         )
     }
