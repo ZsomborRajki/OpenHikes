@@ -62,6 +62,16 @@ final class WatchModel {
     @ObservationIgnored private let store: WatchStore
     /// Rebuilt whenever ``trail`` changes, and `nil` when there is none.
     @ObservationIgnored private var tracker: WatchRouteTracker?
+    /// Whether a trail screen is asking for live position right now.
+    ///
+    /// Remembered rather than answered on the spot, because the feed and the
+    /// trail arrive in either order: the *first* trail a watch is ever sent
+    /// is asked for by a screen that opened with nothing to match against, so
+    /// a request refused for want of a trail has to be honoured when one
+    /// lands. It is also what puts the feed back after a recording along a
+    /// trail ends — ``WatchRecorder/stop()`` stops the receiver, and the
+    /// screen that wanted it is still open.
+    @ObservationIgnored private var isFollowing = false
 
     init(store: WatchStore = WatchStore()) {
         self.store = store
@@ -99,11 +109,13 @@ final class WatchModel {
     /// recording. See ``WatchRecorder/startFollowingFeed()`` for what this
     /// does and does not buy.
     func startFollowing() {
+        isFollowing = true
         guard trail != nil else { return }
         recorder.startFollowingFeed()
     }
 
     func stopFollowing() {
+        isFollowing = false
         recorder.stopFollowingFeed()
     }
 
@@ -190,7 +202,11 @@ final class WatchModel {
         // and never reach the hook, so the count is refreshed either way.
         queuedWalkCount = store.queuedWalks().count
         // A walk along a trail leaves the hiker where they finished it, which
-        // is where they are. Nothing is cleared.
+        // is where they are. Nothing is cleared — but the receiver is: the
+        // recording owned it and stopping took it down, and a trail screen
+        // left open behind it would freeze the hiker's dot where they
+        // pressed Stop.
+        if isFollowing { recorder.startFollowingFeed() }
     }
 
     /// Offers a walk the recorder has just put on the disk queue.
@@ -220,8 +236,14 @@ final class WatchModel {
             tracker = WatchRouteTracker(package)
             follow.clear()
             store.save(package)
+            // The screen that asked for this trail may have opened with
+            // nothing to match against, which is every first launch: its
+            // ``startFollowing()`` had no trail to start a feed for. This is
+            // that moment arriving.
+            if isFollowing { recorder.startFollowingFeed() }
         case .walkKept(let sessionID):
             store.removeWalk(sessionID)
+            link.forget(sessionID)
             queuedWalkCount = store.queuedWalks().count
         case .phoneRecording(let recording):
             apply(recording)

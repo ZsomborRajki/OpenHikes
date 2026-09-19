@@ -80,6 +80,17 @@ final class PhoneLink: NSObject {
 
     @ObservationIgnored private var session: WCSession?
     @ObservationIgnored private var onDelivery: (@MainActor (PhoneDelivery) -> Void)?
+    /// Walks already handed to `WCSession`'s own queue in this process.
+    ///
+    /// ``WatchStore``'s queue is what a walk lives on until the *phone* says
+    /// it has it, so it is still there on every drain — and a drain runs on
+    /// every reachability change, which on a walk is a phone going in and out
+    /// of a rucksack all afternoon. Without this, each one hands the same
+    /// multi-thousand-fix transfer to the system again beside the copies
+    /// already waiting. Not persisted deliberately: a relaunch loses
+    /// `WCSession`'s in-memory view of what is outstanding too, and re-sending
+    /// after one is exactly the retry the queue is for.
+    @ObservationIgnored private var walksInFlight: Set<UUID> = []
 
     /// Starts the session.
     ///
@@ -117,7 +128,23 @@ final class PhoneLink: NSObject {
     /// Sends a finished walk. Guaranteed delivery, and the receipt is what
     /// takes it off ``WatchStore``'s queue.
     func send(_ walk: WatchRecordedWalk) {
-        transfer { try WatchLink.message(walk) }
+        guard !walksInFlight.contains(walk.sessionID) else { return }
+        // Marked only once the system has actually taken it. A build that
+        // threw was never handed over, and a walk recorded as outstanding on
+        // the strength of an attempt that failed would sit on the disk queue
+        // unoffered until the app was relaunched.
+        guard transfer({ try WatchLink.message(walk) }) else { return }
+        walksInFlight.insert(walk.sessionID)
+    }
+
+    /// Forgets that a walk was ever sent, so a later drain offers it again.
+    ///
+    /// Called when the phone's receipt takes it off the disk queue — at which
+    /// point nothing will offer it again anyway — and that is the point: the
+    /// set is bounded by what is genuinely still waiting rather than growing
+    /// for the life of the process.
+    func forget(_ sessionID: UUID) {
+        walksInFlight.remove(sessionID)
     }
 
     /// Presses a button on the phone's recorder.
@@ -187,14 +214,21 @@ final class PhoneLink: NSObject {
     /// function that both encodes *and* transfers rather than as one that
     /// hands an optional dictionary back, because there is nothing a caller
     /// could do with the `nil` except this.
-    private func transfer(_ build: () throws -> [String: Any]) {
-        guard let session else { return }
+    ///
+    /// Answers whether the system took it, which is what ``send(_:)`` needs to
+    /// decide whether a walk is genuinely outstanding: `false` for a session
+    /// that was never started and for a payload that could not be encoded,
+    /// which are the two ways nothing went.
+    @discardableResult private func transfer(_ build: () throws -> [String: Any]) -> Bool {
+        guard let session else { return false }
         do {
             session.transferUserInfo(try build())
+            return true
         } catch {
             Self.logger.error(
                 "A message to the phone could not be encoded: \(error.localizedDescription, privacy: .public)"
             )
+            return false
         }
     }
 }
