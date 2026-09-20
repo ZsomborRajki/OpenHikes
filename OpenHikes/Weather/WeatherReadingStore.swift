@@ -178,6 +178,43 @@ final class WeatherReadingStore {
             }
         }
 
+        /// One day of the week ahead, in fixed units for the reason
+        /// ``Conditions`` is: these bytes are read back by a later build.
+        ///
+        /// Bounded by ``WeatherDailyPolicy/horizon`` before it ever reaches
+        /// here — `.daily` answers with ten days, and this is `UserDefaults`.
+        struct Day: Codable {
+            var date: Date
+            var symbolName: String
+            var highCelsius: Double
+            var lowCelsius: Double
+            var precipitationChance: Double
+
+            var restored: WeatherDaySummary {
+                WeatherDaySummary(
+                    date: date,
+                    symbolName: symbolName,
+                    highTemperature: Measurement(
+                        value: highCelsius,
+                        unit: UnitTemperature.celsius
+                    ),
+                    lowTemperature: Measurement(
+                        value: lowCelsius,
+                        unit: UnitTemperature.celsius
+                    ),
+                    precipitationChance: precipitationChance
+                )
+            }
+
+            init(_ day: WeatherDaySummary) {
+                date = day.date
+                symbolName = day.symbolName
+                highCelsius = day.highTemperature.converted(to: .celsius).value
+                lowCelsius = day.lowTemperature.converted(to: .celsius).value
+                precipitationChance = day.precipitationChance
+            }
+        }
+
         /// The day's light, in fixed units for the reason ``Conditions`` is:
         /// these bytes are read back by a later build.
         ///
@@ -267,6 +304,17 @@ final class WeatherReadingStore {
         /// fetch, seconds after launch. An *empty* array is still a valid
         /// value, and means the provider had no hourly data for the point.
         var hourly: [Hour]
+        /// Non-optional for the reason ``hourly`` is, with one wrinkle worth
+        /// writing down. A blob written by the build that asked for `.daily`
+        /// only to read its first day has no `days` key, and an *optional*
+        /// field would restore it as an empty week — which reads as "the
+        /// provider has no daily forecast for this place" and is not what
+        /// happened. Non-optional, that blob fails to decode, the badge is
+        /// absent for the few seconds until the next fetch, and nothing ever
+        /// claims a fact about the weather that no response supports. An empty
+        /// array *written by this build* is still a valid value and does mean
+        /// the provider had nothing.
+        var days: [Day]
         /// **Optional, unlike ``conditions`` and ``hourly``**, and that is the
         /// reset policy rather than an inconsistency. Those two are
         /// non-optional so a blob written before they existed fails to decode
@@ -308,6 +356,7 @@ final class WeatherReadingStore {
             capturedAt: payload.capturedAt,
             conditions: payload.conditions.restored,
             hourly: payload.hourly.map(\.restored),
+            days: payload.days.map(\.restored),
             daylight: payload.daylight?.restored,
             alerts: payload.alerts?.restored
         )
@@ -352,6 +401,7 @@ final class WeatherReadingStore {
             hikeID: hikeID,
             conditions: Payload.Conditions(snapshot.conditions),
             hourly: snapshot.hourly.map(Payload.Hour.init),
+            days: snapshot.days.map(Payload.Day.init),
             daylight: snapshot.daylight.map(Payload.Daylight.init),
             alerts: snapshot.alerts.map(Payload.Alerts.init)
         )
