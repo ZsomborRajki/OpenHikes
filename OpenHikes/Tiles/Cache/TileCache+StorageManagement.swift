@@ -208,31 +208,18 @@ nonisolated extension TileCache {
         let target = Int64(Double(limit) * Self.trimTargetFraction)
         for tile in unclaimed.sorted(by: { $0.modified < $1.modified }) {
             guard total - freed > target else { break }
-            // Bump-then-delete under one acquisition, the same shape
-            // `reclaimDurableBytes` uses: it is what stops a fetch that took
-            // its token before this deletion from writing the tile back after
-            // it. Reaching that interleaving through *this* path needs a tile
-            // promoted after the claim snapshot to sort early in an
-            // oldest-first order it cannot — a promoted tile keeps its
-            // fetch-time mtime — so the safety here was already arithmetic.
-            // The lock is what makes it an invariant instead, and what keeps
-            // `trimTargetFraction` a tunable rather than a load-bearing one.
-            //
-            // The bump is the deleted tile's own row and not the epoch, which
-            // is the difference between invalidating one in-flight fetch and
-            // invalidating all of them once per tile — five hundred times over
-            // a five-hundred-tile trim, each one a correct response discarded
-            // and refetched. The file's own name is the row's key, so no
-            // reverse mapping is needed to say which tile went; see
-            // ``TileCache/MutationVersions/names``.
-            let removed = mutationVersions.withLock { versions -> Bool in
-                guard removeItemIgnoringNotFound(
-                    at: tile.url,
-                    operation: "trim cached tile"
-                ) else { return false }
-                versions.invalidate(tile.url.lastPathComponent)
-                return true
-            }
+            // Reaching the interleaving
+            // ``removeTileInvalidatingToken(at:operation:)`` forbids through
+            // *this* path needs a tile promoted after the claim snapshot to
+            // sort early in an oldest-first order it cannot — a promoted tile
+            // keeps its fetch-time mtime — so the safety here was already
+            // arithmetic. The lock is what makes it an invariant instead, and
+            // what keeps `trimTargetFraction` a tunable rather than a
+            // load-bearing one.
+            let removed = removeTileInvalidatingToken(
+                at: tile.url,
+                operation: "trim cached tile"
+            )
             guard removed else { continue }
             freed += tile.size
         }

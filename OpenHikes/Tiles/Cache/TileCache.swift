@@ -237,6 +237,37 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// name — see ``MutationVersions/names``.
     let mutationVersions: Mutex<MutationVersions>
 
+    /// Deletes a tile and invalidates its token under **one** acquisition of
+    /// ``TileCache/mutationVersions``.
+    ///
+    /// Bump-then-delete together is the whole point, and it is what stops a
+    /// fetch that took its token before the deletion from writing the tile
+    /// back after it. Doing the two under separate acquisitions reintroduces
+    /// exactly the interleaving the lock exists to forbid — see *Types that
+    /// should not become actors* in `.github/copilot-instructions.md` for why
+    /// this is a `Mutex` and not an actor.
+    ///
+    /// The bump is **this tile's own row** — its file name — and never the
+    /// epoch. A reclaim or a trim runs while the map is being browsed, and
+    /// bumping the epoch per tile made every unrelated in-flight fetch throw
+    /// away a correct response, once per tile deleted: five hundred discarded
+    /// responses over a five-hundred-tile trim. The file's own name is the
+    /// row's key, so no reverse mapping is needed to say which tile went; see
+    /// ``TileCache/MutationVersions/names``.
+    ///
+    /// - Returns: Whether the file was removed, which is what a caller adds
+    ///   the tile's size to its freed total on. A file already gone is `false`
+    ///   and costs nothing — its bytes were not this pass's to count.
+    func removeTileInvalidatingToken(at url: URL, operation: String) -> Bool {
+        mutationVersions.withLock { versions -> Bool in
+            guard removeItemIgnoringNotFound(at: url, operation: operation) else {
+                return false
+            }
+            versions.invalidate(url.lastPathComponent)
+            return true
+        }
+    }
+
     /// Weakly-held network-policy listeners. A boxed array keeps the reference
     /// weak so a deallocated renderer drops out without unregistering.
     struct WeakObserver: Sendable { weak var value: TileCacheObserver? }
