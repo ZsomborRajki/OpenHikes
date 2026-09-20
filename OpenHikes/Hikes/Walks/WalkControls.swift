@@ -162,26 +162,13 @@ private struct WalkPhaseRow: View {
             Spacer()
             if phase == .following, scenePhase == .active {
                 TimelineView(.periodic(from: .now, by: 1)) { _ in
-                    WalkClock(readout: HikeFormat.duration(session.activeSeconds()))
+                    PhaseClock(readout: HikeFormat.duration(session.activeSeconds()))
                 }
             } else {
-                WalkClock(readout: HikeFormat.duration(session.activeSeconds()))
+                PhaseClock(readout: HikeFormat.duration(session.activeSeconds()))
             }
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("walk-phase")
-    }
-}
-
-/// The readout, storing the string rather than the session so SwiftUI diffs
-/// what is on screen and the clock cannot silently freeze — the lesson
-/// `RecordingClock` carries. `WalkClockTick` is the countable tick.
-private struct WalkClock: View {
-    let readout: String
-
-    var body: some View {
-        Text(readout)
-            .font(.headline.monospacedDigit())
-            .foregroundStyle(.secondary)
     }
 }

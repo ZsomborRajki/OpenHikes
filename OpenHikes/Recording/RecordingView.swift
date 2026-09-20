@@ -298,7 +298,7 @@ private struct RecordingHeader: View {
                     // from ``HikeRecorder/elapsedSeconds()``, which counts
                     // from a monotonic source wherever it has one rather than
                     // from the wall clock.
-                    RecordingClock(readout: HikeFormat.duration(recorder.elapsedSeconds()))
+                    PhaseClock(readout: HikeFormat.duration(recorder.elapsedSeconds()))
                 }
             }
         }
@@ -319,28 +319,6 @@ private struct RecordingHeader: View {
         case .idle: .green
         case .failed: .red
         }
-    }
-}
-
-/// The elapsed-time readout, and the app's last per-second wake-up.
-///
-/// Its own view so the 1 Hz tick redraws a `Text` rather than the header
-/// around it, and so the tick is *countable*: `RecordingClockTick` is what
-/// makes "the system suspends this while backgrounded" a measurement in the
-/// report instead of an assumption in a comment.
-///
-/// It stores the formatted readout rather than the recorder deliberately.
-/// A view holding only a reference is structurally identical on every tick,
-/// so SwiftUI skips its body and the clock freezes — which is exactly what
-/// happened the first time this was extracted, and what the assertion in
-/// `testLiveRecordingCostPerFix` now catches.
-private struct RecordingClock: View {
-    let readout: String
-
-    var body: some View {
-        Text(readout)
-            .font(.headline.monospacedDigit())
-            .foregroundStyle(.secondary)
     }
 }
 
