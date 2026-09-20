@@ -246,19 +246,10 @@ private extension CommunityPhotoShareSheet {
     /// What is going, and what is not.
     var contentsSection: some View {
         Section {
-            LabeledContent(
-                "Photos",
-                value: photos.count == 0 ? "None" : "\(photos.count)"
+            CommunitySendPhotoCountRow(
+                count: photos.count,
+                identifier: "community-photos-count"
             )
-            // One element with an explicit value, rather than the pair
-            // `LabeledContent` composes on its own — an identifier on a
-            // container is pushed down onto every descendant. The lesson
-            // ``CommunityPhotoViewer`` taught, applied here for the same
-            // reason.
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Photos")
-            .accessibilityValue(photos.count == 0 ? "None" : "\(photos.count)")
-            .accessibilityIdentifier("community-photos-count")
             CommunitySharePhotoStrip(
                 photos: CommunityPublisher.shareablePhotos(of: hike),
                 excluded: $excludedPhotoIDs,
@@ -320,28 +311,22 @@ private extension CommunityPhotoShareSheet {
     /// What the photographs are credited to.
     ///
     /// The same ``SettingsKey/communityAuthorName`` a shared hike is published
-    /// under, and deliberately the same field: it is one person's one credit,
-    /// and two settings for it would let somebody be two people by accident.
-    /// It matters more here than there — these pictures sit among a stranger's
-    /// on a screen headed with the stranger's name, so the credit is the only
-    /// thing saying whose they are.
+    /// under, asked for with the same ``CommunityCreditSection``: it is one
+    /// person's one credit, and two settings — or two spellings of one — would
+    /// let somebody be two people by accident. It matters more here than
+    /// there, which is what the footer says: these pictures sit among a
+    /// stranger's on a screen headed with the stranger's name, so the credit
+    /// is the only thing saying whose they are.
     var nameSection: some View {
-        Section {
-            TextField("Display name", text: $authorName)
-                .accessibilityIdentifier("community-photos-author-field")
-                .autocorrectionDisabled()
-                #if os(iOS)
-                .textInputAutocapitalization(.words)
-                #endif
-                .disabled(phase.isSending)
-        } header: {
-            Text("Shared as")
-        } footer: {
-            Text("""
+        CommunityCreditSection(
+            authorName: $authorName,
+            footer: """
             Shown publicly beside your photos, so other hikers can tell them from \
             the ones whoever shared this trail took. You can leave it blank.
-            """)
-        }
+            """,
+            identifier: "community-photos-author-field",
+            phase: phase
+        )
     }
 
     /// That a person looks at these first, and what sending them agrees to.
@@ -388,27 +373,21 @@ private extension CommunityPhotoShareSheet {
         )
     }
 
-    @ToolbarContentBuilder var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) {
-            Button(phase.hasFinished ? "Done" : "Cancel") { dismiss() }
-                .disabled(phase.isSending)
-        }
-        ToolbarItem(placement: .confirmationAction) {
-            if phase.isSending {
-                ProgressView()
-                    .accessibilityLabel("Sending")
-            } else if !phase.hasFinished {
-                Button("Add") { send() }
-                    .accessibilityIdentifier("community-photos-confirm")
-                    // The same floor ``CommunityPhotoPublisher/contribute``
-                    // refuses below, so a hike with nothing to send cannot
-                    // start an upload that was always going to come back as a
-                    // failure. Held while the disk has not answered, which is
-                    // the one window a tap could start a send the next line of
-                    // this screen is about to forbid.
-                    .disabled(!hasSomethingToSend || !photos.hasCounted)
-            }
-        }
+    var toolbarContent: some ToolbarContent {
+        CommunitySendToolbar(
+            phase: phase,
+            confirmTitle: "Add",
+            confirmIdentifier: "community-photos-confirm",
+            // The same floor ``CommunityPhotoPublisher/contribute`` refuses
+            // below, so a hike with nothing to send cannot start an upload
+            // that was always going to come back as a failure. Held while the
+            // disk has not answered, which is the one window a tap could start
+            // a send the next line of this screen is about to forbid.
+            canConfirm: hasSomethingToSend && photos.hasCounted,
+            offersConfirmation: true,
+            cancel: { dismiss() },
+            confirm: { send() }
+        )
     }
 }
 
