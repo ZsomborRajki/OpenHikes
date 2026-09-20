@@ -480,23 +480,17 @@ nonisolated struct CommunityHikeDetail: Sendable, CommunityReviewSubject {
     /// pinned to a different photograph's coordinate — which nothing
     /// downstream could ever detect, and which a saved hike keeps for good.
     ///
+    /// The check itself, and the rest of the pairing, is
+    /// ``CommunityReviewSubject``'s.
     /// ``CloudKitCommunityTransport/detail(for:downloadingInto:)`` builds both
     /// arrays from the same downloaded files, so nothing it hands back can
-    /// fail this. That is a reason to keep the check rather than to drop it:
-    /// the guarantee lives in one conformance, the consequence of losing it is
-    /// undetectable and permanent, and the check costs a comparison on a path
-    /// that already walks every photograph.
-    var isConsistent: Bool {
-        photoPins.count == photoFileURLs.count
-    }
-
-    /// Whether every photograph on the record reached this device.
+    /// fail it.
     ///
-    /// What ``CommunityTransporting/keepOnlyPhotos(_:of:staging:)`` may only
-    /// be called behind — see ``photosOnRecord``.
-    var hasEveryPhoto: Bool {
-        isConsistent && photoFileURLs.count == photosOnRecord
-    }
+    /// The hike's own photographs are credited by the listing's author name,
+    /// and reported, blocked and taken down as the hike — so there is no
+    /// per-photograph attribution to carry. A contributed set is the case that
+    /// has one.
+    var galleryAttribution: CommunityPhotoAttribution? { nil }
 
     /// The photographs that know where they were taken, ready for the map.
     ///
@@ -531,19 +525,7 @@ nonisolated struct CommunityHikeDetail: Sendable, CommunityReviewSubject {
     /// about that submission's pictures, and a contributed pin under their
     /// thumb would be a picture they cannot remove from a record they are not
     /// editing.
-    var ownPreviewPhotos: [CommunityPreviewPhoto] {
-        guard isConsistent else { return [] }
-        return zip(photoPins, photoFileURLs).enumerated().compactMap { index, pair in
-            guard let coordinate = pair.0.coordinate else { return nil }
-            return CommunityPreviewPhoto(
-                index: index,
-                latitude: coordinate.latitude,
-                longitude: coordinate.longitude,
-                capturedAt: pair.0.capturedAt,
-                fileURL: pair.1
-            )
-        }
-    }
+    var ownPreviewPhotos: [CommunityPreviewPhoto] { previewPhotos(startingAt: 0) }
 
     /// Everybody else's anchored photographs, numbered on from the author's.
     ///
@@ -597,36 +579,6 @@ nonisolated struct CommunityHikeDetail: Sendable, CommunityReviewSubject {
     /// make — a hiker deciding on a trail is looking at pictures of a place,
     /// whoever took them — and the one the reviewer's screen has to, for the
     /// reason ``ownPreviewPhotos`` gives.
-    var ownGalleryPhotos: [CommunityGalleryPhoto] {
-        let pinned = isConsistent
-        return photoFileURLs.enumerated().map { index, url in
-            CommunityGalleryPhoto(
-                index: index,
-                pin: pinned ? photoPins[index] : nil,
-                fileURL: url,
-                // The hike's own: credited by the listing's author name, and
-                // reported, blocked and taken down as the hike. See
-                // ``CommunityGalleryPhoto/contribution``.
-                contribution: nil
-            )
-        }
-    }
+    var ownGalleryPhotos: [CommunityGalleryPhoto] { galleryPhotos(startingAt: 0) }
 
-    /// The photographs at `indexes`, each with the pin that describes it, in
-    /// the order they arrived in.
-    ///
-    /// The order is load-bearing rather than tidy: what comes back is written
-    /// straight onto the submission as its two photo fields, and those pair by
-    /// position. Sorting by index is what keeps the first picture first after
-    /// the third has been taken out.
-    ///
-    /// Empty when the two arrays disagree — the same refusal ``previewPhotos``
-    /// makes, and a sharper one here, since this answer is uploaded.
-    func keptPhotos(at indexes: Set<Int>) -> [CommunityKeptPhoto] {
-        guard isConsistent else { return [] }
-        return indexes.sorted().compactMap { index in
-            guard photoFileURLs.indices.contains(index) else { return nil }
-            return CommunityKeptPhoto(pin: photoPins[index], fileURL: photoFileURLs[index])
-        }
-    }
 }

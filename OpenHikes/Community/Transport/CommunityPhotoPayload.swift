@@ -188,22 +188,18 @@ nonisolated struct CommunityPhotoContribution: Identifiable, Hashable, Sendable,
     /// delete that one too. A screen merely showing a set has no use for it.
     var photosOnRecord: Int = 0
 
-    /// Whether the pins still describe the pictures.
+    /// Who these photographs belong to, carried onto every one of them.
     ///
-    /// The same pairing invariant ``CommunityHikeDetail/isConsistent`` states,
-    /// asked separately per contribution because each is a record of its own:
-    /// one set whose pins are wrong must not cost the others their places.
-    var isConsistent: Bool {
-        photoPins.count == photoFileURLs.count
-    }
-
-    /// Whether every photograph on the record reached this device.
-    ///
-    /// What ``CommunityTransporting/keepOnlyPhotos(_:ofPending:staging:)`` may
-    /// only be called behind, exactly as ``CommunityHikeDetail/hasEveryPhoto``
-    /// gates its sibling.
-    var hasEveryPhoto: Bool {
-        isConsistent && photoFileURLs.count == photosOnRecord
+    /// The four fields are meaningful only together — a credit with no author
+    /// id is a photograph nobody can block — which is why they travel as one
+    /// value. See ``CommunityPhotoAttribution``.
+    var galleryAttribution: CommunityPhotoAttribution? {
+        CommunityPhotoAttribution(
+            contributionID: id,
+            photoSubmissionID: photoSubmissionID,
+            credit: credit,
+            authorID: authorID
+        )
     }
 
     /// What to put beside a photograph from this set, or `nil` when the
@@ -212,74 +208,11 @@ nonisolated struct CommunityPhotoContribution: Identifiable, Hashable, Sendable,
         authorName.isEmpty ? nil : authorName
     }
 
-    /// The photographs at `indexes`, each with the pin that describes it, in
-    /// the order they arrived in.
-    ///
-    /// ``CommunityHikeDetail/keptPhotos(at:)`` for the other record type, and
-    /// the order is load-bearing for the same reason: what comes back is
-    /// written straight onto the submission as its two photo fields, and those
-    /// pair by position.
-    func keptPhotos(at indexes: Set<Int>) -> [CommunityKeptPhoto] {
-        guard isConsistent else { return [] }
-        return indexes.sorted().compactMap { index in
-            guard photoFileURLs.indices.contains(index) else { return nil }
-            return CommunityKeptPhoto(pin: photoPins[index], fileURL: photoFileURLs[index])
-        }
-    }
-
-    /// The photographs that know where they were taken, ready for the map.
-    ///
-    /// Unanchored ones are left out rather than pinned somewhere plausible —
-    /// ``CommunityHikeDetail/previewPhotos``'s rule, and empty for an
-    /// inconsistent set for its reason: a pin is a claim about *which*
-    /// photograph was taken *where*, and pairing by index is the whole of what
-    /// backs it.
-    ///
-    /// - Parameter offset: Where this set starts in the merged gallery, so a
-    ///   contributed pin and a contributed page agree about which picture they
-    ///   are both about. See ``CommunityHikeDetail/galleryPhotos``.
-    /// ``CommunityReviewSubject``'s spelling, numbered from zero: on a
-    /// review screen there is nothing before these — a contribution under
-    /// review is not sitting after a hike's own pictures the way it will be
-    /// once it is published.
+    /// ``CommunityReviewSubject``'s spelling, numbered from zero: on a review
+    /// screen there is nothing before these — a contribution under review is
+    /// not sitting after a hike's own pictures the way it will be once it is
+    /// published.
     var reviewPreviewPhotos: [CommunityPreviewPhoto] { previewPhotos(startingAt: 0) }
-
-    func previewPhotos(startingAt offset: Int) -> [CommunityPreviewPhoto] {
-        guard isConsistent else { return [] }
-        return zip(photoPins, photoFileURLs).enumerated().compactMap { index, pair in
-            guard let coordinate = pair.0.coordinate else { return nil }
-            return CommunityPreviewPhoto(
-                index: offset + index,
-                latitude: coordinate.latitude,
-                longitude: coordinate.longitude,
-                capturedAt: pair.0.capturedAt,
-                fileURL: pair.1
-            )
-        }
-    }
-
-    /// Every downloaded photograph of this set, in the order the strip draws
-    /// them.
-    ///
-    /// Drops nothing, unlike ``previewPhotos(startingAt:)``, because the
-    /// gallery is the strip made large: a picture missing from here would make
-    /// the fourth tile open the fifth photograph.
-    func galleryPhotos(startingAt offset: Int) -> [CommunityGalleryPhoto] {
-        let pinned = isConsistent
-        return photoFileURLs.enumerated().map { index, url in
-            CommunityGalleryPhoto(
-                index: offset + index,
-                pin: pinned ? photoPins[index] : nil,
-                fileURL: url,
-                contribution: CommunityPhotoAttribution(
-                    contributionID: id,
-                    photoSubmissionID: photoSubmissionID,
-                    credit: credit,
-                    authorID: authorID
-                )
-            )
-        }
-    }
 }
 
 /// Who a contributed photograph belongs to, and the two record names that
