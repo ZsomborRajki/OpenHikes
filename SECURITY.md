@@ -88,11 +88,14 @@ enumerable, but a name rather than a permission. What would be new is a way to
 
 - Data reaching somewhere it should not — the mirrored (private) CloudKit
   database, the `group.tappium.com.OpenHikes` App Group store the widget reads,
-  the photo library, or a tile provider's servers.
+  the photo library, a tile provider's servers, or the paired Apple Watch,
+  which is sent the titles and figures of the hiker's hikes and the geometry of
+  one trail and should be sent nothing else.
 - Anything exploitable through untrusted input: an imported GPX file, an
-  `openhikes://` deep link, a response from a tile or Overpass endpoint, or the
-  contents of a community record — which is text and assets another user
-  uploaded.
+  `openhikes://` deep link, a response from a tile or Overpass endpoint, a
+  payload crossing the watch link (`WatchLink` is the only decoder on either
+  side), or the contents of a community record — which is text and assets
+  another user uploaded.
 - A committed credential. `OpenHikes/Secrets.plist` is gitignored and holds the
   optional Stadia and Thunderforest keys; a key that reached a commit is worth
   reporting even if the commit is old.

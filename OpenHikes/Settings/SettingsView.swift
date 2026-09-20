@@ -487,7 +487,9 @@ private extension SettingsView {
     ///
     /// The footer says three things a hiker deciding this needs, and says them
     /// because each one is a thing they cannot check from here: what goes,
-    /// that nothing is read back, and when they will be asked. The last is the
+    /// what is read back — nothing on the phone, and the heart rate on a watch
+    /// recording, which this switch does not control — and when they will be
+    /// asked. The last is the
     /// same promise *Also Save to Photos* makes, kept the same way — the
     /// prompt comes at the first write, not at the flick of this switch.
     @ViewBuilder var healthSection: some View {
@@ -502,9 +504,10 @@ private extension SettingsView {
                 "Writes each hike you finish recording to the Health app as a hiking"
                 + " workout, with its distance, time, climb and route — so it counts"
                 + " towards your rings and sits beside your other activity. Deleting a"
-                + " hike removes its workout from Health too. OpenHikes never reads"
-                + " anything from Health. You'll be asked for permission the first time"
-                + " a hike is saved."
+                + " hike removes its workout from Health too. OpenHikes reads nothing"
+                + " from Health on your iPhone; on Apple Watch a recording reads your"
+                + " heart rate to show it while you walk. You'll be asked for permission"
+                + " the first time a hike is saved."
             )
         }
         #endif

@@ -46,9 +46,9 @@
 	<key>NSCameraUsageDescription</key>
 	<string>OpenHikes uses the camera so you can photograph a hike as you walk it. Photos are kept with that hike, and pinned to the point on the trail you had selected.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>OpenHikes connects to Health to save your finished hikes as workouts, including distance and route, when you turn on Save Hikes to Health. OpenHikes does not read your Health data.</string>
+	<string>OpenHikes connects to Health to save your finished hikes as workouts, including distance and route, when you turn on Save Hikes to Health. OpenHikes reads nothing from Health on your iPhone.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>OpenHikes saves your finished hikes to Health as hiking workouts, so they count towards your rings and appear beside your other activity. This is off until you turn it on, and OpenHikes never reads anything from Health.</string>
+	<string>OpenHikes saves your finished hikes to Health as hiking workouts, so they count towards your rings and appear beside your other activity. This is off until you turn it on, and OpenHikes reads nothing from Health on your iPhone.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>OpenHikes uses Always location, only when you turn on Background Trail Tracking in Settings, to keep your Home Screen widget and Live Activity showing your progress along the trail while the app isn't open.</string>
 	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
