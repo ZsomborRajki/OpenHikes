@@ -24,19 +24,18 @@ private struct OfflineStorageAlerts: ViewModifier {
         content
         .alert(
             "Couldn’t Delete Offline Tiles",
-            isPresented: Binding(
-                get: { deletionFailure != nil },
-                set: { presented in
-                    guard !presented else { return }
-                    deletionFailure = nil
-                }
-            ),
+            isPresented: $deletionFailure.isPresent(),
             presenting: deletionFailure
         ) { _ in
             Button("OK", role: .cancel) { /* dismiss */ }
         } message: { failure in
             Text(Self.deletionMessage(for: failure))
         }
+        // Not `isPresent()`, which the alert above uses: dismissing this one
+        // has to *cancel the download*, and the shortfall is the downloader's
+        // own state rather than a flag this view may clear behind its back.
+        // Niling it would leave a download waiting on an answer nobody is
+        // going to give it.
         .alert(
             "Not Enough Space for This Map",
             isPresented: Binding(

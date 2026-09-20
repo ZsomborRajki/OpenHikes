@@ -87,10 +87,7 @@ struct CommunityReviewChrome: ViewModifier {
             }
             .alert(
                 "Couldn't finish",
-                isPresented: Binding(
-                    get: { decisionFailure != nil },
-                    set: { if !$0 { decisionFailure = nil } }
-                ),
+                isPresented: $decisionFailure.isPresent(),
                 presenting: decisionFailure
             ) { _ in
                 Button("OK", role: .cancel) { decisionFailure = nil }
