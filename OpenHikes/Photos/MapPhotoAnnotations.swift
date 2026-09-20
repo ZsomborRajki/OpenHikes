@@ -196,17 +196,11 @@ extension MapView.Coordinator {
         // map — which is every one, since the gallery is pushed over the screen
         // that owns them — can only be applied once they are back.
         applyPhotoPinSelection(controller.selection, on: mapView)
-        withObservationTracking {
+        reobserving(self, mapView, controller) {
             _ = controller.pins
             _ = controller.selection
-        } onChange: { [weak self, weak mapView, weak controller] in
-            let coordinator = self
-            let map = mapView
-            let model = controller
-            Task { @MainActor in
-                guard let coordinator, let map, let model else { return }
-                coordinator.trackPhotoPins(model, on: map)
-            }
+        } onChange: { coordinator, map, model in
+            coordinator.trackPhotoPins(model, on: map)
         }
     }
 

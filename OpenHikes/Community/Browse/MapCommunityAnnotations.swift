@@ -110,16 +110,10 @@ extension MapView.Coordinator {
 
     private func trackCommunityPins(_ browser: CommunityBrowser, on mapView: MKMapView) {
         applyCommunityPins(browser.nearbyListings, on: mapView)
-        withObservationTracking {
+        reobserving(self, mapView, browser) {
             _ = browser.nearbyListings
-        } onChange: { [weak self, weak mapView, weak browser] in
-            let coordinator = self
-            let map = mapView
-            let model = browser
-            Task { @MainActor in
-                guard let coordinator, let map, let model else { return }
-                coordinator.trackCommunityPins(model, on: map)
-            }
+        } onChange: { coordinator, map, model in
+            coordinator.trackCommunityPins(model, on: map)
         }
     }
 

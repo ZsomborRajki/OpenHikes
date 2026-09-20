@@ -324,55 +324,37 @@ extension MapView {
         }
 
         private func observeFitRoute(_ controller: MapController, on mapView: MKMapView) {
-            withObservationTracking {
+            reobserving(self, mapView, controller) {
                 _ = controller.fitRouteRequest
-            } onChange: { [weak self, weak mapView, weak controller] in
-                let coordinator = self
-                let map = mapView
-                let model = controller
-                Task { @MainActor in
-                    guard let coordinator, let map, let model else { return }
-                    coordinator.fitToCurrentRoute(map, animated: true)
-                    coordinator.observeFitRoute(model, on: map)
-                }
+            } onChange: { coordinator, map, model in
+                coordinator.fitToCurrentRoute(map, animated: true)
+                coordinator.observeFitRoute(model, on: map)
             }
         }
 
         private func observeShowRegion(_ controller: MapController, on mapView: MKMapView) {
-            withObservationTracking {
+            reobserving(self, mapView, controller) {
                 _ = controller.showRegionRequest
-            } onChange: { [weak self, weak mapView, weak controller] in
-                let coordinator = self
-                let map = mapView
-                let model = controller
-                Task { @MainActor in
-                    guard let coordinator, let map, let model else { return }
-                    if let region = model.region {
-                        // Through the coordinator rather than `setRegion`, so a
-                        // searched place and a photograph's pin land in the map
-                        // the hiker can see rather than in the window — see
-                        // `MapCoordinator+RouteFitting.swift`. `setRegion` has no
-                        // edge padding at all, which is what put a result's
-                        // centre behind the sheet.
-                        coordinator.show(region, on: map, animated: true)
-                    }
-                    coordinator.observeShowRegion(model, on: map)
+            } onChange: { coordinator, map, model in
+                if let region = model.region {
+                    // Through the coordinator rather than `setRegion`, so a
+                    // searched place and a photograph's pin land in the map
+                    // the hiker can see rather than in the window — see
+                    // `MapCoordinator+RouteFitting.swift`. `setRegion` has no
+                    // edge padding at all, which is what put a result's
+                    // centre behind the sheet.
+                    coordinator.show(region, on: map, animated: true)
                 }
+                coordinator.observeShowRegion(model, on: map)
             }
         }
 
         private func observeFollowUser(_ controller: MapController, on mapView: MKMapView) {
-            withObservationTracking {
+            reobserving(self, mapView, controller) {
                 _ = controller.followUserRequest
-            } onChange: { [weak self, weak mapView, weak controller] in
-                let coordinator = self
-                let map = mapView
-                let model = controller
-                Task { @MainActor in
-                    guard let coordinator, let map, let model else { return }
-                    map.setUserTrackingMode(.follow, animated: true)
-                    coordinator.observeFollowUser(model, on: map)
-                }
+            } onChange: { coordinator, map, model in
+                map.setUserTrackingMode(.follow, animated: true)
+                coordinator.observeFollowUser(model, on: map)
             }
         }
 
@@ -391,16 +373,10 @@ extension MapView {
 
         private func trackLocation(_ locationManager: LocationManager, on mapView: MKMapView) {
             centerOnUser(locationManager.coordinate, on: mapView)
-            withObservationTracking {
+            reobserving(self, mapView, locationManager) {
                 _ = locationManager.coordinate
-            } onChange: { [weak self, weak mapView, weak locationManager] in
-                let coordinator = self
-                let map = mapView
-                let model = locationManager
-                Task { @MainActor in
-                    guard let coordinator, let map, let model else { return }
-                    coordinator.trackLocation(model, on: map)
-                }
+            } onChange: { coordinator, map, model in
+                coordinator.trackLocation(model, on: map)
             }
         }
 
@@ -446,18 +422,12 @@ extension MapView {
         /// and must not travel through SwiftUI to reach the map.
         func observeRouteStyle(_ style: RouteStyle, on mapView: MKMapView) {
             applyRouteStyle(tint: style.tint, width: style.width, pattern: style.pattern, on: mapView)
-            withObservationTracking {
+            reobserving(self, mapView, style) {
                 _ = style.tint
                 _ = style.width
                 _ = style.pattern
-            } onChange: { [weak self, weak mapView, weak style] in
-                let coordinator = self
-                let map = mapView
-                let model = style
-                Task { @MainActor in
-                    guard let coordinator, let map, let model else { return }
-                    coordinator.observeRouteStyle(model, on: map)
-                }
+            } onChange: { coordinator, map, model in
+                coordinator.observeRouteStyle(model, on: map)
             }
         }
 
@@ -512,16 +482,10 @@ extension MapView {
         /// re-registers. This keeps drag updates entirely off SwiftUI's render path.
         func observeHighlight(_ highlight: RouteHighlight, on mapView: MKMapView) {
             applyHighlight(highlight.coordinate, on: mapView)
-            withObservationTracking {
+            reobserving(self, mapView, highlight) {
                 _ = highlight.coordinate
-            } onChange: { [weak self, weak mapView, weak highlight] in
-                let coordinator = self
-                let map = mapView
-                let model = highlight
-                Task { @MainActor in
-                    guard let coordinator, let map, let model else { return }
-                    coordinator.observeHighlight(model, on: map)
-                }
+            } onChange: { coordinator, map, model in
+                coordinator.observeHighlight(model, on: map)
             }
         }
 
@@ -545,16 +509,10 @@ extension MapView {
                 // not dropped.
                 pendingRecordingTrace = true
             }
-            withObservationTracking {
+            reobserving(self, mapView, trace) {
                 _ = trace.revision
-            } onChange: { [weak self, weak mapView, weak trace] in
-                let coordinator = self
-                let map = mapView
-                let model = trace
-                Task { @MainActor in
-                    guard let coordinator, let map, let model else { return }
-                    coordinator.observeRecordingTrace(model, on: map)
-                }
+            } onChange: { coordinator, map, model in
+                coordinator.observeRecordingTrace(model, on: map)
             }
         }
     }

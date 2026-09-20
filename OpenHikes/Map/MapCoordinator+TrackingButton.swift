@@ -48,16 +48,10 @@ extension MapView.Coordinator {
     func observeSheetMetrics(_ metrics: SheetMetrics, on mapView: MKMapView) {
         sheetMetrics = metrics
         applySheetTop(on: mapView)
-        withObservationTracking {
+        reobserving(self, mapView, metrics) {
             _ = metrics.topY
-        } onChange: { [weak self, weak mapView, weak metrics] in
-            let coordinator = self
-            let map = mapView
-            let model = metrics
-            Task { @MainActor in
-                guard let coordinator, let map, let model else { return }
-                coordinator.observeSheetMetrics(model, on: map)
-            }
+        } onChange: { coordinator, map, model in
+            coordinator.observeSheetMetrics(model, on: map)
         }
     }
 

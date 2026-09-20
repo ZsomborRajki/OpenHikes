@@ -30,16 +30,10 @@ extension MapView.Coordinator {
     /// then re-registers — the same shape as `observeHighlight(_:on:)`.
     func observeWalkHighlight(_ highlight: WalkHighlight, on mapView: MKMapView) {
         applyWalkHighlight(highlight.segments, on: mapView)
-        withObservationTracking {
+        reobserving(self, mapView, highlight) {
             _ = highlight.revision
-        } onChange: { [weak self, weak mapView, weak highlight] in
-            let coordinator = self
-            let map = mapView
-            let model = highlight
-            Task { @MainActor in
-                guard let coordinator, let map, let model else { return }
-                coordinator.observeWalkHighlight(model, on: map)
-            }
+        } onChange: { coordinator, map, model in
+            coordinator.observeWalkHighlight(model, on: map)
         }
     }
 
