@@ -28,6 +28,15 @@
 //  than leaving a hiker to read a shrunken number as the app having lost their
 //  pictures.
 //
+//  ## Its own file, and a suite
+//
+//  Out of the two forms rather than inside either, which is what lets a suite
+//  reach it: both are on ``Scripts/coverage-exclusions.txt`` because their
+//  executable lines are SwiftUI bodies, and a number this load-bearing should
+//  not be exempt along with them. The view half of what was extracted with it
+//  is in `CommunitySharePhotoViews.swift`, which *is* body code and is
+//  excluded. See ``CommunitySharePhotoTallyTests``.
+//
 //  ## The cap is applied after the exclusions
 //
 //  Deliberately, and it is why ``includedCount`` is what comes in here rather
@@ -38,8 +47,8 @@
 //  which applies it the same way on the other side.
 //
 
+import Foundation
 import SwiftData
-import SwiftUI
 
 /// What a send would carry, and what it would leave behind.
 ///
@@ -109,63 +118,5 @@ struct CommunitySharePhotoTally {
                 added on, so they can't be shared from here.
                 """
             )
-    }
-}
-
-extension View {
-    /// Keeps `count` up to date with what this device can actually send.
-    ///
-    /// Re-asked whenever the hiker strikes a photograph off or puts one back,
-    /// because the answer is about a particular set of *files*: the count
-    /// under the strip has to be what will really go, and the cap means taking
-    /// one out can let another in. Nothing else can change it while the form
-    /// is the screen on top.
-    func countsSendablePhotos(
-        of hike: Hike,
-        excluding excluded: Set<UUID>,
-        store: HikePhotoStore,
-        into count: Binding<Int?>
-    ) -> some View {
-        task(id: excluded) {
-            count.wrappedValue = await CommunityPublisher.sendablePhotoCount(
-                of: hike,
-                excludingPhotos: excluded,
-                store: store
-            )
-        }
-    }
-}
-
-/// What a publishing form shows once the upload has landed.
-///
-/// Both forms end here and ended it identically — the same paperplane, the
-/// same *Sent for review*, the same spacing and the same one combined
-/// accessibility element. What differs is the sentence underneath, because one
-/// is about a hike appearing and the other about photographs appearing on
-/// somebody else's, and the identifier, which is asserted per screen.
-struct CommunitySentSection: View {
-    /// What happens next, in this form's own words.
-    let detail: LocalizedStringKey
-    let identifier: String
-
-    var body: some View {
-        Section {
-            VStack(spacing: 8) {
-                Image(systemName: "paperplane.fill")
-                    .font(.largeTitle)
-                    .foregroundStyle(.tint)
-                    .accessibilityHidden(true)
-                Text("Sent for review")
-                    .font(.headline)
-                Text(detail)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier(identifier)
-        }
     }
 }
