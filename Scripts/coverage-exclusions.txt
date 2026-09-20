@@ -36,6 +36,21 @@
 #      that grows past a handful of lines belongs in its own file, where the
 #      floor can see it again.
 #
+# Five paths here arrived from the two duplication sweeps of 2026-09-19 and
+# 2026-09-20, and they are the case rule 2 above describes running in reverse.
+# Folding a section that two screens drew identically — a breakdown bar, a
+# review strip, a mail ending, a gallery chevron, a sent section — produces a
+# new file that is *entirely* body code. Inside the two screens those lines
+# were already exempt, because the screens are; extracted, they landed in the
+# denominator as permanently uncovered and took the measured number down 0.82
+# points across the two sweeps without one suite being weakened. Deduplicating
+# a screen is not a fall in what this gate is for.
+#
+# The rule that keeps it honest is the same one: what comes out of a screen and
+# is *not* body code does not belong here. CommunitySharePhotoTally came out of
+# the same fold and has its own file and its own suite, and
+# PhotoCalloutPreviewControl is UIKit the unit suites already reach at 94%.
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -43,14 +58,17 @@
 OpenHikes/Community/CommunityHikeRow.swift
 OpenHikes/Community/CommunityHikeView+Contributions.swift
 OpenHikes/Community/CommunityHikeView.swift
+OpenHikes/Community/CommunityMailOutcomeSections.swift
 OpenHikes/Community/CommunityPhotoActions.swift
 OpenHikes/Community/CommunityPhotoReviewView.swift
 OpenHikes/Community/CommunityPhotoShareSheet.swift
 OpenHikes/Community/CommunityPhotoTile.swift
 OpenHikes/Community/CommunityPhotoViewer.swift
 OpenHikes/Community/CommunityReportSheet.swift
+OpenHikes/Community/CommunityReviewPhotoStrip.swift
 OpenHikes/Community/CommunityReviewView.swift
 OpenHikes/Community/CommunitySharePhotoStrip.swift
+OpenHikes/Community/CommunitySharePhotoViews.swift
 OpenHikes/Community/CommunityShareSheet.swift
 OpenHikes/Community/CommunityWithdrawalSheet.swift
 OpenHikes/Community/MapSheetCommunitySection.swift
@@ -64,6 +82,7 @@ OpenHikes/Hikes/HikeRow.swift
 OpenHikes/Hikes/HikeSurfaceSection.swift
 OpenHikes/Hikes/HikeWalkHistory.swift
 OpenHikes/Hikes/RouteLinePatternPicker.swift
+OpenHikes/Hikes/TrailBreakdownSection.swift
 OpenHikes/Hikes/WalkControls.swift
 OpenHikes/Hikes/WalkRow.swift
 OpenHikes/Hikes/WalkSummaryView.swift
@@ -72,6 +91,7 @@ OpenHikes/Map/MapSidePanel.swift
 OpenHikes/Photos/HikePhotoSection.swift
 OpenHikes/Photos/HikePhotoViewer.swift
 OpenHikes/Photos/PhotoDiscoverySheet.swift
+OpenHikes/Photos/PhotoStepButton.swift
 OpenHikes/Purchases/MapPaywallView.swift
 OpenHikes/Recording/RecordingRouteReviewControls.swift
 OpenHikes/Settings/AboutSection.swift
