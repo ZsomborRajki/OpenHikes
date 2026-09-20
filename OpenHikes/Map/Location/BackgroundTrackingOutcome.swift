@@ -24,7 +24,7 @@
 /// `locationManagerDidChangeAuthorization`. A switch that flicked itself off
 /// while the system's own prompt was on top of it would be the app answering
 /// the prompt for the hiker.
-enum BackgroundTrackingOutcome: Equatable {
+nonisolated enum BackgroundTrackingOutcome: Equatable {
     /// A system prompt is up. Nothing to report until it is answered.
     case awaitingPrompt
     /// Always access is refused, and nothing in this app can ask again — the

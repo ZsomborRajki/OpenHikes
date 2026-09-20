@@ -282,10 +282,12 @@ extension MapView.Coordinator {
 
     /// Shows exactly one of the two buttons in the capsule.
     ///
-    /// Internal rather than private so `MapCoordinatorTests` can drive it
-    /// without a `CLLocationManager` — the swap is the whole behaviour, and
-    /// the status that decides it is somebody else's suite.
-    func applyLocationAccess(denied: Bool) {
+    /// Private: the swap is only ever reached through
+    /// ``observeLocationAccess(_:on:)``, and the tests drive it from the far
+    /// end — they build a map around a stubbed feed and read the two
+    /// `isHidden`s back, which is the whole behaviour rather than this one
+    /// assignment. See `MapCoordinatorTests+LocationAccess.swift`.
+    private func applyLocationAccess(denied: Bool) {
         trackingGlyph?.isHidden = denied
         refusedTrackingButton?.isHidden = !denied
     }
