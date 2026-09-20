@@ -292,7 +292,13 @@ extension MapSheetHikes {
         community.nearbyListings.filter(\.isCurated)
     }
 
-    func communityRow(_ listing: CommunityListing) -> some View {
+    /// One listing, as a row that opens it.
+    ///
+    /// The leaf all four places that list a community hike go through — the
+    /// two browse sections and the two suggestion sections — because a row
+    /// that opened its listing on a tap in three of them and not the fourth
+    /// would be a list where some rows work.
+    func communityRowButton(_ listing: CommunityListing) -> some View {
         Button {
             openListing(listing)
         } label: {
@@ -303,16 +309,21 @@ extension MapSheetHikes {
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        // The same offer the hiker's own rows make, for the same reason: a
-        // long press is where a hiker looks for "let me move this", and a
-        // gesture of our own would fire the button under it instead.
-        .contextMenu {
-            Button {
-                withAnimation { community.isReordering = true }
-            } label: {
-                Label("Reorder List", systemImage: "arrow.up.arrow.down")
+    }
+
+    /// The same row, in the lists a hiker is allowed to reorder.
+    func communityRow(_ listing: CommunityListing) -> some View {
+        communityRowButton(listing)
+            // The same offer the hiker's own rows make, for the same reason: a
+            // long press is where a hiker looks for "let me move this", and a
+            // gesture of our own would fire the button under it instead.
+            .contextMenu {
+                Button {
+                    withAnimation { community.isReordering = true }
+                } label: {
+                    Label("Reorder List", systemImage: "arrow.up.arrow.down")
+                }
             }
-        }
     }
 
     /// Submissions waiting for a person, above the published ones.
@@ -607,14 +618,7 @@ extension MapSheetHikes {
         if !community.matchingListings.isEmpty {
             Section {
                 ForEach(community.matchingListings) { listing in
-                    Button { openListing(listing) } label: {
-                        CommunityHikeRow(
-                            listing: listing,
-                            isImported: importedHikes[listing.id] != nil
-                        )
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
+                    communityRowButton(listing)
                 }
             } header: {
                 Text("Community Hikes")
@@ -636,14 +640,7 @@ extension MapSheetHikes {
         if community.isBrowsing, !community.nearbyListings.isEmpty {
             Section {
                 ForEach(community.nearbyListings) { listing in
-                    Button { openListing(listing) } label: {
-                        CommunityHikeRow(
-                            listing: listing,
-                            isImported: importedHikes[listing.id] != nil
-                        )
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
+                    communityRowButton(listing)
                 }
             } header: {
                 Text("Near Here")
