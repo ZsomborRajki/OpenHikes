@@ -455,9 +455,7 @@ struct TrailWidgetEntryView: View {
             snapshot.metrics(limit: layout.metricLimit)
         }
 
-        /// The recording map is the raw trace over a plain fill, never a
-        /// rendered basemap, so the text is on a light surface and takes the
-        /// standard label colors.
+        /// What is spoken after the trail's name: how the recording is going.
         private var accessibilityValue: String {
             let spoken = snapshot.metricsAccessibilityText(limit: layout.metricLimit)
             return spoken.isEmpty
@@ -494,25 +492,26 @@ struct TrailWidgetEntryView: View {
                     }
                 }
             }
-            .padding(layout.padding)
-            // The whole widget is one tap target, so it is read as one thing:
-            // whether a recording is running, then how it is going. The title
-            // is no longer drawn, but VoiceOver still leads with it — it is
-            // the only place the paused state is put into words.
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(snapshot.title)
-            .accessibilityValue(accessibilityValue)
-            .containerBackground(for: .widget) {
-                ZStack {
-                    Rectangle().fill(.fill.tertiary)
-                    TrailMapView(
-                        polyline: snapshot.polyline,
-                        basemaps: nil,
-                        tint: .red,
-                        liveFix: snapshot.polyline.last,
-                        lineWidth: layout.routeLineWidth
-                    )
-                }
+            // Read as one thing: whether a recording is running, then how it
+            // is going. The title is no longer drawn, but VoiceOver still
+            // leads with it — it is the only place the paused state is put
+            // into words. See ``View/trailWidgetCanvas(padding:label:value:background:)``.
+            .trailWidgetCanvas(
+                padding: layout.padding,
+                label: snapshot.title,
+                value: accessibilityValue
+            ) {
+                // Never a rendered basemap: the recording map is the raw
+                // trace over a plain fill, so the text above is on a light
+                // surface, takes the standard label colours, and needs no
+                // scrim — unlike a trail's.
+                TrailMapView(
+                    polyline: snapshot.polyline,
+                    basemaps: nil,
+                    tint: .red,
+                    liveFix: snapshot.polyline.last,
+                    lineWidth: layout.routeLineWidth
+                )
             }
         }
     }
@@ -599,34 +598,24 @@ private struct TrailWidgetContent: View {
             }
         }
         .shadow(color: .black.opacity(hasMap ? MapTextStyle.shadowOpacity : 0), radius: 2, y: 1)
-        .padding(layout.padding)
         // One tap target, so one element — and the trail's name is spoken on
         // every family even though none of them draw it any more. The widget
         // shows the shape of the trail; VoiceOver has to be told which one.
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(snapshot.title)
-        .accessibilityValue(accessibilityValue)
-        // The map is the widget's background rather than a subview, so it
-        // runs edge to edge under the text and the system rounds it to the
-        // widget's own corner radius. It also means the system can drop it
-        // wherever container backgrounds don't belong — StandBy, tinted
-        // Home Screens — and the text still stands on its own.
-        .containerBackground(for: .widget) {
-            ZStack {
-                // Shows through only until the first render lands, or if one
-                // never does: the fallback glyph needs something behind it.
-                Rectangle().fill(.fill.tertiary)
+        // See ``View/trailWidgetCanvas(padding:label:value:background:)``.
+        .trailWidgetCanvas(
+            padding: layout.padding,
+            label: snapshot.title,
+            value: accessibilityValue
+        ) {
+            TrailMapView(
+                polyline: snapshot.polyline,
+                basemaps: basemaps,
+                tint: tint,
+                liveFix: snapshot.liveFix?.coordinate,
+                lineWidth: layout.routeLineWidth
+            )
 
-                TrailMapView(
-                    polyline: snapshot.polyline,
-                    basemaps: basemaps,
-                    tint: tint,
-                    liveFix: snapshot.liveFix?.coordinate,
-                    lineWidth: layout.routeLineWidth
-                )
-
-                if hasMap { scrim }
-            }
+            if hasMap { scrim }
         }
     }
 
