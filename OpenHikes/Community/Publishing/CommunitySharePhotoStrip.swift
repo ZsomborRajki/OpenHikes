@@ -40,12 +40,6 @@ import SwiftUI
 
 /// The photographs a hiker is about to send, and which of them are going.
 struct CommunitySharePhotoStrip: View {
-    /// The same 76-point tile the hike's own gallery draws — this is the same
-    /// row of the same photographs, and two sizes would be two answers to one
-    /// question.
-    static let tileSize: CGFloat = 76
-    private static let tileSpacing: CGFloat = 8
-    private static let tileCornerRadius: CGFloat = 12
     /// How far a struck-off picture fades. Faded rather than removed, so the
     /// tap that took it out is the tap that puts it back.
     private static let excludedTileOpacity: Double = 0.4
@@ -69,7 +63,7 @@ struct CommunitySharePhotoStrip: View {
                 // Lazy for the reason ``HikePhotoSection/gallery(_:)`` is: an eager
                 // stack starts a decode for every tile at once, for a row that shows
                 // a handful.
-                LazyHStack(spacing: Self.tileSpacing) {
+                LazyHStack(spacing: PhotoTileMetrics.spacing) {
                     ForEach(photos) { photo in
                         tile(photo)
                     }
@@ -89,8 +83,8 @@ struct CommunitySharePhotoStrip: View {
             HikePhotoThumbnail(
                 photo: photo,
                 store: store,
-                size: Self.tileSize,
-                cornerRadius: Self.tileCornerRadius,
+                size: PhotoTileMetrics.stripTileSize,
+                cornerRadius: PhotoTileMetrics.cornerRadius,
                 label: Self.label(for: photo, isExcluded: isExcluded, among: photos.count)
             )
             .opacity(isExcluded ? Self.excludedTileOpacity : 1)

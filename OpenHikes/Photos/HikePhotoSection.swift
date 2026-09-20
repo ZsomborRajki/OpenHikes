@@ -52,10 +52,6 @@ struct HikePhotoSection: View {
         reader: PhotoLibrarySource.reader()
     )
 
-    private static let tileSize: CGFloat = 76
-    private static let tileSpacing: CGFloat = 8
-    private static let cornerRadius: CGFloat = 12
-
     var body: some View {
         // Taking a photo writes `hike.photos`, and this is the body that
         // should absorb that write. The mark is how a regression that pushes
@@ -138,7 +134,7 @@ struct HikePhotoSection: View {
     /// to cancel by scrolling away from, unless the container is lazy.
     private func gallery(_ photos: [HikePhoto]) -> some View {
         ScrollView(.horizontal) {
-            LazyHStack(spacing: Self.tileSpacing) {
+            LazyHStack(spacing: PhotoTileMetrics.spacing) {
                 // Enumerated rather than plain, so a tile is handed the
                 // position it is already standing in. See
                 // ``label(for:at:among:)``.
@@ -149,8 +145,8 @@ struct HikePhotoSection: View {
                         HikePhotoThumbnail(
                             photo: photo,
                             store: store,
-                            size: Self.tileSize,
-                            cornerRadius: Self.cornerRadius,
+                            size: PhotoTileMetrics.stripTileSize,
+                            cornerRadius: PhotoTileMetrics.cornerRadius,
                             label: Self.label(for: photo, at: index, among: photos.count)
                         )
                     }
