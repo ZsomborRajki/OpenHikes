@@ -27,7 +27,7 @@ the most interesting thing here to report on, so it is named first.
 
 ### The public community database
 
-The rules are spelled out in `OpenHikes/Community/CommunitySchema.swift`, and
+The rules are spelled out in `OpenHikes/Community/Transport/CommunitySchema.swift`, and
 anything the deployed environment does that contradicts that file is worth
 reporting:
 
