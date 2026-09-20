@@ -103,16 +103,19 @@ struct HikeLiveActivity: Widget {
     private func expandedTrailing(
         _ presentation: HikeActivityPresentation
     ) -> some View {
-        if presentation.showsElapsedTimer {
+        switch presentation.secondaryFigure {
+        case .elapsed:
             HikeActivityElapsed(presentation: presentation)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-        } else if let value = presentation.secondaryValue {
+        case let .figure(value, caption):
             HikeActivityFigure(
                 value: value,
-                caption: presentation.secondaryCaption ?? "",
+                caption: caption,
                 alignment: .trailing
             )
             .frame(maxWidth: .infinity, alignment: .trailing)
+        case nil:
+            EmptyView()
         }
     }
 

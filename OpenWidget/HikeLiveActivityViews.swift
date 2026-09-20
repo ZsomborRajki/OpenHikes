@@ -271,7 +271,8 @@ struct HikeActivityLockScreenView: View {
     private func trailingFigure(
         _ presentation: HikeActivityPresentation
     ) -> some View {
-        if presentation.showsElapsedTimer {
+        switch presentation.secondaryFigure {
+        case .elapsed:
             VStack(alignment: .trailing, spacing: 0) {
                 HikeActivityElapsed(presentation: presentation)
                 Text("Elapsed")
@@ -279,12 +280,14 @@ struct HikeActivityLockScreenView: View {
                     .foregroundStyle(.secondary)
             }
             .accessibilityHidden(true)
-        } else if let value = presentation.secondaryValue {
+        case let .figure(value, caption):
             HikeActivityFigure(
                 value: value,
-                caption: presentation.secondaryCaption ?? "",
+                caption: caption,
                 alignment: .trailing
             )
+        case nil:
+            EmptyView()
         }
     }
 }
