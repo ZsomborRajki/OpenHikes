@@ -77,12 +77,22 @@ enum LocationAccessNeed {
 /// this one is observed rather than handed a closure.
 ///
 /// ``isShowing`` is the only thing on it, and it changes twice per refusal
-/// the hiker actually taps into. See ``LocationAccessAlert`` for why no body
-/// on the render path reads it.
+/// the hiker actually taps into. It is presented by ``MapScreenAlerts``, from
+/// inside the sheet's contents — see that file for why the root view is the
+/// one place this alert cannot be attached, and ``isShowingBinding`` for why
+/// attaching it there costs no body a dependency on this flag.
 @MainActor
 @Observable
 final class LocationAccessPrompt {
     var isShowing = false
+
+    /// Drives `.alert(isPresented:)`. A binding rather than the property
+    /// itself, for the reason ``WeatherDetailPresentation/isPresentedBinding``
+    /// is one: building it reads nothing, so the body that attaches the alert
+    /// does not become a reader of this flag.
+    var isShowingBinding: Binding<Bool> {
+        Binding(get: { self.isShowing }, set: { self.isShowing = $0 })
+    }
 
     /// Raised from the map's own button, which is the moment the hiker has
     /// just asked for the thing that cannot happen.
@@ -115,31 +125,5 @@ extension View {
         } message: {
             Text(need.message)
         }
-    }
-}
-
-/// Draws nothing. It is where the map screen's copy of the alert above is
-/// presented, and the reason it is a `View` of its own is that
-/// ``LocationAccessPrompt/isShowing`` has to be read by *some* body and
-/// ``OpenHikesView``'s is the wrong one — the map, the sheet and every
-/// control on them are inlined into it, so an alert appearing there would
-/// re-render the whole screen to draw a box over it. Here it re-renders a
-/// zero-size rectangle instead.
-///
-/// The same arrangement, and for the same reason, as ``SheetLayoutReader``
-/// in the background beside it.
-struct LocationAccessAlert: View {
-    @Bindable var prompt: LocationAccessPrompt
-
-    var body: some View {
-        // A plain `Color.clear`, the shape ``SheetLayoutReader`` beside it
-        // takes: it draws nothing and is never announced, but it is a real
-        // view in the hierarchy, which is what a presentation hangs off. A
-        // zero-sized frame would be a view SwiftUI is free to give no place
-        // to, and an alert with no host does not open.
-        Color.clear
-            .accessibilityHidden(true)
-            .allowsHitTesting(false)
-            .locationAccessAlert(.whileUsing, isPresented: $prompt.isShowing)
     }
 }
