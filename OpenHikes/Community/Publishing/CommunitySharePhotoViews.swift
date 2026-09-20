@@ -55,23 +55,12 @@ struct CommunitySentSection: View {
     let identifier: String
 
     var body: some View {
-        Section {
-            VStack(spacing: 8) {
-                Image(systemName: "paperplane.fill")
-                    .font(.largeTitle)
-                    .foregroundStyle(.tint)
-                    .accessibilityHidden(true)
-                Text("Sent for review")
-                    .font(.headline)
-                Text(detail)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier(identifier)
-        }
+        CommunityOutcomeSection(
+            symbol: "paperplane.fill",
+            tint: AnyShapeStyle(.tint),
+            headline: Text("Sent for review"),
+            detail: Text(detail),
+            identifier: identifier
+        )
     }
 }

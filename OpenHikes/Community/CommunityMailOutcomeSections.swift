@@ -85,50 +85,23 @@ struct CommunityMailOutcomeSections: View {
     }
 
     private var handedOffSection: some View {
-        outcomeSection(
+        CommunityOutcomeSection(
             symbol: "envelope",
             tint: AnyShapeStyle(.tint),
-            headline: "Opened in your mail app",
-            detail: "The \(noun.lowercased()) reaches the reviewer only once you send it there.",
+            headline: Text("Opened in your mail app"),
+            detail: Text("The \(noun.lowercased()) reaches the reviewer only once you send it there."),
             identifier: identifiers.handedOff
         )
     }
 
     private var noMailAppSection: some View {
-        outcomeSection(
+        CommunityOutcomeSection(
             symbol: "envelope.badge.shield.half.filled",
             tint: AnyShapeStyle(.secondary),
-            headline: "No mail app answered",
-            detail: "Nothing on this device offered to write the message.",
+            headline: Text("No mail app answered"),
+            detail: Text("Nothing on this device offered to write the message."),
             identifier: identifiers.noMailApp
         )
-    }
-
-    private func outcomeSection(
-        symbol: String,
-        tint: AnyShapeStyle,
-        headline: String,
-        detail: String,
-        identifier: String
-    ) -> some View {
-        Section {
-            VStack(spacing: 8) {
-                Image(systemName: symbol)
-                    .font(.largeTitle)
-                    .foregroundStyle(tint)
-                    .accessibilityHidden(true)
-                Text(headline)
-                    .font(.headline)
-                Text(detail)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier(identifier)
-        }
     }
 
     /// The message itself, kept reachable after *either* outcome.
