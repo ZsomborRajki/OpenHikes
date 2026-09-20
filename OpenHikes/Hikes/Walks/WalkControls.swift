@@ -19,6 +19,7 @@
 //  walk's, and vice versa.
 //
 
+import OpenHikesShared
 import SwiftUI
 
 struct WalkControls: View {
@@ -62,7 +63,12 @@ struct WalkControls: View {
             titleVisibility: .visible
         ) {
             Button("End Hike", role: .destructive) {
-                switch session.end() {
+                let end = session.end()
+                // From the outcome rather than from the phase going absent:
+                // kept, dropped and refused are three different pieces of news
+                // and the phase carries none of them. See ``WalkHaptics``.
+                end.hapticMoment.play()
+                switch end {
                 case let .kept(walk): onOpenWalk(walk)
                 case .discarded: break
                 case .refused: showEndRefusal = true
@@ -91,7 +97,17 @@ struct WalkControls: View {
         // own action above, so only the automatic case is answered here.
         .onChange(of: session.lastEndedWalk) { _, ended in
             guard let ended, ended.hikeID == hike.id, ended.endReason == .reachedEnd else { return }
+            // The one ending nobody asked for, and so the one most worth
+            // feeling: a hiker who walked the last of the route learns it
+            // without taking the phone out.
+            HapticMoment.walkSaved.play()
             onOpenWalk(ended)
+        }
+        // The beginning and the middle. The endings are reported by the two
+        // closures above, which know what kind of ending it was — see
+        // ``WalkHaptics``.
+        .sensoryFeedback(trigger: session.phase) { old, new in
+            hapticFeedback(forWalkPhase: old, to: new)?.feedback
         }
     }
 
@@ -129,8 +145,12 @@ struct WalkControls: View {
     }
 
     /// Says so when a tap asking for `attempted` was not written down.
+    ///
+    /// A change that *was* written down says nothing here: the phase moved,
+    /// and the `sensoryFeedback` above has already answered it.
     private func refuse(_ attempted: TrailWalkPhase, unless changed: Bool) {
         guard !changed else { return }
+        HapticMoment.walkFailed.play()
         refusedPhase = attempted
         showPhaseRefusal = true
     }

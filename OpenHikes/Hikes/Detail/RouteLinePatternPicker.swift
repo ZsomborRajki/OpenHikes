@@ -13,6 +13,7 @@
 //  than the detail screen around them.
 //
 
+import OpenHikesShared
 import SwiftUI
 
 struct RouteLinePatternPicker: View {
@@ -65,6 +66,14 @@ struct RouteLinePatternPicker: View {
                 }
             }
         }
+        // Two of the five swatches differ only in how long their strokes are,
+        // and the line they change is on a map behind this sheet. The body
+        // already reads the pattern for the caption, so this registers nothing
+        // new.
+        .sensoryFeedback(
+            HapticMoment.choiceChanged.feedback,
+            trigger: hike.routeLinePattern
+        )
     }
 
     private func swatchButton(for pattern: RouteLinePattern) -> some View {

@@ -53,6 +53,7 @@
 //  opposite things said to a customer who may already be paying.
 //
 
+import OpenHikesShared
 import StoreKit
 import SwiftUI
 
@@ -284,7 +285,13 @@ struct MapPaywallView: View {
 
     private func restore() async {
         message = nil
-        switch await store.restore() {
+        let outcome = await store.restore()
+        // A cancel is the one outcome that says nothing: the customer dismissed
+        // the sheet themselves and already knows what they did.
+        if outcome != .cancelled {
+            (outcome == .restored ? HapticMoment.outcomeSucceeded : .outcomeFailed).play()
+        }
+        switch outcome {
         case .restored, .cancelled:
             // `.restored` closes the screen the same way a purchase does; a
             // cancel says nothing, because the user already knows what they

@@ -17,6 +17,7 @@
 //
 
 import MapKit
+import OpenHikesShared
 import SwiftData
 import SwiftUI
 
@@ -401,6 +402,11 @@ private extension MapSheetHikes {
                 }
             }
             .pickerStyle(.inline)
+            // `sort` is already an input of this body, so the read is free —
+            // and a menu that closes on the tap is exactly the control whose
+            // choice is worth confirming, because the list behind it may not
+            // visibly change at all.
+            .sensoryFeedback(HapticMoment.choiceChanged.feedback, trigger: sort)
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: isCustomOrder ? "hand.draw" : sort.symbol)
@@ -510,6 +516,9 @@ private extension MapSheetHikes {
                         }
                 }
                 .onMove { offsets, destination in
+                    // See ``MapSheetCommunitySection/moveCommunity(_:from:to:)``
+                    // for why the drop and not the drag.
+                    HapticMoment.rowMoved.play()
                     HikeListOrder.move(arranged, from: offsets, to: destination)
                     orderRevision += 1
                 }

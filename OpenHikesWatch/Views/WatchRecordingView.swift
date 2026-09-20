@@ -61,6 +61,22 @@ struct WatchRecordingView: View {
         }
         .navigationTitle("Record")
         .navigationBarTitleDisplayMode(.inline)
+        // Every moment this watch has to offer, off one phase — see
+        // ``WatchRecordingHaptics``. On the body rather than in a leaf of its
+        // own, because this body already reads `phase` and says above that it
+        // may; the phone's screen needs the boundary and this one does not.
+        .sensoryFeedback(trigger: model.recorder.phase) { old, new in
+            HapticMoment.walk(
+                from: old.hapticWalkState,
+                to: new.hapticWalkState
+            )?.feedback
+        }
+        // A command the phone would not carry out. The buttons that send one
+        // are disabled until it answers, so this is the only way a hiker
+        // learns the answer was no.
+        .sensoryFeedback(trigger: model.commandRefusal) { _, refusal in
+            refusal == nil ? nil : HapticMoment.walkFailed.feedback
+        }
     }
 
     @ViewBuilder private var watchRecording: some View {
@@ -247,6 +263,17 @@ private struct PhoneRecordingPanel: View {
                     .multilineTextAlignment(.center)
             }
             controls
+        }
+        // The phone's answer to a command sent from here, rather than the tap
+        // that sent it. Silent when the recording ends: this watch is told
+        // that the phone stopped and never whether it kept the walk, and a
+        // guess either way would be worse than saying nothing.
+        .sensoryFeedback(trigger: recording.state) { old, new in
+            guard new != .idle else { return nil }
+            return HapticMoment.walk(
+                from: old.hapticWalkState,
+                to: new.hapticWalkState
+            )?.feedback
         }
     }
 

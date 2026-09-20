@@ -33,6 +33,7 @@
 //  ``CommunityBrowser/startBrowsing()`` and ``CommunityBrowser/stopBrowsing()``.
 //
 
+import OpenHikesShared
 import SwiftUI
 
 /// Which of the sheet's two lists is showing.
@@ -130,6 +131,10 @@ extension MapSheetHikes {
         from offsets: IndexSet,
         to destination: Int
     ) {
+        // On the drop rather than through the drag: a row follows the finger
+        // the whole way, so the one moment worth marking is it being let go
+        // somewhere new.
+        HapticMoment.rowMoved.play()
         var moved = displayed
         moved.move(fromOffsets: offsets, toOffset: destination)
         for (index, listing) in moved.enumerated() {

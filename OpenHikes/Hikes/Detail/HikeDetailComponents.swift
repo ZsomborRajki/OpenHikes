@@ -5,6 +5,7 @@
 //  Helper views used only by HikeDetailView.
 //
 
+import OpenHikesShared
 import SwiftUI
 
 /// The one tile the hike detail's action row is built from — zoom, offline
@@ -337,6 +338,22 @@ struct OfflineDownloadButton: View {
         )
         .accessibilityValue(accessibilityValue)
         .accessibilityIdentifier("offline-download-button")
+        // A download is the longest wait in the app and the one a hiker walks
+        // away from, so the two ways it settles are worth feeling.
+        //
+        // The other three are not, and each for its own reason. `downloading`
+        // is the wait itself; `idle` is a cancel the hiker asked for a moment
+        // ago; and `needsSpace` has not settled at all — it is the run stopping
+        // to ask a question, and it raises an alert to ask it. Answering that
+        // one belongs with the ambient haptics this change deliberately leaves
+        // out, not with the outcomes.
+        .sensoryFeedback(trigger: downloader.phase) { _, phase in
+            switch phase {
+            case .finished: HapticMoment.outcomeSucceeded.feedback
+            case .failed: HapticMoment.outcomeFailed.feedback
+            case .idle, .downloading, .needsSpace: nil
+            }
+        }
     }
 
     private var accessibilityValue: String {

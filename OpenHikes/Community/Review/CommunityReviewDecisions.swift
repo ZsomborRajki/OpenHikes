@@ -35,6 +35,7 @@
 //
 
 import Foundation
+import OpenHikesShared
 import SwiftUI
 
 /// What a review screen needs from the thing it is deciding about.
@@ -317,9 +318,15 @@ final class CommunityReviewDecisions<Subject: CommunityReviewSubject> {
             } catch {
                 isDeciding = false
                 decisionFailure = Self.failure(error)
+                // Both decisions and both outcomes pass through here, which is
+                // why the haptic is here rather than on the two buttons: a
+                // reviewer taps Publish and waits on a network round trip, and
+                // what is worth feeling is which way it went.
+                HapticMoment.outcomeFailed.play()
                 return
             }
             isDeciding = false
+            HapticMoment.outcomeSucceeded.play()
             finish()
         }
     }

@@ -100,6 +100,9 @@ struct RecordingView: View {
                 }
             }
         }
+        // The walk's whole haptic vocabulary, and a boundary for the same
+        // reason the pins above are one — see ``RecordingHaptics``.
+        .background { RecordingHaptics(recorder: recorder) }
         // The phase is a coloured dot and a word at the top of a scrolling
         // screen, so a change nobody is looking at is a change nobody hears.
         .onChange(of: recorder.phase) { _, phase in

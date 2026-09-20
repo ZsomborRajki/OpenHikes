@@ -23,6 +23,7 @@
 //  Cancel-or-Done on one side and Send on the other.
 //
 
+import OpenHikesShared
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -90,7 +91,8 @@ struct CommunityMailOutcomeSections: View {
             tint: AnyShapeStyle(.tint),
             headline: Text("Opened in your mail app"),
             detail: Text("The \(noun.lowercased()) reaches the reviewer only once you send it there."),
-            identifier: identifiers.handedOff
+            identifier: identifiers.handedOff,
+            moment: .outcomeSucceeded
         )
     }
 
@@ -100,7 +102,11 @@ struct CommunityMailOutcomeSections: View {
             tint: AnyShapeStyle(.secondary),
             headline: Text("No mail app answered"),
             detail: Text("Nothing on this device offered to write the message."),
-            identifier: identifiers.noMailApp
+            identifier: identifiers.noMailApp,
+            // The one ending in this family that is not good news: nothing on
+            // the device would write the message, so the report has not gone
+            // anywhere.
+            moment: .outcomeFailed
         )
     }
 
