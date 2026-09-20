@@ -904,48 +904,35 @@ extension BackgroundTrailTracker {
     /// the atomic App Group write — is disk and arithmetic, and belongs off
     /// the frame.
     ///
-    /// Ordering is by construction rather than by luck: the handle is assigned
-    /// synchronously on the main actor, which serializes these calls, and every
-    /// publication awaits the one it replaced before touching the store.
-    /// ``SnapshotWriter`` alone would not be enough — an actor grants mutual
-    /// exclusion but says nothing about the order suspended callers resume in,
-    /// so two fixes could commit backwards and leave the widget showing the
-    /// older one for as long as the hiker kept to the same on/off-route
-    /// status.
+    /// Ordering is by construction rather than by luck, and the construction is
+    /// ``onFixPublishChain(_:)`` — the handle is assigned synchronously on the
+    /// main actor, which serializes these calls, and every publication awaits
+    /// the one it replaced before touching the store. ``SnapshotWriter`` alone
+    /// would not be enough: an actor grants mutual exclusion but says nothing
+    /// about the order suspended callers resume in, so two fixes could commit
+    /// backwards and leave the widget showing the older one for as long as the
+    /// hiker kept to the same on/off-route status.
     private func updateStoredLiveFix(
         _ fix: SharedTrailSnapshot.LiveFix?,
         input: SnapshotInput,
         elevation: RouteElevationSummary,
         walk: SharedTrailSnapshot.Walk?
     ) {
-        let revision = selectionRevision
-        let previous = fixPublishTask
-        // A selection publication writes the whole trail: landing a fix before
-        // it would simply be overwritten by that trail's own snapshot, which
-        // carries none. `publishLiveFix` refuses outright while one is in
-        // flight; the background feed cannot, so it queues behind it instead.
-        let pendingSelection = selectionPublishTask
-        fixPublishSequence &+= 1
-        let sequence = fixPublishSequence
-        fixPublishTask = Task { [weak self] in
-            defer { self?.finishFixPublish(sequence: sequence) }
-            await previous?.value
-            await pendingSelection?.value
-            guard let self,
-                  let write = await snapshotWriter.applyLiveFix(
-                      fix,
-                      input: input,
-                      elevation: elevation,
-                      walk: walk,
-                      ifCurrent: revision
-                  ),
-                  selectionRevision == revision
+        onFixPublishChain { tracker, revision in
+            guard let write = await tracker.snapshotWriter.applyLiveFix(
+                fix,
+                input: input,
+                elevation: elevation,
+                walk: walk,
+                ifCurrent: revision
+            ),
+                tracker.selectionRevision == revision
             else { return }
-            await snapshotWriter.reloadWidget()
-            publishFollowActivity(write.snapshot)
+            await tracker.snapshotWriter.reloadWidget()
+            tracker.publishFollowActivity(write.snapshot)
             // Only when the trail itself changed. A moving position needs no
             // new basemap — that's the whole reason images are affordable here.
-            if write.isNewTrail { refreshBasemaps(for: write.snapshot) }
+            if write.isNewTrail { tracker.refreshBasemaps(for: write.snapshot) }
         }
     }
 
@@ -968,6 +955,45 @@ extension BackgroundTrailTracker {
         hikeID: UUID,
         then completion: @escaping @MainActor (SharedTrailSnapshot?) -> Void = { _ in /* no-op default */ }
     ) {
+        onFixPublishChain { tracker, revision in
+            var written: SharedTrailSnapshot?
+            if let snapshot = await tracker.snapshotWriter.applyWalk(
+                walk,
+                hikeID: hikeID,
+                ifCurrent: revision
+            ), tracker.selectionRevision == revision {
+                await tracker.snapshotWriter.reloadWidget()
+                written = snapshot
+            }
+            completion(written)
+        }
+    }
+
+    /// Queues one App Group write behind everything the live-fix chain already
+    /// has in flight, and hands the publication the selection revision it was
+    /// queued against.
+    ///
+    /// This is the ordering both writers depend on, in one place rather than
+    /// two. Three things happen before the hop and all three are load-bearing:
+    /// the revision is read **now**, so a selection that changes while this
+    /// waits is detectable rather than invisible; the two handles are captured
+    /// **now**, so the queue is the one that existed at the call rather than
+    /// whatever it has become by the time this resumes; and the sequence is
+    /// bumped **now**, so the handle this call installs is the only one
+    /// ``finishFixPublish(sequence:)`` will release.
+    ///
+    /// The second handle is the one that is easy to leave out. A selection
+    /// publication writes the whole trail, so a fix landing before it would
+    /// simply be overwritten by that trail's own snapshot, which carries none.
+    /// ``publishLiveFix(_:)`` refuses outright while one is in flight; the
+    /// background feed cannot refuse, so it queues behind it instead.
+    ///
+    /// The tracker is handed back rather than captured, and the publication
+    /// runs only if it is still here: a write chained behind a tracker that
+    /// has gone is a write nothing is waiting for.
+    private func onFixPublishChain(
+        _ publish: @escaping @MainActor @Sendable (BackgroundTrailTracker, UInt64) async -> Void
+    ) {
         let revision = selectionRevision
         let previous = fixPublishTask
         let pendingSelection = selectionPublishTask
@@ -978,13 +1004,7 @@ extension BackgroundTrailTracker {
             await previous?.value
             await pendingSelection?.value
             guard let self else { return }
-            var written: SharedTrailSnapshot?
-            if let snapshot = await snapshotWriter.applyWalk(walk, hikeID: hikeID, ifCurrent: revision),
-               selectionRevision == revision {
-                await snapshotWriter.reloadWidget()
-                written = snapshot
-            }
-            completion(written)
+            await publish(self, revision)
         }
     }
 
