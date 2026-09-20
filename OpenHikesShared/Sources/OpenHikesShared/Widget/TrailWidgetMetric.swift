@@ -305,6 +305,32 @@ extension TrailWidgetMetric {
     }
 }
 
+extension SharedTrailSnapshot: TrailWidgetMetricSource {}
+extension SharedRecordingSnapshot: TrailWidgetMetricSource {}
+
+/// Something a widget can draw a band of stat chips for.
+///
+/// Two snapshots answer this and they answer it differently — a trail's
+/// chips are ascent and where the hiker is, a recording's are ascent and
+/// pace. What they do not differ about is turning whichever chips came back
+/// into the one phrase a widget speaks, so that lives here: a widget is a
+/// single accessibility element, the glyphs say nothing to VoiceOver, and a
+/// second spelling of the joining would be a widget that reads differently
+/// depending on what it happens to be showing.
+public protocol TrailWidgetMetricSource {
+    /// This snapshot's chips, most useful first, truncated to whatever the
+    /// widget family has width for.
+    func metrics(limit: Int, locale: Locale) -> [TrailWidgetMetric]
+}
+
+public extension TrailWidgetMetricSource {
+    /// The same chips as one phrase, for the widget's single accessibility
+    /// element.
+    func metricsAccessibilityText(limit: Int, locale: Locale = .current) -> String {
+        TrailWidgetMetric.accessibilityText(for: metrics(limit: limit, locale: locale))
+    }
+}
+
 public extension SharedTrailSnapshot {
     /// The stat chips for this trail: at most two, most useful first, and
     /// truncated to whatever the widget family has width for.
@@ -340,16 +366,6 @@ public extension SharedTrailSnapshot {
         )
     }
 
-    /// The same chips as one phrase, for the widget's single accessibility
-    /// element — the glyphs themselves say nothing to VoiceOver.
-    func metricsAccessibilityText(
-        limit: Int,
-        locale: Locale = .current
-    ) -> String {
-        TrailWidgetMetric.accessibilityText(
-            for: metrics(limit: limit, locale: locale)
-        )
-    }
 }
 
 public extension SharedRecordingSnapshot {
@@ -374,14 +390,4 @@ public extension SharedRecordingSnapshot {
         )
     }
 
-    /// The same chips as one phrase — see
-    /// ``SharedTrailSnapshot/metricsAccessibilityText(limit:locale:)``.
-    func metricsAccessibilityText(
-        limit: Int,
-        locale: Locale = .current
-    ) -> String {
-        TrailWidgetMetric.accessibilityText(
-            for: metrics(limit: limit, locale: locale)
-        )
-    }
 }
