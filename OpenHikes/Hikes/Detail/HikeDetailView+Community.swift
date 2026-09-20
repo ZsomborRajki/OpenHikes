@@ -119,13 +119,16 @@ extension HikeDetailView {
                 submissionID: hike.communityPhotoSubmissionID,
                 contributionID: hike.communityPhotoContributionID
             )
-            communityControl(publication, eligibility, contribution, transport)
-                .accessibilityLabel(
-                    Self.shareButtonLabel(publication, eligibility, contribution)
-                )
+            let appearance = CommunityShareButtonAppearance(
+                publication: publication,
+                eligibility: eligibility,
+                contribution: contribution
+            )
+            communityControl(appearance, publication, eligibility, contribution, transport)
+                .accessibilityLabel(appearance.label)
                 // What a tap will do is invisible in a toolbar glyph, so the
                 // hint is the only place it can be explained.
-                .accessibilityHint(Self.shareButtonHint(publication, eligibility, contribution))
+                .accessibilityHint(appearance.hint)
                 .accessibilityIdentifier("community-share-button")
                 // A hike with no route can still carry photographs, and the
                 // contribution path does not send one — so the floor that
@@ -226,6 +229,7 @@ extension HikeDetailView {
     /// gets the form that explains why. See this file's header.
     @ViewBuilder
     private func communityControl(
+        _ appearance: CommunityShareButtonAppearance,
         _ publication: CommunityPublicationState,
         _ eligibility: CommunityPublishingEligibility,
         _ contribution: CommunityContributionState,
@@ -234,23 +238,23 @@ extension HikeDetailView {
         switch publication {
         case .notShared:
             if let target = eligibility.photoTarget {
-                contributionControl(target, publication, eligibility, contribution)
+                contributionControl(appearance, target, contribution)
             } else {
                 Button { isSharingToCommunity = true } label: {
-                    Self.shareButtonGlyph(publication, eligibility, contribution)
+                    Self.shareButtonGlyph(appearance)
                 }
                 .buttonStyle(.plain)
             }
         case .awaitingReview:
             Button { isWithdrawingFromCommunity = true } label: {
-                Self.shareButtonGlyph(publication, eligibility, contribution)
+                Self.shareButtonGlyph(appearance)
             }
             .buttonStyle(.plain)
         case .published:
             Menu {
                 publishedMenuItems(contribution, transport)
             } label: {
-                Self.shareButtonGlyph(publication, eligibility, contribution)
+                Self.shareButtonGlyph(appearance)
             }
             .menuStyle(.button)
             .buttonStyle(.plain)
@@ -339,20 +343,19 @@ extension HikeDetailView {
     /// able to put a second copy of the same pictures on a stranger's trail.
     @ViewBuilder
     private func contributionControl(
+        _ appearance: CommunityShareButtonAppearance,
         _ target: CommunityPhotoTarget,
-        _ publication: CommunityPublicationState,
-        _ eligibility: CommunityPublishingEligibility,
         _ contribution: CommunityContributionState
     ) -> some View {
         switch contribution {
         case .notShared:
             Button { contributionTarget = target } label: {
-                Self.shareButtonGlyph(publication, eligibility, contribution)
+                Self.shareButtonGlyph(appearance)
             }
             .buttonStyle(.plain)
         case .awaitingReview:
             Button { isWithdrawingPhotosFromCommunity = true } label: {
-                Self.shareButtonGlyph(publication, eligibility, contribution)
+                Self.shareButtonGlyph(appearance)
             }
             .buttonStyle(.plain)
         case .published:
@@ -365,7 +368,7 @@ extension HikeDetailView {
                 }
                 .accessibilityIdentifier("community-photo-withdraw-button")
             } label: {
-                Self.shareButtonGlyph(publication, eligibility, contribution)
+                Self.shareButtonGlyph(appearance)
             }
             .menuStyle(.button)
             .buttonStyle(.plain)
@@ -373,149 +376,12 @@ extension HikeDetailView {
     }
 
     private static func shareButtonGlyph(
-        _ publication: CommunityPublicationState,
-        _ eligibility: CommunityPublishingEligibility,
-        _ contribution: CommunityContributionState
+        _ appearance: CommunityShareButtonAppearance
     ) -> some View {
-        Image(systemName: shareButtonSymbol(publication, eligibility, contribution))
+        Image(systemName: appearance.symbol)
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .minimumTapTarget()
-    }
-
-    /// A glyph per state, because a badge on one glyph would be unreadable at
-    /// the size a toolbar draws this.
-    ///
-    /// The slashed one is the state with nothing to offer at all: a hike that
-    /// can be neither published nor contributed to, which reads as *not
-    /// shared* to every other part of the app and is not the same thing.
-    ///
-    /// The photograph glyphs are a second journey through the same three
-    /// states, and only their two ends are drawn differently. *Waiting for a
-    /// person* is the same fact whichever was sent, so it is the same
-    /// `hourglass`, and the route's answer wins wherever both apply: a hike
-    /// that is live and has photographs in the queue draws `person.2.fill`,
-    /// because *published* is the older and larger fact about it. Since
-    /// ``CommunityPhotoTarget/published(listingID:title:)`` a hike can be in
-    /// both conversations at once, which is why that precedence is stated
-    /// rather than assumed. What tells them apart where it matters is the
-    /// label and the hint below, which say which thing is waiting.
-    private static func shareButtonSymbol(
-        _ publication: CommunityPublicationState,
-        _ eligibility: CommunityPublishingEligibility,
-        _ contribution: CommunityContributionState
-    ) -> String {
-        switch publication {
-        case .notShared:
-            if eligibility.isEligible { return "person.2" }
-            guard eligibility.offersPhotographs else { return "person.2.slash" }
-            return switch contribution {
-            case .notShared: "photo.badge.plus"
-            case .awaitingReview: "hourglass"
-            case .published: "photo.badge.checkmark"
-            }
-        case .awaitingReview: return "hourglass"
-        case .published: return "person.2.fill"
-        }
-    }
-
-    /// Says *waiting for review* and never *rejected*: the absence of a
-    /// listing covers a reviewer who has not looked and one who declined, and
-    /// this app cannot tell those apart. See ``Hike/communityListingID``.
-    private static func shareButtonLabel(
-        _ publication: CommunityPublicationState,
-        _ eligibility: CommunityPublishingEligibility,
-        _ contribution: CommunityContributionState
-    ) -> String {
-        switch publication {
-        case .notShared:
-            if eligibility.isEligible { return String(localized: "Share with the community") }
-            guard eligibility.offersPhotographs else {
-                return eligibility.reason?.shortLabel ?? String(localized: "Can't be shared")
-            }
-            return switch contribution {
-            case .notShared: String(localized: "Add your photos to this trail")
-            case .awaitingReview: String(localized: "Photos waiting for review")
-            case .published: String(localized: "Photos published to this trail")
-            }
-        case .awaitingReview: return String(localized: "Waiting for review")
-        case .published: return String(localized: "Published to the community")
-        }
-    }
-
-    /// Spoken after the button, for the states where the glyph alone does not
-    /// say what a tap will do.
-    private static func shareButtonHint(
-        _ publication: CommunityPublicationState,
-        _ eligibility: CommunityPublishingEligibility,
-        _ contribution: CommunityContributionState
-    ) -> String {
-        switch publication {
-        case .notShared:
-            return notSharedHint(eligibility, contribution)
-        case .awaitingReview:
-            return String(
-                localized: """
-                Sent. It appears for other hikers once a person has checked it. \
-                Opens a request to withdraw it.
-                """
-            )
-        case .published:
-            return Self.publishedHint(contribution)
-        }
-    }
-
-    /// What a live hike's menu holds, which depends on where its photographs
-    /// are rather than on the hike — the hike is published and stays that way.
-    private static func publishedHint(_ contribution: CommunityContributionState) -> String {
-        switch contribution {
-        case .notShared:
-            String(
-                localized: """
-                Live for other hikers. Add photos you've taken since, or ask \
-                for the hike to be taken down.
-                """
-            )
-        case .awaitingReview:
-            String(
-                localized: """
-                Live, and the photos you added are waiting for a person to \
-                check them. Opens a request to withdraw them, or the hike.
-                """
-            )
-        case .published:
-            String(localized: "Add more photos, or ask for them, or the hike, to be taken down.")
-        }
-    }
-
-    /// The four things the first state can be, which is one more than the
-    /// other two have between them.
-    private static func notSharedHint(
-        _ eligibility: CommunityPublishingEligibility,
-        _ contribution: CommunityContributionState
-    ) -> String {
-        if eligibility.isEligible { return "" }
-        guard eligibility.offersPhotographs else {
-            return String(localized: "Opens an explanation of why this hike can't be shared.")
-        }
-        return switch contribution {
-        case .notShared:
-            String(
-                localized: """
-                This trail is already in the community list. Opens a form to add \
-                your photos to it.
-                """
-            )
-        case .awaitingReview:
-            String(
-                localized: """
-                Sent. They appear on the trail once a person has checked them. \
-                Opens a request to withdraw them.
-                """
-            )
-        case .published:
-            String(localized: "Add more photos, or ask for yours to be taken down.")
-        }
     }
 
     /// Spends one request to ask whether this hike's listing is still there.
