@@ -132,8 +132,13 @@ struct LocationAccessAlert: View {
     @Bindable var prompt: LocationAccessPrompt
 
     var body: some View {
+        // A plain `Color.clear`, the shape ``SheetLayoutReader`` beside it
+        // takes: it draws nothing and is never announced, but it is a real
+        // view in the hierarchy, which is what a presentation hangs off. A
+        // zero-sized frame would be a view SwiftUI is free to give no place
+        // to, and an alert with no host does not open.
         Color.clear
-            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
             .allowsHitTesting(false)
             .locationAccessAlert(.whileUsing, isPresented: $prompt.isShowing)
     }
