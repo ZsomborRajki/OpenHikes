@@ -291,20 +291,10 @@ private extension CommunityShareSheet {
                 .accessibilityLabel("Notes about this hike")
                 .accessibilityIdentifier("community-share-notes")
             }
-            LabeledContent(
-                "Photos",
-                value: photos.count == 0 ? "None" : "\(photos.count)"
+            CommunitySendPhotoCountRow(
+                count: photos.count,
+                identifier: "community-share-photo-count"
             )
-            // One element with an explicit value, rather than the pair
-            // `LabeledContent` composes on its own. An identifier on a
-            // container is pushed down onto every descendant, so without this
-            // the name matches the "Photos" caption first and a reader asking
-            // for the row's value gets nothing — see ``CommunityPhotoViewer``
-            // for where that lesson was learned.
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Photos")
-            .accessibilityValue(photos.count == 0 ? "None" : "\(photos.count)")
-            .accessibilityIdentifier("community-share-photo-count")
             photoPicker
             if photos.unsendableCount > 0 {
                 // Said here rather than left to the footer, because it is
@@ -366,35 +356,20 @@ private extension CommunityShareSheet {
 
     /// What the hike is credited to, asked for as the display name it is.
     ///
-    /// It used to be labelled "Name", which left the hiker to decide whether
-    /// they were being asked for the name on their Apple Account. Nothing in
-    /// this app ever wanted that — ``CommunityListing/authorName`` has said
-    /// "a credit and not an identity" since it was written, blank has always
-    /// been allowed, and what it sits beside is a walk rather than a profile.
-    /// The field now says so, which is also what settles how it is declared:
-    /// Apple's definitions put a handle under `NSPrivacyCollectedDataTypeUserID`
-    /// and a person's name under Contact Info. See `PrivacyInfo.xcprivacy`.
-    ///
-    /// Still capitalised by word. A display name is far more often "Anna" or
-    /// "Ridge Walker" than a lowercase handle, and a keyboard can be overruled
-    /// where a wrong guess about what is being asked for cannot be.
+    /// ``CommunityCreditSection`` — the same field the contribution form asks
+    /// for, because it is the same setting and two spellings of it would let
+    /// somebody be two people by accident. Only the footer differs, and only
+    /// because what the name sits beside does.
     var nameSection: some View {
-        Section {
-            TextField("Display name", text: $authorName)
-                .accessibilityIdentifier("community-author-field")
-                .autocorrectionDisabled()
-                #if os(iOS)
-                .textInputAutocapitalization(.words)
-                #endif
-                .disabled(phase.isSending)
-        } header: {
-            Text("Shared as")
-        } footer: {
-            Text("""
+        CommunityCreditSection(
+            authorName: $authorName,
+            footer: """
             Shown publicly next to your hike. It doesn't have to be your real \
             name, and you can leave it blank to share without one.
-            """)
-        }
+            """,
+            identifier: "community-author-field",
+            phase: phase
+        )
     }
 
     /// The two things a hiker should know before the Share button, in the
@@ -563,8 +538,19 @@ private extension CommunityShareSheet {
         )
     }
 
-    @ToolbarContentBuilder var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) {
+    var toolbarContent: some ToolbarContent {
+        CommunitySendToolbar(
+            phase: phase,
+            confirmTitle: "Share",
+            confirmIdentifier: "community-share-confirm",
+            // The same floor ``CommunityPublisher/share`` refuses below, so a
+            // hike with no route cannot start an upload that was always going
+            // to come back as a failure. Also held while eligibility is still
+            // `nil`, which is the one window in which a tap could start a send
+            // the next line of this screen is about to forbid.
+            canConfirm: hike.pointCount >= 2 && eligibility != nil,
+            offersConfirmation: eligibility?.reason == nil
+        ) {
             // Committed here as well as in `onDisappear`, and this is the one
             // that can be relied on. A sheet's content is not guaranteed to be
             // torn down when it is dismissed — SwiftUI may keep the view
@@ -572,28 +558,11 @@ private extension CommunityShareSheet {
             // than a commit point. Both calls are idempotent, so the pair
             // costs nothing and closes the case where neither the title nor
             // the notes reach the hike because the screen never went away.
-            Button(phase.hasFinished ? "Done" : "Cancel") {
-                commitNotes()
-                commitTitle()
-                dismiss()
-            }
-            .disabled(phase.isSending)
-        }
-        ToolbarItem(placement: .confirmationAction) {
-            if phase.isSending {
-                ProgressView()
-                    .accessibilityLabel("Sending")
-            } else if !phase.hasFinished, eligibility?.reason == nil {
-                Button("Share") { share() }
-                    .accessibilityIdentifier("community-share-confirm")
-                    // The same floor ``CommunityPublisher/share`` refuses
-                    // below, so a hike with no route cannot start an upload
-                    // that was always going to come back as a failure. Also
-                    // held while eligibility is still `nil`, which is the one
-                    // window in which a tap could start a send the next line
-                    // of this screen is about to forbid.
-                    .disabled(hike.pointCount < 2 || eligibility == nil)
-            }
+            commitNotes()
+            commitTitle()
+            dismiss()
+        } confirm: {
+            share()
         }
     }
 }
