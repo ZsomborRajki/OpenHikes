@@ -204,6 +204,46 @@ nonisolated enum OverpassRequest {
         return .aborted(remark)
     }
 
+    /// The live transport both callers use unless a suite hands them one of
+    /// its own — see *Deliberate test seams* in the repository instructions.
+    ///
+    /// It is three steps and the middle one is the reason this is here rather
+    /// than written at each `init`: an Overpass mirror that answers something
+    /// other than HTTP, or a proxy that answers nothing at all, arrives as a
+    /// `URLResponse` that is not an `HTTPURLResponse`, and a caller that
+    /// force-cast it would trap on a bad network instead of reporting one. The
+    /// `guard` is the whole difference and it was written twice.
+    ///
+    /// Reading the headers here rather than at the call site is the other
+    /// half: ``headers(of:)`` exists because mirrors vary in the case they
+    /// send, and a transport that skipped it would hand its caller a
+    /// dictionary the rate-limit reader cannot look anything up in.
+    ///
+    /// - Parameter span: A MetricKit span to time the request inside, for the
+    ///   one caller whose request is an unavoidable radio wake-up during a
+    ///   hike. The curated-trail fetch passes none: it happens with the app in
+    ///   the hiker's hand and is not the wake-up worth the telemetry budget —
+    ///   see the note at the top of ``FieldSignpost``.
+    static func liveTransport(
+        timing span: FieldSignpost.Span? = nil
+    ) -> @Sendable (URLRequest) async throws -> OverpassHTTPResponse {
+        { request in
+            let token = span.map(FieldSignpost.begin)
+            defer {
+                if let token { FieldSignpost.end(token) }
+            }
+            let (data, urlResponse) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = urlResponse as? HTTPURLResponse else {
+                throw TrailGraphProviderError.invalidResponse
+            }
+            return OverpassHTTPResponse(
+                data: data,
+                statusCode: httpResponse.statusCode,
+                headers: headers(of: httpResponse)
+            )
+        }
+    }
+
     /// Lowercased header names, the way both callers read them.
     ///
     /// `HTTPURLResponse.allHeaderFields` preserves whatever case the server
