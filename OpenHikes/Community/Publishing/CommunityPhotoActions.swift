@@ -56,6 +56,7 @@
 //  make one.
 //
 
+import OpenHikesShared
 import SwiftUI
 
 /// The menu a contributed photograph carries, and the sheets behind it.
@@ -229,9 +230,14 @@ private extension CommunityPhotoActions {
                 isTakingDown = false
                 takeDownFailure = error as? CommunityFailure
                     ?? .unavailable(error.localizedDescription)
+                HapticMoment.outcomeFailed.play()
                 return
             }
             isTakingDown = false
+            // Said here rather than left to the screen that follows: the
+            // success of a take-down *is* this screen going away, and a screen
+            // on its way out is no place to hang a confirmation.
+            HapticMoment.outcomeSucceeded.play()
             // Before the screen goes, because the screen it goes *to* is the
             // one still drawing these photographs: the trail's detail was
             // downloaded when it opened and nothing fetches it again on the

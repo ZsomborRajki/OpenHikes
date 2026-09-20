@@ -133,6 +133,7 @@
 //  without. See ``actionsToolbarItem``.
 //
 
+import OpenHikesShared
 import os
 import SwiftData
 import SwiftUI
@@ -627,9 +628,13 @@ private extension CommunityHikeView {
                 isTakingDown = false
                 takeDownFailure = error as? CommunityFailure
                     ?? .unavailable(error.localizedDescription)
+                HapticMoment.outcomeFailed.play()
                 return
             }
             isTakingDown = false
+            // For the reason ``CommunityPhotoActions/takeDown()`` gives: the
+            // success of this is the screen leaving.
+            HapticMoment.outcomeSucceeded.play()
             // Before the pop, so the list the pop lands on already agrees
             // with the delete that has just happened.
             browser.forgetTakenDown(listing)

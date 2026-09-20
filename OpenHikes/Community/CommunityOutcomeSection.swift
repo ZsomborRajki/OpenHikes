@@ -3,6 +3,7 @@
 //  OpenHikes
 //
 
+import OpenHikesShared
 import SwiftUI
 
 /// The centred symbol, headline and sentence a Community form ends on.
@@ -28,6 +29,24 @@ struct CommunityOutcomeSection: View {
     let headline: Text
     let detail: Text
     let identifier: String
+    /// How this ending felt, which is the one thing about it the four callers
+    /// genuinely disagree about: three of them are good news and
+    /// ``CommunityMailOutcomeSections`` has one that is not.
+    ///
+    /// Here rather than at each call site for the same reason the symbol and
+    /// the tint are: what a form ends on is the last thing a hiker reads, and
+    /// the four being the same shape is the point. A haptic written into each
+    /// form separately is four chances for one of them to end louder than the
+    /// others.
+    let moment: HapticMoment
+
+    /// Flipped once, when the section reaches the screen.
+    ///
+    /// A `Bool` rather than a counter on purpose: a `Section` in a `Form` can
+    /// appear more than once as it is scrolled past, and only the first
+    /// transition is news. `false → true` happens exactly once per section,
+    /// whatever `onAppear` does afterwards.
+    @State private var appeared = false
 
     var body: some View {
         Section {
@@ -48,5 +67,7 @@ struct CommunityOutcomeSection: View {
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier(identifier)
         }
+        .onAppear { appeared = true }
+        .sensoryFeedback(moment.feedback, trigger: appeared)
     }
 }

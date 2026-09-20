@@ -15,6 +15,7 @@
 //  two apart is what lets the floor go on measuring it.
 //
 
+import OpenHikesShared
 import SwiftData
 import SwiftUI
 
@@ -60,7 +61,8 @@ struct CommunitySentSection: View {
             tint: AnyShapeStyle(.tint),
             headline: Text("Sent for review"),
             detail: Text(detail),
-            identifier: identifier
+            identifier: identifier,
+            moment: .outcomeSucceeded
         )
     }
 }

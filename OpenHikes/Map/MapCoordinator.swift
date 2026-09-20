@@ -8,6 +8,7 @@
 //
 
 import MapKit
+import OpenHikesShared
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -733,6 +734,10 @@ extension MapView.Coordinator {
             // on one that took *Search this area* away would be the pill
             // getting out of the way of something that is not there.
             withdrawAreaSearchForCallout(open: view.canShowCallout)
+            // The same `canShowCallout` question, for the same reason: a
+            // highlight dot is selectable and draws nothing, and a tap that
+            // opened no callout has nothing to confirm.
+            if view.canShowCallout { HapticMoment.targetHit.play() }
             return
         }
         mapView.deselectAnnotation(view.annotation, animated: false)

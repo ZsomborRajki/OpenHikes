@@ -21,6 +21,7 @@
 //  places without widening every call site.
 //
 
+import OpenHikesShared
 import PhotosUI
 import SwiftUI
 
@@ -159,6 +160,12 @@ private struct PhotoCaptureAlerts: ViewModifier {
                 Button("OK", role: .cancel) { /* dismiss */ }
             } message: {
                 Text(failureMessage)
+            }
+            // The frame is not retained and there is no library copy unless the
+            // user opted into one, so this alert is the only trace of a picture
+            // they have lost. Worth feeling as well as reading.
+            .sensoryFeedback(trigger: state.failure) { _, failure in
+                failure == nil ? nil : HapticMoment.outcomeFailed.feedback
             }
     }
 

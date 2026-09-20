@@ -43,6 +43,7 @@
 //
 
 import MapKit
+import OpenHikesShared
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -126,7 +127,12 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         guard recognizer.state == .ended,
               let mapView = recognizer.view as? MKMapView
         else { return }
-        switch routeTapTarget(at: recognizer.location(in: mapView), in: mapView) {
+        let target = routeTapTarget(at: recognizer.location(in: mapView), in: mapView)
+        // Only a hit. A tap that landed on open map is not a failed gesture —
+        // it is panning, or nothing at all — and answering it would make the
+        // whole map buzz under a finger.
+        if target != nil { HapticMoment.targetHit.play() }
+        switch target {
         case .drawnRoute: drawnRouteTap?.open()
         case let .communityListing(listing): community?.open(listing)
         case nil: break
