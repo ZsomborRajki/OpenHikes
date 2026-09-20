@@ -392,10 +392,7 @@ struct CommunityHikeView: View {
         }
         .alert(
             "Couldn't take it down",
-            isPresented: Binding(
-                get: { takeDownFailure != nil },
-                set: { if !$0 { takeDownFailure = nil } }
-            ),
+            isPresented: $takeDownFailure.isPresent(),
             presenting: takeDownFailure
         ) { _ in
             Button("OK", role: .cancel) { takeDownFailure = nil }

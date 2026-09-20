@@ -154,10 +154,7 @@ private struct PhotoCaptureAlerts: ViewModifier {
             // the user losing a picture and never finding out.
             .alert(
                 failureTitle,
-                isPresented: Binding(
-                    get: { state.failure != nil },
-                    set: { if !$0 { state.failure = nil } }
-                )
+                isPresented: $state.failure.isPresent()
             ) {
                 Button("OK", role: .cancel) { /* dismiss */ }
             } message: {

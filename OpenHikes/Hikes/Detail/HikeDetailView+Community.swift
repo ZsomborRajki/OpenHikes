@@ -185,10 +185,7 @@ extension HikeDetailView {
                 // is only tolerable there because it explains a rule.
                 .alert(
                     publicationLiveness.map(Self.livenessTitle) ?? "",
-                    isPresented: Binding(
-                        get: { publicationLiveness != nil },
-                        set: { if !$0 { publicationLiveness = nil } }
-                    ),
+                    isPresented: $publicationLiveness.isPresent(),
                     presenting: publicationLiveness
                 ) { answer in
                     if answer == .takenDown {

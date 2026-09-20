@@ -214,10 +214,7 @@ struct MapSheetHikes: View, Equatable {
         // built for and never on a leftover from the previous swipe.
         .confirmationDialog(
             prompt?.title ?? "",
-            isPresented: Binding(
-                get: { pendingDeletion != nil },
-                set: { if !$0 { pendingDeletion = nil } }
-            ),
+            isPresented: $pendingDeletion.isPresent(),
             titleVisibility: .visible,
             presenting: pendingDeletion
         ) { hike in
