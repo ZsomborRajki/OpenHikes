@@ -290,21 +290,19 @@ private extension CommunityPhotoShareSheet {
     /// contributed to in the spring.
     var duplicateSection: some View {
         Section {
-            Label {
-                Text(
+            CommunityFootnoteLabel(
+                text: Text(
                     """
                     You've already added photos from this hike. Sending again adds a \
                     second set beside the first — it doesn't replace it, and this app \
                     can't take that one down. Ask for it to be removed from this hike's \
                     own screen.
                     """
-                )
-            } icon: {
-                Image(systemName: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-            }
-            .font(.footnote)
-            .accessibilityIdentifier("community-photos-duplicate")
+                ),
+                systemImage: "exclamationmark.triangle",
+                tint: AnyShapeStyle(.orange),
+                identifier: "community-photos-duplicate"
+            )
         }
     }
 
@@ -339,13 +337,11 @@ private extension CommunityPhotoShareSheet {
     /// that the walk is somebody else's and the pictures are not.
     var reviewSection: some View {
         Section {
-            Label {
-                Text("Every photo is checked by a person before anyone else can see it.")
-            } icon: {
-                Image(systemName: "checkmark.shield")
-                    .foregroundStyle(.tint)
-            }
-            .font(.footnote)
+            CommunityFootnoteLabel(
+                text: Text("Every photo is checked by a person before anyone else can see it."),
+                systemImage: "checkmark.shield",
+                tint: AnyShapeStyle(.tint)
+            )
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
                 Text("""

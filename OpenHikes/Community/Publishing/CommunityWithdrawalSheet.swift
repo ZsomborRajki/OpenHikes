@@ -122,13 +122,11 @@ private extension CommunityWithdrawalSheet {
     /// *not* happen, which is the half a hiker cannot see.
     var whatHappensSection: some View {
         Section {
-            Label {
-                Text("Removal requests are read and acted on within 24 hours.")
-            } icon: {
-                Image(systemName: "clock.badge.checkmark")
-                    .foregroundStyle(.tint)
-            }
-            .font(.footnote)
+            CommunityFootnoteLabel(
+                text: Text("Removal requests are read and acted on within 24 hours."),
+                systemImage: "clock.badge.checkmark",
+                tint: AnyShapeStyle(.tint)
+            )
         } footer: {
             Text("""
             Your request opens in your mail app so you can send it. It carries \

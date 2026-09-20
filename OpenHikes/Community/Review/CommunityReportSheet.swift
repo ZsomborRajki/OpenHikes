@@ -174,13 +174,11 @@ private extension CommunityReportSheet {
     /// only in the privacy policy.
     var commitmentSection: some View {
         Section {
-            Label {
-                Text("Reports are read and acted on within 24 hours.")
-            } icon: {
-                Image(systemName: "clock.badge.checkmark")
-                    .foregroundStyle(.tint)
-            }
-            .font(.footnote)
+            CommunityFootnoteLabel(
+                text: Text("Reports are read and acted on within 24 hours."),
+                systemImage: "clock.badge.checkmark",
+                tint: AnyShapeStyle(.tint)
+            )
         } footer: {
             // Said because the hiker is about to watch their mail app open,
             // which is surprising if nobody warned them, and because a report
