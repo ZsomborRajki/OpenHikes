@@ -907,28 +907,18 @@ nonisolated extension TileCache {
         )
 
         func isStale(_ file: URL) -> Bool {
-            // A fresh stat, not the one `allTileFiles` prefetched. Enumerating
+            // ``modificationDate(of:)`` rather than a stat of its own, and the
+            // half of it that matters here is the cache clear: enumerating
             // with `includingPropertiesForKeys:` caches the modification date
-            // on the URL, and `resourceValues` hands that cached value back —
-            // which would defeat the lock below by answering with a date read
+            // on the URL, and `resourceValues` would hand that cached value
+            // back — defeating the lock below by answering with a date read
             // before the lock was taken.
-            var file = file
-            file.removeAllCachedResourceValues()
-            let modified: Date?
-            do {
-                modified = try file.resourceValues(
-                    forKeys: [.contentModificationDateKey]
-                ).contentModificationDate
-            } catch {
-                logFileError(
-                    error,
-                    operation: "read tile modification date",
-                    url: file
-                )
-                modified = nil
-            }
-            // An unreadable date means an unusable tile, so treat it as stale.
-            return modified.map { isExpired($0, referenceDate: referenceDate) } ?? true
+            //
+            // An unreadable date means an unusable tile, so it is stale. That
+            // is this caller's rule and not the helper's, which reports the
+            // failure as `nil` on purpose.
+            modificationDate(of: file)
+                .map { isExpired($0, referenceDate: referenceDate) } ?? true
         }
 
         func remove(_ file: URL) -> Bool {
