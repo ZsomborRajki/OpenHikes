@@ -54,6 +54,39 @@ public struct HikeActivityPresentation: Sendable, Equatable {
     public var accessibilityValue: String
 }
 
+public extension HikeActivityPresentation {
+    /// What belongs in the second slot, decided once.
+    ///
+    /// Both surfaces that draw one — the Lock Screen panel and the Dynamic
+    /// Island's trailing region — worked this out for themselves, and the
+    /// precedence is not obvious enough to be safe written twice: a live
+    /// clock takes the slot outright, a figure fills it when there is no
+    /// clock, and an absent figure leaves the slot *empty* rather than
+    /// dashed — a hiker who has lost the trail has no "remaining" that means
+    /// anything.
+    ///
+    /// The two surfaces still draw each case their own way — the panel labels
+    /// its clock and the island aligns to its edge — so this decides what,
+    /// not how.
+    enum SecondaryFigure: Sendable, Equatable {
+        /// The self-ticking clock, drawn from ``timerStart``.
+        case elapsed
+        /// A number and its caption.
+        case figure(value: String, caption: String)
+    }
+
+    /// `nil` when the slot stays empty, which both surfaces want: an absent
+    /// region collapses, and that is the right answer rather than a dash.
+    var secondaryFigure: SecondaryFigure? {
+        if showsElapsedTimer { return .elapsed }
+        guard let secondaryValue else { return nil }
+        // The caption is optional on the payload and the figure needs one, so
+        // the default is here rather than at each call site — where it was
+        // written as `?? ""` twice.
+        return .figure(value: secondaryValue, caption: secondaryCaption ?? "")
+    }
+}
+
 public extension HikeActivityAttributes {
     /// The presentation for `state`.
     ///

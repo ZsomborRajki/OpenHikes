@@ -213,4 +213,43 @@ struct HikeActivityPresentationTests {
         #expect(!presentation.accessibilityValue.contains(", ,"))
         #expect(!presentation.accessibilityValue.hasSuffix(", "))
     }
+
+    /// The precedence the Lock Screen panel and the Dynamic Island both draw
+    /// from. It used to be worked out separately in each of them, which is
+    /// what makes it worth an assertion now that it is not.
+    @Test("a running clock takes the second slot outright")
+    func runningClockTakesTheSecondSlot() {
+        let presentation = Self.recordingAttributes.presentation(
+            for: Self.runningRecording,
+            locale: Self.locale
+        )
+        #expect(presentation.secondaryFigure == .elapsed)
+    }
+
+    @Test("a stopped clock hands the second slot to the figure")
+    func stoppedClockHandsOverTheSecondSlot() {
+        var paused = Self.runningRecording
+        paused.runState = .paused
+        let presentation = Self.recordingAttributes.presentation(
+            for: paused,
+            locale: Self.locale
+        )
+        #expect(
+            presentation.secondaryFigure
+                == .figure(value: presentation.elapsedText, caption: "Elapsed")
+        )
+    }
+
+    /// Empty rather than dashed: a hiker who has lost the trail has no
+    /// "remaining" that means anything, and an absent region collapses.
+    @Test("nothing to say in the second slot leaves it empty")
+    func nothingToSayLeavesTheSecondSlotEmpty() {
+        var presentation = Self.recordingAttributes.presentation(
+            for: Self.runningRecording,
+            locale: Self.locale
+        )
+        presentation.showsElapsedTimer = false
+        presentation.secondaryValue = nil
+        #expect(presentation.secondaryFigure == nil)
+    }
 }
