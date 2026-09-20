@@ -17,12 +17,13 @@ struct RecordingWidgetMetricTests {
 
     private static func snapshot(
         gain: Double? = 180,
-        speed: Double? = 1.2
+        speed: Double? = 1.2,
+        distance: Double = 1400
     ) -> SharedRecordingSnapshot {
         SharedRecordingSnapshot(
             sessionID: UUID(),
             startedAt: Date(timeIntervalSince1970: 1_750_000_000),
-            distanceMeters: 1400,
+            distanceMeters: distance,
             pointCount: 320,
             polyline: [],
             elevationGainMeters: gain,
@@ -30,25 +31,46 @@ struct RecordingWidgetMetricTests {
         )
     }
 
-    /// Distance and point count are already on the status line and the elapsed
-    /// time is in the header, so these two are what a recording otherwise
-    /// doesn't say.
-    @Test("a live recording reports what its status line doesn't")
+    /// The three slots a trail's band has, answered with the walk's figures —
+    /// and in the trail's order, so the pair in the corner does not swap
+    /// places when a hiker starts recording along a trail they were following.
+    @Test("a live recording fills the same three slots a trail does")
     func recordingChips() {
-        #expect(Self.snapshot().metrics(limit: 4, locale: Self.locale).map(\.kind) == [.ascent, .pace])
+        #expect(
+            Self.snapshot().metrics(limit: 4, locale: Self.locale).map(\.kind)
+                == [.ascent, .distance, .pace]
+        )
     }
 
-    /// A recording that has just started has neither figure yet.
+    /// A recording that has just started has none of the three yet.
     @Test("nothing is claimed before there is anything to claim")
     func nothingBeforeTheFirstFixes() {
-        #expect(Self.snapshot(gain: nil, speed: nil).metrics(limit: 4, locale: Self.locale).isEmpty)
+        #expect(
+            Self.snapshot(gain: nil, speed: nil, distance: 0)
+                .metrics(limit: 4, locale: Self.locale)
+                .isEmpty
+        )
     }
 
     /// A stationary recorder has a speed of zero, and "0.0 km/h" is not a
-    /// pace worth the width.
+    /// pace worth the width. The metres it has already walked stay.
     @Test("a standing start reports no pace")
     func standingStartHasNoPace() {
-        #expect(Self.snapshot(speed: 0).metrics(limit: 4, locale: Self.locale).map(\.kind) == [.ascent])
+        #expect(
+            Self.snapshot(speed: 0).metrics(limit: 4, locale: Self.locale).map(\.kind)
+                == [.ascent, .distance]
+        )
+    }
+
+    /// The distance chip and the trail's length chip render the same way and
+    /// are deliberately different kinds, because VoiceOver is where the
+    /// difference has to survive: "Walked 1.4 km" is not "Length 1.4 km".
+    @Test("a walk's distance is spoken as walked, not as a length")
+    func distanceIsSpokenAsAWalk() throws {
+        let metrics = Self.snapshot().metrics(limit: 4, locale: Self.locale)
+        let walked = try #require(metrics.first { $0.kind == .distance })
+        #expect(walked.spokenLabel == "Walked")
+        #expect(!metrics.contains { $0.kind == .length })
     }
 
     @Test("the chips survive the App Group round trip with the rest")

@@ -94,11 +94,12 @@ final class WidgetFeedTests {
             snapshot.elevationGainMeters != (snapshot.elevationHighMeters ?? 0) - (snapshot.elevationLowMeters ?? 0),
             "a span would have been the easy wrong answer"
         )
-        #expect(snapshot.metrics(limit: 4).map(\.kind) == [.ascent])
+        #expect(snapshot.metrics(limit: 4).map(\.kind) == [.ascent, .length])
     }
 
-    /// A GPX with no heights must publish no heights. The chips are dropped
-    /// rather than drawn as zeroes — see the widget's metric builder.
+    /// A GPX with no heights must publish no heights. The height chips are
+    /// dropped rather than drawn as zeroes — see the widget's metric builder.
+    /// The length is measured from the line and survives.
     @Test("a route without elevations publishes none")
     func selectionWithoutElevationsPublishesNone() async throws {
         let flat = Fixture.hike(
@@ -114,7 +115,7 @@ final class WidgetFeedTests {
         let snapshot = try #require(SharedStore.load())
         #expect(snapshot.elevationGainMeters == nil)
         #expect(snapshot.elevationHighMeters == nil)
-        #expect(snapshot.metrics(limit: 4).isEmpty)
+        #expect(snapshot.metrics(limit: 4).map(\.kind) == [.length])
     }
 
     @Test("deselecting clears the trail rather than leaving a stale one")
@@ -221,8 +222,9 @@ final class WidgetFeedTests {
         let snapshot = try #require(SharedStore.load())
         let elevation = try #require(snapshot.liveFix?.elevationMeters)
         #expect(abs(elevation - (Fixture.ridgeRoute[3].elevation ?? 0)) < 1)
-        // And the hiker's own height then displaces the summit in the chips.
-        #expect(snapshot.metrics(limit: 2).map(\.kind) == [.ascent, .currentElevation])
+        // And the hiker's own height then takes the third chip, behind the
+        // climb and the length the corner always draws.
+        #expect(snapshot.metrics(limit: 3).map(\.kind) == [.ascent, .length, .currentElevation])
     }
 
     /// A fix too far from the trail isn't progress — the widget shows the

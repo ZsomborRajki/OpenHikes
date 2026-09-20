@@ -47,7 +47,7 @@ struct WeatherPlaceNameTests {
     private let budapest = CLLocationCoordinate2D(latitude: 47.4979, longitude: 19.0402)
 
     private func manager(_ names: StubPlaceNames?) -> WeatherManager {
-        WeatherManager(placeNames: names)
+        WeatherManager(placeNames: names, widgetPublisher: .inert)
     }
 
     private func focused(

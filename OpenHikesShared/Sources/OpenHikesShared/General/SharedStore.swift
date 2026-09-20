@@ -23,6 +23,7 @@ public enum SharedStore {
     /// hundred snapshots, and it can only do that if it can list them.
     private static let trailSnapshotDirectoryName = "trail-snapshots"
     private static let recordingFileName = "recording-snapshot.json"
+    private static let weatherFileName = "weather-reading.json"
     private static let basemapSetFileName = "trail-basemaps.json"
     private static let basemapDirectoryName = "basemaps"
 
@@ -100,6 +101,10 @@ public enum SharedStore {
 
     private static var recordingFileURL: URL? {
         containerURL?.appendingPathComponent(recordingFileName)
+    }
+
+    private static var weatherFileURL: URL? {
+        containerURL?.appendingPathComponent(weatherFileName)
     }
 
     private static var pendingRecordingFixStore: PendingRecordingFixStore? {
@@ -242,6 +247,42 @@ public enum SharedStore {
     public static func clearTrailSnapshot(for hikeID: UUID) {
         guard let url = trailSnapshotURL(for: hikeID) else { return }
         try? FileManager.default.removeItem(at: url)
+    }
+
+    // MARK: Weather
+
+    // A file of its own rather than a field on the trail snapshot; see
+    // ``SharedWeatherReading`` for why the two cannot share a clock.
+
+    /// The temperature the app's badge was last showing, or `nil` if none has
+    /// been written, the container cannot be resolved, or the file cannot be
+    /// read.
+    ///
+    /// Deliberately *not* filtered by age here. Whether a reading is too old
+    /// to draw is the renderer's question and it is asked against the date the
+    /// entry is built for, which is not the moment this runs — see
+    /// ``SharedWeatherReading/maximumAge``.
+    public static func loadWeatherReading() -> SharedWeatherReading? {
+        guard let weatherFileURL,
+              let data = try? Data(contentsOf: weatherFileURL)
+        else { return nil }
+        return decode(SharedWeatherReading.self, from: data, named: weatherFileName)
+    }
+
+    /// Writes the reading. No-ops rather than crashing if the App Group
+    /// container can't be resolved, as every other writer here does.
+    public static func saveWeatherReading(_ reading: SharedWeatherReading) {
+        guard let weatherFileURL else { return }
+        guard let data = try? JSONEncoder().encode(reading) else { return }
+        try? data.write(to: weatherFileURL, options: .atomic)
+    }
+
+    /// Drops the stored reading — for a launch that has no subject to report
+    /// on any more, so the widget stops drawing a number nothing stands
+    /// behind.
+    public static func clearWeatherReading() {
+        guard let weatherFileURL else { return }
+        try? FileManager.default.removeItem(at: weatherFileURL)
     }
 
     // MARK: Live recording

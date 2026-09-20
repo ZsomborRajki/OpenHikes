@@ -139,7 +139,10 @@ struct WeatherReadingStoreTests {
             subject: .place(budapest, name: "Budapest")
         )
 
-        let manager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        let manager = WeatherManager(
+            store: WeatherReadingStore(defaults: defaults),
+            widgetPublisher: .inert
+        )
         manager.restoreLastReading()
         #expect(manager.state == .reading(saved, subject: .place(budapest, name: "Budapest")))
     }
@@ -158,7 +161,10 @@ struct WeatherReadingStoreTests {
             subject: .place(budapest, name: "Budapest")
         )
 
-        let manager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        let manager = WeatherManager(
+            store: WeatherReadingStore(defaults: defaults),
+            widgetPublisher: .inert
+        )
         #expect(manager.state == .idle)
     }
 
@@ -177,7 +183,10 @@ struct WeatherReadingStoreTests {
             snapshot: stored,
             subject: .place(budapest, name: "Budapest")
         )
-        let manager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        let manager = WeatherManager(
+            store: WeatherReadingStore(defaults: defaults),
+            widgetPublisher: .inert
+        )
         let france = WeatherSubject.place(
             CLLocationCoordinate2D(latitude: 45.8326, longitude: 6.8652),
             name: "Chamonix"
@@ -201,7 +210,10 @@ struct WeatherReadingStoreTests {
             snapshot: stored,
             subject: budapestSubject
         )
-        let manager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        let manager = WeatherManager(
+            store: WeatherReadingStore(defaults: defaults),
+            widgetPublisher: .inert
+        )
         manager.focus(
             on: .place(
                 CLLocationCoordinate2D(latitude: 45.8326, longitude: 6.8652),
@@ -229,7 +241,10 @@ struct WeatherReadingStoreTests {
         let store = WeatherReadingStore(defaults: defaults)
         let budapestSubject = WeatherSubject.place(budapest, name: "Budapest")
         store.save(snapshot: snapshot(celsius: 4), subject: budapestSubject)
-        let manager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        let manager = WeatherManager(
+            store: WeatherReadingStore(defaults: defaults),
+            widgetPublisher: .inert
+        )
         manager.restoreLastReading()
         #expect(manager.state == .reading(snapshot(celsius: 4), subject: budapestSubject))
 

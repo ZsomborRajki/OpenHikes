@@ -106,6 +106,54 @@ public enum WidgetFormat {
             )
     }
 
+    /// The one place a temperature becomes text, for the app's badge and the
+    /// widget's alike.
+    ///
+    /// `usage: .weather` rather than the default `.general`: both convert to
+    /// the locale's preferred unit, but only `.weather` asks for the unit that
+    /// locale uses *for weather*, which is the question being asked here.
+    ///
+    /// The precision is pinned at whole degrees rather than left at the
+    /// style's default, which carries every digit the provider sent through
+    /// the conversion: 12.3456 °C formats as `54.22208°`, in a capsule laid
+    /// out for three characters.
+    ///
+    /// Lives here rather than in the app for the reason ``elevation(meters:locale:)``
+    /// does: the app computes the reading and the widget renders it, so the
+    /// rounding and the unit choice have to be made once. `WeatherReadingFormat`
+    /// in the app delegates to this, and its header describes what the two
+    /// independent renderings cost when they were allowed to disagree — a
+    /// hiker in `en_US` read `12°` on the badge for a reading VoiceOver spoke
+    /// as "53.6 degrees Fahrenheit".
+    public static func temperature(
+        _ measurement: Measurement<UnitTemperature>,
+        width: Measurement<UnitTemperature>.FormatStyle.UnitWidth,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        measurement.formatted(
+            .measurement(
+                width: width,
+                usage: .weather,
+                numberFormatStyle: .number.precision(.fractionLength(0))
+            )
+            .locale(locale)
+        )
+    }
+
+    /// The same formatter, for the fixed unit ``SharedWeatherReading`` puts on
+    /// the wire.
+    public static func temperature(
+        celsius: Double,
+        width: Measurement<UnitTemperature>.FormatStyle.UnitWidth,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        temperature(
+            Measurement(value: celsius, unit: UnitTemperature.celsius),
+            width: width,
+            locale: locale
+        )
+    }
+
     /// Whether this region measures a road distance in miles.
     ///
     /// The question ``length(meters:locale:)`` asks by passing `usage: .road`,
@@ -184,6 +232,8 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
     public enum Kind: String, Sendable, CaseIterable {
         case ascent = "ascent"
         case currentElevation = "currentElevation"
+        case distance = "distance"
+        case length = "length"
         case pace = "pace"
         case points = "points"
         case remaining = "remaining"
@@ -207,6 +257,8 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
         switch kind {
         case .ascent: "arrow.up.forward"
         case .currentElevation: "figure.hiking"
+        case .distance: "figure.walk"
+        case .length: "point.topleft.down.to.point.bottomright.curvepath"
         case .pace: "speedometer"
         case .points: "point.3.connected.trianglepath.dotted"
         case .remaining: "flag.pattern.checkered"
@@ -218,6 +270,8 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
         switch kind {
         case .ascent: "Ascent"
         case .currentElevation: "Elevation"
+        case .distance: "Walked"
+        case .length: "Length"
         case .pace: "Average speed"
         case .points: "Track points"
         case .remaining: "Remaining"
@@ -243,6 +297,36 @@ extension TrailWidgetMetric {
         return Self(
             kind: .ascent,
             value: WidgetFormat.elevation(meters: meters, locale: locale)
+        )
+    }
+
+    /// The whole route, end to end — the figure the status line used to carry
+    /// inside a sentence and now carries as a chip of its own.
+    ///
+    /// Absent for a zero-length route, which is a trail that failed to import
+    /// rather than a short walk: "0 m" beside a drawn line is the widget
+    /// contradicting itself.
+    static func length(meters: Double?, locale: Locale) -> Self? {
+        guard let meters, meters > 0 else { return nil }
+        return Self(
+            kind: .length,
+            value: WidgetFormat.length(meters: meters, locale: locale)
+        )
+    }
+
+    /// How far a recording has come. The same formatting as ``length(meters:locale:)``
+    /// and a different name on purpose: the two occupy the same slot in their
+    /// respective bands and read identically, so the only place the difference
+    /// survives is what VoiceOver says — "Length 4.2 km" for a route, "Walked
+    /// 1.4 km" for a walk.
+    ///
+    /// Absent before the walk has moved, when "0 m" says only that the first
+    /// two fixes have not landed yet.
+    static func distance(meters: Double?, locale: Locale) -> Self? {
+        guard let meters, meters > 0 else { return nil }
+        return Self(
+            kind: .distance,
+            value: WidgetFormat.length(meters: meters, locale: locale)
         )
     }
 
@@ -335,17 +419,27 @@ public extension SharedTrailSnapshot {
     /// The stat chips for this trail: at most two, most useful first, and
     /// truncated to whatever the widget family has width for.
     ///
-    /// A widget is a glance, not a report, so the band under the map carries
-    /// one fact about height rather than four. Ascent is that fact — it is
-    /// what separates a stroll from a climb, and the one thing the map behind
-    /// it cannot draw. The high point and the descent were dropped for saying
-    /// nearly the same thing twice over: on a loop the descent *is* the
-    /// ascent, and a summit height is a number to read in the app rather than
-    /// to glance at on a home screen.
+    /// A widget is a glance, not a report, so the band carries one fact about
+    /// height rather than four. Ascent is that fact — it is what separates a
+    /// stroll from a climb, and the one thing the map behind it cannot draw.
+    /// The high point and the descent were dropped for saying nearly the same
+    /// thing twice over: on a loop the descent *is* the ascent, and a summit
+    /// height is a number to read in the app rather than to glance at on a
+    /// home screen.
     ///
-    /// The hiker's own elevation joins it only while there is a live fix to
-    /// read it from — on the trail, "where am I" is worth the second slot; off
-    /// it, there is nothing to put there.
+    /// ``TrailWidgetMetric/length(meters:locale:)`` takes the second slot, and
+    /// it is second rather than first because the two are asked in that order:
+    /// a hiker deciding whether to set off wants to know how hard it is before
+    /// how far it is, and the map behind the chips already shows the shape the
+    /// length describes. It is here at all because the drawn status line it
+    /// used to hide inside is gone — every family draws both of these, which
+    /// is why ``TrailWidgetLayout/metricLimit`` now starts at two.
+    ///
+    /// The hiker's own elevation is the third and is the one a narrow family
+    /// gives up, because it is the only one of the three the widget can do
+    /// without: the bar along the bottom already says how far along the trail
+    /// they are, and a height is the detail behind that rather than the fact.
+    /// It is present only while there is a live fix to read it from.
     ///
     /// A missing figure is omitted rather than drawn as a dash: a route
     /// imported without elevations should show fewer chips, not a row of
@@ -355,6 +449,10 @@ public extension SharedTrailSnapshot {
             [
                 TrailWidgetMetric.ascent(
                     meters: elevationGainMeters,
+                    locale: locale
+                ),
+                TrailWidgetMetric.length(
+                    meters: totalDistanceMeters,
                     locale: locale
                 ),
                 TrailWidgetMetric.currentElevation(
@@ -371,14 +469,25 @@ public extension SharedTrailSnapshot {
 public extension SharedRecordingSnapshot {
     /// The stat chips for a recording in progress, most useful first.
     ///
-    /// Distance and point count are already on the status line beside them, so
-    /// these are the two facts a live recording otherwise doesn't show: how
-    /// much has been climbed, and how fast it is being walked.
+    /// The same three slots a trail's band has, answered with the walk's own
+    /// figures: what has been climbed, how far it has come, and how fast it is
+    /// being walked. Climb and distance are deliberately in the trail's order
+    /// rather than the other way round, so the pair in the widget's top-right
+    /// corner does not swap places the moment a hiker starts recording along
+    /// the trail they were following.
+    ///
+    /// Distance is here because the status line that used to carry it is no
+    /// longer drawn; pace is the one a narrow family gives up, which is the
+    /// trail band's rule applied to the same widths.
     func metrics(limit: Int, locale: Locale = .current) -> [TrailWidgetMetric] {
         TrailWidgetMetric.band(
             [
                 TrailWidgetMetric.ascent(
                     meters: elevationGainMeters,
+                    locale: locale
+                ),
+                TrailWidgetMetric.distance(
+                    meters: distanceMeters,
                     locale: locale
                 ),
                 TrailWidgetMetric.pace(

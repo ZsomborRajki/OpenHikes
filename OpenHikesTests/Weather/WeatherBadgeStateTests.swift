@@ -41,7 +41,7 @@ struct WeatherBadgeStateTests {
 
     @Test("a manager with nothing to show is idle, and only then")
     func startsIdle() {
-        #expect(WeatherManager().state == .idle)
+        #expect(WeatherManager(widgetPublisher: .inert).state == .idle)
     }
 
     /// The badge draws a symbol and a temperature and nothing else, so the
@@ -73,7 +73,7 @@ struct WeatherBadgeStateTests {
     /// an absence.
     @Test("focusing a subject with a request coming shows it loading")
     func focusWithRequestLoads() {
-        let manager = WeatherManager()
+        let manager = WeatherManager(widgetPublisher: .inert)
         manager.focus(on: .place(budapest, name: "Budapest"), willRequest: true)
         #expect(manager.state == .loading(.place(budapest, name: "Budapest")))
     }
@@ -83,7 +83,7 @@ struct WeatherBadgeStateTests {
     /// was `nil` and drew nothing.
     @Test("a subject the poll cannot ask about reads as unavailable")
     func focusWithoutRequestIsUnavailable() {
-        let manager = WeatherManager()
+        let manager = WeatherManager(widgetPublisher: .inert)
         manager.focus(on: .place(budapest, name: "Budapest"), willRequest: false)
         #expect(manager.state == .unavailable(.place(budapest, name: "Budapest")))
         #expect(manager.current == nil, "and there is genuinely no reading to show")
@@ -96,7 +96,7 @@ struct WeatherBadgeStateTests {
     /// would sit empty on a subject the poll thought was fresh.
     @Test("returning to a cached subject shows its reading immediately")
     func cachedSubjectIsShownAtOnce() {
-        let manager = WeatherManager()
+        let manager = WeatherManager(widgetPublisher: .inert)
         let reading = snapshot(celsius: 12)
         manager.applyUITestSnapshot(reading, subject: .place(budapest, name: "Budapest"))
 
@@ -112,7 +112,7 @@ struct WeatherBadgeStateTests {
     /// response to it.
     @Test("a reading for the hiker survives them moving")
     func hikerReadingSurvivesMovement() {
-        let manager = WeatherManager()
+        let manager = WeatherManager(widgetPublisher: .inert)
         let reading = snapshot(celsius: 8)
         manager.applyUITestSnapshot(reading, subject: .me(budapest))
 
@@ -123,7 +123,7 @@ struct WeatherBadgeStateTests {
 
     @Test("only a reading answers `current`")
     func currentFollowsTheReading() {
-        let manager = WeatherManager()
+        let manager = WeatherManager(widgetPublisher: .inert)
         #expect(manager.current == nil)
 
         let reading = snapshot(celsius: 3)
@@ -138,7 +138,7 @@ struct WeatherBadgeStateTests {
     func sameNameDifferentLocations() {
         let france = WeatherSubject.place(.init(latitude: 48.8566, longitude: 2.3522), name: "Paris")
         let texas = WeatherSubject.place(.init(latitude: 33.6609, longitude: -95.5555), name: "Paris")
-        let manager = WeatherManager()
+        let manager = WeatherManager(widgetPublisher: .inert)
         var requests = WeatherRequestState()
         let now = Date(timeIntervalSinceReferenceDate: 1_000_000)
         let reading = snapshot(celsius: 12, capturedAt: now)
@@ -157,7 +157,7 @@ struct WeatherBadgeStateTests {
 
     @Test("revisiting a fresh reading keeps it through cache eviction")
     func cacheRecencyMatchesRequestRecency() {
-        let manager = WeatherManager()
+        let manager = WeatherManager(widgetPublisher: .inert)
         var requests = WeatherRequestState()
         let now = Date(timeIntervalSinceReferenceDate: 1_000_000)
         let reading = snapshot(celsius: 12, capturedAt: now)
@@ -187,7 +187,7 @@ struct WeatherBadgeStateTests {
 
     @Test("waiting for a recording's first fix clears the previous place's badge")
     func noSubjectClearsPreviousReading() {
-        let manager = WeatherManager()
+        let manager = WeatherManager(widgetPublisher: .inert)
         manager.applyUITestSnapshot(snapshot(celsius: 12), subject: .place(budapest, name: "Budapest"))
         manager.focus(on: nil, willRequest: false)
         #expect(manager.state == .idle)
