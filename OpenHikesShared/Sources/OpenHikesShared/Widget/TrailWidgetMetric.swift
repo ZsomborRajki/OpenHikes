@@ -280,6 +280,31 @@ extension TrailWidgetMetric {
     }
 }
 
+extension TrailWidgetMetric {
+    /// The chips a snapshot offers, in order, cut to what the family has room
+    /// for.
+    ///
+    /// Both snapshots build their band this way and the rule is the same for
+    /// each: a figure that is missing is **omitted** rather than drawn as a
+    /// dash, so a route imported without elevations shows fewer chips instead
+    /// of a row of placeholders. That is what makes `nil` the right thing for
+    /// each factory to return, and what makes the order of `candidates` the
+    /// whole of the priority — the cut happens after the compact, so a
+    /// missing first chip promotes the second rather than costing the slot.
+    ///
+    /// - Parameter candidates: Most useful first.
+    static func band(_ candidates: [TrailWidgetMetric?], limit: Int) -> [TrailWidgetMetric] {
+        guard limit > 0 else { return [] }
+        return Array(candidates.compactMap(\.self).prefix(limit))
+    }
+
+    /// The same chips as one phrase, for a widget's single accessibility
+    /// element — the glyphs themselves say nothing to VoiceOver.
+    static func accessibilityText(for metrics: [TrailWidgetMetric]) -> String {
+        metrics.map(\.accessibilityPhrase).joined(separator: ", ")
+    }
+}
+
 public extension SharedTrailSnapshot {
     /// The stat chips for this trail: at most two, most useful first, and
     /// truncated to whatever the widget family has width for.
@@ -300,8 +325,7 @@ public extension SharedTrailSnapshot {
     /// imported without elevations should show fewer chips, not a row of
     /// placeholders.
     func metrics(limit: Int, locale: Locale = .current) -> [TrailWidgetMetric] {
-        guard limit > 0 else { return [] }
-        return Array(
+        TrailWidgetMetric.band(
             [
                 TrailWidgetMetric.ascent(
                     meters: elevationGainMeters,
@@ -311,9 +335,8 @@ public extension SharedTrailSnapshot {
                     meters: liveFix?.elevationMeters,
                     locale: locale
                 ),
-            ]
-            .compactMap(\.self)
-            .prefix(limit)
+            ],
+            limit: limit
         )
     }
 
@@ -323,9 +346,9 @@ public extension SharedTrailSnapshot {
         limit: Int,
         locale: Locale = .current
     ) -> String {
-        metrics(limit: limit, locale: locale)
-            .map(\.accessibilityPhrase)
-            .joined(separator: ", ")
+        TrailWidgetMetric.accessibilityText(
+            for: metrics(limit: limit, locale: locale)
+        )
     }
 }
 
@@ -336,8 +359,7 @@ public extension SharedRecordingSnapshot {
     /// these are the two facts a live recording otherwise doesn't show: how
     /// much has been climbed, and how fast it is being walked.
     func metrics(limit: Int, locale: Locale = .current) -> [TrailWidgetMetric] {
-        guard limit > 0 else { return [] }
-        return Array(
+        TrailWidgetMetric.band(
             [
                 TrailWidgetMetric.ascent(
                     meters: elevationGainMeters,
@@ -347,9 +369,8 @@ public extension SharedRecordingSnapshot {
                     metersPerSecond: averageSpeedMetersPerSecond,
                     locale: locale
                 ),
-            ]
-            .compactMap(\.self)
-            .prefix(limit)
+            ],
+            limit: limit
         )
     }
 
@@ -359,8 +380,8 @@ public extension SharedRecordingSnapshot {
         limit: Int,
         locale: Locale = .current
     ) -> String {
-        metrics(limit: limit, locale: locale)
-            .map(\.accessibilityPhrase)
-            .joined(separator: ", ")
+        TrailWidgetMetric.accessibilityText(
+            for: metrics(limit: limit, locale: locale)
+        )
     }
 }
