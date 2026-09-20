@@ -94,7 +94,10 @@ struct CommunityShareSheet: View {
     /// its pictures, and this is the exception the hiker reaches for.
     @State private var excludedPhotoIDs: Set<UUID> = []
     /// How many photographs this device can send, once the disk has been
-    /// asked. `nil` until then — see ``photoCount``.
+    /// asked. `nil` until then. Kept and written here rather than inside
+    /// ``CommunitySharePhotoTally`` because it is the answer to a `.task`,
+    /// which is this view's to own — see
+    /// ``SwiftUI/View/countsSendablePhotos(of:excluding:store:into:)``.
     @State private var sendablePhotoCount: Int?
     /// Whether this hike may be published at all, once the library has been
     /// asked. `nil` until then, and the Share button waits for it: offering a
@@ -119,53 +122,18 @@ struct CommunityShareSheet: View {
         )
     }
 
-    /// The photographs this share would actually carry, worked out once here
-    /// rather than described twice — the cap is ``CommunityPublisher``'s, and
-    /// a screen that quoted its own number would eventually quote a stale one.
+    /// What this share would actually carry, and what it would leave behind.
     ///
-    /// Rows are not files. A photo row mirrors between a hiker's devices and
-    /// its pixels never do, so the iPad shows a full strip for a walk recorded
-    /// on the phone and can send none of it — and the upload drops exactly
-    /// those, silently. Until the disk has answered, the capped row count is
-    /// the best guess available; after that this is the number that will
-    /// really go.
-    private var photoCount: Int {
-        sendablePhotoCount ?? min(includedPhotoCount, CommunityPublisher.maximumPhotos)
-    }
-
-    /// How many of this hike's photographs are still ticked, before the disk
-    /// and the cap have had their say.
-    private var includedPhotoCount: Int {
-        CommunityPublisher.ownPhotos(of: hike)
-            .count(where: { !excludedPhotoIDs.contains($0.id) })
-    }
-
-    /// How many of this hike's pictures are on another device, and so are not
-    /// going anywhere from here.
-    private var unsendablePhotoCount: Int {
-        guard let sendablePhotoCount else { return 0 }
-        return min(includedPhotoCount, CommunityPublisher.maximumPhotos) - sendablePhotoCount
-    }
-
-    /// What to say about the pictures that are staying behind.
-    ///
-    /// Number-neutral after the count, like the disclosure sentence: one
-    /// photograph reads as written English rather than as a template with a 1
-    /// in it.
-    private var photosOnAnotherDevice: String {
-        unsendablePhotoCount == 1
-            ? String(
-                localized: """
-                One of this hike's photos is on the device it was added on, \
-                so it can't be shared from here.
-                """
-            )
-            : String(
-                localized: """
-                \(unsendablePhotoCount) of this hike's photos are on the device \
-                they were added on, so they can't be shared from here.
-                """
-            )
+    /// ``CommunitySharePhotoTally`` rather than four members of this screen's
+    /// own: the contribution form asks exactly the same question about exactly
+    /// the same files, and the number under the strip has to be the number
+    /// that goes on both.
+    private var photos: CommunitySharePhotoTally {
+        CommunitySharePhotoTally(
+            hike: hike,
+            excluding: excludedPhotoIDs,
+            sendableCount: sendablePhotoCount
+        )
     }
 
     /// The name this share is published under.
@@ -268,18 +236,12 @@ struct CommunityShareSheet: View {
                     store: store
                 )
             }
-            // Re-asked whenever the hiker strikes a photograph off or puts
-            // one back, because the answer is about a particular set of files:
-            // the count under the strip has to be what will really go, and the
-            // cap means taking one out can let another in. Nothing else can
-            // change it while this sheet is the screen on top.
-            .task(id: excludedPhotoIDs) {
-                sendablePhotoCount = await CommunityPublisher.sendablePhotoCount(
-                    of: hike,
-                    excludingPhotos: excludedPhotoIDs,
-                    store: store
-                )
-            }
+            .countsSendablePhotos(
+                of: hike,
+                excluding: excludedPhotoIDs,
+                store: store,
+                into: $sendablePhotoCount
+            )
             // Asked here as well as on the hike's own screen, and not merely
             // trusted from there: the button is drawn from the two cheap rules
             // alone, and the retread check needs a fetch and a pass over every
@@ -339,7 +301,7 @@ private extension CommunityShareSheet {
             }
             LabeledContent(
                 "Photos",
-                value: photoCount == 0 ? "None" : "\(photoCount)"
+                value: photos.count == 0 ? "None" : "\(photos.count)"
             )
             // One element with an explicit value, rather than the pair
             // `LabeledContent` composes on its own. An identifier on a
@@ -349,10 +311,10 @@ private extension CommunityShareSheet {
             // for where that lesson was learned.
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Photos")
-            .accessibilityValue(photoCount == 0 ? "None" : "\(photoCount)")
+            .accessibilityValue(photos.count == 0 ? "None" : "\(photos.count)")
             .accessibilityIdentifier("community-share-photo-count")
             photoPicker
-            if unsendablePhotoCount > 0 {
+            if photos.unsendableCount > 0 {
                 // Said here rather than left to the footer, because it is
                 // about the row directly above it: the number there is
                 // smaller than the strip on the hike screen, and a hiker who
@@ -363,7 +325,7 @@ private extension CommunityShareSheet {
                 // — see ``PhotoUnavailability/notOnThisDevice``, which the
                 // gallery, the map callout and the viewer all speak through.
                 Label {
-                    Text(photosOnAnotherDevice)
+                    Text(CommunitySharePhotoTally.onAnotherDevice(count: photos.unsendableCount))
                 } icon: {
                     Image(systemName: "icloud.slash")
                         .foregroundStyle(.secondary)
@@ -389,7 +351,7 @@ private extension CommunityShareSheet {
             Text(
                 CommunityShareDisclosure.text(
                     hasNotes: sharedDescription != nil,
-                    photoCount: photoCount
+                    photoCount: photos.count
                 )
             )
         }
@@ -603,24 +565,10 @@ private extension CommunityShareSheet {
     }
 
     var sentSection: some View {
-        Section {
-            VStack(spacing: 8) {
-                Image(systemName: "paperplane.fill")
-                    .font(.largeTitle)
-                    .foregroundStyle(.tint)
-                    .accessibilityHidden(true)
-                Text("Sent for review")
-                    .font(.headline)
-                Text("It'll appear for other hikers once it's been checked.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("community-share-sent")
-        }
+        CommunitySentSection(
+            detail: "It'll appear for other hikers once it's been checked.",
+            identifier: "community-share-sent"
+        )
     }
 
     @ToolbarContentBuilder var toolbarContent: some ToolbarContent {
