@@ -227,26 +227,15 @@ struct HikePhotoViewer: View {
     /// moves the one beside it, and at the end of a gallery that would shift
     /// the button the user is about to press.
     private func stepControls(_ photos: [HikePhoto], currentIndex: Int?) -> some View {
-        HStack(spacing: 6) {
-            stepButton(
-                systemImage: "chevron.left",
-                label: "Previous photo",
-                identifier: "previous-photo-button",
-                offset: -1,
-                photos: photos,
-                currentIndex: currentIndex
-            )
-            stepButton(
-                systemImage: "chevron.right",
-                label: "Next photo",
-                identifier: "next-photo-button",
-                offset: 1,
-                photos: photos,
-                currentIndex: currentIndex
-            )
-        }
-        .opacity(photos.count > 1 ? 1 : 0)
-        .accessibilityHidden(photos.count <= 1)
+        PhotoStepControls(
+            previousIdentifier: "previous-photo-button",
+            nextIdentifier: "next-photo-button",
+            // This gallery's own question about its own list: it is handed the
+            // photographs and the index from above rather than holding them.
+            hasDestination: { destination(from: currentIndex, by: $0, in: photos) != nil },
+            step: { step(by: $0) }
+        )
+        .photoStepVisibility(count: photos.count)
     }
 
     /// Who took the photograph on screen, when that is somebody other than
@@ -276,25 +265,6 @@ struct HikePhotoViewer: View {
                 .environment(\.colorScheme, .dark)
                 .accessibilityIdentifier("photo-credit")
         }
-    }
-
-    private func stepButton(
-        systemImage: String,
-        label: LocalizedStringKey,
-        identifier: String,
-        offset: Int,
-        photos: [HikePhoto],
-        currentIndex: Int?
-    ) -> some View {
-        PhotoStepButton(
-            systemImage: systemImage,
-            label: label,
-            identifier: identifier,
-            // This gallery's own question about its own list: it is handed the
-            // photographs and the index from above rather than holding them.
-            hasDestination: destination(from: currentIndex, by: offset, in: photos) != nil,
-            step: { step(by: offset) }
-        )
     }
 
     @ToolbarContentBuilder
