@@ -44,19 +44,125 @@ import SwiftUI
 /// other a credit and a target trail. The photographs are the overlap, and
 /// they are the overlap because they are what the strip and the map both draw.
 nonisolated protocol CommunityReviewSubject: Sendable {
+    /// Where each downloaded photograph was taken, in ``photoFileURLs`` order.
+    var photoPins: [CommunityPhotoPin] { get }
     /// The downloaded copies, owned by the screen that asked for them.
     var photoFileURLs: [URL] { get }
     /// How many the record actually carries — see ``hasEveryPhoto``.
     var photosOnRecord: Int { get }
-    /// Whether every photograph on the record reached this device. Removal is
-    /// withheld when it did not: a rewrite is built from the copies here, so
-    /// doing it with one missing would delete that one too.
-    var hasEveryPhoto: Bool { get }
-    /// Which of the downloaded photographs to keep, as the rewrite wants them.
-    func keptPhotos(at indexes: Set<Int>) -> [CommunityKeptPhoto]
+    /// Who these photographs belong to, or `nil` when they are the hike
+    /// author's own and the listing already says so. See
+    /// ``CommunityGalleryPhoto/contribution``.
+    var galleryAttribution: CommunityPhotoAttribution? { get }
     /// Where each photograph was taken, for the pins on the map behind the
     /// sheet.
+    ///
+    /// Still each subject's own, because the two disagree about what a review
+    /// screen is looking at: a contribution numbers its pictures from zero,
+    /// and a hike detail shows the ones the submission carries.
     var reviewPreviewPhotos: [CommunityPreviewPhoto] { get }
+}
+
+/// The pairing itself, which both subjects had written out.
+///
+/// **A pin is a claim about *which* photograph was taken *where*, and pairing
+/// by index is the entirety of what backs that claim.** Everything below turns
+/// on that one sentence, which is why it is now said once: the two arrays are
+/// checked against each other before any of it, and a subject that cannot
+/// support the claim draws no pins rather than pins that might each be about
+/// the picture next door.
+///
+/// `nonisolated` on the extension rather than on the members, which is the
+/// spelling the repository instructions require under
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` — both conformers are
+/// `nonisolated` structs, and an unannotated extension here compiles locally
+/// and fails on CI.
+nonisolated extension CommunityReviewSubject {
+    /// Whether the pins still describe the pictures.
+    ///
+    /// Asked separately per subject because each is a record of its own: one
+    /// set whose pins are wrong must not cost the others their places.
+    ///
+    /// ``CloudKitCommunityTransport`` builds both arrays from the same
+    /// downloaded files, so nothing it hands back can fail this. That is a
+    /// reason to keep the check rather than to drop it: the guarantee lives in
+    /// one conformance, the consequence of losing it is undetectable and
+    /// permanent, and the check costs a comparison on a path that already
+    /// walks every photograph.
+    var isConsistent: Bool {
+        photoPins.count == photoFileURLs.count
+    }
+
+    /// Whether every photograph on the record reached this device.
+    ///
+    /// What a rewrite may only be called behind: it is built out of the copies
+    /// on this device, so doing it while one is missing would delete that one
+    /// too, permanently, without the reviewer having decided anything about
+    /// it.
+    var hasEveryPhoto: Bool {
+        isConsistent && photoFileURLs.count == photosOnRecord
+    }
+
+    /// The photographs at `indexes`, each with the pin that describes it, in
+    /// the order they arrived in.
+    ///
+    /// The order is load-bearing rather than tidy: what comes back is written
+    /// straight onto the submission as its two photo fields, and those pair by
+    /// position. Sorting by index is what keeps the first picture first after
+    /// the third has been taken out.
+    ///
+    /// Empty when the two arrays disagree — a sharper refusal than
+    /// ``previewPhotos(startingAt:)``'s, since this answer is uploaded.
+    func keptPhotos(at indexes: Set<Int>) -> [CommunityKeptPhoto] {
+        guard isConsistent else { return [] }
+        return indexes.sorted().compactMap { index in
+            guard photoFileURLs.indices.contains(index) else { return nil }
+            return CommunityKeptPhoto(pin: photoPins[index], fileURL: photoFileURLs[index])
+        }
+    }
+
+    /// The photographs that know where they were taken, ready for the map.
+    ///
+    /// Unanchored ones are left out rather than pinned somewhere plausible,
+    /// which is the rule ``PhotoMapPin`` already follows for the hiker's own
+    /// pictures: a photograph with no coordinate is still part of the hike and
+    /// still in the strip, it just has nowhere to stand.
+    ///
+    /// - Parameter offset: Where this set starts in the merged gallery, so a
+    ///   pin and a gallery page agree about which picture they are both about.
+    ///   See ``CommunityHikeDetail/galleryPhotos``.
+    func previewPhotos(startingAt offset: Int) -> [CommunityPreviewPhoto] {
+        guard isConsistent else { return [] }
+        return zip(photoPins, photoFileURLs).enumerated().compactMap { index, pair in
+            guard let coordinate = pair.0.coordinate else { return nil }
+            return CommunityPreviewPhoto(
+                index: offset + index,
+                latitude: coordinate.latitude,
+                longitude: coordinate.longitude,
+                capturedAt: pair.0.capturedAt,
+                fileURL: pair.1
+            )
+        }
+    }
+
+    /// Every downloaded photograph of this set, in the order the strip draws
+    /// them.
+    ///
+    /// Drops nothing, unlike ``previewPhotos(startingAt:)``, because the
+    /// gallery is the strip made large: a picture missing from here would make
+    /// the fourth tile open the fifth photograph. What an inconsistent set
+    /// loses is the *places* rather than the pictures.
+    func galleryPhotos(startingAt offset: Int) -> [CommunityGalleryPhoto] {
+        let pinned = isConsistent
+        return photoFileURLs.enumerated().map { index, url in
+            CommunityGalleryPhoto(
+                index: offset + index,
+                pin: pinned ? photoPins[index] : nil,
+                fileURL: url,
+                contribution: galleryAttribution
+            )
+        }
+    }
 }
 
 @MainActor
