@@ -19,6 +19,7 @@
 //
 
 import Foundation
+import OpenHikesShared
 
 nonisolated enum WeatherReadingFormat {
     private static let secondsPerMinute: Double = 60
@@ -62,29 +63,24 @@ nonisolated enum WeatherReadingFormat {
 
     /// The one place a temperature becomes text.
     ///
-    /// `usage: .weather` rather than the default `.general`: both convert to
-    /// the locale's preferred unit, but only `.weather` asks for the unit that
-    /// locale uses *for weather*, which is the question being asked here.
+    /// The formatter itself is ``WidgetFormat/temperature(_:width:locale:)``
+    /// in the shared package, and this is a name for it rather than a second
+    /// copy — for the reason `HikeFormat.elevation` is: the widget draws this
+    /// same reading on the home screen, and the app and the extension cannot
+    /// round one quantity two ways. See that method for why `usage: .weather`
+    /// and whole degrees, and this file's header for what the two independent
+    /// renderings cost before there was one.
     ///
-    /// The precision is pinned at whole degrees rather than left at the
-    /// style's default, which carries every digit WeatherKit sent through the
-    /// conversion: 12.3456 °C formats as `54.22208°`, in a capsule laid out
-    /// for three characters. Rounding here — rather than at the call site the
-    /// way the old badge did — is what keeps the spoken value on the same
-    /// number as the drawn one.
+    /// Kept as a member here because every call site in the app reads
+    /// `WeatherReadingFormat` for its other four, and sending one of the five
+    /// somewhere else to be spelled would be the split that made them drift in
+    /// the first place.
     static func temperature(
         _ measurement: Measurement<UnitTemperature>,
         width: Measurement<UnitTemperature>.FormatStyle.UnitWidth,
         locale: Locale = .autoupdatingCurrent
     ) -> String {
-        measurement.formatted(
-            .measurement(
-                width: width,
-                usage: .weather,
-                numberFormatStyle: .number.precision(.fractionLength(0))
-            )
-            .locale(locale)
-        )
+        WidgetFormat.temperature(measurement, width: width, locale: locale)
     }
 
     /// A fraction of one, as a percentage.

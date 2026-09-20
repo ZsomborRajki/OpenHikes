@@ -3,7 +3,9 @@
 //  OpenWidget
 //
 //  Shows the shape of whichever trail is currently selected in OpenHikes,
-//  plus your last-known position along it. During an active recording it may
+//  plus your last-known position along it. Holds the timeline provider, the
+//  entry and the recording half of the drawing; the trail half is in
+//  TrailWidgetTrailContent.swift. During an active recording it may
 //  request one coarse location anchor on a sparse WidgetKit timeline; all
 //  displayed state still comes from SharedStore (see OpenHikesShared).
 //
@@ -24,6 +26,17 @@ struct TrailWidgetEntry: TimelineEntry {
     /// here; the image itself is read at render time by whichever view ends
     /// up needing it, so an entry never holds a decoded bitmap.
     var basemaps: TrailBasemapSet?
+    /// The temperature the app's weather badge was last showing, if there is
+    /// one and it is still worth drawing.
+    ///
+    /// Read here rather than in the view for the reason the basemaps are:
+    /// building the entry is the moment the store is read, and a view that
+    /// reached for the App Group would be doing it once per family per
+    /// appearance. Unlike the basemaps it is **not** tied to the trail — it
+    /// belongs to whatever the badge is pointed at — so it survives the
+    /// recording takeover below and is the one thing both states draw the
+    /// same way.
+    var weather: SharedWeatherReading?
 
     /// Pairs a stored snapshot with its basemaps, which are only ever valid
     /// for the hike they were rendered for — and settles the one contention
@@ -72,6 +85,11 @@ struct TrailWidgetEntry: TimelineEntry {
         self.snapshot = recordingSnapshot == nil ? snapshot : nil
         basemaps = self.snapshot.flatMap { snapshot in
             SharedStore.loadBasemapSet(for: snapshot.hikeID)
+        }
+        // Dropped here rather than at the draw, so the entry is the whole
+        // truth about what this timeline shows and a test can ask it.
+        weather = SharedStore.loadWeatherReading().flatMap { reading in
+            reading.isExpired(asOf: date) ? nil : reading
         }
     }
 
@@ -230,8 +248,33 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
         )
     }
 
+    /// The gallery entry and the redacted placeholder.
+    ///
+    /// Carries the basemaps shipped in the asset catalogue rather than the
+    /// nothing the App Group has for a trail that does not exist — see
+    /// ``TrailWidgetPlaceholderBasemaps``. Assigned after the fact rather than
+    /// taken by ``TrailWidgetEntry/init``, because the initializer's job is to
+    /// pair a *stored* snapshot with the images rendered for it, and widening
+    /// it to take either would put the one case that has no store into the
+    /// path every real entry goes down.
     static func placeholderEntry(date: Date = .now) -> TrailWidgetEntry {
-        TrailWidgetEntry(date: date, snapshot: placeholderSnapshot)
+        entry(for: placeholderSnapshot, date: date)
+    }
+
+    /// The same trail, part-walked: the one arrangement in which every element
+    /// is drawn at once — the chips, the temperature beside them, and the bar
+    /// along the bottom.
+    static func followedPlaceholderEntry(date: Date = .now) -> TrailWidgetEntry {
+        entry(for: followedPlaceholderSnapshot, date: date)
+    }
+
+    private static func entry(
+        for snapshot: SharedTrailSnapshot,
+        date: Date
+    ) -> TrailWidgetEntry {
+        var entry = TrailWidgetEntry(date: date, snapshot: snapshot)
+        entry.basemaps = TrailWidgetPlaceholderBasemaps.set
+        return entry
     }
 
     static func currentTimeline(
@@ -245,15 +288,37 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
                 nextReload(
                     after: date,
                     recording:
-                        entry.recordingSnapshot?.isCapturingFixes == true
+                        entry.recordingSnapshot?.isCapturingFixes == true,
+                    weatherExpiresAt: entry.weather?.expiresAt
                 )
             )
         )
     }
 
+    /// When this timeline asks to be rebuilt.
+    ///
+    /// - Parameter weatherExpiresAt: when the drawn temperature stops counting
+    ///   as current. Brought forward to here rather than left to whichever
+    ///   reload happens next, because the two cadences above are wrong for it
+    ///   in opposite directions: the safety net would leave a three-hour-old
+    ///   reading on screen for another three, and nothing at all would leave
+    ///   it there until the hiker next opened the app. One reload, at the
+    ///   moment the number goes off, draws the corner empty instead. It can
+    ///   only ever move the date *earlier* — a reading that expires next week
+    ///   does not buy the widget a week of silence.
     static func nextReload(
         after date: Date,
-        recording: Bool = false
+        recording: Bool = false,
+        weatherExpiresAt: Date? = nil
+    ) -> Date {
+        let scheduled = scheduledReload(after: date, recording: recording)
+        guard let weatherExpiresAt, weatherExpiresAt > date else { return scheduled }
+        return min(scheduled, weatherExpiresAt)
+    }
+
+    private static func scheduledReload(
+        after date: Date,
+        recording: Bool
     ) -> Date {
         if recording {
             return Calendar.current.date(
@@ -432,20 +497,39 @@ struct TrailWidgetEntryView: View {
 
     @ViewBuilder private var systemContent: some View {
         if let recording = entry.recordingSnapshot {
-            RecordingWidgetContent(snapshot: recording, family: family)
+            RecordingWidgetContent(
+                snapshot: recording,
+                weather: entry.weather,
+                family: family
+            )
         } else if let snapshot = entry.snapshot {
-            TrailWidgetContent(snapshot: snapshot, basemaps: entry.basemaps, family: family)
+            TrailWidgetContent(
+                snapshot: snapshot,
+                basemaps: entry.basemaps,
+                weather: entry.weather,
+                family: family
+            )
         } else {
             emptyState
         }
     }
 
+    /// A recording in progress: the trace over a plain fill, with the same
+    /// top line a trail draws and deliberately nothing along the bottom.
+    ///
+    /// **No progress bar, because there is no progress to report.** A trail
+    /// has a length to be a fraction of; a recording is a walk of unknown
+    /// extent, and every bar that could be drawn for it would be inventing a
+    /// denominator — an elapsed-time stripe measures against nothing, and a
+    /// filled bar says "done" about a walk that is still happening. The line
+    /// on the map is the honest picture of how far it has come, and the
+    /// distance chip in the corner is the number.
     private struct RecordingWidgetContent: View {
         let snapshot: SharedRecordingSnapshot
+        let weather: SharedWeatherReading?
         let family: WidgetFamily
 
-        private static let stackSpacing: Double = 4
-        private static let statusSpacing: Double = 5
+        private static let glyphSpacing: Double = 5
 
         private var layout: TrailWidgetLayout {
             TrailWidgetLayout(family: family)
@@ -455,18 +539,25 @@ struct TrailWidgetEntryView: View {
             snapshot.metrics(limit: layout.metricLimit)
         }
 
-        /// What is spoken after the trail's name: how the recording is going.
+        /// What is spoken after the trail's name: how the recording is going,
+        /// then the conditions it is going in.
         private var accessibilityValue: String {
-            let spoken = snapshot.metricsAccessibilityText(limit: layout.metricLimit)
-            return spoken.isEmpty
-                ? snapshot.statusText
-                : "\(snapshot.statusText), \(spoken)"
+            TrailWidgetSpeech.value(
+                status: snapshot.statusText,
+                metrics: snapshot.metricsAccessibilityText(limit: layout.metricLimit),
+                weather: weather
+            )
         }
 
         /// The one thing the removed title row still had to say: whether fixes
         /// are still arriving. A different shape rather than only a different
         /// colour, so a paused recording reads as paused without the reader
         /// having to tell red from grey.
+        ///
+        /// It survives the status line it used to sit beside, and leads the
+        /// top row instead. The words are gone from the widget but not from
+        /// VoiceOver, which still speaks `statusText`; this is the only thing
+        /// left that says "paused" to someone looking at it.
         private var stateGlyph: some View {
             Image(systemName: snapshot.isCapturingFixes ? "circle.fill" : "pause.fill")
                 .font(.caption2)
@@ -476,21 +567,16 @@ struct TrailWidgetEntryView: View {
 
         var body: some View {
             VStack(alignment: .leading, spacing: 0) {
-                Spacer(minLength: 0)
-
-                VStack(alignment: .leading, spacing: Self.stackSpacing) {
-                    TrailWidgetMetricRow(metrics: metrics, onMap: false)
-                    HStack(spacing: Self.statusSpacing) {
+                TrailWidgetHeaderRow(metrics: metrics, onMap: false) {
+                    HStack(spacing: Self.glyphSpacing) {
                         stateGlyph
-                        Text(snapshot.statusText)
-                            .font(
-                                family == .systemSmall
-                                    ? .caption.weight(.semibold)
-                                    : .caption
-                            )
-                            .foregroundStyle(.secondary)
+                        if let weather {
+                            TrailWidgetTemperature(text: weather.formatted(), onMap: false)
+                        }
                     }
                 }
+
+                Spacer(minLength: 0)
             }
             // Read as one thing: whether a recording is running, then how it
             // is going. The title is no longer drawn, but VoiceOver still
@@ -532,116 +618,11 @@ struct TrailWidgetEntryView: View {
     }
 }
 
-private struct TrailWidgetContent: View {
-    let snapshot: SharedTrailSnapshot
-    let basemaps: TrailBasemapSet?
-    let family: WidgetFamily
-
-    /// Text treatment for the light-on-map case, the companion to ``Scrim``:
-    /// the scrim darkens the map, this keeps the glyphs legible on top of it.
-    private enum MapTextStyle {
-        static let shadowOpacity: Double = 0.35
-    }
-
-    private enum Scrim {
-        static let bottomClearLocation: Double = 0.6
-        /// The stat chips and the progress hairline push the text band taller,
-        /// so the darkened part starts higher when they are drawn — otherwise
-        /// the top chip sits on undimmed map.
-        static let bottomClearLocationWithMetrics: Double = 0.48
-        static let bottomOpacity: Double = 0.55
-    }
-
-    private enum Stack {
-        static let spacing: Double = 4
-        static let progressTopPadding: Double = 1
-    }
-
-    private var layout: TrailWidgetLayout { TrailWidgetLayout(family: family) }
-    private var tint: Color { Color(hex: snapshot.tintHex) ?? .green }
-    private var metrics: [TrailWidgetMetric] { snapshot.metrics(limit: layout.metricLimit) }
-
-    /// Whether a rendered map is actually behind the text, which is what
-    /// decides between light-on-map and standard label colors.
-    ///
-    /// Any non-empty set resolves to *some* image for any size and
-    /// appearance — that's what `image(forAspectRatio:appearance:)`'s
-    /// fallback chain guarantees — so this needs no size math of its own. In
-    /// the one case where it can be optimistic (the manifest survived but its
-    /// files didn't, which the renderer actively prevents), the scrim below
-    /// is drawn anyway and the text stays legible against it.
-    private var hasMap: Bool { !(basemaps?.images.isEmpty ?? true) }
-
-    /// Everything the one accessibility element says after the trail's name:
-    /// how far along it the hiker is, then each chip in words. The glyphs
-    /// themselves are hidden, so this is the only place the numbers are said.
-    private var accessibilityValue: String {
-        let spoken = snapshot.metricsAccessibilityText(limit: layout.metricLimit)
-        return spoken.isEmpty ? snapshot.statusText : "\(snapshot.statusText), \(spoken)"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Spacer(minLength: 0)
-
-            VStack(alignment: .leading, spacing: Stack.spacing) {
-                TrailWidgetMetricRow(metrics: metrics, onMap: hasMap)
-                Text(snapshot.statusText)
-                    .font(family == .systemSmall ? .caption.weight(.semibold) : .caption)
-                    .foregroundStyle(hasMap ? Color.white : .secondary)
-                // Coverage while a walk is under way, position otherwise —
-                // the same number the status line above it just gave.
-                if let fraction = snapshot.progressFraction {
-                    TrailWidgetProgressBar(fraction: fraction, tint: tint, onMap: hasMap)
-                        .padding(.top, Stack.progressTopPadding)
-                }
-            }
-        }
-        .shadow(color: .black.opacity(hasMap ? MapTextStyle.shadowOpacity : 0), radius: 2, y: 1)
-        // One tap target, so one element — and the trail's name is spoken on
-        // every family even though none of them draw it any more. The widget
-        // shows the shape of the trail; VoiceOver has to be told which one.
-        // See ``View/trailWidgetCanvas(padding:label:value:background:)``.
-        .trailWidgetCanvas(
-            padding: layout.padding,
-            label: snapshot.title,
-            value: accessibilityValue
-        ) {
-            TrailMapView(
-                polyline: snapshot.polyline,
-                basemaps: basemaps,
-                tint: tint,
-                liveFix: snapshot.liveFix?.coordinate,
-                lineWidth: layout.routeLineWidth
-            )
-
-            if hasMap { scrim }
-        }
-    }
-
-    /// Darkens only the band the text occupies, so the middle of the map —
-    /// where the trail is — keeps its own contrast. There is no top band any
-    /// more: nothing is drawn up there to darken it for.
-    private var scrim: some View {
-        let bottomClear = metrics.isEmpty
-            ? Scrim.bottomClearLocation
-            : Scrim.bottomClearLocationWithMetrics
-        return LinearGradient(
-            stops: [
-                .init(color: .clear, location: bottomClear),
-                .init(color: .black.opacity(Scrim.bottomOpacity), location: 1),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-}
-
 struct TrailWidget: Widget {
-    /// The Home Screen sizes: a map behind a status line and up to two stat
-    /// chips. Named rather than inlined so a test can check that each one has
-    /// a ``TrailWidgetLayout`` to draw with — which is a question only these
-    /// three are asked, because they are the only ones that draw a map.
+    /// The Home Screen sizes: a map between a line of figures and a progress
+    /// hairline. Named rather than inlined so a test can check that each one
+    /// has a ``TrailWidgetLayout`` to draw with — which is a question only
+    /// these three are asked, because they are the only ones that draw a map.
     ///
     /// `.systemExtraLarge` is deliberately absent: it exists on iPad and the
     /// Mac, and every target here declares `TARGETED_DEVICE_FAMILY = 1`, so
@@ -679,7 +660,8 @@ struct TrailWidget: Widget {
 #Preview(as: .systemSmall) {
     TrailWidget()
 } timeline: {
-    TrailWidgetEntry(date: .now, snapshot: TrailWidgetProvider.placeholderSnapshot)
+    TrailWidgetProvider.followedPlaceholderEntry()
+    TrailWidgetProvider.placeholderEntry()
     TrailWidgetEntry(
         date: .now,
         snapshot: nil,
@@ -699,27 +681,33 @@ struct TrailWidget: Widget {
 #Preview("Following a trail", as: .systemMedium) {
     TrailWidget()
 } timeline: {
-    TrailWidgetEntry(date: .now, snapshot: TrailWidgetProvider.followedPlaceholderSnapshot)
+    TrailWidgetProvider.followedPlaceholderEntry()
+}
+
+#Preview("Following a trail", as: .systemLarge) {
+    TrailWidget()
+} timeline: {
+    TrailWidgetProvider.followedPlaceholderEntry()
 }
 
 #Preview("Lock Screen, circular", as: .accessoryCircular) {
     TrailWidget()
 } timeline: {
-    TrailWidgetEntry(date: .now, snapshot: TrailWidgetProvider.followedPlaceholderSnapshot)
-    TrailWidgetEntry(date: .now, snapshot: TrailWidgetProvider.placeholderSnapshot)
+    TrailWidgetProvider.followedPlaceholderEntry()
+    TrailWidgetProvider.placeholderEntry()
     TrailWidgetEntry(date: .now, snapshot: nil)
 }
 
 #Preview("Lock Screen, rectangular", as: .accessoryRectangular) {
     TrailWidget()
 } timeline: {
-    TrailWidgetEntry(date: .now, snapshot: TrailWidgetProvider.followedPlaceholderSnapshot)
+    TrailWidgetProvider.followedPlaceholderEntry()
     TrailWidgetEntry(date: .now, snapshot: nil)
 }
 
 #Preview("Lock Screen, inline", as: .accessoryInline) {
     TrailWidget()
 } timeline: {
-    TrailWidgetEntry(date: .now, snapshot: TrailWidgetProvider.followedPlaceholderSnapshot)
+    TrailWidgetProvider.followedPlaceholderEntry()
     TrailWidgetEntry(date: .now, snapshot: nil)
 }

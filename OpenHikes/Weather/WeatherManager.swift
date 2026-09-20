@@ -356,6 +356,12 @@ final class WeatherManager {
     )
 
     /// What the badge draws.
+    ///
+    /// Assigned only by ``publish(_:)``, which is what keeps the widget's
+    /// temperature on whatever this is showing. Six places move the badge and
+    /// a seventh will be added one day; routing them through one call is the
+    /// difference between that being free and it being a corner of the home
+    /// screen that quietly stops agreeing with the app.
     private(set) var state: WeatherBadgeState = .idle
 
     /// The reading currently on screen, if there is one.
@@ -382,6 +388,9 @@ final class WeatherManager {
     /// rather than one for the app.
     @ObservationIgnored private var alertWatches: OrderedDictionary<String, WeatherAlertWatch> = [:]
     @ObservationIgnored private let store: WeatherReadingStore?
+    /// Where the badge's reading reaches the home screen widget. A suite hands
+    /// this a counter, for the reason ``TrailWidgetReload`` takes one.
+    @ObservationIgnored private let widgetPublisher: WeatherWidgetPublisher
     /// `nil` for a launch that must not reach the network — see
     /// ``WeatherPlaceNaming``. The sheet is then headed exactly as it was
     /// before that file existed.
@@ -435,11 +444,13 @@ final class WeatherManager {
     init(
         store: WeatherReadingStore? = nil,
         placeNames: (any WeatherPlaceNaming)? = nil,
-        notifier: (any MovementReminderNotifying)? = nil
+        notifier: (any MovementReminderNotifying)? = nil,
+        widgetPublisher: WeatherWidgetPublisher = .system
     ) {
         self.store = store
         self.placeNames = placeNames
         self.notifier = notifier
+        self.widgetPublisher = widgetPublisher
     }
 
     /// Looks up the city the current subject's forecast is for, if it is the
@@ -510,7 +521,7 @@ final class WeatherManager {
         guard let restored = store?.load() else { return }
         cache[restored.subject.key] = restored.snapshot
         guard state == .idle else { return }
-        state = .reading(restored.snapshot, subject: restored.subject)
+        publish(.reading(restored.snapshot, subject: restored.subject))
     }
 
     /// Points the badge at `subject`, before anything is fetched for it.
@@ -521,16 +532,16 @@ final class WeatherManager {
     /// spin for the second.
     func focus(on subject: WeatherSubject?, willRequest: Bool) {
         guard let subject else {
-            state = .idle
+            publish(.idle)
             return
         }
         if let cached = cache[subject.key] {
             remember(cached, for: subject)
-            state = .reading(cached, subject: subject)
+            publish(.reading(cached, subject: subject))
         } else if willRequest {
-            state = .loading(subject)
+            publish(.loading(subject))
         } else {
-            state = .unavailable(subject)
+            publish(.unavailable(subject))
         }
     }
 
@@ -587,7 +598,7 @@ final class WeatherManager {
                 alerts: WeatherAlerts(alerts)
             )
             remember(snapshot, for: subject)
-            state = .reading(snapshot, subject: subject)
+            publish(.reading(snapshot, subject: subject))
             store?.save(snapshot: snapshot, subject: subject)
             await announceAlerts(in: snapshot, for: subject)
             return true
@@ -605,9 +616,9 @@ final class WeatherManager {
                 """
             )
             if let cached = cache[subject.key] {
-                state = .reading(cached, subject: subject)
+                publish(.reading(cached, subject: subject))
             } else {
-                state = .unavailable(subject)
+                publish(.unavailable(subject))
             }
             return false
         }
@@ -654,6 +665,19 @@ final class WeatherManager {
         )
     }
 
+    /// Moves the badge, and tells the widget what the badge now says.
+    ///
+    /// The only writer of ``state``. The widget draws a temperature it cannot
+    /// fetch, so every move of the badge is also a publish — see
+    /// ``WeatherWidgetPublisher``, which decides on its own whether the new
+    /// state is worth a redraw and does both off the main thread.
+    private func publish(_ newState: WeatherBadgeState) {
+        guard state != newState else { return }
+        state = newState
+        let reading = newState.sharedReading
+        Task { await widgetPublisher.publish(reading) }
+    }
+
     private func remember(_ snapshot: WeatherSnapshot, for subject: WeatherSubject) {
         // The reading is stored where the subject already sits and the entry
         // is *then* moved to the end of the recency order, which is what makes
@@ -679,7 +703,7 @@ final class WeatherManager {
         subject: WeatherSubject = .uiTestFixtureSubject
     ) {
         remember(snapshot, for: subject)
-        state = .reading(snapshot, subject: subject)
+        publish(.reading(snapshot, subject: subject))
     }
     #endif
 }

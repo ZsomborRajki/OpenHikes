@@ -317,8 +317,9 @@ struct TrailWidgetTests {
         }
     }
 
-    /// The small widget draws a thinner line and tighter padding — it is the
-    /// same trail in less space than any of the larger families.
+    /// The small widget draws a thinner line, tighter padding and one chip
+    /// fewer — it is the same trail in less space than any of the larger
+    /// families.
     @Test("the small family is drawn more tightly than the larger ones")
     func smallFamilyIsTighter() {
         let small = TrailWidgetLayout(family: .systemSmall)
@@ -336,7 +337,7 @@ struct TrailWidgetTests {
 
     /// Chips are ordered most-useful-first and truncated to the width, so the
     /// limit is what decides which fact a size gives up — a square 155 pt
-    /// widget is mostly map, and one number is a glance.
+    /// widget is mostly map, and the third figure is the one it can spare.
     @Test("wider families carry more stat chips than the small one")
     func widerFamiliesCarryMoreChips() {
         let limits = [WidgetFamily.systemSmall, .systemMedium, .systemLarge]
@@ -364,11 +365,12 @@ struct TrailWidgetTests {
         }
     }
 
-    /// The widget draws no title and no elapsed-time text; what it says in
-    /// words is one status line and, at most, two chips. Nothing here can
-    /// check pixels, so the cap the layout hands the builder is the pin.
-    @Test("no Home Screen family asks for more than the two chips there are")
-    func noFamilyAsksForMoreThanThePair() {
+    /// The widget draws no title, no status line and no elapsed-time text;
+    /// what it says in words is at most three chips across its top-right
+    /// corner. Nothing here can check pixels, so the cap the layout hands the
+    /// builder is the pin.
+    @Test("no Home Screen family asks for more than the three chips there are")
+    func noFamilyAsksForMoreThanTheThree() {
         let live = Self.snapshot(
             liveFix: .init(
                 coordinate: .init(latitude: 47.6320, longitude: 12.8620),
@@ -380,7 +382,7 @@ struct TrailWidgetTests {
         )
         for family in TrailWidget.systemFamilies {
             let limit = TrailWidgetLayout(family: family).metricLimit
-            #expect(limit <= 2, "\(family)")
+            #expect(limit <= 3, "\(family)")
             #expect(live.metrics(limit: limit).count == limit, "\(family)")
         }
     }
@@ -419,15 +421,15 @@ struct TrailWidgetTests {
 
     /// The gallery is where a widget is chosen. A placeholder drawn emptier
     /// than the real thing undersells it — and the followed variant is the one
-    /// preview arrangement where both chips are drawn at once.
+    /// preview arrangement where every chip is drawn at once.
     @Test("the gallery placeholder shows the chips a real trail would")
     func placeholderIsRepresentative() {
         let limit = TrailWidgetLayout(family: .systemMedium).metricLimit
         let gallery = TrailWidgetProvider.placeholderEntry().snapshot?.metrics(limit: limit) ?? []
-        #expect(gallery.map(\.kind) == [.ascent])
+        #expect(gallery.map(\.kind) == [.ascent, .length])
         #expect(
             TrailWidgetProvider.followedPlaceholderSnapshot.metrics(limit: limit).map(\.kind)
-                == [.ascent, .currentElevation]
+                == [.ascent, .length, .currentElevation]
         )
     }
 }
