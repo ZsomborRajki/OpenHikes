@@ -296,18 +296,15 @@ struct HikePhotoViewer: View {
         photos: [HikePhoto],
         currentIndex: Int?
     ) -> some View {
-        Button {
-            step(by: offset)
-        } label: {
-            Image(systemName: systemImage)
-                .font(.title3.weight(.semibold))
-                .minimumTapTarget()
-        }
-        .glassButtonStyle()
-        .buttonBorderShape(.circle)
-        .disabled(destination(from: currentIndex, by: offset, in: photos) == nil)
-        .accessibilityLabel(label)
-        .accessibilityIdentifier(identifier)
+        PhotoStepButton(
+            systemImage: systemImage,
+            label: label,
+            identifier: identifier,
+            // This gallery's own question about its own list: it is handed the
+            // photographs and the index from above rather than holding them.
+            hasDestination: destination(from: currentIndex, by: offset, in: photos) != nil,
+            step: { step(by: offset) }
+        )
     }
 
     @ToolbarContentBuilder
@@ -447,19 +444,12 @@ private struct ShowPhotoOnMapButton: View {
     @Environment(\.dismiss)
     private var dismiss
 
-    /// Close enough to see the bend in the trail the photo was taken from.
-    private static let regionMeters: CLLocationDistance = 500
-
     var body: some View {
         Button {
             highlight.move(to: coordinate)
-            mapController.show(
-                MKCoordinateRegion(
-                    center: coordinate,
-                    latitudinalMeters: Self.regionMeters,
-                    longitudinalMeters: Self.regionMeters
-                )
-            )
+            // The span is ``MapController/showPhotoSpot(_:)``'s, which the
+            // community gallery frames with too.
+            mapController.showPhotoSpot(coordinate)
             // Asked for here and answered after the dismiss below: the pins
             // belong to the screen this one is pushed over, so they are off the
             // map until it comes back. See ``PhotoMapPinController/select(_:)``.

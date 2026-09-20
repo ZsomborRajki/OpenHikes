@@ -246,4 +246,22 @@ final class MapController {
     func followUser() {
         followUserRequest += 1
     }
+
+    /// Ask the map to frame the spot a photograph was taken.
+    ///
+    /// Close enough to see the bend in the trail it was taken from, which is
+    /// the one thing a *Show on map* is for. Both galleries frame it the same
+    /// way — the hiker's own and a stranger's — because a picture is a picture
+    /// and two spans would make the same tap mean two things.
+    func showPhotoSpot(_ coordinate: CLLocationCoordinate2D) {
+        show(
+            MKCoordinateRegion(
+                center: coordinate,
+                latitudinalMeters: Self.photoSpotSpanMeters,
+                longitudinalMeters: Self.photoSpotSpanMeters
+            )
+        )
+    }
+
+    private static let photoSpotSpanMeters: CLLocationDistance = 500
 }

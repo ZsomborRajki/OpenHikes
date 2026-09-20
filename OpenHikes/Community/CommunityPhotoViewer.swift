@@ -212,18 +212,14 @@ struct CommunityPhotoViewer: View {
         identifier: String,
         offset: Int
     ) -> some View {
-        Button {
-            step(by: offset)
-        } label: {
-            Image(systemName: systemImage)
-                .font(.title3.weight(.semibold))
-                .minimumTapTarget()
-        }
-        .glassButtonStyle()
-        .buttonBorderShape(.circle)
-        .disabled(destination(by: offset) == nil)
-        .accessibilityLabel(label)
-        .accessibilityIdentifier(identifier)
+        PhotoStepButton(
+            systemImage: systemImage,
+            label: label,
+            identifier: identifier,
+            // This gallery's own question about its own list.
+            hasDestination: destination(by: offset) != nil,
+            step: { step(by: offset) }
+        )
     }
 
     @ToolbarContentBuilder
@@ -365,19 +361,11 @@ private struct CommunityPhotoMapButton: View {
     @Environment(\.dismiss)
     private var dismiss
 
-    /// Close enough to see the bend in the trail the photograph was taken
-    /// from. The same span the hiker's own gallery frames.
-    private static let regionMeters: CLLocationDistance = 500
-
     var body: some View {
         Button {
-            mapController.show(
-                MKCoordinateRegion(
-                    center: coordinate,
-                    latitudinalMeters: Self.regionMeters,
-                    longitudinalMeters: Self.regionMeters
-                )
-            )
+            // The same span the hiker's own gallery frames, which is now the
+            // same line of code — see ``MapController/showPhotoSpot(_:)``.
+            mapController.showPhotoSpot(coordinate)
             // Asked for here and answered after the dismiss below — see
             // ``CommunityBrowser/selectPhotoPin(_:)``.
             community?.selectPhotoPin(index)
