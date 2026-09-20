@@ -51,15 +51,13 @@ struct WatchRootView: View {
         case record
     }
 
-    /// Which screen this launch asked to open on. A plain value, resolved once
-    /// at launch — never read from the model, so it cannot invalidate anything.
-    let screen: WatchLaunchEnvironment.Screen
-
     @State private var tab: Tab
     @State private var trailPath: [WatchTrailDestination]
 
+    /// - Parameter screen: which screen this launch asked to open on. Read
+    ///   once, here, and turned into the two plain values below — it is never
+    ///   stored on this view, so nothing in the body can come to depend on it.
     init(screen: WatchLaunchEnvironment.Screen = .trails) {
-        self.screen = screen
         _tab = State(initialValue: screen == .record ? .record : .trail)
         _trailPath = State(initialValue: Self.initialPath(for: screen))
     }

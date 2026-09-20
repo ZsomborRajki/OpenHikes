@@ -61,7 +61,8 @@ nonisolated enum WatchLaunchEnvironment {
         /// Whether the watch is holding the trail's geometry. Separate from
         /// the library because the two arrive separately in life, and the gap
         /// between them is a screen of its own — the one that says it is
-        /// fetching the trail from your iPhone.
+        /// fetching the trail from your iPhone, which
+        /// `--ui-test-withhold-trail` is how to reach.
         let holdsTrail: Bool
         /// How far along the trail the hiker is, `0...1`, or `nil` for a watch
         /// that has not had a fix yet.
@@ -73,8 +74,9 @@ nonisolated enum WatchLaunchEnvironment {
         /// How many finished walks are waiting to be sent.
         let queuedWalkCount: Int
 
-        // periphery:ignore - read only from the `#else` branch below, which a
-        // Debug-configuration scan never compiles.
+        // periphery:ignore - the `#else` branch below is the only reader a
+        // Release-configuration scan compiles, and it is one this file's own
+        // `#if DEBUG` hides from the other.
         /// What every shipping launch gets, and what a debug launch with no
         /// arguments parses to.
         static let production = Self()
@@ -94,7 +96,7 @@ nonisolated enum WatchLaunchEnvironment {
         private static let uiTestingArgument = "--ui-testing"
         private static let screenPrefix = "--ui-test-screen="
         private static let seedTrailsPrefix = "--ui-test-seed-trails="
-        private static let holdTrailArgument = "--ui-test-hold-trail"
+        private static let withholdTrailArgument = "--ui-test-withhold-trail"
         private static let followPrefix = "--ui-test-follow="
         private static let recordingPrefix = "--ui-test-recording="
         private static let phoneRecordingPrefix = "--ui-test-phone-recording="
@@ -130,12 +132,13 @@ nonisolated enum WatchLaunchEnvironment {
             let requestedTrails = Self.value(of: Self.seedTrailsPrefix, in: arguments)
                 .flatMap(Int.init)
             seededTrailCount = min(max(requestedTrails ?? 6, 0), Self.maximumSeededTrails)
-            // As above: a map or a figures frame is a trail already fetched,
-            // and asking for one without its geometry is the *waiting* screen,
-            // which `--ui-test-hold-trail` alone on the list frame reaches.
-            holdsTrail = arguments.contains(Self.holdTrailArgument)
-                || screen == .map
-                || screen == .figures
+            // A map or a figures frame is a trail already fetched, and they
+            // are the only two screens that draw one — so the flag has to be
+            // an opt-*out*. An opt-in could never reach the screen it exists
+            // for: the two that would show the waiting state are the two that
+            // already imply the trail is here.
+            holdsTrail = (screen == .map || screen == .figures)
+                && !arguments.contains(Self.withholdTrailArgument)
             followFraction = Self.value(of: Self.followPrefix, in: arguments)
                 .flatMap(Double.init)
                 .map { min(max($0, 0), 1) }

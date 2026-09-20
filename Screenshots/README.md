@@ -214,8 +214,9 @@ reads as deliberate. There are two causes and both are handled:
   that stack. Without it every map frame is grey; with it none are. This is
   the one to suspect first if the frames regress.
 - **A cold cache is slow.** The device is erased every run, so the tiles are
-  always fetched fresh. Map frames wait 60 seconds where a text frame waits 15
-  (`OPENHIKES_WATCH_MAP_SETTLE`, `--settle`).
+  always fetched fresh. Map frames wait 60 seconds
+  (`OPENHIKES_WATCH_MAP_SETTLE`) where a text frame waits 15 (`--settle`,
+  which does not move the map wait).
 
 `--no-pair` is the fallback: an unpaired watch uses its own network and always
 draws its map, at the cost of a red crossed-out iPhone in every status bar.
