@@ -272,13 +272,28 @@ nonisolated struct CommunityReport: Equatable, Sendable {
     /// The whole message as one block, for the hiker to copy when there is no
     /// mail app to hand it to. See ``CommunityReportSheet``'s fallback.
     var plainText: String {
-        "To: \(Self.recipient)\nSubject: \(subject)\n\n\(body)"
+        Self.plainText(subject: subject, body: body)
+    }
+
+    /// One composed message as the block a hiker copies, when no mail app
+    /// answered the `mailto:` above.
+    ///
+    /// Shared with ``CommunityWithdrawal`` for the reason ``mailURL(subject:body:)``
+    /// is: what makes this worth copying is that it carries the recipient, and
+    /// a second spelling that drifted would have a hiker paste a message to
+    /// nobody.
+    static func plainText(subject: String, body: String) -> String {
+        "To: \(recipient)\nSubject: \(subject)\n\n\(body)"
     }
 
     /// Fixed rather than the hiker's locale, for the same reason ``body`` is
     /// not localized: this is read by one person, and two reports whose dates
     /// are formatted differently are two reports that cannot be compared.
-    private static let reviewerDate: DateFormatter = {
+    ///
+    /// Shared with ``CommunityWithdrawal``, which quotes dates into the same
+    /// inbox: two messages about the same hike whose dates disagree in format
+    /// are two messages a reviewer has to stop and reconcile.
+    static let reviewerDate: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
