@@ -216,35 +216,39 @@ extension WeatherDaySummary {
     /// `.daily` answers with ten days that would otherwise be written to
     /// `UserDefaults` on every successful fetch.
     ///
-    /// **The day in progress is kept.** A hiker reading this at four o'clock
-    /// is still deciding about this evening, and dropping today would put
-    /// tomorrow in the row their eye lands on first. Days already gone are
-    /// dropped, which only ever happens to a stored reading: `.daily` begins
-    /// at today, and `start` is the reading's own timestamp, so a blob
-    /// restored the morning after it was written does not draw yesterday.
+    /// **The day in progress is kept, and the days already gone are not** —
+    /// ``WeatherDaySummary/upcoming(in:asOf:calendar:)`` is the rule, and the
+    /// sheet applies it a second time on the way to the screen because
+    /// nothing here expires: what this trims is the response, and a reading
+    /// is drawn for as long as no later one replaces it.
     ///
-    /// Compared through a `Calendar` rather than by arithmetic on `date`, for
-    /// the reason ``WeatherDaylight``'s own mapping gives: "the same day" is a
-    /// question only a calendar can answer, and a week of a real forecast
-    /// crosses a daylight-saving boundary twice a year.
+    /// Anchored to `start`, the reading's own timestamp, rather than to
+    /// `Date.now`, for the reason ``WeatherSnapshot/capturedAt`` gives:
+    /// WeatherKit serves cached payloads, and a response that arrives at
+    /// 00:05 may be a reading taken yesterday.
+    ///
+    /// Mapped before it is trimmed rather than after, which costs three
+    /// values nobody draws and buys the one predicate: the *same* rule has to
+    /// hold here and at the sheet, and two spellings of it would agree until
+    /// somebody changed one.
     nonisolated static func summaries(
         from forecast: Forecast<DayWeather>,
         notBefore start: Date,
         calendar: Calendar = .autoupdatingCurrent
     ) -> [Self] {
-        let firstDay = calendar.startOfDay(for: start)
-        return forecast
-            .filter { calendar.startOfDay(for: $0.date) >= firstDay }
-            .prefix(WeatherDailyPolicy.horizon)
-            .map { day in
-                Self(
-                    date: day.date,
-                    symbolName: day.symbolName,
-                    highTemperature: day.highTemperature,
-                    lowTemperature: day.lowTemperature,
-                    precipitationChance: day.precipitationChance
-                )
-            }
+        let week = forecast.map { day in
+            Self(
+                date: day.date,
+                symbolName: day.symbolName,
+                highTemperature: day.highTemperature,
+                lowTemperature: day.lowTemperature,
+                precipitationChance: day.precipitationChance
+            )
+        }
+        return Array(
+            upcoming(in: week, asOf: start, calendar: calendar)
+                .prefix(WeatherDailyPolicy.horizon)
+        )
     }
 }
 
