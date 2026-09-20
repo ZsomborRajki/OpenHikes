@@ -10,16 +10,13 @@
 //  check is the only thing in the app allowed to write the second one. A suite
 //  can exercise either without a `@Model` or a container.
 //
-//  ## What the app can and cannot know
-//
-//  It can know that a listing exists for its submission, because a listing is
-//  `_world` read and carries a reference to the submission it was published
-//  from. It cannot know anything else — and in particular it cannot tell a
-//  reviewer who has not looked yet from one who looked and declined, because
-//  a decline leaves no record at all. See ``CommunitySchema``.
-//
-//  So there are three states and not four. *Refused* is not one of them, and
-//  adding it would mean inventing an observation nothing supports.
+//  The state machine and the refresh are ``CommunityUploadState`` and
+//  ``CommunityUploadCheck``, which ``CommunityContributionCheck`` shares —
+//  read that file for what the app can and cannot know about anything it has
+//  uploaded, and for why there are three states rather than four. What is
+//  named here is only what is particular to a *hike*: which two columns, which
+//  question, and the two things this check can do that a contribution's cannot
+//  — ask whether a listing is still there, and forget one that is not.
 //
 
 import Foundation
@@ -28,44 +25,21 @@ import SwiftData
 
 /// How far along a hike is towards being visible to other people.
 ///
-/// Derived from two columns rather than stored as a third, so it cannot
-/// disagree with them — the failure a stored status field invites is a hike
-/// whose ``Hike/communityListingID`` says published while its status says
-/// pending, and no amount of care at the call sites prevents that.
-nonisolated enum CommunityPublicationState: Equatable, Sendable {
-    /// Sent and accepted, with no listing seen for it yet. Covers a reviewer
-    /// who has not looked and one who declined, which are the same absence —
-    /// see this file's header for why there is no fourth case.
+/// ``CommunityUploadState`` over ``Hike/communitySubmissionID`` and
+/// ``Hike/communityListingID``. The listing is the *result* half: a hike can
+/// only have one if it was submitted, and it is what a reviewer's yes leaves
+/// behind.
+nonisolated enum CommunityPublicationState: CommunityUploadState {
     case awaitingReview
-    /// Never sent from this account, so the share button is an offer.
     case notShared
-    /// A listing exists. Other people can find this hike.
     case published
 
     /// - Parameters:
     ///   - submissionID: ``Hike/communitySubmissionID``.
     ///   - listingID: ``Hike/communityListingID``.
     init(submissionID: String?, listingID: String?) {
-        // Listing first: a hike can only have one if it was submitted, and
-        // reading them the other way round would make a published hike with a
-        // cleared submission id look unshared.
-        if listingID != nil {
-            self = .published
-        } else if submissionID != nil {
-            self = .awaitingReview
-        } else {
-            self = .notShared
-        }
+        self.init(submissionID: submissionID, resultID: listingID)
     }
-
-    /// Whether sharing this hike now would make a *second* submission.
-    ///
-    /// True in both states that have already sent one, which is the whole
-    /// point: the app cannot replace or withdraw a submission — see
-    /// ``CommunityTransporting``, which has no method for either — so a second
-    /// share is a second hike in the list rather than an edit of the first.
-    /// The share form says so before it will send one.
-    var wouldDuplicate: Bool { self != .notShared }
 }
 
 /// Asks whether a submission has been published, and remembers a yes.
@@ -76,13 +50,10 @@ enum CommunityPublicationCheck {
     /// Brings `hike`'s ``Hike/communityListingID`` up to date, asking at most
     /// one question and only when there is one worth asking.
     ///
-    /// Silent about every failure, and that is deliberate rather than lazy.
-    /// This runs because a screen appeared, not because the hiker asked for
-    /// anything, so there is no request for a failure to be the answer to — an
-    /// offline phone opening a hike it shared last week should show *waiting
-    /// for review*, which is what it showed before and is still the most
-    /// accurate thing anybody can say. An alert here would interrupt a screen
-    /// the hiker opened to look at their own walk.
+    /// ``CommunityUploadCheck/refreshUploadResult(of:submission:result:asking:reportingFailureAs:save:)``
+    /// does the work — including staying silent about every failure, and the
+    /// two guards that keep a late answer off a newer submission. What is
+    /// here is the pair of columns and the question.
     ///
     /// - Parameter save: The commit seam, the same shape ``CommunityPublisher``
     ///   and ``HikeImport`` take theirs in.
@@ -93,69 +64,19 @@ enum CommunityPublicationCheck {
         transport: any CommunityTransporting,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> Bool {
-        // Nothing to ask about, and — for an already-published hike — nothing
-        // that could change the answer. Publication is one-way here; see
-        // ``Hike/communityListingID`` for why a takedown is allowed to leave
-        // this stale rather than cost a request per screen forever.
-        guard let submissionID = hike.communitySubmissionID,
-              hike.communityListingID == nil
-        else { return false }
-
-        let listing: CommunityListing?
-        do {
-            listing = try await transport.publication(of: submissionID)
-        } catch {
-            logger.debug(
-                """
-                Could not check whether a hike is published: \
-                \(error.localizedDescription, privacy: .public)
-                """
-            )
-            return false
-        }
-        guard let listing else { return false }
-
-        // The hike may have been deleted while the request was in flight — a
-        // detail screen is one back-swipe and one delete away — in which case
-        // there is simply nothing left to record it on. The same guard, and
-        // the same reasoning, as the end of ``CommunityPublisher/share``.
-        guard hike.isAttached else { return false }
-        // And it may be asking about a different submission than the one this
-        // answer is about. A re-share landing inside the await replaces
-        // ``Hike/communitySubmissionID`` and clears the listing beside it —
-        // both deliberately, because the two columns are one answer about one
-        // submission — and writing this listing back would undo exactly that:
-        // the pair would read new-submission/old-listing, which reports
-        // *published* about a copy no reviewer has seen and, because the guard
-        // above skips a hike that already has a listing, stops the new
-        // submission ever being asked about. That is the state #256 fixed,
-        // reached from the other side.
-        //
-        // It does not take a second tap to get here. Both columns are mirrored
-        // so a second device does not offer to send a trail that is already
-        // sent, so a share from the iPad can rewrite this one while the
-        // iPhone's check is waiting on the network.
-        //
-        // Silent, like every other way this gives up: nothing asked for it,
-        // and the answer for the current submission is *waiting for review*,
-        // which is what the screen already says.
-        guard hike.communitySubmissionID == submissionID else { return false }
-        hike.communityListingID = listing.id
-        guard let context = hike.modelContext else { return false }
-        do {
-            try save(context)
-        } catch {
-            // Costs a repeated check on the next launch and nothing else: the
-            // listing is real either way, and this column is a cache of a
-            // public fact rather than the fact itself.
-            logger.error(
-                """
-                Saw a hike go live but could not record it locally: \
-                \(error.localizedDescription, privacy: .public)
-                """
-            )
-        }
-        return true
+        await CommunityUploadCheck.refreshUploadResult(
+            of: hike,
+            submission: \.communitySubmissionID,
+            result: \.communityListingID,
+            // Only the id is taken off the listing. Everything else on it is
+            // the copy in the public database, which this hike is not.
+            asking: { try await transport.publication(of: $0)?.id },
+            reportingFailureAs: .init(
+                couldNotAsk: "Could not check whether a hike is published",
+                couldNotRecord: "Saw a hike go live but could not record it locally"
+            ),
+            save: save
+        )
     }
 
     /// Whether a listing still exists for `hike`'s submission.
