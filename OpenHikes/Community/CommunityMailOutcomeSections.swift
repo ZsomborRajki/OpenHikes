@@ -17,11 +17,33 @@
 //  is what two UI test files look for, and a `"\(prefix)-fallback-text"` here
 //  would mean the string they search for exists nowhere in the app.
 //
+//  The two other things a mailed request has and both sheets had written out
+//  are here too: ``CommunityMailPhase``, the three states the trip from form
+//  to handoff passes through, and ``CommunityMailRequestToolbar``, which is
+//  Cancel-or-Done on one side and Send on the other.
+//
 
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
 #endif
+
+/// Where a mailed request is on the one-way trip from form to handoff.
+///
+/// Both sheets declared this, with the same three cases and the same reason
+/// for two of them. There is no *sent*: what the app can observe is whether
+/// something opened the `mailto:`, and that is `handedOff` — see
+/// ``CommunityReportSheet``'s header for why the Boolean behind it does not
+/// support the stronger claim.
+enum CommunityMailPhase: Equatable {
+    /// Filling the form in.
+    case editing
+    /// Something opened the `mailto:`. Whether it composed anything is not
+    /// knowable from here.
+    case handedOff
+    /// Nothing opened the `mailto:` at all.
+    case noMailApp
+}
 
 /// What became of the handoff. Both answers leave the hiker holding the
 /// message, which is why they share everything below the first section.
@@ -148,6 +170,39 @@ struct CommunityMailOutcomeSections: View {
         Section {
             Button("Back to the \(noun)", action: editAgain)
                 .accessibilityIdentifier(identifiers.editAgain)
+        }
+    }
+}
+
+/// Cancel-or-Done on one side, Send on the other, for a sheet that mails the
+/// reviewer.
+///
+/// ``DismissButton`` rather than `Button("Done") { dismiss() }`, because a
+/// `.toolbar` closure is inlined into the body that declares it — so an
+/// `@Environment(\.dismiss)` on the sheet would belong to its whole form and
+/// rebuild it on every scene-phase transition. **The mail handoff *is* a
+/// scene-phase transition**, which makes these two screens the shape that rule
+/// was measured on. See ``DismissButton``.
+///
+/// Send disappears once the handoff has happened rather than being disabled:
+/// there is nothing left to send from here, and what replaces the form is the
+/// message itself with a way back to it.
+struct CommunityMailRequestToolbar: ToolbarContent {
+    let phase: CommunityMailPhase
+    /// Spelled out per screen rather than built from a prefix, for the reason
+    /// ``CommunityMailOutcomeSections/Identifiers`` gives.
+    let sendIdentifier: String
+    let send: () -> Void
+
+    @ToolbarContentBuilder var body: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            DismissButton(phase == .editing ? "Cancel" : "Done")
+        }
+        ToolbarItem(placement: .confirmationAction) {
+            if phase == .editing {
+                Button("Send", action: send)
+                    .accessibilityIdentifier(sendIdentifier)
+            }
         }
     }
 }

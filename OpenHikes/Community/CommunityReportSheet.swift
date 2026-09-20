@@ -50,16 +50,6 @@ struct CommunityReportSheet: View {
     /// Not a one-way trip, which is the correction a review made. Both
     /// outcomes below lead back to ``editing``, since neither of them is
     /// evidence that the report got anywhere.
-    private enum Phase: Equatable {
-        /// Filling the form in.
-        case editing
-        /// Something opened the `mailto:`. Whether it composed anything is not
-        /// knowable from here — see this file's header.
-        case handedOff
-        /// Nothing opened the `mailto:` at all.
-        case noMailApp
-    }
-
     let listing: CommunityListing
     /// The contributed set, when what is being reported is one photograph on
     /// the hike rather than the hike itself. `nil` is the ordinary report.
@@ -69,7 +59,7 @@ struct CommunityReportSheet: View {
     private var openURL
     @State private var reason: CommunityReportReason = .objectionable
     @State private var note = ""
-    @State private var phase: Phase = .editing
+    @State private var phase: CommunityMailPhase = .editing
 
     private var report: CommunityReport {
         CommunityReport(
@@ -99,7 +89,13 @@ struct CommunityReportSheet: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .toolbar { toolbarContent }
+            .toolbar {
+                CommunityMailRequestToolbar(
+                    phase: phase,
+                    sendIdentifier: "community-report-send",
+                    send: send
+                )
+            }
         }
     }
 }
@@ -217,28 +213,6 @@ private extension CommunityReportSheet {
             ),
             editAgain: { phase = .editing }
         )
-    }
-}
-
-// MARK: - Toolbar
-
-private extension CommunityReportSheet {
-    /// ``DismissButton`` rather than `Button("Done") { dismiss() }`, because a
-    /// `.toolbar` closure is inlined into the body that declares it — so
-    /// `@Environment(\.dismiss)` here would belong to this whole form and
-    /// rebuild it on every scene-phase transition. The mail handoff *is* a
-    /// scene-phase transition, which makes this screen the shape the rule was
-    /// measured on. See ``DismissButton``.
-    @ToolbarContentBuilder var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) {
-            DismissButton(phase == .editing ? "Cancel" : "Done")
-        }
-        ToolbarItem(placement: .confirmationAction) {
-            if phase == .editing {
-                Button("Send") { send() }
-                    .accessibilityIdentifier("community-report-send")
-            }
-        }
     }
 }
 

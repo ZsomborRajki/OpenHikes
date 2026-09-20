@@ -36,21 +36,12 @@ import SwiftUI
 struct CommunityWithdrawalSheet: View {
     /// Where the sheet is in the trip from form to handoff. Spelled the same
     /// way ``CommunityReportSheet``'s is, and for the same reason.
-    private enum Phase: Equatable {
-        case editing
-        /// Something opened the `mailto:`. Whether it composed anything is not
-        /// knowable from here.
-        case handedOff
-        /// Nothing opened the `mailto:` at all.
-        case noMailApp
-    }
-
     let withdrawal: CommunityWithdrawal
 
     @Environment(\.openURL)
     private var openURL
     @State private var note = ""
-    @State private var phase: Phase = .editing
+    @State private var phase: CommunityMailPhase = .editing
 
     private var composed: CommunityWithdrawal {
         var request = withdrawal
@@ -76,7 +67,13 @@ struct CommunityWithdrawalSheet: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .toolbar { toolbarContent }
+            .toolbar {
+                CommunityMailRequestToolbar(
+                    phase: phase,
+                    sendIdentifier: "community-withdrawal-send",
+                    send: send
+                )
+            }
         }
     }
 }
@@ -162,26 +159,6 @@ private extension CommunityWithdrawalSheet {
             ),
             editAgain: { phase = .editing }
         )
-    }
-}
-
-// MARK: - Toolbar
-
-private extension CommunityWithdrawalSheet {
-    /// ``DismissButton`` rather than a `Button` closing over
-    /// `@Environment(\.dismiss)`, for the reason ``CommunityReportSheet``
-    /// gives: a `.toolbar` closure is inlined into the body that declares it,
-    /// and the mail handoff is a scene-phase transition.
-    @ToolbarContentBuilder var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) {
-            DismissButton(phase == .editing ? "Cancel" : "Done")
-        }
-        ToolbarItem(placement: .confirmationAction) {
-            if phase == .editing {
-                Button("Send") { send() }
-                    .accessibilityIdentifier("community-withdrawal-send")
-            }
-        }
     }
 }
 
