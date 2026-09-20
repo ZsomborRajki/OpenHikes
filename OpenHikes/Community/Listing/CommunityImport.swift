@@ -310,30 +310,15 @@ nonisolated enum CommunityImport {
             )
             return
         }
-        for (pin, url) in zip(detail.photoPins, detail.photoFileURLs) {
-            guard let data = await readFile(at: url) else { continue }
-            // The hike can be swiped away while a dozen photographs are being
-            // copied — the list is one tap behind this screen — and writing to
-            // a detached row persists nothing, leaving files nothing claims.
-            guard hike.isAttached else { return }
-            await HikePhotoImport.add(
-                data,
-                to: hike,
-                coordinate: pin.coordinate,
-                // Never the hiker's setting — see this file's header.
-                savesToPhotoLibrary: false,
-                capturedAt: pin.capturedAt,
-                // Stamped as somebody else's, which is the one thing that
-                // keeps it out of a contribution back to the same trail: the
-                // saved hike is exactly the one the *Add Photos* form opens
-                // on, and without this it opened pre-selected with the
-                // author's own pictures. See ``HikePhoto/importedFromListingID``.
-                importedFromListingID: detail.listing.id,
-                store: store,
-                libraryWriter: libraryWriter,
-                save: save
-            )
-        }
+        await attachSet(
+            zip(detail.photoPins, detail.photoFileURLs),
+            // No per-photograph credit, for the reason above.
+            stampedAs: Stamp(listingID: detail.listing.id, authorName: nil),
+            to: hike,
+            store: store,
+            libraryWriter: libraryWriter,
+            save: save
+        )
     }
 
     /// The photographs other hikers published onto this trail.
@@ -394,24 +379,80 @@ nonisolated enum CommunityImport {
                 )
                 continue
             }
-            for (pin, url) in zip(contribution.photoPins, contribution.photoFileURLs) {
-                guard let data = await readFile(at: url) else { continue }
-                // Swiped away while the copy was running, exactly as above.
-                guard hike.isAttached else { return }
-                await HikePhotoImport.add(
-                    data,
-                    to: hike,
-                    coordinate: pin.coordinate,
-                    // Never the hiker's setting — see this file's header.
-                    savesToPhotoLibrary: false,
-                    capturedAt: pin.capturedAt,
-                    importedFromListingID: detail.listing.id,
-                    importedAuthorName: contribution.credit,
-                    store: store,
-                    libraryWriter: libraryWriter,
-                    save: save
-                )
-            }
+            await attachSet(
+                zip(contribution.photoPins, contribution.photoFileURLs),
+                stampedAs: Stamp(
+                    listingID: detail.listing.id,
+                    authorName: contribution.credit
+                ),
+                to: hike,
+                store: store,
+                libraryWriter: libraryWriter,
+                save: save
+            )
+        }
+    }
+
+    /// How a copied photograph is stamped: the listing it came from, and who
+    /// took it where that is somebody other than the hike's own author.
+    private struct Stamp {
+        let listingID: String
+        /// `nil` for the walk's own photographs, whose credit is the hike's
+        /// ``Hike/importedAuthorName``, and for a contributor who asked for
+        /// none — which is the honest answer rather than a lost one.
+        let authorName: String?
+    }
+
+    /// Copies one paired set of pins and files onto the hike, whoever took
+    /// them.
+    ///
+    /// The one loop both halves above run, because what differs between a
+    /// submission's photographs and a contribution's is the stamp and nothing
+    /// else — the reading, the abandonment check and every other argument are
+    /// the same work on the same files, and the two spellings of it were one
+    /// edit apart from disagreeing about which.
+    ///
+    /// **Paired by the caller**, which is also where the pairing is checked:
+    /// `zip` truncates silently, and a photograph pinned to another
+    /// photograph's coordinate is the one failure nothing downstream could
+    /// notice, so both callers refuse a set whose two arrays disagree before
+    /// reaching here.
+    ///
+    /// **The hike is re-checked every picture.** It can be swiped away while a
+    /// dozen are being copied — the list is one tap behind this screen — and
+    /// writing to a detached row persists nothing, leaving files nothing
+    /// claims. That ends the import rather than skipping one photograph, which
+    /// is why it returns.
+    @MainActor
+    private static func attachSet(
+        _ photos: some Sequence<(CommunityPhotoPin, URL)>,
+        stampedAs stamp: Stamp,
+        to hike: Hike,
+        store: HikePhotoStore,
+        libraryWriter: any PhotoLibraryWriting,
+        save: (ModelContext) throws -> Void
+    ) async {
+        for (pin, url) in photos {
+            guard let data = await readFile(at: url) else { continue }
+            guard hike.isAttached else { return }
+            await HikePhotoImport.add(
+                data,
+                to: hike,
+                coordinate: pin.coordinate,
+                // Never the hiker's setting — see this file's header.
+                savesToPhotoLibrary: false,
+                capturedAt: pin.capturedAt,
+                // Stamped as somebody else's, which is the one thing that
+                // keeps it out of a contribution back to the same trail: the
+                // saved hike is exactly the one the *Add Photos* form opens
+                // on, and without this it opened pre-selected with the
+                // author's own pictures. See ``HikePhoto/importedFromListingID``.
+                importedFromListingID: stamp.listingID,
+                importedAuthorName: stamp.authorName,
+                store: store,
+                libraryWriter: libraryWriter,
+                save: save
+            )
         }
     }
 
