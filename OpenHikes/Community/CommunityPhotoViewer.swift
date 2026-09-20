@@ -107,25 +107,13 @@ struct CommunityPhotoViewer: View {
         let current = currentIndex.flatMap { index in
             photos.indices.contains(index) ? photos[index] : nil
         }
-        // A photograph is shown against black everywhere in iOS, and the pages
-        // letterbox rather than crop, so the backdrop is doing real work: it is
-        // what the un-filled edges of a portrait shot on a landscape screen
-        // become.
-        return ZStack {
-            Color.black.ignoresSafeArea()
-            pages
-        }
-        .overlay(alignment: .bottom) { controls }
-        .navigationTitle(title)
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        // The backdrop is black whatever the device is set to, so the bar has
-        // to be told that: without this the title renders in the light
-        // scheme's label colour and is black on black.
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        #endif
-        .toolbar { toolbarContent(current) }
+        // The black surface and the bar that has to be told about it are
+        // ``photoGalleryChrome()``, which the hiker's own gallery wears too.
+        return pages
+            .photoGalleryChrome()
+            .overlay(alignment: .bottom) { controls }
+            .navigationTitle(title)
+            .toolbar { toolbarContent(current) }
         .accessibilityIdentifier("community-photo-viewer")
         .onAppear {
             // Assigning the scroll position before the scroll view exists is
@@ -226,13 +214,16 @@ struct CommunityPhotoViewer: View {
     private func toolbarContent(_ current: CommunityGalleryPhoto?) -> some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             if let current, let coordinate = current.coordinate {
-                CommunityPhotoMapButton(
-                    index: current.index,
+                ShowPhotoSpotButton(
                     coordinate: coordinate,
                     mapController: mapController,
-                    community: community,
-                    onShowOnMap: onShowOnMap
-                )
+                    identifier: "community-photo-show-on-map-button"
+                ) {
+                    // Asked for here and answered after the dismiss — see
+                    // ``CommunityBrowser/selectPhotoPin(_:)``.
+                    community?.selectPhotoPin(current.index)
+                    onShowOnMap()
+                }
             }
         }
         // Split from the menu below rather than grouped with it, for the
@@ -327,55 +318,6 @@ struct CommunityPhotoViewer: View {
     private func step(by offset: Int) {
         guard let target = destination(by: offset) else { return }
         withAnimation { currentIndex = target }
-    }
-}
-
-/// Frames the map on where a shared photograph was taken, and gets out of the
-/// way so it can be seen.
-///
-/// A view rather than a button in the viewer's toolbar closure, because
-/// `@Environment(\.dismiss)` invalidates the view that declares it whether or
-/// not its body reads it — see ``DismissButton`` for what that costs a screen
-/// which re-decodes a photograph on every pass.
-///
-/// It moves the camera and nothing else, which is the one real difference from
-/// ``HikePhotoViewer``'s version. That one has to put a marker on the map
-/// because nothing else is standing for the photograph; here the preview
-/// already drew a pin for every anchored picture, and a second marker on top
-/// of it would be two things standing for one photograph. What this does
-/// instead is *open* that pin, so the reviewer lands on the photograph they
-/// were looking at rather than on one camera among several.
-///
-/// "Out of the way" is the whole sheet rather than just this screen. Popping
-/// alone restores the height the preview was being read at, which on a screen
-/// that had been at `.large` is a sheet closing straight back over the pin —
-/// so the sheet is asked to collapse first and the pop finds that decision
-/// already made.
-private struct CommunityPhotoMapButton: View {
-    let index: Int
-    let coordinate: CLLocationCoordinate2D
-    var mapController: MapController
-    var community: CommunityBrowser?
-    let onShowOnMap: () -> Void
-
-    @Environment(\.dismiss)
-    private var dismiss
-
-    var body: some View {
-        Button {
-            // The same span the hiker's own gallery frames, which is now the
-            // same line of code — see ``MapController/showPhotoSpot(_:)``.
-            mapController.showPhotoSpot(coordinate)
-            // Asked for here and answered after the dismiss below — see
-            // ``CommunityBrowser/selectPhotoPin(_:)``.
-            community?.selectPhotoPin(index)
-            onShowOnMap()
-            dismiss()
-        } label: {
-            Image(systemName: "mappin.and.ellipse")
-        }
-        .accessibilityLabel("Show where this photo was taken")
-        .accessibilityIdentifier("community-photo-show-on-map-button")
     }
 }
 
