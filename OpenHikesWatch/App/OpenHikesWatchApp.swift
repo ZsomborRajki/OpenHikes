@@ -17,12 +17,12 @@ struct OpenHikesWatchApp: App {
 
     var body: some Scene {
         WindowGroup {
-            WatchRootView()
+            WatchRootView(screen: WatchLaunchEnvironment.configuration.screen)
                 .environment(model)
                 // `.task` rather than `init`, because activating a `WCSession`
                 // asks the system for a delegate callback and there is nothing
                 // to deliver it to until there is a scene.
-                .task { model.start() }
+                .task { start() }
                 // Every time the app comes to the front, not only the first.
                 // A hiker who opens it again after installing it is a hiker
                 // already wondering why the list is empty, and this is the
@@ -32,5 +32,20 @@ struct OpenHikesWatchApp: App {
                     if phase == .active { model.askForLibraryIfEmpty() }
                 }
         }
+    }
+
+    /// Either the real thing or a seeded stand-in for it, never both.
+    ///
+    /// A `--ui-testing` launch must not activate the link: see
+    /// ``WatchModel/applySeededFixture()`` for why activating it against a
+    /// simulator with no paired phone is worse than not activating it.
+    private func start() {
+        #if DEBUG
+        if WatchLaunchEnvironment.configuration.isUITesting {
+            model.applySeededFixture()
+            return
+        }
+        #endif
+        model.start()
     }
 }

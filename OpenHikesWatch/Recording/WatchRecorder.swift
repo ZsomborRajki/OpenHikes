@@ -320,6 +320,26 @@ final class WatchRecorder: NSObject {
         }
     }
 
+    #if DEBUG
+    /// Puts a recording on the screen without starting one.
+    ///
+    /// For `Scripts/watch-screenshots.sh`, which needs a walk that is already
+    /// four kilometres in. A real recording cannot be asked for one: an
+    /// `HKWorkoutSession` started now reads zero, and the only way to a
+    /// non-zero figure is to walk a simulator for an hour. So the phase and
+    /// the figures are set and neither the session nor the location feed is
+    /// touched — which also means **nothing here can be stopped**, because
+    /// there is nothing running to stop. ``stop()`` on a seeded phase would
+    /// write a walk with no fixes in it; the frames never press it.
+    ///
+    /// Compiled out of a shipping build with everything else behind
+    /// ``WatchLaunchEnvironment``.
+    func applySeededRecording(_ phase: Phase, stats snapshot: WatchWalkAccumulatorSnapshot) {
+        self.phase = phase
+        stats.update(from: snapshot)
+    }
+    #endif
+
     /// Ends the session and throws the builder's workout away.
     ///
     /// `discardWorkout` rather than `finishWorkout`, deliberately and on every

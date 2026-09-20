@@ -27,9 +27,14 @@ struct TrailListView: View {
                     // the row, so a trail opened from anywhere asks the same
                     // way — and so a row is an ordinary `NavigationLink` with
                     // the traits the system gives one.
-                    NavigationLink {
-                        TrailMapScreen(hikeID: hike.id, name: hike.name)
-                    } label: {
+                    //
+                    // A *value* rather than a closure, so the same destination
+                    // can be reached by pushing onto the stack's path instead
+                    // of by tapping. `WatchRootView` owns the path and the
+                    // `navigationDestination` that resolves this.
+                    NavigationLink(
+                        value: WatchTrailDestination(hikeID: hike.id, name: hike.name)
+                    ) {
                         TrailRow(hike: hike)
                     }
                 }

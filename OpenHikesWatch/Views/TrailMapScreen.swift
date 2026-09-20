@@ -134,7 +134,17 @@ struct TrailMapScreen: View {
     // periphery:ignore - read through its projected value, which the index
     // does not record as a use: `$isShowingFigures` is handed to `TrailMapFull`
     // and to the `.sheet` below, and the sheet is what the button opens.
-    @State private var isShowingFigures = false
+    @State private var isShowingFigures: Bool
+
+    /// - Parameter initiallyShowingFigures: whether the figures sheet is
+    ///   already up. `false` for every trail a hiker opens; `true` only from a
+    ///   launch that asked for the figures screen, which is how
+    ///   `Scripts/watch-screenshots.sh` photographs a sheet it cannot tap open.
+    init(hikeID: UUID, name: String, initiallyShowingFigures: Bool = false) {
+        self.hikeID = hikeID
+        self.name = name
+        _isShowingFigures = State(initialValue: initiallyShowingFigures)
+    }
 
     var body: some View {
         content
