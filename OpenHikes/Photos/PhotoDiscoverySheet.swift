@@ -25,9 +25,6 @@ struct PhotoDiscoverySheet: View {
     let hike: Hike
     let controller: PhotoDiscoveryController
 
-    private static let cellSize: CGFloat = 104
-    private static let cellSpacing: CGFloat = 8
-    private static let cornerRadius: CGFloat = 12
     private static let badgeSize: CGFloat = 22
 
     var body: some View {
@@ -105,19 +102,19 @@ struct PhotoDiscoverySheet: View {
             LazyVGrid(
                 columns: [
                     GridItem(
-                        .adaptive(minimum: Self.cellSize),
-                        spacing: Self.cellSpacing
+                        .adaptive(minimum: PhotoTileMetrics.gridCellSize),
+                        spacing: PhotoTileMetrics.spacing
                     ),
                 ],
-                spacing: Self.cellSpacing
+                spacing: PhotoTileMetrics.spacing
             ) {
                 ForEach(controller.matches.enumerated(), id: \.element.id) { index, match in
                     DiscoveredPhotoCell(
                         match: match,
                         controller: controller,
                         index: index,
-                        size: Self.cellSize,
-                        cornerRadius: Self.cornerRadius,
+                        size: PhotoTileMetrics.gridCellSize,
+                        cornerRadius: PhotoTileMetrics.cornerRadius,
                         badgeSize: Self.badgeSize
                     )
                 }
