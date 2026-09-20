@@ -38,14 +38,6 @@ import SwiftData
 import SwiftUI
 
 struct CommunityShareSheet: View {
-    /// Where the sheet is in the one-way trip from form to outcome.
-    private enum Phase: Equatable {
-        case editing
-        case failed(CommunityFailure)
-        case sending
-        case sent
-    }
-
     let hike: Hike
     let transport: any CommunityTransporting
     /// Where the photo files are, so the form can ask which of this hike's
@@ -59,7 +51,7 @@ struct CommunityShareSheet: View {
     private var modelContext
     @AppStorage(SettingsKey.communityAuthorName)
     private var authorName = ""
-    @State private var phase: Phase = .editing
+    @State private var phase: CommunitySendPhase = .editing
     /// What the hiker has written about this walk, held here and committed to
     /// the hike rather than bound straight through to it.
     ///
@@ -213,7 +205,7 @@ struct CommunityShareSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar { toolbarContent }
-            .interactiveDismissDisabled(phase == .sending)
+            .interactiveDismissDisabled(phase.isSending)
             .onAppear {
                 seedNotes()
                 seedTitle()
@@ -273,7 +265,7 @@ private extension CommunityShareSheet {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Title")
                 TextField("What was this hike?", text: $titleDraft)
-                    .disabled(phase == .sending)
+                    .disabled(phase.isSending)
                     .accessibilityLabel("Hike title")
                     .accessibilityIdentifier("community-share-title")
             }
@@ -295,7 +287,7 @@ private extension CommunityShareSheet {
                     axis: .vertical
                 )
                 .lineLimit(3...8)
-                .disabled(phase == .sending)
+                .disabled(phase.isSending)
                 .accessibilityLabel("Notes about this hike")
                 .accessibilityIdentifier("community-share-notes")
             }
@@ -368,7 +360,7 @@ private extension CommunityShareSheet {
             photos: CommunityPublisher.shareablePhotos(of: hike),
             excluded: $excludedPhotoIDs,
             store: store,
-            isSending: phase == .sending
+            isSending: phase.isSending
         )
     }
 
@@ -394,7 +386,7 @@ private extension CommunityShareSheet {
                 #if os(iOS)
                 .textInputAutocapitalization(.words)
                 #endif
-                .disabled(phase == .sending)
+                .disabled(phase.isSending)
         } header: {
             Text("Shared as")
         } footer: {
@@ -580,18 +572,18 @@ private extension CommunityShareSheet {
             // than a commit point. Both calls are idempotent, so the pair
             // costs nothing and closes the case where neither the title nor
             // the notes reach the hike because the screen never went away.
-            Button(phase == .sent ? "Done" : "Cancel") {
+            Button(phase.hasFinished ? "Done" : "Cancel") {
                 commitNotes()
                 commitTitle()
                 dismiss()
             }
-            .disabled(phase == .sending)
+            .disabled(phase.isSending)
         }
         ToolbarItem(placement: .confirmationAction) {
-            if phase == .sending {
+            if phase.isSending {
                 ProgressView()
                     .accessibilityLabel("Sending")
-            } else if phase != .sent, eligibility?.reason == nil {
+            } else if !phase.hasFinished, eligibility?.reason == nil {
                 Button("Share") { share() }
                     .accessibilityIdentifier("community-share-confirm")
                     // The same floor ``CommunityPublisher/share`` refuses
@@ -626,12 +618,7 @@ private extension CommunityShareSheet {
                 transport: transport,
                 excludingPhotos: excludedPhotoIDs
             )
-            switch outcome {
-            case .submitted:
-                phase = .sent
-            case .refused(let failure):
-                phase = .failed(failure)
-            }
+            phase = CommunitySendPhase(outcome)
         }
     }
 

@@ -43,7 +43,7 @@ struct CommunityStagingTests {
         _ hike: Hike,
         through transport: StubCommunityTransport,
         store: HikePhotoStore
-    ) async -> (outcome: CommunityShareOutcome, upload: Upload?) {
+    ) async -> (outcome: CommunitySendOutcome, upload: Upload?) {
         let recorded = Mutex<Upload?>(nil)
         transport.beforeSubmissionReturns = { draft in
             recorded.withLock { $0 = Self.stage(draft) }

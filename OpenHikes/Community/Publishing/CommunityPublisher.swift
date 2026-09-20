@@ -27,16 +27,6 @@ import Foundation
 import os
 import SwiftData
 
-/// What one attempt to share a hike did.
-enum CommunityShareOutcome: Equatable {
-    case refused(CommunityFailure)
-    /// Accepted. Not the same as published: a human still has to look at it,
-    /// and at this point nothing has. Whether they later did is asked
-    /// afterwards and elsewhere — ``CommunityPublicationCheck`` looks for the
-    /// listing, which is the one observation this app can make.
-    case submitted
-}
-
 /// Everything about a hike that is read off the `@Model` before any
 /// suspension, gathered into one value that can cross to the encoding
 /// executor.
@@ -140,7 +130,7 @@ nonisolated enum CommunityPublisher {
         excludingPhotos excluded: Set<UUID> = [],
         store: HikePhotoStore = .shared,
         save: (ModelContext) throws -> Void = { try $0.save() }
-    ) async -> CommunityShareOutcome {
+    ) async -> CommunitySendOutcome {
         guard hike.pointCount >= 2 else { return .refused(.nothingToShare) }
         // The two rules that need nothing but this hike, re-checked here for
         // the same reason the point floor above is: the form's Share button

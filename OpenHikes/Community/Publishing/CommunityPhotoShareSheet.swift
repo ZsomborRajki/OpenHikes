@@ -47,14 +47,6 @@ import SwiftData
 import SwiftUI
 
 struct CommunityPhotoShareSheet: View {
-    /// Where the sheet is in the one-way trip from form to outcome.
-    private enum Phase: Equatable {
-        case editing
-        case failed(CommunityFailure)
-        case sending
-        case sent
-    }
-
     let hike: Hike
     /// The trail the photographs go on. Handed in rather than worked out here,
     /// because working it out is ``CommunityPublishingCheck``'s job and this
@@ -69,7 +61,7 @@ struct CommunityPhotoShareSheet: View {
     private var dismiss
     @AppStorage(SettingsKey.communityAuthorName)
     private var authorName = ""
-    @State private var phase: Phase = .editing
+    @State private var phase: CommunitySendPhase = .editing
     /// The photographs struck off the strip, by id.
     ///
     /// Seeded rather than empty, which is this form's one departure from the
@@ -183,7 +175,7 @@ struct CommunityPhotoShareSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
                 #endif
                 .toolbar { toolbarContent }
-                .interactiveDismissDisabled(phase == .sending)
+                .interactiveDismissDisabled(phase.isSending)
                 .countsSendablePhotos(
                     of: hike,
                     excluding: excludedPhotoIDs,
@@ -271,7 +263,7 @@ private extension CommunityPhotoShareSheet {
                 photos: CommunityPublisher.shareablePhotos(of: hike),
                 excluded: $excludedPhotoIDs,
                 store: store,
-                isSending: phase == .sending
+                isSending: phase.isSending
             )
             if alreadySentPhotoCount > 0 {
                 Text(Self.alreadySent(count: alreadySentPhotoCount))
@@ -341,7 +333,7 @@ private extension CommunityPhotoShareSheet {
                 #if os(iOS)
                 .textInputAutocapitalization(.words)
                 #endif
-                .disabled(phase == .sending)
+                .disabled(phase.isSending)
         } header: {
             Text("Shared as")
         } footer: {
@@ -398,14 +390,14 @@ private extension CommunityPhotoShareSheet {
 
     @ToolbarContentBuilder var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button(phase == .sent ? "Done" : "Cancel") { dismiss() }
-                .disabled(phase == .sending)
+            Button(phase.hasFinished ? "Done" : "Cancel") { dismiss() }
+                .disabled(phase.isSending)
         }
         ToolbarItem(placement: .confirmationAction) {
-            if phase == .sending {
+            if phase.isSending {
                 ProgressView()
                     .accessibilityLabel("Sending")
-            } else if phase != .sent {
+            } else if !phase.hasFinished {
                 Button("Add") { send() }
                     .accessibilityIdentifier("community-photos-confirm")
                     // The same floor ``CommunityPhotoPublisher/contribute``
@@ -434,12 +426,7 @@ private extension CommunityPhotoShareSheet {
                 excludingPhotos: excludedPhotoIDs,
                 store: store
             )
-            switch outcome {
-            case .submitted:
-                phase = .sent
-            case .refused(let failure):
-                phase = .failed(failure)
-            }
+            phase = CommunitySendPhase(outcome)
         }
     }
 }
