@@ -580,18 +580,13 @@ extension MapView.Coordinator {
     /// and hide the view before its fade had anything left to fade.
     private func trackAreaPrompt(_ browser: CommunityBrowser, animated: Bool) {
         applyAreaSearchVisibility(animated: animated)
-        withObservationTracking {
+        reobserving(self, browser) {
             _ = browser.isBrowsing
             _ = browser.areaPrompt
             _ = browser.curatedNotice
             _ = browser.isSearching
-        } onChange: { [weak self, weak browser] in
-            let coordinator = self
-            let model = browser
-            Task { @MainActor in
-                guard let coordinator, let model else { return }
-                coordinator.trackAreaPrompt(model, animated: true)
-            }
+        } onChange: { coordinator, model in
+            coordinator.trackAreaPrompt(model, animated: true)
         }
     }
 

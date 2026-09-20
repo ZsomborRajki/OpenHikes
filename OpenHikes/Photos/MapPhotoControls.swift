@@ -172,16 +172,11 @@ extension MapView.Coordinator {
     private func trackPhotoControls(_ controller: PhotoCaptureController) {
         photoCaptureController = controller
         applyPhotoControlsVisibility(animated: false)
-        withObservationTracking {
+        reobserving(self, controller) {
             _ = controller.isAvailable
-        } onChange: { [weak self, weak controller] in
-            let coordinator = self
-            let model = controller
-            Task { @MainActor in
-                guard let coordinator, let model else { return }
-                coordinator.applyPhotoControlsVisibility(animated: true)
-                coordinator.trackPhotoControls(model)
-            }
+        } onChange: { coordinator, model in
+            coordinator.applyPhotoControlsVisibility(animated: true)
+            coordinator.trackPhotoControls(model)
         }
     }
 

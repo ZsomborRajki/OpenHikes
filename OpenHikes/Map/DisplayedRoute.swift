@@ -233,21 +233,18 @@ final class RouteStyle {
     /// arrives while no registration is armed — still converge on the latest.
     private func track(generation: Int) {
         guard let hike = trackedHike else { return }
-        withObservationTracking {
+        reobserving(self) {
             _ = hike.tint
             _ = hike.routeWidth
             _ = hike.routeLinePatternID
-        } onChange: { [weak self] in
-            guard let self else { return }
-            Task { @MainActor in
-                guard generation == self.generation, let followed = self.trackedHike else { return }
-                self.apply(
-                    tint: followed.tint,
-                    width: followed.routeWidth,
-                    pattern: followed.routeLinePattern
-                )
-                self.track(generation: generation)
-            }
+        } onChange: { route in
+            guard generation == route.generation, let followed = route.trackedHike else { return }
+            route.apply(
+                tint: followed.tint,
+                width: followed.routeWidth,
+                pattern: followed.routeLinePattern
+            )
+            route.track(generation: generation)
         }
     }
 

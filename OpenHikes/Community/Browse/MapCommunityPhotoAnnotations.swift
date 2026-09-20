@@ -183,17 +183,11 @@ extension MapView.Coordinator {
         // this mirrors and for the same reason: the gallery that asks is
         // pushed over the screen that owns them.
         applyCommunityPhotoPinSelection(browser.photoPinSelection, on: mapView)
-        withObservationTracking {
+        reobserving(self, mapView, browser) {
             _ = browser.photoPins
             _ = browser.photoPinSelection
-        } onChange: { [weak self, weak mapView, weak browser] in
-            let coordinator = self
-            let map = mapView
-            let model = browser
-            Task { @MainActor in
-                guard let coordinator, let map, let model else { return }
-                coordinator.trackCommunityPhotoPins(model, on: map)
-            }
+        } onChange: { coordinator, map, model in
+            coordinator.trackCommunityPhotoPins(model, on: map)
         }
     }
 
