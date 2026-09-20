@@ -306,15 +306,12 @@ private extension CommunityShareSheet {
                 // Same shape as everywhere else a photo's pixels are missing
                 // — see ``PhotoUnavailability/notOnThisDevice``, which the
                 // gallery, the map callout and the viewer all speak through.
-                Label {
-                    Text(CommunitySharePhotoTally.onAnotherDevice(count: photos.unsendableCount))
-                } icon: {
-                    Image(systemName: "icloud.slash")
-                        .foregroundStyle(.secondary)
-                }
-                .font(.footnote)
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("community-share-photos-elsewhere")
+                CommunityFootnoteLabel(
+                    text: Text(CommunitySharePhotoTally.onAnotherDevice(count: photos.unsendableCount)),
+                    systemImage: "icloud.slash",
+                    tint: AnyShapeStyle(.secondary),
+                    identifier: "community-share-photos-elsewhere"
+                )
             }
         } header: {
             Text("What gets shared")
@@ -392,13 +389,11 @@ private extension CommunityShareSheet {
     /// reachable — which a `Link` is and a modal they have to dismiss is not.
     var reviewSection: some View {
         Section {
-            Label {
-                Text("Every community hike is checked by a person before anyone else can see it.")
-            } icon: {
-                Image(systemName: "checkmark.shield")
-                    .foregroundStyle(.tint)
-            }
-            .font(.footnote)
+            CommunityFootnoteLabel(
+                text: Text("Every community hike is checked by a person before anyone else can see it."),
+                systemImage: "checkmark.shield",
+                tint: AnyShapeStyle(.tint)
+            )
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
                 // What the list is *for*, said before what it forbids.
@@ -450,21 +445,19 @@ private extension CommunityShareSheet {
     @ViewBuilder var duplicateSection: some View {
         if publication.wouldDuplicate {
             Section {
-                Label {
-                    Text(
+                CommunityFootnoteLabel(
+                    text: Text(
                         """
                         You've already shared this hike. Sending it again adds a \
                         second copy for other hikers — it doesn't replace or update \
                         the first, and this app can't take that one down. Ask for it \
                         to be removed by reporting it from its own screen.
                         """
-                    )
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle")
-                        .foregroundStyle(.orange)
-                }
-                .font(.footnote)
-                .accessibilityIdentifier("community-share-duplicate")
+                    ),
+                    systemImage: "exclamationmark.triangle",
+                    tint: AnyShapeStyle(.orange),
+                    identifier: "community-share-duplicate"
+                )
             }
         }
     }
