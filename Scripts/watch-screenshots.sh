@@ -244,7 +244,14 @@ watch_udid() {
     printf '%s\n' "$matches" | cut -f1
 }
 
-udid="$(watch_udid "$device_name" || true)"
+# `|| resolution=$?` rather than `|| true`: `watch_udid` answers 2 for a name
+# that matches more than one device, and swallowing that would create a *third*
+# one with the same name rather than stop and say so.
+resolution=0
+udid="$(watch_udid "$device_name")" || resolution=$?
+if (( resolution > 1 )); then
+    exit "$resolution"
+fi
 if [[ -z "$udid" ]]; then
     runtime="$(runtime_id)"
     [[ -n "$runtime" ]] || { echo "No watchOS simulator runtime installed." >&2; exit 1; }
@@ -270,6 +277,21 @@ watch_pairs() {
         | awk -v watch="$udid" '
             /^[0-9A-Fa-f-]{36} \(/ { pair = $1; next }
             $0 ~ watch && pair != "" { print pair; pair = "" }'
+}
+
+# Whether *this* watch's pair reports `connected`.
+#
+# Scoped to this pair rather than `grep -q "(active, connected)"` over the whole
+# listing. A machine that has Xcode's own paired watch and iPhone on it answers
+# that grep from the wrong pair, and every wait below then returns at once —
+# which is a set of frames wearing the unpaired glyph this exists to remove,
+# and no warning, because the same grep decides that too.
+pair_is_connected() {
+    xcrun simctl list pairs \
+        | awk -v watch="$udid" '
+            /^[0-9A-Fa-f-]{36} \(/ { connected = ($0 ~ /\(active, connected\)/); next }
+            connected && $0 ~ watch { found = 1 }
+            END { exit(found ? 0 : 1) }'
 }
 
 # Whether this watch is already paired to this companion.
@@ -355,12 +377,12 @@ if [[ "$skip_pair" == false ]]; then
     # drawn until the pair reports `connected`, and how long that takes is a
     # property of the machine.
     for _ in $(seq 1 30); do
-        if xcrun simctl list pairs | grep -q "(active, connected)"; then
+        if pair_is_connected; then
             break
         fi
         sleep 1
     done
-    if ! xcrun simctl list pairs | grep -q "(active, connected)"; then
+    if ! pair_is_connected; then
         echo "The pair never connected; frames will carry the unpaired glyph." >&2
     fi
     # Again, because the sync above can have restarted it since.
@@ -404,6 +426,11 @@ fi
 
 if [[ "$skip_build" == false ]]; then
     echo "Building ${build_scheme}…"
+    # The log sits beside the derived data, and `>` does not create a directory:
+    # on a clean checkout `DerivedData/` does not exist yet, and without this the
+    # redirection fails before `xcodebuild` runs — reported as "Build failed" with
+    # no log to read.
+    mkdir -p "$(dirname "$derived_data")"
     xcodebuild build \
         -project "$project" \
         -scheme "$build_scheme" \
@@ -458,7 +485,7 @@ wait_for_pair() {
     local _
     [[ "$skip_pair" == false ]] || return 0
     for _ in $(seq 1 "$pair_wait_seconds"); do
-        if xcrun simctl list pairs | grep -q "(active, connected)"; then
+        if pair_is_connected; then
             return 0
         fi
         sleep 1

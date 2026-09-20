@@ -156,6 +156,14 @@ final class WatchModel {
     /// does and does not buy.
     func startFollowing() {
         isFollowing = true
+        #if DEBUG
+        // A seeded launch already has the position it was asked for, matched
+        // through the real tracker — see ``applySeededFixture()``. Starting
+        // the receiver here would hand ``advanceFollow(with:)`` whatever the
+        // simulator happens to be standing on and overwrite it, which is a
+        // screenshot of a hiker a continent off their trail.
+        if WatchLaunchEnvironment.configuration.isUITesting { return }
+        #endif
         guard trail != nil else { return }
         recorder.startFollowingFeed()
     }
