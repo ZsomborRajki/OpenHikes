@@ -63,9 +63,9 @@
 		<string>location</string>
 	</array>
 	<key>NSHealthShareUsageDescription</key>
-	<string>OpenHikes reads your heart rate and energy from Health while you are recording a hike, so the watch can show them as you walk. Nothing else in Health is read.</string>
+	<string>OpenHikes reads your heart rate from Health while you are recording a hike, so the watch can show it as you walk. Nothing else in Health is read.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>OpenHikes starts a hiking workout in Health while you record on your watch, which is what keeps the recording running with the screen off and saves the walk beside your other activity.</string>
+	<string>OpenHikes starts a hiking workout in Health while you record on your watch, which is what keeps the recording running with the screen off. The workout itself is not saved — your iPhone saves the finished hike.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>OpenHikes uses your location to show where you are on the trail you are following, and to record the hike you walk.</string>
 	<key>NSMotionUsageDescription</key>

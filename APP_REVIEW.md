@@ -65,17 +65,66 @@ Paste-ready:
 2. **The background mode / recording.** Record a hike from the sheet. The
    location indicator is up for as long as the recording is, and goes when the
    recording is saved or discarded.
+3. **The watch.** Record a hike on the paired watch. The workout session is
+   what holds it up with the wrist down, and it ends with the recording.
+
+## The watch app — its own background declarations, and the one Health read
+
+The submitted binary embeds a watchOS app, `OpenHikesWatch`. Its background
+entitlements are not the phone's and are not covered by either section above,
+and it is the only part of the app that reads anything from HealthKit.
+
+Paste-ready:
+
+> The app embeds an Apple Watch app that records a hike on the watch alone. It
+> asks for When In Use location on the watch and never asks for Always there:
+> the Always feature described above is the phone's widget and Live Activity,
+> and it has no watch half.
+>
+> The watch declares two background keys, both for recording and neither
+> shared with the phone. `WKBackgroundModes` carries `workout-processing`,
+> claimed by starting an `HKWorkoutSession`, which is the only thing watchOS
+> offers that keeps a recording running with the wrist down. `UIBackgroundModes`
+> carries `location` — an iOS key in a watchOS Info.plist deliberately, because
+> Core Location checks that key on watchOS too and refuses
+> `allowsBackgroundLocationUpdates` without it. Both begin when the hiker taps
+> Record on the watch and end when the recording stops; following a trail
+> without recording it starts neither.
+>
+> HealthKit on the watch asks to share the workout type and to read heart rate,
+> and nothing else. The workout the live builder assembles is **discarded** on
+> every path out of a recording rather than finished, because the phone already
+> writes the finished hike to Health once and two writers would file the same
+> walk twice — the watch is not a second writer. The heart rate is shown on the
+> recording screen while the walk runs: it is not stored, not added to the
+> hike, and not sent to the phone.
+
+The strings a hiker reads on the watch say the same thing, and are in
+`OpenHikesWatch/Info.plist`:
+
+> OpenHikes reads your heart rate from Health while you are recording a hike, so
+> the watch can show it as you walk. Nothing else in Health is read.
+
+> OpenHikes starts a hiking workout in Health while you record on your watch,
+> which is what keeps the recording running with the screen off. The workout
+> itself is not saved — your iPhone saves the finished hike.
 
 ## Where these facts live in the repository
 
-- The purpose strings are in `OpenHikes/Info.plist`, all of them, and
-  `InfoPlistContractTests` reads them back out of the built bundle.
+- The phone's purpose strings are in `OpenHikes/Info.plist`, all of them, and
+  `InfoPlistContractTests` reads them back out of the built bundle. The watch's
+  are in `OpenHikesWatch/Info.plist`, which no test reaches — there is no watch
+  test bundle — so they are checked by reading them.
 - The Always feature is `BackgroundTrailTracker`; its file header carries the
   argument for why significant-change monitoring is the right feed and what it
   still costs.
-- The recording half is `HikeRecorder+State.swift`, which is the only place
-  `allowsBackgroundLocationUpdates` and `CLBackgroundActivitySession` are
-  touched.
+- The phone's recording half is `HikeRecorder+State.swift`, the only place on
+  iOS that touches `allowsBackgroundLocationUpdates` or
+  `CLBackgroundActivitySession`. The watch has its own and shares neither
+  file nor entitlement: `OpenHikesWatch/Recording/WatchRecorder.swift` sets
+  `allowsBackgroundLocationUpdates` and owns the `HKWorkoutSession`, and
+  `OpenHikesWatch/Info.plist` carries the two background keys and the two
+  Health purpose strings.
 - The switch is `SettingsKey.backgroundTrackingEnabled`, drawn by
   `SettingsView.backgroundTrackingSection`, whose footer says the same thing
   the prompt does.

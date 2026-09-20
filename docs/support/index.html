@@ -25,12 +25,12 @@
 
 <h1>Support</h1>
 
-<p>OpenHikes is a hiking app for iPhone, made by one person. If something is broken, unclear, or missing, writing to me is the fastest way to get it looked at &mdash; there is no support queue standing between us.</p>
+<p>OpenHikes is a hiking app for iPhone and Apple Watch, made by one person. If something is broken, unclear, or missing, writing to me is the fastest way to get it looked at &mdash; there is no support queue standing between us.</p>
 
 <h2>Getting in touch</h2>
 <p>Email <a href="mailto:zsombor.rajki@gmail.com">zsombor.rajki@gmail.com</a>. You do not need an account of any kind to write, and you will get a reply from a person.</p>
 <p>If you have a GitHub account, a bug report or feature request is also welcome at <a href="https://github.com/ZsomborRajki/OpenHikes/issues">the issue tracker</a>, where you can see what is already known and what is being worked on. Email and the tracker reach the same place; use whichever you prefer.</p>
-<p>It helps, but is not required, to include your iPhone model, your iOS version, the version of OpenHikes shown under Settings &rarr; About &rarr; Version, and what you were doing when it went wrong.</p>
+<p>It helps, but is not required, to include your iPhone model, your iOS version, the version of OpenHikes shown under Settings &rarr; About &rarr; Version, and what you were doing when it went wrong. If the watch was involved, its model and watchOS version too.</p>
 
 <h2>Reporting a shared hike, or asking for your own to be removed</h2>
 <p><strong>Reports and removal requests are read and acted on within 24 hours.</strong></p>
@@ -42,7 +42,7 @@
 <p>If the app cannot send the message for any reason &mdash; no mail app on the device, for instance &mdash; email <a href="mailto:zsombor.rajki@gmail.com">zsombor.rajki@gmail.com</a> directly and describe the hike. Anything published can be taken down on the author&rsquo;s request.</p>
 
 <h2>Requirements</h2>
-<p>OpenHikes runs on iPhone and needs iOS 26 or later. There is no iPad or Apple Watch version.</p>
+<p>OpenHikes runs on iPhone and needs iOS 26 or later. It comes with an Apple Watch app, which needs watchOS 26 or later; it is part of the same app rather than a separate purchase, and it installs from the Watch app on your phone the way any companion app does. There is no iPad version.</p>
 
 <h2>Common questions</h2>
 
@@ -52,11 +52,18 @@
 <h3>My recorded track has gaps, or recording stopped</h3>
 <p>Recording needs location access to keep running with the screen off. In the iOS Settings app, under OpenHikes, check that Location is set to <em>While Using the App</em> at minimum and that <em>Precise Location</em> is on. Low Power Mode can also thin out location updates. A recording survives the app being closed or crashing, so if something went wrong mid-hike, reopen the app before deleting anything &mdash; it will offer to recover the recording.</p>
 
+<h3>What does the Apple Watch app do?</h3>
+<p>Three things. It shows the hikes on your phone, and draws the one you pick as a line on the map with how far along you are, how much is left, and how far off the trail you have wandered &mdash; all worked out on the watch itself, so it keeps answering with the phone in a rucksack or out of range. It records a hike on its own, through a long walk with the screen dark, and hands the finished walk to your phone the next time the two are together. And while your phone is the one recording, the watch shows that recording and can pause, resume and stop it.</p>
+<p>Recording on the watch starts a hiking workout, which is the only thing watchOS offers that keeps an app running with your wrist down. That workout is thrown away when the recording ends rather than saved, so a walk recorded on the watch does not put a second entry in Health: the hike goes to your phone, and your phone writes it to Health once if you have turned <em>Save Hikes to Health</em> on there. The watch does read your heart rate while it records, to show it as you walk &mdash; that reading is shown and nothing else, and is not added to the hike or sent anywhere.</p>
+
+<h3>A hike I recorded on my watch hasn&rsquo;t appeared on my phone</h3>
+<p>It is still on the watch, and it is not lost. A finished walk is written to the watch&rsquo;s own storage the moment you stop recording, and it is removed only once your phone has confirmed it has it &mdash; so a phone that was out of range, switched off, or flat for the rest of the day delays the hand-over and nothing else. Bring the two together with Bluetooth or Wi-Fi on and it goes over on its own; opening OpenHikes on the watch offers anything still waiting straight away. Do not delete the watch app while a walk is waiting, because that is the only copy there is.</p>
+
 <h3>My Home Screen widget or Live Activity isn&rsquo;t updating</h3>
 <p>Keeping those current while the app is closed is what <em>Background Trail Tracking</em> in the app&rsquo;s Settings does, and it is off until you turn it on. Turning it on asks for &ldquo;Always&rdquo; location access, which iOS requires for this and nothing else in the app. It also only does anything while you have a trail selected and are actually near it, which is deliberate: a trail left selected from last summer costs you no battery.</p>
 
 <h3>The map is blank, or won&rsquo;t load offline</h3>
-<p>Areas you have browsed are kept automatically, so ground you looked at with a signal is still there without one. Ground you have never opened was never downloaded. If the map is blank <em>with</em> a connection, check Settings for the selected map source: Stadia Outdoors and Thunderforest Outdoors need an OpenHikes Pro subscription, while OpenStreetMap is free and always available. You can see and clear what is stored under <em>Offline Storage</em>.</p>
+<p>Areas you have browsed are kept automatically, so ground you looked at with a signal is still there without one. Ground you have never opened was never downloaded. If the map is blank <em>with</em> a connection, check Settings for the selected map source: Stadia Outdoors and Thunderforest Outdoors need an OpenHikes Pro subscription, while OpenStreetMap and Apple Maps are free and always available. You can see and clear what is stored under <em>Offline Storage</em>.</p>
 
 <h3>How do I get a GPX file into the app?</h3>
 <p>Open the <code>.gpx</code> from anywhere on the phone &mdash; Files, Mail, AirDrop, a download, any share sheet &mdash; and choose OpenHikes. It imports with its route, its statistics and its metadata.</p>
@@ -74,7 +81,7 @@
 <p>Deleting a hike in the app deletes it. Deleting the app removes everything it stored on that device, and turning off iCloud sync and deleting the app removes the synced copy from your iCloud storage as well. Because there is no account and no server holding your hikes, there is nothing else of yours for me to delete &mdash; with one exception: a hike you chose to publish, which you can take down at any time using <em>Ask for Removal</em>.</p>
 
 <h2>OpenHikes Pro</h2>
-<p>Everything in OpenHikes is free except two commercial map styles &mdash; Stadia Outdoors and Thunderforest Outdoors &mdash; and downloading a whole route&rsquo;s Stadia map in advance. Those maps bill OpenHikes for every view, which is the reason they cost something; the free OpenStreetMap map is the one that costs nothing to serve, and it stays the default. Recording, GPX import and export, photos, community hikes, the widget, the Live Activity and iCloud sync are all free and always will be.</p>
+<p>Everything in OpenHikes is free except two commercial map styles &mdash; Stadia Outdoors and Thunderforest Outdoors &mdash; and downloading a whole route&rsquo;s Stadia map in advance. Those maps bill OpenHikes for every view, which is the reason they cost something; the free OpenStreetMap map is the one that costs nothing to serve, and it stays the default. Recording, GPX import and export, photos, community hikes, the widget, the Live Activity, the Apple Watch app and iCloud sync are all free and always will be.</p>
 <p>The subscription is monthly, starts with a free trial, and is shareable with your family. The price in your region is shown in the App Store and on the subscription screen in the app before you buy anything.</p>
 
 <h3>I paid and the maps are still locked</h3>
