@@ -569,7 +569,13 @@ private extension OpenHikesModel {
             // ``WeatherAlertWatch`` and has nothing to do with a walk's state.
             notifier: AppLaunchEnvironment.isRunningTests
                 ? nil
-                : SystemMovementReminderNotifier()
+                : SystemMovementReminderNotifier(),
+            // The same refusal, for the same reason one file down: the app
+            // test bundle runs inside this process against the *real* App
+            // Group, so a composed manager would publish into the file the
+            // widget suites assert on — and ask WidgetKit for a redraw out of
+            // a run's reload budget. See ``WeatherWidgetPublisher/inert``.
+            widgetPublisher: AppLaunchEnvironment.isRunningTests ? .inert : .system
         )
         let significantLocations = SignificantLocationFeed(
             monitor: significantLocationRegistration.client(
@@ -631,7 +637,16 @@ private extension OpenHikesModel {
             automaticallyRecovers: false
         )
         let locationManager = LocationManager(manager: Self.dormantLocationSource())
-        let weatherManager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        // Inert for the reason the geocoder is absent above: a UI-test launch
+        // must leave nothing of itself outside the app. Publishing would write
+        // this run's fixture reading into the real App Group — where the
+        // widget suites and the hiker's own home screen read it — and spend
+        // WidgetKit reloads on it. `applyUITestSnapshot` moves the badge, so
+        // without this every snapshot in every suite would do both.
+        let weatherManager = WeatherManager(
+            store: WeatherReadingStore(defaults: defaults),
+            widgetPublisher: .inert
+        )
         let significantLocations = SignificantLocationFeed(
             monitor: significantLocationRegistration.client(
                 for: .movementFeed,

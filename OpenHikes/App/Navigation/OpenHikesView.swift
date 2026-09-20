@@ -952,7 +952,10 @@ struct ImportSelectionGate {
             automaticallyRecovers: false
         ),
         locationManager: LocationManager(),
-        weatherManager: WeatherManager(),
+        // Inert for the reason the location source below is dormant: a
+        // preview must not reach anything outside itself — here, the App
+        // Group the hiker's own widget reads.
+        weatherManager: WeatherManager(widgetPublisher: .inert),
         // Dormant: a preview must not arm significant-change monitoring.
         significantLocations: SignificantLocationFeed(monitor: DormantLocationSource())
     )

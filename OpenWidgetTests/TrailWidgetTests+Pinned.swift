@@ -30,7 +30,7 @@ import OpenHikesShared
 import Testing
 import WidgetKit
 
-extension TrailWidgetTests {
+extension TrailWidgetStoreSuites.TrailWidgetTests {
     // MARK: Two widgets, two trails
 
     /// The whole point of the issue, read off the provider: the same store

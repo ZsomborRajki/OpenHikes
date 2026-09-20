@@ -20,7 +20,8 @@ import OpenHikesShared
 import Testing
 import WidgetKit
 
-@Suite("Trail widget weather", .serialized, .enabled(if: WidgetStoreProbe.isAvailable))
+extension TrailWidgetStoreSuites {
+@Suite("Trail widget weather", .serialized)
 struct TrailWidgetWeatherTests {
     private static let now = Date(timeIntervalSince1970: 1_750_000_000)
 
@@ -156,6 +157,39 @@ struct TrailWidgetWeatherTests {
         )
     }
 
+    /// The refresh date is a *request*: WidgetKit defers a reload for a widget
+    /// that has overrun its budget or a device in Low Power Mode, and a
+    /// one-entry timeline would keep drawing the expired number for as long as
+    /// that lasts. The second entry needs no permission to be shown.
+    @Test("the timeline carries the entry that draws no temperature")
+    func timelineCarriesTheEmptiedEntry() throws {
+        SharedStore.save(TrailWidgetTests.snapshot())
+        let reading = try #require(Self.reading(ageMinutes: 20))
+        SharedStore.saveWeatherReading(reading)
+
+        let timeline = TrailWidgetProvider.currentTimeline(date: Self.now)
+
+        #expect(timeline.entries.count == 2)
+        let dropped = try #require(timeline.entries.last)
+        #expect(dropped.date == reading.expiresAt)
+        #expect(dropped.weather == nil, "the corner empties on time whether or not the reload lands")
+        #expect(dropped.snapshot?.hikeID == timeline.entries.first?.snapshot?.hikeID)
+    }
+
+    /// A reading already past its age is dropped by the entry itself, so there
+    /// is nothing to schedule an emptying for.
+    @Test("an expired reading adds no second entry")
+    func expiredReadingAddsNoEntry() throws {
+        SharedStore.save(TrailWidgetTests.snapshot())
+        SharedStore.saveWeatherReading(
+            try #require(Self.reading(ageMinutes: SharedWeatherReading.maximumAge / 60 + 10))
+        )
+
+        let timeline = TrailWidgetProvider.currentTimeline(date: Self.now)
+
+        #expect(timeline.entries.count == 1)
+    }
+
     // MARK: What VoiceOver gets
 
     /// Nothing on a Home Screen family is drawn *and* spoken any more: the
@@ -176,6 +210,53 @@ struct TrailWidgetWeatherTests {
         #expect(spoken.contains(reading.spoken()))
     }
 
+    /// The figures the chips carry are not said twice. The trail's length is a
+    /// chip now, and it is also what `statusText` falls back to when there is
+    /// no live fix — the state a placed widget is in most of the time — so the
+    /// spoken value is built from the progress half of that line rather than
+    /// from the line.
+    @Test("a figure that is already a chip is not spoken twice")
+    func nothingIsSaidTwice() {
+        let snapshot = TrailWidgetTests.snapshot()
+        let length = WidgetFormat.length(meters: snapshot.totalDistanceMeters)
+
+        let spoken = TrailWidgetSpeech.value(
+            status: snapshot.progressStatusText,
+            metrics: snapshot.metricsAccessibilityText(limit: 2),
+            weather: nil
+        )
+
+        #expect(spoken.contains(length))
+        #expect(
+            spoken.components(separatedBy: length).count == 2,
+            "once, from the chip — the status line's fallback is the same number"
+        )
+    }
+
+    /// The same rule for a recording, whose status line is a distance and a
+    /// point count and whose chips now carry that distance.
+    @Test("a recording's distance is spoken once, and its point count survives")
+    func recordingSaysItsDistanceOnce() {
+        let recording = SharedRecordingSnapshot(
+            sessionID: UUID(),
+            startedAt: Self.now.addingTimeInterval(-3600),
+            distanceMeters: 1400,
+            pointCount: 320,
+            polyline: [.init(latitude: 47.5, longitude: 12.9)],
+            elevationGainMeters: 180
+        )
+        let walked = WidgetFormat.length(meters: 1400)
+
+        let spoken = TrailWidgetSpeech.value(
+            status: recording.pointCountText,
+            metrics: recording.metricsAccessibilityText(limit: 2),
+            weather: nil
+        )
+
+        #expect(spoken.contains("320 pts"))
+        #expect(spoken.components(separatedBy: walked).count == 2)
+    }
+
     /// A missing part is omitted rather than announced, which is the rule the
     /// chips already follow — "no temperature" is not something to say.
     @Test("nothing is announced for a figure that is missing")
@@ -185,4 +266,5 @@ struct TrailWidgetWeatherTests {
         )
         #expect(TrailWidgetSpeech.value(status: "", metrics: "", weather: nil).isEmpty)
     }
+}
 }

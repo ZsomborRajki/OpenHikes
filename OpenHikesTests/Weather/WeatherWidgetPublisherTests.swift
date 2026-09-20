@@ -34,11 +34,21 @@ struct WeatherWidgetPublisherTests {
     nonisolated private final class MemoryStore: @unchecked Sendable {
         private let lock = NSLock()
         private var stored: SharedWeatherReading?
+        private var written: [Double?] = []
 
         var reading: SharedWeatherReading? {
             lock.lock()
             defer { lock.unlock() }
             return stored
+        }
+
+        /// Every write in the order it arrived — a `nil` for a clear. What the
+        /// burst test asks: the App Group cannot be left holding an older
+        /// reading than the badge is showing.
+        var writes: [Double?] {
+            lock.lock()
+            defer { lock.unlock() }
+            return written
         }
 
         func seed(_ reading: SharedWeatherReading?) {
@@ -47,11 +57,18 @@ struct WeatherWidgetPublisherTests {
             stored = reading
         }
 
+        private func record(_ reading: SharedWeatherReading?) {
+            seed(reading)
+            lock.lock()
+            defer { lock.unlock() }
+            written.append(reading?.temperatureCelsius)
+        }
+
         var seam: WeatherWidgetPublisher.Store {
             WeatherWidgetPublisher.Store(
                 load: { self.reading },
-                save: { self.seed($0) },
-                clear: { self.seed(nil) }
+                save: { self.record($0) },
+                clear: { self.record(nil) }
             )
         }
     }
@@ -83,6 +100,27 @@ struct WeatherWidgetPublisherTests {
         SharedWeatherReading(
             temperatureCelsius: celsius,
             capturedAt: now.addingTimeInterval(-ageSeconds)
+        )
+    }
+
+    private static let budapest = CLLocationCoordinate2D(latitude: 47.4979, longitude: 19.0402)
+    private static let vienna = CLLocationCoordinate2D(latitude: 48.2082, longitude: 16.3738)
+
+    /// A badge reading, for the tests that drive a whole `WeatherManager`
+    /// rather than the publisher under it.
+    ///
+    /// Captured *now* rather than at ``now``, which is a fixed instant years
+    /// behind this run: a manager publishes through the real clock, and a
+    /// reading older than ``SharedWeatherReading/maximumAge`` draws nothing —
+    /// so a fixture stamped in the past would be indistinguishable from no
+    /// reading at all by the time the publisher asked.
+    private static func snapshot(celsius: Double, capturedAt: Date = .now) -> WeatherSnapshot {
+        WeatherSnapshot(
+            symbolName: "cloud.sun.fill",
+            temperature: Measurement(value: celsius, unit: UnitTemperature.celsius),
+            conditionDescription: "Partly Cloudy",
+            capturedAt: capturedAt,
+            conditions: .preview
         )
     }
 
@@ -203,5 +241,100 @@ struct WeatherWidgetPublisherTests {
 
         #expect(abs(reading.temperatureCelsius - 20) < 0.001)
         #expect(reading.capturedAt == Self.now, "the provider's clock, not this one")
+    }
+
+    /// The write is what the next timeline reads, so a write that did not
+    /// happen is not a changed widget. Both App Group writers swallow their
+    /// failures — an unresolvable container, a device still locked under data
+    /// protection — and asking the store afterwards is what keeps that case
+    /// from spending a reload on every badge move for a picture that cannot
+    /// change.
+    @Test("a write that does not land asks for no redraw")
+    func failedWriteAsksForNothing() async throws {
+        let reloads = Reloads()
+        let refusing = WeatherWidgetPublisher.Store(
+            load: { nil },
+            save: { _ in /* the container could not be resolved */ },
+            clear: { /* nor here */ }
+        )
+        let publisher = WeatherWidgetPublisher(reload: reloads.record, store: refusing)
+
+        let reading = try #require(Self.reading(celsius: 12))
+        let redrew = await publisher.publish(reading, asOf: Self.now, locale: Self.locale)
+
+        #expect(redrew == false)
+        #expect(reloads.value == 0)
+    }
+
+    // MARK: What the badge hands over, and when
+
+    @Test("a fetch in flight is not news the widget can use")
+    func loadingIsNotPublished() {
+        let subject = WeatherSubject.me(.init(latitude: 47.5, longitude: 12.9))
+
+        #expect(WeatherBadgeState.loading(subject).publishesToWidget == false)
+        #expect(WeatherBadgeState.idle.publishesToWidget)
+        #expect(WeatherBadgeState.unavailable(subject).publishesToWidget)
+        #expect(
+            WeatherBadgeState
+                .reading(Self.snapshot(celsius: 12, capturedAt: Self.now), subject: subject)
+                .publishesToWidget
+        )
+    }
+
+    /// Tapping a trail the app has no cached forecast for is the commonest
+    /// thing a hiker does, and it moves the badge twice: to `loading`, then to
+    /// the answer. Publishing the first of those would blank the widget's
+    /// corner and spend a reload doing it, then fill it and spend another.
+    @MainActor
+    @Test("a fetch in flight leaves the corner as it was")
+    func loadingLeavesTheCornerAlone() async {
+        let store = MemoryStore()
+        let reloads = Reloads()
+        let manager = WeatherManager(
+            widgetPublisher: WeatherWidgetPublisher(reload: reloads.record, store: store.seam)
+        )
+
+        manager.applyUITestSnapshot(
+            Self.snapshot(celsius: 12),
+            subject: .place(Self.budapest, name: "Budapest")
+        )
+        await manager.settleWidgetPublishing()
+        manager.focus(on: .place(Self.vienna, name: "Vienna"), willRequest: true)
+        await manager.settleWidgetPublishing()
+
+        #expect(manager.state == .loading(.place(Self.vienna, name: "Vienna")))
+        #expect(store.reading?.temperatureCelsius == 12, "the last number stands until the next")
+        #expect(reloads.value == 1, "and the fetch costs nothing")
+    }
+
+    /// Every publish reads the App Group file and rewrites it, and the badge
+    /// moves in bursts — a focus, the fetch that answers it, sometimes a
+    /// second subject on top. Unstructured tasks would land in whatever order
+    /// the executor gave them, which leaves the widget holding an older
+    /// reading than the badge is showing for up to
+    /// `SharedWeatherReading.maximumAge`.
+    @MainActor
+    @Test("a burst of badge moves reaches the widget in the order it happened")
+    func burstArrivesInOrder() async {
+        let store = MemoryStore()
+        let manager = WeatherManager(
+            widgetPublisher: WeatherWidgetPublisher(
+                reload: { /* the order of the writes is the whole question here */ },
+                store: store.seam
+            )
+        )
+        let degrees: [Double] = [4, 9, 14, 19, 24, 29]
+
+        for celsius in degrees {
+            manager.applyUITestSnapshot(
+                Self.snapshot(celsius: celsius),
+                subject: .place(Self.budapest, name: "Budapest")
+            )
+        }
+        await manager.settleWidgetPublishing()
+
+        #expect(store.writes == degrees.map { Optional($0) })
+        #expect(store.reading?.temperatureCelsius == 29)
     }
 }

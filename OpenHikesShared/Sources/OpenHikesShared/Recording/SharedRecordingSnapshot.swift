@@ -57,6 +57,18 @@ public struct SharedRecordingSnapshot: SharedPayload, Equatable {
     }
 
     public var statusText: String {
-        "\(WidgetFormat.length(meters: distanceMeters)) · \(pointCount.formatted()) pts"
+        "\(WidgetFormat.length(meters: distanceMeters)) · \(pointCountText)"
+    }
+
+    /// The half of ``statusText`` the Home Screen widget's chips do not
+    /// already say.
+    ///
+    /// The distance is a chip there now — "Walked 1.4 km" — so an
+    /// accessibility value built from ``statusText`` would read "1.4 km · 320
+    /// pts, Ascent 180 m, Walked 1.4 km". The Lock Screen families draw
+    /// ``statusText`` and no chips, so they keep both figures. See
+    /// ``TrailWidgetSpeech`` in the widget target.
+    public var pointCountText: String {
+        "\(pointCount.formatted()) pts"
     }
 }

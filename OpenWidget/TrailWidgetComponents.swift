@@ -195,9 +195,16 @@ struct TrailWidgetProgressBar: View {
 /// the figures behind that, then the conditions it is happening in. Anything
 /// missing is omitted rather than announced, which is the same rule the chips
 /// follow.
+///
+/// **Nothing is said twice.** `status` is deliberately the *part* of a
+/// snapshot's status line the chips do not carry — `progressStatusText` for a
+/// trail, `pointCountText` for a recording — rather than the line itself,
+/// because the figures that line used to have to itself are chips now. Passing
+/// `statusText` here would read "2.6 km, Ascent 420 m, Length 2.6 km" to
+/// someone who cannot see that it is one number.
 enum TrailWidgetSpeech {
     static func value(
-        status: String,
+        status: String?,
         metrics: String,
         weather: SharedWeatherReading?
     ) -> String {

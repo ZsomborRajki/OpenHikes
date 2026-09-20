@@ -183,6 +183,20 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
     /// rather than a contradiction. A paused walk says so first, because on a
     /// widget that is the one word that changes what the number means.
     public var statusText: String {
+        progressStatusText ?? WidgetFormat.length(meters: totalDistanceMeters)
+    }
+
+    /// The half of ``statusText`` that says where the walk stands, and `nil`
+    /// when there is no walk to stand anywhere in it.
+    ///
+    /// Split out for the Home Screen widget's single accessibility element.
+    /// There the trail's length is drawn as a chip of its own, so a spoken
+    /// value built from ``statusText`` would say the same figure twice — "2.6
+    /// km, Ascent 420 m, Length 2.6 km" — for the state a placed widget is in
+    /// most of the time. The Lock Screen families still draw ``statusText``
+    /// and still want the fallback, which is why it stays there rather than
+    /// moving here. See ``TrailWidgetSpeech`` in the widget target.
+    public var progressStatusText: String? {
         if let walk {
             let covered = "\(Self.percent(walk.coveredFraction))% walked"
             let prefix = walk.state == .paused ? "Paused · " : ""
@@ -190,8 +204,7 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
             let remaining = WidgetFormat.length(meters: remainingDistanceMeters)
             return "\(prefix)\(covered) · \(remaining) left"
         }
-        guard let fractionComplete, let remainingDistanceMeters
-        else { return WidgetFormat.length(meters: totalDistanceMeters) }
+        guard let fractionComplete, let remainingDistanceMeters else { return nil }
         let remaining = WidgetFormat.length(meters: remainingDistanceMeters)
         return "\(Self.percent(fractionComplete))% · \(remaining) left"
     }

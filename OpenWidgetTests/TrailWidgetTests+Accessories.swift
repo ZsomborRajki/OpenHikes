@@ -22,7 +22,7 @@ import OpenHikesShared
 import Testing
 import WidgetKit
 
-extension TrailWidgetTests {
+extension TrailWidgetStoreSuites.TrailWidgetTests {
     /// The Lock Screen families draw a glyph, a ring or one line of text —
     /// all of which are hidden from VoiceOver — so what a reader actually
     /// gets is the label and value ``TrailWidgetAccessorySubject`` supplies.

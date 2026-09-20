@@ -25,7 +25,7 @@ import OpenHikesShared
 import Testing
 import WidgetKit
 
-extension TrailWidgetTests {
+extension TrailWidgetStoreSuites.TrailWidgetTests {
     @Test("a live recording takes over the widget and deep links back to it")
     func recordingTakesOver() throws {
         defer { try? SharedStore.clearRecording() }
