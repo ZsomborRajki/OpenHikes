@@ -107,28 +107,18 @@ struct HikePhotoViewer: View {
     var body: some View {
         let photos = hike.orderedPhotos
         let currentIndex = index(of: currentID, in: photos)
-        // A photo is shown against black everywhere in iOS, and the strip's
-        // tiles are letterboxed here rather than cropped, so the backdrop is
-        // doing real work: it's what the un-filled edges of a portrait shot on
-        // a landscape screen become.
-        return ZStack {
-            Color.black.ignoresSafeArea()
+        // The black surface and the bar that has to be told about it are
+        // ``photoGalleryChrome()``, which the community gallery wears too.
+        return Group {
             if photos.isEmpty {
                 emptyState
             } else {
                 pages(photos)
             }
         }
+        .photoGalleryChrome()
         .overlay(alignment: .bottom) { bottomBar(photos, currentIndex: currentIndex) }
         .navigationTitle(title(photos, currentIndex: currentIndex))
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        // The backdrop is black whatever the device is set to, so the bar has
-        // to be told that: without this the title renders in the light
-        // scheme's label colour and is black on black.
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        #endif
         .toolbar {
             toolbarContent(
                 currentIndex.map { photos[$0] },
@@ -314,13 +304,17 @@ struct HikePhotoViewer: View {
     ) -> some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             if let current, let coordinate = current.coordinate {
-                ShowPhotoOnMapButton(
-                    photoID: current.id,
+                ShowPhotoSpotButton(
                     coordinate: coordinate,
-                    highlight: highlight,
                     mapController: mapController,
-                    photoPins: photoPins,
-                    onShowOnMap: onShowOnMap
+                    identifier: "photo-show-on-map-button",
+                    beforeFraming: { highlight.move(to: coordinate) },
+                    thenSelecting: {
+                        // Asked for here and answered after the dismiss — see
+                        // ``PhotoMapPinController/select(_:)``.
+                        photoPins?.select(current.id)
+                        onShowOnMap()
+                    }
                 )
             }
         }
@@ -411,56 +405,6 @@ struct HikePhotoViewer: View {
             ?? destination(from: currentIndex, by: -1, in: photos)
         currentID = successor.map { photos[$0].id }
         HikePhotoImport.remove(photo, from: hike, store: store)
-    }
-}
-
-/// Moves the map's selection dot to the photo's place on the trail and gets
-/// out of the way so it can be seen.
-///
-/// A view rather than a button in the viewer's toolbar closure, because it is
-/// the second of that screen's two readers of the environment's dismiss action
-/// — see ``DismissButton`` for what declaring it costs the body around it.
-///
-/// The camera is framed on the coordinate at a fixed, close span rather than
-/// re-fitted to the whole route: the point of the button is to see where one
-/// photo was taken, and a route-wide fit would put it back in the middle of
-/// everything. The pin standing there is opened too, so what the hiker arrives
-/// at is the photograph they were looking at rather than a marker among markers
-/// that they have to work out and tap.
-///
-/// "Out of the way" is the whole sheet, not just this screen. Popping alone
-/// restores the height the hike was being read at, which on a screen that had
-/// been at `.large` is a sheet closing straight back over the pin — so the
-/// sheet is asked to collapse first, and the pop then finds that decision
-/// already made.
-private struct ShowPhotoOnMapButton: View {
-    let photoID: UUID
-    let coordinate: CLLocationCoordinate2D
-    var highlight: RouteHighlight
-    var mapController: MapController
-    var photoPins: PhotoMapPinController?
-    let onShowOnMap: () -> Void
-
-    @Environment(\.dismiss)
-    private var dismiss
-
-    var body: some View {
-        Button {
-            highlight.move(to: coordinate)
-            // The span is ``MapController/showPhotoSpot(_:)``'s, which the
-            // community gallery frames with too.
-            mapController.showPhotoSpot(coordinate)
-            // Asked for here and answered after the dismiss below: the pins
-            // belong to the screen this one is pushed over, so they are off the
-            // map until it comes back. See ``PhotoMapPinController/select(_:)``.
-            photoPins?.select(photoID)
-            onShowOnMap()
-            dismiss()
-        } label: {
-            Image(systemName: "mappin.and.ellipse")
-        }
-        .accessibilityLabel("Show where this photo was taken")
-        .accessibilityIdentifier("photo-show-on-map-button")
     }
 }
 
