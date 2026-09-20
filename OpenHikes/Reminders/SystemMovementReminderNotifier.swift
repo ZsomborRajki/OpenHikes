@@ -15,11 +15,13 @@
 //  posted, or it is delivered with no buttons on it and the hiker has to
 //  unlock the phone to do the thing the banner just offered — so registration
 //  is folded into ``authorize()``, which every path runs first. And the
-//  interruption level is deliberately left at its default: `.timeSensitive`
-//  is the level that breaks through a Focus, and it needs an entitlement
-//  Apple grants per app rather than a property this file can set. Asking for
-//  it is a separate, deliberate change to what the app ships with — see the
-//  issue tracker, not this comment, for whether it has been made.
+//  interruption level is not this file's to choose: `.timeSensitive` is the
+//  level that breaks through a Focus, which two of the five kinds are worth
+//  and three are not, and that answer lives on
+//  ``MovementReminderKind/interruptionLevel`` beside the category and the
+//  button — the same split the rest of this file keeps. What it costs the
+//  app is an entitlement, which is in `OpenHikes.entitlements`; what a build
+//  missing it costs a hiker is a silent downgrade back to `.active`.
 //
 
 import Foundation
@@ -86,6 +88,10 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
         content.body = reminder.body
         content.categoryIdentifier = reminder.categoryIdentifier
         content.sound = .default
+        // Both from the kind, for the reason the category is: what a given
+        // reminder is worth is policy, and none of it is decided here.
+        content.interruptionLevel = reminder.kind.interruptionLevel
+        content.relevanceScore = reminder.kind.relevanceScore
         // `nil`, not a one-second time interval: the reminder is about what
         // the hiker is doing right now, and a trigger would let it arrive
         // after they have already resumed.

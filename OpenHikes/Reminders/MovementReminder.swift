@@ -18,6 +18,9 @@
 //
 
 import Foundation
+#if canImport(UserNotifications)
+import UserNotifications
+#endif
 
 /// Which of the three disagreements between the walk and the hiker this is.
 ///
@@ -84,6 +87,81 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
         case .pauseRecording: .pause
         case .resumeRecording, .resumeWalk: .resume
         }
+    }
+
+    #if canImport(UserNotifications)
+    /// How hard this reminder may knock, which is the difference between a
+    /// warning and a piece of bookkeeping.
+    ///
+    /// The default is `.active`, and `.active` is precisely the level a Focus
+    /// silences. Every one of these is posted to a phone in a pocket, on a
+    /// walk — the single most likely time for Do Not Disturb or a custom
+    /// Focus to be on — so the default loses the two that are not
+    /// bookkeeping at exactly the moment they are worth the most.
+    /// ``severeWeather`` is an agency's warning about the ground the hiker is
+    /// standing on and ``leftTheTrail`` is a fork taken wrong in fog; a
+    /// warning a Focus eats is a feature that exists only for hikers who
+    /// happen not to use one. The other three are the app and the hiker
+    /// disagreeing about whether a walk is being recorded, and a Focus is
+    /// right to hold those until it is over — this is deliberately not
+    /// "raise everything".
+    ///
+    /// `.timeSensitive` is a claim the app has to be entitled to make:
+    /// `com.apple.developer.usernotifications.time-sensitive` is in
+    /// `OpenHikes.entitlements` for this property's sake and nothing else's.
+    /// A build that lost it is delivered at `.active` with no error and no
+    /// log, and no test in this tree can say so — iOS has no `SecTask`, the
+    /// archive CI builds is unsigned and therefore carries no entitlements
+    /// at all, and `timeSensitiveSetting` reads `.notSupported` on an
+    /// unauthorized host as well as an unentitled one. The entitlement line
+    /// is the whole of the record. `.critical` is deliberately not on the
+    /// table: it is granted by request rather than by checkbox, it overrides
+    /// the ringer switch, and a hiking app's weather banner is not what that
+    /// is for.
+    var interruptionLevel: UNNotificationInterruptionLevel {
+        switch self {
+        case .leftTheTrail, .severeWeather: .timeSensitive
+        case .pauseRecording, .resumeRecording, .resumeWalk: .active
+        }
+    }
+    #endif
+
+    /// Where this sorts inside a Notification Summary, the one place several
+    /// of these are ever seen side by side.
+    ///
+    /// Unset is zero for every kind, and a tie is ordered arbitrarily — so a
+    /// summary can lead with "Taking a break?" and bury the storm warning
+    /// under it. The ladder is ``interruptionLevel``'s argument at a finer
+    /// grain: the warning about the ground outranks the warning about the
+    /// route, both outrank anything about bookkeeping, and among the three
+    /// bookkeeping reminders the two that are losing track of a walk outrank
+    /// the one that is only spoiling a moving-time average.
+    var relevanceScore: Double {
+        switch self {
+        case .severeWeather: Relevance.weatherWarning
+        case .leftTheTrail: Relevance.offTheRoute
+        case .resumeRecording, .resumeWalk: Relevance.walkGoingUnrecorded
+        case .pauseRecording: Relevance.stopCountedAsMoving
+        }
+    }
+
+    /// The four rungs of that ladder, named rather than written into the
+    /// switch as literals: the gaps between them are the argument, and a
+    /// bare `0.8` beside a bare `0.5` says nothing about which pair of
+    /// reminders it is keeping apart.
+    private enum Relevance {
+        /// Somebody else's warning about the ground, which is the one thing
+        /// here this app did not decide to say.
+        static let weatherWarning = 1.0
+        /// A fact about where the hiker is, worth more than anything about
+        /// bookkeeping and less than a warning from an agency.
+        static let offTheRoute = 0.8
+        /// A walk that is happening and is not being written down. The
+        /// kilometres lost to it cannot be recovered afterwards.
+        static let walkGoingUnrecorded = 0.5
+        /// A moving-time average being spoiled by a lunch stop, which the
+        /// hiker can still correct once they are home.
+        static let stopCountedAsMoving = 0.3
     }
 }
 
