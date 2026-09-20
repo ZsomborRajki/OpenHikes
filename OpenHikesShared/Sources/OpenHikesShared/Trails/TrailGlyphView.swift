@@ -16,22 +16,28 @@
 
 import SwiftUI
 
-/// Public because the watch app draws with it directly.
+/// Internal, and it used to be public for a reason that stopped being true.
 ///
-/// On iOS this is ``TrailMapView``'s fallback and nothing outside the package
-/// reaches for it. On watchOS it is not a fallback but *the* trail visual:
-/// there is no basemap to render against — a rendered snapshot is hundreds of
+/// The watch app drew with this directly in its first version, because there
+/// was no basemap to render against — a rendered snapshot is hundreds of
 /// kilobytes crossing a Bluetooth link for a screen an inch wide, and a tile
 /// cache is not something that belongs on a watch. A line fitted to the bounds
-/// is what a watch has room to show, which is what this already draws.
-public struct TrailGlyphView: View {
+/// was what a watch had room to show.
+///
+/// It has a real map now: ``TrailMapScreen`` draws an Apple `Map` with a
+/// `MapPolyline` over it, tuned for hiking, and nothing on the wrist reaches
+/// for this any more. So the only caller left is ``TrailMapView``, one file
+/// over, which draws this instead of a map on iOS whenever a rendered basemap
+/// is not available — the first seconds after a trail is selected, offline, or
+/// after a render failed.
+struct TrailGlyphView: View {
     private let polyline: [SharedTrailSnapshot.CodableCoordinate]
     private let liveFix: SharedTrailSnapshot.CodableCoordinate?
     private let tint: Color
     private let lineWidth: CGFloat
     private let showsFixDot: Bool
 
-    public init(
+    init(
         polyline: [SharedTrailSnapshot.CodableCoordinate],
         tint: Color,
         liveFix: SharedTrailSnapshot.CodableCoordinate? = nil,
@@ -45,7 +51,7 @@ public struct TrailGlyphView: View {
         self.showsFixDot = showsFixDot
     }
 
-    public var body: some View {
+    var body: some View {
         Canvas { context, size in
             guard polyline.count > 1,
                   let projected = Self.project(polyline: polyline, liveFix: liveFix, into: size, inset: lineWidth * 2)

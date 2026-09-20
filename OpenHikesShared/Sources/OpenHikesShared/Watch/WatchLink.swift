@@ -203,12 +203,16 @@ public extension WatchLink {
         try payload(WatchWalkReceipt.self, of: .walkReceipt, from: message)
     }
 
+    /// Encoded but never decoded, which is why this kind has no reader beside
+    /// it while every other one does.
+    ///
+    /// ``WatchLibraryRequest`` carries a schema version and nothing else: it
+    /// is a watch with no list saying so. The phone answers the *kind* by
+    /// sweeping its library — see ``WatchSessionCoordinator`` — and never asks
+    /// what was in the message, because there is nothing in it to ask about.
+    /// A decoder existed here for symmetry, and symmetry is not a caller.
     static func message(_ request: WatchLibraryRequest) throws -> [String: Any] {
         try message(.libraryRequest, request)
-    }
-
-    static func libraryRequest(from message: [String: Any]) throws(WatchLinkFailure) -> WatchLibraryRequest {
-        try payload(WatchLibraryRequest.self, of: .libraryRequest, from: message)
     }
 
     static func message(_ recording: WatchPhoneRecording) throws -> [String: Any] {

@@ -221,7 +221,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
                 .waitForExistence(timeout: UITestTimeout.existence),
             "selecting a photo pin should open a callout previewing the photo"
         )
-        capture(app, as: .route)
+        capture(as: .route)
     }
 
     /// The photographs, pinned where they were taken.
@@ -247,7 +247,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         openHikeDetail(in: app, titled: Self.routeTitle)
         try importDiscoveredPhotos(in: app)
         scrollIntoView(element("hike-photo-strip", in: app), in: app)
-        capture(app, as: .photos)
+        capture(as: .photos)
     }
 
     /// The nearby list: published hikes and waymarked OpenStreetMap routes in
@@ -273,7 +273,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
             "the nearby search never answered with a row to photograph"
         )
         revealCommunityPins(in: app, atLeast: Self.minimumVisiblePins)
-        capture(app, as: .nearby)
+        capture(as: .nearby)
     }
 
     /// The statistics and the elevation profile — the screen that answers
@@ -286,7 +286,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
         scrollIntoView(element("elevation-chart", in: app), in: app)
-        capture(app, as: .statistics)
+        capture(as: .statistics)
     }
 
     /// A recording in progress.
@@ -319,7 +319,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         )
         walkRecordedTrace(Self.openingStretch, countedBy: points)
         liftRecordedLineClearOfTheSheet(in: app)
-        capture(app, as: .recording)
+        capture(as: .recording)
     }
 
     /// Offline maps: a whole route's tiles saved for a walk with no signal.
@@ -358,7 +358,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
             scrollIntoView(download, in: app),
             "a provider that permits bulk download should offer the button"
         )
-        capture(app, as: .offline)
+        capture(as: .offline)
     }
 
     /// A finished walk in the trail's History.
@@ -397,7 +397,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
                 .waitForExistence(timeout: UITestTimeout.existence),
             "the summary should lead with how much of the trail was covered"
         )
-        capture(app, as: .walkHistory)
+        capture(as: .walkHistory)
     }
 }
 
@@ -811,14 +811,16 @@ extension ScreenshotUITests {
         )
     }
 
-    /// Attaches `app`'s current screen to the result bundle under `frame`'s
-    /// name.
+    /// Attaches the current screen to the result bundle under `frame`'s name.
     ///
-    /// `XCUIScreen.main` rather than `app.screenshot()`: the app's own
-    /// screenshot is clipped to the app's frame and loses the status bar,
-    /// which is a part of the picture App Store Connect expects to be there.
+    /// Takes no application, which is the whole of why it is worth saying:
+    /// `XCUIScreen.main` rather than `app.screenshot()`, because the app's own
+    /// screenshot is clipped to the app's frame and loses the status bar —
+    /// and that is a part of the picture App Store Connect expects to be
+    /// there. The parameter this used to take was the app it then never
+    /// asked.
     @MainActor
-    private func capture(_ app: XCUIApplication, as frame: Frame) {
+    private func capture(as frame: Frame) {
         let shot = XCUIScreen.main.screenshot()
         let attachment = XCTAttachment(screenshot: shot)
         attachment.name = frame.rawValue
