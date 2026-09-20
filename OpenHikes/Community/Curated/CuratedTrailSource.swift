@@ -286,17 +286,7 @@ actor CuratedTrailSource: CuratedTrailSourcing {
         self.clock = clock
         self.pause = pause
         store = directory.map { CuratedTrailStore(directory: $0, clock: clock) }
-        self.transport = transport ?? { request in
-            let (data, urlResponse) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = urlResponse as? HTTPURLResponse else {
-                throw TrailGraphProviderError.invalidResponse
-            }
-            return OverpassHTTPResponse(
-                data: data,
-                statusCode: httpResponse.statusCode,
-                headers: OverpassRequest.headers(of: httpResponse)
-            )
-        }
+        self.transport = transport ?? OverpassRequest.liveTransport()
     }
 
     // MARK: - The cache

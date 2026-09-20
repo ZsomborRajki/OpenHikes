@@ -180,26 +180,12 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
                 .appendingPathComponent("OpenHikes-TrailGraphs", isDirectory: true)
         self.endpoint = endpoint
         self.clock = clock
-        self.transport = transport ?? { request in
-            // A MetricKit span, because this is the app's only unavoidable
-            // radio wake-up during a hike, and wall time is the least
-            // interesting thing about it. What the field report adds is the
-            // CPU spent decoding the response and the bytes it wrote — on a
-            // cellular connection the app did not choose.
-            let field = FieldSignpost.begin(.trailGraphPrefetch)
-            defer {
-                FieldSignpost.end(field)
-            }
-            let (data, urlResponse) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = urlResponse as? HTTPURLResponse else {
-                throw TrailGraphProviderError.invalidResponse
-            }
-            return OverpassHTTPResponse(
-                data: data,
-                statusCode: httpResponse.statusCode,
-                headers: OverpassRequest.headers(of: httpResponse)
-            )
-        }
+        // Timed, because this is the app's only unavoidable radio wake-up
+        // during a hike and wall time is the least interesting thing about
+        // it. What the field report adds is the CPU spent decoding the
+        // response and the bytes it wrote — on a cellular connection the app
+        // did not choose.
+        self.transport = transport ?? OverpassRequest.liveTransport(timing: .trailGraphPrefetch)
     }
 
     nonisolated func region(
