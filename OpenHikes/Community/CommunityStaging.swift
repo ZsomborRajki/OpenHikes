@@ -112,29 +112,12 @@ nonisolated enum CommunityStaging {
 
     /// Removes everything staged before `cutoff`.
     ///
-    /// Dated rather than emptied wholesale, for the reason
-    /// ``GPXExport/purgeStagedExports(in:before:)`` is: an entry written a
-    /// moment ago belongs to work that is still happening. Silent about
-    /// failure for the same reason — staging that outlives its owner is
-    /// housekeeping, and nothing here should fail a share or blank a preview.
-    ///
-    /// Synchronous and taking both its inputs, so a suite can age an entry and
-    /// watch: what this decides is invisible in the result, since a sweep that
-    /// spared a live download and one that never looked both leave a working
-    /// directory in place on a good day.
+    /// The name Community's callers know the sweep by, and this feature's own
+    /// rule about *when* — see ``lifetime``, which is six times the one an
+    /// export gets and says why. The pass itself is
+    /// ``StagedFiles/purge(in:before:)``, which ``GPXExport`` shares.
     static func purgeAbandoned(in parent: URL, before cutoff: Date) {
-        let manager = FileManager.default
-        let staged = (try? manager.contentsOfDirectory(
-            at: parent,
-            includingPropertiesForKeys: [.contentModificationDateKey]
-        )) ?? []
-        for url in staged {
-            let modified = try? url
-                .resourceValues(forKeys: [.contentModificationDateKey])
-                .contentModificationDate
-            guard let modified, modified < cutoff else { continue }
-            try? manager.removeItem(at: url)
-        }
+        StagedFiles.purge(in: parent, before: cutoff)
     }
 
     /// The ordinary call: sweep the staging parent on the way into work that

@@ -532,23 +532,11 @@ nonisolated extension GPXExport {
 
     /// Removes exports staged before `cutoff`.
     ///
-    /// Dated rather than emptied wholesale: a file still being copied out
-    /// belongs to a share that is still happening. Silent about failure for
-    /// the same reason ``GPXInbox/discardCopy(at:)`` is — a staged file that
-    /// outlives its share is housekeeping, not something to fail a share over.
+    /// The name an export's callers know the sweep by, and the export's own
+    /// rule about *when* — see ``stagedExportLifetime``. The pass itself is
+    /// ``StagedFiles/purge(in:before:)``, which Community's staging shares.
     static func purgeStagedExports(in directory: URL, before cutoff: Date) {
-        let manager = FileManager.default
-        let staged = (try? manager.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: [.contentModificationDateKey]
-        )) ?? []
-        for url in staged {
-            let modified = try? url
-                .resourceValues(forKeys: [.contentModificationDateKey])
-                .contentModificationDate
-            guard let modified, modified < cutoff else { continue }
-            try? manager.removeItem(at: url)
-        }
+        StagedFiles.purge(in: directory, before: cutoff)
     }
 }
 
