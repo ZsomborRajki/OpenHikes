@@ -68,6 +68,45 @@ nonisolated struct WeatherDaySummary: Equatable, Sendable, Identifiable {
     var id: Date { date }
 }
 
+extension WeatherDaySummary {
+    /// The days of `week` that have not ended yet, as of `date`.
+    ///
+    /// **Applied on the way to the screen as well as on the way in**, and
+    /// that is not belt-and-braces. Nothing in ``WeatherManager`` expires: a
+    /// reading restored from the stored blob, or one carried in the in-memory
+    /// cache while the app sat in a rucksack overnight, is drawn exactly as it
+    /// was fetched. Filtered only at the fetch, such a reading opens the strip
+    /// on yesterday — a first row named for the weekday it was, with no row
+    /// saying *Today* anywhere beneath it.
+    ///
+    /// **A day is kept until it ends, rather than bucketed into a calendar
+    /// day.** `DayWeather` is dated at midnight in the *forecast's* zone, not
+    /// the reader's, so comparing start-of-day in the reader's calendar drops
+    /// the first row of a forecast for a city several hours ahead — Tokyo read
+    /// from California begins the day before, locally. Asking whether the day
+    /// is over instead is the same answer at home and the right one abroad,
+    /// and it keeps the day in progress, which is the point: a hiker reading
+    /// this at four o'clock is still deciding about this evening.
+    ///
+    /// Through a `Calendar` rather than by adding 86,400 seconds, for the
+    /// reason the mapping gives: a real week crosses a daylight-saving
+    /// boundary twice a year.
+    nonisolated static func upcoming(
+        in week: [Self],
+        asOf date: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> [Self] {
+        week.filter { day in
+            guard let end = calendar.date(byAdding: .day, value: 1, to: day.date) else {
+                // A calendar that cannot add a day to a date is not a reason
+                // to hide the forecast; the row is kept and reads as it did.
+                return true
+            }
+            return end > date
+        }
+    }
+}
+
 /// How much of the daily forecast is worth keeping.
 nonisolated enum WeatherDailyPolicy {
     /// Seven days.

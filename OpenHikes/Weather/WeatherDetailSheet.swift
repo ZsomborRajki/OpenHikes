@@ -744,9 +744,14 @@ extension WeatherDetailView {
         /// Wide enough for the longest abbreviated weekday a locale is likely
         /// to hand back, so the glyphs beside them line up down the section
         /// rather than stepping in and out with the day's name.
+        ///
+        /// A *minimum* rather than a width, because neither figure scales
+        /// with the reader's text size: at an accessibility size "Today" is
+        /// half again as wide as this, and a fixed frame would truncate the
+        /// one row the strip names in words. The column still lines up at
+        /// every size that fits, which is every size the alignment was for.
         static let dayWidth: CGFloat = 52
-        /// Wide enough for "100%", so a dry day and a wet one put the
-        /// temperatures in the same place.
+        /// Wide enough for "100%", a minimum for the reason ``dayWidth`` is.
         static let chanceWidth: CGFloat = 38
         static let spacing: CGFloat = 10
     }
@@ -771,7 +776,14 @@ extension WeatherDetailView {
     /// existed, and a provider with no daily data for the point.
     @ViewBuilder
     private func daysSection(_ days: [WeatherDaySummary]) -> some View {
-        if !days.isEmpty {
+        // Trimmed again here, and not because the mapping forgot to. That one
+        // trims the *response*; ``WeatherManager`` then expires nothing, so
+        // the reading restored from last night's blob — or the one the cache
+        // carried across midnight with the app in a rucksack — still begins
+        // on a day that has gone. Drawn as-is it opens on yesterday's
+        // weekday, with no row saying *Today* under it.
+        let upcoming = WeatherDaySummary.upcoming(in: days, asOf: .now)
+        if !upcoming.isEmpty {
             // No identifier on the `Section` itself, which is what the
             // daylight section above does and is a trap here: an
             // `accessibilityIdentifier` on a container propagates down and
@@ -779,7 +791,7 @@ extension WeatherDetailView {
             // to the section's name and none to its own. The rows are what a
             // test looks for, so the rows are what is named.
             Section("Next days") {
-                ForEach(days) { day in
+                ForEach(upcoming) { day in
                     dayRow(day)
                 }
             }
@@ -790,7 +802,7 @@ extension WeatherDetailView {
         HStack(spacing: Self.DayStrip.spacing) {
             Text(Self.weekday(day.date))
                 .font(.subheadline.weight(.medium))
-                .frame(width: Self.DayStrip.dayWidth, alignment: .leading)
+                .frame(minWidth: Self.DayStrip.dayWidth, alignment: .leading)
             Image(systemName: day.symbolName)
                 .symbolRenderingMode(.multicolor)
                 .font(.body)
@@ -804,7 +816,7 @@ extension WeatherDetailView {
             )
             .font(.caption)
             .foregroundStyle(.tint)
-            .frame(width: Self.DayStrip.chanceWidth, alignment: .leading)
+            .frame(minWidth: Self.DayStrip.chanceWidth, alignment: .leading)
             Spacer(minLength: 0)
             Text(WeatherReadingFormat.temperature(day.highTemperature, width: .narrow))
                 .font(.subheadline.weight(.medium))

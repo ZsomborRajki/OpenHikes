@@ -54,6 +54,26 @@ struct WeatherDailyForecastTests {
         }
     }
 
+    /// The same week, dated through a `Calendar` — see
+    /// ``yesterdayIsDroppedOnTheWayToTheScreen()`` for why a flat day is not
+    /// good enough where the assertion is about calendar days.
+    private func calendarDays(_ count: Int, from start: Date) throws -> [WeatherDaySummary] {
+        let calendar = Calendar.autoupdatingCurrent
+        return try (0..<count).map { offset in
+            let date = try #require(calendar.date(byAdding: .day, value: offset, to: start))
+            return WeatherDaySummary(
+                date: date,
+                symbolName: "cloud.sun.fill",
+                highTemperature: Measurement(
+                    value: Double(offset) + 10,
+                    unit: UnitTemperature.celsius
+                ),
+                lowTemperature: Measurement(value: Double(offset), unit: UnitTemperature.celsius),
+                precipitationChance: 0
+            )
+        }
+    }
+
     private func makeDefaults() throws -> UserDefaults {
         try #require(UserDefaults(suiteName: "weather-daily-\(UUID().uuidString)"))
     }
@@ -168,6 +188,56 @@ struct WeatherDailyForecastTests {
         let day = try #require(restored.snapshot.days.first)
         #expect(abs(day.highTemperature.converted(to: .celsius).value - 20) < 0.001)
         #expect(abs(day.lowTemperature.converted(to: .celsius).value - 10) < 0.001)
+    }
+
+    /// The reading is filtered on the way *out* as well as on the way in,
+    /// and this is the case that needs it: nothing in ``WeatherManager``
+    /// expires, so a blob written last night is drawn this morning exactly as
+    /// it was stored. Trimmed only at the fetch, its first row is yesterday.
+    ///
+    /// Built through a `Calendar` rather than through ``days(_:from:)``,
+    /// which adds a flat 86,400 seconds: anchored to a real midnight, that
+    /// helper puts two rows on one calendar day the morning the clocks go
+    /// forward, and this test is about which calendar day a row falls on.
+    @Test("a week stored yesterday no longer opens on yesterday")
+    func yesterdayIsDroppedOnTheWayToTheScreen() throws {
+        let calendar = Calendar.autoupdatingCurrent
+        let yesterday = try #require(
+            calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: .now))
+        )
+        let week = try calendarDays(WeatherDailyPolicy.horizon, from: yesterday)
+
+        let drawn = WeatherDaySummary.upcoming(in: week, asOf: .now)
+        #expect(drawn.count == week.count - 1)
+        #expect(
+            !drawn.contains { calendar.isDate($0.date, inSameDayAs: yesterday) },
+            "a day that has ended is not a day to walk on"
+        )
+        let first = try #require(drawn.first)
+        #expect(
+            calendar.isDateInToday(first.date),
+            "the strip opens on the day in progress, which the sheet names Today"
+        )
+    }
+
+    /// The day in progress is the one the strip exists to keep, so the filter
+    /// runs to the end of it rather than to its start.
+    @Test("the day in progress survives until it actually ends")
+    func todaySurvivesUntilMidnight() throws {
+        let calendar = Calendar.autoupdatingCurrent
+        let today = calendar.startOfDay(for: .now)
+        let midnight = try #require(calendar.date(byAdding: .day, value: 1, to: today))
+        let lateTonight = try #require(calendar.date(byAdding: .minute, value: -1, to: midnight))
+
+        let week = try calendarDays(2, from: today)
+        #expect(
+            WeatherDaySummary.upcoming(in: week, asOf: lateTonight).count == 2,
+            "a minute before midnight, today has not gone yet"
+        )
+        #expect(
+            WeatherDaySummary.upcoming(in: week, asOf: midnight).count == 1,
+            "and at midnight it has"
+        )
     }
 
     /// The horizon is the decision the issue was filed about: WeatherKit's ten
