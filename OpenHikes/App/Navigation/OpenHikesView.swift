@@ -84,9 +84,9 @@ struct OpenHikesView: View {
     /// is a push into the stack this view owns. See ``DrawnRouteTap``.
     @State var drawnRouteTap = DrawnRouteTap()
     /// Raised by the map's refused "my location" button, presented by
-    /// ``LocationAccessAlert`` in the background below. Owned here because the
-    /// map raising it and the alert presenting it are on opposite sides of
-    /// this view, and nothing between them can hold state.
+    /// ``MapScreenAlerts`` on the sheet's contents. Owned here because the map
+    /// raising it and the alert presenting it are on opposite sides of this
+    /// view, and nothing between them can hold state.
     @State var locationAccessPrompt = LocationAccessPrompt()
     /// Which screen a photo would be filed under. Owned here because the map's
     /// camera pill and the screens that offer it live on opposite sides of the
@@ -225,6 +225,13 @@ struct OpenHikesView: View {
                 onPicked: attachPickedPhotos
             )
             .weatherDetailSheet(weatherDetail, weather: appModel.weatherManager)
+            .mapScreenAlerts(
+                importFailure: $importFailure,
+                searchFailure: $searchFailure,
+                startupIssue: showingStorageStartupIssue,
+                locationAccess: locationAccessPrompt.isShowingBinding,
+                photoCapture: $photoPresentation
+            )
     }
 
     var body: some View {
@@ -300,12 +307,6 @@ struct OpenHikesView: View {
             // moves back in. See ``SheetLayoutReader``.
             .background {
                 SheetLayoutReader(presentation: sheet, metrics: sheetMetrics)
-                // Draws nothing either, and is here rather than on
-                // `mapSurface` for the same reason: presenting the alert from
-                // this body would re-render the map, the sheet and every
-                // control on them to put a box over them. See
-                // ``LocationAccessAlert``.
-                LocationAccessAlert(prompt: locationAccessPrompt)
             }
     }
 
@@ -446,36 +447,7 @@ struct OpenHikesView: View {
             .onChange(of: usesSidePanel) { _, isPanel in
                 showSheet = !isPanel
             }
-            // Presented from here rather than from the sheet: the document
-            // picker's dismissal tears the sheet down (see above), and an alert
-            // owned by a view that's being rebuilt at that moment doesn't
-            // reliably appear.
-            .alert(isPresented: showingImportFailure, error: importFailure) {
-                Button("OK", role: .cancel) { /* dismiss */ }
-            }
-            // Here for the same reason as the import failure above, and
-            // because a silent search is indistinguishable from a broken one.
-            .alert(isPresented: showingSearchFailure, error: searchFailure) {
-                Button("OK", role: .cancel) { /* dismiss */ }
-            }
-            .alert(
-                "Saved Hikes Unavailable",
-                isPresented: showingStorageStartupIssue
-            ) {
-                Button("OK", role: .cancel) { /* dismiss */ }
-            } message: {
-                Text(
-                    "OpenHikes couldn't open its saved hikes. " +
-                    "This launch is using temporary storage, so changes won't survive a relaunch. " +
-                    "Existing data was left untouched."
-                )
-            }
             .onOpenURL { url in openInboundURL(url) }
-            .photoCaptureAlerts($photoPresentation)
-            // The pill posts a token; flipping the presentation flags is this
-            // view's job because it owns `photoPresentation`. The pickers
-            // themselves hang off `MapSheet` above — a modal attached beside a
-            // sheet that is never dismissed is never presented at all.
             // An intent asked for a hike, from outside the view tree. Handed
             // to the same router the widget's taps go through rather than a
             // second way in — see ``HikeOpenRequests``.
@@ -483,6 +455,11 @@ struct OpenHikesView: View {
                 guard let url = appModel.hikeOpenRequests.link else { return }
                 openInboundURL(url)
             }
+            // The pill posts a token; flipping the presentation flags is this
+            // view's job because it owns `photoPresentation`. The pickers and
+            // the alerts that report what they couldn't do both hang off
+            // `mapSheet()` above — a modal attached beside a sheet that is
+            // never dismissed is never presented at all.
             .onChange(of: photoCapture.cameraRequest) { _, _ in
                 Task { await presentCamera() }
             }
@@ -810,30 +787,14 @@ private struct SelectedHikeState: Equatable {
 }
 
 private extension OpenHikesView {
-    /// `.alert(isPresented:error:)` wants a `Bool`; the message lives in
-    /// ``importFailure``, so dismissal clears that rather than a second flag
-    /// the two could disagree on. See `presenceBinding(for:)`.
-    var showingImportFailure: Binding<Bool> {
-        presenceBinding(for: $importFailure)
-    }
-
-    var showingSearchFailure: Binding<Bool> {
-        presenceBinding(for: $searchFailure)
-    }
-
+    /// Whether this launch is on temporary storage. The alert's dismissal
+    /// clears the model's own issue rather than a second flag the two could
+    /// disagree on — the same arrangement ``MapScreenAlerts`` uses for the
+    /// two failures it owns a value for.
     var showingStorageStartupIssue: Binding<Bool> {
         Binding(
             get: { appModel.startupIssue != nil },
             set: { if !$0 { appModel.startupIssue = nil } }
-        )
-    }
-
-    /// Presents while `error` holds something, and clears it on dismissal, so
-    /// there is never a second flag the two could disagree on.
-    func presenceBinding<E>(for error: Binding<E?>) -> Binding<Bool> {
-        Binding(
-            get: { error.wrappedValue != nil },
-            set: { if !$0 { error.wrappedValue = nil } }
         )
     }
 }

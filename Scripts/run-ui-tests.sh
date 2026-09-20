@@ -13,6 +13,7 @@ bundle="OpenHikesUITests"
 # Every functional class in the bundle.
 suites=(
   OpenHikesUITests
+  MapScreenAlertUITests
   OrientationUITests
   RecordingUITests
   WalkUITests

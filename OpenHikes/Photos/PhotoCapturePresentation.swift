@@ -77,9 +77,10 @@ extension View {
 
     /// Attaches the alerts that report what the pickers couldn't do.
     ///
-    /// Belongs on the root view rather than on the sheet: an alert owned by a
-    /// view that is being rebuilt does not reliably appear, and the sheet is
-    /// rebuilt on every navigation.
+    /// Attached to the sheet's contents beside the pickers themselves, and for
+    /// the same reason — an alert is a presentation like any other, and the
+    /// root view is already presenting the sheet. See ``MapScreenAlerts``,
+    /// which is where this one is called from, for the two ways that failed.
     func photoCaptureAlerts(_ state: Binding<PhotoCaptureState>) -> some View {
         modifier(PhotoCaptureAlerts(state: state))
     }
