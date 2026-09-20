@@ -174,40 +174,18 @@ struct CommunityPhotoViewer: View {
     /// why ``PhotoUITests`` asks for `app.buttons["Next photo"]`.
     private var controls: some View {
         GlassStack(spacing: 6) {
-            HStack(spacing: 6) {
-                stepButton(
-                    systemImage: "chevron.left",
-                    label: "Previous photo",
-                    identifier: "community-previous-photo-button",
-                    offset: -1
-                )
-                stepButton(
-                    systemImage: "chevron.right",
-                    label: "Next photo",
-                    identifier: "community-next-photo-button",
-                    offset: 1
-                )
-            }
+            PhotoStepControls(
+                previousIdentifier: "community-previous-photo-button",
+                nextIdentifier: "community-next-photo-button",
+                // This gallery's own question about its own list.
+                hasDestination: { destination(by: $0) != nil },
+                step: { step(by: $0) }
+            )
         }
         .padding(.bottom, 20)
-        .opacity(photos.count > 1 ? 1 : 0)
-        .accessibilityHidden(photos.count <= 1)
-    }
-
-    private func stepButton(
-        systemImage: String,
-        label: LocalizedStringKey,
-        identifier: String,
-        offset: Int
-    ) -> some View {
-        PhotoStepButton(
-            systemImage: systemImage,
-            label: label,
-            identifier: identifier,
-            // This gallery's own question about its own list.
-            hasDestination: destination(by: offset) != nil,
-            step: { step(by: offset) }
-        )
+        // On the pill rather than on the pair, so an empty glass capsule is
+        // not left behind on a gallery of one.
+        .photoStepVisibility(count: photos.count)
     }
 
     @ToolbarContentBuilder
