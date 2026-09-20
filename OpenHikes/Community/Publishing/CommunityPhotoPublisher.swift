@@ -42,14 +42,6 @@ import Foundation
 import os
 import SwiftData
 
-/// What one attempt to contribute photographs did.
-enum CommunityPhotoOutcome: Equatable {
-    case refused(CommunityFailure)
-    /// Accepted. Not the same as published: a person still has to look at
-    /// them. See ``CommunityContributionCheck``.
-    case submitted
-}
-
 /// Everything read off the `@Model` before any suspension, in one value that
 /// can cross to the encoding executor.
 ///
@@ -103,7 +95,7 @@ nonisolated enum CommunityPhotoPublisher {
         excludingPhotos excluded: Set<UUID> = [],
         store: HikePhotoStore = .shared,
         save: (ModelContext) throws -> Void = { try $0.save() }
-    ) async -> CommunityPhotoOutcome {
+    ) async -> CommunitySendOutcome {
         let details = ContributedPhotoDetails(
             hikeID: hike.id,
             target: target,
