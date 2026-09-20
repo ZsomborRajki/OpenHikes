@@ -415,4 +415,75 @@ nonisolated final class OpenHikesUITests: XCTestCase {
     /// the same reading in Fahrenheit.
     private static let stubbedWeatherCondition = "Partly Cloudy"
     private static let stubbedWeatherUnit = "degrees"
+    /// Enough swipes to reach the day strip from the top of the reading, with
+    /// room for the alert section that a fixture with a warning would add
+    /// above it.
+    private static let dayStripSwipes = 6
+}
+
+// MARK: - The week ahead
+
+/// The day strip's test, in a same-file extension rather than in the class
+/// above, which sits at `type_body_length`'s 300 lines. The rule excludes
+/// extensions deliberately; see the *Lint* section of the instructions file.
+extension OpenHikesUITests {
+    /// The week the sheet was carrying all along.
+    ///
+    /// Ten days of `.daily` arrived on every fetch and nine were dropped, so
+    /// the app could say what the weather is doing now and could not answer
+    /// the question a hiker brings to a hiking app, which is which day this
+    /// week to walk. The strip is that data drawn.
+    ///
+    /// **Scrolled to before it is waited on, not after.** The strip sits below
+    /// the readings deliberately — see ``daysSection(_:)`` — and `List` builds
+    /// rows lazily, so below the fold is absent from the element tree rather
+    /// than merely off screen: a `waitForExistence` there waits out its whole
+    /// timeout on a section that is drawn correctly. Swiping and re-asking is
+    /// the wait.
+    ///
+    /// **And swiped on the list rather than through ``scrollIntoView(_:in:
+    /// attempts:)``**, which asks ``scrollContainer(in:)`` for a container and
+    /// is handed the first `ScrollView` on the screen. On this sheet that is
+    /// the hourly strip, which scrolls *sideways*: swiping up on it moves
+    /// nothing, and the element goes stale as the strip re-renders. The
+    /// failure reads "Failed to swipe up weather-detail-hourly ScrollView",
+    /// which names the strip rather than the mistake.
+    ///
+    /// What the row says is the assertion. The horizon is covered by
+    /// `WeatherDailyForecastTests`, where it is a number rather than a count
+    /// of what a collection view happens to be keeping in memory.
+    @MainActor
+    func testTheWeatherSheetCarriesTheWeekAhead() {
+        let app = launchApp(arguments: ["--ui-test-weather"])
+
+        tapWhenReady(element("weather-badge", in: app))
+        XCTAssertTrue(
+            element("weather-detail-conditions", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "tapping the badge should open the reading it came from"
+        )
+
+        let list = app.collectionViews.firstMatch
+        XCTAssertTrue(
+            list.waitForExistence(timeout: UITestTimeout.existence),
+            "the reading should be drawn in a list"
+        )
+        let firstDay = element("weather-detail-day", in: app)
+        for _ in 0..<Self.dayStripSwipes where !isReachable(firstDay, in: app) {
+            list.swipeUp()
+        }
+        XCTAssertTrue(
+            isReachable(firstDay, in: app),
+            "the sheet should carry a daily forecast below the reading"
+        )
+        XCTAssertEqual(
+            firstDay.label,
+            "Today",
+            "the strip keeps the day in progress, and names it rather than dating it"
+        )
+        XCTAssertTrue(
+            (firstDay.value as? String)?.contains("High") ?? false,
+            "a day row should say the range the day will reach, not just its sky"
+        )
+    }
 }

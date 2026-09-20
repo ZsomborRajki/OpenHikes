@@ -109,11 +109,16 @@ struct WeatherDetailView: View {
         static let columnSpacing: CGFloat = 18
         static let columnWidth: CGFloat = 44
         static let rowSpacing: CGFloat = 6
-        /// Below this the chance of rain is not worth a row of its own: it
-        /// rounds to nothing, and a column of "0%" under every dry hour is
-        /// noise where the point of the strip is to make a wet hour visible.
-        static let precipitationFloor = 0.05
     }
+
+    /// Below this the chance of rain is not worth drawing: it rounds to
+    /// nothing, and a "0%" against every dry hour and every dry day is noise
+    /// where the point of both strips is to make the wet one visible.
+    ///
+    /// One threshold rather than two, because it is one editorial decision —
+    /// and two would be a pair of numbers that agree until somebody changes
+    /// the wrong one.
+    private static let precipitationFloor = 0.05
 
     let weather: WeatherManager
 
@@ -155,6 +160,7 @@ struct WeatherDetailView: View {
                     // is a statement about the day, and so is the freshness
                     // section below it.
                     daylightSection(snapshot.daylight)
+                    daysSection(snapshot.days)
                     // The *absence* of an alert, which is a footnote rather
                     // than news and so sits here rather than at the top.
                     alertStatusSection(snapshot.alerts)
@@ -277,9 +283,9 @@ struct WeatherDetailView: View {
             .font(.subheadline.weight(.medium))
             // Drawn only where there is something to say, and reserved
             // either way so the glyphs above stay on one line across the
-            // strip — see ``HourStrip/precipitationFloor``.
+            // strip — see ``precipitationFloor``.
             Text(
-                hour.precipitationChance >= Self.HourStrip.precipitationFloor
+                hour.precipitationChance >= Self.precipitationFloor
                     ? WeatherReadingFormat.percentage(hour.precipitationChance)
                     : " "
             )
@@ -297,7 +303,7 @@ struct WeatherDetailView: View {
     /// hearing "zero percent" for every dry hour learns nothing twelve times.
     private static func spokenHour(_ hour: WeatherHourSummary) -> String {
         let temperature = WeatherReadingFormat.temperature(hour.temperature, width: .wide)
-        guard hour.precipitationChance >= HourStrip.precipitationFloor else { return temperature }
+        guard hour.precipitationChance >= precipitationFloor else { return temperature }
         let chance = WeatherReadingFormat.percentage(hour.precipitationChance)
         return String(localized: "\(temperature), \(chance) chance of precipitation")
     }
@@ -720,6 +726,148 @@ private extension WeatherDetailView {
             value: WeatherReadingFormat.precipitation(conditions.precipitationIntensity),
             systemImage: "cloud.rain"
         )
+    }
+}
+
+// MARK: - The week ahead
+
+/// The day strip, in a same-file extension rather than in the type above.
+///
+/// `WeatherDetailView` sits at `type_body_length`'s 300 lines, and an
+/// extension is the way out that keeps the code where a reader looks for it —
+/// the rule excludes extensions deliberately, and this one is four members
+/// about one section. See the *Lint* section of the instructions file.
+extension WeatherDetailView {
+    /// The day strip's own measurements, named for the reason
+    /// ``HourStrip``'s are.
+    private enum DayStrip {
+        /// Wide enough for the longest abbreviated weekday a locale is likely
+        /// to hand back, so the glyphs beside them line up down the section
+        /// rather than stepping in and out with the day's name.
+        static let dayWidth: CGFloat = 52
+        /// Wide enough for "100%", so a dry day and a wet one put the
+        /// temperatures in the same place.
+        static let chanceWidth: CGFloat = 38
+        static let spacing: CGFloat = 10
+    }
+
+    /// The week ahead — see ``WeatherDaySummary``.
+    ///
+    /// **Not under the hourly strip, which is where it was asked for.** The
+    /// comment on ``daylightSection(_:)``'s placement is the reason: `List`
+    /// builds rows lazily, past the fold is absent from the element tree, and
+    /// a section inserted above the readings pushes the wind row off the first
+    /// screenful of a sheet at its middle detent. Here the sections read in
+    /// order of how far ahead they look — the next hours, now, today, the week
+    /// — which is the order the questions are asked in anyway.
+    ///
+    /// Rows rather than a horizontal strip, unlike the hours. Seven fit down a
+    /// sheet without scrolling, the comparison being made is between days
+    /// rather than along a timeline, and a row has somewhere to put a high and
+    /// a low without stacking four figures in a column.
+    ///
+    /// `@ViewBuilder` for the reason ``hourlySection(_:)`` is one, and empty
+    /// for the same two: a reading restored from a blob written before this
+    /// existed, and a provider with no daily data for the point.
+    @ViewBuilder
+    private func daysSection(_ days: [WeatherDaySummary]) -> some View {
+        if !days.isEmpty {
+            // No identifier on the `Section` itself, which is what the
+            // daylight section above does and is a trap here: an
+            // `accessibilityIdentifier` on a container propagates down and
+            // takes the rows' own identifiers with it, so every day answered
+            // to the section's name and none to its own. The rows are what a
+            // test looks for, so the rows are what is named.
+            Section("Next days") {
+                ForEach(days) { day in
+                    dayRow(day)
+                }
+            }
+        }
+    }
+
+    private func dayRow(_ day: WeatherDaySummary) -> some View {
+        HStack(spacing: Self.DayStrip.spacing) {
+            Text(Self.weekday(day.date))
+                .font(.subheadline.weight(.medium))
+                .frame(width: Self.DayStrip.dayWidth, alignment: .leading)
+            Image(systemName: day.symbolName)
+                .symbolRenderingMode(.multicolor)
+                .font(.body)
+            // Drawn only where there is something to say, and reserved either
+            // way so the temperatures stay in one column down the section —
+            // see ``precipitationFloor``.
+            Text(
+                day.precipitationChance >= Self.precipitationFloor
+                    ? WeatherReadingFormat.percentage(day.precipitationChance)
+                    : " "
+            )
+            .font(.caption)
+            .foregroundStyle(.tint)
+            .frame(width: Self.DayStrip.chanceWidth, alignment: .leading)
+            Spacer(minLength: 0)
+            Text(WeatherReadingFormat.temperature(day.highTemperature, width: .narrow))
+                .font(.subheadline.weight(.medium))
+            Text(WeatherReadingFormat.temperature(day.lowTemperature, width: .narrow))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        // A day, a sky and a range are one fact about one day — the shape
+        // ``hourColumn(_:)`` and ``DetailRow`` both take.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.spokenWeekday(day.date))
+        .accessibilityValue(Self.spokenDay(day))
+        // The same identifier on every row, so a test can count them: the
+        // horizon is the decision this section was filed about, and a strip
+        // quietly drawing ten days again is the regression worth catching.
+        .accessibilityIdentifier("weather-detail-day")
+    }
+
+    /// The day's name as the row draws it, or "Today" for the day in progress.
+    ///
+    /// The word rather than the weekday for today, because the strip keeps the
+    /// day in progress and "Sat" in the first row of a forecast read on
+    /// Saturday afternoon is a question rather than an answer.
+    ///
+    /// Abbreviated below that: seven full weekday names down a sheet is a
+    /// column of text where the point is the numbers beside it.
+    private static func weekday(_ date: Date) -> String {
+        Self.today(date) ?? date.formatted(.dateTime.weekday(.abbreviated))
+    }
+
+    /// The same day, spelled out, which is what the row is called aloud.
+    ///
+    /// The abbreviation is a layout decision and nothing else: VoiceOver
+    /// reading "Sat" is the screen's shorthand read back rather than the day
+    /// it stands for, and a reader stepping down seven rows is the one person
+    /// here with no column of numbers to line it up against.
+    private static func spokenWeekday(_ date: Date) -> String {
+        Self.today(date) ?? date.formatted(.dateTime.weekday(.wide))
+    }
+
+    /// "Today" when `date` falls on it, and `nil` otherwise — the one word
+    /// both spellings of a weekday share.
+    private static func today(_ date: Date) -> String? {
+        guard Calendar.autoupdatingCurrent.isDateInToday(date) else { return nil }
+        return String(localized: "Today", comment: "The first row of the daily forecast")
+    }
+
+    /// What one day says out loud.
+    ///
+    /// The weekday is already the row's label, so this is the forecast
+    /// itself: the range, and the chance of rain only where the strip draws it
+    /// — a reader hearing "zero percent" on every dry day learns nothing seven
+    /// times, which is the rule ``spokenHour(_:)`` keeps.
+    private static func spokenDay(_ day: WeatherDaySummary) -> String {
+        let high = WeatherReadingFormat.temperature(day.highTemperature, width: .wide)
+        let low = WeatherReadingFormat.temperature(day.lowTemperature, width: .wide)
+        let range = String(
+            localized: "High \(high), low \(low)",
+            comment: "A day's forecast range, spoken"
+        )
+        guard day.precipitationChance >= precipitationFloor else { return range }
+        let chance = WeatherReadingFormat.percentage(day.precipitationChance)
+        return String(localized: "\(range), \(chance) chance of precipitation")
     }
 }
 

@@ -77,6 +77,25 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
     /// is to draw no strip. Unlike ``conditions``, an absent strip does not
     /// make the reading wrong, so it does not fail the decode.
     let hourly: [WeatherHourSummary]
+    /// The week ahead, from the same response — see ``WeatherDaySummary``.
+    ///
+    /// **Empty rather than optional, which is ``hourly``'s treatment and
+    /// deliberately not ``daylight``'s.** The worry that argues for an
+    /// optional is real: `.daily` was in the request before anything read more
+    /// than its first day, so a blob written by one of those builds carries no
+    /// week, and that is not the same fact as a provider with no daily
+    /// forecast for the point. It is answered by the reset policy rather than
+    /// by a third state — the stored field is non-optional, so such a blob
+    /// fails to decode once and is replaced seconds after launch rather than
+    /// being read as an answer about the weather. See ``WeatherReadingStore``,
+    /// whose header calls that the whole cost of adding a field.
+    ///
+    /// An optional would buy nothing here anyway. ``daylight`` is optional
+    /// because *absent* and *present with no sunset* are different things a
+    /// reader can see; `nil` and `[]` are not, because the only code that
+    /// reads this asks one question of it, which is whether there are rows to
+    /// draw.
+    let days: [WeatherDaySummary]
     /// The day's light and its temperature range — see ``WeatherDaylight``.
     ///
     /// **Optional, where ``conditions`` is not and ``hourly`` is empty-but-
@@ -108,6 +127,7 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
         capturedAt: Date,
         conditions: WeatherConditions,
         hourly: [WeatherHourSummary] = [],
+        days: [WeatherDaySummary] = [],
         daylight: WeatherDaylight? = nil,
         alerts: WeatherAlerts? = nil
     ) {
@@ -117,6 +137,7 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
         self.capturedAt = capturedAt
         self.conditions = conditions
         self.hourly = hourly
+        self.days = days
         self.daylight = daylight
         self.alerts = alerts
     }
@@ -124,6 +145,7 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
     init(
         _ weather: CurrentWeather,
         hourly: [WeatherHourSummary] = [],
+        days: [WeatherDaySummary] = [],
         daylight: WeatherDaylight? = nil,
         alerts: WeatherAlerts? = nil
     ) {
@@ -134,6 +156,7 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
             capturedAt: weather.metadata.date,
             conditions: WeatherConditions(weather),
             hourly: hourly,
+            days: days,
             daylight: daylight,
             alerts: alerts
         )
@@ -169,6 +192,57 @@ extension WeatherHourSummary {
                     symbolName: hour.symbolName,
                     temperature: hour.temperature,
                     precipitationChance: hour.precipitationChance
+                )
+            }
+    }
+}
+
+extension WeatherDaySummary {
+    /// The one place WeatherKit's daily shape is read as a forecast.
+    ///
+    /// The other reader of `.daily` is ``WeatherDaylight``, which takes one
+    /// day's sun out of the same ten. They are deliberately separate: that one
+    /// answers *when does the light go today*, which is a fact about the
+    /// reading, and this one answers *which day should I walk*, which is a
+    /// fact about the week. Folding them together would make the daylight
+    /// section depend on how many days the strip happens to keep.
+    ///
+    /// `nonisolated` for the reason ``WeatherHourSummary``'s own mapping is:
+    /// the caller is a nonisolated initializer on a value that has to cross
+    /// actors.
+    ///
+    /// **Trimmed to ``WeatherDailyPolicy/horizon`` here rather than at the
+    /// screen**, because everything downstream stores what it is given, and
+    /// `.daily` answers with ten days that would otherwise be written to
+    /// `UserDefaults` on every successful fetch.
+    ///
+    /// **The day in progress is kept.** A hiker reading this at four o'clock
+    /// is still deciding about this evening, and dropping today would put
+    /// tomorrow in the row their eye lands on first. Days already gone are
+    /// dropped, which only ever happens to a stored reading: `.daily` begins
+    /// at today, and `start` is the reading's own timestamp, so a blob
+    /// restored the morning after it was written does not draw yesterday.
+    ///
+    /// Compared through a `Calendar` rather than by arithmetic on `date`, for
+    /// the reason ``WeatherDaylight``'s own mapping gives: "the same day" is a
+    /// question only a calendar can answer, and a week of a real forecast
+    /// crosses a daylight-saving boundary twice a year.
+    nonisolated static func summaries(
+        from forecast: Forecast<DayWeather>,
+        notBefore start: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> [Self] {
+        let firstDay = calendar.startOfDay(for: start)
+        return forecast
+            .filter { calendar.startOfDay(for: $0.date) >= firstDay }
+            .prefix(WeatherDailyPolicy.horizon)
+            .map { day in
+                Self(
+                    date: day.date,
+                    symbolName: day.symbolName,
+                    highTemperature: day.highTemperature,
+                    lowTemperature: day.lowTemperature,
+                    precipitationChance: day.precipitationChance
                 )
             }
     }
@@ -471,9 +545,10 @@ final class WeatherManager {
         do {
             // One round trip, four datasets. `weather(for:including:)` is
             // variadic and answers all of them from the same request, so the
-            // strip, the daylight row and the alerts cost what the badge was
-            // already spending — see ``WeatherHourSummary``,
-            // ``WeatherDaylight`` and ``WeatherAlerts``.
+            // strip, the week, the daylight row and the alerts cost what the
+            // badge was already spending — see ``WeatherHourSummary``,
+            // ``WeatherDaySummary``, ``WeatherDaylight`` and
+            // ``WeatherAlerts``.
             let (reading, forecast, daily, alerts) = try await service.weather(
                 for: location,
                 including: .current,
@@ -487,10 +562,17 @@ final class WeatherManager {
                     from: forecast,
                     notBefore: reading.metadata.date
                 ),
-                // Against the reading's own date rather than `Date.now`, for
-                // the reason ``WeatherSnapshot/capturedAt`` gives: WeatherKit
-                // serves cached payloads, and a response that arrives at
-                // 00:05 may be a reading taken yesterday.
+                // The next two are the same ten days read twice: the week a
+                // walk is chosen from, and the one day's sun that ends the
+                // walk already chosen. Both are anchored against the reading's
+                // own date rather than `Date.now`, for the reason
+                // ``WeatherSnapshot/capturedAt`` gives: WeatherKit serves
+                // cached payloads, and a response that arrives at 00:05 may be
+                // a reading taken yesterday.
+                days: WeatherDaySummary.summaries(
+                    from: daily,
+                    notBefore: reading.metadata.date
+                ),
                 daylight: WeatherDaylight.forDay(
                     of: reading.metadata.date,
                     in: daily
@@ -618,6 +700,7 @@ extension WeatherSnapshot {
             capturedAt: .now,
             conditions: .preview,
             hourly: WeatherHourSummary.previewStrip,
+            days: WeatherDaySummary.previewWeek,
             daylight: .uiTestFixture
         )
     }
