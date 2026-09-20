@@ -57,6 +57,9 @@ struct SettingsView: View {
     /// here reads the manifests — this screen both measures and deletes by them.
     let autoSave: AutoSaveController
     let backgroundTracker: BackgroundTrailTracker
+    /// Only for the authorization it reports — see
+    /// ``BackgroundTrackingSection``.
+    let locationManager: LocationManager
     /// The community authors this device has blocked. Drawn by
     /// ``BlockedHikersSection``, which is absent while the list is empty.
     let blocks: CommunityBlockList
@@ -65,8 +68,6 @@ struct SettingsView: View {
 
     @AppStorage(SettingsKey.tileProviderID)
     private var tileProviderID = TileProvider.default.id
-    @AppStorage(SettingsKey.backgroundTrackingEnabled)
-    private var backgroundTrackingEnabled = false
     @AppStorage(SettingsKey.liveActivitiesEnabled)
     private var liveActivitiesEnabled = SettingsDefault.liveActivitiesEnabled
     @AppStorage(SettingsKey.savePhotosToLibrary)
@@ -121,7 +122,10 @@ struct SettingsView: View {
                 mapProviderSection
                 photosSection
                 healthSection
-                backgroundTrackingSection
+                BackgroundTrackingSection(
+                    tracker: backgroundTracker,
+                    locationManager: locationManager
+                )
                 liveActivitySection
                 movementReminderSection
                 displaySection
@@ -245,54 +249,6 @@ struct SettingsView: View {
     }
 
     // MARK: Photos
-
-    // MARK: Background tracking
-
-    /// iOS-only: this is what feeds the Home Screen widget and the Live
-    /// Activity while OpenHikes isn't open. Off by default — turning it
-    /// on is what first triggers the system's Always-location prompt.
-    ///
-    /// **The footer and `NSLocationAlwaysAndWhenInUseUsageDescription` say the
-    /// same thing on purpose**, and both name both surfaces. That string is
-    /// the whole of what App Review reads about Always access — see *Notes for
-    /// App Review* in `APP_REVIEW.md` — and a switch whose own description
-    /// claimed less than the prompt would be the app disagreeing with itself
-    /// in the one place a reviewer compares the two.
-    @ViewBuilder private var backgroundTrackingSection: some View {
-        #if os(iOS)
-        Section {
-            Toggle("Background Trail Tracking", isOn: backgroundTrackingBinding)
-            if backgroundTrackingEnabled, UIApplication.shared.backgroundRefreshStatus != .available {
-                Label(
-                    "Background App Refresh is off, so this may not update while OpenHikes is closed.",
-                    systemImage: "exclamationmark.triangle"
-                )
-                .font(.caption)
-                .foregroundStyle(.orange)
-            }
-        } header: {
-            Text("Background Tracking")
-        } footer: {
-            Text(
-                """
-                Keeps your Home Screen widget and Live Activity showing your \
-                progress along the selected trail even when OpenHikes isn't \
-                open, using occasional, low-power location updates.
-                """
-            )
-        }
-        #endif
-    }
-
-    private var backgroundTrackingBinding: Binding<Bool> {
-        Binding(
-            get: { backgroundTrackingEnabled },
-            set: { newValue in
-                backgroundTrackingEnabled = newValue
-                backgroundTracker.setEnabled(newValue)
-            }
-        )
-    }
 
     // MARK: Offline
 
@@ -764,6 +720,7 @@ private extension SettingsView {
     return SettingsView(
         autoSave: AutoSaveController(),
         backgroundTracker: BackgroundTrailTracker(container: container),
+        locationManager: LocationManager(),
         blocks: CommunityBlockList(),
         cloudSync: CloudSyncCoordinator(defaults: .standard, isSyncingThisLaunch: false),
         entitlement: MapEntitlementStore(currentEntitlements: { false })

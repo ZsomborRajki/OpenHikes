@@ -72,6 +72,17 @@ final class WatchRecorder: NSObject {
     }
 
     private(set) var phase: Phase = .idle
+
+    /// Whether the hiker has refused this watch location outright.
+    ///
+    /// Starting a *recording* on a refusal already fails out loud — see
+    /// ``requestPermissions()``, which is where the same complaint was
+    /// answered for the button that starts a walk. Following a trail had no
+    /// such moment: ``startFollowingFeed()`` asked for updates that were never
+    /// going to arrive, and the map simply never drew the hiker. The route was
+    /// still worth looking at, so the screen keeps drawing it and says this
+    /// underneath instead.
+    private(set) var isLocationRefused = false
     /// The live figures. A stable object the root never reads — see
     /// ``WatchRecordingStats``.
     let stats = WatchRecordingStats()
@@ -263,6 +274,10 @@ final class WatchRecorder: NSObject {
 
     /// Lets a waiting start go, once there is something to tell it.
     private func authorizationSettled(as status: CLAuthorizationStatus) {
+        // Ahead of the waiter, and outside its guard: a grant answered with no
+        // start waiting on it is exactly the case the caption is for — the
+        // hiker following a trail who went to Settings about it.
+        isLocationRefused = Self.isRefused(status)
         guard status != .notDetermined, let waiter = authorizationWaiter else { return }
         authorizationWaiter = nil
         waiter.resume(returning: status)
@@ -359,10 +374,23 @@ final class WatchRecorder: NSObject {
     /// there.
     func startFollowingFeed() {
         guard !phase.isActive else { return }
-        if locations.authorizationStatus == .notDetermined {
+        let status = locations.authorizationStatus
+        isLocationRefused = Self.isRefused(status)
+        if status == .notDetermined {
             locations.requestWhenInUseAuthorization()
         }
+        // Started even on a refusal, deliberately. It delivers nothing, costs
+        // nothing, and is the one call that makes the feed live the instant a
+        // grant arrives — without it a hiker who fixed this in Settings would
+        // come back to a map that stayed blank until they left the screen and
+        // returned to it.
         locations.startUpdatingLocation()
+    }
+
+    /// `.restricted` counts with `.denied`: from here they are the same, and
+    /// the only place either can change is the watch's own Settings.
+    private static func isRefused(_ status: CLAuthorizationStatus) -> Bool {
+        status == .denied || status == .restricted
     }
 
     func stopFollowingFeed() {

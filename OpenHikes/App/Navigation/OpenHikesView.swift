@@ -83,6 +83,11 @@ struct OpenHikesView: View {
     /// ``photoPins`` is: the line is drawn by MapKit and the screen it opens
     /// is a push into the stack this view owns. See ``DrawnRouteTap``.
     @State var drawnRouteTap = DrawnRouteTap()
+    /// Raised by the map's refused "my location" button, presented by
+    /// ``LocationAccessAlert`` in the background below. Owned here because the
+    /// map raising it and the alert presenting it are on opposite sides of
+    /// this view, and nothing between them can hold state.
+    @State var locationAccessPrompt = LocationAccessPrompt()
     /// Which screen a photo would be filed under. Owned here because the map's
     /// camera pill and the screens that offer it live on opposite sides of the
     /// sheet; see ``PhotoCaptureController``.
@@ -295,6 +300,12 @@ struct OpenHikesView: View {
             // moves back in. See ``SheetLayoutReader``.
             .background {
                 SheetLayoutReader(presentation: sheet, metrics: sheetMetrics)
+                // Draws nothing either, and is here rather than on
+                // `mapSurface` for the same reason: presenting the alert from
+                // this body would re-render the map, the sheet and every
+                // control on them to put a box over them. See
+                // ``LocationAccessAlert``.
+                LocationAccessAlert(prompt: locationAccessPrompt)
             }
     }
 
@@ -316,6 +327,7 @@ struct OpenHikesView: View {
             tileSource: activeTileSource,
             mapController: mapController,
             drawnRouteTap: drawnRouteTap,
+            locationAccessPrompt: locationAccessPrompt,
             photoCapture: photoCapture,
             photoPins: photoPins,
             community: appModel.community,

@@ -23,6 +23,10 @@ extension MapView {
         /// Guards `observeLocation` so `update(_:_:)` — called on every
         /// SwiftUI-driven pass — only starts the location-tracking loop once.
         private var isObservingLocation = false
+        /// The same, for which of the two buttons the capsule is showing — a
+        /// second registration can never be cancelled. See
+        /// ``observeLocationAccess(_:on:)``.
+        var isObservingLocationAccess = false
         var routeID: UUID?
         var routeOverlay: MKPolyline?
         /// The drawn route's points, kept beside the polyline MapKit owns
@@ -120,6 +124,10 @@ extension MapView {
         /// The button inside that capsule, held only to recolour its glyph as
         /// tracking turns on and off — see ``applyTrackingTint(for:)``.
         weak var trackingGlyph: MKUserTrackingButton?
+        /// The one that takes its place when the hiker has refused location —
+        /// see ``MapView/makeRefusedTrackingButton(_:)``. Exactly one of the
+        /// two is ever on screen.
+        weak var refusedTrackingButton: UIButton?
         #endif
 
         weak var sheetMetrics: SheetMetrics?
@@ -249,6 +257,12 @@ extension MapView {
         /// reason ``community`` is: the coordinator outlives nothing and owns
         /// nothing. See ``DrawnRouteTap``.
         weak var drawnRouteTap: DrawnRouteTap?
+
+        /// What the refused "my location" button raises. Weak for the reason
+        /// above, and handed over rather than observed in this direction: the
+        /// map tells it a refused button was tapped and it never tells the map
+        /// anything. See ``LocationAccessPrompt``.
+        weak var locationAccessPrompt: LocationAccessPrompt?
 
         #if canImport(UIKit)
         /// The recognizer that answers a tap on any line drawn here, held so

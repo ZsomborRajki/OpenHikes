@@ -206,6 +206,7 @@ struct MapSheet: View {
             SettingsView(
                 autoSave: appModel.autoSaveController,
                 backgroundTracker: appModel.backgroundTracker,
+                locationManager: appModel.locationManager,
                 blocks: appModel.communityBlocks,
                 cloudSync: appModel.cloudSync,
                 entitlement: appModel.entitlement

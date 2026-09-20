@@ -258,40 +258,6 @@ final class BackgroundTrailTracker: NSObject {
         syncTrailRegion()
     }
 
-    // MARK: Settings toggle
-
-    func setEnabled(_ enabled: Bool) {
-        guard enabled else {
-            monitor.stopSignificantLocationUpdates()
-            // A registered condition outlives the process that added it, so
-            // turning the feature off has to *remove* it rather than merely
-            // stop arming on what it says. Without this the switch left a
-            // standing geofence — and the background launches it buys — behind
-            // a feature the hiker had turned off, which is the one thing a
-            // switch like this must not do.
-            clearTrailRegion()
-            return
-        }
-        if monitor.isAlwaysAuthorized {
-            syncMonitoring(trackingEnabled: true)
-            // The watch, but not the condition: the region is registered by a
-            // selection, and the selection that would have registered this one
-            // happened while the feature was off. The next one re-registers
-            // it, and so does the next launch, which restores the stored
-            // selection. Until then the gate reads `unknown` and arms, which
-            // is the fail-open direction everything else here takes.
-            defaults.set(false, forKey: SettingsKey.trailRegionCleared)
-            startWatchingTrailRegion()
-        } else if monitor.canRequestAlwaysAccess {
-            // Asked for even with no hike selected: the toggle is a standing
-            // preference, and the grant is a trip out of the app the user
-            // shouldn't have to make again the moment they pick a trail. The
-            // answer arrives at `authorizationChanged()`.
-            monitor.requestAlwaysAccess()
-        }
-        // Denied or restricted: nothing to ask and nothing to start.
-    }
-
     // MARK: Selection
 
     /// Called whenever the app's selected hike changes. Snapshots the SwiftData
@@ -1042,32 +1008,6 @@ extension BackgroundTrailTracker {
     }
 }
 
-// MARK: - Telling the walk how far off the line a fix fell
-
-// An extension because the class above is at its `type_body_length` limit;
-// same file, so nothing had to be opened up to reach its members.
-private extension BackgroundTrailTracker {
-    /// Hands one fix's distance from the route to the walk session, which is
-    /// where the off-trail reminder's state machine lives.
-    ///
-    /// Called from **both** feeds and on every fix, matched or not: a fix
-    /// back on the line is what re-arms the reminder, so reporting only the
-    /// misses would tell a hiker once and never again. `nil` means the fix
-    /// could not be matched at all, which is absence of evidence rather than
-    /// evidence of absence — see ``OffTrailWatch``.
-    func reportRouteDistance(
-        hikeID: UUID,
-        offRouteMeters: Double?,
-        at date: Date
-    ) {
-        walkSession?.recordRouteDistance(
-            hikeID: hikeID,
-            offRouteMeters: offRouteMeters,
-            at: date
-        )
-    }
-}
-
 extension BackgroundTrailTracker: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
@@ -1108,6 +1048,50 @@ extension BackgroundTrailTracker: CLLocationManagerDelegate {
 // four conditions behind it sit together rather than beside the state they
 // read.
 extension BackgroundTrailTracker {
+    // MARK: The settings toggle
+
+    /// Turns background tracking on or off, and says what came of it.
+    ///
+    /// `@discardableResult` for the one caller that has nothing to do with the
+    /// answer — turning the feature *off* always settles — rather than as an
+    /// invitation to ignore it. The switch in Settings is the caller that must
+    /// read it: see ``BackgroundTrackingOutcome``.
+    @discardableResult func setEnabled(_ enabled: Bool) -> BackgroundTrackingOutcome {
+        guard enabled else {
+            monitor.stopSignificantLocationUpdates()
+            // A registered condition outlives the process that added it, so
+            // turning the feature off has to *remove* it rather than merely
+            // stop arming on what it says. Without this the switch left a
+            // standing geofence — and the background launches it buys — behind
+            // a feature the hiker had turned off, which is the one thing a
+            // switch like this must not do.
+            clearTrailRegion()
+            return .settled
+        }
+        if monitor.isAlwaysAuthorized {
+            syncMonitoring(trackingEnabled: true)
+            // The watch, but not the condition: the region is registered by a
+            // selection, and the selection that would have registered this one
+            // happened while the feature was off. The next one re-registers
+            // it, and so does the next launch, which restores the stored
+            // selection. Until then the gate reads `unknown` and arms, which
+            // is the fail-open direction everything else here takes.
+            defaults.set(false, forKey: SettingsKey.trailRegionCleared)
+            startWatchingTrailRegion()
+            return .settled
+        }
+        // Denied or restricted: nothing to ask and nothing to start — which
+        // used to be the end of it, and is now the one thing this method
+        // exists to be able to say.
+        guard monitor.canRequestAlwaysAccess else { return .needsSettings }
+        // Asked for even with no hike selected: the toggle is a standing
+        // preference, and the grant is a trip out of the app the user
+        // shouldn't have to make again the moment they pick a trail. The
+        // answer arrives at `authorizationChanged()`.
+        monitor.requestAlwaysAccess()
+        return .awaitingPrompt
+    }
+
     /// Brings monitoring in line with the one condition under which it is
     /// worth having armed.
     ///
