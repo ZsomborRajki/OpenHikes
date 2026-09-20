@@ -117,6 +117,49 @@ final class LocationManager: NSObject {
     nonisolated deinit { /* intentionally empty */ }
 
     private(set) var coordinate: CLLocationCoordinate2D?
+
+    /// What CoreLocation currently allows this app, as the app's own
+    /// observable state.
+    ///
+    /// Observable because a refusal used to be invisible. Every branch below
+    /// reads the status straight off the source and returns quietly when it
+    /// is `.denied`, so an app whose hiker had said no simply had no location
+    /// for the rest of the install and said so nowhere: the "my location"
+    /// button spun and gave up, the background-tracking switch turned on and
+    /// armed nothing. Nothing could tell them because nothing kept the
+    /// answer. Reported by the user 2026-09-20.
+    ///
+    /// Low-frequency in a way ``coordinate`` is not — it changes when the
+    /// hiker answers a prompt or visits Settings, which is a handful of times
+    /// in the life of an install — so a SwiftUI body may read it. Observation
+    /// registers per property, so reading this one does not enrol the reader
+    /// in the once-a-second fix feed beside it.
+    private(set) var authorizationStatus: CLAuthorizationStatus
+
+    /// Whether the hiker has refused this app location outright.
+    ///
+    /// The one state worth putting in front of them, because it is the one
+    /// nothing in the app can move: `.notDetermined` is answered by asking,
+    /// and both authorized cases work. `.restricted` joins `.denied` because
+    /// the two are the same from here — there is no fix coming, and the only
+    /// place either can change is Settings.
+    var isAccessDenied: Bool {
+        authorizationStatus == .denied || authorizationStatus == .restricted
+    }
+
+    /// Whether the app may use location while it is closed.
+    ///
+    /// Read by the background-tracking switch in Settings, which is a feature
+    /// this object serves none of — and is here anyway, because the grant is
+    /// the *app's* and there is one of it. ``BackgroundTrailTracker`` asks its
+    /// own `CLLocationManager` the same question through
+    /// ``SignificantLocationMonitor/isAlwaysAuthorized`` and gets the same
+    /// answer; what it cannot do is make that answer observable, and a second
+    /// copy of a system-wide fact is a second thing to keep in step.
+    var hasAlwaysAccess: Bool {
+        authorizationStatus == .authorizedAlways
+    }
+
     @ObservationIgnored private var latestLocation: CLLocation?
 
     @ObservationIgnored private let manager: any ForegroundLocationSource
@@ -138,6 +181,21 @@ final class LocationManager: NSObject {
     /// must not turn anything on, because `start()` is also where the
     /// authorization prompt comes from.
     private var isUpdating = false
+    /// Whether the scene is in front of the hiker.
+    ///
+    /// Tracked because the authorization callback is not a foreground event.
+    /// Granting access happens in *Settings*, which means this app is in the
+    /// background when the answer arrives — and the callback below used to
+    /// call `beginUpdates()` on it regardless, turning the GPS on behind a
+    /// screen nobody was looking at and leaving it on until the next resign.
+    /// That is the same standing request ``stop()`` exists to prevent, let
+    /// back in through the one door that cannot be seen from the front.
+    ///
+    /// Nothing is lost by refusing there. The hiker comes back to an app that
+    /// now has the grant, ``resume()`` runs on the way in, and its guard
+    /// passes for the first time — so the feed starts a moment later, on the
+    /// frame where it is first worth anything.
+    @ObservationIgnored private var isForeground = true
     /// Reads the current time for the throttle above. Injectable so a test can
     /// step across the one-second window instead of sleeping through it —
     /// which is both slower and, being a race against a real clock, flakier.
@@ -147,8 +205,15 @@ final class LocationManager: NSObject {
         manager: (any ForegroundLocationSource)? = nil,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
-        self.manager = manager ?? CLLocationManager()
+        let source = manager ?? CLLocationManager()
+        self.manager = source
         self.clock = clock
+        // Read before the delegate is assigned, so the property is truthful
+        // from the first body that reads it rather than from the first
+        // callback. CoreLocation does deliver one on assignment, but a view
+        // built in the same turn would otherwise see `.notDetermined` for an
+        // install that settled this months ago.
+        authorizationStatus = source.foregroundAuthorizationStatus
         super.init()
         self.manager.foregroundDelegate = self
         self.manager.desiredAccuracy = Self.baselineDesiredAccuracy
@@ -159,7 +224,9 @@ final class LocationManager: NSObject {
     /// updating.
     func start() {
         updatesRequested = true
+        isForeground = true
         let status = manager.foregroundAuthorizationStatus
+        record(status)
         if status == .notDetermined {
             manager.requestWhenInUseAuthorization()
         } else if Self.isAuthorized(status) {
@@ -185,6 +252,10 @@ final class LocationManager: NSObject {
     /// foreground are other objects entirely: the recorder's own manager, and
     /// ``BackgroundTrailTracker``'s significant-change delivery.
     func stop() {
+        // Ahead of the guard below, and not inside it: a scene that resigns
+        // with nothing running has still resigned, and the authorization
+        // callback has to know that whether or not there was a feed to end.
+        isForeground = false
         guard isUpdating else { return }
         isUpdating = false
         manager.stopUpdatingLocation()
@@ -197,8 +268,14 @@ final class LocationManager: NSObject {
     /// there would put the authorization alert in front of a hiker one step
     /// earlier than ``start()``'s caller decided to.
     func resume() {
-        guard updatesRequested,
-              Self.isAuthorized(manager.foregroundAuthorizationStatus) else { return }
+        isForeground = true
+        let status = manager.foregroundAuthorizationStatus
+        // Re-read on the way in because the grant may have changed while the
+        // app was away — a trip to Settings is exactly how a refusal gets
+        // reversed, and the callback that reported it arrived to a background
+        // app. This is the write that lets the button and its alert notice.
+        record(status)
+        guard updatesRequested, Self.isAuthorized(status) else { return }
         beginUpdates()
     }
 
@@ -212,6 +289,20 @@ final class LocationManager: NSObject {
         guard !isUpdating else { return }
         isUpdating = true
         manager.startUpdatingLocation()
+    }
+
+    /// Records the grant, and only when it has actually changed.
+    ///
+    /// The dedupe is the point. Three callers write this — `start()`,
+    /// `resume()` and the delegate — and `resume()` runs on *every* return to
+    /// the foreground, which for a hiker checking the map at a junction is
+    /// several times an hour. `authorizationStatus` is observable, and
+    /// Observation does not compare before it notifies, so without this each
+    /// one of those would wake the map's capsule observation to re-decide a
+    /// question whose answer has not moved since the install was set up.
+    private func record(_ status: CLAuthorizationStatus) {
+        guard status != authorizationStatus else { return }
+        authorizationStatus = status
     }
 
     private static func isAuthorized(_ status: CLAuthorizationStatus) -> Bool {
@@ -304,8 +395,16 @@ extension LocationManager: CLLocationManagerDelegate {
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         onMainActor { [weak self] in
-            guard let self, updatesRequested,
-                  Self.isAuthorized(self.manager.foregroundAuthorizationStatus) else { return }
+            guard let self else { return }
+            let status = self.manager.foregroundAuthorizationStatus
+            // Recorded whatever the scene is doing: this is the only place a
+            // refusal is ever heard, and the screen that has to say so may be
+            // built long after it arrives.
+            record(status)
+            // Acted on only in front. See ``isForeground`` — a grant answered
+            // in Settings reaches a backgrounded app, and starting the GPS
+            // there is the standing request ``stop()`` exists to end.
+            guard updatesRequested, isForeground, Self.isAuthorized(status) else { return }
             beginUpdates()
         }
     }

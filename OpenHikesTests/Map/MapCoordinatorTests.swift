@@ -42,6 +42,9 @@ struct MapCoordinatorTests {
     /// Internal so the line-tap tests can ask what a thumb opened — see
     /// `MapCoordinatorTests+RouteTap.swift`.
     let drawnRouteTap = DrawnRouteTap()
+    /// What the refused "my location" button raises — see
+    /// `MapCoordinatorTests+LocationAccess.swift`.
+    let locationAccessPrompt = LocationAccessPrompt()
     private let routeStyle = RouteStyle()
     /// Driven by a clock the test owns: `LocationManager` publishes at most
     /// once a second, and `SheetMetrics` tells a resting sheet from a moving
@@ -72,15 +75,21 @@ struct MapCoordinatorTests {
     /// comes back close to what was asked for rather than equal to it.
     static let centreTolerance = 0.001
 
+    /// `locationManager` is a parameter with a default for the reason
+    /// `community` and `searchCompleter` are: one file's worth of tests needs
+    /// to build a map around a *refused* feed, and the suite's own manager
+    /// wraps a real `CLLocationManager` whose status is whatever the test host
+    /// happens to have. See `MapCoordinatorTests+LocationAccess.swift`.
     func mapView(
         route: DisplayedRoute? = nil,
         tileSource: ActiveTileSource? = osm,
         sidePanelInset: CGFloat = 0,
         community: CommunityBrowser = CommunityBrowser(transport: nil, blockList: .scratch()),
-        searchCompleter: SearchCompleter = SearchCompleter()
+        searchCompleter: SearchCompleter = SearchCompleter(),
+        locationManager: LocationManager? = nil
     ) -> MapView {
         MapView(
-            locationManager: locationManager,
+            locationManager: locationManager ?? self.locationManager,
             route: route,
             routeStyle: routeStyle,
             highlight: highlight,
@@ -90,6 +99,7 @@ struct MapCoordinatorTests {
             tileSource: tileSource,
             mapController: mapController,
             drawnRouteTap: drawnRouteTap,
+            locationAccessPrompt: locationAccessPrompt,
             photoCapture: photoCapture,
             photoPins: photoPins,
             community: community,

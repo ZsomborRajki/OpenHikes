@@ -78,6 +78,15 @@ struct MapView: MapViewRepresentable, Equatable {
     /// serving the shared hikes' lines.
     var drawnRouteTap: DrawnRouteTap
 
+    /// Where a tap on the *refused* "my location" button goes — the capsule
+    /// the map shows in place of MapKit's own when the hiker has said no.
+    ///
+    /// Handed over in the same direction and for the same reason as
+    /// ``drawnRouteTap``. Which of the two buttons is on screen is a separate
+    /// question, and it is read from ``locationManager`` above rather than
+    /// passed here — see ``Coordinator/observeLocationAccess(_:on:)``.
+    var locationAccessPrompt: LocationAccessPrompt
+
     /// Whether a photo can be taken right now, and the two requests the camera
     /// pill raises. Observed directly by the map (not via SwiftUI) so pushing
     /// or popping a screen that can receive a photo shows or hides the pill
@@ -142,6 +151,7 @@ struct MapView: MapViewRepresentable, Equatable {
             && lhs.tileSource == rhs.tileSource
             && lhs.mapController === rhs.mapController
             && lhs.drawnRouteTap === rhs.drawnRouteTap
+            && lhs.locationAccessPrompt === rhs.locationAccessPrompt
             && lhs.locationManager === rhs.locationManager
             && lhs.photoCapture === rhs.photoCapture
             && lhs.photoPins === rhs.photoPins
@@ -180,6 +190,7 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.community = community
         coordinator.searchCompleter = searchCompleter
         coordinator.drawnRouteTap = drawnRouteTap
+        coordinator.locationAccessPrompt = locationAccessPrompt
         // The map asks the community question and now draws its answer too —
         // see ``MapCommunityAnnotations``. Observed here rather than handed
         // down, so a nearby result landing moves MapKit's annotations and no
@@ -209,6 +220,14 @@ struct MapView: MapViewRepresentable, Equatable {
         // when the map is built (a restored selection, a widget deep link)
         // leaves it hidden until the *next* availability change.
         coordinator.observePhotoControls(photoCapture)
+        // After `addControls` for the same reason: this decides which of the
+        // two buttons in the tracking capsule is on screen, and neither
+        // exists until that call has run. A map built by a hiker who refused
+        // location months ago has to draw the refused one on this first pass
+        // — there is no authorization change coming to prompt a second.
+        #if canImport(UIKit)
+        coordinator.observeLocationAccess(locationManager, on: mapView)
+        #endif
         // The same, for the same reason: a map rebuilt while an offer is
         // standing has to draw it on this first pass rather than waiting for
         // the next settle.

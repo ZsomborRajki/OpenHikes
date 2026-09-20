@@ -154,11 +154,37 @@ struct TrailMapScreen: View {
     @ViewBuilder private var content: some View {
         if let trail = model.trail, trail.hikeID == hikeID, trail.isDrawable {
             TrailMapFull(trail: trail, isShowingFigures: $isShowingFigures)
+                .overlay(alignment: .bottom) { refusedCaption }
                 .sheet(isPresented: $isShowingFigures) {
                     NavigationStack { TrailDetailView(trail: trail) }
                 }
         } else {
             waiting
+        }
+    }
+
+    /// Why there is no dot on the map.
+    ///
+    /// Over the map rather than instead of it: the route is the greater half
+    /// of what this screen is for, and it is worth looking at whether or not
+    /// the watch will say where the hiker is standing. Without this the map
+    /// drew the trail, never drew the hiker, and gave no reason — the same
+    /// complaint the phone's location button answered, on the one watch screen
+    /// that had no moment to answer it in.
+    ///
+    /// Reads one property that changes at most once a screen, so the caption
+    /// appearing costs this body a pass and the fix feed costs it none — see
+    /// ``TrailMapFull``, which is where everything per-fix lives.
+    @ViewBuilder private var refusedCaption: some View {
+        if model.recorder.isLocationRefused {
+            Text("Location is off, so your position isn't shown.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(.thinMaterial, in: .capsule)
+                .padding(.bottom, 4)
         }
     }
 

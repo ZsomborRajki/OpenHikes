@@ -252,11 +252,55 @@ extension MapView.Coordinator {
     func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {
         applyTrackingTint(for: mode)
     }
+
+    /// Keeps the capsule showing the button that can actually do something.
+    ///
+    /// Observed rather than read at tap time, because the answer changes while
+    /// nobody is tapping: a hiker who goes to Settings and grants access comes
+    /// back to a map that has to have put MapKit's button back before they
+    /// reach for it. ``LocationManager/authorizationStatus`` is written on the
+    /// way back in for exactly this — see ``LocationManager/resume()``.
+    ///
+    /// The same imperative arrangement as ``observeSheetMetrics(_:on:)``: the
+    /// swap reaches two `isHidden`s with no SwiftUI pass in between, which
+    /// matters less here than it does for a drag, but a second way of doing
+    /// the same thing on the same button is its own cost.
+    func observeLocationAccess(_ locationManager: LocationManager, on mapView: MKMapView) {
+        guard !isObservingLocationAccess else { return }
+        isObservingLocationAccess = true
+        trackLocationAccess(locationManager, on: mapView)
+    }
+
+    private func trackLocationAccess(_ locationManager: LocationManager, on mapView: MKMapView) {
+        applyLocationAccess(denied: locationManager.isAccessDenied)
+        reobserving(self, mapView, locationManager) {
+            _ = locationManager.isAccessDenied
+        } onChange: { coordinator, map, model in
+            coordinator.trackLocationAccess(model, on: map)
+        }
+    }
+
+    /// Shows exactly one of the two buttons in the capsule.
+    ///
+    /// Private: the swap is only ever reached through
+    /// ``observeLocationAccess(_:on:)``, and the tests drive it from the far
+    /// end — they build a map around a stubbed feed and read the two
+    /// `isHidden`s back, which is the whole behaviour rather than this one
+    /// assignment. See `MapCoordinatorTests+LocationAccess.swift`.
+    private func applyLocationAccess(denied: Bool) {
+        trackingGlyph?.isHidden = denied
+        refusedTrackingButton?.isHidden = !denied
+    }
     #endif
 }
 
 #if os(iOS)
 extension MapView {
+    /// The refused glyph's size, matched to the camera pill's rather than to
+    /// `MKUserTrackingButton`'s — the two capsules sit in one column and the
+    /// stand-in has to look like it belongs to the same set.
+    private static let refusedSymbolPointSize: CGFloat = 17
+
     /// The "my location" button, inside a glass capsule of its own.
     ///
     /// `MKUserTrackingButton` arrives with no chrome: it draws its glyph
@@ -289,16 +333,72 @@ extension MapView {
         glass.cornerConfiguration = .capsule()
         glass.contentView.addSubview(tracking)
 
+        let refused = makeRefusedTrackingButton(coordinator)
+        glass.contentView.addSubview(refused)
+
         NSLayoutConstraint.activate([
             glass.widthAnchor.constraint(equalToConstant: MapPhotoControlsView.controlSize),
             glass.heightAnchor.constraint(equalToConstant: MapPhotoControlsView.controlSize),
             tracking.centerXAnchor.constraint(equalTo: glass.contentView.centerXAnchor),
             tracking.centerYAnchor.constraint(equalTo: glass.contentView.centerYAnchor),
+            refused.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor),
+            refused.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor),
+            refused.topAnchor.constraint(equalTo: glass.contentView.topAnchor),
+            refused.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor),
         ])
 
         coordinator.trackingGlyph = tracking
+        coordinator.refusedTrackingButton = refused
         coordinator.applyTrackingTint(for: mapView.userTrackingMode)
         return glass
+    }
+
+    /// The button that stands in the capsule when the hiker has refused
+    /// location, in place of the one MapKit draws.
+    ///
+    /// A second button rather than a mode on the first, because
+    /// `MKUserTrackingButton` has no mode: its glyph is private, its tap goes
+    /// straight to the map view, and what the map view does with a tap it
+    /// cannot answer is spin a small indicator and give up — which is exactly
+    /// what the hiker reported. Nothing on it can be overridden, so the way to
+    /// stop it happening is for that button not to be on screen.
+    ///
+    /// Hidden until the status says otherwise, so the ordinary case builds the
+    /// same view it always did with one hidden sibling behind it.
+    ///
+    /// `location.slash` in the secondary label colour, against the same glass
+    /// that carries the ordinary glyph's legibility — see
+    /// ``makeTrackingButton(for:_:)`` for why that surface exists. Secondary
+    /// rather than the accent or `.label`, because the capsule is now saying
+    /// "not available" and a full-strength glyph reads as a control waiting to
+    /// be used.
+    private func makeRefusedTrackingButton(_ coordinator: Coordinator) -> UIButton {
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(
+            systemName: "location.slash",
+            withConfiguration: UIImage.SymbolConfiguration(
+                pointSize: Self.refusedSymbolPointSize,
+                weight: .medium
+            )
+        )
+        configuration.baseForegroundColor = .secondaryLabel
+
+        let button = UIButton(
+            configuration: configuration,
+            // The coordinator is what the map view retains; the button is its
+            // subview's subview. Weak so this does not close the loop.
+            primaryAction: UIAction { [weak coordinator] _ in
+                coordinator?.locationAccessPrompt?.show()
+            }
+        )
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.isHidden = true
+        // A glyph is not a label, and `performAccessibilityAudit` measures
+        // both — the same rule the camera pill's buttons carry.
+        button.accessibilityLabel = "Location access off"
+        button.accessibilityHint = "Explains why OpenHikes can't show your location."
+        button.accessibilityIdentifier = "location-access-refused"
+        return button
     }
 }
 #endif
