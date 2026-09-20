@@ -114,7 +114,6 @@ nonisolated enum CuratedTrailQuery {
 // MARK: - Turning a search area into a box
 
 nonisolated extension CuratedTrailQuery {
-    private static let metresPerDegreeLatitude: Double = 111_320
     /// Where `cos(latitude)` stops being a usable divisor. Beyond it the
     /// longitude span of a fixed distance runs away to the whole world, and
     /// there is no box — a search a few hundred metres from the pole would
@@ -144,6 +143,11 @@ nonisolated extension CuratedTrailQuery {
         let latitude = area.latitude
         guard abs(latitude) < polarLatitudeLimit else { return nil }
 
+        // ``RouteGeometry``'s figure rather than one of this file's own:
+        // a circumscribing box is exactly the buffer that constant is
+        // for, and a second spelling of it is a second thing to keep
+        // right.
+        let metresPerDegreeLatitude = RouteGeometry.metersPerDegreeLatitude
         let latitudeSpan = area.radiusMeters / metresPerDegreeLatitude
         let longitudeSpan = area.radiusMeters
             / (metresPerDegreeLatitude * cos(latitude * .pi / 180))
