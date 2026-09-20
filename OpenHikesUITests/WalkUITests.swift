@@ -130,7 +130,7 @@ nonisolated final class WalkUITests: XCTestCase {
             .matching(identifier: "walk-row").firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: UITestTimeout.existence))
         XCTAssertTrue(
-            (row.value as? String ?? "").contains("50"),
+            row.label.contains("50"),
             "the row reads as one element: date, then percentage and how it ended"
         )
     }
