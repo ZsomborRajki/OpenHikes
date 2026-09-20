@@ -190,7 +190,7 @@ nonisolated struct CommunityWithdrawal: Equatable, Sendable {
             "",
             kind == .hike ? "The hike" : "The walk the photos came from",
             "Title: \(title)",
-            "Walked: \(Self.reviewerDate.string(from: hikeDate))",
+            "Walked: \(CommunityReport.reviewerDate.string(from: hikeDate))",
             "Status: \(isPublished ? "published" : "awaiting review")",
         ]
         if !note.isEmpty {
@@ -245,18 +245,9 @@ nonisolated struct CommunityWithdrawal: Equatable, Sendable {
     }
 
     /// The whole message as one block, for the hiker to copy when there is no
-    /// mail app to hand it to.
+    /// mail app to hand it to. Composed by ``CommunityReport``'s own routine,
+    /// so both messages to the same inbox name it the same way.
     var plainText: String {
-        "To: \(CommunityReport.recipient)\nSubject: \(subject)\n\n\(body)"
+        CommunityReport.plainText(subject: subject, body: body)
     }
-
-    /// Fixed rather than the hiker's locale, for the reason
-    /// ``CommunityReport``'s is.
-    private static let reviewerDate: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
 }
