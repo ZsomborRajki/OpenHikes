@@ -163,27 +163,10 @@ final class HikeLiveActivityController {
     @ObservationIgnored private var pendingWork: Task<Void, Never>?
     @ObservationIgnored private var workSequence: UInt64 = 0
 
-    /// The typed lifecycle observation, held for exactly as long as the
-    /// controller is — which is the whole of its deregistration.
-    /// `NotificationCenter.ObservationToken` ends its observation when it goes
-    /// out of scope, so releasing this array is what takes the observer off
-    /// the centre; dropping the token at the end of `observePreferences`
-    /// would instead take the registration down before the hiker ever left
-    /// the app. `LifecycleObservationTokenTests` pins both halves.
-    @ObservationIgnored private var lifecycleObservers: [NotificationCenter.ObservationToken] = []
-
-    /// The untyped one, which has no such lifetime: a block-based observer is
-    /// retained by the notification centre until it is removed by token, and
-    /// the app-hosted test bundles build hundreds of these controllers. That
-    /// is the entire job of the `isolated deinit` below — SE-0371 hops it back
-    /// to the main actor before it runs, which is what lets it read main-actor
-    /// storage and what removed the `nonisolated` box this used to need.
-    /// ``PowerStateMonitor`` makes the same choice.
-    @ObservationIgnored private var defaultsObservers: [any NSObjectProtocol] = []
-
-    isolated deinit {
-        for token in defaultsObservers { NotificationCenter.default.removeObserver(token) }
-    }
+    /// Both halves of ``isEnabled``, watched and held — see
+    /// ``PreferenceObservation``, which owns the deregistration this used to
+    /// spell out here.
+    @ObservationIgnored private let preferenceObservation = PreferenceObservation()
 
     init(
         presenter: any HikeActivityPresenting,
@@ -423,41 +406,17 @@ final class HikeLiveActivityController {
     }
 
     /// Watches both halves of ``isEnabled``, each by the only means that
-    /// reports it.
+    /// reports it — see ``PreferenceObservation`` for which means, and why the
+    /// two cannot be collapsed into one.
     ///
-    /// The app's own switch is a `UserDefaults` key that `SettingsView` writes
-    /// through `@AppStorage`, so the defaults notification — scoped to this
-    /// controller's own suite, never the process-wide one — is what sees it.
-    /// The system's per-app switch is not a default at all and changing it
-    /// means leaving for iOS Settings, so returning to the foreground is the
-    /// only moment the app can re-ask; `UIApplication`'s lifecycle message
-    /// rather than `scenePhase` keeps this off SwiftUI's render path entirely,
-    /// which is the same choice `MapView.Coordinator` makes and for the same
-    /// reason.
-    ///
-    /// The two are not the same kind of observation and must not be collapsed
-    /// into one. `DidBecomeActiveMessage` is a `MainActorMessage`, so its
-    /// handler is synchronously main-actor isolated and needs no hop.
-    /// `UserDefaults.didChangeNotification` has no typed message and arrives
-    /// on whichever thread wrote the key, so it keeps its `onMainActor`.
+    /// Both halves ask the same question here: whether the app's switch and
+    /// the system's still agree that a panel may be on screen.
     private func observePreferences() {
-        #if canImport(UIKit)
-        lifecycleObservers.append(
-            lifecycleCenter.addObserver(
-                for: UIApplication.DidBecomeActiveMessage.self
-            ) { [weak self] _ in
-                self?.reconcileWithPreferences()
-            }
-        )
-        #endif
-        defaultsObservers.append(
-            NotificationCenter.default.addObserver(
-                forName: UserDefaults.didChangeNotification,
-                object: defaults,
-                queue: nil
-            ) { [weak self] _ in
-                onMainActor { self?.reconcileWithPreferences() }
-            }
+        preferenceObservation.observe(
+            lifecycleCenter: lifecycleCenter,
+            defaults: defaults,
+            onForeground: { [weak self] in self?.reconcileWithPreferences() },
+            onDefaultsChange: { [weak self] in self?.reconcileWithPreferences() }
         )
     }
 

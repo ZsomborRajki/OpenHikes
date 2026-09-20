@@ -128,27 +128,10 @@ final class MovementReminderController {
     /// same shape, as `HikeLiveActivityController.pendingWork`.
     private var pendingWork: Task<Void, Never>?
 
-    /// The typed lifecycle observation, held for exactly as long as the
-    /// controller is — which is the whole of its deregistration. An
-    /// `ObservationToken` ends its observation when it goes out of scope, so
-    /// releasing this array is what takes the observer off the centre, and
-    /// dropping the token at the end of `observePreferences` would take the
-    /// registration down before the hiker ever left the app.
-    /// `LifecycleObservationTokenTests` pins both halves.
-    private var lifecycleObservers: [NotificationCenter.ObservationToken] = []
-
-    /// The untyped one, which has no such lifetime: a block-based observer is
-    /// retained by the notification centre until it is removed by token. That
-    /// is the entire job of the `isolated deinit` below — SE-0371 hops it back
-    /// to the main actor before it runs, which is what lets it read main-actor
-    /// storage and what removed the `nonisolated` box this used to need, the
-    /// same choice `HikeLiveActivityController` and ``PowerStateMonitor``
-    /// make.
-    private var defaultsObservers: [any NSObjectProtocol] = []
-
-    isolated deinit {
-        for token in defaultsObservers { NotificationCenter.default.removeObserver(token) }
-    }
+    /// Both things that can silence a reminder, watched and held — see
+    /// ``PreferenceObservation``, which owns the deregistration this used to
+    /// spell out here.
+    private let preferenceObservation = PreferenceObservation()
 
     init(
         notifier: any MovementReminderNotifying,
@@ -443,39 +426,21 @@ extension MovementReminderController {
         if wasWatching { watchingDidEnd() }
     }
 
-    /// Watches both things that can silence a reminder, each by the only
-    /// means that reports it: the hiker's switch through the defaults
-    /// notification — scoped to this controller's own suite rather than the
-    /// process-wide one, which is how `SettingsView`'s `@AppStorage` write
-    /// arrives here — and iOS's permission on the way back into the
-    /// foreground.
+    /// Watches both things that can silence a reminder, each by the only means
+    /// that reports it — see ``PreferenceObservation`` for which means.
+    ///
+    /// Unlike the Live Activity controller's pair, the two halves here ask
+    /// *different* questions: the hiker's switch is a preference to reconcile
+    /// against, and iOS's permission has to be re-asked, which is a request
+    /// rather than a read. `prompting: false` is what keeps coming back into
+    /// the app from putting a system alert in front of somebody who did not
+    /// touch anything.
     private func observePreferences() {
-        #if canImport(UIKit)
-        // The system's permission is not a default, and changing it means
-        // leaving for iOS Settings, so coming back is the only moment the app
-        // can re-ask. `UIApplication`'s lifecycle message rather than
-        // `scenePhase` keeps this off SwiftUI's render path — the same seam,
-        // watched the same way, that `HikeLiveActivityController` uses for the
-        // system's Live Activity switch. A `MainActorMessage` handler is
-        // synchronously main-actor isolated, so there is no hop to make.
-        lifecycleObservers.append(
-            lifecycleCenter.addObserver(
-                for: UIApplication.DidBecomeActiveMessage.self
-            ) { [weak self] _ in
-                self?.reconcileWithAuthorization(prompting: false)
-            }
-        )
-        #endif
-        // No typed message for this one, and it arrives on whichever thread
-        // wrote the key, so the hop stays explicit.
-        defaultsObservers.append(
-            NotificationCenter.default.addObserver(
-                forName: UserDefaults.didChangeNotification,
-                object: defaults,
-                queue: nil
-            ) { [weak self] _ in
-                onMainActor { self?.reconcileWithPreferences() }
-            }
+        preferenceObservation.observe(
+            lifecycleCenter: lifecycleCenter,
+            defaults: defaults,
+            onForeground: { [weak self] in self?.reconcileWithAuthorization(prompting: false) },
+            onDefaultsChange: { [weak self] in self?.reconcileWithPreferences() }
         )
     }
 
