@@ -131,6 +131,9 @@ struct TrailMapScreen: View {
     @Environment(WatchModel.self)
     private var model
 
+    // periphery:ignore - read through its projected value, which the index
+    // does not record as a use: `$isShowingFigures` is handed to `TrailMapFull`
+    // and to the `.sheet` below, and the sheet is what the button opens.
     @State private var isShowingFigures = false
 
     var body: some View {

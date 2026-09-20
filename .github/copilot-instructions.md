@@ -439,11 +439,18 @@ a property. On a phone the cost of getting this wrong is a frame; on a watch it
 is the battery that has to outlast the walk those figures describe.
 `WatchRootView` reads nothing at all.
 
-**What the first version deliberately does not do.** No map and no tiles — a
-basemap is hundreds of kilobytes per trail across a Bluetooth link for a screen
-an inch wide, and issue #509 already argued the first version would be figures
-and a trail-shaped line; `TrailGlyphView` draws exactly that and is public for
-this. No complications, no Smart Stack widget and no Double Tap. No watch-side
+**What the first version deliberately did not do, and what has changed since.**
+The first version had no map at all: a rendered basemap is hundreds of
+kilobytes per trail across a Bluetooth link for a screen an inch wide, issue
+#509 argued it should be figures and a trail-shaped line, and `TrailGlyphView`
+drew exactly that. That is no longer where the wrist is. `TrailMapScreen` draws
+an Apple `Map` with a `MapPolyline` over it, tuned for hiking — realistic
+elevation, muted emphasis, and a hand-picked point-of-interest list — which
+costs no basemap transfer because MapKit fetches its own. *Tiles* are still
+absent and cannot be otherwise: `MKTileOverlay`, `MKTileOverlayRenderer` and
+`MKMapView` are all `API_UNAVAILABLE(watchos)`. `TrailGlyphView` is internal
+again, and is now only the iOS widget's fallback. No complications, no Smart
+Stack widget and no Double Tap. No watch-side
 community, photographs, weather or offline maps. Following a trail *without*
 recording gets a live position only while the app is on screen, because the
 alternative is starting a workout session nobody asked for. And the mirror
