@@ -120,6 +120,68 @@ nonisolated enum CommunityStaging {
         StagedFiles.purge(in: parent, before: cutoff)
     }
 
+    /// The photographs one upload carries, re-encoded into `directory`.
+    ///
+    /// Both halves of publishing stage a set of pictures exactly this way — a
+    /// hike's own share and a contribution onto somebody else's trail — and
+    /// the invariant they keep is the reason it is one function rather than
+    /// two that look alike.
+    ///
+    /// **The three arrays describe each other, index for index.** A photograph
+    /// that will not encode — or whose file is on the device it was added on —
+    /// is *dropped* rather than failing the upload: one unreadable file should
+    /// cost its own picture and not the walk. So the pin and the id are
+    /// appended only alongside a file that really exists, and never beside the
+    /// row that was asked for. See ``CommunityHikeDetail/isConsistent``, which
+    /// is what checks the pair at the other end, and
+    /// ``HikePhoto/sentToCommunityAt``, which is what the ids get stamped on —
+    /// a picture that would not encode did not go, and must not be recorded as
+    /// though it had.
+    ///
+    /// The file names are positional, so a caller must not reorder afterwards.
+    ///
+    /// - Returns: The pins, the files and the ids, in upload order.
+    static func stagePhotos(
+        _ photos: [HikePhoto],
+        into directory: URL,
+        store: HikePhotoStore
+    ) -> StagedPhotos {
+        try? FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        var staged = StagedPhotos()
+        for (index, photo) in photos.enumerated() {
+            guard let url = store.exportCopy(
+                of: photo,
+                maxPixelSize: CommunityPublisher.photoMaxPixelSize,
+                quality: CommunityPublisher.photoQuality,
+                named: "photo-\(index).jpeg",
+                into: directory
+            ) else { continue }
+            staged.fileURLs.append(url)
+            staged.pins.append(
+                CommunityPhotoPin(capturedAt: photo.capturedAt, coordinate: photo.coordinate)
+            )
+            staged.photoIDs.append(photo.id)
+        }
+        return staged
+    }
+
+    /// Removes everything an attempt staged, whatever happened.
+    ///
+    /// Fire-and-forget and off the main actor, in the shape the photo and tile
+    /// deletions already use: what is left behind on a kill is wasted space in
+    /// a temporary directory the system reclaims on its own — and which
+    /// ``sweep()`` above collects anyway — which is the cheapest failure
+    /// either publisher has.
+    static func discard(_ directory: URL) {
+        Task.detached(priority: .utility) {
+            try? FileManager.default.removeItem(at: directory)
+        }
+    }
+
     /// The ordinary call: sweep the staging parent on the way into work that
     /// is about to stage something of its own.
     ///
@@ -133,4 +195,19 @@ nonisolated enum CommunityStaging {
             purgeAbandoned(in: directory, before: .now - lifetime)
         }
     }
+}
+
+/// What one pass of ``CommunityStaging/stagePhotos(_:into:store:)`` wrote.
+///
+/// Three arrays that describe each other index for index — a pin, a file and
+/// the row it came from — and never the photographs that were asked for. See
+/// that method for why the distinction is the whole point.
+///
+/// Not a draft and deliberately not near one: ``CommunitySubmissionDraft`` and
+/// ``CommunityPhotoDraft`` are the payloads, and every field on one is a field
+/// ``CommunityShareDisclosure`` has to account for.
+nonisolated struct StagedPhotos: Sendable {
+    var pins: [CommunityPhotoPin] = []
+    var fileURLs: [URL] = []
+    var photoIDs: [UUID] = []
 }

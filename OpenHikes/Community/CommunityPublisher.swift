@@ -178,7 +178,7 @@ nonisolated enum CommunityPublisher {
         // run.
         let workingDirectory = CommunityStaging.shareDirectory(of: details.hikeID)
         CommunityStaging.sweep()
-        defer { discard(workingDirectory) }
+        defer { CommunityStaging.discard(workingDirectory) }
 
         let staged = await prepare(
             details,
@@ -408,37 +408,7 @@ nonisolated enum CommunityPublisher {
         in directory: URL,
         store: HikePhotoStore
     ) async -> StagedSubmission {
-        try? FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true
-        )
-
-        var pins: [CommunityPhotoPin] = []
-        var urls: [URL] = []
-        var sent: [UUID] = []
-        for (index, photo) in photos.enumerated() {
-            // A photo that will not encode is dropped rather than failing the
-            // share. One unreadable file should cost its own picture and not
-            // the walk — and the pin is appended only alongside a file that
-            // exists, which is what keeps the two arrays describing each
-            // other. See ``CommunityHikeDetail/isConsistent``.
-            guard let url = store.exportCopy(
-                of: photo,
-                maxPixelSize: photoMaxPixelSize,
-                quality: photoQuality,
-                named: "photo-\(index).jpeg",
-                into: directory
-            ) else { continue }
-            urls.append(url)
-            pins.append(
-                CommunityPhotoPin(capturedAt: photo.capturedAt, coordinate: photo.coordinate)
-            )
-            // Alongside the file rather than alongside the row, for the same
-            // reason the pin is: this list is what gets stamped as sent, and a
-            // picture that would not encode did not go.
-            sent.append(photo.id)
-        }
-
+        let staged = CommunityStaging.stagePhotos(photos, into: directory, store: store)
         let draft = CommunitySubmissionDraft(
             hikeID: details.hikeID,
             title: details.title,
@@ -447,22 +417,10 @@ nonisolated enum CommunityPublisher {
             hikeDate: details.hikeDate,
             distanceMeters: details.distanceMeters,
             route: details.route,
-            photoPins: pins,
-            photoFileURLs: urls,
+            photoPins: staged.pins,
+            photoFileURLs: staged.fileURLs,
             stagingDirectory: directory
         )
-        return StagedSubmission(draft: draft, photoIDs: sent)
-    }
-
-    /// Removes everything the attempt staged, whatever happened.
-    ///
-    /// Fire-and-forget and off the main actor, in the shape the photo and tile
-    /// deletions already use: what is left behind on a kill is wasted space in
-    /// a temporary directory the system reclaims on its own, which is the
-    /// cheapest failure in this file.
-    private static func discard(_ directory: URL) {
-        Task.detached(priority: .utility) {
-            try? FileManager.default.removeItem(at: directory)
-        }
+        return StagedSubmission(draft: draft, photoIDs: staged.photoIDs)
     }
 }

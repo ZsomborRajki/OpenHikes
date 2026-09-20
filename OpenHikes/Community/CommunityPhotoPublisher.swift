@@ -120,7 +120,7 @@ nonisolated enum CommunityPhotoPublisher {
 
         let workingDirectory = CommunityStaging.contributionDirectory(of: details.hikeID)
         CommunityStaging.sweep()
-        defer { discard(workingDirectory) }
+        defer { CommunityStaging.discard(workingDirectory) }
 
         let staged = await prepare(details, photos: photos, in: workingDirectory, store: store)
         // Every row this device holds a file for failed to encode, or held no
@@ -189,52 +189,16 @@ nonisolated enum CommunityPhotoPublisher {
         in directory: URL,
         store: HikePhotoStore
     ) async -> StagedContribution {
-        try? FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true
-        )
-
-        var pins: [CommunityPhotoPin] = []
-        var urls: [URL] = []
-        var sent: [UUID] = []
-        for (index, photo) in photos.enumerated() {
-            // A photo that will not encode — or whose file is on the device it
-            // was added on — is dropped rather than failing the contribution,
-            // and the pin is appended only alongside a file that exists, which
-            // is what keeps the two arrays describing each other.
-            guard let url = store.exportCopy(
-                of: photo,
-                maxPixelSize: CommunityPublisher.photoMaxPixelSize,
-                quality: CommunityPublisher.photoQuality,
-                named: "photo-\(index).jpeg",
-                into: directory
-            ) else { continue }
-            urls.append(url)
-            pins.append(
-                CommunityPhotoPin(capturedAt: photo.capturedAt, coordinate: photo.coordinate)
-            )
-            // Beside the file, never beside the row: this is the list that
-            // gets stamped as sent, and a picture that would not encode did
-            // not go. See ``HikePhoto/sentToCommunityAt``.
-            sent.append(photo.id)
-        }
-
+        let staged = CommunityStaging.stagePhotos(photos, into: directory, store: store)
         let draft = CommunityPhotoDraft(
             target: details.target,
             hikeID: details.hikeID,
             authorName: details.authorName,
             takenOn: details.takenOn,
-            photoPins: pins,
-            photoFileURLs: urls,
+            photoPins: staged.pins,
+            photoFileURLs: staged.fileURLs,
             stagingDirectory: directory
         )
-        return StagedContribution(draft: draft, photoIDs: sent)
-    }
-
-    /// Removes everything the attempt staged, whatever happened.
-    private static func discard(_ directory: URL) {
-        Task.detached(priority: .utility) {
-            try? FileManager.default.removeItem(at: directory)
-        }
+        return StagedContribution(draft: draft, photoIDs: staged.photoIDs)
     }
 }
