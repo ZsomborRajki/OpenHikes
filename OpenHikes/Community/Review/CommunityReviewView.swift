@@ -186,46 +186,24 @@ struct CommunityReviewView: View {
             }
             decisionSection
         }
-        .navigationTitle("Review")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-        .task {
-            browser.previewOpened(pending.prospectiveListing)
-            await decisions.begin(loading: download, thenShowing: showOnMap)
-        }
-        .onDisappear {
-            browser.previewClosed(pending.prospectiveListing)
-            decisions.end()
-        }
-        .confirmationDialog(
-            "Decline this submission?",
-            isPresented: $decisions.isConfirmingDecline,
-            titleVisibility: .visible
-        ) {
-            Button("Decline and Delete", role: .destructive) { decline() }
-            Button("Cancel", role: .cancel) { /* the dialog closing is the whole action */ }
-        } message: {
-            Text(
-                """
+        .modifier(
+            CommunityReviewChrome(
+                title: "Review",
+                listing: pending.prospectiveListing,
+                browser: browser,
+                declineQuestion: "Decline this submission?",
+                declineWarning: """
                 The route and photographs are deleted for good. \
                 The hiker is not told, and their app goes on reading \
                 “waiting for review”.
-                """
+                """,
+                isConfirmingDecline: $decisions.isConfirmingDecline,
+                decisionFailure: $decisions.decisionFailure,
+                begin: { await decisions.begin(loading: download, thenShowing: showOnMap) },
+                end: { decisions.end() },
+                decline: { decline() }
             )
-        }
-        .alert(
-            "Couldn't finish",
-            isPresented: Binding(
-                get: { decisions.decisionFailure != nil },
-                set: { if !$0 { decisions.decisionFailure = nil } }
-            ),
-            presenting: decisions.decisionFailure
-        ) { _ in
-            Button("OK", role: .cancel) { decisions.decisionFailure = nil }
-        } message: { failure in
-            Text(failure.recoverySuggestion ?? failure.localizedDescription)
-        }
+        )
     }
 }
 
@@ -375,48 +353,40 @@ private extension CommunityReviewView {
 
 private extension CommunityReviewView {
     var decisionSection: some View {
-        Section {
-            Button {
-                publish()
-            } label: {
-                if decisions.isDeciding {
-                    ProgressView()
+        CommunityReviewDecisionSection(
+            isDeciding: decisions.isDeciding,
+            canPublish: canPublish,
+            publishIdentifier: "review-publish",
+            declineIdentifier: "review-decline",
+            publish: { publish() },
+            decline: { decisions.isConfirmingDecline = true },
+            footer: {
+                if pending.authorID.isEmpty {
+                    // Reachable only from a submission CloudKit did not stamp with
+                    // a creator, which should be impossible — the type grants
+                    // create to `_icloud` and nothing else. Saying so beats a
+                    // disabled button with no explanation.
+                    Text(
+                        """
+                        This submission has no creator recorded, so a published \
+                        listing would be invisible and nobody could block its \
+                        author. It cannot be published.
+                        """
+                    )
+                } else if !decisions.hasLoaded {
+                    // The same rule the button is disabled by, said out loud —
+                    // see ``canPublish``. Declining stays available, because a
+                    // submission that will not load is a perfectly good reason to.
+                    Text("Publishing waits for the description and photographs to load.")
+                } else if publishedTitle.isEmpty {
+                    // A reviewer mid-edit rather than a submission with a problem,
+                    // which is why it says what to do rather than what is wrong.
+                    Text("A hike needs a title. Put one back to publish this.")
                 } else {
-                    Text("Publish")
-                }
+                    Text("Publishing makes this visible to everybody, immediately.")
             }
-            .disabled(!canPublish)
-            .accessibilityIdentifier("review-publish")
-
-            Button("Decline", role: .destructive) { decisions.isConfirmingDecline = true }
-                .disabled(decisions.isDeciding)
-                .accessibilityIdentifier("review-decline")
-        } footer: {
-            if pending.authorID.isEmpty {
-                // Reachable only from a submission CloudKit did not stamp with
-                // a creator, which should be impossible — the type grants
-                // create to `_icloud` and nothing else. Saying so beats a
-                // disabled button with no explanation.
-                Text(
-                    """
-                    This submission has no creator recorded, so a published \
-                    listing would be invisible and nobody could block its \
-                    author. It cannot be published.
-                    """
-                )
-            } else if !decisions.hasLoaded {
-                // The same rule the button is disabled by, said out loud —
-                // see ``canPublish``. Declining stays available, because a
-                // submission that will not load is a perfectly good reason to.
-                Text("Publishing waits for the description and photographs to load.")
-            } else if publishedTitle.isEmpty {
-                // A reviewer mid-edit rather than a submission with a problem,
-                // which is why it says what to do rather than what is wrong.
-                Text("A hike needs a title. Put one back to publish this.")
-            } else {
-                Text("Publishing makes this visible to everybody, immediately.")
             }
-        }
+        )
     }
 
     /// Downloads the submission into the staging directory this visit owns.

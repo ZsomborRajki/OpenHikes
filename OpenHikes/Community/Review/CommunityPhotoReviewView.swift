@@ -103,46 +103,24 @@ struct CommunityPhotoReviewView: View {
             }
             decisionSection
         }
-        .navigationTitle("Review Photos")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-        .task {
-            browser.previewOpened(pending.prospectiveListing)
-            await decisions.begin(loading: download, thenShowing: showOnMap)
-        }
-        .onDisappear {
-            browser.previewClosed(pending.prospectiveListing)
-            decisions.end()
-        }
-        .confirmationDialog(
-            "Decline these photos?",
-            isPresented: $decisions.isConfirmingDecline,
-            titleVisibility: .visible
-        ) {
-            Button("Decline and Delete", role: .destructive) { decline() }
-            Button("Cancel", role: .cancel) { /* the dialog closing is the whole action */ }
-        } message: {
-            Text(
-                """
+        .modifier(
+            CommunityReviewChrome(
+                title: "Review Photos",
+                listing: pending.prospectiveListing,
+                browser: browser,
+                declineQuestion: "Decline these photos?",
+                declineWarning: """
                 The photos are deleted for good. The hiker is not told, and their \
                 app goes on reading “waiting for review”. The trail itself is not \
                 touched.
-                """
+                """,
+                isConfirmingDecline: $decisions.isConfirmingDecline,
+                decisionFailure: $decisions.decisionFailure,
+                begin: { await decisions.begin(loading: download, thenShowing: showOnMap) },
+                end: { decisions.end() },
+                decline: { decline() }
             )
-        }
-        .alert(
-            "Couldn't finish",
-            isPresented: Binding(
-                get: { decisions.decisionFailure != nil },
-                set: { if !$0 { decisions.decisionFailure = nil } }
-            ),
-            presenting: decisions.decisionFailure
-        ) { _ in
-            Button("OK", role: .cancel) { decisions.decisionFailure = nil }
-        } message: { failure in
-            Text(failure.recoverySuggestion ?? failure.localizedDescription)
-        }
+        )
     }
 }
 
@@ -215,25 +193,17 @@ private extension CommunityPhotoReviewView {
 
 private extension CommunityPhotoReviewView {
     var decisionSection: some View {
-        Section {
-            Button {
-                publish()
-            } label: {
-                if decisions.isDeciding {
-                    ProgressView()
-                } else {
-                    Text("Publish")
-                }
+        CommunityReviewDecisionSection(
+            isDeciding: decisions.isDeciding,
+            canPublish: canPublish,
+            publishIdentifier: "photo-review-publish",
+            declineIdentifier: "photo-review-decline",
+            publish: { publish() },
+            decline: { decisions.isConfirmingDecline = true },
+            footer: {
+                decisionFooter
             }
-            .disabled(!canPublish)
-            .accessibilityIdentifier("photo-review-publish")
-
-            Button("Decline", role: .destructive) { decisions.isConfirmingDecline = true }
-                .disabled(decisions.isDeciding)
-                .accessibilityIdentifier("photo-review-decline")
-        } footer: {
-            decisionFooter
-        }
+        )
     }
 
     @ViewBuilder var decisionFooter: some View {
