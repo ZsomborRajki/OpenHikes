@@ -60,8 +60,7 @@ final class PhotoMapAnnotation: NSObject, MKAnnotation {
 
 #if os(iOS)
 /// The picture inside a photo pin's callout, and the way into the gallery.
-final class PhotoCalloutPreview: UIControl {
-    private let imageView = UIImageView()
+final class PhotoCalloutPreview: PhotoCalloutPreviewControl {
     /// What the view is currently showing, so a decode that lands after the
     /// view has been recycled onto another pin is dropped rather than drawn.
     private var photoID: UUID?
@@ -75,14 +74,8 @@ final class PhotoCalloutPreview: UIControl {
     private var loadTask: Task<Void, Never>?
     private var onTap: ((UUID) -> Void)?
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        buildHierarchy()
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("PhotoCalloutPreview is created in code only")
+    init() {
+        super.init(accessibilityIdentifier: "photo-pin-preview")
     }
 
     /// Points the preview at a pin. Cheap to call again with the same one —
@@ -127,51 +120,6 @@ final class PhotoCalloutPreview: UIControl {
         }
     }
 
-    private func buildHierarchy() {
-        translatesAutoresizingMaskIntoConstraints = false
-        clipsToBounds = true
-        layer.cornerRadius = PhotoCalloutMetrics.cornerRadius
-        layer.cornerCurve = .continuous
-
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        imageView.clipsToBounds = true
-        imageView.backgroundColor = .secondarySystemFill
-        // The control answers the touch, not the picture inside it.
-        imageView.isUserInteractionEnabled = false
-        addSubview(imageView)
-
-        NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: PhotoCalloutMetrics.previewWidth),
-            heightAnchor.constraint(equalToConstant: PhotoCalloutMetrics.previewHeight),
-            imageView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            imageView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            imageView.topAnchor.constraint(equalTo: topAnchor),
-            imageView.bottomAnchor.constraint(equalTo: bottomAnchor),
-        ])
-
-        addTarget(self, action: #selector(handleTap), for: .touchUpInside)
-        isAccessibilityElement = true
-        accessibilityTraits = .button
-        accessibilityIdentifier = "photo-pin-preview"
-    }
-
-    /// A glyph rather than a spinner, for the reason the gallery strip's tiles
-    /// use one: a thumbnail already on disk arrives within a frame or two, and
-    /// a spinner that appears and vanishes reads as a glitch.
-    ///
-    /// Which glyph carries the whole difference between "in a moment" and "not
-    /// here at all", exactly as the strip's tiles do.
-    private func showPlaceholder(_ symbolName: String) {
-        imageView.contentMode = .center
-        imageView.tintColor = .tertiaryLabel
-        imageView.image = UIImage(
-            systemName: symbolName,
-            withConfiguration: UIImage.SymbolConfiguration(
-                pointSize: PhotoCalloutMetrics.placeholderPointSize
-            )
-        )
-    }
-
     private static func symbol(for reason: PhotoUnavailability) -> String {
         switch reason {
         case .notOnThisDevice: "icloud.slash"
@@ -183,7 +131,7 @@ final class PhotoCalloutPreview: UIControl {
         }
     }
 
-    @objc private func handleTap() {
+    override func handleTap() {
         guard let photoID else { return }
         onTap?(photoID)
     }

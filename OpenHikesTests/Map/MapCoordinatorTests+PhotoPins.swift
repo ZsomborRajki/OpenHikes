@@ -309,7 +309,9 @@ extension MapCoordinatorTests {
         let pin = try #require(
             PhotoMapPin.pins(for: [Self.photo(at: Self.bend, offset: 0)]).first
         )
-        let preview = PhotoCalloutPreview(frame: .zero)
+        // Built the way the map builds one — the box sizes itself from
+        // ``PhotoCalloutMetrics``, so there is no frame to pass.
+        let preview = PhotoCalloutPreview()
         preview.show(pin, store: store) { _ in /* unused */ }
         await settle(until: "the callout to find the photo is not on this device") {
             preview.accessibilityLabel?.hasSuffix("not on this device") == true

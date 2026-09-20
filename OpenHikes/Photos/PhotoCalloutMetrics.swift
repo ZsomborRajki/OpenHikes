@@ -15,6 +15,11 @@
 //  differently, with different answers for a picture that will not load — the
 //  duplication here was never the views, only the numbers they agreed on.
 //
+//  What they *build* from these numbers is shared, and that is
+//  ``PhotoCalloutPreviewControl``: the hierarchy, the constraints, the tap
+//  target, the accessibility traits and the placeholder glyph. Chrome rather
+//  than behaviour, and it was written out twice here too.
+//
 
 import CoreGraphics
 
