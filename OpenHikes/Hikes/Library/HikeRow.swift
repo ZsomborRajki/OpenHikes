@@ -8,15 +8,6 @@
 import SwiftUI
 
 struct HikeRow: View {
-    private static let symbolFrameSize: CGFloat = 38
-    /// How much colour the status capsule carries behind its label.
-    ///
-    /// Raised with everything else that was drawn at an alpha chosen against
-    /// the sheet's old glass — see ``Color/contentSurface``. The capsule is
-    /// decoration rather than the signal (the label inside it is the tint at
-    /// full strength), so this only has to be visible, not legible.
-    private static let statusBadgeOpacity: Double = 0.22
-
     struct Status {
         let title: String
         let tint: Color
@@ -27,49 +18,14 @@ struct HikeRow: View {
     var status: Status?
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: hike.symbol)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: Self.symbolFrameSize, height: Self.symbolFrameSize)
-                .background(hike.tintOpaque, in: Circle())
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(hike.displayTitle)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
-                HStack(spacing: 6) {
-                    if let status {
-                        Text(status.title)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(status.tint)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(status.tint.opacity(Self.statusBadgeOpacity), in: Capsule())
-                    }
-                    Text(hike.subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .lineLimit(1)
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(isSelected ? AnyShapeStyle(hike.tintOpaque) : AnyShapeStyle(.tertiary))
-                .accessibilityHidden(true)
+        TrailListRow(
+            title: hike.displayTitle,
+            badge: status.map { TrailListRow.Badge(title: $0.title, tint: $0.tint) },
+            subtitle: hike.subtitle,
+            selectionTint: isSelected ? hike.tintOpaque : nil,
+            identifier: "hike-row"
+        ) {
+            TrailListRowGlyph(systemName: hike.symbol, tint: hike.tintOpaque)
         }
-        // One element rather than four: the row is a single tap target, so
-        // stepping through a symbol, a badge and a chevron to reach the
-        // subtitle is three stops that say nothing. The title leads, which is
-        // also what UI automation matches a row by.
-        .accessibilityElement(children: .combine)
-        // Being the drawn route is otherwise carried only by the tinted
-        // chevron and the tinted row background — colour alone.
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-        .accessibilityIdentifier("hike-row")
     }
 }

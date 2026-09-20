@@ -109,9 +109,15 @@ nonisolated final class AccessibilityLabelUITests: XCTestCase {
             row.label.contains("\(year)") || row.label.contains("\(year - 1)"),
             "a walk row should lead with its date, got \"\(row.label)\""
         )
-        let value = row.value as? String ?? ""
-        XCTAssertTrue(value.contains("50 percent"), "the value carries the percentage, got \"\(value)\"")
-        XCTAssertTrue(value.contains("ended"), "and how the walk ended, got \"\(value)\"")
+        // One combined label rather than a label and a value: the row is one
+        // element the way every other composite row in this app is — see
+        // ``TrailListRow``. The percentage is spoken in words because the
+        // drawn line is shorthand.
+        XCTAssertTrue(
+            row.label.contains("50 percent"),
+            "the label carries the percentage, got \"\(row.label)\""
+        )
+        XCTAssertTrue(row.label.contains("ended"), "and how the walk ended, got \"\(row.label)\"")
 
         row.tap()
         XCTAssertTrue(

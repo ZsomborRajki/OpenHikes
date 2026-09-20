@@ -18,11 +18,6 @@
 import SwiftUI
 
 struct CommunityHikeRow: View {
-    private static let symbolFrameSize: CGFloat = 38
-    /// Behind the badge's label. Raised alongside ``HikeRow``'s, which is
-    /// the same capsule on the hiker's own rows.
-    private static let badgeOpacity: Double = 0.22
-
     let listing: CommunityListing
     /// True when this hike has already been imported. Drawn rather than
     /// hidden: a hiker who imported a trail last week and meets it again in
@@ -31,57 +26,26 @@ struct CommunityHikeRow: View {
     var isImported: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
+        TrailListRow(
+            title: listing.title,
+            // The listing's colour, which is what ``HikeRow`` does with its own
+            // status capsule: the badge belongs to the row it is in, and a row
+            // whose circle and capsule disagree reads as two things.
+            badge: isImported ? TrailListRow.Badge(title: "Saved", tint: listing.tint) : nil,
+            subtitle: subtitle,
+            identifier: "community-hike-row"
+        ) {
             // A different glyph for a curated route, because the two rows are
             // different things and the badge alone is easy to miss at a
             // glance: a signpost for a waymarked trail nobody walked yet, and
-            // a walker for somebody's hike. Hidden from VoiceOver like every
-            // other decoration here — the spoken row says which it is in
-            // ``subtitle``, where it is a word rather than a picture.
-            Image(systemName: listing.isCurated ? "signpost.right" : "figure.hiking")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: Self.symbolFrameSize, height: Self.symbolFrameSize)
-                // This listing's own colour rather than the app's, so a page
-                // of results is not a column of identical circles and so the
-                // row matches the line and the pin the map is drawing for the
-                // same trail. See ``CommunityListing/tint``.
-                .background(listing.tint, in: Circle())
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(listing.title)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
-                HStack(spacing: 6) {
-                    if isImported {
-                        // The listing's colour here too, which is what
-                        // ``HikeRow`` does with its own status capsule: the
-                        // badge belongs to the row it is in, and a row whose
-                        // circle and capsule disagree reads as two things.
-                        Text("Saved")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(listing.tint)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(listing.tint.opacity(Self.badgeOpacity), in: Capsule())
-                    }
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .lineLimit(1)
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.tertiary)
-                .accessibilityHidden(true)
+            // a walker for somebody's hike. Spoken as a word rather than a
+            // picture in ``subtitle``, which is why the glyph itself is
+            // hidden.
+            TrailListRowGlyph(
+                systemName: listing.isCurated ? "signpost.right" : "figure.hiking",
+                tint: listing.tint
+            )
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("community-hike-row")
     }
 
     /// "5.2 km · by Anna · 3 photos", or "5.2 km · Loop · Red waymark 411",
