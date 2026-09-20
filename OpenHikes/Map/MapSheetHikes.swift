@@ -402,11 +402,6 @@ private extension MapSheetHikes {
                 }
             }
             .pickerStyle(.inline)
-            // `sort` is already an input of this body, so the read is free —
-            // and a menu that closes on the tap is exactly the control whose
-            // choice is worth confirming, because the list behind it may not
-            // visibly change at all.
-            .sensoryFeedback(HapticMoment.choiceChanged.feedback, trigger: sort)
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: isCustomOrder ? "hand.draw" : sort.symbol)
@@ -418,6 +413,14 @@ private extension MapSheetHikes {
             .foregroundStyle(.tint)
             .minimumTapTarget()
         }
+        // On the `Menu` and deliberately *not* on the `Picker` inside it.
+        // A menu's content closure is built into a platform menu and torn down
+        // the instant a row is tapped, so a `sensoryFeedback` declared in
+        // there has no view left to fire from by the time `sort` changes — the
+        // one control whose choice is worth confirming would have been the one
+        // that said nothing. The label out here reads `sort` already, so the
+        // trigger costs nothing new.
+        .sensoryFeedback(HapticMoment.choiceChanged.feedback, trigger: sort)
         .accessibilityLabel("Sort hikes")
         .accessibilityValue(isCustomOrder ? "Your order" : sort.title)
         .accessibilityIdentifier("hike-order-button")

@@ -106,8 +106,17 @@ struct WalkControls: View {
         // The beginning and the middle. The endings are reported by the two
         // closures above, which know what kind of ending it was — see
         // ``WalkHaptics``.
+        //
+        // Scoped to the walked hike for the reason the `onChange` above is:
+        // the session is one object and this view is on *every* hike's detail,
+        // so two details alive in the stack at once would both answer the same
+        // change. A phase can move without this screen being the one that
+        // moved it — ``MovementReminderActions`` resumes a walk from a
+        // notification — and that is the case where a hiker would feel the
+        // same Resume twice.
         .sensoryFeedback(trigger: session.phase) { old, new in
-            hapticFeedback(forWalkPhase: old, to: new)?.feedback
+            guard session.walkedHikeID == hike.id else { return nil }
+            return hapticFeedback(forWalkPhase: old, to: new)?.feedback
         }
     }
 

@@ -175,8 +175,16 @@ public extension HapticMoment {
     @MainActor
     func play() {
         switch self {
-        case .walkBegan, .walkResumed, .walkPaused:
+        case .walkBegan, .walkResumed:
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        // Not `.medium` as well. UIKit has no `.start`/`.stop`, so this face
+        // has to make the pair differ by something — and pause against resume
+        // is the one pair a hiker reads through a sleeve, pinned for
+        // ``feedback`` by `HapticMomentTests.opposedMomentsDiffer`. Sharp
+        // against blunt at the same weight is the same axis `.outcomeFailed`
+        // uses to separate itself from `.outcomeSucceeded`.
+        case .walkPaused:
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         case .trackingBegan:
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         case .walkSaved:
