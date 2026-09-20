@@ -204,9 +204,10 @@ nonisolated private extension CommunityRouteOverlap {
     /// Whether the two bounding boxes come within a tolerance of each other.
     ///
     /// In degrees rather than metres, and generously: a tolerance is converted
-    /// at the equator, where a degree is longest, so the padding is never too
-    /// small anywhere. Over-padding costs a grid pass that finds nothing;
-    /// under-padding would discard a real duplicate.
+    /// through ``RouteGeometry/metersPerDegreeLatitude``, which is the figure
+    /// at the equator where a degree of longitude is longest, so the padding is
+    /// never too small anywhere. Over-padding costs a grid pass that finds
+    /// nothing; under-padding would discard a real duplicate.
     ///
     /// A route crossing the antimeridian has a box spanning the globe and this
     /// says the two meet, which sends the pair to the grid — where
@@ -214,7 +215,7 @@ nonisolated private extension CommunityRouteOverlap {
     /// rejection is an optimisation, so being wrong here costs time and never
     /// an answer.
     static func boxesMeet(_ route: [RouteCoordinate], _ other: [RouteCoordinate]) -> Bool {
-        let padding = toleranceMeters / metersPerDegreeAtEquator
+        let padding = toleranceMeters / RouteGeometry.metersPerDegreeLatitude
         let first = box(of: route)
         let second = box(of: other)
         return first.minLatitude - padding <= second.maxLatitude
@@ -222,10 +223,6 @@ nonisolated private extension CommunityRouteOverlap {
             && first.minLongitude - padding <= second.maxLongitude
             && second.minLongitude - padding <= first.maxLongitude
     }
-
-    /// One degree of latitude, which is also the longest a degree of longitude
-    /// ever gets. Used only to pad a bounding box, where erring long is free.
-    static let metersPerDegreeAtEquator: Double = 111_320
 
     struct Box {
         let minLatitude: Double
