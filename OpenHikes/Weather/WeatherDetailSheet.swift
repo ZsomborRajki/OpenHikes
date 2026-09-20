@@ -884,6 +884,9 @@ extension WeatherDetailView {
 }
 
 #Preview("Weather detail") {
-    let manager = WeatherManager()
+    // Inert: a preview runs on the developer's own machine, against the real
+    // App Group, and has no business rewriting the temperature on their home
+    // screen or spending the widget's reloads.
+    let manager = WeatherManager(widgetPublisher: .inert)
     return WeatherDetailView(weather: manager)
 }

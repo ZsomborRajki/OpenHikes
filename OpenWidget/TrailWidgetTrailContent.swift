@@ -72,9 +72,14 @@ struct TrailWidgetContent: View {
     /// temperature. The glyphs themselves are hidden, so this is the only
     /// place any of the numbers are said — including the status line, which is
     /// no longer drawn anywhere.
+    ///
+    /// ``SharedTrailSnapshot/progressStatusText`` rather than `statusText`,
+    /// because the length that line falls back to when there is no live fix
+    /// is a chip now: the fallback would make the commonest state of a placed
+    /// widget say its one number twice.
     private var accessibilityValue: String {
         TrailWidgetSpeech.value(
-            status: snapshot.statusText,
+            status: snapshot.progressStatusText,
             metrics: snapshot.metricsAccessibilityText(limit: layout.metricLimit),
             weather: weather
         )

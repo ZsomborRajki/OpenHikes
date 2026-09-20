@@ -98,6 +98,20 @@ struct SharedTrailSnapshotTests {
         #expect(!status.isEmpty)
     }
 
+    /// The half the Home Screen widget speaks. It is absent exactly where the
+    /// status line falls back to the trail's length, because the widget draws
+    /// that length as a chip of its own — and a reader who cannot see the chip
+    /// must not be told the same number twice. See `TrailWidgetSpeech`.
+    @Test("the progress half is absent when there is no progress to report")
+    func progressStatusIsAbsentWithoutAFix() {
+        let walked = Self.snapshot(total: 10_000, along: 6200)
+        let idle = Self.snapshot(total: 10_000)
+
+        #expect(walked.progressStatusText == walked.statusText)
+        #expect(idle.progressStatusText == nil)
+        #expect(idle.statusText == WidgetFormat.length(meters: 10_000))
+    }
+
     // MARK: Walks
 
     private static func walk(

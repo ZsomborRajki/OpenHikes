@@ -117,9 +117,18 @@ nonisolated struct WeatherWidgetPublisher: Sendable {
     ///
     /// `@concurrent` rather than a detached task, for the reason
     /// `GPXExport.writeTemporaryFile(for:)` is one: the caller is
-    /// `@MainActor`, the work here is two App Group file operations, and this
-    /// keeps them off the main thread while staying inside the caller's task
-    /// so a cancelled launch cancels it.
+    /// `@MainActor` and the work here is App Group file operations, so this
+    /// keeps them off the main thread while leaving the call an ordinary
+    /// `await` — cancellation and ordering stay the caller's to decide. The
+    /// one caller that has several of these to make in a row decides both by
+    /// chaining them; see ``WeatherManager/publish(_:)``.
+    ///
+    /// The redraw is decided against what the store *has* after the write
+    /// rather than against the value passed in. A write that did not land —
+    /// an App Group that cannot be resolved, a container still locked under
+    /// data protection — leaves the old reading in place, and asking the
+    /// store means that case spends no reload at all instead of one on every
+    /// badge move for a widget whose picture cannot change.
     ///
     /// - Returns: whether the redraw was asked for, which is what a refusal is
     ///   asserted through where a silent sink would be indistinguishable from
@@ -137,7 +146,7 @@ nonisolated struct WeatherWidgetPublisher: Sendable {
             store.clear()
         }
         let before = Self.drawnTemperature(for: previous, asOf: now, locale: locale)
-        let after = Self.drawnTemperature(for: reading, asOf: now, locale: locale)
+        let after = Self.drawnTemperature(for: store.load(), asOf: now, locale: locale)
         guard before != after else { return false }
         reload()
         return true
@@ -145,18 +154,35 @@ nonisolated struct WeatherWidgetPublisher: Sendable {
 }
 
 extension WeatherBadgeState {
+    /// Whether a move to this state is worth telling the widget about at all.
+    ///
+    /// `false` for ``WeatherBadgeState/loading(_:)`` alone, which is the one
+    /// state that is *on its way somewhere*: a fetch is in flight and it
+    /// resolves, within a WeatherKit round trip, into a reading or into
+    /// ``WeatherBadgeState/unavailable(_:)`` — and both of those publish. A
+    /// widget told about the state in between would empty its corner and
+    /// spend a reload doing it, then fill it and spend another, for the
+    /// commonest thing a hiker does: tapping a trail the app has no cached
+    /// forecast for. Holding the corner as it is costs nothing and is bounded
+    /// by ``SharedWeatherReading/maximumAge`` in the case where the fetch
+    /// never comes back at all.
+    var publishesToWidget: Bool {
+        if case .loading = self { return false }
+        return true
+    }
+
     /// The reading this state hands the widget, or `nil` for a state that has
     /// none to give.
     ///
-    /// `loading` and `unavailable` deliberately answer `nil` rather than
-    /// leaving whatever was published last in place. On the badge those two
-    /// still draw something — a spinner, an empty capsule — because the hiker
-    /// can see they mean "working on it" and "could not". A widget has no
-    /// room to say either, so the only honest drawings are the temperature or
-    /// nothing, and a number that has outlived the subject it was for is the
-    /// wrong one: focusing a trail three hundred kilometres away and failing
-    /// to get its forecast must not leave the last valley's temperature on the
-    /// home screen.
+    /// `unavailable` deliberately answers `nil` rather than leaving whatever
+    /// was published last in place. On the badge it still draws something — an
+    /// empty capsule — because the hiker can see it means "could not". A
+    /// widget has no room to say that, so the only honest drawings are the
+    /// temperature or nothing, and a number that has outlived the subject it
+    /// was for is the wrong one: focusing a trail three hundred kilometres
+    /// away and failing to get its forecast must not leave the last valley's
+    /// temperature on the home screen. `loading` is never asked — see
+    /// ``publishesToWidget``.
     var sharedReading: SharedWeatherReading? {
         guard let snapshot else { return nil }
         return SharedWeatherReading(

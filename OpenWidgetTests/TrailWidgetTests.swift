@@ -43,8 +43,11 @@ nonisolated enum WidgetStoreProbe {
     }
 }
 
-/// Everything below writes the one App Group payload, so it runs serialized.
-@Suite("Trail widget", .serialized, .enabled(if: WidgetStoreProbe.isAvailable))
+/// Everything below writes the one App Group payload, so it runs serialized —
+/// and nested, so it cannot run beside the other suite that writes it. See
+/// `TrailWidgetStoreSuites`.
+extension TrailWidgetStoreSuites {
+@Suite("Trail widget", .serialized)
 struct TrailWidgetTests {
 
     static func snapshot(
@@ -109,6 +112,10 @@ struct TrailWidgetTests {
         SharedStore.clear()
         try? SharedStore.clearRecording()
         try? SharedStore.clearPendingRecordingFixes()
+        // The entry carries a temperature now, and a reading left behind by
+        // the weather suite would put one into the timeline this suite counts
+        // the entries of.
+        SharedStore.clearWeatherReading()
     }
 
     // MARK: The timeline
@@ -432,4 +439,5 @@ struct TrailWidgetTests {
                 == [.ascent, .length, .currentElevation]
         )
     }
+}
 }

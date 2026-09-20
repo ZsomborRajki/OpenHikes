@@ -391,6 +391,10 @@ final class WeatherManager {
     /// Where the badge's reading reaches the home screen widget. A suite hands
     /// this a counter, for the reason ``TrailWidgetReload`` takes one.
     @ObservationIgnored private let widgetPublisher: WeatherWidgetPublisher
+    /// The tail of the publish chain — see ``publish(_:)``. Never cancelled:
+    /// a publish that has started is a file the widget is about to read, and
+    /// abandoning it half-written is the one outcome worse than a late one.
+    @ObservationIgnored private var pendingWidgetPublish: Task<Void, Never>?
     /// `nil` for a launch that must not reach the network — see
     /// ``WeatherPlaceNaming``. The sheet is then headed exactly as it was
     /// before that file existed.
@@ -668,14 +672,40 @@ final class WeatherManager {
     /// Moves the badge, and tells the widget what the badge now says.
     ///
     /// The only writer of ``state``. The widget draws a temperature it cannot
-    /// fetch, so every move of the badge is also a publish — see
-    /// ``WeatherWidgetPublisher``, which decides on its own whether the new
-    /// state is worth a redraw and does both off the main thread.
+    /// fetch, so every move of the badge that has something new to say is also
+    /// a publish — see ``WeatherWidgetPublisher``, which decides on its own
+    /// whether the new state is worth a redraw and does both off the main
+    /// thread.
+    ///
+    /// **Chained rather than fired**, for the reason
+    /// `HikeLiveActivityController.enqueue(_:)` chains: the badge moves in
+    /// bursts — a focus, then the fetch that answers it, sometimes a second
+    /// subject on top — and each publish is a read of the App Group file
+    /// followed by a write of it. Unstructured tasks racing into that file
+    /// would settle in whatever order the global executor happened to run
+    /// them, which for the commonest burst means a widget left holding the
+    /// *older* reading until the next badge move, up to
+    /// ``SharedWeatherReading/maximumAge`` later.
     private func publish(_ newState: WeatherBadgeState) {
         guard state != newState else { return }
         state = newState
+        guard newState.publishesToWidget else { return }
         let reading = newState.sharedReading
-        Task { await widgetPublisher.publish(reading) }
+        let previous = pendingWidgetPublish
+        pendingWidgetPublish = Task { [widgetPublisher] in
+            await previous?.value
+            await widgetPublisher.publish(reading)
+        }
+    }
+
+    /// Waits for everything queued for the widget so far.
+    ///
+    /// A test seam, and the reason the suites can assert on a stub without
+    /// sleeping: the publish is `async` and deliberately off the main thread,
+    /// so "the reading landed" is only answerable by draining. See
+    /// `HikeLiveActivityController.settle()`.
+    func settleWidgetPublishing() async {
+        await pendingWidgetPublish?.value
     }
 
     private func remember(_ snapshot: WeatherSnapshot, for subject: WeatherSubject) {

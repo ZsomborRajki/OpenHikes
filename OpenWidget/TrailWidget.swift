@@ -18,7 +18,9 @@ import SwiftUI
 import WidgetKit
 
 struct TrailWidgetEntry: TimelineEntry {
-    let date: Date
+    /// `var` only so ``droppingWeather(at:)`` can move a copy forward to the
+    /// moment the temperature goes off. Nothing else assigns it.
+    var date: Date
     let snapshot: SharedTrailSnapshot?
     let recordingSnapshot: SharedRecordingSnapshot?
     /// The map images the app rendered for `snapshot`'s trail, if any — see
@@ -91,6 +93,23 @@ struct TrailWidgetEntry: TimelineEntry {
         weather = SharedStore.loadWeatherReading().flatMap { reading in
             reading.isExpired(asOf: date) ? nil : reading
         }
+    }
+
+    /// This same entry at `date`, with the temperature gone.
+    ///
+    /// The second half of how a reading stops being drawn. The first is the
+    /// refresh date — see ``TrailWidgetProvider/nextReload(after:recording:weatherExpiresAt:)``
+    /// — and on its own it is a *request*: WidgetKit defers a reload for a
+    /// widget that has overrun its budget, or a device in Low Power Mode, and
+    /// a single-entry timeline then keeps rendering the expired number for as
+    /// long as the deferral lasts. An entry already in the timeline needs no
+    /// permission to be shown, so this is what actually empties the corner on
+    /// time. It costs no reload: the entries of one timeline are built once.
+    func droppingWeather(at date: Date) -> Self {
+        var dropped = self
+        dropped.date = date
+        dropped.weather = nil
+        return dropped
     }
 
     /// Where tapping the widget goes. Absent in the empty state, where there
@@ -282,14 +301,21 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
         pinnedTo pinnedHikeID: UUID? = nil
     ) -> Timeline<TrailWidgetEntry> {
         let entry = currentEntry(date: date, pinnedTo: pinnedHikeID)
+        let expiry = entry.weather?.expiresAt
+        var entries = [entry]
+        // The entry that draws no temperature, scheduled for the moment the
+        // one above stops being true. See ``TrailWidgetEntry/droppingWeather(at:)``.
+        if let expiry, expiry > date {
+            entries.append(entry.droppingWeather(at: expiry))
+        }
         return Timeline(
-            entries: [entry],
+            entries: entries,
             policy: .after(
                 nextReload(
                     after: date,
                     recording:
                         entry.recordingSnapshot?.isCapturingFixes == true,
-                    weatherExpiresAt: entry.weather?.expiresAt
+                    weatherExpiresAt: expiry
                 )
             )
         )
@@ -541,9 +567,13 @@ struct TrailWidgetEntryView: View {
 
         /// What is spoken after the trail's name: how the recording is going,
         /// then the conditions it is going in.
+        ///
+        /// ``SharedRecordingSnapshot/pointCountText`` rather than
+        /// `statusText`, whose other half is the distance — which is a chip
+        /// here now and would otherwise be read out twice.
         private var accessibilityValue: String {
             TrailWidgetSpeech.value(
-                status: snapshot.statusText,
+                status: snapshot.pointCountText,
                 metrics: snapshot.metricsAccessibilityText(limit: layout.metricLimit),
                 weather: weather
             )
