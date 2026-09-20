@@ -144,3 +144,97 @@ for the compass in the corner before touching the zoom.
 - Frame 6 is captured with `--ui-test-entitled`, so it shows a control that is
   behind OpenHikes Pro. That is honest — it is a real feature — but the listing
   text should not imply it is free.
+
+## The Apple Watch set
+
+```sh
+Scripts/watch-screenshots.sh
+```
+
+That creates a dedicated `Apple Watch Ultra 4 (49mm)` simulator and a companion
+iPhone, erases the watch, pairs the two, pins the locale, builds, installs, and
+writes five PNGs at 422 × 514 to `Screenshots/WatchOutput/`. About four and a
+half minutes, most of it deliberate waiting.
+
+| # | Frame | What it has to say |
+|---|-------|--------------------|
+| 1 | `01-your-trails` | Your hikes, on your wrist |
+| 2 | `02-the-trail-on-your-wrist` | The route on a real map — the reason to raise it |
+| 3 | `03-how-much-is-left` | How far, how much is left, still on the trail |
+| 4 | `04-recording-from-the-wrist` | It records on its own, with a heart rate |
+| 5 | `05-your-iphone-s-hike` | Your iPhone's recording, driven from here |
+
+### It is launched, not tapped
+
+There is no watch equivalent of `ScreenshotUITests` and there is not going to
+be one: `OpenHikesWatch` has no test bundle and no gate boots a watch
+simulator, and `simctl` can install, launch and photograph a watch app but
+cannot tap one.
+
+So a frame is a *launch*. `Scripts/watch-screenshots.sh` launches the app once
+per frame with that frame's `--ui-test-*` arguments, `WatchLaunchEnvironment`
+parses them, and `SeededWatchFixture` puts the watch in the state they
+describe. The payloads it builds are the real ones — a `WatchLibraryDigest`, a
+`WatchTrailPackage`, a `WatchPhoneRecording` — because a watch simulator has no
+paired phone and every screen in this app is drawn from something that arrives
+over `WCSession`. The position on the trail is matched by the real
+`WatchRouteTracker` rather than invented, so the figures on frame 3 are the
+ones that trail and that place genuinely produce.
+
+The route is the same Königssee walk the iPhone set uses, decimated to 128
+points in `SeededWatchRoute.swift`.
+
+This also replaces what looking at a watch screen used to cost: editing
+`OpenHikesWatchApp`'s `WindowGroup` to point at the screen and putting it back
+afterwards.
+
+### Three things that are not like the iPhone set
+
+- **The status bar cannot be pinned to 9:41.** `simctl status_bar override`
+  answers "Status bar overrides not supported on this platform" on every
+  watchOS device. The time in the frames is the time they were taken.
+- **There is no light appearance.** `simctl ui … appearance` answers "Runtime
+  does not support userInterfaceStyle", because watchOS has no light mode. One
+  set, no `-dark` suffix.
+- **The locale is pinned, to `en_IE`.** A simulator inherits the Mac's region,
+  which here produced "4,2 km" and "2026. Sep 7.". `en_IE` is the English
+  locale that is also metric — `en_US` is imperial and `en_GB` prints miles,
+  which this app honours. `--locale en_US` for a US listing.
+
+### When the map comes out grey
+
+A green route on a flat grey grid is MapKit's placeholder, which is also what
+this app genuinely looks like offline — so the frame is wrong in a way that
+reads as deliberate. There are two causes and both are handled:
+
+- **A paired watch fetches its tiles through its companion.** The watch's log
+  says `[GeoServices:TileLoading] [Companion] … com.apple.nanomaps.xpc.
+  GeoServices was invalidated`, with each request timing out after exactly
+  60 seconds. The script launches `com.apple.Maps` on the companion to start
+  that stack. Without it every map frame is grey; with it none are. This is
+  the one to suspect first if the frames regress.
+- **A cold cache is slow.** The device is erased every run, so the tiles are
+  always fetched fresh. Map frames wait 60 seconds where a text frame waits 15
+  (`OPENHIKES_WATCH_MAP_SETTLE`, `--settle`).
+
+`--no-pair` is the fallback: an unpaired watch uses its own network and always
+draws its map, at the cost of a red crossed-out iPhone in every status bar.
+`--no-erase` keeps the tile cache between runs.
+
+### Pairing is done once
+
+The pair survives both the erase and the simulators being shut down, so the
+script only pairs when the pairing is not already right. That is not an
+optimisation: re-pairing forces a sync, and a watch in the middle of one
+reports no companion and starves MapKit for a minute or more — which looks
+exactly like a bug in the app. A run that does have to pair waits the sync out
+before capturing anything.
+
+The companion also carries the **phone** app, which is why the paired path
+builds the `OpenHikes` scheme rather than `OpenHikesWatch` (the iOS app embeds
+the watch one, so it is still one build). watchOS mirrors the companion's app
+list, and a watch app whose phone app is missing is an orphan that the pairing
+sync deletes — some minutes in, which is the middle of a capture. The symptom
+is `simctl launch` refusing with `FBSOpenApplicationServiceErrorDomain` code 4
+for an app that was launching a minute earlier, and it survives a reboot,
+because the app is genuinely gone.

@@ -84,6 +84,34 @@ final class WatchModel {
         recorder.onWalkQueued = { [weak self] walk in self?.walkQueued(walk) }
     }
 
+    #if DEBUG
+    /// Puts this watch in the state a `--ui-test-*` launch asked for.
+    ///
+    /// Applied *instead of* ``start()``, not before it — see
+    /// `OpenHikesWatchApp`. Activating the link on a simulator with no paired
+    /// phone would achieve nothing, but it would also set
+    /// ``PhoneLink/isCompanionInstalled`` to `false`, and the empty-state copy
+    /// branches on it: a seeded run would draw its list correctly and a run
+    /// seeded with no trails would blame a missing companion app for it.
+    ///
+    /// Everything it writes is what a phone would have sent, so the screens
+    /// below are not told they are being photographed — see
+    /// ``SeededWatchFixture``.
+    func applySeededFixture() {
+        let fixture = SeededWatchFixture(configuration: WatchLaunchEnvironment.configuration)
+        library = fixture.library
+        trail = fixture.trail
+        queuedWalkCount = fixture.queuedWalkCount
+        phoneRecording = fixture.phoneRecording
+        if let trail { tracker = WatchRouteTracker(trail) }
+        if let position = fixture.position { follow.update(position) }
+        if let recording = fixture.recording {
+            recorder.applySeededRecording(recording.phase, stats: recording.stats)
+        }
+        recorder.stats.update(heartRateBPM: fixture.heartRateBPM)
+    }
+    #endif
+
     /// Starts the link and sends whatever is already waiting.
     func start() {
         link.activate { [weak self] delivery in self?.apply(delivery) }

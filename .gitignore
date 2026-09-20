@@ -43,5 +43,7 @@ TestResults/
 # repository's history — see Screenshots/README.md.
 Screenshots/Output/
 Screenshots/Output-*/
+Screenshots/WatchOutput/
+Screenshots/WatchOutput-*/
 Screenshots/Photos/
 Screenshots/Stamped/
