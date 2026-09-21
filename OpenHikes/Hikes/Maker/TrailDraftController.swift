@@ -268,15 +268,26 @@ final class TrailDraftController {
 
     /// Takes one answer, whatever has happened to the drawing meanwhile.
     ///
-    /// The claim is released either way, so a leg whose answer was cancelled
-    /// can be asked about again — by the next tap, or by *Retry*. The draft
-    /// itself decides whether the answer still applies: it is matched against
-    /// the leg's two ends rather than its place in the list, so a hiker who
-    /// added three more points while this was in flight still gets it, and one
-    /// who turned snapping off does not. See ``TrailDraft/apply(_:to:)``.
+    /// The draft decides whether the answer still applies: it is matched
+    /// against the leg's two ends rather than its place in the list, so a
+    /// hiker who added three more points while this was in flight still gets
+    /// it, and one who turned snapping off does not. See
+    /// ``TrailDraft/apply(_:to:)``.
+    ///
+    /// **A cancelled question has to be given back as well as released.**
+    /// Cancellation is not a failure and is not drawn as one, but a leg left
+    /// marked as waiting is never asked about again — ``TrailDraft/legsAwaitingRoutes(retryingRefusals:)``
+    /// skips it — so it would stay dashed for the rest of the drawing. There
+    /// is nothing here that cancels one of these, but the provider's shared
+    /// download has its own reasons to: a leg can be waiting on the same
+    /// region a recording is prefetching, and that recording stopping takes
+    /// the request with it.
     private func receive(_ route: TrailLegRoute?, for ends: TrailLegEnds) {
         legsInFlight.remove(ends)
-        guard let route else { return }
+        guard let route else {
+            draft.abandonRouting(of: ends)
+            return
+        }
         draft.apply(route, to: ends)
     }
 }

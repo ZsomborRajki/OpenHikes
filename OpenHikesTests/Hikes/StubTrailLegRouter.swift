@@ -21,14 +21,16 @@ import Foundation
 @testable import OpenHikes
 
 actor StubTrailLegRouter: TrailLegRouting {
-    private var snap: TrailLegSnap
+    /// What the next answer says, or `nil` for the answer a cancelled
+    /// question gives — which is no answer at all.
+    private var snap: TrailLegSnap?
     private var asked: [TrailLegEnds] = []
     /// Whether answers are held back until ``release()``.
     private var isHolding: Bool
     /// The callers waiting for that release.
     private var waiting: [CheckedContinuation<Void, Never>] = []
 
-    init(answering snap: TrailLegSnap, holding: Bool = false) {
+    init(answering snap: TrailLegSnap?, holding: Bool = false) {
         self.snap = snap
         isHolding = holding
     }
@@ -40,11 +42,13 @@ actor StubTrailLegRouter: TrailLegRouting {
                 waiting.append(continuation)
             }
         }
+        guard let snap else { return nil }
         return .straight(along: ends, snap)
     }
 
-    /// What every answer from here on says.
-    func answer(with snap: TrailLegSnap) {
+    /// What every answer from here on says, or `nil` to answer the way a
+    /// cancelled question does.
+    func answer(with snap: TrailLegSnap?) {
         self.snap = snap
     }
 

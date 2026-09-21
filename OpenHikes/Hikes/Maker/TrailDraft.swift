@@ -301,6 +301,21 @@ final class TrailDraft {
         }
     }
 
+    /// Gives up on one leg that was being asked about, leaving it the
+    /// straight line it already is.
+    ///
+    /// What a cancelled question comes to. Cancellation is not a failure and
+    /// must not be drawn as one — but the leg cannot be left waiting either,
+    /// because a leg that is waiting is never asked about again and would
+    /// stay dashed for the rest of the drawing. Dropped back to freehand
+    /// instead, so the next pass picks it up.
+    func abandonRouting(of ends: TrailLegEnds) {
+        mutateLegs { leg in
+            guard leg.ends == ends, leg.snap.isRouting else { return }
+            leg.snap = .freehand
+        }
+    }
+
     /// Gives up on legs still waiting, leaving them the straight lines they
     /// already are — what the maker closing does, so a draft resumed later
     /// does not come back dashed forever.

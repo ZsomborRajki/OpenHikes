@@ -178,6 +178,27 @@ struct TrailDraftRoutingTests {
         #expect(!maker.draft.hasRetryableLegs)
     }
 
+    /// A cancelled question is not a failure and is not drawn as one — but
+    /// the leg cannot be left waiting either. A leg still marked as waiting
+    /// is never asked about again, so it would stay dashed for the rest of
+    /// the drawing.
+    @Test("a cancelled question gives the leg back rather than leaving it waiting")
+    func cancelledQuestionsReleaseTheLeg() async {
+        let router = StubTrailLegRouter(answering: nil)
+        let maker = Self.maker(router)
+
+        Self.draw([Line.south, Line.north], on: maker)
+
+        await settleDelegateHop(until: "the leg to stop waiting") {
+            maker.draft.legs.first?.snap == .freehand
+        }
+        #expect(!maker.draft.isRouting)
+        #expect(
+            maker.draft.legsAwaitingRoutes(retryingRefusals: false).count == 1,
+            "and it is asked about again by the next pass"
+        )
+    }
+
     // MARK: The toggle
 
     @Test("turning path-following off straightens the line and asks nothing")
