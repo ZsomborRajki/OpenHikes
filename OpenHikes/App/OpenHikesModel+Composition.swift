@@ -149,6 +149,25 @@ extension OpenHikesModel {
             areaNames: namesAreas ? GeocodedAreaNames() : nil
         )
     }
+
+    /// The trail maker, pointed at the unmirrored store a half-drawn trail
+    /// belongs in — see ``TrailDraftRecord`` for why that is the one it
+    /// belongs in and what the choice costs (nothing: no `CD_` type, no
+    /// Console index, no mirrored-schema entry).
+    ///
+    /// The container's main context, like ``TrailWalkSession``'s: both are
+    /// main-actor SwiftData work driven by a hiker's own gestures rather than
+    /// by a feed, so neither wants a background context of its own.
+    ///
+    /// Unguarded by ``AppLaunchEnvironment/isRunningTests``, unlike
+    /// ``makeWatchLink(container:)``. A hosted suite gets whatever container
+    /// the host built, which for a test launch is in-memory, so there is
+    /// nothing here that could reach the developer's own disk — and UI
+    /// automation needs the maker to work for the same reason it needs the
+    /// recorder to.
+    static func makeTrailMaker(container: ModelContainer) -> TrailDraftController {
+        TrailDraftController(store: TrailDraftStore(context: container.mainContext))
+    }
 }
 
 // MARK: - The watch
@@ -165,24 +184,6 @@ extension OpenHikesModel {
     /// mid-suite would be written into whatever store the host happened to
     /// build. There is nothing here a UI test can drive either: it would need
     /// a second device on the other end of the link.
-    /// The trail maker, pointed at the unmirrored store a half-drawn trail
-    /// belongs in — see ``TrailDraftRecord`` for why that is the one it
-    /// belongs in and what the choice costs (nothing: no `CD_` type, no
-    /// Console index, no mirrored-schema entry).
-    ///
-    /// The container's main context, like ``TrailWalkSession``'s: both are
-    /// main-actor SwiftData work driven by a hiker's own gestures rather than
-    /// by a feed, so neither wants a background context of its own.
-    ///
-    /// Unguarded by ``AppLaunchEnvironment/isRunningTests``, unlike the link
-    /// below. A hosted suite gets whatever container the host built, which for
-    /// a test launch is in-memory, so there is nothing here that could reach
-    /// the developer's own disk — and UI automation needs the maker to work
-    /// for the same reason it needs the recorder to.
-    static func makeTrailMaker(container: ModelContainer) -> TrailDraftController {
-        TrailDraftController(store: TrailDraftStore(context: container.mainContext))
-    }
-
     static func makeWatchLink(container: ModelContainer) -> WatchSessionCoordinator? {
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
         return WatchSessionCoordinator(container: container)

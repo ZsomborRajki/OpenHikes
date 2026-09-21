@@ -36,13 +36,6 @@ import SwiftData
 
 @Model
 final class TrailDraftRecord {
-    /// What the hiker has typed into the maker's name field, unbounded here
-    /// and bounded on the way out — ``TrailDraftSave`` is where a draft
-    /// becomes a hike and where ``HikeTitle/bounded(_:)`` is spent, which is
-    /// the rule that type states: a name is bounded where it enters the app's
-    /// payloads, and a draft on this device's own disk is not one of them.
-    var name: String = ""
-
     /// The points, in order. ``RouteCoordinate`` rather than a second encoded
     /// shape, because it is already what a route is written as and a draft is
     /// a route that is not finished. The per-waypoint identities are not kept:
@@ -54,8 +47,7 @@ final class TrailDraftRecord {
     /// draft has something to say about it. Read by nothing today.
     var updatedAt = Date.distantPast
 
-    init(name: String, waypoints: [RouteCoordinate], updatedAt: Date) {
-        self.name = name
+    init(waypoints: [RouteCoordinate], updatedAt: Date) {
         self.waypoints = waypoints
         self.updatedAt = updatedAt
     }

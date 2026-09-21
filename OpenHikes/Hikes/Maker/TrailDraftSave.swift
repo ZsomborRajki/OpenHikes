@@ -86,7 +86,13 @@ enum TrailDraftSave {
         category: "TrailDraft"
     )
 
-    /// Persists `draft` as a hike, or says why it could not.
+    /// Persists `draft` as a hike under `name`, or says why it could not.
+    ///
+    /// The name arrives as an argument rather than off the draft, because it
+    /// is typed into the alert that asks for it on the way out — see
+    /// ``TrailDraftView``. A blank one is not a missing answer but the
+    /// answer the placeholder promised: ``HikeTitle/drawn(name:madeOn:)``
+    /// names the trail after the day it was drawn.
     ///
     /// - Parameter save: The seam the commit goes through, so a suite can
     ///   refuse it — the same shape ``HikeImport`` and
@@ -95,6 +101,7 @@ enum TrailDraftSave {
     ///   failure whose whole point is what it does *not* leave behind.
     @discardableResult static func hike(
         from draft: TrailDraft,
+        named name: String,
         into context: ModelContext,
         madeOn date: Date = .now,
         save: (ModelContext) throws -> Void = { try $0.save() }
@@ -106,7 +113,7 @@ enum TrailDraftSave {
             // Bounded here, where the name leaves the maker: this is the point
             // at which a typed string starts reaching payloads with ceilings
             // — see ``HikeTitle``, which owns the rule and both its bounds.
-            title: HikeTitle.drawn(name: draft.name, madeOn: date),
+            title: HikeTitle.drawn(name: name, madeOn: date),
             distanceMeters: draft.distanceMeters,
             date: date,
             tintHex: Hike.randomTintHex(),

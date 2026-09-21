@@ -166,6 +166,9 @@ struct TrailDraftControllerTests {
 
     // MARK: Keeping it
 
+    /// Written as it lands, with the maker still open — which is what makes
+    /// closing it a no-op rather than the moment the drawing is saved. See
+    /// ``TrailDraftController/setEditing(_:)``.
     @Test("a point put down is written down with it")
     func pointsArePersisted() throws {
         let (maker, store) = try makerWithStore()
@@ -173,42 +176,22 @@ struct TrailDraftControllerTests {
 
         maker.appendWaypoint(at: Self.coordinate(Line.south))
 
-        let stored = try #require(store.load())
-        #expect(stored.waypoints.count == 1)
-    }
-
-    /// A name typed but never followed by a tap is the case a per-keystroke
-    /// write would have covered and a per-tap one does not, which is why
-    /// closing the maker writes too.
-    @Test("closing the maker writes down a name nothing else carried")
-    func closingCarriesTheName() throws {
-        let (maker, store) = try makerWithStore()
-        maker.setEditing(true)
-        maker.appendWaypoint(at: Self.coordinate(Line.south))
-        maker.draft.name = "Ridge"
-
-        maker.setEditing(false)
-
-        #expect(try #require(store.load()).name == "Ridge")
+        #expect(store.load().count == 1)
     }
 
     @Test("a draft left behind comes back when the maker is opened again")
     func draftIsRestored() throws {
         let store = TrailDraftStore(context: try Fixture.modelContext())
-        store.save(
-            name: "Ridge",
-            waypoints: [
-                TrailWaypoint(coordinate: Self.coordinate(Line.south)),
-                TrailWaypoint(coordinate: Self.coordinate(Line.north)),
-            ]
-        )
+        store.save(waypoints: [
+            TrailWaypoint(coordinate: Self.coordinate(Line.south)),
+            TrailWaypoint(coordinate: Self.coordinate(Line.north)),
+        ])
         // A fresh launch: a controller with nothing in memory.
         let maker = TrailDraftController(store: store)
 
         maker.setEditing(true)
 
         #expect(maker.draft.waypoints.count == 2)
-        #expect(maker.draft.name == "Ridge")
         #expect(maker.draft.distanceMeters > 0)
     }
 
@@ -233,13 +216,11 @@ struct TrailDraftControllerTests {
         let (maker, store) = try makerWithStore()
         maker.setEditing(true)
         maker.appendWaypoint(at: Self.coordinate(Line.south))
-        maker.draft.name = "Ridge"
 
         maker.discard()
 
         #expect(maker.draft.isEmpty)
-        #expect(maker.draft.name.isEmpty)
-        #expect(store.load() == nil)
+        #expect(store.load().isEmpty)
     }
 
     /// A discard followed by a reopen finds nothing, which is the other half

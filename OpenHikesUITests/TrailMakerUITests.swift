@@ -21,6 +21,9 @@
 import XCTest
 
 nonisolated final class TrailMakerUITests: XCTestCase {
+    /// What the drawn trail is named, and what the library row is found by.
+    private static let trailName = "Saturday Ridge"
+
     /// Three taps well inside the map, spread far enough apart that no two of
     /// them land on the same coordinate at any plausible zoom.
     ///
@@ -28,8 +31,6 @@ nonisolated final class TrailMakerUITests: XCTestCase {
     /// window is whatever device the runner resolved. The vertical range stays
     /// in the top half, clear of the sheet at every detent it can rest at and
     /// clear of the controls on the leading edge.
-    private static let trailName = "Saturday Ridge"
-
     private static let drawnPoints: [CGVector] = [
         CGVector(dx: 0.45, dy: 0.20),
         CGVector(dx: 0.65, dy: 0.30),
@@ -74,13 +75,10 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         )
         XCTAssertTrue(save.isEnabled, "three points is a trail")
 
-        // Named last, so the keyboard is never over the map being tapped.
-        let name = element("trail-draft-name", in: app)
-        XCTAssertTrue(name.exists, "the maker should offer a name field")
-        name.tap()
-        name.typeText(Self.trailName)
-
+        // Named on the way out, in the alert Save opens — the same shape a
+        // stopped recording is named in, and the only place the maker asks.
         save.tap()
+        nameTheTrail(Self.trailName, in: app)
 
         // A saved trail lands exactly where a stopped recording lands: on its
         // own screen, over a map drawing it.
@@ -189,6 +187,26 @@ nonisolated final class TrailMakerUITests: XCTestCase {
             ),
             "tapping the pill should open the maker"
         )
+    }
+
+    /// Answers the alert Save opens, which is the only place the maker asks
+    /// what the trail is called.
+    ///
+    /// The field opens blank — the placeholder is the default name — so this
+    /// types rather than replaces, unlike `stopRecording(named:in:)` next
+    /// door.
+    @MainActor
+    private func nameTheTrail(_ name: String, in app: XCUIApplication) {
+        let prompt = app.alerts["Name Your Trail"]
+        XCTAssertTrue(
+            prompt.waitForExistence(timeout: UITestTimeout.navigation),
+            "saving should ask what the trail is called"
+        )
+        let field = prompt.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: UITestTimeout.navigation))
+        field.tap()
+        field.typeText(name)
+        prompt.buttons["Save"].tap()
     }
 
     /// Taps the map at each offset and waits for the point to be listed.

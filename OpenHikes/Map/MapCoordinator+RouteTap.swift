@@ -175,6 +175,10 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
     /// the line they are drawing. The hiker's own photo pins cannot be there
     /// at all: like the camera pill, they are offered only by a screen that
     /// attaches a subject, and the maker attaches none.
+    ///
+    /// The maker's *own* numbered pins are not among them, and
+    /// ``isTapClaimed(at:in:)`` says why: they answer no tap, so a claim by
+    /// one is a tap that disappears rather than a tap that did something else.
     func addTrailDraftWaypoint(at point: CGPoint, in mapView: MKMapView) -> Bool {
         guard let trailDraftController, trailDraftController.isEditing else { return false }
         guard !isTapClaimed(at: point, in: mapView) else { return false }
@@ -246,10 +250,23 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
     /// `UIControl` alone would let a tap on the padding around a button through
     /// while catching the button itself, which is the sort of difference
     /// nobody can see and everybody hits.
+    /// The maker's own pins are the one exception, and they are an exception
+    /// because they are not a claim. A ``TrailDraftWaypointAnnotation``'s view
+    /// shows no callout and answers no tap, so letting it take one means a
+    /// thumb inside its 24 points does nothing at all — no point put down, no
+    /// callout opened, no feedback — and in a phase with no undo, no drag and
+    /// no delete, a hiker drawing a switchback or doubling back past a point
+    /// they already placed cannot tell a swallowed tap from a missed one. The
+    /// paragraph above argues from markers that *do* something with a touch;
+    /// these do not, so the tap goes on to mean what every other tap on this
+    /// canvas means.
     private func isTapClaimed(at point: CGPoint, in mapView: MKMapView) -> Bool {
         var view = mapView.hitTest(point, with: nil)
         while let current = view, current !== mapView {
-            if current is MKAnnotationView || current is UIControl { return true }
+            if let annotationView = current as? MKAnnotationView {
+                return !(annotationView.annotation is TrailDraftWaypointAnnotation)
+            }
+            if current is UIControl { return true }
             if isOwnControl(current) { return true }
             view = current.superview
         }
