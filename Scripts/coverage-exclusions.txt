@@ -51,28 +51,55 @@
 # the same fold and has its own file and its own suite, and
 # PhotoCalloutPreviewControl is UIKit the unit suites already reach at 94%.
 #
+# Eight more paths arrived on 2026-09-21, and they are the same case again
+# rather than a new one: screens and folded-out sections written after this
+# list was, which nobody added to it. They took the measured number to 75.21%
+# and turned the gate red on a `main` whose suites were all green — the first
+# time this gate has failed for the reason the list exists to prevent. Two
+# files that turned up in the same sweep are deliberately *not* here:
+#
+#   * `CommunityShareButtonAppearance` is a value type with `import Foundation`
+#     and no view in it, working out one toolbar button's glyph, label and hint
+#     from three states. It is the precedence its own header calls too subtle
+#     to write three times, so it is exactly what the floor should be
+#     measuring; `CommunityShareButtonAppearanceTests` now covers it.
+#   * `CameraPicker` is a `UIViewControllerRepresentable` and its coordinator —
+#     UIKit glue, the same kind of code as PhotoCalloutPreviewControl above,
+#     and reachable in principle by the unit suites.
+#
+# `OpenHikesView+Photos` is the honest borderline: an extension on a `View`
+# whose members are `func`s that attach a photograph rather than body code. It
+# stays measured, because the rule at the top of this file is about what the
+# lines *are* and not about which type they hang off.
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
 
+OpenHikes/Community/CommunityFailureSections.swift
 OpenHikes/Community/Browse/CommunityHikeRow.swift
 OpenHikes/Community/Listing/CommunityHikeView+Contributions.swift
+OpenHikes/Community/Listing/CommunityHikeView+Curated.swift
 OpenHikes/Community/Listing/CommunityHikeView.swift
 OpenHikes/Community/CommunityMailOutcomeSections.swift
+OpenHikes/Community/CommunityOutcomeSection.swift
 OpenHikes/Community/Publishing/CommunityPhotoActions.swift
 OpenHikes/Community/Review/CommunityPhotoReviewView.swift
 OpenHikes/Community/Publishing/CommunityPhotoShareSheet.swift
 OpenHikes/Community/CommunityPhotoTile.swift
 OpenHikes/Community/CommunityPhotoViewer.swift
 OpenHikes/Community/Review/CommunityReportSheet.swift
+OpenHikes/Community/Review/CommunityReviewChrome.swift
 OpenHikes/Community/Review/CommunityReviewPhotoStrip.swift
 OpenHikes/Community/Review/CommunityReviewView.swift
+OpenHikes/Community/Publishing/CommunitySendFormViews.swift
 OpenHikes/Community/Publishing/CommunitySharePhotoStrip.swift
 OpenHikes/Community/Publishing/CommunitySharePhotoViews.swift
 OpenHikes/Community/Publishing/CommunityShareSheet.swift
 OpenHikes/Community/Publishing/CommunityWithdrawalSheet.swift
 OpenHikes/Community/Browse/MapSheetCommunitySection.swift
 OpenHikes/General/Dismissal.swift
+OpenHikes/General/TrailListRow.swift
 OpenHikes/Hikes/Detail/ElevationChartView.swift
 OpenHikes/Hikes/Detail/HikeDetailComponents.swift
 OpenHikes/Hikes/Detail/HikeDetailView+Community.swift
@@ -91,10 +118,12 @@ OpenHikes/Map/MapSidePanel.swift
 OpenHikes/Photos/HikePhotoSection.swift
 OpenHikes/Photos/HikePhotoViewer.swift
 OpenHikes/Photos/PhotoDiscoverySheet.swift
+OpenHikes/Photos/PhotoGalleryChrome.swift
 OpenHikes/Photos/PhotoStepButton.swift
 OpenHikes/Purchases/MapPaywallView.swift
 OpenHikes/Recording/RecordingRouteReviewControls.swift
 OpenHikes/Settings/AboutSection.swift
+OpenHikes/Settings/BackgroundTrackingSection.swift
 OpenHikes/Settings/BlockedHikersSection.swift
 OpenHikes/Settings/CloudSyncSection.swift
 OpenHikes/Settings/FieldMetricsSection.swift
