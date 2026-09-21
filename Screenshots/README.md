@@ -65,6 +65,16 @@ earlier run, and all three show up in a screenshot. It also means a capture
 cannot collide with `Scripts/run-ui-tests.sh`, which claims its own device for
 the same reason.
 
+**The locale is pinned, to `en_IE`.** A simulator inherits the Mac's region, and
+every figure in this app is formatted through the reader's locale on purpose —
+so on a machine set to Hungary the whole set came out reading "2,4 km",
+"2 000 m" and "2026. Sep 6.", all correct and none of it what an English listing
+wants. `en_IE` is the one that is English, metric and writes a date most of the
+world reads: `en_US` is imperial and `en_GB` prints road distances in miles,
+which this app honours, so an `en_GB` frame reads "6.6 mi" beside a German place
+name. `--locale en_US` is the right call for a US listing and will print miles.
+The watch script has pinned its own for the same reason since it was written.
+
 `ScreenshotUITests` is deliberately **not** in `suites` in
 `Scripts/run-ui-tests.sh`: it asserts almost nothing and exists to produce
 files, so `--all` leaves it alone. `Scripts/screenshots.sh` names it

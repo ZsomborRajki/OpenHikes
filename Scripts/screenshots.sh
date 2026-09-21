@@ -25,6 +25,16 @@
 # — which looks, in a store listing, like a screenshot somebody forgot to
 # clean up. `simctl status_bar override` is what fixes it, and it has to be
 # re-applied after every erase because an erase takes it with everything else.
+#
+# ## The locale
+#
+# A simulator inherits the host's region, and every figure in this app is
+# formatted through the reader's locale on purpose — so without pinning it the
+# frames come out reading "2,4 km", "2 000 m" and "2026. Sep 6." on a machine
+# set to Hungary, and "6.6 mi" on one set to the UK. All correct, and none of
+# them the set anybody uploads to an English listing. That makes the locale
+# part of what a screenshot run decides rather than inherits, exactly as
+# `Scripts/watch-screenshots.sh` already decided it.
 
 set -euo pipefail
 
@@ -48,6 +58,15 @@ app_bundle_id="tappium.com.OpenHikes"
 keep_device=false
 skip_photos=false
 appearance_mode="both"
+# English and metric, without having to force the units to disagree with the
+# locale. That rules out the obvious two: en_US is imperial, and en_GB prints
+# road distances in miles — which this app honours, so an en_GB frame reads
+# "6.6 mi" beside a German place name. en_IE is English, metric, and formats a
+# date the way most of the world reads one. The same default and the same
+# argument as `Scripts/watch-screenshots.sh`, which is the point: one listing,
+# one set of conventions. Override for a localised set; `--locale en_US` is
+# the right call for a US listing and will print miles.
+locale_id="${OPENHIKES_SCREENSHOT_LOCALE:-en_IE}"
 
 usage() {
     cat <<'EOF'
@@ -65,6 +84,9 @@ Options:
   --device-type <t>  Simulator device type (default: iPhone 18 Pro Max)
   --appearance <a>   light, dark, or both (default: both). "both" runs the
                      suite twice and suffixes the dark frames with "-dark".
+  --locale <id>      Locale to pin the simulator to (default: en_IE). This is
+                     what decides "2.4 km" against "2,4 km" and "6.6 mi", so
+                     it is a property of the listing rather than of the Mac.
   --no-photos        Do not touch the photo library
   --keep             Leave the simulator booted afterwards
   -h, --help         Show this help
@@ -81,6 +103,7 @@ while [[ $# -gt 0 ]]; do
         --device) device_name="${2:?--device needs a name}"; shift 2 ;;
         --device-type) device_type="${2:?--device-type needs a type}"; shift 2 ;;
         --appearance) appearance_mode="${2:?--appearance needs a value}"; shift 2 ;;
+        --locale) locale_id="${2:?--locale needs an identifier}"; shift 2 ;;
         --no-photos) skip_photos=true; shift ;;
         --keep) keep_device=true; shift ;;
         -h|--help) usage; exit 0 ;;
@@ -125,6 +148,14 @@ xcrun simctl status_bar "$udid" override \
     --cellularBars 4 \
     --batteryState charged \
     --batteryLevel 100
+
+# After the erase, which takes these with everything else, and before the first
+# launch, which is the one that reads them. No reboot is needed: an app
+# resolves `Locale.autoupdatingCurrent` at launch, and every frame here is its
+# own launch.
+xcrun simctl spawn "$udid" defaults write -g AppleLocale -string "$locale_id"
+xcrun simctl spawn "$udid" defaults write -g AppleLanguages \
+    -array "${locale_id//_/-}"
 
 # Whether the two frames that drive the real photo library have anything to
 # drive it with. Handed to the tests rather than guessed at by them: they skip

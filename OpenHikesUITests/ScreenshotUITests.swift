@@ -440,6 +440,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         openTrailMaker(in: app)
         drawTrailPoints(Self.drawnTrail, on: map, in: app)
 
+        liftDrawnTrailClearOfTheSheet(in: app)
         // The header is the sentence this frame is of — how long the line is
         // so far — and it sits under the search field, which is the section a
         // middle detent opens on.
@@ -456,12 +457,27 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// Wider apart than ``TrailMakerUITests``' own offsets: that suite is
     /// asserting that a tap becomes a point, and this one is a picture of a
     /// route somebody planned.
+    ///
+    /// **The pins do not land where the taps did**, and correcting the offsets
+    /// is not the fix. Measured over two captures: the same four taps drew
+    /// 0.28, 0.19, 0.14 and about 0.10 of the screen lower than they were
+    /// made — a shrinking drift, which is a camera still settling under a map
+    /// that has just been given a location rather than a constant to subtract.
+    /// So the taps stay where they read well and
+    /// ``liftDrawnTrailClearOfTheSheet(in:)`` pans afterwards, which is the
+    /// same answer `liftRecordedLineClearOfTheSheet(in:)` gives to the same
+    /// problem on the recording frame.
     private static let drawnTrail: [CGVector] = [
-        CGVector(dx: 0.24, dy: 0.42),
-        CGVector(dx: 0.44, dy: 0.24),
-        CGVector(dx: 0.68, dy: 0.34),
-        CGVector(dx: 0.80, dy: 0.17),
+        CGVector(dx: 0.26, dy: 0.30),
+        CGVector(dx: 0.43, dy: 0.16),
+        CGVector(dx: 0.64, dy: 0.25),
+        CGVector(dx: 0.80, dy: 0.15),
     ]
+
+    /// How far the drawn line is panned up afterwards, in fractions of the
+    /// window. Enough to bring the first point out from behind the sheet
+    /// without taking the last one under the status bar.
+    private static let drawnTrailLift: CGFloat = 0.18
 }
 
 /// The gestures and lookups the frames above are built from.
@@ -767,6 +783,30 @@ extension ScreenshotUITests {
                 forDuration: Self.dragPressDuration,
                 thenDragTo: map.coordinate(
                     withNormalizedOffset: CGVector(dx: 0.7, dy: 0.34 - Self.recordingLift)
+                )
+            )
+    }
+
+    /// Drags the map up so the whole drawn line sits in the band the sheet is
+    /// not over.
+    ///
+    /// A fixed pan for the reason ``liftRecordedLineClearOfTheSheet(in:)`` is
+    /// one: the legs are `MKPolyline`s, which are drawn rather than exposed,
+    /// so there is no element to measure and correct against.
+    ///
+    /// Safe as a *press* and drag while the maker is up, which is the part
+    /// worth saying: a press of ``dragPressDuration`` is well under
+    /// ``MapView/Coordinator/waypointGrabPressDuration``, so this pans the map
+    /// rather than taking hold of a waypoint — and it starts clear of the line
+    /// in any case, since a tap on a leg would insert a point into it.
+    @MainActor
+    private func liftDrawnTrailClearOfTheSheet(in app: XCUIApplication) {
+        let map = mapElement(in: app)
+        map.coordinate(withNormalizedOffset: CGVector(dx: 0.12, dy: 0.38))
+            .press(
+                forDuration: Self.dragPressDuration,
+                thenDragTo: map.coordinate(
+                    withNormalizedOffset: CGVector(dx: 0.12, dy: 0.38 - Self.drawnTrailLift)
                 )
             )
     }
