@@ -4,14 +4,29 @@
 //
 //  Where the places near a drawn trail come from.
 //
-//  One request, one answer, and nothing kept. That is the whole difference
-//  between this and ``CuratedTrailSource``, which caches in memory and on disk
-//  because its unit is a *relation* a hiker comes back to — panning to an area
-//  again, opening a route whose line the list already fetched. There is no
-//  equivalent here: what a search answers is drawn as candidates and is gone
-//  on the next search or when the maker closes, deliberately, because nothing
-//  offered has been chosen. Caching a page of things nobody took would be
-//  keeping a list of everything a hiker has ever looked past.
+//  One request, one answer, and — for now — nothing kept. That is the whole
+//  difference between this and ``CuratedTrailSource``, which caches in memory
+//  and on disk because its unit is a *relation* a hiker comes back to: panning
+//  to an area again, opening a route whose line the list already fetched. What
+//  a search answers here is drawn as candidates and is gone on the next search
+//  or when the maker closes.
+//
+//  **That is a deferral rather than a decision, and the issue records which.**
+//  A store of the same shape ``CuratedTrailStore`` has — one file per element,
+//  read back only as *what happens to be on this device near here* — is worth
+//  having for the case this type otherwise handles badly: a refused search
+//  draws an empty map, in a valley that may have answered an hour ago, and
+//  three of five first attempts came back `504` the day this was measured. It
+//  is listed under Phase 6 of #607 with the two constraints it has to keep: the
+//  OSM element id belongs on the stored record and never on ``TrailPlace``,
+//  which is the value ``TrailPoint`` mirrors, and the file cap is picked
+//  against the fetch rather than copied from the curated one — a page there is
+//  25 relations, and one search here fetches some 578 elements to offer 40.
+//
+//  What stays refused is the *other* shape: one file per search **box**, so a
+//  later search inside a stored one costs no request. That is the coverage
+//  index this repository has already declined once, and a box that merely
+//  overlaps answers partially while looking complete.
 //
 //  The manners — the rate-limit gate, the one retry a busy answer gets, the
 //  `User-Agent`, the reading of a `200` carrying a `remark` — are
