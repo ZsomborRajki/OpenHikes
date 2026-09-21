@@ -163,6 +163,11 @@ final class TrailDraftController {
             // waiting, the claims are released, and an answer landing
             // afterwards finds no leg asking for it and is dropped. Reopening
             // asks again and the router answers from memory.
+            // A finger cannot survive the screen it was on. A drag left held
+            // would put the pin back where it was on the next open, which is
+            // right, but the map would have been taken down mid-gesture and
+            // never told to stop.
+            draft.cancelDrag()
             draft.stopRouting()
             legsInFlight.removeAll()
         }
@@ -187,6 +192,114 @@ final class TrailDraftController {
         draft.append(coordinate)
         persist()
         resolveLegs()
+    }
+
+    /// Puts a point into the middle of a leg, where the tap landed.
+    ///
+    /// The other meaning a tap on the canvas has, and the one that makes a
+    /// drawn trail editable rather than merely extendable: a route that needs
+    /// to bend round a spur is fixed by tapping the leg that cuts the corner,
+    /// not by starting again. Which of the two a tap means is decided on the
+    /// map, by whether it landed on a line — see
+    /// ``MapView/Coordinator/addTrailDraftWaypoint(at:in:)``.
+    func insertWaypoint(at coordinate: CLLocationCoordinate2D, intoLegAt index: Int) {
+        guard isEditing else { return }
+        draft.insert(coordinate, intoLegAt: index)
+        persist()
+        resolveLegs()
+    }
+
+    /// Takes points out of the line. What a swipe on a row does.
+    func removeWaypoints(atOffsets offsets: IndexSet) {
+        guard isEditing else { return }
+        draft.remove(atOffsets: offsets)
+        persist()
+        resolveLegs()
+    }
+
+    /// Reorders the line. What a drag in the list's edit mode commits.
+    func reorderWaypoints(fromOffsets offsets: IndexSet, toOffset destination: Int) {
+        guard isEditing else { return }
+        draft.moveWaypoints(fromOffsets: offsets, toOffset: destination)
+        persist()
+        resolveLegs()
+    }
+
+    /// Walks the line the other way. Asks for nothing — see
+    /// ``TrailDraft/reverse()``, which turns the shapes round rather than
+    /// discarding them — but still goes through here, because the reversed
+    /// list is what has to be written down.
+    func reverse() {
+        guard isEditing else { return }
+        draft.reverse()
+        persist()
+        resolveLegs()
+    }
+
+    /// Joins the end back to the start.
+    func closeTheLoop() {
+        guard isEditing else { return }
+        draft.closeTheLoop()
+        persist()
+        resolveLegs()
+    }
+
+    /// Throws the points away and leaves the maker open, which is the
+    /// undoable half of the pair ``discard()`` is the other end of.
+    func clearDrawing() {
+        guard isEditing else { return }
+        draft.clearDrawing()
+        persist()
+    }
+
+    func undo() {
+        guard isEditing else { return }
+        draft.undo()
+        persist()
+        resolveLegs()
+    }
+
+    func redo() {
+        guard isEditing else { return }
+        draft.redo()
+        persist()
+        resolveLegs()
+    }
+
+    // MARK: - A point under a finger
+
+    /// Takes hold of the point at `index`. Answers whether there was one.
+    ///
+    /// Nothing is written and nothing is asked between here and
+    /// ``endDrag()``: a drag is one edit, however far the finger travels, and
+    /// a store write or an Overpass request per frame would be neither. See
+    /// ``TrailDraft`` for the channel the movement itself goes down.
+    func beginDrag(ofWaypointAt index: Int) -> Bool {
+        guard isEditing else { return false }
+        return draft.beginDrag(ofWaypointAt: index)
+    }
+
+    func dragWaypoint(to coordinate: CLLocationCoordinate2D) {
+        draft.moveDrag(to: coordinate)
+    }
+
+    /// Lets go. The one point in a drag where the drawing changes, the draft
+    /// is written down and the two legs either side are asked about.
+    ///
+    /// - Returns: whether the point moved at all, so the map can tell a drag
+    ///   from a press that went nowhere and answer only the first with a
+    ///   haptic.
+    @discardableResult func endDrag() -> Bool {
+        guard draft.endDrag() else { return false }
+        persist()
+        resolveLegs()
+        return true
+    }
+
+    /// Puts the held point back and asks nothing — a cancelled gesture is not
+    /// an edit.
+    func cancelDrag() {
+        draft.cancelDrag()
     }
 
     /// Turns path-following on or off, and re-resolves what is already drawn.

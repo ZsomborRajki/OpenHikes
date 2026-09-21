@@ -17,7 +17,11 @@
 //  asked and how often, `TrailDraftSaveTests` the row that comes out,
 //  `TrailDraftControllerTests` the two pills' exclusion and the guards, and
 //  `MapCoordinatorTests+TrailDraft` the map's half with a real `MKMapView` and
-//  a synthesised point. This is the one that presses the buttons.
+//  a synthesised point. Phase 3's editing adds four more — `TrailDraftEditingTests`
+//  for what each operation does to the list, `TrailDraftHistoryTests` for undo,
+//  `TrailLegMemoTests` for the shapes it restores, and
+//  `MapCoordinatorTests+TrailDraftEditing` for the leg tap and the drag against
+//  a real map. This is the one that presses the buttons.
 //
 
 import XCTest
@@ -37,6 +41,16 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         CGVector(dx: 0.45, dy: 0.20),
         CGVector(dx: 0.65, dy: 0.30),
         CGVector(dx: 0.50, dy: 0.42),
+    ]
+
+    /// Three taps whose two legs are very different lengths, so how far the
+    /// middle point sits along the line is a different number each way round —
+    /// which is the only thing on screen a reversal changes. Evenly spaced
+    /// points would reverse into the same three figures and prove nothing.
+    private static let lopsidedPoints: [CGVector] = [
+        CGVector(dx: 0.30, dy: 0.18),
+        CGVector(dx: 0.34, dy: 0.22),
+        CGVector(dx: 0.85, dy: 0.42),
     ]
 
     /// The whole feature end to end: open the maker from the map, put three
@@ -294,5 +308,242 @@ nonisolated final class TrailMakerUITests: XCTestCase {
                 "tapping the map should put point \(index + 1) down"
             )
         }
+    }
+}
+
+// MARK: - Editing what is already drawn
+
+/// The Phase 3 gestures, which are the ones a suite below this cannot reach at
+/// all.
+///
+/// Every operation's arithmetic is asserted next door — `TrailDraftEditingTests`
+/// for what each does to the list, `TrailDraftHistoryTests` for undo — and none
+/// of that says whether a hiker can *get* to any of it. A swipe, a context
+/// menu, an edit-mode drag and a tap that lands on a line are four things only
+/// a real simulator does, and three of them were wrong the first time on the
+/// hikes list. This is where they are pressed.
+extension TrailMakerUITests {
+    /// A swipe takes a point out, and the menu puts it back.
+    ///
+    /// The pair rather than either alone: delete is the destructive half of
+    /// this phase and undo is what makes it safe, so a suite that covered only
+    /// the first would be green on a build where the second never appeared.
+    @MainActor
+    func testSwipingAPointAwayAndUndoingIt() {
+        let app = launchApp()
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
+
+        openTheMaker(in: app)
+        draw(Self.drawnPoints, on: map, in: app)
+
+        let third = element("trail-draft-point-3", in: app)
+        element("trail-draft-point-2", in: app).swipeLeft()
+        let delete = app.buttons["Delete"]
+        XCTAssertTrue(
+            delete.waitForExistence(timeout: UITestTimeout.existence),
+            "a swipe on a point should offer to delete it"
+        )
+        delete.tap()
+        XCTAssertTrue(
+            waitUntil { !third.exists },
+            "deleting should leave two points"
+        )
+
+        chooseAction("Undo", in: app)
+
+        XCTAssertTrue(
+            third.waitForExistence(timeout: UITestTimeout.navigation),
+            "undo should bring the deleted point back"
+        )
+    }
+
+    /// A tap on a leg puts a point **into** it, which is the half of the
+    /// canvas that cannot be told apart from an append without a real map: both
+    /// are one tap, and which one happens is decided by whether a line was
+    /// under the thumb.
+    @MainActor
+    func testTappingALegAddsAPointInTheMiddle() {
+        let app = launchApp()
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
+
+        openTheMaker(in: app)
+        let ends = Array(Self.drawnPoints.prefix(2))
+        draw(ends, on: map, in: app)
+        let length = element("trail-draft-length", in: app).label
+
+        // Halfway between the two taps, which on a launch with no trail graph
+        // is exactly where the straight leg between them is drawn.
+        let middle = CGVector(
+            dx: (ends[0].dx + ends[1].dx) / 2,
+            dy: (ends[0].dy + ends[1].dy) / 2
+        )
+        map.coordinate(withNormalizedOffset: middle).tap()
+
+        XCTAssertTrue(
+            element("trail-draft-point-3", in: app).waitForExistence(
+                timeout: UITestTimeout.navigation
+            ),
+            "tapping the leg should put a third point down"
+        )
+        // And it went into the middle rather than onto the end: a point
+        // appended out there would have made the trail visibly longer, and a
+        // point on the line between two others adds nothing to it.
+        XCTAssertEqual(
+            element("trail-draft-length", in: app).label,
+            length,
+            "a point inserted on the line should not lengthen the trail"
+        )
+    }
+
+    /// Reordering, reached the way the hikes list taught: a context menu, then
+    /// edit mode, then the list's own drag, then the way out.
+    ///
+    /// A long press straight onto a drag does nothing — `List` reorders only in
+    /// edit mode — and the drag itself has to be slow and held, because a
+    /// reorder commits on the drop. Both were paid for once on `HikeOrderUITests`
+    /// and neither is rediscovered here.
+    @MainActor
+    func testReorderingThePoints() {
+        let app = launchApp()
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
+
+        openTheMaker(in: app)
+        draw(Self.drawnPoints, on: map, in: app)
+        let length = element("trail-draft-length", in: app).label
+
+        let third = element("trail-draft-point-3", in: app)
+        let second = element("trail-draft-point-2", in: app)
+        third.press(forDuration: 1.0)
+        let reorder = app.buttons["Reorder Points"]
+        XCTAssertTrue(
+            reorder.waitForExistence(timeout: UITestTimeout.existence),
+            "a long press on a point should offer to rearrange the line"
+        )
+        reorder.tap()
+        let done = element("trail-draft-reorder-done", in: app)
+        XCTAssertTrue(
+            done.waitForExistence(timeout: UITestTimeout.existence),
+            "taking the offer should put the list into reorder mode"
+        )
+
+        // The trailing edge is where the grabber is; slow, and held at the
+        // end, because the move is committed on the drop.
+        third.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).press(
+            forDuration: 0.8,
+            thenDragTo: second.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.0)),
+            withVelocity: .slow,
+            thenHoldForDuration: 0.8
+        )
+
+        // The line is a different line now, which is the whole point of the
+        // operation: the same three places walked in another order are a
+        // different length.
+        XCTAssertTrue(
+            waitUntil { element("trail-draft-length", in: app).label != length },
+            "reordering the points should change the trail they describe"
+        )
+
+        done.tap()
+        XCTAssertTrue(
+            waitUntil { element("trail-draft-actions", in: app).exists },
+            "leaving reorder mode should hand the menu back"
+        )
+        XCTAssertTrue(
+            element("trail-draft-save", in: app).isEnabled,
+            "a reordered trail is still a trail"
+        )
+    }
+
+    /// The two shape verbs, which have no gesture and exist only in the menu.
+    @MainActor
+    func testReversingAndClosingTheLoop() {
+        let app = launchApp()
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
+
+        openTheMaker(in: app)
+        draw(Self.lopsidedPoints, on: map, in: app)
+        let second = element("trail-draft-point-2", in: app).label
+
+        chooseAction("Reverse", in: app)
+
+        // Same three places, same total length, walked the other way — so what
+        // changes is how far along the middle one sits.
+        XCTAssertTrue(
+            waitUntil { element("trail-draft-point-2", in: app).label != second },
+            "reversing should walk the line the other way"
+        )
+
+        chooseAction("Close the Loop", in: app)
+
+        XCTAssertTrue(
+            element("trail-draft-point-4", in: app).waitForExistence(
+                timeout: UITestTimeout.navigation
+            ),
+            "closing the loop should bring the line back to where it started"
+        )
+    }
+
+    /// *Clear* is the one edit that asks first, and the question is what makes
+    /// it safe to put in a menu beside Undo.
+    @MainActor
+    func testClearingAsksFirstAndCanBeUndone() {
+        let app = launchApp()
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
+
+        openTheMaker(in: app)
+        draw(Self.drawnPoints, on: map, in: app)
+
+        chooseAction("Clear", in: app)
+        let confirm = app.buttons["Clear"]
+        XCTAssertTrue(
+            confirm.waitForExistence(timeout: UITestTimeout.existence),
+            "clearing should ask before removing the points"
+        )
+        confirm.tap()
+
+        XCTAssertTrue(
+            element("trail-draft-empty", in: app).waitForExistence(
+                timeout: UITestTimeout.navigation
+            ),
+            "clearing should leave an empty maker"
+        )
+
+        chooseAction("Undo", in: app)
+
+        XCTAssertTrue(
+            element("trail-draft-point-3", in: app).waitForExistence(
+                timeout: UITestTimeout.navigation
+            ),
+            "the drawing should come back, because clearing is an edit like any other"
+        )
+    }
+
+    /// Opens the edit menu and takes one of the things in it.
+    ///
+    /// By title rather than by identifier, and that is a finding rather than a
+    /// preference: a `Menu`'s contents are rebuilt by the system when it opens,
+    /// and the `accessibilityIdentifier` on a button inside one does not come
+    /// through — the first version of these tests looked for them and found
+    /// nothing. The context menu on a row behaves the same way, which is why
+    /// `testReorderingThePoints` asks for *Reorder Points* by name too.
+    @MainActor
+    private func chooseAction(_ title: String, in app: XCUIApplication) {
+        let menu = element("trail-draft-actions", in: app)
+        XCTAssertTrue(
+            menu.waitForExistence(timeout: UITestTimeout.existence),
+            "the maker should offer its edit menu"
+        )
+        menu.tap()
+        let action = app.buttons[title]
+        XCTAssertTrue(
+            action.waitForExistence(timeout: UITestTimeout.existence),
+            "\(title) should be in the edit menu"
+        )
+        action.tap()
     }
 }

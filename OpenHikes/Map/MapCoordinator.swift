@@ -224,8 +224,28 @@ extension MapView {
         /// the points, because an answer landing changes a leg's shape and
         /// state without any point moving.
         var trailDraftLegs: [TrailLeg] = []
-        /// And where the pins currently are.
+        /// And where the pins currently are. Also what a press is measured
+        /// against to find the waypoint under it — see `MapTrailDraftDrag.swift`.
         var trailDraftCoordinates: [CLLocationCoordinate2D] = []
+
+        #if canImport(UIKit)
+        /// The press that moves a waypoint, or `nil` before the map has one.
+        /// Held so installing it twice cannot take hold of one pin twice —
+        /// see `MapTrailDraftDrag.swift`.
+        var trailDraftDragRecognizer: UILongPressGestureRecognizer?
+        #endif
+
+        /// The point currently being dragged, as the map has drawn it. The
+        /// draft's own untracked channel is the source; this is what the last
+        /// pass applied, so a restore knows which pin and which two lines to
+        /// put back.
+        var trailDraftDrag: TrailWaypointDrag?
+        /// How far the pin was from the finger when the press was recognized,
+        /// carried for the rest of the gesture so the point does not jump.
+        var trailDraftDragOffset: CGSize = .zero
+        /// Whether this drag is the reason the map is not scrolling, so a map
+        /// that was already still is handed back the way it was found.
+        var trailDraftDragPausedScrolling = false
 
         // MARK: Photo pins
         // Stored state for `MapPhotoAnnotations.swift`, which owns everything

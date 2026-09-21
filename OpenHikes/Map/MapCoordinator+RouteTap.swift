@@ -20,6 +20,16 @@
 //  ``communityListing(forTapAt:in:)`` in `MapCommunityRoutes.swift`, and
 //  ``isTapOnDrawnRoute(at:in:)`` below.
 //
+//  ## The drawn trail's own legs, since Phase 3
+//
+//  A third kind of line is on this map while the trail maker is up, and it is
+//  the one kind whose tap is not *open something*: a tap on a leg of the line
+//  being drawn puts a point into it. That is answered before the two above and
+//  by ``addTrailDraftWaypoint(at:in:)`` rather than here, because while the
+//  maker is up a tap on the map has exactly one meaning — see the note on that
+//  method, and `MapTrailDraftDrag.swift` for the press that moves a point
+//  rather than adding one.
+//
 //  ## The hiker's own line wins
 //
 //  It is drawn on top, it is drawn at full strength and the hiker chose its
@@ -123,6 +133,23 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         true
     }
 
+    /// Whether a recognizer on this map may start.
+    ///
+    /// Only one of the two this delegate answers for is ever refused, and it
+    /// is refused for nearly every press: the waypoint drag begins only when a
+    /// pin is under the finger. Everything else — a press on open map, on a
+    /// line, on a control — is left to mean exactly what it meant before,
+    /// which is what keeps a gesture nobody is using from costing a quarter of
+    /// a second of every long press on the map. See `MapTrailDraftDrag.swift`.
+    func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+        guard recognizer === trailDraftDragRecognizer,
+              let mapView = recognizer.view as? MKMapView else { return true }
+        return trailDraftWaypointIndex(
+            at: recognizer.location(in: mapView),
+            in: mapView
+        ) != nil
+    }
+
     @objc func handleRouteTap(_ recognizer: UITapGestureRecognizer) {
         guard recognizer.state == .ended,
               let mapView = recognizer.view as? MKMapView
@@ -179,11 +206,72 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
     /// The maker's *own* numbered pins are not among them, and
     /// ``isTapClaimed(at:in:)`` says why: they answer no tap, so a claim by
     /// one is a tap that disappears rather than a tap that did something else.
+    ///
+    /// ## Two meanings, and the line decides which
+    ///
+    /// A tap on open map appends a point at the end of the line, which is what
+    /// drawing is. A tap **on a leg that is already drawn** puts a point into
+    /// that leg where the thumb landed, which is how a route that cuts a
+    /// corner is made to bend round it. The second is not a second gesture:
+    /// it is the same tap, and which it means is decided by whether it landed
+    /// within a fingertip of a line the hiker can see. Appending to the end of
+    /// a trail by tapping a point on its own middle is not a thing anybody
+    /// means.
     func addTrailDraftWaypoint(at point: CGPoint, in mapView: MKMapView) -> Bool {
         guard let trailDraftController, trailDraftController.isEditing else { return false }
         guard !isTapClaimed(at: point, in: mapView) else { return false }
-        trailDraftController.appendWaypoint(at: mapView.convert(point, toCoordinateFrom: mapView))
+        let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
+        if let leg = trailDraftLegIndex(at: point, in: mapView) {
+            trailDraftController.insertWaypoint(at: coordinate, intoLegAt: leg)
+        } else {
+            trailDraftController.appendWaypoint(at: coordinate)
+        }
         return true
+    }
+
+    /// Which leg of the drawn line a tap landed on, if any.
+    ///
+    /// Measured against the polylines the map is drawing rather than against
+    /// the draft, for the reason ``trailDraftWaypointIndex(at:in:)`` is: they
+    /// are the same list one observation pass apart, and the lines are what
+    /// the hiker aimed at.
+    ///
+    /// Each leg's bounding rectangle is asked first, exactly as
+    /// ``isTapOnDrawnRoute(at:in:)`` asks the whole route's — a snapped leg
+    /// through a valley is hundreds of points, and there is one of these per
+    /// leg rather than one per trail, so the guard matters more here than
+    /// there. Nearest wins, not first: a tap where a trail doubles back on
+    /// itself is aimed at the pixels under the thumb.
+    func trailDraftLegIndex(at point: CGPoint, in mapView: MKMapView) -> Int? {
+        guard trailDraftController?.isEditing == true,
+              !trailDraftOverlays.isEmpty else { return nil }
+        let tolerance = Self.lineTapTolerancePoints
+        var projected: [[CGPoint]] = []
+        projected.reserveCapacity(trailDraftOverlays.count)
+        for line in trailDraftOverlays {
+            let bounds = mapView
+                .convert(MKCoordinateRegion(line.boundingMapRect), toRectTo: mapView)
+                .insetBy(dx: -tolerance, dy: -tolerance)
+            guard bounds.contains(point) else {
+                // Kept in the list rather than skipped, so an index here is an
+                // index into the legs. An empty line is never the nearest.
+                projected.append([])
+                continue
+            }
+            projected.append(Self.points(of: line, in: mapView))
+        }
+        return RouteHitTest.nearest(to: point, among: projected, tolerance: tolerance)
+    }
+
+    /// One polyline's points, projected into the map's own screen space — the
+    /// space the tolerance is a number in. See ``RouteHitTest``.
+    private static func points(of line: MKPolyline, in mapView: MKMapView) -> [CGPoint] {
+        var coordinates = [CLLocationCoordinate2D](
+            repeating: kCLLocationCoordinate2DInvalid,
+            count: line.pointCount
+        )
+        line.getCoordinates(&coordinates, range: NSRange(location: 0, length: line.pointCount))
+        return coordinates.map { mapView.convert($0, toPointTo: mapView) }
     }
 
     /// The line a tap at `point` landed on, if any.
@@ -254,12 +342,18 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
     /// because they are not a claim. A ``TrailDraftWaypointAnnotation``'s view
     /// shows no callout and answers no tap, so letting it take one means a
     /// thumb inside its 24 points does nothing at all — no point put down, no
-    /// callout opened, no feedback — and in a phase with no undo, no drag and
-    /// no delete, a hiker drawing a switchback or doubling back past a point
-    /// they already placed cannot tell a swallowed tap from a missed one. The
-    /// paragraph above argues from markers that *do* something with a touch;
-    /// these do not, so the tap goes on to mean what every other tap on this
-    /// canvas means.
+    /// callout opened, no feedback — and a hiker drawing a switchback or
+    /// doubling back past a point they already placed cannot tell a swallowed
+    /// tap from a missed one. The paragraph above argues from markers that
+    /// *do* something with a touch; these do not, so the tap goes on to mean
+    /// what every other tap on this canvas means.
+    ///
+    /// **A waypoint pin answers a *press*, and that is a different gesture.**
+    /// Since Phase 3 a long press on one takes hold of it and moves it, which
+    /// is a `UILongPressGestureRecognizer` of the map's own rather than
+    /// anything the annotation view does with a touch — see
+    /// `MapTrailDraftDrag.swift`. So the pin still claims nothing here, and
+    /// the two gestures do not have to be told apart.
     private func isTapClaimed(at point: CGPoint, in mapView: MKMapView) -> Bool {
         var view = mapView.hitTest(point, with: nil)
         while let current = view, current !== mapView {

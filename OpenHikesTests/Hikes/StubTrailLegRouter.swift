@@ -61,4 +61,12 @@ actor StubTrailLegRouter: TrailLegRouting {
     }
 
     func askedCount() -> Int { asked.count }
+
+    /// Which legs were asked about, in order.
+    ///
+    /// The count answers *how often*; this answers *which*, which is the only
+    /// way to assert that an edit re-resolved the adjacencies it changed and
+    /// left the rest alone — the claim a reorder, a delete and a drag all
+    /// rest on.
+    func askedEnds() -> [TrailLegEnds] { asked }
 }
