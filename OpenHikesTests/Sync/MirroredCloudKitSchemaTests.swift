@@ -67,14 +67,20 @@ struct MirroredCloudKitSchemaTests {
     /// merged last-writer-wins with another device's — see ``HikeLocalState``.
     /// A model listed in both, or moved between them, would be that failure
     /// with nothing to notice it.
+    ///
+    /// ``TrailDraftRecord`` is here for a related reason of its own: a
+    /// half-drawn trail is one device's unfinished work, and mirroring it
+    /// would put a line nobody has finished into the hiker's other devices and
+    /// then resolve two people drawing at once last-writer-wins. The list is
+    /// spelled out rather than counted so that *moving* a model into the
+    /// mirrored store fails here rather than on somebody's second phone.
     @Test
     func theSidecarIsNotMirrored() {
         let mirroredNames = Set(mirrored.entities.map(\.name))
         let sidecarNames = Set(sidecar.entities.map(\.name))
 
-        #expect(sidecarNames == ["HikeLocalState"])
+        #expect(sidecarNames == ["HikeLocalState", "TrailDraftRecord"])
         #expect(mirroredNames.isDisjoint(with: sidecarNames))
-        #expect(!mirroredNames.contains("HikeLocalState"))
     }
 
     /// CloudKit requires defaults even for a fresh mirrored store.

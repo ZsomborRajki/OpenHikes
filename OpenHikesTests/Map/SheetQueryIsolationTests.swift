@@ -171,7 +171,8 @@ struct SheetQueryIsolationTests {
             walkHighlight: WalkHighlight(),
             mapController: MapController(),
             photoCapture: PhotoCaptureController(),
-            photoPins: PhotoMapPinController()
+            photoPins: PhotoMapPinController(),
+            trailMaker: TrailDraftController()
         )
         #expect(
             !declaresQuery(sheet),

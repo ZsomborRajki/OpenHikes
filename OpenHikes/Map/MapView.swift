@@ -98,6 +98,11 @@ struct MapView: MapViewRepresentable, Equatable {
     /// annotations rather than this view — see ``PhotoMapPinController``.
     var photoPins: PhotoMapPinController
 
+    /// Whether a trail can be made right now, and the line being drawn if one
+    /// is. Observed directly by the map (not via SwiftUI) so putting a point
+    /// down moves MapKit and nothing else — see ``TrailDraftController``.
+    var trailMaker: TrailDraftController
+
     /// Told where the map came to rest, so community results can follow the
     /// map without any SwiftUI body reading the region.
     ///
@@ -155,6 +160,7 @@ struct MapView: MapViewRepresentable, Equatable {
             && lhs.locationManager === rhs.locationManager
             && lhs.photoCapture === rhs.photoCapture
             && lhs.photoPins === rhs.photoPins
+            && lhs.trailMaker === rhs.trailMaker
             && lhs.community === rhs.community
             && lhs.searchCompleter === rhs.searchCompleter
             && lhs.sidePanelInset == rhs.sidePanelInset
@@ -220,6 +226,15 @@ struct MapView: MapViewRepresentable, Equatable {
         // when the map is built (a restored selection, a widget deep link)
         // leaves it hidden until the *next* availability change.
         coordinator.observePhotoControls(photoCapture)
+        // And the pill that takes turns with it in the same slot, for the same
+        // reason: a map built while the sheet already has nothing pushed has
+        // to offer the maker on this first pass rather than waiting for a
+        // navigation that may not come.
+        coordinator.observeTrailDraftControls(trailMaker)
+        // The line and its numbered pins, which are drawn only while the
+        // maker's screen is up — including on a map rebuilt underneath one, as
+        // a rotation rebuilds it.
+        coordinator.observeTrailDraft(trailMaker, on: mapView)
         // After `addControls` for the same reason: this decides which of the
         // two buttons in the tracking capsule is on screen, and neither
         // exists until that call has run. A map built by a hiker who refused
@@ -341,6 +356,7 @@ struct MapView: MapViewRepresentable, Equatable {
         // time the pill's constraints are made.
         addAttribution(to: mapView, coordinator, alignedTo: guide)
         addPhotoControls(to: mapView, coordinator, alignedTo: guide)
+        addTrailDraftControls(to: mapView, coordinator, alignedTo: guide)
         addAreaSearchControl(to: mapView, coordinator, alignedTo: guide)
         // Replaces the placeholders above with real positions as soon as the
         // map has a height to measure against.

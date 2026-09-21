@@ -20,6 +20,11 @@
 //  drawn in between. So the pill has two constraints, one for each case, and
 //  this is where exactly one of them is on.
 //
+//  Two pills share that slot — the camera's and the maker's, which are offered
+//  on opposite signals and so can never both draw — and each carries its own
+//  pair, because a constraint belongs to one view. Both pairs are switched
+//  here, together, off the same question.
+//
 
 import MapKit
 #if canImport(UIKit)
@@ -36,11 +41,30 @@ extension MapView.Coordinator {
     /// activation invalidates the map's layout whether or not anything moved.
     /// The map is the one view here that cannot afford a free layout pass.
     func applyCreditLineClearance() {
-        guard let above = photoControlsAboveCreditLine,
-              let flush = photoControlsWithoutCreditLine,
-              let attributionView
-        else { return }
-        let wanted = attributionView.isHidden ? flush : above
+        guard let attributionView else { return }
+        let wantsFlush = attributionView.isHidden
+        apply(
+            flush: wantsFlush,
+            above: photoControlsAboveCreditLine,
+            flushWith: photoControlsWithoutCreditLine
+        )
+        apply(
+            flush: wantsFlush,
+            above: trailDraftAboveCreditLine,
+            flushWith: trailDraftWithoutCreditLine
+        )
+    }
+
+    /// Switches one pill's pair. Absent constraints are the ordinary case
+    /// during `makeMapView`, where the pills are built one after the other and
+    /// each calls this as soon as it has its own.
+    private func apply(
+        flush wantsFlush: Bool,
+        above: NSLayoutConstraint?,
+        flushWith flush: NSLayoutConstraint?
+    ) {
+        guard let above, let flush else { return }
+        let wanted = wantsFlush ? flush : above
         guard !wanted.isActive else { return }
         NSLayoutConstraint.deactivate([above, flush])
         NSLayoutConstraint.activate([wanted])

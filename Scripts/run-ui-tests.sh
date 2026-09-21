@@ -16,6 +16,7 @@ suites=(
   MapScreenAlertUITests
   OrientationUITests
   RecordingUITests
+  TrailMakerUITests
   WalkUITests
   PhotoUITests
   SettingsUITests

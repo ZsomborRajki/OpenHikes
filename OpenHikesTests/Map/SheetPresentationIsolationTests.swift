@@ -190,7 +190,8 @@ struct SheetPresentationIsolationTests {
             walkHighlight: WalkHighlight(),
             mapController: MapController(),
             photoCapture: PhotoCaptureController(),
-            photoPins: PhotoMapPinController()
+            photoPins: PhotoMapPinController(),
+            trailMaker: TrailDraftController()
         )
         let storesStringBinding = Mirror(reflecting: sheet).children.contains { child in
             String(describing: type(of: child.value)) == "Binding<String>"

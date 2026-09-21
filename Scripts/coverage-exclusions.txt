@@ -72,6 +72,17 @@
 # stays measured, because the rule at the top of this file is about what the
 # lines *are* and not about which type they hang off.
 #
+# Two more arrived with the trail maker on 2026-09-21, and they are the
+# ordinary case rather than a new one: `TrailDraftView` is the maker's screen
+# and `TrailDraftFields` is the three small `View`s it is built from, both
+# entirely body code that only `OpenHikesUITests` evaluates. The rest of
+# `Hikes/Maker/` is deliberately *not* here and is exactly what this gate
+# should be measuring — the draft's arithmetic, the controller's guards, the
+# store's one-row rule and the save that writes a `Hike`, each with a suite of
+# its own — and neither is `MapTrailDraftControls` or `MapTrailDraftOverlay`,
+# which are UIKit and MapKit the unit suites reach through
+# `MapCoordinatorTests+TrailDraft`.
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -110,6 +121,8 @@ OpenHikes/Hikes/Trail/HikeSurfaceSection.swift
 OpenHikes/Hikes/Walks/HikeWalkHistory.swift
 OpenHikes/Hikes/Detail/RouteLinePatternPicker.swift
 OpenHikes/Hikes/Trail/TrailBreakdownSection.swift
+OpenHikes/Hikes/Maker/TrailDraftFields.swift
+OpenHikes/Hikes/Maker/TrailDraftView.swift
 OpenHikes/Hikes/Walks/WalkControls.swift
 OpenHikes/Hikes/Walks/WalkRow.swift
 OpenHikes/Hikes/Walks/WalkSummaryView.swift

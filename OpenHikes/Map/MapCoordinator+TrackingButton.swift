@@ -210,8 +210,10 @@ extension MapView.Coordinator {
         }
         // The pill has a second reason to be hidden — there may be no hike to
         // photograph — so it takes this through the accessor that combines the
-        // two rather than having it written at it directly.
+        // two rather than having it written at it directly. The maker's pill
+        // shares that slot and takes the same value the same way.
         applyPhotoControlsAlpha(alpha)
+        applyTrailDraftControlsAlpha(alpha)
         #endif
     }
 
