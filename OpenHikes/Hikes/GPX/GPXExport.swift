@@ -29,6 +29,10 @@ nonisolated enum GPXExport {
         /// carries them. Empty for a hike with no pictures, and for one whose
         /// pictures are all unanchored — see ``Photograph``.
         var photographs: [Photograph] = []
+        /// The places marked along the trail, in along-route order. Empty for
+        /// a hike with none, which is every hike this app made before the
+        /// trail maker existed. See ``TrailPlace``.
+        var places: [TrailPlace] = []
     }
 
     /// One photograph's place and moment, which is all of it that GPX can
@@ -130,6 +134,10 @@ nonisolated enum GPXExport {
     /// drawing, and this is the name readers conventionally map to a camera.
     static let photographSymbol = "Photo"
 
+    /// Rough cost of one place's `<wpt>`, which carries a note the
+    /// photographs' do not.
+    private static let bytesPerPlace = 220
+
     /// The GPX 1.1 document for `track`.
     ///
     /// Deliberately free of the off-main assertion that
@@ -143,6 +151,7 @@ nonisolated enum GPXExport {
             preambleBytes
                 + track.route.count * bytesPerPoint
                 + track.photographs.count * bytesPerPhotograph
+                + track.places.count * bytesPerPlace
         )
         xml += "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         xml += "<gpx version=\"1.1\" creator=\"\(escaped(creator))\""
@@ -151,6 +160,7 @@ nonisolated enum GPXExport {
         xml += " xsi:schemaLocation=\"\(schemaLocation)\">\n"
         appendMetadata(of: track, to: &xml)
         appendPhotographs(track, to: &xml)
+        appendPlaces(track, to: &xml)
         appendTrack(track, to: &xml)
         xml += "</gpx>\n"
         return xml
@@ -233,6 +243,50 @@ nonisolated private extension GPXExport {
                 xml += "    <link href=\"\(escaped(href))\"/>\n"
             }
             xml += "    <sym>\(escaped(photographSymbol))</sym>\n"
+            xml += "  </wpt>\n"
+        }
+    }
+
+    /// A `<wpt>` for every marked place.
+    ///
+    /// Beside the photographs and before the track, because GPX 1.1 fixes the
+    /// order of `<gpx>`'s children — metadata, then `wpt*`, then `rte*`, then
+    /// `trk*` — and a schema-validating reader refuses a file that puts
+    /// waypoints after the track. The two kinds of waypoint are told apart by
+    /// `<sym>`, which is exactly what `<sym>` is for: *Photo* for a picture,
+    /// and the symbol's own word for a place. See
+    /// ``GPXImport/place(_:)`` for the other end.
+    ///
+    /// **A place always has a `<name>`, even one the hiker never named.**
+    /// ``TrailPlace/displayName`` is what is written, so a `<wpt>` that turns
+    /// up in somebody else's reader is labelled *Spring* rather than being a
+    /// nameless dot — unnamed is the normal case for the places this feature
+    /// is about, and a file full of blanks would lose the only thing they had.
+    ///
+    /// No `<time>`, unlike a photograph's. A photo waypoint carries the moment
+    /// the shutter fired, which is a fact about the walk; when a place was
+    /// *marked* is a fact about the planning, and stamping it would tell a
+    /// reader that a hiker stood at that spring on the evening they drew the
+    /// route from their sofa.
+    static func appendPlaces(_ track: Track, to xml: inout String) {
+        for place in track.places {
+            let latitude = place.latitude.formatted(coordinateStyle)
+            let longitude = place.longitude.formatted(coordinateStyle)
+            xml += "  <wpt lat=\"\(latitude)\" lon=\"\(longitude)\">\n"
+            xml += "    <name>\(escaped(place.displayName))</name>\n"
+            // `<desc>` rather than `<cmt>`: a comment is about the waypoint
+            // and a description is about the place, and a note here is the
+            // hiker saying what is there. Both are allowed and readers show
+            // the description.
+            if !place.note.isEmpty {
+                xml += "    <desc>\(escaped(place.note))</desc>\n"
+            }
+            // Only a place that claims to be something. An unstated symbol is
+            // a real answer — see ``TrailPlace`` — and `<sym></sym>` would be
+            // a claim that it is a symbol nobody has.
+            if let symbol = place.symbol {
+                xml += "    <sym>\(escaped(symbol.rawValue))</sym>\n"
+            }
             xml += "  </wpt>\n"
         }
     }
@@ -624,7 +678,11 @@ extension GPXExport.Track {
                     ),
                     capturedAt: photo.capturedAt
                 )
-            }
+            },
+            // In along-route order, which is the order the maker's list and
+            // the detail screen both draw them in — so a file opened in
+            // another reader lists them the way the hiker will walk past them.
+            places: hike.orderedPlaces.map(\.place)
         )
     }
 }

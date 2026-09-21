@@ -18,11 +18,17 @@
 //  *line*, not the dot, so a drag that does not move the line is a drag done
 //  blind.
 //
-//  It also costs nothing to keep the tap rules as they were. A draggable
-//  annotation view has to be selectable, and a waypoint pin deliberately
-//  answers no tap at all — see ``MapView/Coordinator/isTapClaimed(at:in:)``,
-//  where handing a tap *back* to the canvas is what lets a hiker draw a
-//  switchback past a point they have already put down.
+//  It also keeps the two gestures independent of the tap rules, which changed
+//  under it in Phase 4: a waypoint pin now *is* selectable and does show a
+//  callout — see ``MapView/Coordinator/isTapClaimed(at:in:)``. Nothing here
+//  had to move for that, because none of this is anything the annotation view
+//  does with a touch.
+//
+//  ## Two kinds of pin, one recognizer
+//
+//  Since Phase 4 a marked place can be moved the same way, and it is the same
+//  press — asked about first, because a place's balloon is drawn over the
+//  line. What it costs is much less, and `MapTrailPlaceDrag.swift` says why.
 //
 //  ## What the gesture does to the map underneath it
 //
@@ -91,15 +97,30 @@ extension MapView.Coordinator {
         guard let mapView = recognizer.view as? MKMapView else { return }
         let point = recognizer.location(in: mapView)
         switch recognizer.state {
-        case .began: beginTrailDraftDrag(at: point, in: mapView)
-        case .changed: moveTrailDraftDrag(to: point, in: mapView)
-        case .ended: endTrailDraftDrag(on: mapView)
+        // A place pin is asked about first, because it is drawn over the line
+        // and a press that landed on the balloon is a press on the balloon.
+        // Each of the four below answers whether a place was the thing being
+        // held, and the waypoint half is asked only when none was.
+        case .began:
+            if !beginTrailPlaceDrag(at: point, in: mapView) {
+                beginTrailDraftDrag(at: point, in: mapView)
+            }
+        case .changed:
+            if trailPlaceDrag != nil {
+                moveTrailPlaceDrag(to: point, in: mapView)
+            } else {
+                moveTrailDraftDrag(to: point, in: mapView)
+            }
+        case .ended:
+            if !endTrailPlaceDrag(on: mapView) { endTrailDraftDrag(on: mapView) }
         // A cancelled gesture is not a small edit: the finger was taken away
         // by something that is not the hiker — a call, a system gesture — so
         // the point goes back where it was.
-        case .cancelled, .failed: cancelTrailDraftDrag(on: mapView)
+        case .cancelled, .failed:
+            if !cancelTrailPlaceDrag(on: mapView) { cancelTrailDraftDrag(on: mapView) }
         case .possible: break
-        @unknown default: cancelTrailDraftDrag(on: mapView)
+        @unknown default:
+            if !cancelTrailPlaceDrag(on: mapView) { cancelTrailDraftDrag(on: mapView) }
         }
     }
 
@@ -182,7 +203,10 @@ extension MapView.Coordinator {
     }
 
     /// Hands the map back its own gestures, whichever way the drag ended.
-    private func releaseTrailDraftDrag(on mapView: MKMapView) {
+    ///
+    /// Shared with the place drag, which pauses scrolling the same way and has
+    /// the same one thing to undo — see `MapTrailPlaceDrag.swift`.
+    func releaseTrailDraftDrag(on mapView: MKMapView) {
         guard trailDraftDragPausedScrolling else { return }
         trailDraftDragPausedScrolling = false
         mapView.isScrollEnabled = true

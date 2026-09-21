@@ -135,7 +135,11 @@ struct TrailDraftHistoryTests {
     func theHistoryIsBounded() {
         var history = TrailDraftHistory()
         for _ in 0...TrailDraftHistory.depth {
-            history.record([TrailWaypoint(coordinate: Self.coordinate(Line.first))])
+            history.record(
+                TrailDraftContents(
+                    waypoints: [TrailWaypoint(coordinate: Self.coordinate(Line.first))]
+                )
+            )
         }
         #expect(history.past.count == TrailDraftHistory.depth)
     }
@@ -149,6 +153,7 @@ struct TrailDraftHistoryTests {
 
         draft.replace(
             with: [TrailWaypoint(coordinate: Self.coordinate(Line.third))],
+            places: [],
             snapsToPaths: true
         )
 

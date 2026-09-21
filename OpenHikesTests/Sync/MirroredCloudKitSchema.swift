@@ -60,7 +60,7 @@ enum MirroredCloudKitSchema {
                 "title",
                 "trackDescription",
             ],
-            relationships: ["walks"]
+            relationships: ["trailPoints", "walks"]
         ),
         RecordType(
             entity: "HikeWalk",
@@ -74,6 +74,20 @@ enum MirroredCloudKitSchema {
                 "id",
                 "routeDistanceMeters",
                 "startedAt",
+            ],
+            relationships: ["hike"]
+        ),
+        RecordType(
+            entity: "TrailPoint",
+            attributes: [
+                "createdAt",
+                "hikeID",
+                "id",
+                "latitude",
+                "longitude",
+                "name",
+                "note",
+                "symbolID",
             ],
             relationships: ["hike"]
         ),

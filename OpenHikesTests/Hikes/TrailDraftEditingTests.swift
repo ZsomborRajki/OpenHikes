@@ -58,6 +58,7 @@ struct TrailDraftEditingTests {
         let draft = TrailDraft()
         draft.replace(
             with: latitudes.map { TrailWaypoint(coordinate: coordinate($0)) },
+            places: [],
             snapsToPaths: true
         )
         return draft

@@ -73,17 +73,26 @@ final class TrailDraftWaypointAnnotation: NSObject, MKAnnotation {
     @objc dynamic var coordinate: CLLocationCoordinate2D
     /// One-based, because it is read by a person rather than indexed by code.
     let number: Int
+    /// How far along the line this point sits, which is the callout's second
+    /// line and the same figure the list row carries.
+    let distanceAlongLineMeters: Double
 
-    init(coordinate: CLLocationCoordinate2D, number: Int) {
+    init(coordinate: CLLocationCoordinate2D, number: Int, distanceAlongLineMeters: Double) {
         self.coordinate = coordinate
         self.number = number
+        self.distanceAlongLineMeters = distanceAlongLineMeters
     }
 
-    /// Spoken by VoiceOver, which reaches a waypoint through its pin the way
-    /// it reaches a shared hike through its marker — a polyline is not an
-    /// accessibility element and cannot be made one.
+    /// The callout's heading, and what VoiceOver reaches a waypoint by — a
+    /// polyline is not an accessibility element and cannot be made one.
     var title: String? {
         String(localized: "Point \(number)")
+    }
+
+    /// How far along the trail it is, in the hiker's own units.
+    var subtitle: String? {
+        Measurement(value: distanceAlongLineMeters, unit: UnitLength.meters)
+            .formatted(.measurement(width: .abbreviated, usage: .road))
     }
 }
 
@@ -122,6 +131,12 @@ extension MapView.Coordinator {
             // publishes one `Int` per frame and nothing that reads it is a
             // SwiftUI body. See ``TrailDraft``.
             _ = controller.draft.dragRevision
+            // The marked places, in the same registration and for the same
+            // reason the line is: they are drawn while the maker is up and not
+            // otherwise. Their own drag does not come through here — a place
+            // under a finger moves its annotation directly, which is what
+            // ``placeRows`` staying still through the gesture is for.
+            _ = controller.draft.placeRows
         } onChange: { coordinator, map, model in
             coordinator.trackTrailDraft(model, on: map)
         }
@@ -141,6 +156,10 @@ extension MapView.Coordinator {
         let points = isDrawing ? controller.draft.coordinates : []
         let held = isDrawing ? controller.draft.drag : nil
         let snapping = controller.draft.snapsToPaths
+        // Before the guard below, deliberately: that one lets a pass through
+        // only when the *line* changed, and a place can be marked, renamed or
+        // removed without a leg moving. It has a guard of its own.
+        applyTrailDraftPlaces(isDrawing ? controller.draft.placeRows : [], on: mapView)
         guard legs != trailDraftLegs
             || !Self.isSameDraft(points, as: trailDraftCoordinates) else {
             // Nothing has been committed, so this pass is a finger moving. The
@@ -165,12 +184,26 @@ extension MapView.Coordinator {
         if !trailDraftAnnotations.isEmpty {
             mapView.removeAnnotations(trailDraftAnnotations)
             trailDraftAnnotations = []
+            // One of them may have been the open callout — the same tidy-up
+            // ``applyPhotoPins(_:on:)`` does, for the same reason: removing a
+            // selected annotation takes its callout without MapKit reliably
+            // reporting a deselection.
+            refreshOpenCallout(on: mapView)
         }
+        // The provisional pin belonged to the drawing as it was. A tap that
+        // changed the line has answered the question it was asking, and one
+        // left standing would offer *Add Stop* into a leg that has gone.
+        if !isDrawing { removeTrailDraftDroppedPin(from: mapView) }
         guard !points.isEmpty else { return }
 
         addTrailDraftLegs(legs, to: mapView)
+        let distances = controller.draft.distancesAlongLine
         let pins = points.enumerated().map { index, coordinate in
-            TrailDraftWaypointAnnotation(coordinate: coordinate, number: index + 1)
+            TrailDraftWaypointAnnotation(
+                coordinate: coordinate,
+                number: index + 1,
+                distanceAlongLineMeters: distances.indices.contains(index) ? distances[index] : 0
+            )
         }
         trailDraftAnnotations = pins
         mapView.addAnnotations(pins)
@@ -381,7 +414,12 @@ extension MapView.Coordinator {
         let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
             ?? MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
         view.annotation = annotation
-        view.canShowCallout = false
+        // A callout since Phase 4, where it used to be none: every tap on this
+        // canvas opens something now, so a pin that swallowed one would be the
+        // only thing on the map that does nothing. What it says is which point
+        // this is and how far along it sits; what it offers is the one verb a
+        // list row cannot reach from here. See `MapTrailDraftCallout.swift`.
+        view.canShowCallout = true
         let diameter = Self.trailDraftPinDiameter
         view.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
 
@@ -398,6 +436,7 @@ extension MapView.Coordinator {
         layer.shadowOpacity = Self.trailDraftPinShadowOpacity
         layer.shadowRadius = 2
         layer.shadowOffset = .zero
+        attachTrailDraftWaypointCallout(for: annotation, to: view, on: mapView)
         #endif
         return view
     }

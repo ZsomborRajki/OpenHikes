@@ -52,7 +52,11 @@ struct TrailDraftStoreTests {
     func roundTrip() throws {
         let context = try context()
         let store = TrailDraftStore(context: context)
-        store.save(waypoints: Self.waypoints([Line.south, Line.north]), snapsToPaths: true)
+        store.save(
+            waypoints: Self.waypoints([Line.south, Line.north]),
+            places: [],
+            snapsToPaths: true
+        )
 
         let restored = TrailDraftStore(context: context).load()
 
@@ -68,6 +72,7 @@ struct TrailDraftStoreTests {
         let context = try context()
         TrailDraftStore(context: context).save(
             waypoints: Self.waypoints([Line.south, Line.north]),
+            places: [],
             snapsToPaths: false
         )
 
@@ -88,7 +93,7 @@ struct TrailDraftStoreTests {
     func orderSurvives() throws {
         let context = try context()
         let latitudes = [Line.north, Line.south, Line.north, Line.south]
-        TrailDraftStore(context: context).save(waypoints: Self.waypoints(latitudes), snapsToPaths: true)
+        TrailDraftStore(context: context).save(waypoints: Self.waypoints(latitudes), places: [], snapsToPaths: true)
 
         let restored = TrailDraftStore(context: context).load()
 
@@ -100,8 +105,12 @@ struct TrailDraftStoreTests {
         let context = try context()
         let store = TrailDraftStore(context: context)
 
-        store.save(waypoints: Self.waypoints([Line.south, Line.north]), snapsToPaths: true)
-        store.save(waypoints: Self.waypoints([Line.north]), snapsToPaths: true)
+        store.save(
+            waypoints: Self.waypoints([Line.south, Line.north]),
+            places: [],
+            snapsToPaths: true
+        )
+        store.save(waypoints: Self.waypoints([Line.north]), places: [], snapsToPaths: true)
 
         #expect(try context.fetch(FetchDescriptor<TrailDraftRecord>()).count == 1)
         #expect(store.load().waypoints.map(\.latitude) == [Line.north])
@@ -111,7 +120,11 @@ struct TrailDraftStoreTests {
     func clearingDeletesTheRow() throws {
         let context = try context()
         let store = TrailDraftStore(context: context)
-        store.save(waypoints: Self.waypoints([Line.south, Line.north]), snapsToPaths: true)
+        store.save(
+            waypoints: Self.waypoints([Line.south, Line.north]),
+            places: [],
+            snapsToPaths: true
+        )
 
         store.clear()
 
@@ -133,8 +146,56 @@ struct TrailDraftStoreTests {
     func pointlessDraftReadsAsNothing() throws {
         let context = try context()
         let store = TrailDraftStore(context: context)
-        store.save(waypoints: [], snapsToPaths: true)
+        store.save(waypoints: [], places: [], snapsToPaths: true)
 
         #expect(store.load().isEmpty)
+    }
+}
+
+extension TrailDraftStoreTests {
+    /// The places are written down with the points, and they are the half that
+    /// keeps its identities — a place's id is what the map, the editor and the
+    /// drag all name it by, and what a saved ``TrailPoint`` carries.
+    @Test("the marked places survive a launch")
+    func placesSurviveALaunch() throws {
+        let context = try context()
+        let store = TrailDraftStore(context: context)
+        let place = TrailPlace(
+            latitude: Line.south,
+            longitude: Line.longitude,
+            name: "Hut",
+            symbol: .shelter,
+            note: "Locked in winter"
+        )
+
+        store.save(
+            waypoints: Self.waypoints([Line.south, Line.north]),
+            places: [place],
+            snapsToPaths: true
+        )
+        let restored = TrailDraftStore(context: context).load()
+
+        #expect(restored.places.count == 1)
+        #expect(restored.places.first?.id == place.id, "a place keeps its identity")
+        #expect(restored.places.first?.name == "Hut")
+        #expect(restored.places.first?.symbol == .shelter)
+        #expect(restored.places.first?.note == "Locked in winter")
+    }
+
+    /// A hiker who marked the hut before drawing anything has done work, and a
+    /// draft that reported itself empty would have it thrown away by the next
+    /// Cancel without being asked about.
+    @Test("a drawing with places and no line is not nothing")
+    func placesAloneAreADrawing() throws {
+        let context = try context()
+        let store = TrailDraftStore(context: context)
+
+        store.save(
+            waypoints: [],
+            places: [TrailPlace(latitude: Line.south, longitude: Line.longitude)],
+            snapsToPaths: true
+        )
+
+        #expect(!TrailDraftStore(context: context).load().isEmpty)
     }
 }

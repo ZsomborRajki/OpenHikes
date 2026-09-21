@@ -87,7 +87,17 @@ extension MapCoordinatorTests {
         let onTheLeg = CGPoint(x: map.bounds.midX, y: map.bounds.midY)
         #expect(coordinator.trailDraftLegIndex(at: onTheLeg, in: map) == 0)
 
-        #expect(coordinator.addTrailDraftWaypoint(at: onTheLeg, in: map))
+        // The tap drops a pin that *remembers* the leg, and *Add Stop* is what
+        // puts the point into it — see ``TrailDraftDroppedPin/legIndex``.
+        #expect(coordinator.dropTrailDraftPin(at: onTheLeg, in: map))
+        let pin = try #require(coordinator.trailDraftDroppedPin)
+        #expect(pin.legIndex == 0, "the tap did not remember the leg it landed on")
+        coordinator.applyTrailDraftPin(
+            .addStop,
+            at: pin.coordinate,
+            legIndex: pin.legIndex,
+            in: map
+        )
 
         #expect(trailMaker.draft.waypoints.count == 3)
         let inserted = try #require(trailMaker.draft.waypoints.dropFirst().first)
@@ -96,11 +106,10 @@ extension MapCoordinatorTests {
         #endif
     }
 
-    /// And a tap anywhere else still means what it meant: put a point on the
-    /// end. The two meanings are one gesture, separated by whether a line the
-    /// hiker can see was under the thumb.
-    @Test("a tap away from every leg still appends")
-    func tapAwayFromALegAppends() {
+    /// And a tap anywhere else remembers no leg, so its pin offers the verbs
+    /// of an empty drawing rather than an *Add Stop* with nowhere to go.
+    @Test("a tap away from every leg carries no leg")
+    func tapAwayFromALegCarriesNoLeg() throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
@@ -111,8 +120,10 @@ extension MapCoordinatorTests {
         // No line drawn at all, so nothing can be tapped on.
         let anywhere = CGPoint(x: map.bounds.midX, y: map.bounds.midY)
         #expect(coordinator.trailDraftLegIndex(at: anywhere, in: map) == nil)
-        #expect(coordinator.addTrailDraftWaypoint(at: anywhere, in: map))
-        #expect(trailMaker.draft.waypoints.count == 1)
+        #expect(coordinator.dropTrailDraftPin(at: anywhere, in: map))
+        let pin = try #require(coordinator.trailDraftDroppedPin)
+        #expect(pin.legIndex == nil)
+        #expect(pin.actions == [.startHere, .markAPlace])
         #endif
     }
 

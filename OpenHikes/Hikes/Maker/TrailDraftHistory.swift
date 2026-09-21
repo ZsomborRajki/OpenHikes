@@ -22,10 +22,13 @@
 //  ``TrailLegMemo`` instead so that undo restores the resolved geometry rather
 //  than re-fetching it.
 //
-//  **Waypoints only.** Whether legs follow mapped paths is a setting rather
-//  than part of the drawing — it is written down with the points precisely
-//  because it describes how they are being drawn — so an undo that flipped it
-//  back would be undoing something the hiker did not do to the line.
+//  **The drawing, and not the settings.** A step is the waypoints *and the
+//  marked places* — see ``TrailDraftContents`` — because both are things a
+//  hiker put on the map and both can be put there by mistake. Whether legs
+//  follow mapped paths is not: it is a setting, written down with the points
+//  precisely because it describes how they are being drawn, so an undo that
+//  flipped it back would be undoing something the hiker did not do to the
+//  line.
 //
 //  ## Redo is dropped by the next edit, and that is the standard rule
 //
@@ -36,6 +39,18 @@
 //
 
 import Foundation
+
+/// Everything one step of undo puts back.
+///
+/// The two lists together rather than a stack each, because they are edited
+/// against each other: clearing a drawing takes both, and a hiker who marks a
+/// spring, deletes two waypoints and then undoes twice expects the two undos
+/// to walk back through what they actually did rather than through two
+/// unrelated histories that happen to share a button.
+nonisolated struct TrailDraftContents: Equatable, Sendable {
+    var waypoints: [TrailWaypoint] = []
+    var places: [TrailPlace] = []
+}
 
 /// The undo and redo stacks for one drawing.
 ///
@@ -51,44 +66,44 @@ nonisolated struct TrailDraftHistory: Equatable, Sendable {
     /// rearranging a long trail does not keep every list it ever had.
     static let depth = 50
 
-    private(set) var past: [[TrailWaypoint]] = []
-    private(set) var future: [[TrailWaypoint]] = []
+    private(set) var past: [TrailDraftContents] = []
+    private(set) var future: [TrailDraftContents] = []
 
     var canUndo: Bool { !past.isEmpty }
     var canRedo: Bool { !future.isEmpty }
 
-    /// Remembers `waypoints` as the state to come back to, and abandons
+    /// Remembers `contents` as the state to come back to, and abandons
     /// whatever was ahead.
     ///
-    /// Called *before* the change it is about, with the list as it stands, so
-    /// a caller that records and then does nothing has cost a step and changed
-    /// nothing else.
-    mutating func record(_ waypoints: [TrailWaypoint]) {
-        past.append(waypoints)
+    /// Called *before* the change it is about, with the drawing as it stands,
+    /// so a caller that records and then does nothing has cost a step and
+    /// changed nothing else.
+    mutating func record(_ contents: TrailDraftContents) {
+        past.append(contents)
         if past.count > Self.depth { past.removeFirst() }
         future = []
     }
 
-    /// Puts `waypoints` back to the step before it, and hands the list it was
-    /// holding to the redo stack.
+    /// Puts `contents` back to the step before it, and hands the drawing it
+    /// was holding to the redo stack.
     ///
-    /// In place, and taking the current list rather than only handing one
+    /// In place, and taking the current drawing rather than only handing one
     /// back: an undo stack on its own cannot answer what *redo* should
     /// restore, and the move has to be one operation or the two stacks can be
-    /// left disagreeing about which list is in force.
+    /// left disagreeing about which drawing is in force.
     ///
     /// - Returns: whether there was a step to take.
-    @discardableResult mutating func undo(_ waypoints: inout [TrailWaypoint]) -> Bool {
+    @discardableResult mutating func undo(_ contents: inout TrailDraftContents) -> Bool {
         guard let previous = past.popLast() else { return false }
-        future.append(waypoints)
-        waypoints = previous
+        future.append(contents)
+        contents = previous
         return true
     }
 
-    @discardableResult mutating func redo(_ waypoints: inout [TrailWaypoint]) -> Bool {
+    @discardableResult mutating func redo(_ contents: inout TrailDraftContents) -> Bool {
         guard let next = future.popLast() else { return false }
-        past.append(waypoints)
-        waypoints = next
+        past.append(contents)
+        contents = next
         return true
     }
 
