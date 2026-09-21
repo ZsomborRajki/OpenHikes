@@ -258,6 +258,57 @@ struct TrailPointFinderTests {
         #expect(finder.notice?.caption.isWarning == true, "and this one *is* a failure")
     }
 
+    /// **What a refusal draws instead of an empty map.** Three of five first
+    /// attempts came back `504` the day this was measured, and the valley may
+    /// well have answered an hour ago — so the places already on this device
+    /// go down as candidates, and the caption still says the search failed.
+    @Test("a refused search draws what is already on this device, and still says it failed")
+    func aRefusalDrawsWhatIsStored() async {
+        let stored = Self.place(47.6005, 12.92, name: "Kalte Quelle")
+        let finder = TrailPointFinder(source: StubStoringSource(stored: [stored]))
+
+        Self.settled(finder)
+        await Self.search(finder, along: Self.line)
+
+        #expect(finder.rows.map(\.place.name) == ["Kalte Quelle"])
+        #expect(finder.notice == .outage(.busy), "it is still a refusal and still says so")
+        #expect(finder.notice?.caption.isWarning == true)
+    }
+
+    /// And the disk is not touched at all when there is already something on
+    /// offer, because a refusal never replaces candidates that are still true
+    /// — so reading every file in the cache directory would buy nothing.
+    @Test("a refusal with candidates already offered does not read the disk")
+    func aRefusalKeepsTheOfferAndReadsNothing() async {
+        let offered = Self.place(47.6005, 12.92, name: "Spring")
+        let stored = Self.place(47.6005, 12.93, name: "From the disk")
+        let source = StubStoringSource(stored: [stored], answeringFirst: [offered])
+        let finder = TrailPointFinder(source: source)
+
+        Self.settled(finder)
+        await Self.search(finder, along: Self.line)
+        await Self.search(finder, along: Self.line)
+
+        #expect(finder.rows.map(\.place.name) == ["Spring"])
+        #expect(source.diskReads == 0, "nothing on the disk could have improved on this")
+    }
+
+    /// A search that answered draws its answer and nothing else: the store is
+    /// the failure path and only the failure path.
+    @Test("a search that answered never draws from the disk")
+    func anAnsweredSearchIgnoresTheDisk() async {
+        let stored = Self.place(47.6005, 12.93, name: "From the disk")
+        let found = Self.place(47.6005, 12.92, name: "From Overpass")
+        let source = StubStoringSource(stored: [stored], answeringFirst: [found], alwaysAnswers: true)
+        let finder = TrailPointFinder(source: source)
+
+        Self.settled(finder)
+        await Self.search(finder, along: Self.line)
+
+        #expect(finder.rows.map(\.place.name) == ["From Overpass"])
+        #expect(source.diskReads == 0)
+    }
+
     /// A superseded search is not a refusal. Reporting one would put a warning
     /// under the pill because the hiker closed the maker.
     @Test("a cancelled search reports nothing")
@@ -325,6 +376,55 @@ struct TrailPointFinderTests {
 
         let after = try #require(finder.rows.first?.anchor?.distanceAlongRouteMeters)
         #expect(after > (try #require(before)))
+    }
+}
+
+/// A source that refuses over the wire and has something on disk.
+///
+/// The two halves are what the fall-back is about, and they cannot be written
+/// as a closure over a constant: what is asserted is which of them the finder
+/// reached, and how often.
+private struct StubStoringSource: TrailPointSourcing {
+    let stored: [TrailPlace]
+    /// What the first search answers with, if anything. An empty list refuses
+    /// straight away, which is the case a cold valley meets.
+    var answeringFirst: [TrailPlace] = []
+    /// Whether every search answers, rather than only the first.
+    var alwaysAnswers = false
+
+    private let calls = Calls()
+
+    /// What a gateway in front of a busy Overpass answers with, measured.
+    private static let gatewayTimeout = 504
+
+    /// How many times the disk was asked. `0` is the assertion in two of the
+    /// three cases.
+    var diskReads: Int { calls.diskReads }
+
+    /// A reference box, because the conformance is `Sendable` and a count is
+    /// the point of the stub.
+    private final class Calls: @unchecked Sendable {
+        private let lock = NSLock()
+        private var searches = 0
+        private var reads = 0
+
+        var diskReads: Int { lock.withLock { reads } }
+
+        func search() -> Int { lock.withLock { searches += 1; return searches } }
+        func read() { lock.withLock { reads += 1 } }
+    }
+
+    func places(near _: CommunitySearchArea) throws -> [TrailPlace] {
+        let call = calls.search()
+        guard alwaysAnswers || (call == 1 && !answeringFirst.isEmpty) else {
+            throw TrailGraphProviderError.server(statusCode: Self.gatewayTimeout)
+        }
+        return answeringFirst
+    }
+
+    func cachedPlaces(near _: CommunitySearchArea, limit _: Int) -> [TrailPlace] {
+        calls.read()
+        return stored
     }
 }
 

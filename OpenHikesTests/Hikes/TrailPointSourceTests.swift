@@ -60,13 +60,23 @@ struct TrailPointSourceTests {
         )
     }
 
+    /// A source that keeps nothing.
+    ///
+    /// `directory: nil` rather than the default, and it is not a detail: the
+    /// default is the *app's own* `Caches`, so a suite taking it would write
+    /// a few hundred files into the directory a real launch reads back — and
+    /// would then be asserting about whatever the last run left there. Where
+    /// the keeping is asserted is ``TrailPointStoreTests``, against a
+    /// directory of its own, and below against one this file makes.
     private static func makeSource(
         _ responses: [OverpassHTTPResponse],
-        pause: (@Sendable (TimeInterval) async throws -> Void)? = nil
+        pause: (@Sendable (TimeInterval) async throws -> Void)? = nil,
+        directory: URL? = nil
     ) -> (TrailPointSource, CuratedTransportStub) {
         let stub = CuratedTransportStub(responses: responses)
         let source = TrailPointSource(
             pause: pause ?? { _ in /* nothing waits in a suite */ },
+            directory: directory,
             transport: { request in await stub.answer(request) }
         )
         return (source, stub)
@@ -205,5 +215,38 @@ struct TrailPointSourceTests {
         }
 
         #expect(CuratedTrailOutage(try #require(error)) == .unavailable)
+    }
+
+    // MARK: - What is kept
+
+    /// **The end of the chain the fall-back hangs on.** A search that answered
+    /// is written down, so the next one — in the same valley, on the same
+    /// device, refused by the same server — has something to draw. Three of
+    /// five first attempts came back `504` the day this was measured.
+    @Test("an answer is written down, and comes back when the next one is refused")
+    func anAnswerIsKeptForARefusal() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("trail-point-source-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let (source, _) = Self.makeSource([Self.ok(Self.body)], directory: directory)
+
+        let answered = try await source.places(near: Self.area)
+        let kept = await source.cachedPlaces(near: Self.area, limit: TrailPointQuery.maximumStoredResults)
+
+        #expect(answered.count == kept.count)
+        #expect(Set(kept.map(\.displayName)) == Set(answered.map(\.displayName)))
+    }
+
+    /// And a source with nowhere to write keeps nothing rather than failing.
+    /// That is what a suite gets, and what a device whose `Caches` directory
+    /// the system will not name gets.
+    @Test("a source with no directory keeps nothing")
+    func aSourceWithNoDirectoryKeepsNothing() async throws {
+        let (source, _) = Self.makeSource([Self.ok(Self.body)])
+
+        _ = try await source.places(near: Self.area)
+
+        let kept = await source.cachedPlaces(near: Self.area, limit: TrailPointQuery.maximumStoredResults)
+        #expect(kept.isEmpty)
     }
 }
