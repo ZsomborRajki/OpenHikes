@@ -793,6 +793,12 @@ jobs:
     # this is drift and it is still going. So 60, chosen to sit clear of it for
     # the same reason 45 was.
     #
+    # The run that raised it is not the evidence for it; the next one is. **The
+    # first run after this change took 45m24s**, which the gate it replaced
+    # would have failed — on a green job, for a comment-only commit. Read that
+    # as the reason the note above says to raise a gate on the drift rather
+    # than on the first timeout.
+    #
     # **Almost none of it is the tests.** Measured on the longest run: booting
     # the simulator 157s, granting location 222s, the audits 2031s of which 675
     # is the twenty tests, and the label assertions 204s of which 174 is the
