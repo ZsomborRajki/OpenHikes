@@ -280,11 +280,12 @@ extension MapView.Coordinator {
     }
 
     /// The maker's own annotation views: a waypoint's numbered dot, a marked
-    /// place's balloon, and the provisional pin a tap dropped.
+    /// place's balloon, the grey balloon of a place OpenStreetMap offered, and
+    /// the provisional pin a tap dropped.
     ///
-    /// One question rather than three at the delegate's `viewFor`, so the
-    /// three kinds this feature puts on the map are recognised in the file
-    /// that puts them there — and so `MapCoordinator.swift`, which is at the
+    /// One question rather than four at the delegate's `viewFor`, so the kinds
+    /// this feature puts on the map are recognised in the file that puts them
+    /// there — and so `MapCoordinator.swift`, which is at the
     /// length the linter allows, does not grow a branch per phase.
     func makerAnnotationView(
         for annotation: any MKAnnotation,
@@ -295,6 +296,9 @@ extension MapView.Coordinator {
         }
         if let place = annotation as? TrailPlaceAnnotation {
             return trailPlaceAnnotationView(for: place, on: mapView)
+        }
+        if let candidate = annotation as? TrailPointCandidateAnnotation {
+            return trailPointCandidateView(for: candidate, on: mapView)
         }
         #if os(iOS)
         if let dropped = annotation as? TrailDraftDroppedPin {

@@ -385,6 +385,7 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         #if os(iOS)
         if view === photoControls || view === attributionView { return true }
         if view === trailDraftControls { return true }
+        if view === trailPointSearchControl { return true }
         #endif
         return false
     }

@@ -137,6 +137,11 @@ extension MapView.Coordinator {
             // under a finger moves its annotation directly, which is what
             // ``placeRows`` staying still through the gesture is for.
             _ = controller.draft.placeRows
+            // And what OpenStreetMap last offered near the line, in the same
+            // registration for the same reason: the candidates are drawn while
+            // the maker is up and not otherwise. See
+            // `MapTrailPointCandidates.swift`.
+            _ = controller.finder.rows
         } onChange: { coordinator, map, model in
             coordinator.trackTrailDraft(model, on: map)
         }
@@ -160,6 +165,14 @@ extension MapView.Coordinator {
         // only when the *line* changed, and a place can be marked, renamed or
         // removed without a leg moving. It has a guard of its own.
         applyTrailDraftPlaces(isDrawing ? controller.draft.placeRows : [], on: mapView)
+        // The offered places, on the same terms and before the same guard: a
+        // search landing changes no leg at all.
+        applyTrailPointCandidates(isDrawing ? controller.finder.rows : [], on: mapView)
+        // And the strip at the top of the map, which the maker takes from the
+        // *Community* tab for as long as it is up — the one exclusion in this
+        // feature that does not fall out of an existing definition. See
+        // ``withdrawAreaSearchForDrawing(_:)``.
+        withdrawAreaSearchForDrawing(isDrawing)
         guard legs != trailDraftLegs
             || !Self.isSameDraft(points, as: trailDraftCoordinates) else {
             // Nothing has been committed, so this pass is a finger moving. The

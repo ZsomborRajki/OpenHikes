@@ -197,7 +197,13 @@ extension MapCoordinatorTests {
 
         await searchThisArea(browser)
 
-        await settle(until: "the caption to reach the pill") { pill.notice == .noTrailsHere }
+        // Compared against the notice's own caption rather than against a
+        // string: what it *says* is ``CuratedTrailNotice``'s and is pinned
+        // there, and the pill now takes the shape both features' notices come
+        // to it in — see ``MapCaptionNotice``.
+        await settle(until: "the caption to reach the pill") {
+            pill.notice == CuratedTrailNotice.noTrailsHere.caption
+        }
         #expect(pill.isEnabled, "somewhere else is the answer, and the pill is how to ask")
         #expect(!pill.isHidden)
         #endif
