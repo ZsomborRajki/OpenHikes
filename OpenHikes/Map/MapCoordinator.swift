@@ -227,6 +227,24 @@ extension MapView {
         /// And where the pins currently are. Also what a press is measured
         /// against to find the waypoint under it — see `MapTrailDraftDrag.swift`.
         var trailDraftCoordinates: [CLLocationCoordinate2D] = []
+        /// The provisional pin a tap left behind, waiting for one of its
+        /// callout's buttons — or `nil`, which is nearly always.
+        ///
+        /// Held by the map rather than by the draft, because nothing about it
+        /// is part of the trail: it is a question, and the map is what puts it
+        /// away. See `MapTrailDraftCallout.swift`.
+        var trailDraftDroppedPin: TrailDraftDroppedPin?
+        /// The places marked along the drawing, as the map has drawn them.
+        /// Editable: the maker is up.
+        var trailDraftPlaceAnnotations: [TrailPlaceAnnotation] = []
+        /// The places of the hike whose screen is pushed, as the map has drawn
+        /// them. Read-only, and never on screen at the same time as the pair
+        /// above — the maker and a hike's detail are two different screens, and
+        /// ``TrailPlacePinController`` withdraws these the moment its own is
+        /// not on top.
+        var hikePlaceAnnotations: [TrailPlaceAnnotation] = []
+        var isObservingHikePlaces = false
+        weak var hikePlaceController: TrailPlacePinController?
 
         #if canImport(UIKit)
         /// The press that moves a waypoint, or `nil` before the map has one.
@@ -246,6 +264,13 @@ extension MapView {
         /// Whether this drag is the reason the map is not scrolling, so a map
         /// that was already still is handed back the way it was found.
         var trailDraftDragPausedScrolling = false
+        /// The place pin currently under a finger, or `nil`.
+        ///
+        /// The annotation itself rather than an index or a coordinate, because
+        /// moving a place *is* writing this object's coordinate — nothing is
+        /// published and nothing is redrawn until the finger lifts. See
+        /// `MapTrailPlaceDrag.swift`.
+        var trailPlaceDrag: TrailPlaceAnnotation?
 
         // MARK: Photo pins
         // Stored state for `MapPhotoAnnotations.swift`, which owns everything
@@ -747,9 +772,9 @@ extension MapView.Coordinator {
         if let communityPhoto = annotation as? CommunityPhotoMapAnnotation {
             return communityPhotoAnnotationView(for: communityPhoto, on: mapView)
         }
-        if let waypoint = annotation as? TrailDraftWaypointAnnotation {
-            return trailDraftAnnotationView(for: waypoint, on: mapView)
-        }
+        // The maker's three kinds in one question — see
+        // ``makerAnnotationView(for:on:)``.
+        if let maker = makerAnnotationView(for: annotation, on: mapView) { return maker }
 
         let identifier = "routeHighlight"
         let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
@@ -812,6 +837,9 @@ extension MapView.Coordinator {
     func mapView(_ mapView: MKMapView, didDeselect view: MKAnnotationView) {
         guard !(view.annotation is MKUserLocation) else { return }
         withdrawAreaSearchForCallout(open: false)
+        // A dismissed callout is the hiker saying *never mind*, so the
+        // provisional pin it belonged to goes with it.
+        dismissTrailDraftPin(for: view.annotation, on: mapView)
     }
 
     #if canImport(UIKit)

@@ -285,6 +285,17 @@ final class Hike {
     /// cascade, which takes the walks with the hike.
     @Relationship(deleteRule: .cascade, inverse: \HikeWalk.hike)
     var walks: [HikeWalk]?
+
+    /// Every place marked along this trail — see ``TrailPoint``, and
+    /// ``orderedPlaces`` for the order they are read in.
+    ///
+    /// Optional for the reason above, and read through *here* rather than
+    /// through a query on ``TrailPoint/hikeID``, which is where this differs
+    /// from ``walks``: no screen lists places across hikes, and both callers
+    /// want this trail's, ordered against this trail's line. The cascade does
+    /// the same job either way.
+    @Relationship(deleteRule: .cascade, inverse: \TrailPoint.hike)
+    var trailPoints: [TrailPoint]?
     // swiftlint:enable discouraged_optional_collection
 
     /// The resolved ``HikeLocalState``, remembered so repeated tile-ownership

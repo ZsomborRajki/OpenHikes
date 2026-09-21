@@ -17,7 +17,9 @@
 //  many times.
 //
 
+import CoreLocation
 import MapKit
+import Observation
 import SwiftUI
 
 /// What the hiker is typing into the save alert, for as long as that alert is
@@ -88,8 +90,24 @@ struct TrailDraftNameField: View {
 /// would re-evaluate the whole list on every search — the exact cost this
 /// file's header splits the fields apart to avoid.
 @MainActor
+@Observable
 final class TrailDraftSearchRun {
-    private var task: Task<Void, Never>?
+    /// The last place a lookup actually found, or `nil` before one has.
+    ///
+    /// Kept so the maker can offer to *mark* it, which is the fourth of the
+    /// four add flows the plan issue asks for and the only one that arrives
+    /// with a name already on it: an `MKLocalSearch` result is a hut, a spring
+    /// or a summit that somebody has already labelled. The camera move is
+    /// still all that happens on its own — marking is a second, deliberate
+    /// tap, because a field that placed something every time it was used would
+    /// be a search that edits the trail.
+    ///
+    /// Observed, so the menu entry appears with the answer. It is read by one
+    /// small section's body and nothing else, which is what this file's header
+    /// splits the fields apart for.
+    private(set) var lastResult: TrailPlaceSearchResult?
+
+    @ObservationIgnored private var task: Task<Void, Never>?
 
     /// Starts `work`, cancelling whatever was already running. Nothing here
     /// waits on the old one: it is abandoned rather than drained, because what
@@ -102,6 +120,46 @@ final class TrailDraftSearchRun {
     func cancel() {
         task?.cancel()
         task = nil
+    }
+
+    /// Remembers what a lookup found, so the maker can offer to mark it.
+    func found(_ result: TrailPlaceSearchResult?) {
+        guard lastResult != result else { return }
+        lastResult = result
+    }
+}
+
+/// A place a lookup found: what it is called, and where it is.
+///
+/// A value of its own rather than an `MKMapItem`, because what the maker does
+/// with it is build a ``TrailPlace`` — and because `MKMapItem` is a reference
+/// type from a framework, which is neither `Equatable` nor something a suite
+/// can construct.
+nonisolated struct TrailPlaceSearchResult: Equatable, Sendable {
+    var name: String
+    var latitude: Double
+    var longitude: Double
+
+    var clCoordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    /// The first result of a response, or `nil` for a response with nothing in
+    /// it or nothing named.
+    ///
+    /// The *first*, because that is the one the camera framed: a field that
+    /// moved the map to one place and offered to mark another would be two
+    /// answers to one question.
+    init?(firstOf items: [MKMapItem]) {
+        guard let item = items.first else { return nil }
+        let coordinate = item.location.coordinate
+        guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
+        // `name` rather than the typed query: the query is what the hiker
+        // guessed and this is what MapKit found, and they differ exactly where
+        // it matters — "kehlstein" comes back as "Kehlsteinhaus".
+        name = item.name ?? ""
+        latitude = coordinate.latitude
+        longitude = coordinate.longitude
     }
 }
 
@@ -221,6 +279,10 @@ struct TrailDraftSearchField: View {
                   !Task.isCancelled,
                   !response.mapItems.isEmpty else { return }
             mapController.show(response.boundingRegion)
+            // Remembered rather than placed — see
+            // ``TrailDraftSearchRun/lastResult``. Nothing on the trail changes
+            // here; the maker's own menu is where the hiker says to mark it.
+            search.found(TrailPlaceSearchResult(firstOf: response.mapItems))
         }
     }
 }

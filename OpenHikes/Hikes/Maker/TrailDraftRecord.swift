@@ -43,6 +43,23 @@ final class TrailDraftRecord {
     /// is a new session.
     var waypoints: [RouteCoordinate] = []
 
+    /// The places marked along it, in the order they were marked.
+    ///
+    /// ``TrailPlace`` itself rather than a second encoded shape, because it is
+    /// already `Codable` and already the value every screen works in — the
+    /// same argument the waypoints above make for ``RouteCoordinate``. It is
+    /// only here, in the *unmirrored* store, that a stored `TrailPlace` costs
+    /// nothing: the mirrored copy a save writes is ``TrailPoint``, a row per
+    /// place, because that is what CloudKit can carry and query.
+    ///
+    /// The identities *are* kept here, unlike the waypoints', and the
+    /// difference is what they are for: a waypoint's id exists so a list can
+    /// key its rows within one session, while a place's is what the map, the
+    /// editor and the drag all name it by — and what a saved ``TrailPoint``
+    /// carries. An empty inline default, so a row written before this column
+    /// existed resumes as a drawing with nothing marked on it.
+    var places: [TrailPlace] = []
+
     /// Whether the legs between them were following mapped paths.
     ///
     /// Part of the drawing rather than a global preference, because it is
@@ -58,8 +75,14 @@ final class TrailDraftRecord {
     /// draft has something to say about it. Read by nothing today.
     var updatedAt = Date.distantPast
 
-    init(waypoints: [RouteCoordinate], snapsToPaths: Bool, updatedAt: Date) {
+    init(
+        waypoints: [RouteCoordinate],
+        places: [TrailPlace],
+        snapsToPaths: Bool,
+        updatedAt: Date
+    ) {
         self.waypoints = waypoints
+        self.places = places
         self.snapsToPaths = snapsToPaths
         self.updatedAt = updatedAt
     }

@@ -307,6 +307,7 @@ struct TrailDraftRoutingTests {
                 TrailWaypoint(coordinate: Self.coordinate(Line.south)),
                 TrailWaypoint(coordinate: Self.coordinate(Line.north)),
             ],
+            places: [],
             snapsToPaths: true
         )
         let maker = TrailDraftController(store: store, router: router)
@@ -329,6 +330,7 @@ struct TrailDraftRoutingTests {
                 TrailWaypoint(coordinate: Self.coordinate(Line.south)),
                 TrailWaypoint(coordinate: Self.coordinate(Line.north)),
             ],
+            places: [],
             snapsToPaths: false
         )
         let maker = TrailDraftController(store: store, router: router)

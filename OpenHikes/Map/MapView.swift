@@ -97,6 +97,9 @@ struct MapView: MapViewRepresentable, Equatable {
     /// (not via SwiftUI) so taking, importing or deleting one redraws MapKit's
     /// annotations rather than this view — see ``PhotoMapPinController``.
     var photoPins: PhotoMapPinController
+    /// The open hike's marked places, drawn as pins. Observed directly for the
+    /// reason ``photoPins`` is — see ``TrailPlacePinController``.
+    var placePins: TrailPlacePinController
 
     /// Whether a trail can be made right now, and the line being drawn if one
     /// is. Observed directly by the map (not via SwiftUI) so putting a point
@@ -137,35 +140,6 @@ struct MapView: MapViewRepresentable, Equatable {
     /// types above it is a plain value compared in `==` below.
     var sidePanelInset: CGFloat = 0
 
-    /// Lets `.equatable()` skip `updateUIView` when nothing actually changed —
-    /// without it, SwiftUI calls `updateUIView` on every ancestor body pass
-    /// that touches this view's transaction (e.g. the sheet's per-frame drag
-    /// updates), even though `routeStyle`/`highlight`/`sheetMetrics`/
-    /// `mapController`/`locationManager` are deliberately observed outside
-    /// SwiftUI for exactly that scenario. Those controller models are reference types the
-    /// parent always hands down as the same instance, so identity comparison is
-    /// correct: their *contents* changing on their own is not a reason to
-    /// re-run `updateUIView`.
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.route == rhs.route
-            && lhs.routeStyle === rhs.routeStyle
-            && lhs.highlight === rhs.highlight
-            && lhs.walkHighlight === rhs.walkHighlight
-            && lhs.recordingTrace === rhs.recordingTrace
-            && lhs.sheetMetrics === rhs.sheetMetrics
-            && lhs.tileSource == rhs.tileSource
-            && lhs.mapController === rhs.mapController
-            && lhs.drawnRouteTap === rhs.drawnRouteTap
-            && lhs.locationAccessPrompt === rhs.locationAccessPrompt
-            && lhs.locationManager === rhs.locationManager
-            && lhs.photoCapture === rhs.photoCapture
-            && lhs.photoPins === rhs.photoPins
-            && lhs.trailMaker === rhs.trailMaker
-            && lhs.community === rhs.community
-            && lhs.searchCompleter === rhs.searchCompleter
-            && lhs.sidePanelInset == rhs.sidePanelInset
-    }
-
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     /// Internal rather than private so `MapCoordinatorTests` can drive the two
@@ -193,6 +167,7 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.observeMapController(mapController, on: mapView)
         coordinator.observeRouteStyle(routeStyle, on: mapView)
         coordinator.observePhotoPins(photoPins, on: mapView)
+        coordinator.observeHikePlaces(placePins, on: mapView)
         coordinator.community = community
         coordinator.searchCompleter = searchCompleter
         coordinator.drawnRouteTap = drawnRouteTap
@@ -712,6 +687,44 @@ struct MapView: MapViewRepresentable, Equatable {
     func updateUIView(_ mapView: MKMapView, context: Context) { update(mapView, context.coordinator) }
     #endif
 
+}
+
+// MARK: - When an update is worth running
+
+// A same-file extension rather than more of the struct above, for the reason
+// `OpenHikesView`'s own relocations take one: `type_body_length` is a limit on
+// a body and an extension is not one. Nothing about this comparison belongs
+// anywhere else.
+extension MapView {
+    /// Lets `.equatable()` skip `updateUIView` when nothing actually changed —
+    /// without it, SwiftUI calls `updateUIView` on every ancestor body pass
+    /// that touches this view's transaction (e.g. the sheet's per-frame drag
+    /// updates), even though `routeStyle`/`highlight`/`sheetMetrics`/
+    /// `mapController`/`locationManager` are deliberately observed outside
+    /// SwiftUI for exactly that scenario. Those controller models are reference types the
+    /// parent always hands down as the same instance, so identity comparison is
+    /// correct: their *contents* changing on their own is not a reason to
+    /// re-run `updateUIView`.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.route == rhs.route
+            && lhs.routeStyle === rhs.routeStyle
+            && lhs.highlight === rhs.highlight
+            && lhs.walkHighlight === rhs.walkHighlight
+            && lhs.recordingTrace === rhs.recordingTrace
+            && lhs.sheetMetrics === rhs.sheetMetrics
+            && lhs.tileSource == rhs.tileSource
+            && lhs.mapController === rhs.mapController
+            && lhs.drawnRouteTap === rhs.drawnRouteTap
+            && lhs.locationAccessPrompt === rhs.locationAccessPrompt
+            && lhs.locationManager === rhs.locationManager
+            && lhs.photoCapture === rhs.photoCapture
+            && lhs.photoPins === rhs.photoPins
+            && lhs.placePins === rhs.placePins
+            && lhs.trailMaker === rhs.trailMaker
+            && lhs.community === rhs.community
+            && lhs.searchCompleter === rhs.searchCompleter
+            && lhs.sidePanelInset == rhs.sidePanelInset
+    }
 }
 
 #if os(iOS)

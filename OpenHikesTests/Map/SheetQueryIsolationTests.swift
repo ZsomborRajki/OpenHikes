@@ -172,6 +172,7 @@ struct SheetQueryIsolationTests {
             mapController: MapController(),
             photoCapture: PhotoCaptureController(),
             photoPins: PhotoMapPinController(),
+            placePins: TrailPlacePinController(),
             trailMaker: TrailDraftController()
         )
         #expect(

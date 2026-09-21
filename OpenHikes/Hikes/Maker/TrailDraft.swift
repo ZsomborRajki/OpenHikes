@@ -52,10 +52,21 @@
 //  all, and ``waypoints`` changes exactly once, when the finger lifts. Do not
 //  widen these properties into the drag.
 //
+//  ## Places are the other list, and they have no rank
+//
+//  ``places`` is what is *on* the trail rather than what it goes through — a
+//  spring, a saddle, the hut at the col. It is a second list and deliberately
+//  not a second kind of waypoint: a waypoint is the third place the line goes,
+//  and a place is a spot on the ground that happens to be near it. So nothing
+//  numbers them, nothing reorders them, and where each one sits along the line
+//  is derived from the line by ``rankPlaces()`` rather than stored. A leg that
+//  snaps through a valley moves every place's distance without a hiker having
+//  touched one. See ``TrailPlace``.
+//
 //  ## Undo, and the one thing that is not snapshotted
 //
-//  Every operation below records the waypoint list before it changes it, into
-//  ``TrailDraftHistory``. What is *not* in a snapshot is the resolved leg
+//  Every operation below records the drawing — the points *and* the places —
+//  before it changes it, into ``TrailDraftHistory``. What is *not* in a snapshot is the resolved leg
 //  shapes: they are far larger than the points and they are re-derivable, so
 //  they are remembered once, by their two ends, in ``TrailLegMemo`` — which
 //  `rebuildLegs` consults. That is what makes undo restore the line rather
@@ -169,6 +180,28 @@ final class TrailDraft {
     /// the number on the screen and the number in the library.
     private(set) var distancesAlongLine: [Double] = []
 
+    /// The places marked along this trail, in the order they were marked.
+    ///
+    /// The order they were *marked* rather than the order they are met, and
+    /// that is not the list a screen draws: ``placeRows`` is. A place has no
+    /// rank — it is a spot on the ground — so the only stable order this list
+    /// can have is the one nothing else depends on, and where a place sits
+    /// along the line is derived from the line rather than stored beside it.
+    /// Which means an edit to the route reorders the places for free, and a
+    /// place that was marked before there was a line at all is still here to
+    /// be measured once there is one.
+    private(set) var places: [TrailPlace] = []
+
+    /// The same places in the order they are met walking the line, each with
+    /// how far along it sits.
+    ///
+    /// Stored rather than computed on read, for the reason
+    /// ``distancesAlongLine`` is: a snapped trail is thousands of coordinates
+    /// and this projects every place onto every segment of it, which is fine
+    /// once per edit and is not fine once per body pass. Recomputed by
+    /// ``remeasure()``, so it moves when either the line or the places do.
+    private(set) var placeRows: [TrailPlaceRow] = []
+
     /// The point currently under a finger, or `nil` when none is.
     ///
     /// **Untracked, deliberately** — see the file header. Read beside
@@ -205,7 +238,19 @@ final class TrailDraft {
     /// trail, which is why ``TrailDraftSave`` refuses it.
     var canBeSaved: Bool { waypoints.count > 1 }
 
-    var isEmpty: Bool { waypoints.isEmpty }
+    /// Whether there is nothing here at all — no line and nothing marked.
+    ///
+    /// Both halves, because this is what decides whether the durable draft is
+    /// worth keeping and whether Cancel has anything to ask about. A hiker who
+    /// marked the hut before drawing anything has done work, and a Cancel that
+    /// threw it away without asking would be the same loss a cleared line is.
+    var isEmpty: Bool { waypoints.isEmpty && places.isEmpty }
+
+    /// The drawing as one value: what a step of undo remembers, and what a
+    /// restore puts back. See ``TrailDraftContents``.
+    var contents: TrailDraftContents {
+        TrailDraftContents(waypoints: waypoints, places: places)
+    }
 
     /// Where the pins go. The points themselves, never the resolved shape.
     var coordinates: [CLLocationCoordinate2D] {
@@ -275,7 +320,7 @@ final class TrailDraft {
 
     /// Appends a point at the end of the line.
     func append(_ coordinate: CLLocationCoordinate2D) {
-        history.record(waypoints)
+        history.record(contents)
         waypoints.append(TrailWaypoint(coordinate: coordinate))
         rebuildLegs()
     }
@@ -293,10 +338,15 @@ final class TrailDraft {
     /// A different drawing, so the steps behind the last one go with it — an
     /// undo that reached back past a restore would offer a line from a
     /// session that has ended.
-    func replace(with waypoints: [TrailWaypoint], snapsToPaths: Bool) {
+    func replace(
+        with waypoints: [TrailWaypoint],
+        places: [TrailPlace],
+        snapsToPaths: Bool
+    ) {
         cancelDrag()
         history.forget()
         self.waypoints = waypoints
+        self.places = places
         legs = []
         setSnapsToPaths(snapsToPaths)
         rebuildLegs()
@@ -315,8 +365,9 @@ final class TrailDraft {
         cancelDrag()
         history.forget()
         memo = TrailLegMemo()
-        guard !waypoints.isEmpty else { return }
+        guard !isEmpty else { return }
         waypoints = []
+        places = []
         rebuildLegs()
     }
 
@@ -474,9 +525,10 @@ final class TrailDraft {
     /// every shape this drawing has settled and the list is what says which of
     /// them apply. See ``TrailDraftHistory`` for why a step is a list of points
     /// and not a list of shapes.
-    private func restore(_ restored: [TrailWaypoint]) {
+    private func restore(_ restored: TrailDraftContents) {
         cancelDrag()
-        waypoints = restored
+        waypoints = restored.waypoints
+        places = restored.places
         rebuildLegs()
     }
 
@@ -515,8 +567,24 @@ final class TrailDraft {
 
     private func remeasure() {
         let measured = Self.distances(along: legs, pointCount: waypoints.count)
-        guard distancesAlongLine != measured else { return }
-        distancesAlongLine = measured
+        if distancesAlongLine != measured { distancesAlongLine = measured }
+        rankPlaces()
+    }
+
+    /// Puts the places back in the order the line meets them.
+    ///
+    /// Called from ``remeasure()`` rather than from the place operations, so
+    /// that an edit to the *route* re-ranks them too: a leg that snapped
+    /// through a valley moves every place's distance along the line without
+    /// anything having been marked or moved.
+    ///
+    /// Measured against the resolved line — ``routeCoordinates`` — rather than
+    /// against the waypoints, so the figure beside a place is the same one the
+    /// header and the saved hike carry.
+    private func rankPlaces() {
+        let ranked = TrailPlaceOrder.ordered(places, along: routeCoordinates)
+        guard placeRows != ranked else { return }
+        placeRows = ranked
     }
 
     /// One running total per waypoint, in one walk of the legs.
@@ -554,7 +622,7 @@ extension TrailDraft {
         guard waypoints.indices.contains(index) else { return }
         let moved = TrailWaypoint(coordinate: coordinate, id: waypoints[index].id)
         guard moved != waypoints[index] else { return }
-        history.record(waypoints)
+        history.record(contents)
         waypoints[index] = moved
         rebuildLegs()
     }
@@ -567,7 +635,7 @@ extension TrailDraft {
     /// becomes two.
     func insert(_ coordinate: CLLocationCoordinate2D, intoLegAt index: Int) {
         guard legs.indices.contains(index) else { return }
-        history.record(waypoints)
+        history.record(contents)
         waypoints.insert(TrailWaypoint(coordinate: coordinate), at: index + 1)
         rebuildLegs()
     }
@@ -578,7 +646,7 @@ extension TrailDraft {
             .filter { !offsets.contains($0.offset) }
             .map(\.element)
         guard kept.count != waypoints.count else { return }
-        history.record(waypoints)
+        history.record(contents)
         waypoints = kept
         rebuildLegs()
     }
@@ -591,7 +659,7 @@ extension TrailDraft {
     func moveWaypoints(fromOffsets offsets: IndexSet, toOffset destination: Int) {
         let reordered = Self.moving(waypoints, from: offsets, to: destination)
         guard reordered != waypoints else { return }
-        history.record(waypoints)
+        history.record(contents)
         waypoints = reordered
         rebuildLegs()
     }
@@ -610,7 +678,7 @@ extension TrailDraft {
     /// named by the waypoint it arrives at, and every one of those has changed.
     func reverse() {
         guard canBeRearranged else { return }
-        history.record(waypoints)
+        history.record(contents)
         let flipped = legs.reversed().map { $0.flipped() }
         waypoints.reverse()
         rebuildLegs(reusing: flipped)
@@ -624,7 +692,7 @@ extension TrailDraft {
     /// whose last row does not exist.
     func closeTheLoop() {
         guard canCloseTheLoop, let first = waypoints.first else { return }
-        history.record(waypoints)
+        history.record(contents)
         waypoints.append(
             TrailWaypoint(latitude: first.latitude, longitude: first.longitude)
         )
@@ -635,23 +703,143 @@ extension TrailDraft {
     /// this trail again rather than abandoning it, which is why it is a step
     /// like any other and ``clear()`` is not.
     func clearDrawing() {
-        guard !waypoints.isEmpty else { return }
-        history.record(waypoints)
+        guard !isEmpty else { return }
+        history.record(contents)
         cancelDrag()
         waypoints = []
+        // The places go with the line, because *Clear* is the hiker starting
+        // this trail again and a hut marked against a route that no longer
+        // exists is not the start of anything. One step of undo brings back
+        // both, which is the whole reason a step is the drawing rather than
+        // the waypoint list — see ``TrailDraftContents``.
+        places = []
         rebuildLegs()
     }
 
     func undo() {
-        var restored = waypoints
+        var restored = contents
         guard history.undo(&restored) else { return }
         restore(restored)
     }
 
     func redo() {
-        var restored = waypoints
+        var restored = contents
         guard history.redo(&restored) else { return }
         restore(restored)
+    }
+
+    // MARK: Places
+
+    /// Marks a place. What the callout's *Mark a Place* does, and what the
+    /// three add flows in the maker's list do.
+    ///
+    /// A step like every other edit, so a place dropped by a mis-tap is undone
+    /// rather than hunted for and deleted.
+    func addPlace(_ place: TrailPlace) {
+        history.record(contents)
+        places.append(place)
+        rankPlaces()
+    }
+
+    /// Writes a place's name, symbol, note or coordinate back, matched by
+    /// identity.
+    ///
+    /// Silent for a place that is no longer here and for one that would not
+    /// change: the editor is a sheet over a drawing that can be undone
+    /// underneath it, and a write of the same values would cost a step of
+    /// history that puts nothing back.
+    func updatePlace(_ place: TrailPlace) {
+        guard let index = places.firstIndex(where: { $0.id == place.id }),
+              !places[index].matches(place) else { return }
+        history.record(contents)
+        places[index] = place
+        rankPlaces()
+    }
+
+    /// Moves a place to a new spot. What a drag on its pin commits.
+    ///
+    /// Its own verb rather than ``updatePlace(_:)`` with a rebuilt value,
+    /// because the map has a coordinate and nothing else: reading the rest of
+    /// the place out to put it straight back is how a drag that races the
+    /// editor writes yesterday's name.
+    func movePlace(id: UUID, to coordinate: CLLocationCoordinate2D) {
+        guard let index = places.firstIndex(where: { $0.id == id }) else { return }
+        guard places[index].latitude != coordinate.latitude
+            || places[index].longitude != coordinate.longitude else { return }
+        history.record(contents)
+        places[index].latitude = coordinate.latitude
+        places[index].longitude = coordinate.longitude
+        rankPlaces()
+    }
+
+    func removePlace(id: UUID) {
+        guard let index = places.firstIndex(where: { $0.id == id }) else { return }
+        history.record(contents)
+        places.remove(at: index)
+        rankPlaces()
+    }
+
+    /// Takes places out of the list a screen is showing. What a swipe on a
+    /// place row does.
+    ///
+    /// The offsets are into ``placeRows`` — the order the line meets them —
+    /// rather than into ``places``, because that is the list the hiker swiped
+    /// on and the two are not the same order. Resolved to identities here
+    /// rather than at the call site, so a screen never has to know that.
+    func removePlaces(atRowOffsets offsets: IndexSet) {
+        let doomed = Set(
+            offsets.compactMap { offset in
+                placeRows.indices.contains(offset) ? placeRows[offset].id : nil
+            }
+        )
+        guard !doomed.isEmpty else { return }
+        history.record(contents)
+        places.removeAll { doomed.contains($0.id) }
+        rankPlaces()
+    }
+
+    /// The place with this identity, or `nil` for one that has gone.
+    func place(id: UUID) -> TrailPlace? {
+        places.first { $0.id == id }
+    }
+
+    /// Which leg of the line runs nearest to `coordinate`, or `nil` when there
+    /// is no line.
+    ///
+    /// What *Add Stop* asks when the tap that raised the callout did not land
+    /// on a leg. Measured on the ground rather than on the glass, unlike the
+    /// leg hit-test that answers a thumb: this is a question about where a
+    /// point belongs in a route, and the answer must not depend on how the
+    /// camera happened to be turned.
+    ///
+    /// Distance to the leg's drawn shape rather than to the straight line
+    /// between its ends, so a snapped leg that loops round a spur is judged by
+    /// the path it actually follows.
+    func nearestLegIndex(to coordinate: CLLocationCoordinate2D) -> Int? {
+        var best: Int?
+        var bestDistance = Double.infinity
+        for (index, leg) in legs.enumerated() {
+            let shape = leg.coordinates.count > 1
+                ? leg.coordinates
+                : leg.ends.straightCoordinates
+            for (start, end) in zip(shape, shape.dropFirst()) {
+                let projection = RouteGeometry.project(
+                    coordinate,
+                    onSegmentFrom: CLLocationCoordinate2D(
+                        latitude: start.latitude,
+                        longitude: start.longitude
+                    ),
+                    to: CLLocationCoordinate2D(
+                        latitude: end.latitude,
+                        longitude: end.longitude
+                    )
+                )
+                guard projection.offRouteMeters < bestDistance else { continue }
+                bestDistance = projection.offRouteMeters
+                best = index
+            }
+        }
+        return best
     }
 
     // MARK: A point under a finger

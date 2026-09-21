@@ -120,6 +120,7 @@ struct TrailDraftTests {
                 TrailWaypoint(coordinate: Self.coordinate(Line.south)),
                 TrailWaypoint(coordinate: Self.coordinate(Line.north)),
             ],
+            places: [],
             snapsToPaths: true
         )
         #expect(draft.waypoints.count == 2)

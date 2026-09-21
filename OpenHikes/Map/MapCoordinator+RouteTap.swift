@@ -136,18 +136,43 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
     /// Whether a recognizer on this map may start.
     ///
     /// Only one of the two this delegate answers for is ever refused, and it
-    /// is refused for nearly every press: the waypoint drag begins only when a
-    /// pin is under the finger. Everything else — a press on open map, on a
-    /// line, on a control — is left to mean exactly what it meant before,
-    /// which is what keeps a gesture nobody is using from costing a quarter of
-    /// a second of every long press on the map. See `MapTrailDraftDrag.swift`.
+    /// is refused for nearly every press: the drag begins only when one of the
+    /// maker's own pins is under the finger. Everything else — a press on open
+    /// map, on a line, on a control — is left to mean exactly what it meant
+    /// before, which is what keeps a gesture nobody is using from costing a
+    /// quarter of a second of every long press on the map. See
+    /// `MapTrailDraftDrag.swift` and `MapTrailPlaceDrag.swift`.
+    ///
+    /// Either kind counts, and the *begin* handler decides which it was: a
+    /// waypoint's numbered dot, or a marked place's balloon. Asking twice here
+    /// rather than once is what keeps a press on a balloon — whose body is
+    /// forty points above the coordinate it points at — from being refused for
+    /// being nowhere near a waypoint.
     func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
         guard recognizer === trailDraftDragRecognizer,
               let mapView = recognizer.view as? MKMapView else { return true }
-        return trailDraftWaypointIndex(
-            at: recognizer.location(in: mapView),
-            in: mapView
-        ) != nil
+        let point = recognizer.location(in: mapView)
+        if isPressOnTrailPlace(at: point, in: mapView) { return true }
+        return trailDraftWaypointIndex(at: point, in: mapView) != nil
+    }
+
+    /// Whether a press at `point` landed on one of the maker's own place pins.
+    ///
+    /// Its own question rather than `trailPlace(at:in:) != nil` reused from
+    /// the drag, because this one runs on **every** long press anywhere on the
+    /// map and must stay cheap: a map with no maker up has no editable places,
+    /// which this answers without a hit test.
+    private func isPressOnTrailPlace(at point: CGPoint, in mapView: MKMapView) -> Bool {
+        guard trailDraftController?.isEditing == true,
+              !trailDraftPlaceAnnotations.isEmpty else { return false }
+        var view = mapView.hitTest(point, with: nil)
+        while let current = view, current !== mapView {
+            if let annotationView = current as? MKAnnotationView {
+                return annotationView.annotation is TrailPlaceAnnotation
+            }
+            view = current.superview
+        }
+        return false
     }
 
     @objc func handleRouteTap(_ recognizer: UITapGestureRecognizer) {
@@ -157,12 +182,17 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         let point = recognizer.location(in: mapView)
         // **While the maker is up, a tap on the map means one thing.** Every
         // other meaning this recognizer carries — the hiker's own line, a
-        // shared hike's — is suspended, because a tap that put a point down
-        // *and* opened somebody's trail would be a tap that did two things,
-        // and the one thing it is for is the one the hiker came here to do.
-        // The controls above the map keep their claim: `addTrailDraftWaypoint`
-        // asks the same question `routeTapTarget(at:in:)` asks first.
-        if addTrailDraftWaypoint(at: point, in: mapView) { return }
+        // shared hike's — is suspended, because a tap that dropped a pin *and*
+        // opened somebody's trail would be a tap that did two things, and the
+        // one thing it is for is the one the hiker came here to do.
+        //
+        // What that one thing *is* changed in Phase 4: the tap no longer draws
+        // anything, it drops a pin and asks. See `MapTrailDraftCallout.swift`
+        // and ``TrailDraftPinAction`` for why a map is a thing people touch to
+        // look at things. The controls above the map keep their claim:
+        // `dropTrailDraftPin` asks the same question `routeTapTarget(at:in:)`
+        // asks first.
+        if dropTrailDraftPin(at: point, in: mapView) { return }
         let target = routeTapTarget(at: point, in: mapView)
         // Only a hit. A tap that landed on open map is not a failed gesture —
         // it is panning, or nothing at all — and answering it would make the
@@ -175,59 +205,42 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         }
     }
 
-    /// Puts a waypoint down where a tap landed, while the maker is up.
-    ///
-    /// - Returns: whether the tap was spent here, which is what tells the
-    ///   handler above to stop asking what else it could have meant.
-    ///
-    /// Split from the handler for the reason ``routeTapTarget(at:in:)`` is:
-    /// a `UITapGestureRecognizer`'s state and location are set by the touch
-    /// system and cannot be driven by a suite, so what is worth asserting on
-    /// has to be reachable without one.
-    ///
-    /// A tap that landed on something over the map is not a waypoint. The
-    /// tracking button, the credit line and the pill that opened this mode all
-    /// sit on the canvas, and a thumb on one of them must not leave a point
-    /// behind it.
-    ///
-    /// **Markers are among those things, deliberately.** What this suspends is
-    /// the *canvas* — the lines, which are drawn pixels with no view behind
-    /// them and are reached only through this recognizer. An `MKAnnotationView`
-    /// is a view with its own touches, and ``isTapClaimed(at:in:)`` has always
-    /// given it the tap; a shared hike's pin therefore still opens its callout
-    /// while a trail is being drawn, and the callout's accessory still opens
-    /// the hike. That is a second deliberate tap rather than a stray one, the
-    /// maker keeps its draft underneath and Back returns to it — and somebody
-    /// planning a walk has a real use for reading the waymarked route beside
-    /// the line they are drawing. The hiker's own photo pins cannot be there
-    /// at all: like the camera pill, they are offered only by a screen that
-    /// attaches a subject, and the maker attaches none.
-    ///
-    /// The maker's *own* numbered pins are not among them, and
-    /// ``isTapClaimed(at:in:)`` says why: they answer no tap, so a claim by
-    /// one is a tap that disappears rather than a tap that did something else.
-    ///
-    /// ## Two meanings, and the line decides which
-    ///
-    /// A tap on open map appends a point at the end of the line, which is what
-    /// drawing is. A tap **on a leg that is already drawn** puts a point into
-    /// that leg where the thumb landed, which is how a route that cuts a
-    /// corner is made to bend round it. The second is not a second gesture:
-    /// it is the same tap, and which it means is decided by whether it landed
-    /// within a fingertip of a line the hiker can see. Appending to the end of
-    /// a trail by tapping a point on its own middle is not a thing anybody
-    /// means.
-    func addTrailDraftWaypoint(at point: CGPoint, in mapView: MKMapView) -> Bool {
-        guard let trailDraftController, trailDraftController.isEditing else { return false }
-        guard !isTapClaimed(at: point, in: mapView) else { return false }
-        let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
-        if let leg = trailDraftLegIndex(at: point, in: mapView) {
-            trailDraftController.insertWaypoint(at: coordinate, intoLegAt: leg)
-        } else {
-            trailDraftController.appendWaypoint(at: coordinate)
-        }
-        return true
-    }
+    // MARK: - What a tap means while the maker is up
+    //
+    // The canvas rules, kept beside the handler above that applies them. The
+    // pin a tap drops and the buttons in its callout are in
+    // `MapTrailDraftCallout.swift`; ``dropTrailDraftPin(at:in:)`` is the call.
+    //
+    // **A tap that landed on something over the map is not a drop.** The
+    // tracking button, the credit line and the pill that opened this mode all
+    // sit on the canvas, and a thumb on one of them must not leave a pin
+    // behind it.
+    //
+    // **Markers are among those things, deliberately.** What the maker
+    // suspends is the *canvas* — the lines, which are drawn pixels with no
+    // view behind them and are reached only through this recognizer. An
+    // `MKAnnotationView` is a view with its own touches, and
+    // ``isTapClaimed(at:in:)`` has always given it the tap; a shared hike's
+    // pin therefore still opens its callout while a trail is being drawn, and
+    // the callout's accessory still opens the hike. That is a second
+    // deliberate tap rather than a stray one — the maker keeps its draft
+    // underneath and Back returns to it, and somebody planning a walk has a
+    // real use for reading the waymarked route beside the line they are
+    // drawing. The hiker's own photo pins cannot be there at all: like the
+    // camera pill, they are offered only by a screen that attaches a subject,
+    // and the maker attaches none.
+    //
+    // The maker's *own* numbered pins are among them now, and that is the
+    // Phase 4 change: they show a callout, so a tap on one is a tap that did
+    // something rather than one that disappeared inside a 24-point dot.
+    //
+    // **The leg a tap landed on is carried, not re-derived.** A tap on a leg
+    // that is already drawn is still different from a tap on open map — it is
+    // how a route that cuts a corner is made to bend round it — but the
+    // difference is no longer in what the tap *does*. Both drop a pin; the leg
+    // is remembered on it, so *Add Stop* puts the point into the leg the thumb
+    // was on rather than into whichever leg is nearest by the time the button
+    // is pressed. See ``TrailDraftDroppedPin/legIndex``.
 
     /// Which leg of the drawn line a tap landed on, if any.
     ///
@@ -338,28 +351,25 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
     /// `UIControl` alone would let a tap on the padding around a button through
     /// while catching the button itself, which is the sort of difference
     /// nobody can see and everybody hits.
-    /// The maker's own pins are the one exception, and they are an exception
-    /// because they are not a claim. A ``TrailDraftWaypointAnnotation``'s view
-    /// shows no callout and answers no tap, so letting it take one means a
-    /// thumb inside its 24 points does nothing at all — no point put down, no
-    /// callout opened, no feedback — and a hiker drawing a switchback or
-    /// doubling back past a point they already placed cannot tell a swallowed
-    /// tap from a missed one. The paragraph above argues from markers that
-    /// *do* something with a touch; these do not, so the tap goes on to mean
-    /// what every other tap on this canvas means.
+    /// **Every annotation claims its tap, and the maker's pins used to be the
+    /// exception.** Through Phase 3 a ``TrailDraftWaypointAnnotation`` showed
+    /// no callout and answered no touch, so letting one take a tap meant a
+    /// thumb inside its 24 points did nothing at all — no point put down, no
+    /// callout opened, no feedback — and a hiker drawing a switchback could
+    /// not tell a swallowed tap from a missed one. The carve-out was for that,
+    /// and Phase 4 removed it by removing its cause: a waypoint pin now opens
+    /// a callout saying which point it is and offering to take it out, so it
+    /// answers a tap like everything else on this map.
     ///
-    /// **A waypoint pin answers a *press*, and that is a different gesture.**
-    /// Since Phase 3 a long press on one takes hold of it and moves it, which
-    /// is a `UILongPressGestureRecognizer` of the map's own rather than
-    /// anything the annotation view does with a touch — see
-    /// `MapTrailDraftDrag.swift`. So the pin still claims nothing here, and
-    /// the two gestures do not have to be told apart.
-    private func isTapClaimed(at point: CGPoint, in mapView: MKMapView) -> Bool {
+    /// **A waypoint pin also answers a *press*, and that is a different
+    /// gesture.** Since Phase 3 a long press on one takes hold of it and moves
+    /// it, which is a `UILongPressGestureRecognizer` of the map's own rather
+    /// than anything the annotation view does with a touch — see
+    /// `MapTrailDraftDrag.swift`. The two do not have to be told apart here.
+    func isTapClaimed(at point: CGPoint, in mapView: MKMapView) -> Bool {
         var view = mapView.hitTest(point, with: nil)
         while let current = view, current !== mapView {
-            if let annotationView = current as? MKAnnotationView {
-                return !(annotationView.annotation is TrailDraftWaypointAnnotation)
-            }
+            if current is MKAnnotationView { return true }
             if current is UIControl { return true }
             if isOwnControl(current) { return true }
             view = current.superview

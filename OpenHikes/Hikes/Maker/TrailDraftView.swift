@@ -38,6 +38,9 @@ struct TrailDraftView: View {
     let completer: SearchCompleter
     /// How the field above moves the camera. It places nothing.
     let mapController: MapController
+    /// The hiker's own position, for *Mark a Place → At My Location*. `nil`
+    /// for a launch with no location, which withholds that one entry.
+    var locationManager: LocationManager?
     var onCancel: () -> Void
     var onSaved: (Hike) -> Void
 
@@ -75,6 +78,18 @@ struct TrailDraftView: View {
     /// The *Find a Place* lookup, held here rather than in the field that
     /// starts it — see ``TrailDraftSearchRun``.
     @State private var search = TrailDraftSearchRun()
+    /// What is being typed into the place editor. Held here rather than in the
+    /// sheet, so it survives the sheet being torn down while the write it
+    /// carries is going through — see ``TrailPlaceEdit``.
+    @State private var placeEdit = TrailPlaceEdit()
+    /// Whether that sheet is up.
+    ///
+    /// A flag beside the edit above rather than an `item:` presentation off
+    /// ``TrailDraftController/placeEditorRequest``, because the request is a
+    /// one-shot token the map raises and this is a presentation the screen
+    /// owns: the hiker can close the sheet, and the token that opened it does
+    /// not change when they do.
+    @State private var isEditingPlace = false
 
     private var draft: TrailDraft { maker.draft }
 
@@ -94,6 +109,13 @@ struct TrailDraftView: View {
             }
 
             pointsSection
+            TrailDraftPlaceSection(
+                maker: maker,
+                completer: completer,
+                locationManager: locationManager,
+                search: search,
+                onEdit: editPlace
+            )
         }
         // Reordering is the operation the list earns its place with, and a
         // `List` offers it only while this is `.active` — a long press and a
@@ -107,6 +129,14 @@ struct TrailDraftView: View {
         .onDisappear {
             search.cancel()
             completer.clear()
+        }
+        // The map asks and this screen presents: a callout's *Edit* and the
+        // *Mark a Place* that follows a tap both land on the controller, which
+        // is the one thing the map and this screen can both see. See
+        // ``TrailDraftController/placeEditorRequest``.
+        .onChange(of: maker.placeEditorRequest) { _, request in
+            guard let request else { return }
+            editPlace(request.placeID)
         }
         .navigationTitle("New Trail")
         #if os(iOS)
@@ -184,6 +214,14 @@ struct TrailDraftView: View {
         }
         .alert(isPresented: showingRefusal, error: refusal) {
             Button("OK", role: .cancel) { /* dismisses */ }
+        }
+        // Inside this screen, like the two dialogs and the alert above, and
+        // for the reason ``TrailPlaceEditor``'s own header gives: it cannot be
+        // a push, because a push would take the canvas down under it.
+        .sheet(isPresented: $isEditingPlace, onDismiss: commitPlaceEdit) {
+            TrailPlaceEditor(maker: maker, edit: placeEdit) {
+                isEditingPlace = false
+            }
         }
     }
 
@@ -278,6 +316,25 @@ struct TrailDraftView: View {
             get: { namingStartedAt != nil },
             set: { if !$0 { namingStartedAt = nil } }
         )
+    }
+
+    /// Opens the editor on a place, or does nothing for one that has gone —
+    /// a callout can outlive the place it is about by an undo.
+    private func editPlace(_ id: UUID) {
+        guard let place = draft.place(id: id) else { return }
+        placeEdit.begin(place)
+        isEditingPlace = true
+    }
+
+    /// Writes what was typed, on the way out.
+    ///
+    /// On `onDismiss` rather than on the Done button, so a sheet swiped away
+    /// keeps the name as surely as one dismissed by the button — see
+    /// ``TrailPlaceEditor`` for why there is no third answer.
+    private func commitPlaceEdit() {
+        guard let edited = placeEdit.edited else { return }
+        maker.updatePlace(edited)
+        placeEdit.begin(nil)
     }
 
     /// Cancel throws a drawing away, so it asks first — but only when there is

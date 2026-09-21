@@ -51,6 +51,16 @@ import CoreLocation
 import Foundation
 import Observation
 
+/// A request that the maker's screen open the place editor.
+///
+/// A type rather than a bare `UUID` so the token travels with it — see
+/// ``TrailDraftController/placeEditorRequest`` for what the token is for, and
+/// ``PinSelection``, which is the same shape one feature over.
+nonisolated struct TrailPlaceEditRequest: Equatable, Sendable {
+    let placeID: UUID
+    let token: Int
+}
+
 @Observable
 final class TrailDraftController {
     /// Non-isolated so releasing the last reference never requires proving
@@ -77,6 +87,20 @@ final class TrailDraftController {
     /// A one-shot request to open the maker, in the shape ``MapController``'s
     /// commands take: a token whose *change* is the message.
     private(set) var openRequest = 0
+
+    /// A one-shot request to open the editor on one place, or `nil` when
+    /// nothing has asked.
+    ///
+    /// Tokened for the reason ``PinSelection`` is: asking twice for the same
+    /// place is two requests, and without the token the second would look to
+    /// the screen like the one it has already answered — which is exactly
+    /// what a hiker does by opening a pin's callout, tapping *Edit*, closing
+    /// the sheet and tapping *Edit* again.
+    ///
+    /// The map is what asks — a callout's button, or *Mark a Place* — and the
+    /// screen inside the sheet is what presents. Neither can see the other,
+    /// which is the whole of why it lands here.
+    private(set) var placeEditorRequest: TrailPlaceEditRequest?
 
     /// Whether this maker can make a leg follow a path at all.
     ///
@@ -111,6 +135,8 @@ final class TrailDraftController {
     /// withheld until the sheet has said otherwise rather than flashing in
     /// over a launch that restored a pushed screen.
     @ObservationIgnored private var hasPushedScreen = true
+
+    @ObservationIgnored private var nextPlaceEditorToken = 0
 
     init(store: TrailDraftStore? = nil, router: (any TrailLegRouting)? = nil) {
         self.store = store
@@ -252,6 +278,86 @@ final class TrailDraftController {
         persist()
     }
 
+    // MARK: - Places
+
+    /// Marks a place, and hands back what was marked so the caller can open
+    /// the editor on it.
+    ///
+    /// Returned rather than merely added, because marking a place and naming
+    /// it are one gesture from the hiker's side: the callout's *Mark a Place*
+    /// puts a pin down and opens the sheet that says what it is. `nil` when
+    /// the maker is not up, which is the same guard every other mutation here
+    /// makes and for the same reason — the map's recognizer sees every tap.
+    ///
+    /// Nothing is routed. A place is not on the line, so no leg changes and
+    /// OpenStreetMap is asked nothing; this is the one mutation in the feature
+    /// that costs a store write and not a request.
+    @discardableResult func markPlace(
+        at coordinate: CLLocationCoordinate2D,
+        named name: String = "",
+        symbol: TrailPlaceSymbol? = nil
+    ) -> TrailPlace? {
+        guard isEditing else { return nil }
+        let place = TrailPlace(
+            coordinate: coordinate,
+            // Bounded where it enters, like every other name in this app —
+            // see ``HikeTitle``. A place's name can arrive from a search
+            // result rather than from a keyboard, which is exactly the
+            // unattended half that bound exists for.
+            name: BoundedText.boundedOrEmpty(name, to: .title),
+            symbol: symbol
+        )
+        draft.addPlace(place)
+        persist()
+        return place
+    }
+
+    /// Writes an edited place back.
+    func updatePlace(_ place: TrailPlace) {
+        guard isEditing else { return }
+        draft.updatePlace(place)
+        persist()
+    }
+
+    /// Moves a place. What a drag on its pin commits.
+    func movePlace(id: UUID, to coordinate: CLLocationCoordinate2D) {
+        guard isEditing else { return }
+        draft.movePlace(id: id, to: coordinate)
+        persist()
+    }
+
+    /// Asks the maker's screen to open the editor on a place.
+    ///
+    /// Not guarded on ``isEditing``, unlike every mutation here, and for the
+    /// reason ``PhotoMapPinController/select(_:)`` is not guarded either: the
+    /// request has to survive the moment it is made in. It is raised from a
+    /// callout on the map, and what answers it is a sheet on a screen — the
+    /// screen decides whether it is still interested.
+    func requestPlaceEditor(for id: UUID) {
+        nextPlaceEditorToken += 1
+        placeEditorRequest = TrailPlaceEditRequest(
+            placeID: id,
+            token: nextPlaceEditorToken
+        )
+    }
+
+    func removePlace(id: UUID) {
+        guard isEditing else { return }
+        draft.removePlace(id: id)
+        persist()
+    }
+
+    /// Takes places out of the list a screen is showing. What a swipe on a
+    /// place row does — the offsets are into the ranked list, not the marked
+    /// one; see ``TrailDraft/removePlaces(atRowOffsets:)``.
+    func removePlaces(atRowOffsets offsets: IndexSet) {
+        guard isEditing else { return }
+        draft.removePlaces(atRowOffsets: offsets)
+        persist()
+    }
+
+    // MARK: - History
+
     func undo() {
         guard isEditing else { return }
         draft.undo()
@@ -336,7 +442,11 @@ final class TrailDraftController {
         // launch finds the line still in memory, and overwriting it with the
         // copy on disk would undo whatever was added after the last write.
         guard draft.isEmpty, let stored = store?.load(), !stored.isEmpty else { return }
-        draft.replace(with: stored.waypoints, snapsToPaths: stored.snapsToPaths)
+        draft.replace(
+            with: stored.waypoints,
+            places: stored.places,
+            snapsToPaths: stored.snapsToPaths
+        )
     }
 
     private func persist() {
@@ -345,7 +455,11 @@ final class TrailDraftController {
             store.clear()
             return
         }
-        store.save(waypoints: draft.waypoints, snapsToPaths: draft.snapsToPaths)
+        store.save(
+            waypoints: draft.waypoints,
+            places: draft.places,
+            snapsToPaths: draft.snapsToPaths
+        )
     }
 
     private func refreshAvailability() {

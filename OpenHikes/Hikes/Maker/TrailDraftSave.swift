@@ -19,7 +19,11 @@
 //
 //  Two points is the floor, and it is a refusal rather than a disabled button
 //  alone: one point is a place, and a `Hike` whose route is a single
-//  coordinate has no length, no profile and nothing to draw.
+//  coordinate has no length, no profile and nothing to draw. **The places
+//  marked along it do not count towards that floor and cannot rescue a draft
+//  below it**, which is the same distinction everywhere else in this feature:
+//  a place is a spot on the ground beside a trail, not part of one, and a
+//  saved hike with no route is not a hike whatever is marked near it.
 //
 //  **A leg still routing is saved as it stands.** Save does not wait: a hiker
 //  who has finished drawing has finished, and holding the button while a
@@ -132,6 +136,17 @@ enum TrailDraftSave {
             route: draft.routeCoordinates
         )
         context.insert(hike)
+        // After the insert, because a ``TrailPoint`` is a row of its own and a
+        // relationship assigned to a hike that is not in a context yet has
+        // nowhere to put it. Before the commit, because the whole point of
+        // committing here is that everything downstream acts on the claim that
+        // what was drawn is *kept* — and a place written a moment later would
+        // be a second chance to fail after the hiker has been told it worked.
+        //
+        // The places are saved whatever the line did. A place marked beside a
+        // leg Overpass refused is still a place; nothing here waits on
+        // anything, which is the rule the whole feature is built on.
+        hike.replacePlaces(with: draft.places, in: context, now: date)
         do {
             try save(context)
         } catch {

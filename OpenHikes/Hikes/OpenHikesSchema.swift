@@ -9,7 +9,7 @@ import SwiftData
 /// See "Schema and migration policy" in the repository instructions.
 nonisolated enum OpenHikesSchema: VersionedSchema {
     static var versionIdentifier: Schema.Version { Schema.Version(1, 0, 0) }
-    static var hikeModels: [any PersistentModel.Type] { [Hike.self, HikeWalk.self] }
+    static var hikeModels: [any PersistentModel.Type] { [Hike.self, HikeWalk.self, TrailPoint.self] }
     /// The unmirrored store. ``TrailDraftRecord`` is here rather than beside
     /// ``Hike`` because a half-drawn trail is one device's unfinished work —
     /// see that type for the argument, and note what it buys: no `CD_` record

@@ -60,6 +60,16 @@ nonisolated enum GPXImport {
         /// The `<wpt>`s the file marked as photographs. Empty for a file that
         /// carries none, which is every file this app did not write.
         let photographs: [Photograph]
+        /// Every other `<wpt>`, as a marked place — see ``TrailPlace``.
+        ///
+        /// **This is new behaviour for files this app did not write**, and it
+        /// is the point of reading them at all: before Phase 4 a `<wpt>` that
+        /// was not one of our photographs was dropped on the floor, so a GPX
+        /// carrying the huts, the springs and the summits somebody else had
+        /// marked arrived as a bare line. They are kept now, which is the
+        /// same trade the track's own `<desc>` and `<author>` already make —
+        /// what the sender put in the file is what the hiker asked to import.
+        let places: [TrailPlace]
 
         /// Built from `<trkseg>`-shaped runs rather than one flat list, so the
         /// file's own boundaries survive into the route.
@@ -93,7 +103,8 @@ nonisolated enum GPXImport {
             keywords: String?,
             startTime: Date?,
             segments: [[Point]],
-            photographs: [Photograph] = []
+            photographs: [Photograph] = [],
+            places: [TrailPlace] = []
         ) {
             self.name = name
             self.trackDescription = trackDescription
@@ -101,6 +112,7 @@ nonisolated enum GPXImport {
             self.keywords = keywords
             self.startTime = startTime
             self.photographs = photographs
+            self.places = places
             points = Array(segments.joined())
 
             var coordinates: [RouteCoordinate] = []
@@ -370,8 +382,68 @@ nonisolated enum GPXImport {
             // a photograph to every vertex of the track it just drew.
             photographs: hasGeometryOfItsOwn
                 ? document.waypoints.compactMap(photograph)
+                : [],
+            // The same guard, for the same reason: a file whose waypoints *are*
+            // its geometry has just had them read as the line, and reading them
+            // again as places would mark every vertex of the track it drew.
+            places: hasGeometryOfItsOwn
+                ? Array(document.waypoints.compactMap(place).prefix(maximumPlaces))
                 : []
         )
+    }
+
+    /// How many `<wpt>`s of a file may become places.
+    ///
+    /// A cap rather than a refusal, and rather than none. Unlike the
+    /// photographs — which are values in one column on the hike — every place
+    /// is a ``TrailPoint`` row and therefore a CloudKit record, so an
+    /// unattended file with ten thousand waypoints would put ten thousand
+    /// records into the hiker's private database for a route they opened once.
+    /// Refusing the file instead would be worse: the line is fine, and a hike
+    /// nobody can import because somebody else over-marked it is a hike lost
+    /// to a detail. Generous enough that no hand-made route reaches it —
+    /// a long alpine traverse carries a few dozen.
+    static let maximumPlaces = 200
+
+    /// A `<wpt>` read as a marked place, or `nil` for one that is a
+    /// photograph or has no usable coordinate.
+    ///
+    /// Everything that is not a photograph, which is the whole rule: a `<wpt>`
+    /// is *a point of interest* in GPX, and this app now has somewhere to put
+    /// one. The photographs are subtracted first because they are the one kind
+    /// this app already gives a different home — see ``photograph(_:)``.
+    ///
+    /// `<sym>` is read through ``TrailPlaceSymbol``'s own raw values, so a
+    /// file this app wrote round-trips exactly; anything else keeps its name
+    /// and its note and gets no symbol, which is the honest answer rather than
+    /// guessing at somebody else's table. See ``TrailPlace`` for why an
+    /// unstated symbol is a state rather than a missing value.
+    ///
+    /// The name and note are bounded here, where the file enters, for the
+    /// reason ``HikeTitle`` bounds the track's own name two screens up: both
+    /// land on mirrored columns, and an unattended file is exactly the input
+    /// that argument is about. A `<wpt>` with nothing but a coordinate is
+    /// still a place — the map draws it as an unnamed pin, which is what the
+    /// file said.
+    private static func place(_ waypoint: ParsedPoint) -> TrailPlace? {
+        guard !isPhotograph(waypoint), let point = point(waypoint) else { return nil }
+        return TrailPlace(
+            coordinate: point.coordinate,
+            name: BoundedText.boundedOrEmpty(waypoint.name, to: .title),
+            symbol: waypoint.symbol.flatMap(symbol(named:)),
+            note: BoundedText.boundedOrEmpty(waypoint.note, to: .notes)
+        )
+    }
+
+    /// A `<sym>` read as one of the eight, case-insensitively.
+    ///
+    /// Case-insensitive because a symbol name is a lookup key in somebody
+    /// else's table rather than text this app wrote — the same reason
+    /// ``isPhotographLabel(_:)`` is.
+    private static func symbol(named raw: String) -> TrailPlaceSymbol? {
+        TrailPlaceSymbol.allCases.first { candidate in
+            candidate.rawValue.caseInsensitiveCompare(raw) == .orderedSame
+        }
     }
 
     /// A `<wpt>` read as a photograph, or `nil` for one that is not.
@@ -386,8 +458,7 @@ nonisolated enum GPXImport {
     /// Case-insensitive, because a symbol name is a lookup key in somebody
     /// else's table rather than text this app wrote.
     private static func photograph(_ waypoint: ParsedPoint) -> Photograph? {
-        let labels = [waypoint.symbol, waypoint.name].compacted()
-        guard labels.contains(where: isPhotographLabel) else { return nil }
+        guard isPhotograph(waypoint) else { return nil }
         // Reuses the track point's own guards, so a photograph cannot be
         // pinned somewhere a track point would have been refused: the same
         // Web Mercator range check, and the same refusal of a non-finite
@@ -427,6 +498,16 @@ nonisolated enum GPXImport {
         )
     }
 
+    /// Whether a `<wpt>` is labelled as one of our photographs.
+    ///
+    /// Its own question since Phase 4, because two readings now depend on it:
+    /// a photograph is one thing, and everything that is *not* a photograph is
+    /// a marked place. One predicate is what keeps a `<wpt>` from being read
+    /// as both.
+    private static func isPhotograph(_ waypoint: ParsedPoint) -> Bool {
+        [waypoint.symbol, waypoint.name].compacted().contains(where: isPhotographLabel)
+    }
+
     /// Whether one `<sym>` or `<name>` is the label ``GPXExport`` writes.
     ///
     /// Case-insensitive, because a symbol name is a lookup key in somebody
@@ -449,12 +530,14 @@ nonisolated private extension GPXImport {
         var longitude: Double?
         var elevation: Double?
         var time: Date?
-        /// `<name>` and `<sym>`, read only so a `<wpt>` can be recognised as a
-        /// photograph. Both stay `nil` for a `<trkpt>` or `<rtept>`: nothing
+        /// `<name>`, `<sym>` and `<desc>`, read so a `<wpt>` can be
+        /// recognised as a photograph and, failing that, kept as a marked
+        /// place. All three stay `nil` for a `<trkpt>` or `<rtept>`: nothing
         /// asks a route point what it is called, and filling them would cost
-        /// two string stores per point on a hundred-thousand-point track.
+        /// three string stores per point on a hundred-thousand-point track.
         var name: String?
         var symbol: String?
+        var note: String?
     }
 
     /// One run of points that the file itself kept together: a `<trkseg>`, or
@@ -659,6 +742,7 @@ nonisolated private extension GPXImport {
             // here ever looks at.
             case Element.name where point.kind == .waypoint: point.value.name = value
             case Element.symbol where point.kind == .waypoint: point.value.symbol = value
+            case Element.description where point.kind == .waypoint: point.value.note = value
             default: return
             }
             pendingPoint = point

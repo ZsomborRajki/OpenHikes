@@ -43,6 +43,74 @@ struct TrailDraftSaveTests {
         try Fixture.modelContext()
     }
 
+    // MARK: The places
+
+    /// A drawn trail's places go with it, as ``TrailPoint`` rows — the one
+    /// thing Phase 4 adds to what a save writes.
+    @Test("a drawn trail's places are saved with it")
+    func savesThePlaces() throws {
+        let context = try context()
+        let draft = Self.draft([Line.south, Line.north])
+        draft.addPlace(
+            TrailPlace(
+                latitude: (Line.south + Line.north) / 2,
+                longitude: Line.longitude,
+                name: "Spring",
+                symbol: .water,
+                note: "Runs all summer"
+            )
+        )
+
+        let hike = try #require(
+            TrailDraftSave.hike(from: draft, named: "Ridge", into: context).hike
+        )
+
+        #expect(hike.trailPoints?.count == 1)
+        let point = try #require(hike.trailPoints?.first)
+        #expect(point.hikeID == hike.id)
+        #expect(point.name == "Spring")
+        #expect(point.symbolID == TrailPlaceSymbol.water.rawValue)
+        #expect(point.note == "Runs all summer")
+        // And it is read back as the value everything outside the store works
+        // in, ordered against the line it was saved beside.
+        #expect(hike.orderedPlaces.map(\.place.name) == ["Spring"])
+    }
+
+    /// A place is a spot beside a trail rather than part of one, so it does
+    /// not lengthen the route and is not one of its coordinates.
+    @Test("a place is not a point of the saved route")
+    func placesAreNotRoutePoints() throws {
+        let context = try context()
+        let draft = Self.draft([Line.south, Line.north])
+        let before = draft.distanceMeters
+        draft.addPlace(
+            TrailPlace(latitude: Line.south, longitude: Line.longitude + 0.01)
+        )
+
+        let hike = try #require(
+            TrailDraftSave.hike(from: draft, named: "Ridge", into: context).hike
+        )
+
+        #expect(hike.route.count == 2)
+        #expect(hike.distanceMeters == before)
+    }
+
+    /// The floor is about the line, and a place cannot rescue a draft that is
+    /// not a trail.
+    @Test("a place does not make a one-point drawing saveable")
+    func placesDoNotSatisfyTheFloor() throws {
+        let context = try context()
+        let draft = Self.draft([Line.south])
+        draft.addPlace(TrailPlace(latitude: Line.north, longitude: Line.longitude))
+
+        let outcome = TrailDraftSave.hike(from: draft, named: "Ridge", into: context)
+
+        #expect(outcome.hike == nil)
+        if case .refused(let refusal) = outcome {
+            #expect(refusal == .tooShort)
+        }
+    }
+
     @Test("a drawn trail is saved as an ordinary hike")
     func savesAnOrdinaryHike() throws {
         let context = try context()

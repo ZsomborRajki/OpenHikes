@@ -187,6 +187,7 @@ struct TrailDraftControllerTests {
                 TrailWaypoint(coordinate: Self.coordinate(Line.south)),
                 TrailWaypoint(coordinate: Self.coordinate(Line.north)),
             ],
+            places: [],
             snapsToPaths: true
         )
         // A fresh launch: a controller with nothing in memory.

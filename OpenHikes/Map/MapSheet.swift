@@ -61,6 +61,9 @@ struct MapSheet: View {
     /// Handed down so a pushed hike can draw its photos on the map, and a
     /// tapped pin can push the gallery back. See ``PhotoMapPinController``.
     var photoPins: PhotoMapPinController
+    /// Handed down so a pushed hike can draw its marked places on the map, and
+    /// taken away again when it goes. See ``TrailPlacePinController``.
+    var placePins: TrailPlacePinController
     /// Handed down so the maker's screen can rename, cancel and save the draft
     /// the map is drawing, and so this view can tell it when it is on top. See
     /// ``TrailDraftController``.
@@ -246,6 +249,7 @@ struct MapSheet: View {
         .onChange(of: presentation.hasPushedScreen, initial: true) { _, isPushed in
             photoCapture.setHostScreenPresent(isPushed)
             photoPins.setHostScreenPresent(isPushed)
+            placePins.setHostScreenPresent(isPushed)
             // The inverse of the same signal, which is the whole of what keeps
             // the maker's pill and the camera's out of each other's way — see
             // ``TrailDraftController``.
@@ -472,6 +476,7 @@ struct MapSheet: View {
                 walkSession: appModel.walkSession,
                 photoCapture: photoCapture,
                 photoPins: photoPins,
+                placePins: placePins,
                 communityTransport: appModel.communityTransport,
                 onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
                 onOpenWalk: { walk in presentation.path.append(.walk(walk)) },
@@ -552,6 +557,7 @@ private extension MapSheet {
             // feeds its settled region to — see ``SearchCompleter``.
             completer: completer,
             mapController: mapController,
+            locationManager: appModel.locationManager,
             onCancel: closeTrailDraft,
             // A drawn trail lands exactly where a saved recording lands:
             // selected, drawn, and open at its own screen.

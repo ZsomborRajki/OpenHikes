@@ -191,6 +191,7 @@ struct SheetPresentationIsolationTests {
             mapController: MapController(),
             photoCapture: PhotoCaptureController(),
             photoPins: PhotoMapPinController(),
+            placePins: TrailPlacePinController(),
             trailMaker: TrailDraftController()
         )
         let storesStringBinding = Mirror(reflecting: sheet).children.contains { child in

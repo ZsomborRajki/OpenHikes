@@ -188,6 +188,11 @@ enum HikeImport {
         )
         hike.photos = placeOnlyPhotos(of: track)
         context.insert(hike)
+        // After the insert, because a place is a row of its own and a
+        // relationship assigned to a hike that is not in a context yet has
+        // nowhere to put it — the same order ``TrailDraftSave`` takes, and for
+        // the same reason.
+        hike.replacePlaces(with: track.places, in: context)
         do {
             try save(context)
         } catch {

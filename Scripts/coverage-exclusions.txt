@@ -84,6 +84,14 @@
 # which are UIKit and MapKit the unit suites reach through
 # `MapCoordinatorTests+TrailDraft`.
 #
+# Three more arrived with its Phase 4 on 2026-09-21, and they are the same
+# case: `TrailPlaceEditor` is the sheet that names a marked place,
+# `TrailDraftPlaceSection` is the list it appears in, and `HikePlaceSection` is
+# the read-only version of that list on a saved hike's screen. `TrailPlace`,
+# `TrailPoint` and `MapTrailPlaceAnnotations` are deliberately *not* here: the
+# first two are arithmetic and a model, and the third is MapKit the unit
+# suites reach through `MapCoordinatorTests+TrailPlaces`.
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -117,6 +125,7 @@ OpenHikes/Hikes/Detail/HikeDetailComponents.swift
 OpenHikes/Hikes/Detail/HikeDetailView+Community.swift
 OpenHikes/Hikes/Detail/HikeDetailView.swift
 OpenHikes/Hikes/Trail/HikeDifficultySection.swift
+OpenHikes/Hikes/Places/HikePlaceSection.swift
 OpenHikes/Hikes/Library/HikeRow.swift
 OpenHikes/Hikes/Trail/HikeSurfaceSection.swift
 OpenHikes/Hikes/Walks/HikeWalkHistory.swift
@@ -124,7 +133,9 @@ OpenHikes/Hikes/Detail/RouteLinePatternPicker.swift
 OpenHikes/Hikes/Trail/TrailBreakdownSection.swift
 OpenHikes/Hikes/Maker/TrailDraftActions.swift
 OpenHikes/Hikes/Maker/TrailDraftFields.swift
+OpenHikes/Hikes/Maker/TrailDraftPlaceSection.swift
 OpenHikes/Hikes/Maker/TrailDraftView.swift
+OpenHikes/Hikes/Maker/TrailPlaceEditor.swift
 OpenHikes/Hikes/Walks/WalkControls.swift
 OpenHikes/Hikes/Walks/WalkRow.swift
 OpenHikes/Hikes/Walks/WalkSummaryView.swift

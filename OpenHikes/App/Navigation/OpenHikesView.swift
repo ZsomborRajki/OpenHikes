@@ -62,6 +62,11 @@ struct OpenHikesView: View {
     /// Owned here for the same reason ``photoCapture`` is: the pins are drawn
     /// on the map and the photos live on a screen inside the sheet.
     @State private var photoPins = PhotoMapPinController()
+    /// The open hike's marked places, observed directly by the map. Owned here
+    /// for the reason ``photoPins`` is, and it is the same geometry: the pins
+    /// are drawn by MapKit and the places belong to a screen inside the sheet.
+    /// See ``TrailPlacePinController``.
+    @State private var placePins = TrailPlacePinController()
     @State private var didProcessLaunchFixture = false
 
     // swiftlint:disable private_swiftui_state
@@ -284,6 +289,7 @@ struct OpenHikesView: View {
             locationAccessPrompt: locationAccessPrompt,
             photoCapture: photoCapture,
             photoPins: photoPins,
+            placePins: placePins,
             trailMaker: appModel.trailMaker,
             community: appModel.community,
             searchCompleter: appModel.searchCompleter,
@@ -542,6 +548,7 @@ extension OpenHikesView {
             mapController: mapController,
             photoCapture: photoCapture,
             photoPins: photoPins,
+            placePins: placePins,
             trailMaker: appModel.trailMaker,
             onImportGPX: importGPX,
             onImportFailed: { importFailure = .file(.unreadable) },
