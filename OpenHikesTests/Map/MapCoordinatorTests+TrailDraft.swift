@@ -19,7 +19,8 @@
 //  suspended while a trail is being drawn, because a tap that put a point down
 //  *and* opened somebody's trail would be a tap that did two things. What it
 //  does not suspend is the controls over the map: a thumb on the tracking
-//  button is not a waypoint.
+//  button is not a waypoint. Nor are the maker's own pins controls — they
+//  answer no tap, so they hand it back rather than swallowing it.
 //
 
 import CoreLocation
@@ -58,6 +59,21 @@ extension MapCoordinatorTests {
 
     private static func ridgeCoordinate(_ latitude: Double) -> CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: Ridge.longitude)
+    }
+
+    /// A pin's frame centred on `point`, at the diameter the maker draws.
+    ///
+    /// Placed by hand rather than by adding the annotation and waiting: what
+    /// is being asserted is what `hitTest` finds under a thumb, and MapKit
+    /// makes an annotation's view when it feels like it.
+    private static func pinFrame(around point: CGPoint) -> CGRect {
+        let diameter: CGFloat = 24
+        return CGRect(
+            x: point.x - diameter / 2,
+            y: point.y - diameter / 2,
+            width: diameter,
+            height: diameter
+        )
     }
 
     // MARK: The pill
@@ -219,6 +235,66 @@ extension MapCoordinatorTests {
 
         let onTheButton = CGPoint(x: button.frame.midX, y: button.frame.midY)
         #expect(!coordinator.addTrailDraftWaypoint(at: onTheButton, in: map))
+        #expect(trailMaker.draft.isEmpty)
+        #endif
+    }
+
+    /// The maker's own pins are not among those controls, and this is the pair
+    /// that makes that a distinction rather than a hole. A waypoint pin shows
+    /// no callout and answers no tap, so a tap it took would simply vanish —
+    /// and with no undo, no drag and no delete in this phase, a hiker drawing
+    /// a switchback past a point they already put down could not tell a
+    /// swallowed tap from a missed one.
+    @Test("a tap on the draft's own pin is still a waypoint")
+    func tapOnADraftPinIsAWaypoint() throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        map.setRegion(Self.ridgeRegion(), animated: false)
+        trailMaker.setEditing(true)
+        map.layoutIfNeeded()
+
+        let point = CGPoint(x: map.bounds.midX, y: map.bounds.midY)
+        let pin = try #require(
+            coordinator.mapView(
+                map,
+                viewFor: TrailDraftWaypointAnnotation(
+                    coordinate: map.convert(point, toCoordinateFrom: map),
+                    number: 1
+                )
+            )
+        )
+        pin.frame = Self.pinFrame(around: point)
+        map.addSubview(pin)
+
+        #expect(coordinator.addTrailDraftWaypoint(at: point, in: map))
+        #expect(trailMaker.draft.waypoints.count == 1)
+        #endif
+    }
+
+    /// The other half of it: a marker that *does* answer a tap still takes it,
+    /// which is the rule `addTrailDraftWaypoint(at:in:)` states and the reason
+    /// a shared hike's pin still opens its callout while a trail is drawn.
+    @Test("a tap on a marker that answers taps is not a waypoint")
+    func tapOnAnotherMarkerIsNotAWaypoint() {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        map.setRegion(Self.ridgeRegion(), animated: false)
+        trailMaker.setEditing(true)
+        map.layoutIfNeeded()
+
+        let point = CGPoint(x: map.bounds.midX, y: map.bounds.midY)
+        let marker = MKAnnotationView(
+            annotation: MKPointAnnotation(),
+            reuseIdentifier: nil
+        )
+        marker.frame = Self.pinFrame(around: point)
+        map.addSubview(marker)
+
+        #expect(!coordinator.addTrailDraftWaypoint(at: point, in: map))
         #expect(trailMaker.draft.isEmpty)
         #endif
     }

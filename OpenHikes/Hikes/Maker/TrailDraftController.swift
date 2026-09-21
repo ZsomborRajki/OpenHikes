@@ -25,17 +25,16 @@
 //
 //  ## Every mutation goes through here
 //
-//  The map appends a waypoint and the maker's screen renames, cancels and
-//  saves — and all of them land on ``TrailDraft`` through this object, because
-//  this is the one that also knows the draft has to be written down. A screen
-//  that mutated the draft directly would leave the durable copy behind by
-//  exactly one tap, every time.
+//  The map appends a waypoint and the maker's screen cancels and saves — and
+//  all of them land on ``TrailDraft`` through this object, because this is the
+//  one that also knows the draft has to be written down. A screen that mutated
+//  the draft directly would leave the durable copy behind by exactly one tap,
+//  every time.
 //
 
 import CoreLocation
 import Foundation
 import Observation
-import SwiftUI
 
 @Observable
 final class TrailDraftController {
@@ -103,17 +102,15 @@ final class TrailDraftController {
     /// a tap landing on the map during the pop animation would put down a
     /// waypoint on a trail the hiker has just left.
     ///
-    /// Opening restores whatever was left half-drawn; closing writes down what
-    /// is there, which is what carries a name typed but never followed by a
-    /// tap.
+    /// Opening restores whatever was left half-drawn. Nothing is written on
+    /// the way out, because nothing can be owed by then: the only change a
+    /// draft takes today is a point going down, and ``appendWaypoint(at:)``
+    /// writes as it lands. A phase that lets a point be dragged or deleted has
+    /// to write here too, or leave the disk one gesture behind.
     func setEditing(_ editing: Bool) {
         guard isEditing != editing else { return }
         isEditing = editing
-        if editing {
-            restoreIfNeeded()
-        } else {
-            persist()
-        }
+        if editing { restoreIfNeeded() }
     }
 
     /// Asks for the maker. Refused when the pill isn't available, so a tap
@@ -136,20 +133,6 @@ final class TrailDraftController {
         persist()
     }
 
-    /// Drives the maker's name field, for the reason
-    /// ``SheetPresentation/searchTextBinding`` drives the search field: the
-    /// text is written by the keyboard, which no call site here would ever
-    /// see.
-    ///
-    /// Deliberately **not** written down per keystroke. The name is carried to
-    /// disk by the next waypoint, or by the maker closing — see
-    /// ``setEditing(_:)`` — because a store write per character is a disk
-    /// write per character for a value that nothing but this field reads until
-    /// Save.
-    var nameBinding: Binding<String> {
-        Binding(get: { self.draft.name }, set: { self.draft.name = $0 })
-    }
-
     /// Throws the drawing away: what Cancel does, and what a completed Save
     /// does with what it has just turned into a hike.
     func discard() {
@@ -161,17 +144,17 @@ final class TrailDraftController {
         // Only into an empty draft. Leaving the maker and coming back within a
         // launch finds the line still in memory, and overwriting it with the
         // copy on disk would undo whatever was added after the last write.
-        guard draft.isEmpty, let stored = store?.load() else { return }
-        draft.replace(with: stored.waypoints, name: stored.name)
+        guard draft.isEmpty, let stored = store?.load(), !stored.isEmpty else { return }
+        draft.replace(with: stored)
     }
 
     private func persist() {
         guard let store else { return }
-        guard !draft.isEmpty || !draft.name.isEmpty else {
+        guard !draft.isEmpty else {
             store.clear()
             return
         }
-        store.save(name: draft.name, waypoints: draft.waypoints)
+        store.save(waypoints: draft.waypoints)
     }
 
     private func refreshAvailability() {

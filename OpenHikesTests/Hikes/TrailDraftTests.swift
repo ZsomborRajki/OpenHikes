@@ -102,29 +102,23 @@ struct TrailDraftTests {
         #expect(draft.distanceMeters == 0)
     }
 
-    @Test("clearing empties the points, the name and the length")
+    @Test("clearing empties the points and the length")
     func clearingEmptiesEverything() {
         let draft = Self.draft([Line.south, Line.north])
-        draft.name = "Ridge"
         draft.clear()
         #expect(draft.isEmpty)
-        #expect(draft.name.isEmpty)
         #expect(draft.distanceMeters == 0)
     }
 
-    /// A restore is one answer: points and name together, with the length
-    /// measured again from what arrived rather than carried across.
-    @Test("replacing a draft brings its name and remeasures its length")
+    /// The length is measured again from what arrived rather than carried
+    /// across, which is what keeps a restored draft's header honest.
+    @Test("replacing a draft remeasures its length")
     func replacingRemeasures() {
         let draft = TrailDraft()
-        draft.replace(
-            with: [
-                TrailWaypoint(coordinate: Self.coordinate(Line.south)),
-                TrailWaypoint(coordinate: Self.coordinate(Line.north)),
-            ],
-            name: "Ridge"
-        )
-        #expect(draft.name == "Ridge")
+        draft.replace(with: [
+            TrailWaypoint(coordinate: Self.coordinate(Line.south)),
+            TrailWaypoint(coordinate: Self.coordinate(Line.north)),
+        ])
         #expect(draft.waypoints.count == 2)
         #expect(draft.distanceMeters > 0)
     }

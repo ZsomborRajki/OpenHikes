@@ -102,12 +102,6 @@ final class TrailDraft {
     /// same number" true by construction rather than by assertion.
     var distanceMeters: Double { distancesAlongLine.last ?? 0 }
 
-    /// What the hiker is calling it. Its own property because a keystroke must
-    /// not wake the list or the map — observation is per-property, so the
-    /// field is the only reader this one has. See ``SheetPresentation/searchText``,
-    /// which is stored raw for exactly this reason.
-    var name = ""
-
     /// Whether there is a line here at all. One point is a place rather than a
     /// trail, which is why ``TrailDraftSave`` refuses it.
     var canBeSaved: Bool { waypoints.count > 1 }
@@ -127,21 +121,19 @@ final class TrailDraft {
     /// Replaces the whole draft — what a restore from disk does, and nothing
     /// else does today.
     ///
-    /// The name comes with it rather than being set separately, because a
-    /// restore is one answer: a stored draft that arrived with its points and
-    /// kept the field empty would read as a trail the hiker never named.
-    func replace(with waypoints: [TrailWaypoint], name: String) {
+    /// The points are the whole of it: a drawn trail is named in the alert
+    /// that saves it, so there is nothing else a restore could bring back.
+    /// See ``TrailDraftView``.
+    func replace(with waypoints: [TrailWaypoint]) {
         self.waypoints = waypoints
-        self.name = name
         remeasure()
     }
 
     /// Empties the draft, which is what Cancel and a completed Save both leave
     /// behind.
     func clear() {
-        guard !waypoints.isEmpty || !name.isEmpty else { return }
+        guard !waypoints.isEmpty else { return }
         waypoints = []
-        name = ""
         remeasure()
     }
 

@@ -45,19 +45,18 @@ struct TrailDraftStoreTests {
     @Test("nothing drawn is nothing stored")
     func emptyStoreLoadsNothing() throws {
         let store = TrailDraftStore(context: try context())
-        #expect(store.load() == nil)
+        #expect(store.load().isEmpty)
     }
 
-    @Test("a draft comes back with its points and its name")
+    @Test("a draft comes back with its points")
     func roundTrip() throws {
         let context = try context()
         let store = TrailDraftStore(context: context)
-        store.save(name: "Ridge", waypoints: Self.waypoints([Line.south, Line.north]))
+        store.save(waypoints: Self.waypoints([Line.south, Line.north]))
 
-        let restored = try #require(TrailDraftStore(context: context).load())
+        let restored = TrailDraftStore(context: context).load()
 
-        #expect(restored.name == "Ridge")
-        #expect(restored.waypoints.map(\.latitude) == [Line.south, Line.north])
+        #expect(restored.map(\.latitude) == [Line.south, Line.north])
     }
 
     /// The ordering is the trail. A store that came back with the points in
@@ -66,11 +65,11 @@ struct TrailDraftStoreTests {
     func orderSurvives() throws {
         let context = try context()
         let latitudes = [Line.north, Line.south, Line.north, Line.south]
-        TrailDraftStore(context: context).save(name: "", waypoints: Self.waypoints(latitudes))
+        TrailDraftStore(context: context).save(waypoints: Self.waypoints(latitudes))
 
-        let restored = try #require(TrailDraftStore(context: context).load())
+        let restored = TrailDraftStore(context: context).load()
 
-        #expect(restored.waypoints.map(\.latitude) == latitudes)
+        #expect(restored.map(\.latitude) == latitudes)
     }
 
     @Test("saving twice rewrites the one row rather than adding another")
@@ -78,24 +77,22 @@ struct TrailDraftStoreTests {
         let context = try context()
         let store = TrailDraftStore(context: context)
 
-        store.save(name: "First", waypoints: Self.waypoints([Line.south, Line.north]))
-        store.save(name: "Second", waypoints: Self.waypoints([Line.north]))
+        store.save(waypoints: Self.waypoints([Line.south, Line.north]))
+        store.save(waypoints: Self.waypoints([Line.north]))
 
         #expect(try context.fetch(FetchDescriptor<TrailDraftRecord>()).count == 1)
-        let restored = try #require(store.load())
-        #expect(restored.name == "Second")
-        #expect(restored.waypoints.count == 1)
+        #expect(store.load().map(\.latitude) == [Line.north])
     }
 
     @Test("clearing leaves no row behind")
     func clearingDeletesTheRow() throws {
         let context = try context()
         let store = TrailDraftStore(context: context)
-        store.save(name: "Ridge", waypoints: Self.waypoints([Line.south, Line.north]))
+        store.save(waypoints: Self.waypoints([Line.south, Line.north]))
 
         store.clear()
 
-        #expect(store.load() == nil)
+        #expect(store.load().isEmpty)
         #expect(try context.fetch(FetchDescriptor<TrailDraftRecord>()).isEmpty)
     }
 
@@ -103,7 +100,7 @@ struct TrailDraftStoreTests {
     func clearingNothing() throws {
         let store = TrailDraftStore(context: try context())
         store.clear()
-        #expect(store.load() == nil)
+        #expect(store.load().isEmpty)
     }
 
     /// A row with no points and nothing at all read the same to the maker, so
@@ -113,8 +110,8 @@ struct TrailDraftStoreTests {
     func pointlessDraftReadsAsNothing() throws {
         let context = try context()
         let store = TrailDraftStore(context: context)
-        store.save(name: "Ridge", waypoints: [])
+        store.save(waypoints: [])
 
-        #expect(store.load() == nil)
+        #expect(store.load().isEmpty)
     }
 }
