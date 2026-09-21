@@ -49,11 +49,18 @@ jobs:
     # Not a guess: this job has measured 47, 52, 53, 54, 55, 57 and 58 minutes
     # across recent runs, so a 60-minute ceiling left it 2 minutes of margin on
     # a bad day and it was duly killed mid-analysis on #214 — a red run that
-    # said nothing about the code that triggered it. The extractor traces a
-    # full Xcode build of the app and then queries the database it built, and
-    # neither half is getting shorter. Raised well clear of the spread rather
-    # than to just above the worst case, since the number this is protecting
-    # against is a runner having a slow hour, not the analysis growing.
+    # said nothing about the code that triggered it. Raised well clear of the
+    # spread rather than to just above the worst case, since the number this is
+    # protecting against is a runner having a slow hour, not the analysis
+    # growing.
+    #
+    # The two halves are nothing like equal, and the split is where to look
+    # first when this drifts. Measured on the green run 35511502709
+    # (2026-09-20): 52s to initialise, **51m44s** in `Build for analysis`, and
+    # 3m17s for the whole of `analyze` — finalize 1m37s, queries 1m04s,
+    # interpretation and upload the rest. So this is a build job with a query
+    # step stapled to it, and the `ARCHS` line below is the only lever that has
+    # ever moved the number.
     timeout-minutes: 120
     # Reporting, not gating — the same stance the accessibility job in ci.yml
     # takes, for the same reason. CodeQL's Swift extractor tracks specific
@@ -89,6 +96,39 @@ jobs:
       # off outright rather than worked around. A simulator destination for the
       # same reason: it needs no device SDK and no provisioning profile.
       #
+      # `ARCHS=arm64` is what keeps this job inside the runner, and it is not a
+      # micro-optimisation. A *generic* simulator destination has no active
+      # architecture to narrow to, so Xcode falls back to the target's full
+      # `ARCHS` and `ONLY_ACTIVE_ARCH` reports `NO` whatever the configuration
+      # says — `xcodebuild -showBuildSettings` for the line above prints
+      # `ARCHS = arm64 x86_64`. That compiles every Swift file in the app, the
+      # widget, the watch app and the shared package twice, and because the
+      # extractor is traced onto the compiler it extracts each file twice too,
+      # into one database that is the same size and yields the same alerts. The
+      # green run 35511502709 spent 51m44s here and shows both slices:
+      # `-target arm64-apple-ios26.0-simulator` and
+      # `-target x86_64-apple-ios26.0-simulator`, and the same pair for the
+      # watch and for the packages' `ios12.0` deployment floor.
+      #
+      # `macos-26-arm64` is a 3-core, 7 GB machine — the action sizes itself to
+      # it and logs `CODEQL_RAM: 6144`, `CODEQL_THREADS: 3`. Three concurrent
+      # `swiftc` processes, each with an extractor writing TRAP files beside
+      # it, is already the whole of that box, and twice the compilations is
+      # what tipped it over: eight jobs between 2026-09-20 and 2026-09-21 died
+      # with "The hosted runner lost communication with the server", every one
+      # of them after 80 to 117 minutes against a 41-to-62-minute green run.
+      # The runner uploads no logs when it goes that way, so the annotation is
+      # the entire diagnostic — the duration is what identifies it.
+      #
+      # `ONLY_ACTIVE_ARCH=NO` is stated rather than left implied, so the pair
+      # reads the same way it would on a named destination. The x86_64
+      # simulator slice is not lost coverage: the `builds` matrix in `ci.yml`
+      # still compiles it, on a job that has no extractor attached and no
+      # history of this failure. If a run dies here again, the next lever is
+      # `-jobs 2` — fewer compiler-plus-extractor pairs alive at once, at the
+      # cost of wall clock — not a higher timeout, which never had anything to
+      # do with it.
+      #
       # Not piped through xcbeautify: this build is an input to the extractor
       # rather than a report for a human, and when extraction goes wrong the
       # raw compiler invocations are what says why.
@@ -101,6 +141,8 @@ jobs:
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             -skipPackagePluginValidation \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
