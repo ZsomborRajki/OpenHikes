@@ -18,21 +18,38 @@
 //  view the sheet cannot see. Passing any of it up through the hierarchy would
 //  make the root view a dependency of a screen two pushes down.
 //
+//  ## Points and legs are two lists, and the second is the one that is drawn
+//
+//  ``waypoints`` is what the hiker put down. ``legs`` is what runs between
+//  them, and since Phase 2 that is not necessarily a straight line: a leg can
+//  follow mapped paths, and its shape, its length and its state all belong to
+//  it rather than to either point. So the line on the map, the length in the
+//  header and the route a save writes are all read off the legs, and the
+//  points are only what a pin is drawn at and what a row is named after.
+//
+//  **This type routes nothing.** It holds the shapes and the states;
+//  ``TrailDraftController`` is what asks ``TrailLegRouting`` for them, for the
+//  same reason it is what writes the draft down. A new leg is therefore born
+//  straight and freehand, and is marked ``TrailLegSnap/routing`` in the same
+//  turn the controller asks about it — which is what keeps a draft with no
+//  router at all (a preview, a suite about the pill) from drawing a dashed
+//  line nobody will ever answer for.
+//
 //  ## What is published, and what the next phase must not break
 //
-//  ``waypoints`` is an ordinary observed property, so the map tracks it with
-//  `withObservationTracking` exactly as `MapCommunityRoutes` tracks
-//  `CommunityBrowser.routeLines`, and the maker's own list reads it in a body.
-//  That is correct for as long as a waypoint only ever moves when a hiker taps
-//  — which is all this phase does.
+//  ``waypoints`` and ``legs`` are ordinary observed properties, so the map
+//  tracks them with `withObservationTracking` exactly as `MapCommunityRoutes`
+//  tracks `CommunityBrowser.routeLines`, and the maker's own list reads them
+//  in a body. That is correct for as long as either only changes when a hiker
+//  taps or an answer lands — which is all this phase does.
 //
 //  **A drag is the thing that breaks it, and it is the next phase's first
 //  problem.** Dragging a pin writes at display rate, and a published array is
 //  a body pass per frame for every reader of it. The shape that survives is
 //  the one ``RecordingTrace`` uses: the moving point goes on its own
 //  untracked channel with a revision beside it, the map reads that, and
-//  ``waypoints`` keeps changing only when a drag *ends*. Do not widen this
-//  property into the drag; add the channel beside it.
+//  ``waypoints`` keeps changing only when a drag *ends*. Do not widen these
+//  properties into the drag; add the channel beside them.
 //
 
 import CoreLocation
@@ -85,6 +102,19 @@ final class TrailDraft {
     /// why this is published and what the drag phase has to do instead.
     private(set) var waypoints: [TrailWaypoint] = []
 
+    /// What runs between them: one leg per point after the first, in the same
+    /// order. Empty for a draft with fewer than two points.
+    private(set) var legs: [TrailLeg] = []
+
+    /// Whether legs should follow mapped paths.
+    ///
+    /// The hiker's setting rather than a fact about any one leg, which is why
+    /// it lives here and is written down with the points: a draft resumed
+    /// tomorrow is resumed the way it was being drawn. On by default, because
+    /// a route that follows the ground is the answer nearly everybody wants
+    /// and the one this feature exists to give.
+    private(set) var snapsToPaths = true
+
     /// How far along the line each waypoint sits, in the order they were put
     /// down. Empty for an empty draft; `0` for the first point of any other.
     ///
@@ -93,9 +123,13 @@ final class TrailDraft {
     /// number of points — free at a dozen and not at a hundred, and a hundred
     /// is a long day's route drawn carefully. Measured once per change
     /// instead, which is one walk per tap.
+    ///
+    /// Measured along the **legs**, so a snapped leg contributes the length of
+    /// the path it follows rather than the distance between its ends. That is
+    /// the number on the screen and the number in the library.
     private(set) var distancesAlongLine: [Double] = []
 
-    /// The line's length, summed along the straight legs between the points.
+    /// The line's length.
     ///
     /// The last element of the array above rather than a second sum of the
     /// same legs, which is what makes "the header and the last row say the
@@ -108,33 +142,98 @@ final class TrailDraft {
 
     var isEmpty: Bool { waypoints.isEmpty }
 
+    /// Where the pins go. The points themselves, never the resolved shape.
     var coordinates: [CLLocationCoordinate2D] {
         waypoints.map(\.clCoordinate)
+    }
+
+    /// The whole drawn line, flattened, in the shape a ``Hike`` is written in.
+    ///
+    /// The legs end to end with the duplicate joins dropped — each leg carries
+    /// both of its endpoints, so the point where two legs meet is in the list
+    /// twice before this runs. A single point is its own one-coordinate route,
+    /// which ``TrailDraftSave`` refuses before it can be written.
+    var routeCoordinates: [RouteCoordinate] {
+        guard !legs.isEmpty else { return waypoints.map(\.routeCoordinate) }
+        var flattened = legs[0].coordinates
+        for leg in legs.dropFirst() {
+            flattened.append(contentsOf: leg.coordinates.dropFirst())
+        }
+        return flattened
+    }
+
+    /// Whether any leg is waiting for an answer — what the header says while
+    /// the line is settling.
+    var isRouting: Bool {
+        legs.contains(where: \.snap.isRouting)
+    }
+
+    /// What to say about the line as a whole, or `nil` when there is nothing
+    /// to say.
+    ///
+    /// The worst thing any leg has to report, because a caption under a list
+    /// is one line: a refusal outranks a gap, which outranks the routing that
+    /// is merely in progress. A hiker with one busy leg and one trackless one
+    /// is told about the busy one, because that is the one a tap can fix.
+    var notice: TrailLegNotice? {
+        if let refused = legs.first(where: \.snap.isRetryable) {
+            return refused.snap.notice
+        }
+        if let gap = legs.first(where: \.snap.isDegraded) {
+            return gap.snap.notice
+        }
+        return legs.first(where: \.snap.isRouting)?.snap.notice
+    }
+
+    /// Whether *Retry* has anything to do.
+    var hasRetryableLegs: Bool {
+        legs.contains(where: \.snap.isRetryable)
     }
 
     /// Appends a point at the end of the line.
     func append(_ coordinate: CLLocationCoordinate2D) {
         waypoints.append(TrailWaypoint(coordinate: coordinate))
-        remeasure()
+        rebuildLegs()
     }
 
     /// Replaces the whole draft — what a restore from disk does, and nothing
     /// else does today.
     ///
-    /// The points are the whole of it: a drawn trail is named in the alert
-    /// that saves it, so there is nothing else a restore could bring back.
-    /// See ``TrailDraftView``.
-    func replace(with waypoints: [TrailWaypoint]) {
+    /// The points and the toggle are the whole of it: a drawn trail is named
+    /// in the alert that saves it, so there is nothing else a restore could
+    /// bring back. The resolved shapes are deliberately not among them — they
+    /// are re-derivable, the graph they came from is on disk for a month, and
+    /// storing a few hundred coordinates per leg to save a cache lookup would
+    /// be writing down the answer to a question the disk already answers. See
+    /// ``TrailDraftView``.
+    func replace(with waypoints: [TrailWaypoint], snapsToPaths: Bool) {
         self.waypoints = waypoints
-        remeasure()
+        legs = []
+        setSnapsToPaths(snapsToPaths)
+        rebuildLegs()
     }
 
     /// Empties the draft, which is what Cancel and a completed Save both leave
-    /// behind.
+    /// behind. The toggle is a setting rather than part of the drawing, so it
+    /// stays where the hiker left it.
     func clear() {
         guard !waypoints.isEmpty else { return }
         waypoints = []
-        remeasure()
+        rebuildLegs()
+    }
+
+    /// Turns path-following on or off.
+    ///
+    /// Already-drawn legs are **re-resolved rather than discarded**, and that
+    /// is ``TrailDraftController``'s half: this only records the setting and
+    /// straightens what is on screen, so the line never sits claiming to
+    /// follow paths the toggle has just switched off. Turning it back on
+    /// costs nothing on the wire, because the router remembers what it
+    /// answered — see ``OverpassTrailLegRouter``.
+    func setSnapsToPaths(_ snapping: Bool) {
+        guard snapsToPaths != snapping else { return }
+        snapsToPaths = snapping
+        if !snapping { straightenLegs() }
     }
 
     /// How far along the line a waypoint sits, for the row that names it.
@@ -146,23 +245,139 @@ final class TrailDraft {
         return distancesAlongLine[index]
     }
 
+    /// The leg arriving at the waypoint at `index`, or `nil` for the first
+    /// point, which nothing arrives at.
+    func leg(arrivingAtWaypointAt index: Int) -> TrailLeg? {
+        guard index > 0, legs.indices.contains(index - 1) else { return nil }
+        return legs[index - 1]
+    }
+
+    // MARK: - Routing, driven from the controller
+
+    /// The legs that want an answer and do not have one, in drawing order.
+    ///
+    /// - Parameter retryingRefusals: whether legs that were refused count as
+    ///   wanting one. False for the ordinary pass a tap starts, true for
+    ///   *Retry* — otherwise a refusal would be asked about again on every
+    ///   subsequent tap, which is one extra request per point put down against
+    ///   the server that has just said it is busy.
+    func legsAwaitingRoutes(retryingRefusals: Bool) -> [TrailLegEnds] {
+        guard snapsToPaths else { return [] }
+        return legs.compactMap { leg in
+            switch leg.snap {
+            case .freehand: leg.ends
+            case .refused: retryingRefusals ? leg.ends : nil
+            case .routing, .snapped, .unmapped: nil
+            }
+        }
+    }
+
+    /// Marks these legs as waiting, which is what draws them dashed.
+    ///
+    /// Done in the same turn the question is asked, so a leg is never on
+    /// screen as a settled straight line while an answer about it is in
+    /// flight.
+    func beginRouting(_ pending: [TrailLegEnds]) {
+        let wanted = Set(pending)
+        mutateLegs { leg in
+            guard wanted.contains(leg.ends) else { return }
+            leg.snap = .routing
+        }
+    }
+
+    /// Takes an answer, if the leg it is about is still the leg that asked.
+    ///
+    /// Matched by ends rather than by index, because the list can have grown
+    /// underneath the question: a hiker who puts down two more points while a
+    /// leg is routing still gets that leg's answer, and a hiker who has turned
+    /// snapping off in the meantime gets none, because the leg is no longer
+    /// ``TrailLegSnap/routing``.
+    func apply(_ route: TrailLegRoute, to ends: TrailLegEnds) {
+        mutateLegs { leg in
+            guard leg.ends == ends, leg.snap.isRouting else { return }
+            leg.coordinates = route.coordinates
+            leg.distanceMeters = route.distanceMeters
+            leg.snap = route.snap
+        }
+    }
+
+    /// Gives up on legs still waiting, leaving them the straight lines they
+    /// already are — what the maker closing does, so a draft resumed later
+    /// does not come back dashed forever.
+    func stopRouting() {
+        mutateLegs { leg in
+            guard leg.snap.isRouting else { return }
+            leg.snap = .freehand
+        }
+    }
+
+    // MARK: - Private
+
+    /// One leg per adjacent pair, keeping whatever has already been resolved.
+    ///
+    /// Reuse is keyed on ``TrailLegEnds`` — the two places, not the two
+    /// waypoints — so a leg whose geometry did not change keeps its shape and
+    /// its state through a change to the list around it. That is what makes
+    /// appending a point cost one question rather than all of them, and it is
+    /// what Phase 3's reorder will need from this phase.
+    private func rebuildLegs() {
+        var resolved: [TrailLegEnds: TrailLeg] = [:]
+        for leg in legs { resolved[leg.ends] = leg }
+        var rebuilt: [TrailLeg] = []
+        rebuilt.reserveCapacity(max(0, waypoints.count - 1))
+        for (previous, next) in zip(waypoints, waypoints.dropFirst()) {
+            let ends = TrailLegEnds(from: previous, to: next)
+            if var existing = resolved[ends] {
+                existing.id = next.id
+                rebuilt.append(existing)
+            } else {
+                rebuilt.append(TrailLeg.straight(arrivingAt: next.id, along: ends))
+            }
+        }
+        publish(rebuilt)
+    }
+
+    /// Drops every leg back to the straight line between its ends. What
+    /// turning the toggle off does.
+    private func straightenLegs() {
+        mutateLegs { leg in
+            leg.coordinates = leg.ends.straightCoordinates
+            leg.distanceMeters = leg.ends.straightDistanceMeters
+            leg.snap = .freehand
+        }
+    }
+
+    /// Runs `change` over every leg and publishes the result if anything moved.
+    ///
+    /// One write to ``legs`` rather than one per leg, because each is an
+    /// observation the map and the list both act on — and because a
+    /// same-value write is filtered only for an `Equatable` value, which is
+    /// what the array of legs is (see *Render isolation, in practice*).
+    private func mutateLegs(_ change: (inout TrailLeg) -> Void) {
+        var changed = legs
+        for index in changed.indices { change(&changed[index]) }
+        publish(changed)
+    }
+
+    private func publish(_ rebuilt: [TrailLeg]) {
+        if legs != rebuilt { legs = rebuilt }
+        remeasure()
+    }
+
     private func remeasure() {
-        let measured = Self.distances(along: waypoints)
+        let measured = Self.distances(along: legs, pointCount: waypoints.count)
         guard distancesAlongLine != measured else { return }
         distancesAlongLine = measured
     }
 
     /// One running total per waypoint, in one walk of the legs.
-    private static func distances(along waypoints: [TrailWaypoint]) -> [Double] {
-        guard !waypoints.isEmpty else { return [] }
+    private static func distances(along legs: [TrailLeg], pointCount: Int) -> [Double] {
+        guard pointCount > 0 else { return [] }
         var distances: [Double] = [0]
-        distances.reserveCapacity(waypoints.count)
+        distances.reserveCapacity(pointCount)
         var total: Double = 0
-        for (previous, next) in zip(waypoints, waypoints.dropFirst()) {
-            total += RouteGeometry.distanceMeters(
-                from: previous.clCoordinate,
-                to: next.clCoordinate
-            )
+        for leg in legs {
+            total += leg.distanceMeters
             distances.append(total)
         }
         return distances

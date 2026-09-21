@@ -43,12 +43,24 @@ final class TrailDraftRecord {
     /// is a new session.
     var waypoints: [RouteCoordinate] = []
 
+    /// Whether the legs between them were following mapped paths.
+    ///
+    /// Part of the drawing rather than a global preference, because it is
+    /// about *this* trail: a hiker drawing a line across open fell has turned
+    /// it off for that line, and a hiker who then starts a route up a marked
+    /// valley wants it back on. An inline default, like every column here —
+    /// see *Schema and migration policy*; `true` because that is what a new
+    /// draft starts as, so a row written before this column existed resumes
+    /// the way a new draft would begin.
+    var snapsToPaths = true
+
     /// When this was last written, so a later phase that offers to resume a
     /// draft has something to say about it. Read by nothing today.
     var updatedAt = Date.distantPast
 
-    init(waypoints: [RouteCoordinate], updatedAt: Date) {
+    init(waypoints: [RouteCoordinate], snapsToPaths: Bool, updatedAt: Date) {
         self.waypoints = waypoints
+        self.snapsToPaths = snapsToPaths
         self.updatedAt = updatedAt
     }
 }

@@ -115,10 +115,13 @@ struct TrailDraftTests {
     @Test("replacing a draft remeasures its length")
     func replacingRemeasures() {
         let draft = TrailDraft()
-        draft.replace(with: [
-            TrailWaypoint(coordinate: Self.coordinate(Line.south)),
-            TrailWaypoint(coordinate: Self.coordinate(Line.north)),
-        ])
+        draft.replace(
+            with: [
+                TrailWaypoint(coordinate: Self.coordinate(Line.south)),
+                TrailWaypoint(coordinate: Self.coordinate(Line.north)),
+            ],
+            snapsToPaths: true
+        )
         #expect(draft.waypoints.count == 2)
         #expect(draft.distanceMeters > 0)
     }

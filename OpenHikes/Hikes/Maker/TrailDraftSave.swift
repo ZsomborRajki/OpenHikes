@@ -21,6 +21,12 @@
 //  alone: one point is a place, and a `Hike` whose route is a single
 //  coordinate has no length, no profile and nothing to draw.
 //
+//  **A leg still routing is saved as it stands.** Save does not wait: a hiker
+//  who has finished drawing has finished, and holding the button while a
+//  volunteer-run API is thinking about the last leg would make Overpass's
+//  weather into this app's responsiveness. What they get is the straight
+//  line that leg is currently drawn as, which is what they are looking at.
+//
 //  The commit happens here, before anything is told there is a hike, for the
 //  reason ``HikeImport`` commits before its caller navigates: an insert is a
 //  change pending in a context, and everything downstream of a successful save
@@ -117,7 +123,13 @@ enum TrailDraftSave {
             distanceMeters: draft.distanceMeters,
             date: date,
             tintHex: Hike.randomTintHex(),
-            route: waypoints.map(\.routeCoordinate)
+            // The resolved legs, not the points: a snapped trail is saved as
+            // the paths it follows, which is the whole of what Phase 2 added
+            // and the only thing about it that reaches the library, the
+            // widget, GPX export and *Follow This Trail*. A freehand or
+            // degraded leg contributes its two ends and is indistinguishable
+            // from what Phase 1 wrote — see ``TrailDraft/routeCoordinates``.
+            route: draft.routeCoordinates
         )
         context.insert(hike)
         do {

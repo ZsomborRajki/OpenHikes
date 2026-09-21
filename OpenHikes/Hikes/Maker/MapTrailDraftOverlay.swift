@@ -16,6 +16,26 @@
 //  the line cannot show. It is also what the list in the sheet is a list *of*,
 //  so the two are readable against each other.
 //
+//  ## One polyline per leg, since Phase 2
+//
+//  The line used to be one `MKPolyline` through the waypoints. It is now one
+//  per leg, because a leg is the thing that has a state: while a route is
+//  being asked for it is dashed, once it has settled it is solid, and a leg
+//  that was asked and could not be routed is drawn differently again. A single
+//  overlay has a single renderer and could say only one of those about a whole
+//  trail — and the commonest shape this feature produces is a line where all
+//  but the last leg have settled.
+//
+//  What the three weights mean, and the distinction that matters most:
+//
+//  - **Solid** — settled and as asked. A snapped leg *and* a freehand one,
+//    because a straight line the hiker asked for by turning the toggle off is
+//    not a degraded anything.
+//  - **Short dash** — still being routed. Provisional, and about to change.
+//  - **Long dash** — asked, and straight anyway: nothing is mapped between
+//    these two points, or Overpass refused. The line is real and saveable; it
+//    just is not following anything.
+//
 //  Applied imperatively off ``TrailDraft``, like every other overlay here, so
 //  a tap that adds a point moves MapKit and no SwiftUI view.
 //
@@ -52,13 +72,19 @@ extension MapView.Coordinator {
     private static let trailDraftPinDiameter: CGFloat = 24
     private static let trailDraftPinBorderWidth: CGFloat = 2.5
     private static let trailDraftPinShadowOpacity: Float = 0.35
+    /// Short ticks with wide gaps: unmistakably provisional at a glance, and
+    /// visibly not the long dashes below.
+    private static let trailDraftRoutingDashes = [2, 8]
+    /// Long dashes, close together: a real line that did not find a path.
+    private static let trailDraftDegradedDashes = [10, 6]
 
     /// Observes the draft and redraws it, then re-registers.
     ///
-    /// Both the line and whether there is a canvas at all are tracked in one
-    /// registration, because they are one question: the draft is drawn while
-    /// the maker is up and not otherwise, so a change to either has the same
-    /// answer to compute. Idempotent, like every registration here.
+    /// The line, the legs' states and whether there is a canvas at all are
+    /// tracked in one registration, because they are one question: the draft
+    /// is drawn while the maker is up and not otherwise, so a change to any of
+    /// them has the same answer to compute. Idempotent, like every
+    /// registration here.
     func observeTrailDraft(_ controller: TrailDraftController, on mapView: MKMapView) {
         guard !isObservingTrailDraft else { return }
         isObservingTrailDraft = true
@@ -70,48 +96,72 @@ extension MapView.Coordinator {
         reobserving(self, mapView, controller) {
             _ = controller.isEditing
             _ = controller.draft.waypoints
+            _ = controller.draft.legs
         } onChange: { coordinator, map, model in
             coordinator.trackTrailDraft(model, on: map)
         }
     }
 
-    /// Rebuilds the line and the pins wholesale rather than diffing them.
+    /// Rebuilds the legs and the pins wholesale rather than diffing them.
     ///
-    /// At most a few dozen of each, and this runs when a hiker taps — never at
-    /// drag or fix frequency. The guard in front of it is what keeps a
-    /// republish of the same draft from removing and re-adding everything.
+    /// At most a few dozen of each, and this runs when a hiker taps or when a
+    /// leg's route lands — never at drag or fix frequency. The guard in front
+    /// of it is what keeps a republish of the same draft from removing and
+    /// re-adding everything, and it compares the *legs* rather than the
+    /// waypoints because a leg changes shape and state without a point
+    /// moving: that is what an answer arriving is.
     private func applyTrailDraft(_ controller: TrailDraftController, on mapView: MKMapView) {
-        let coordinates = controller.isEditing ? controller.draft.coordinates : []
-        guard !Self.isSameDraft(coordinates, as: trailDraftCoordinates) else { return }
-        trailDraftCoordinates = coordinates
+        let isDrawing = controller.isEditing
+        let legs = isDrawing ? controller.draft.legs : []
+        let points = isDrawing ? controller.draft.coordinates : []
+        guard legs != trailDraftLegs
+            || !Self.isSameDraft(points, as: trailDraftCoordinates) else { return }
+        trailDraftLegs = legs
+        trailDraftCoordinates = points
 
-        if let existing = trailDraftOverlay {
-            mapView.removeOverlay(existing)
-            trailDraftOverlay = nil
+        if !trailDraftOverlays.isEmpty {
+            mapView.removeOverlays(trailDraftOverlays)
+            trailDraftOverlays = []
+            trailDraftLegStyles = [:]
         }
         if !trailDraftAnnotations.isEmpty {
             mapView.removeAnnotations(trailDraftAnnotations)
             trailDraftAnnotations = []
         }
-        guard !coordinates.isEmpty else { return }
+        guard !points.isEmpty else { return }
 
-        // Above the shared hikes' lines and the hiker's own, because this is
-        // the one the hiker is working on. All of it is still `.aboveLabels`:
-        // the raster tile overlay is opaque, so anything below that level is
-        // buried rather than faint — see ``MapCommunityRoutes``.
-        if coordinates.count > 1 {
-            let line = MKPolyline(coordinates: coordinates, count: coordinates.count)
-            trailDraftOverlay = line
-            mapView.addOverlay(line, level: .aboveLabels)
-        }
-        let pins = coordinates.enumerated().map { index, coordinate in
+        addTrailDraftLegs(legs, to: mapView)
+        let pins = points.enumerated().map { index, coordinate in
             TrailDraftWaypointAnnotation(coordinate: coordinate, number: index + 1)
         }
         trailDraftAnnotations = pins
         mapView.addAnnotations(pins)
     }
 
-    /// Whether two drafts would draw identically.
+    /// One polyline per leg, each remembering the state it should be drawn in.
+    ///
+    /// Above the shared hikes' lines and the hiker's own, because this is the
+    /// one the hiker is working on. All of it is still `.aboveLabels`: the
+    /// raster tile overlay is opaque, so anything below that level is buried
+    /// rather than faint — see ``MapCommunityRoutes``.
+    private func addTrailDraftLegs(_ legs: [TrailLeg], to mapView: MKMapView) {
+        for leg in legs {
+            let coordinates = leg.coordinates.map { point in
+                CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
+            }
+            guard coordinates.count > 1 else { continue }
+            let line = MKPolyline(coordinates: coordinates, count: coordinates.count)
+            trailDraftOverlays.append(line)
+            // Kept beside the overlay rather than on a subclass of it, so the
+            // draft's lines stay plain `MKPolyline`s and everything that asks
+            // MapKit about an overlay keeps one answer. `rendererFor` looks
+            // the state up by identity.
+            trailDraftLegStyles[ObjectIdentifier(line)] = leg.snap
+            mapView.addOverlay(line, level: .aboveLabels)
+        }
+    }
+
+    /// Whether two sets of pins would draw identically.
     ///
     /// Compared by value rather than by count, because a later phase moves a
     /// point without adding one — and a count comparison would silently stop
@@ -126,13 +176,14 @@ extension MapView.Coordinator {
         }
     }
 
-    /// The line's renderer, or `nil` when this polyline is not the draft's.
+    /// One leg's renderer, or `nil` when this polyline is not one of the
+    /// draft's.
     ///
     /// Asked by `rendererFor` before every style that describes the hiker's
     /// own route, for the reason the community one is: a draft is not a hike
     /// and must not be drawn in the colour and width somebody chose for one.
     func trailDraftRenderer(for polyline: MKPolyline) -> MKPolylineRenderer? {
-        guard trailDraftOverlay === polyline else { return nil }
+        guard let snap = trailDraftLegStyles[ObjectIdentifier(polyline)] else { return nil }
         let renderer = MKPolylineRenderer(polyline: polyline)
         #if os(macOS)
         renderer.strokeColor = NSColor(Color.accentColor)
@@ -142,7 +193,22 @@ extension MapView.Coordinator {
         renderer.lineWidth = Self.trailDraftLineWidth
         renderer.lineJoin = .round
         renderer.lineCap = .round
+        // `lineDashPattern` is an `[NSNumber]?` and an empty array is not the
+        // same as none — it draws nothing — so a solid line is `nil`. The
+        // same conversion the recording overlays make; see
+        // `MapCoordinator+RouteStyles.swift`.
+        let dashes = Self.trailDraftDashes(for: snap)
+        // swiftlint:disable:next legacy_objc_type
+        renderer.lineDashPattern = dashes.isEmpty ? nil : dashes.map { NSNumber(value: $0) }
         return renderer
+    }
+
+    /// The dash pattern one leg's state is drawn in, and empty for a solid
+    /// line. See the file header for what the three weights mean.
+    private static func trailDraftDashes(for snap: TrailLegSnap) -> [Int] {
+        if snap.isRouting { return trailDraftRoutingDashes }
+        if snap.isDegraded { return trailDraftDegradedDashes }
+        return []
     }
 
     /// A numbered dot for one waypoint, or `nil` when this annotation is not

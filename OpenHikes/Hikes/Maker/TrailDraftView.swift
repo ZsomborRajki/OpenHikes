@@ -75,6 +75,13 @@ struct TrailDraftView: View {
                 search: search
             )
 
+            // Withheld entirely on a launch that has no trail graph to ask —
+            // a preview, or UI automation started without a fixture. A switch
+            // that cannot change the line is worse than no switch.
+            if maker.canSnapToPaths {
+                TrailDraftSnapToggle(maker: maker)
+            }
+
             pointsSection
         }
         // On the screen's root, and that is the point of it rather than a
@@ -163,9 +170,13 @@ struct TrailDraftView: View {
                 ForEach(Array(draft.waypoints.enumerated()), id: \.element.id) { index, _ in
                     TrailDraftWaypointRow(
                         number: index + 1,
-                        distanceMeters: draft.distanceAlongLine(toWaypointAt: index)
+                        distanceMeters: draft.distanceAlongLine(toWaypointAt: index),
+                        // The leg *into* this point, which is why the first
+                        // row never has one: nothing arrives at it.
+                        legNotice: draft.leg(arrivingAtWaypointAt: index)?.snap.notice
                     )
                 }
+                retryRow
             }
         } header: {
             HStack {
@@ -175,6 +186,26 @@ struct TrailDraftView: View {
                     .monospacedDigit()
                     .accessibilityIdentifier("trail-draft-length")
             }
+        } footer: {
+            // One line for the whole line, saying the worst thing any leg has
+            // to report — see ``TrailDraft/notice``. The per-leg sentence is
+            // on the row it belongs to; this is what a hiker who has not
+            // scrolled sees.
+            if let notice = draft.notice {
+                TrailDraftNoticeLabel(notice: notice)
+            }
+        }
+    }
+
+    /// *Try Again*, offered only when Overpass refused something.
+    ///
+    /// Not for a leg with nothing mapped under it and not for one the hiker
+    /// straightened themselves: asking again about either would spend a
+    /// request to be told the same thing. See ``TrailLegSnap/isRetryable``.
+    @ViewBuilder private var retryRow: some View {
+        if draft.hasRetryableLegs {
+            Button("Try Again", systemImage: "arrow.clockwise", action: maker.retryRefusedLegs)
+                .accessibilityIdentifier("trail-draft-retry")
         }
     }
 

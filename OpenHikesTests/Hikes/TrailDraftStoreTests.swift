@@ -52,11 +52,34 @@ struct TrailDraftStoreTests {
     func roundTrip() throws {
         let context = try context()
         let store = TrailDraftStore(context: context)
-        store.save(waypoints: Self.waypoints([Line.south, Line.north]))
+        store.save(waypoints: Self.waypoints([Line.south, Line.north]), snapsToPaths: true)
 
         let restored = TrailDraftStore(context: context).load()
 
-        #expect(restored.map(\.latitude) == [Line.south, Line.north])
+        #expect(restored.waypoints.map(\.latitude) == [Line.south, Line.north])
+    }
+
+    /// The switch is part of the drawing rather than a global preference, so
+    /// it comes back with the points — otherwise a hiker who straightened
+    /// their line, closed the app and came back would find it bending again
+    /// the moment they added a point.
+    @Test("path-following comes back the way it was left")
+    func snappingSurvives() throws {
+        let context = try context()
+        TrailDraftStore(context: context).save(
+            waypoints: Self.waypoints([Line.south, Line.north]),
+            snapsToPaths: false
+        )
+
+        #expect(!TrailDraftStore(context: context).load().snapsToPaths)
+    }
+
+    /// And a store with nothing in it answers the way a new draft starts,
+    /// which is what makes ``StoredTrailDraft/nothing`` the right empty
+    /// answer rather than a second kind of default.
+    @Test("an empty store answers the way a new draft begins")
+    func emptyStoreFollowsPaths() throws {
+        #expect(TrailDraftStore(context: try context()).load().snapsToPaths)
     }
 
     /// The ordering is the trail. A store that came back with the points in
@@ -65,11 +88,11 @@ struct TrailDraftStoreTests {
     func orderSurvives() throws {
         let context = try context()
         let latitudes = [Line.north, Line.south, Line.north, Line.south]
-        TrailDraftStore(context: context).save(waypoints: Self.waypoints(latitudes))
+        TrailDraftStore(context: context).save(waypoints: Self.waypoints(latitudes), snapsToPaths: true)
 
         let restored = TrailDraftStore(context: context).load()
 
-        #expect(restored.map(\.latitude) == latitudes)
+        #expect(restored.waypoints.map(\.latitude) == latitudes)
     }
 
     @Test("saving twice rewrites the one row rather than adding another")
@@ -77,18 +100,18 @@ struct TrailDraftStoreTests {
         let context = try context()
         let store = TrailDraftStore(context: context)
 
-        store.save(waypoints: Self.waypoints([Line.south, Line.north]))
-        store.save(waypoints: Self.waypoints([Line.north]))
+        store.save(waypoints: Self.waypoints([Line.south, Line.north]), snapsToPaths: true)
+        store.save(waypoints: Self.waypoints([Line.north]), snapsToPaths: true)
 
         #expect(try context.fetch(FetchDescriptor<TrailDraftRecord>()).count == 1)
-        #expect(store.load().map(\.latitude) == [Line.north])
+        #expect(store.load().waypoints.map(\.latitude) == [Line.north])
     }
 
     @Test("clearing leaves no row behind")
     func clearingDeletesTheRow() throws {
         let context = try context()
         let store = TrailDraftStore(context: context)
-        store.save(waypoints: Self.waypoints([Line.south, Line.north]))
+        store.save(waypoints: Self.waypoints([Line.south, Line.north]), snapsToPaths: true)
 
         store.clear()
 
@@ -110,7 +133,7 @@ struct TrailDraftStoreTests {
     func pointlessDraftReadsAsNothing() throws {
         let context = try context()
         let store = TrailDraftStore(context: context)
-        store.save(waypoints: [])
+        store.save(waypoints: [], snapsToPaths: true)
 
         #expect(store.load().isEmpty)
     }

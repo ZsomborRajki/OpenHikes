@@ -2,7 +2,7 @@
 //  TrailDraftFields.swift
 //  OpenHikes
 //
-//  The maker's two fields and its waypoint row.
+//  The maker's fields, its snapping switch, its notices and its waypoint row.
 //
 //  Each is its own `View` type and that is a render-isolation decision rather
 //  than tidiness: only a `View` is a boundary, so a name typed into a field
@@ -225,19 +225,84 @@ struct TrailDraftSearchField: View {
     }
 }
 
+/// Whether the legs between the points follow mapped paths.
+///
+/// Its own `View` for the reason the fields above are, and here the cost it
+/// avoids is the larger one: this sits over a list whose every row reads the
+/// draft, and a `Toggle` declared inline in ``TrailDraftView``'s body would
+/// make the animation of the switch itself a body pass.
+///
+/// It writes through ``TrailDraftController`` rather than onto the draft, like
+/// every other mutation in this feature, because turning it back on is a
+/// question for OpenStreetMap and the controller is what asks — see
+/// ``TrailDraftController/setSnapsToPaths(_:)``.
+struct TrailDraftSnapToggle: View {
+    let maker: TrailDraftController
+
+    var body: some View {
+        Section {
+            Toggle("Follow Paths", isOn: Binding(
+                get: { maker.draft.snapsToPaths },
+                set: { following in maker.setSnapsToPaths(following) }
+            ))
+            .accessibilityIdentifier("trail-draft-snap")
+        } footer: {
+            Text(
+                """
+                Legs run along paths mapped in OpenStreetMap. \
+                Turn this off to draw straight lines.
+                """
+            )
+        }
+    }
+}
+
+/// One short line about a leg, or about the line as a whole.
+///
+/// The glyph is the whole of the difference at a glance and its colour is what
+/// says whether anything is wrong — the arrangement ``CuratedTrailNotice``
+/// already uses under *Search this area*, and the reason a leg with nothing
+/// mapped under it does not wear a warning triangle.
+struct TrailDraftNoticeLabel: View {
+    let notice: TrailLegNotice
+
+    var body: some View {
+        Label {
+            Text(notice.text)
+        } icon: {
+            Image(systemName: notice.symbolName)
+                .foregroundStyle(notice.isWarning ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+        }
+        .font(.caption)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 /// One point in the list, named by its place in the line and how far along it
 /// sits.
+///
+/// The second line is about the **leg arriving at it**, and only when there is
+/// something to say: a leg that snapped or that the hiker straightened
+/// themselves says nothing, so the list is quiet until something is worth
+/// reading. See ``TrailLegSnap/notice``.
 struct TrailDraftWaypointRow: View {
     let number: Int
     let distanceMeters: Double
+    let legNotice: TrailLegNotice?
 
     var body: some View {
-        HStack {
-            Text("Point \(number)")
-            Spacer(minLength: 12)
-            Text(Self.length(distanceMeters))
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text("Point \(number)")
+                Spacer(minLength: 12)
+                Text(Self.length(distanceMeters))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            if let legNotice {
+                TrailDraftNoticeLabel(notice: legNotice)
+                    .foregroundStyle(.secondary)
+            }
         }
         // One element rather than two, the rule every composite row here
         // follows — see ``HikeRow``.

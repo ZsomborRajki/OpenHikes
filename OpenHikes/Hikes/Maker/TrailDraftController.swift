@@ -25,11 +25,26 @@
 //
 //  ## Every mutation goes through here
 //
-//  The map appends a waypoint and the maker's screen cancels and saves — and
-//  all of them land on ``TrailDraft`` through this object, because this is the
-//  one that also knows the draft has to be written down. A screen that mutated
-//  the draft directly would leave the durable copy behind by exactly one tap,
-//  every time.
+//  The map appends a waypoint and the maker's screen toggles snapping, cancels
+//  and saves — and all of them land on ``TrailDraft`` through this object,
+//  because this is the one that also knows the draft has to be written down
+//  and that a change to the line is a question for OpenStreetMap. A screen
+//  that mutated the draft directly would leave the durable copy behind by
+//  exactly one tap and the line unrouted, every time.
+//
+//  ## Legs are routed one at a time, and a refusal is not retried by itself
+//
+//  Every pass takes the legs that want an answer and do not have one, marks
+//  them, and asks about them **in order, one at a time**. Concurrently would
+//  be nineteen simultaneous requests from one phone for a twenty-point trail,
+//  which is the shape that earns the `429` this app has already met in the
+//  field; sequentially, the second leg usually joins the download the first
+//  one started — see ``OverpassTrailLegRouter``.
+//
+//  A leg that was refused stays refused until the hiker taps *Retry*. Asking
+//  again on the next tap would mean one extra request per point put down,
+//  aimed at the server that has just said it is busy, and the hiker would see
+//  the same sentence appear and disappear without having done anything.
 //
 
 import CoreLocation
@@ -63,9 +78,31 @@ final class TrailDraftController {
     /// commands take: a token whose *change* is the message.
     private(set) var openRequest = 0
 
+    /// Whether this maker can make a leg follow a path at all.
+    ///
+    /// False for a launch with no trail-graph provider — a preview, or UI
+    /// automation started without `--ui-test-trail-graph=`. The toggle is
+    /// hidden rather than shown switched off, because a control that cannot
+    /// change anything is worse than no control: the honest statement is that
+    /// this launch draws straight lines.
+    var canSnapToPaths: Bool { router != nil }
+
     /// Where the draft is kept between launches, or `nil` for a launch that
     /// remembers nothing — a preview, or a suite asking only about the pill.
     @ObservationIgnored private let store: TrailDraftStore?
+
+    /// Where a leg's shape comes from, or `nil` for a launch that cannot ask.
+    @ObservationIgnored private let router: (any TrailLegRouting)?
+
+    /// The legs a question is currently out about, so a second pass started by
+    /// the next tap does not ask about them again beside the first.
+    ///
+    /// Not on ``TrailDraft`` even though the leg's own
+    /// ``TrailLegSnap/routing`` says almost the same thing, because the two
+    /// answer different questions: that one is *what should the map draw*, and
+    /// a leg can stop being drawn as routing — the hiker turned snapping off —
+    /// while the request for it is still on the wire.
+    @ObservationIgnored private var legsInFlight: Set<TrailLegEnds> = []
 
     /// Whether the sheet has any screen pushed. The inverse of what the pill
     /// is offered on; see the note above on why that is the whole exclusion.
@@ -75,8 +112,9 @@ final class TrailDraftController {
     /// over a launch that restored a pushed screen.
     @ObservationIgnored private var hasPushedScreen = true
 
-    init(store: TrailDraftStore? = nil) {
+    init(store: TrailDraftStore? = nil, router: (any TrailLegRouting)? = nil) {
         self.store = store
+        self.router = router
         draft = TrailDraft()
     }
 
@@ -102,15 +140,32 @@ final class TrailDraftController {
     /// a tap landing on the map during the pop animation would put down a
     /// waypoint on a trail the hiker has just left.
     ///
-    /// Opening restores whatever was left half-drawn. Nothing is written on
-    /// the way out, because nothing can be owed by then: the only change a
-    /// draft takes today is a point going down, and ``appendWaypoint(at:)``
-    /// writes as it lands. A phase that lets a point be dragged or deleted has
-    /// to write here too, or leave the disk one gesture behind.
+    /// Opening restores whatever was left half-drawn, and asks about its legs
+    /// — a restored draft comes back as points and a setting, never as
+    /// resolved shapes, so the line follows the ground again a moment after it
+    /// comes back rather than sitting straight until it is touched.
+    ///
+    /// Closing gives up on whatever is still in flight. Nothing else is owed:
+    /// a point going down and the toggle moving are both written as they
+    /// happen. A phase that lets a point be dragged or deleted has to write
+    /// here too, or leave the disk one gesture behind.
     func setEditing(_ editing: Bool) {
         guard isEditing != editing else { return }
         isEditing = editing
-        if editing { restoreIfNeeded() }
+        if editing {
+            restoreIfNeeded()
+            resolveLegs()
+        } else {
+            // The questions already on the wire are not cancelled — the
+            // download behind them is shared with the map and with recording,
+            // and abandoning it would waste a request that is nearly paid
+            // for. They are only disowned: the legs stop being drawn as
+            // waiting, the claims are released, and an answer landing
+            // afterwards finds no leg asking for it and is dropped. Reopening
+            // asks again and the router answers from memory.
+            draft.stopRouting()
+            legsInFlight.removeAll()
+        }
     }
 
     /// Asks for the maker. Refused when the pill isn't available, so a tap
@@ -131,6 +186,29 @@ final class TrailDraftController {
         guard isEditing else { return }
         draft.append(coordinate)
         persist()
+        resolveLegs()
+    }
+
+    /// Turns path-following on or off, and re-resolves what is already drawn.
+    ///
+    /// **Re-resolve, not discard.** Turning it off straightens the legs but
+    /// keeps the points; turning it back on asks again, and the router answers
+    /// the ones it has already been asked from memory, so the line comes back
+    /// the way it was without a single request. That is what makes the toggle
+    /// something a hiker can try rather than something they have to commit to.
+    func setSnapsToPaths(_ snapping: Bool) {
+        guard draft.snapsToPaths != snapping else { return }
+        draft.setSnapsToPaths(snapping)
+        persist()
+        resolveLegs()
+    }
+
+    /// Asks again about the legs Overpass refused.
+    ///
+    /// The only thing that does: an ordinary pass leaves a refusal alone, for
+    /// the reason the file header gives.
+    func retryRefusedLegs() {
+        resolveLegs(retryingRefusals: true)
     }
 
     /// Throws the drawing away: what Cancel does, and what a completed Save
@@ -145,7 +223,7 @@ final class TrailDraftController {
         // launch finds the line still in memory, and overwriting it with the
         // copy on disk would undo whatever was added after the last write.
         guard draft.isEmpty, let stored = store?.load(), !stored.isEmpty else { return }
-        draft.replace(with: stored)
+        draft.replace(with: stored.waypoints, snapsToPaths: stored.snapsToPaths)
     }
 
     private func persist() {
@@ -154,12 +232,51 @@ final class TrailDraftController {
             store.clear()
             return
         }
-        store.save(waypoints: draft.waypoints)
+        store.save(waypoints: draft.waypoints, snapsToPaths: draft.snapsToPaths)
     }
 
     private func refreshAvailability() {
         let available = !hasPushedScreen
         guard isAvailable != available else { return }
         isAvailable = available
+    }
+
+    /// Asks about every leg that wants an answer and has not been asked.
+    ///
+    /// One unstructured task per pass rather than one long-lived one, and it
+    /// is not cancelled by the next pass: the legs it is working through are
+    /// claimed in ``legsInFlight`` before it starts, so the pass a second tap
+    /// begins takes only what is left. Cancelling instead would throw away a
+    /// download already on the wire every time a hiker put down another point
+    /// — which is exactly when they are putting down several.
+    private func resolveLegs(retryingRefusals: Bool = false) {
+        guard let router, isEditing else { return }
+        let pending = draft
+            .legsAwaitingRoutes(retryingRefusals: retryingRefusals)
+            .filter { ends in !legsInFlight.contains(ends) }
+        guard !pending.isEmpty else { return }
+        legsInFlight.formUnion(pending)
+        draft.beginRouting(pending)
+        Task { [weak self] in
+            for ends in pending {
+                let route = await router.route(ends)
+                guard let self else { return }
+                receive(route, for: ends)
+            }
+        }
+    }
+
+    /// Takes one answer, whatever has happened to the drawing meanwhile.
+    ///
+    /// The claim is released either way, so a leg whose answer was cancelled
+    /// can be asked about again — by the next tap, or by *Retry*. The draft
+    /// itself decides whether the answer still applies: it is matched against
+    /// the leg's two ends rather than its place in the list, so a hiker who
+    /// added three more points while this was in flight still gets it, and one
+    /// who turned snapping off does not. See ``TrailDraft/apply(_:to:)``.
+    private func receive(_ route: TrailLegRoute?, for ends: TrailLegEnds) {
+        legsInFlight.remove(ends)
+        guard let route else { return }
+        draft.apply(route, to: ends)
     }
 }
