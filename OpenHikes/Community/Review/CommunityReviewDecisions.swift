@@ -34,6 +34,7 @@
 //  is a body that is doing its job.
 //
 
+import CoreLocation
 import Foundation
 import OpenHikesShared
 import SwiftUI
