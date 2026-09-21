@@ -26,6 +26,17 @@
 //  is the same rule the surface and difficulty analysis already follows, and
 //  for the same reason.
 //
+//  ## And once more, for a trail somebody is drawing
+//
+//  The trail maker asks the same source the same question — see
+//  ``TrailDraftElevation`` — because a drawn line has exactly the problem a
+//  curated route has: it is geometry with no terrain under it, and the climb
+//  is the figure that decides whether Saturday is a walk or a day out. What
+//  differs is *when*: a curated route is opened once, while a drawn one keeps
+//  changing, so that caller waits for the drawing to settle before it asks and
+//  throws the answer away the moment the line moves. Everything below is
+//  unchanged by it, which is the point of it being the same file.
+//
 //  And asked **only for an OpenHikes Pro subscriber**, because every call is
 //  billed against the same key the paid map styles are already behind. A free
 //  hiker's curated route opens the way it did before this file existed: a
@@ -280,44 +291,132 @@ nonisolated struct StadiaElevationSource: CuratedElevationSourcing {
     }
 }
 
+/// A route's heights, at the points that were actually asked about.
+///
+/// Kept as a value of its own rather than folded straight into the route,
+/// because the two callers want different things out of one answer. A curated
+/// hike wants the route *filled* and nothing else: it opens once, draws a
+/// chart, and never has to ask again. The trail maker wants the figures while
+/// the hiker goes on drawing, and then — possibly many edits later — has to be
+/// able to say whether the line it is about to save is still the line these
+/// were read for.
+///
+/// Carrying the coordinates is what answers that second question. They are the
+/// ones that were sent, so a route whose sampled points still stand where
+/// these stood is the route these describe. Comparing them is exact rather
+/// than approximate on purpose: these *are* the route's own values, copied,
+/// and a tolerance would only be a way of accepting a height for a point that
+/// has moved.
+nonisolated struct RouteHeightSamples: Equatable, Sendable {
+    /// How many points the route had when these were read.
+    ///
+    /// Which indexes were asked about is a function of this alone — see
+    /// ``CuratedElevationRequest/sampleIndexes(count:limit:)`` — so a route of
+    /// a different length is a different question, and the indexes below are
+    /// not necessarily even in bounds for it.
+    let routePointCount: Int
+    /// The indexes asked about, ascending, both ends included.
+    let indexes: [Int]
+    /// The route's points at those indexes, as they were sent.
+    let coordinates: [RouteCoordinate]
+    /// The height in metres at each, in the same order.
+    let heights: [Double]
+
+    /// What the sampled heights add up to: the climb, the drop and the two
+    /// extremes.
+    ///
+    /// Read off the samples rather than off a filled route, and they are the
+    /// same numbers either way — ``RouteProfile`` walks the points that carry
+    /// a height and these are all of them. Computed on demand because it is
+    /// two hundred additions and the caller stores the answer.
+    var summary: RouteElevationSummary {
+        var accumulator = ElevationAccumulator()
+        for height in heights { accumulator.record(height) }
+        return RouteElevationSummary(accumulator)
+    }
+
+    /// Whether `route` is still the route these heights were read for.
+    func describes(_ route: [RouteCoordinate]) -> Bool {
+        guard route.count == routePointCount, indexes.count == coordinates.count else { return false }
+        return zip(indexes, coordinates).allSatisfy { index, sampled in
+            route[index].latitude == sampled.latitude
+                && route[index].longitude == sampled.longitude
+        }
+    }
+
+    /// `route` with these heights on the points they were read at, or `route`
+    /// untouched when it is not the route they were read for.
+    ///
+    /// Non-finite heights are dropped rather than carried: a height that is
+    /// not a number is not a height, and the chart's downsampling compares
+    /// them.
+    func filling(_ route: [RouteCoordinate]) -> [RouteCoordinate] {
+        guard describes(route) else { return route }
+        var filled = route
+        for (index, height) in zip(indexes, heights) where height.isFinite {
+            filled[index].elevation = height
+        }
+        return filled
+    }
+}
+
 /// Where the log for this half of the feature goes. File-scoped so the
 /// protocol extension below can reach it without every conformance carrying
 /// one.
 nonisolated private let elevationLogger = Logger(subsystem: "OpenHikes", category: "Community")
 
 nonisolated extension CuratedElevationSourcing {
-    /// `route` with heights on the points that were asked about, or `route`
-    /// exactly as it came when the service could not answer.
+    /// The heights at the points `route` samples down to, or `nil` when the
+    /// service could not answer.
     ///
     /// **A failure here is not a failure of the screen.** A curated hike is a
     /// line, a length, a surface and a difficulty before it is a profile, and
     /// every one of those is already in hand by the time this is asked. So a
     /// refusal, a timeout, a build with no key — all of them draw the hike
     /// without a chart, which is what the screen did before this existed and
-    /// what it still does for a route the service has no data for.
+    /// what it still does for a route the service has no data for. The trail
+    /// maker's header is the same bargain: no figure rather than a wrong one.
     ///
-    /// Non-finite heights are dropped rather than carried: a height that is
-    /// not a number is not a height, and the chart's downsampling compares
-    /// them.
-    func filled(_ route: [RouteCoordinate]) async -> [RouteCoordinate] {
+    /// Two of the refusals are logged at `info` rather than `error`, and that
+    /// is about the second caller. A build with no key and a hiker who is not
+    /// a subscriber are both states this is *designed* to have, and the maker
+    /// asks again every time a drawing settles — so at `error` those two would
+    /// be the loudest thing in the log for an ordinary launch by an ordinary
+    /// hiker, and the refusals worth reading would be buried under them.
+    func samples(of route: [RouteCoordinate]) async -> RouteHeightSamples? {
         let indexes = CuratedElevationRequest.sampleIndexes(count: route.count)
-        guard indexes.count > 1 else { return route }
+        guard indexes.count > 1 else { return nil }
+        let coordinates = indexes.map { route[$0] }
         do {
-            let heights = try await heights(at: indexes.map { route[$0].clCoordinate })
-            var filled = route
-            for (index, height) in zip(indexes, heights) where height.isFinite {
-                filled[index].elevation = height
-            }
-            return filled
+            return RouteHeightSamples(
+                routePointCount: route.count,
+                indexes: indexes,
+                coordinates: coordinates,
+                heights: try await heights(at: coordinates.map(\.clCoordinate))
+            )
+        } catch CuratedElevationFailure.noKey, CuratedElevationFailure.notEntitled {
+            elevationLogger.info("No heights for a route: this launch does not ask for any.")
+            return nil
         } catch {
             elevationLogger.error(
                 """
-                No elevation for a curated route: \(error.localizedDescription, privacy: .public). \
-                The hike is drawn without a chart.
+                No heights for a route: \(error.localizedDescription, privacy: .public). \
+                It is drawn without a profile.
                 """
             )
-            return route
+            return nil
         }
+    }
+
+    /// `route` with heights on the points that were asked about, or `route`
+    /// exactly as it came when the service could not answer.
+    ///
+    /// The whole of what a curated hike wants from one of these: it opens
+    /// once, draws, and has no reason to remember which points carried the
+    /// answer. See ``RouteHeightSamples`` for the caller that does.
+    func filled(_ route: [RouteCoordinate]) async -> [RouteCoordinate] {
+        guard let samples = await samples(of: route) else { return route }
+        return samples.filling(route)
     }
 }
 

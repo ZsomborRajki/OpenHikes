@@ -80,6 +80,14 @@ final class TrailDraftController {
     /// ``TrailPointFinder``.
     let finder: TrailPointFinder
 
+    /// What the line climbs and drops, asked for once the drawing settles.
+    ///
+    /// Held here for the reason the finder is, and it keeps the same bargain:
+    /// nothing it holds is written down or restored, and closing the maker
+    /// forgets all of it. See ``TrailDraftElevation`` for why the question
+    /// waits rather than being asked per tap.
+    let elevation: TrailDraftElevation
+
     /// Whether the map should be offering to make a trail. Observed directly
     /// by ``MapView/Coordinator``, so showing or hiding the pill never
     /// re-renders a view.
@@ -147,15 +155,27 @@ final class TrailDraftController {
 
     @ObservationIgnored private var nextPlaceEditorToken = 0
 
+    /// - Parameters:
+    ///   - elevationSource: where the line's heights come from, or `nil` for a
+    ///     launch that must not ask — a preview, or a suite, since every call
+    ///     is billed. See ``OpenHikesModel/makeTrailElevationSource()``.
+    ///   - elevationPause: the debounce in front of that source, exposed for
+    ///     the reason ``TrailDraftElevation``'s own parameter is.
     init(
         store: TrailDraftStore? = nil,
         router: (any TrailLegRouting)? = nil,
-        placeSource: (any TrailPointSourcing)? = nil
+        placeSource: (any TrailPointSourcing)? = nil,
+        elevationSource: (any CuratedElevationSourcing)? = nil,
+        elevationPause: (@Sendable (TimeInterval) async throws -> Void)? = nil
     ) {
         self.store = store
         self.router = router
-        draft = TrailDraft()
+        let drawing = TrailDraft()
+        draft = drawing
         finder = TrailPointFinder(source: placeSource)
+        elevation = elevationPause.map { pause in
+            TrailDraftElevation(draft: drawing, source: elevationSource, pause: pause)
+        } ?? TrailDraftElevation(draft: drawing, source: elevationSource)
     }
 
     /// Reports whether the sheet has a screen pushed, which is the whole of
@@ -195,6 +215,11 @@ final class TrailDraftController {
         if editing {
             restoreIfNeeded()
             resolveLegs()
+            // A restored draft is a line nobody has measured this launch, and
+            // it is a line the hiker is looking at — so the figure is asked
+            // for on open exactly as it is asked for after an edit, and
+            // arrives a couple of seconds later either way.
+            elevation.drawingDidChange()
         } else {
             // The questions already on the wire are not cancelled — the
             // download behind them is shared with the map and with recording,
@@ -213,6 +238,11 @@ final class TrailDraftController {
             // Nothing on offer is the hiker's, so nothing survives the screen
             // it was offered on — see ``TrailPointFinder/clear()``.
             finder.clear()
+            // Unlike a leg, a height question *is* cancelled on the way out:
+            // there is no shared download behind it and nothing else is
+            // waiting for it, so a request nobody will read is a request worth
+            // dropping. The next open asks again.
+            elevation.clear()
         }
     }
 
@@ -233,7 +263,7 @@ final class TrailDraftController {
     func appendWaypoint(at coordinate: CLLocationCoordinate2D) {
         guard isEditing else { return }
         draft.append(coordinate)
-        commit()
+        commitLine()
         resolveLegs()
     }
 
@@ -248,7 +278,7 @@ final class TrailDraftController {
     func insertWaypoint(at coordinate: CLLocationCoordinate2D, intoLegAt index: Int) {
         guard isEditing else { return }
         draft.insert(coordinate, intoLegAt: index)
-        commit()
+        commitLine()
         resolveLegs()
     }
 
@@ -256,7 +286,7 @@ final class TrailDraftController {
     func removeWaypoints(atOffsets offsets: IndexSet) {
         guard isEditing else { return }
         draft.remove(atOffsets: offsets)
-        commit()
+        commitLine()
         resolveLegs()
     }
 
@@ -264,7 +294,7 @@ final class TrailDraftController {
     func reorderWaypoints(fromOffsets offsets: IndexSet, toOffset destination: Int) {
         guard isEditing else { return }
         draft.moveWaypoints(fromOffsets: offsets, toOffset: destination)
-        commit()
+        commitLine()
         resolveLegs()
     }
 
@@ -275,7 +305,7 @@ final class TrailDraftController {
     func reverse() {
         guard isEditing else { return }
         draft.reverse()
-        commit()
+        commitLine()
         resolveLegs()
     }
 
@@ -283,7 +313,7 @@ final class TrailDraftController {
     func closeTheLoop() {
         guard isEditing else { return }
         draft.closeTheLoop()
-        commit()
+        commitLine()
         resolveLegs()
     }
 
@@ -292,7 +322,7 @@ final class TrailDraftController {
     func clearDrawing() {
         guard isEditing else { return }
         draft.clearDrawing()
-        commit()
+        commitLine()
     }
 
     // MARK: - Places
@@ -421,14 +451,14 @@ final class TrailDraftController {
     func undo() {
         guard isEditing else { return }
         draft.undo()
-        commit()
+        commitLine()
         resolveLegs()
     }
 
     func redo() {
         guard isEditing else { return }
         draft.redo()
-        commit()
+        commitLine()
         resolveLegs()
     }
 
@@ -457,7 +487,7 @@ final class TrailDraftController {
     ///   haptic.
     @discardableResult func endDrag() -> Bool {
         guard draft.endDrag() else { return false }
-        commit()
+        commitLine()
         resolveLegs()
         return true
     }
@@ -478,7 +508,7 @@ final class TrailDraftController {
     func setSnapsToPaths(_ snapping: Bool) {
         guard draft.snapsToPaths != snapping else { return }
         draft.setSnapsToPaths(snapping)
-        commit()
+        commitLine()
         resolveLegs()
     }
 
@@ -495,6 +525,11 @@ final class TrailDraftController {
     func discard() {
         draft.clear()
         store?.clear()
+        // The heights go with the line they were read for. Nothing else would
+        // clear them: the drawing is emptied rather than edited, and an empty
+        // draft is never measured, so a figure left here would be the climb of
+        // a trail that has just been saved or thrown away.
+        elevation.clear()
     }
 
     private func restoreIfNeeded() {
@@ -507,6 +542,20 @@ final class TrailDraftController {
             places: stored.places,
             snapsToPaths: stored.snapsToPaths
         )
+    }
+
+    /// What every edit to the **line** ends with: everything ``commit()``
+    /// does, and the heights asked for again once the drawing settles.
+    ///
+    /// Two methods rather than one, and the split is about a bill. Marking a
+    /// place, renaming it or dragging its pin changes no geometry, so the
+    /// climb is the number it already was — and a hiker marking the six
+    /// springs along a climb would otherwise spend six billed calls being told
+    /// so. Every edit that moves the line goes through here; everything else
+    /// goes through ``commit()``.
+    private func commitLine() {
+        commit()
+        elevation.drawingDidChange()
     }
 
     /// What every edit ends with: the drawing written down, and whatever
@@ -588,6 +637,13 @@ final class TrailDraftController {
     /// the request with it.
     private func receive(_ route: TrailLegRoute?, for ends: TrailLegEnds) {
         legsInFlight.remove(ends)
+        // Either way the line has stopped waiting on this leg, and the climb
+        // is asked for again from the moment it does. A leg given back
+        // unanswered is the same news as one answered, for this purpose: the
+        // drawing has settled by exactly one leg, and the debounce in front of
+        // the question is what folds a run of them into one — see
+        // ``TrailDraftElevation``.
+        defer { elevation.drawingDidChange() }
         guard let route else {
             draft.abandonRouting(of: ends)
             return

@@ -232,9 +232,8 @@ struct TrailDraftView: View {
     /// The points, in the order they were put down, with how far along each
     /// one sits.
     ///
-    /// The header carries the running length, which is the figure a hiker is
-    /// actually watching while they draw — climb joins it once there are
-    /// heights to ask for.
+    /// The header carries the running length and the climb, and it is its own
+    /// `View` for the second of those — see ``TrailDraftLineHeader``.
     @ViewBuilder private var pointsSection: some View {
         Section {
             if draft.waypoints.isEmpty {
@@ -266,13 +265,7 @@ struct TrailDraftView: View {
                 retryRow
             }
         } header: {
-            HStack {
-                Text("Points")
-                Spacer(minLength: 12)
-                Text(Self.length(draft.distanceMeters))
-                    .monospacedDigit()
-                    .accessibilityIdentifier("trail-draft-length")
-            }
+            TrailDraftLineHeader(draft: draft, elevation: maker.elevation)
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
                 // One line for the whole line, saying the worst thing any leg
@@ -377,7 +370,11 @@ struct TrailDraftView: View {
             from: draft,
             named: name.text,
             into: modelContext,
-            madeOn: date
+            madeOn: date,
+            // Whatever the heights were last read for, applied only if they
+            // are still about this line — nothing here waits for an answer
+            // that has not landed. See ``TrailDraftElevation``.
+            heights: maker.elevation.samples
         ) {
         case .saved(let hike):
             maker.discard()
@@ -388,8 +385,4 @@ struct TrailDraftView: View {
         }
     }
 
-    private static func length(_ meters: Double) -> String {
-        Measurement(value: meters, unit: UnitLength.meters)
-            .formatted(.measurement(width: .abbreviated, usage: .road))
-    }
 }

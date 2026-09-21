@@ -2,7 +2,8 @@
 //  TrailDraftFields.swift
 //  OpenHikes
 //
-//  The maker's fields, its snapping switch, its notices and its waypoint row.
+//  The maker's fields, its snapping switch, its notices, its running figures
+//  and its waypoint row.
 //
 //  Each is its own `View` type and that is a render-isolation decision rather
 //  than tidiness: only a `View` is a boundary, so a name typed into a field
@@ -337,6 +338,129 @@ struct TrailDraftNoticeLabel: View {
         }
         .font(.caption)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// What the line is so far: how long, and — once anybody has been able to
+/// measure it — what it climbs and drops.
+///
+/// Its own `View` and this is the one on the screen that most needed to be.
+/// The length changes when the drawing does, so a body carrying it rebuilds
+/// the list of points at exactly the moments that list has to be rebuilt
+/// anyway. The climb does not: it lands a couple of seconds after the hiker
+/// stops, from a task nobody is watching, and a figure read in
+/// ``TrailDraftView``'s body would rebuild every point, every place and every
+/// candidate row to say it. See ``TrailDraftElevation``.
+///
+/// **Nothing at all is drawn where there is no height**, which is a free
+/// hiker's drawn trail, a build with no key and every launch running tests.
+/// That is the same degradation a curated route already has — a line, a
+/// length, and no chart — rather than a prompt for a subscription in the
+/// middle of a drawing.
+struct TrailDraftLineHeader: View {
+    let draft: TrailDraft
+    let elevation: TrailDraftElevation
+
+    var body: some View {
+        // Read once and handed to both layouts below, so the one that is
+        // discarded costs a measurement rather than a second read of an
+        // observable.
+        let climb = elevation.summary
+        let waiting = elevation.isMeasuring
+        let length = Self.length(draft.distanceMeters)
+        // Stacked rather than clipped at the accessibility type sizes, where
+        // three figures and a heading do not fit across a phone. The audit
+        // measures exactly this — see ``AccessibilityUITests``.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                Text("Points")
+                Spacer(minLength: 12)
+                figures(climb, waiting: waiting, length: length)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Points")
+                figures(climb, waiting: waiting, length: length)
+            }
+        }
+        // One element rather than four, and a value rather than four labels,
+        // the rule every composite row here follows — see ``HikeRow``. The
+        // units are spoken in full because "km" and "m" are read out as
+        // letters otherwise; ``HikeFormat/spokenElevation(_:locale:)`` is the
+        // same fix the elevation chart already carries.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Points")
+        .accessibilityValue(
+            Self.spoken(draft.distanceMeters, climb: climb, measuring: waiting)
+        )
+    }
+
+    @ViewBuilder
+    private func figures(
+        _ climb: RouteElevationSummary?,
+        waiting: Bool,
+        length: String
+    ) -> some View {
+        HStack(spacing: 10) {
+            // The same thing the *Search this area* pill's spinner says, in
+            // the slot the answer will land in: a figure is coming. It is on
+            // screen once, after the hiker stops drawing, for as long as one
+            // request takes — never during the drawing itself.
+            if waiting {
+                ProgressView()
+                    #if os(iOS)
+                    .controlSize(.mini)
+                    #endif
+            }
+            if let gain = climb?.gainMeters {
+                Label(Self.height(gain), systemImage: "arrow.up")
+            }
+            if let loss = climb?.lossMeters {
+                Label(Self.height(loss), systemImage: "arrow.down")
+            }
+            Text(length)
+        }
+        .monospacedDigit()
+        .imageScale(.small)
+        .accessibilityIdentifier("trail-draft-length")
+    }
+
+    private static func height(_ meters: Double) -> String {
+        HikeFormat.elevation(Measurement(value: meters, unit: UnitLength.meters))
+    }
+
+    /// The same height with its unit said in full, because "m" is read out as
+    /// a letter otherwise.
+    private static func spokenHeight(_ meters: Double) -> String {
+        HikeFormat.spokenElevation(Measurement(value: meters, unit: UnitLength.meters))
+    }
+
+    private static func length(_ meters: Double) -> String {
+        Measurement(value: meters, unit: UnitLength.meters)
+            .formatted(.measurement(width: .abbreviated, usage: .road))
+    }
+
+    /// The same figures as a sentence, with every unit said in full.
+    ///
+    /// The spinner is a shape and says nothing, so the sentence is where a
+    /// hiker who cannot see it is told a number is on its way.
+    static func spoken(
+        _ meters: Double,
+        climb: RouteElevationSummary?,
+        measuring: Bool = false
+    ) -> String {
+        let length = Measurement(value: meters, unit: UnitLength.meters)
+            .formatted(.measurement(width: .wide, usage: .road))
+        let parts = [
+            length,
+            measuring ? String(localized: "measuring the climb") : nil,
+            climb?.gainMeters.map { gain in
+                String(localized: "\(Self.spokenHeight(gain)) of climb")
+            },
+            climb?.lossMeters.map { loss in
+                String(localized: "\(Self.spokenHeight(loss)) of descent")
+            },
+        ]
+        return parts.compactMap(\.self).joined(separator: ", ")
     }
 }
 
