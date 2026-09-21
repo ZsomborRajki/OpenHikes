@@ -61,6 +61,10 @@ struct MapSheet: View {
     /// Handed down so a pushed hike can draw its photos on the map, and a
     /// tapped pin can push the gallery back. See ``PhotoMapPinController``.
     var photoPins: PhotoMapPinController
+    /// Handed down so the maker's screen can rename, cancel and save the draft
+    /// the map is drawing, and so this view can tell it when it is on top. See
+    /// ``TrailDraftController``.
+    var trailMaker: TrailDraftController
 
     var onImportGPX: (URL) -> Void = { _ in /* no-op default */ }
     /// The document picker failed to produce a file at all.
@@ -242,6 +246,17 @@ struct MapSheet: View {
         .onChange(of: presentation.hasPushedScreen, initial: true) { _, isPushed in
             photoCapture.setHostScreenPresent(isPushed)
             photoPins.setHostScreenPresent(isPushed)
+            // The inverse of the same signal, which is the whole of what keeps
+            // the maker's pill and the camera's out of each other's way — see
+            // ``TrailDraftController``.
+            trailMaker.setHostScreenPresent(isPushed)
+        }
+        // And whether the map is the maker's canvas, which is a narrower
+        // question than "is anything pushed" and has to be asked separately:
+        // pushing a hike over the maker would leave the map taking waypoints
+        // for a screen nobody is looking at.
+        .onChange(of: presentation.isTrailDraftPresented, initial: true) { _, isDrafting in
+            trailMaker.setEditing(isDrafting)
         }
         // Track the sheet's top edge continuously (including during interactive
         // drags) and hand it to the map so it can position the location button.
@@ -472,18 +487,10 @@ struct MapSheet: View {
             pendingSubmissionDestination(pending)
         case let .pendingPhotos(pending):
             pendingPhotosDestination(pending)
+        case .trailDraft:
+            trailDraftDestination
         case .recording:
-            RecordingView(
-                recorder: appModel.hikeRecorder,
-                mapController: mapController,
-                photoCapture: photoCapture,
-                photoPins: photoPins,
-                onSaved: showSavedRecording,
-                onDiscarded: closeDiscardedRecording,
-                onOpenPhoto: { hike, photo in
-                    presentation.path.append(.photo(hike, photo.id))
-                }
-            )
+            recordingDestination
         case let .photo(hike, photoID):
             HikePhotoViewer(
                 hike: hike,
@@ -502,6 +509,54 @@ struct MapSheet: View {
                 onShowOnMap: presentation.makeRoomForTheMap
             )
         }
+    }
+}
+
+// MARK: - The recorder
+
+private extension MapSheet {
+    /// The recording screen.
+    ///
+    /// Its own property for the reason ``trailDraftDestination`` and the two
+    /// reviewer methods below are: the switch they came out of is at the
+    /// length the linter allows, and it reads as a list of destinations rather
+    /// than as the destinations themselves.
+    var recordingDestination: some View {
+        RecordingView(
+            recorder: appModel.hikeRecorder,
+            mapController: mapController,
+            photoCapture: photoCapture,
+            photoPins: photoPins,
+            onSaved: showSavedHike,
+            onDiscarded: closeDiscardedRecording,
+            onOpenPhoto: { hike, photo in
+                presentation.path.append(.photo(hike, photo.id))
+            }
+        )
+    }
+}
+
+// MARK: - The maker
+
+private extension MapSheet {
+    /// The trail maker.
+    ///
+    /// Its own property rather than a case body, for the reason the two
+    /// reviewer destinations below have their own methods: the switch it comes
+    /// out of is at the length the linter allows, and a destination taking
+    /// five arguments is what pushes it past.
+    var trailDraftDestination: some View {
+        TrailDraftView(
+            maker: trailMaker,
+            // The same completer the sheet's own field uses, which the map
+            // feeds its settled region to — see ``SearchCompleter``.
+            completer: completer,
+            mapController: mapController,
+            onCancel: closeTrailDraft,
+            // A drawn trail lands exactly where a saved recording lands:
+            // selected, drawn, and open at its own screen.
+            onSaved: showSavedHike
+        )
     }
 }
 
@@ -751,6 +806,12 @@ private func closeRecording() {
     presentation.path.removeAll { $0 == .recording }
 }
 
+/// Leaves the maker. The draft itself is the maker's to keep or throw away —
+/// this only takes the screen down.
+private func closeTrailDraft() {
+    presentation.path.removeAll { $0 == .trailDraft }
+}
+
 private func closeDiscardedRecording(_ hikeID: UUID?) {
     closeRecording()
     if let hikeID, selectedHike?.id == hikeID {
@@ -759,7 +820,11 @@ private func closeDiscardedRecording(_ hikeID: UUID?) {
     }
 }
 
-private func showSavedRecording(_ hike: Hike) {
+/// Where a hike this app has just written lands: selected, drawn on the map,
+/// and open at its own screen. Shared by a stopped recording and a saved
+/// drawing, because the two produce the same thing and should arrive the same
+/// way.
+private func showSavedHike(_ hike: Hike) {
     selectedHike = hike
     presentation.path = [.hike(hike)]
     presentation.makeRoomForTheMap()

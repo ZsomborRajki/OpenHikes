@@ -187,53 +187,6 @@ struct OpenHikesView: View {
         ).renderedSource
     }
 
-    /// The app's primary surface, built once for both shapes it is drawn in.
-    ///
-    /// The two callbacks are the whole difference: a side panel does not move,
-    /// rests at no detent, and has nothing to report to ``SheetMetrics``.
-    ///
-    /// The camera, the library picker and the weather detail are attached here
-    /// rather than beside the presentation, for the reason the repository
-    /// instructions give under *Present modals from inside the sheet's
-    /// contents*: a view
-    /// can only have one modal up at a time, and in portrait this sheet is
-    /// never taken down, so a picker attached alongside it is never presented
-    /// at all. In landscape there is no sheet and the panel is an ordinary
-    /// overlay — attaching them to the contents is what keeps one answer right
-    /// in both shapes. Same reason the GPX importer hangs off ``MapSheet``.
-    private func mapSheet(
-        onSheetTopChange: @escaping (CGFloat) -> Void = { _ in /* no-op default */ },
-        onSheetDetentCommitted: @escaping (Bool) -> Void = { _ in /* no-op default */ }
-    ) -> some View {
-        MapSheet(
-            selectedHike: $selectedHike,
-            presentation: sheet,
-            highlight: highlight,
-            walkHighlight: walkHighlight,
-            mapController: mapController,
-            photoCapture: photoCapture,
-            photoPins: photoPins,
-            onImportGPX: importGPX,
-            onImportFailed: { importFailure = .file(.unreadable) },
-            onSearchFailed: { failure in searchFailure = failure },
-            onSheetTopChange: onSheetTopChange,
-            onSheetDetentCommitted: onSheetDetentCommitted
-        )
-            .photoCapturePickers(
-                $photoPresentation,
-                onCaptured: attachCapturedPhoto,
-                onPicked: attachPickedPhotos
-            )
-            .weatherDetailSheet(weatherDetail, weather: appModel.weatherManager)
-            .mapScreenAlerts(
-                importFailure: $importFailure,
-                searchFailure: $searchFailure,
-                startupIssue: showingStorageStartupIssue,
-                locationAccess: locationAccessPrompt.isShowingBinding,
-                photoCapture: $photoPresentation
-            )
-    }
-
     var body: some View {
         // Fires on every re-evaluation of this view's body. The observable
         // inputs here are `appModel.weatherManager.state` (a focus change, or
@@ -331,6 +284,7 @@ struct OpenHikesView: View {
             locationAccessPrompt: locationAccessPrompt,
             photoCapture: photoCapture,
             photoPins: photoPins,
+            trailMaker: appModel.trailMaker,
             community: appModel.community,
             searchCompleter: appModel.searchCompleter,
             // Keeps the credit line and the camera pill beside the landscape
@@ -465,6 +419,19 @@ struct OpenHikesView: View {
                 photoPresentation.pickedPhotos = []
                 photoPresentation.showLibraryPicker = true
             }
+            // The same shape, for the pill that shares that slot: the map
+            // posts a token and the push belongs here, because this view owns
+            // the sheet's navigation stack. Assigned rather than appended —
+            // the maker is only ever offered when nothing is pushed, so there
+            // is nothing to push it onto, and an assignment cannot stack a
+            // second copy behind a double tap.
+            .onChange(of: appModel.trailMaker.openRequest) { _, _ in
+                sheet.path = [.trailDraft]
+                // The compact detent is only tall enough for the search field,
+                // and `.large` covers the map the maker is drawn on. See
+                // ``SheetPresentation/makeRoomForTheMap()``.
+                sheet.makeRoomForTheMap()
+            }
             // Re-points map styling, auto-save and background route matching
             // at the new selection. A recording draft still styles its route;
             // `OpenHikesModel` filters it out of the rest.
@@ -539,6 +506,62 @@ struct OpenHikesView: View {
         // other route this app draws is drawn by something that has already
         // asked for the same room. See ``SheetPresentation/makeRoomForTheMap()``.
         if selectedHike != nil { sheet.makeRoomForTheMap() }
+    }
+}
+
+// MARK: - The primary surface
+
+/// The sheet's contents and everything presented over them, kept out of the
+/// view's own body so `type_body_length` measures the screen rather than the
+/// plumbing — the same move the import helpers below made. Same file, so
+/// these still reach the view's `private` state.
+extension OpenHikesView {
+    /// The app's primary surface, built once for both shapes it is drawn in.
+    ///
+    /// The two callbacks are the whole difference: a side panel does not move,
+    /// rests at no detent, and has nothing to report to ``SheetMetrics``.
+    ///
+    /// The camera, the library picker and the weather detail are attached here
+    /// rather than beside the presentation, for the reason the repository
+    /// instructions give under *Present modals from inside the sheet's
+    /// contents*: a view
+    /// can only have one modal up at a time, and in portrait this sheet is
+    /// never taken down, so a picker attached alongside it is never presented
+    /// at all. In landscape there is no sheet and the panel is an ordinary
+    /// overlay — attaching them to the contents is what keeps one answer right
+    /// in both shapes. Same reason the GPX importer hangs off ``MapSheet``.
+    private func mapSheet(
+        onSheetTopChange: @escaping (CGFloat) -> Void = { _ in /* no-op default */ },
+        onSheetDetentCommitted: @escaping (Bool) -> Void = { _ in /* no-op default */ }
+    ) -> some View {
+        MapSheet(
+            selectedHike: $selectedHike,
+            presentation: sheet,
+            highlight: highlight,
+            walkHighlight: walkHighlight,
+            mapController: mapController,
+            photoCapture: photoCapture,
+            photoPins: photoPins,
+            trailMaker: appModel.trailMaker,
+            onImportGPX: importGPX,
+            onImportFailed: { importFailure = .file(.unreadable) },
+            onSearchFailed: { failure in searchFailure = failure },
+            onSheetTopChange: onSheetTopChange,
+            onSheetDetentCommitted: onSheetDetentCommitted
+        )
+            .photoCapturePickers(
+                $photoPresentation,
+                onCaptured: attachCapturedPhoto,
+                onPicked: attachPickedPhotos
+            )
+            .weatherDetailSheet(weatherDetail, weather: appModel.weatherManager)
+            .mapScreenAlerts(
+                importFailure: $importFailure,
+                searchFailure: $searchFailure,
+                startupIssue: showingStorageStartupIssue,
+                locationAccess: locationAccessPrompt.isShowingBinding,
+                photoCapture: $photoPresentation
+            )
     }
 }
 
@@ -815,6 +838,11 @@ struct ImportSelectionGate {
     enum Destination: Equatable {
         case root
         case recording
+        /// The trail maker. Its own case rather than folded into ``root`` for
+        /// the reason ``communityHike(_:)`` has one: a hiker part way through
+        /// drawing a line must not have the map's selection — and the route
+        /// drawn on it — replaced by a GPX arriving from Files.
+        case trailDraft
         case hike(UUID)
         /// A published hike's preview, keyed by its listing.
         ///
@@ -873,6 +901,7 @@ struct ImportSelectionGate {
         switch path.last {
         case nil: .root
         case .some(.recording): .recording
+        case .some(.trailDraft): .trailDraft
         case .some(.hike(let hike)): .hike(hike.id)
         // A photo viewer is a hike's own screen one push further in: an
         // import that arrives while it is open is still landing on the hike

@@ -39,6 +39,10 @@ struct MapCoordinatorTests {
     /// Internal so the photo-pin tests can publish pins to it — see
     /// `MapCoordinatorTests+PhotoPins.swift`.
     let photoPins = PhotoMapPinController()
+    /// Internal so the maker's pill and canvas tests can drive it — see
+    /// `MapCoordinatorTests+TrailDraft.swift`. No store: what those ask about
+    /// is the map, and a draft that is not written down draws the same.
+    let trailMaker = TrailDraftController()
     /// Internal so the line-tap tests can ask what a thumb opened — see
     /// `MapCoordinatorTests+RouteTap.swift`.
     let drawnRouteTap = DrawnRouteTap()
@@ -102,6 +106,7 @@ struct MapCoordinatorTests {
             locationAccessPrompt: locationAccessPrompt,
             photoCapture: photoCapture,
             photoPins: photoPins,
+            trailMaker: trailMaker,
             community: community,
             searchCompleter: searchCompleter,
             sidePanelInset: sidePanelInset

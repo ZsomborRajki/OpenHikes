@@ -7,6 +7,7 @@ That is local-first with one deliberate exception. There is no OpenHikes account
 ## Features
 
 - **GPX import and export.** A downloaded `.gpx` opens straight into the app from Files, AirDrop or any share sheet, with track metadata, route statistics — overall and moving-time average speed side by side, so a long lunch stop does not read as a slow walk — elevation-chart scrubbing, route styling and direction chevrons. The Share button hands a hike back out as GPX 1.1.
+- **Drawing a trail.** Every other trail in the app was drawn somewhere else — a recording is a walk that already happened, a GPX is a file somebody sent, a listing is somebody else's route. This is the one you make: tap the map to put points down, watch the length add up, name it and save. What comes out is an ordinary hike, so it can be walked, styled, exported as GPX and taken offline like any other. Search moves the map while you draw, so finding the valley you meant does not mean leaving what you have drawn, and a half-finished trail survives the app being closed — on this device, which is the only one that has any business holding an unfinished line.
 - **Live recording.** Background location, pause and resume, crash-safe recovery, motion-aware fix handling and barometric elevation fusion.
 - **Recording controls.** Start, pause, resume, stop and check a recording through Siri, Shortcuts or Spotlight, plus a state-aware start/stop control in Control Center.
 - **Trail matching and review.** Bounded live matching against a cached OpenStreetMap walking graph, then a post-recording review where every section the matcher moved or found ambiguous can be kept, handed back to the raw GPS trace, or swapped for an alternative.
@@ -134,7 +135,7 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | Path | Purpose |
 |---|---|
 | `OpenHikes/App/` | App entry point, shared app model, configuration, deep-link routing, root navigation. |
-| `OpenHikes/Hikes/` | Persisted hike model, GPX import and export, route profile, statistics, the surface and difficulty breakdowns, walks along a saved trail and their history, hike screens. |
+| `OpenHikes/Hikes/` | Persisted hike model, GPX import and export, drawing a trail on the map, route profile, statistics, the surface and difficulty breakdowns, walks along a saved trail and their history, hike screens. |
 | `OpenHikes/Recording/` | Live recording, recovery journal, sensors, trail matching, recording UI. |
 | `OpenHikes/Map/` | MapKit bridge, map state, search, location tracking, map rendering. |
 | `OpenHikes/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, overlay rendering. |

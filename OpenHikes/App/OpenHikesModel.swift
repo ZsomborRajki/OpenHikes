@@ -78,6 +78,17 @@ final class OpenHikesModel {
     /// sheet draws its results. A `@State` in either would be rebuilt by the
     /// other's navigation.
     let community: CommunityBrowser
+    /// The trail being drawn, whether the map is offering to draw one, and
+    /// where a half-drawn one is kept.
+    ///
+    /// Owned here rather than by either screen that touches it, for the reason
+    /// ``community`` is: the pill and the canvas are on the map, the maker's
+    /// own screen is inside the sheet, and neither owns the other. A `@State`
+    /// in either would be rebuilt by the other's navigation — and the draft
+    /// has to survive being navigated away from, which is the whole point of
+    /// writing it down. See ``TrailDraftController``.
+    let trailMaker: TrailDraftController
+
     /// Autocomplete for the map sheet's search field.
     ///
     /// Owned here for the same reason ``community`` is, and it is the same two
@@ -165,6 +176,7 @@ final class OpenHikesModel {
             activeRecordingHikeID: { [weak hikeRecorder] in hikeRecorder?.currentHike?.id }
         )
         self.communityTransport = communityTransport
+        trailMaker = Self.makeTrailMaker(container: container)
         watchLink = Self.makeWatchLink(container: container)
         communityBlocks = CommunityBlockList(defaults: defaults)
         community = Self.makeCommunityBrowser(transport: communityTransport, blocks: communityBlocks)

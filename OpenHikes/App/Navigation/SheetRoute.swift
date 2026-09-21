@@ -41,6 +41,10 @@ enum SheetRoute: Hashable {
     /// deleted from inside the viewer doesn't invalidate the route showing it.
     case photo(Hike, UUID)
     case recording
+    /// The trail maker. Carries nothing: the draft it is about lives in
+    /// ``TrailDraftController``, which the map writes into and this screen
+    /// reads, exactly as the recording screen carries no recording.
+    case trailDraft
     /// A finished walk's summary. Carries the walk, whose `hikeID` says which
     /// hike's screens it belongs under — so deleting the hike pops its
     /// summaries with it.
@@ -72,7 +76,7 @@ enum SheetRoute: Hashable {
         // deleted. A community preview — and the gallery over it — is about a
         // hike that is not in the library at all, which is exactly the state a
         // deletion puts one back into.
-        case .communityHike, .communityPhoto, .pendingPhotos, .pendingSubmission, .recording:
+        case .communityHike, .communityPhoto, .pendingPhotos, .pendingSubmission, .recording, .trailDraft:
             false
         }
     }
@@ -111,7 +115,8 @@ enum SheetRoute: Hashable {
     var isCommunityPreview: Bool {
         switch self {
         case .communityHike, .communityPhoto: true
-        case .hike, .pendingPhotos, .pendingSubmission, .photo, .recording, .walk: false
+        case .hike, .pendingPhotos, .pendingSubmission, .photo, .recording, .trailDraft, .walk:
+            false
         }
     }
 
@@ -121,7 +126,8 @@ enum SheetRoute: Hashable {
     var prefersFullHeight: Bool {
         switch self {
         case .communityPhoto, .photo: true
-        case .communityHike, .hike, .pendingPhotos, .pendingSubmission, .recording, .walk: false
+        case .communityHike, .hike, .pendingPhotos, .pendingSubmission, .recording, .trailDraft, .walk:
+            false
         }
     }
 
@@ -135,6 +141,7 @@ enum SheetRoute: Hashable {
         case let (.hike(left), .hike(right)): left == right
         case let (.photo(left, leftPhoto), .photo(right, rightPhoto)): left == right && leftPhoto == rightPhoto
         case (.recording, .recording): true
+        case (.trailDraft, .trailDraft): true
         case let (.walk(left), .walk(right)): left.persistentModelID == right.persistentModelID
         case let (.communityHike(left), .communityHike(right)): left.id == right.id
         // The listing and the page, and deliberately not the photographs: the
@@ -182,6 +189,8 @@ enum SheetRoute: Hashable {
         case let .pendingPhotos(pending):
             hasher.combine(7)
             hasher.combine(pending.id)
+        case .trailDraft:
+            hasher.combine(8)
         }
     }
 }

@@ -135,8 +135,19 @@ final class SheetPresentation {
 
     /// Whether anything at all is pushed over the sheet's root. What the map's
     /// camera pill and photo pins belong to: a screen, any screen, rather than
-    /// a particular one.
+    /// a particular one — and, inverted, what the trail maker's pill is
+    /// offered on, which is the whole of why those two can never both draw.
     private(set) var hasPushedScreen = false
+
+    /// Whether the trail maker is the screen on top, which is when the map is
+    /// its canvas and a tap on it means *put a point here*.
+    ///
+    /// Its own flag beside ``isRecordingPresented`` rather than a reading of
+    /// the path, and derived from the path rather than driven by a push event,
+    /// for the reason that one is: a pop's `onDisappear` arrives only after
+    /// the animation, so a tap during a back navigation would put a point on
+    /// a trail the hiker has just left.
+    private(set) var isTrailDraftPresented = false
 
     /// True at the smallest detent, where only the search field shows. Never
     /// true in a side panel, which has the height for the hikes list whatever
@@ -460,6 +471,8 @@ final class SheetPresentation {
         communityPhotoSelections = communityPhotoSelections.filter { storedPath.contains($0.key) }
         let recording = storedPath.last == .recording
         if isRecordingPresented != recording { isRecordingPresented = recording }
+        let drafting = storedPath.last == .trailDraft
+        if isTrailDraftPresented != drafting { isTrailDraftPresented = drafting }
         let pushed = !storedPath.isEmpty
         if hasPushedScreen != pushed { hasPushedScreen = pushed }
         applyFullHeightPolicy()

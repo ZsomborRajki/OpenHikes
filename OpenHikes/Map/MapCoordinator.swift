@@ -186,6 +186,34 @@ extension MapView {
         /// fade animation over the first one's view.
         var isObservingPhotoControls = false
 
+        // MARK: Trail maker
+        // Stored state for `MapTrailDraftControls.swift` and
+        // `MapTrailDraftOverlay.swift`. The pill takes turns with the camera
+        // one in the same slot above — offered on the inverse signal, so the
+        // two can never both draw — and the line and its numbered pins are
+        // drawn only while the maker's screen is up.
+
+        #if os(iOS)
+        weak var trailDraftControls: MapTrailDraftControlsView?
+        #endif
+        /// The same pair of constraints the camera pill has, against the same
+        /// two anchors — a constraint belongs to one view, so the slot is
+        /// shared by building it twice rather than by handing one over. See
+        /// ``applyCreditLineClearance()``.
+        var trailDraftAboveCreditLine: NSLayoutConstraint?
+        var trailDraftWithoutCreditLine: NSLayoutConstraint?
+        weak var trailDraftController: TrailDraftController?
+        /// Guards `observeTrailDraftControls` for the reason the flag above
+        /// guards its own — a second registration can never be cancelled.
+        var isObservingTrailDraftControls = false
+        /// The same, for the line and the pins.
+        var isObservingTrailDraft = false
+        var trailDraftOverlay: MKPolyline?
+        var trailDraftAnnotations: [TrailDraftWaypointAnnotation] = []
+        /// What the draft's overlay currently corresponds to, so a republish
+        /// of the same points removes and re-adds nothing.
+        var trailDraftCoordinates: [CLLocationCoordinate2D] = []
+
         // MARK: Photo pins
         // Stored state for `MapPhotoAnnotations.swift`, which owns everything
         // that reads it: the markers standing where this hike's photos were
@@ -686,6 +714,9 @@ extension MapView.Coordinator {
         if let communityPhoto = annotation as? CommunityPhotoMapAnnotation {
             return communityPhotoAnnotationView(for: communityPhoto, on: mapView)
         }
+        if let waypoint = annotation as? TrailDraftWaypointAnnotation {
+            return trailDraftAnnotationView(for: waypoint, on: mapView)
+        }
 
         let identifier = "routeHighlight"
         let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
@@ -797,6 +828,10 @@ extension MapView.Coordinator {
             // route: a shared hike's line is not it and must not be drawn in
             // the colour and width they chose for theirs.
             if let renderer = communityRouteRenderer(for: polyline) {
+                return renderer
+            }
+            // And the trail being drawn, which is not a hike at all yet.
+            if let renderer = trailDraftRenderer(for: polyline) {
                 return renderer
             }
             if recordingReviewOverlay === polyline {

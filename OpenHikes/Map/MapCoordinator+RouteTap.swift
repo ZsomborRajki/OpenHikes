@@ -127,7 +127,16 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         guard recognizer.state == .ended,
               let mapView = recognizer.view as? MKMapView
         else { return }
-        let target = routeTapTarget(at: recognizer.location(in: mapView), in: mapView)
+        let point = recognizer.location(in: mapView)
+        // **While the maker is up, a tap on the map means one thing.** Every
+        // other meaning this recognizer carries — the hiker's own line, a
+        // shared hike's — is suspended, because a tap that put a point down
+        // *and* opened somebody's trail would be a tap that did two things,
+        // and the one thing it is for is the one the hiker came here to do.
+        // The controls above the map keep their claim: `addTrailDraftWaypoint`
+        // asks the same question `routeTapTarget(at:in:)` asks first.
+        if addTrailDraftWaypoint(at: point, in: mapView) { return }
+        let target = routeTapTarget(at: point, in: mapView)
         // Only a hit. A tap that landed on open map is not a failed gesture —
         // it is panning, or nothing at all — and answering it would make the
         // whole map buzz under a finger.
@@ -137,6 +146,40 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         case let .communityListing(listing): community?.open(listing)
         case nil: break
         }
+    }
+
+    /// Puts a waypoint down where a tap landed, while the maker is up.
+    ///
+    /// - Returns: whether the tap was spent here, which is what tells the
+    ///   handler above to stop asking what else it could have meant.
+    ///
+    /// Split from the handler for the reason ``routeTapTarget(at:in:)`` is:
+    /// a `UITapGestureRecognizer`'s state and location are set by the touch
+    /// system and cannot be driven by a suite, so what is worth asserting on
+    /// has to be reachable without one.
+    ///
+    /// A tap that landed on something over the map is not a waypoint. The
+    /// tracking button, the credit line and the pill that opened this mode all
+    /// sit on the canvas, and a thumb on one of them must not leave a point
+    /// behind it.
+    ///
+    /// **Markers are among those things, deliberately.** What this suspends is
+    /// the *canvas* — the lines, which are drawn pixels with no view behind
+    /// them and are reached only through this recognizer. An `MKAnnotationView`
+    /// is a view with its own touches, and ``isTapClaimed(at:in:)`` has always
+    /// given it the tap; a shared hike's pin therefore still opens its callout
+    /// while a trail is being drawn, and the callout's accessory still opens
+    /// the hike. That is a second deliberate tap rather than a stray one, the
+    /// maker keeps its draft underneath and Back returns to it — and somebody
+    /// planning a walk has a real use for reading the waymarked route beside
+    /// the line they are drawing. The hiker's own photo pins cannot be there
+    /// at all: like the camera pill, they are offered only by a screen that
+    /// attaches a subject, and the maker attaches none.
+    func addTrailDraftWaypoint(at point: CGPoint, in mapView: MKMapView) -> Bool {
+        guard let trailDraftController, trailDraftController.isEditing else { return false }
+        guard !isTapClaimed(at: point, in: mapView) else { return false }
+        trailDraftController.appendWaypoint(at: mapView.convert(point, toCoordinateFrom: mapView))
+        return true
     }
 
     /// The line a tap at `point` landed on, if any.
@@ -186,19 +229,19 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
 
     /// Whether something on top of the map has a better claim to this tap.
     ///
-    /// A marker, a callout, the tracking button, the camera pill, *Search this
-    /// area*, the credit line — all of them are views, all of them sit over the
-    /// lines, and a tap that opens a hike *as well as* pressing a button is
-    /// a tap that did two things. A recognizer on the map view sees those
-    /// touches whatever the view under them does with them, so this is the
-    /// whole of what stops it.
+    /// A marker, a callout, the tracking button, the camera pill, the maker's
+    /// pill, *Search this area*, the credit line — all of them are views, all
+    /// of them sit over the lines, and a tap that opens a hike *as well as*
+    /// pressing a button is a tap that did two things. A recognizer on the map
+    /// view sees those touches whatever the view under them does with them, so
+    /// this is the whole of what stops it.
     ///
     /// The walk up the hierarchy rather than a test of the hit view alone is
     /// because every one of these is a tree: what a tap actually lands on is a
     /// label inside a button inside an annotation view.
     ///
-    /// The four named views are named because none of them is a `UIControl` —
-    /// `MKUserTrackingButton` is a plain `UIView`, and the other three are this
+    /// The named views are named because none of them is a `UIControl` —
+    /// `MKUserTrackingButton` is a plain `UIView`, and the rest are this
     /// app's own containers with the buttons *inside* them. Testing for
     /// `UIControl` alone would let a tap on the padding around a button through
     /// while catching the button itself, which is the sort of difference
@@ -220,6 +263,7 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         if view === trackingButton || view === areaSearchControl { return true }
         #if os(iOS)
         if view === photoControls || view === attributionView { return true }
+        if view === trailDraftControls { return true }
         #endif
         return false
     }
