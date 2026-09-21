@@ -77,9 +77,11 @@ struct HikeListMetricsTests {
     ///
     /// Not named `saved`, which is what the callers below call their results:
     /// a local of the same name shadows this inside its own initializer, and
-    /// Xcode 26.6 on CI reads `saved(…)` as a call on the `Hike` being bound
-    /// rather than on this. It compiles locally on 27 and fails there — see
-    /// the toolchain note in the repository instructions.
+    /// Xcode 26.6 reads `saved(…)` as a call on the `Hike` being bound rather
+    /// than on this, where 27 resolves it here. CI ran 26.6 when that was
+    /// found and runs 27 now, so the name is no longer load-bearing — it stays
+    /// because a helper that says what it fetches beats one that collides with
+    /// every caller's local.
     private func refetched(_ hikeID: UUID, in container: ModelContainer) -> Hike? {
         let context = ModelContext(container)
         var descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })

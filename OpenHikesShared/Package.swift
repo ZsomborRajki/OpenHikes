@@ -12,7 +12,7 @@ import PackageDescription
 /// are named at the same level for a weaker reason: nothing builds them today
 /// (see the `canImport` guards in the sources), but if one ever does it
 /// should start where the app already is. `swift test` runs the suite on the
-/// macOS host, which CI pins to `macos-26`.
+/// macOS host, which CI pins to the `xcode-27` runner image.
 let package = Package(
     name: "OpenHikesShared",
     platforms: [

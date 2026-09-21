@@ -28,6 +28,17 @@ concurrency:
 permissions:
   contents: read
 
+# Deliberately still Xcode 26.6 on `macos-26`, where `ci.yml` has moved to
+# Xcode 27.0 on the `xcode-27` image. This is not drift: CodeQL's Swift
+# extractor analyses up to Swift 6.3.3 (`codeql/swift-all` 6.8.0, in bundle
+# 2.27.0, which is what the pinned action downloads) and Xcode 27 ships Swift
+# 6.4, so an extractor on the newer image has nothing to extract with. Xcode
+# 26.6 is the newest Swift the analysis can actually read, which makes it the
+# right pin for *this* job and the wrong one for every job in `ci.yml`.
+#
+# Move this to `xcode-27` and drop these lines once a bundle announces Swift
+# 6.4 in `swift/ql/lib/CHANGELOG.md`; until then the two workflows disagree on
+# purpose, and only this file's build compiles the app on 26.6.
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
 
@@ -48,8 +59,9 @@ jobs:
     # takes, for the same reason. CodeQL's Swift extractor tracks specific
     # Swift versions (2.26.2 added 6.3.3, which is what Xcode 26.6 ships), so a
     # runner-image Xcode bump can outrun the bundle and produce a red run that
-    # says nothing about this code. Drop this line once the job has been green
-    # across a few runs and the pairing is known to hold.
+    # says nothing about this code — which is exactly why the pin above did not
+    # follow ci.yml onto Xcode 27. Keep this line while that gap is open: it is
+    # what makes the pin a considered lag rather than a bet.
     continue-on-error: true
     permissions:
       contents: read

@@ -12,7 +12,7 @@
 # on the pull request.
 #
 # It is used rather than depended on. xcbeautify 3.2.1 ships preinstalled on
-# the `macos-26` runner image and is the version Homebrew installs today, so
+# the `xcode-27` runner image and is the version Homebrew installs today, so
 # local and CI output match — but a machine without it still gets the previous
 # grep behaviour rather than an error, because formatting text is not the
 # script's job.
