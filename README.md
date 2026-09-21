@@ -25,9 +25,11 @@ That is local-first with one deliberate exception. There is no OpenHikes account
 
 ## Requirements
 
-- Xcode 26.5 or later — development is on Xcode 27. Every target deploys to
-  iOS 26.0, which is also what `OpenHikesShared/Package.swift` declares; CI
-  builds on Xcode 26.6.
+- Xcode 26.5 or later — development is on Xcode 27, and so is CI, which
+  builds on Xcode 27.0 (`27A266a`). Every target deploys to iOS 26.0, which is
+  also what `OpenHikesShared/Package.swift` declares. The CodeQL workflow is
+  the one exception and still builds on Xcode 26.6, because CodeQL's Swift
+  extractor does not read Swift 6.4 yet.
 - An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container, the push and Time Sensitive Notifications entitlements and HealthKit.
 - iPhone, plus an optional Apple Watch app. The phone targets set
   `TARGETED_DEVICE_FAMILY = 1`; `OpenHikesWatch` sets `4` and deploys to
@@ -108,7 +110,7 @@ Scripts/run-script-tests.sh
 
 Against a cold simulator, `xcodebuild test` fails with "The test runner hung before establishing connection" after several minutes without a single test having reported — which is why the boot is the first line above rather than an optional one.
 
-The device name is the one thing these commands do not share with CI. `iPhone 18 Pro` is the Pro model an iOS 27 runtime ships, so an Xcode 26 install has no such simulator: name whichever device your own runtimes do have, which is what `.github/workflows/ci.yml` does when it pins `iPhone 17 Pro` for its Xcode 26.6 runner image.
+These commands name the same device CI does. `iPhone 18 Pro` is the Pro model an iOS 27 runtime ships, and `.github/workflows/ci.yml` names it too, on a runner image that carries the same Xcode 27.0 build as a current local install. On an Xcode 26 install there is no such simulator — name whichever device your own runtimes do have.
 
 Unit and integration tests use Swift Testing; `OpenHikesUITests` uses XCUITest, because Apple's UI automation and launch metrics are not available through Swift Testing.
 

@@ -14,10 +14,27 @@ concurrency:
 permissions:
   contents: read
 
+# The runner image is `xcode-27` rather than `macos-26`, and that is what
+# makes the three values below match a development machine exactly. `macos-26`
+# tops out at Xcode 26.6, so for as long as this workflow ran there, CI
+# compiled the project with a different Swift than anybody who works on it —
+# see *Build and test* in `.github/copilot-instructions.md` for what that cost.
+# `xcode-27` carries Xcode 27.0 build 27A266a, the same build as a current
+# local install, and iOS 27.0 runtimes, whose Pro model is `iPhone 18 Pro`.
+#
+# DEVELOPER_DIR names the versioned symlink and not the real directory, which
+# on this image is `/Applications/Xcode_27_Release_Candidate.app` and will be
+# renamed under us the day the image rebuilds on a released Xcode.
+# `.github/actions/verify-xcode` turns a pin this image does not have into one
+# readable error instead of a deep build-log failure in every job.
+#
+# The image is a *preview* one: GitHub warns of both instability and queueing
+# while its capacity is balanced. That is an accepted cost here, and the way
+# back is this block plus the `runs-on:` lines below.
 env:
-  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
-  IOS_SIMULATOR: iPhone 17 Pro
-  IOS_DESTINATION: platform=iOS Simulator,name=iPhone 17 Pro
+  DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+  IOS_SIMULATOR: iPhone 18 Pro
+  IOS_DESTINATION: platform=iOS Simulator,name=iPhone 18 Pro
 
 jobs:
   # Seven jobs below can fail this workflow — `quality`, `unit-tests`, the two
@@ -104,7 +121,7 @@ jobs:
     name: Lint and shared package
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -210,7 +227,7 @@ jobs:
     name: App and widget tests
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -334,7 +351,7 @@ jobs:
     name: ${{ matrix.name }}
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -400,7 +417,7 @@ jobs:
     name: Unsigned iOS archive
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -492,7 +509,7 @@ jobs:
     name: Thread sanitizer
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -743,7 +760,7 @@ jobs:
     name: Accessibility UI tests
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 45
     # Gating. The trial this job was admitted on ran from 2026-08-15 to
     # 2026-09-06 and produced 192 completed runs with zero failures, at the
