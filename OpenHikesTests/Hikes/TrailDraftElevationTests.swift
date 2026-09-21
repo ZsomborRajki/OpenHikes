@@ -191,7 +191,7 @@ struct TrailDraftElevationTests {
         elevation.drawingDidChange()
         await Self.measured(elevation, by: source)
 
-        let filled = elevation.filling(draft.routeCoordinates)
+        let filled = elevation.samples?.filling(draft.routeCoordinates) ?? []
         #expect(filled.compactMap(\.elevation) == Heights.all)
     }
 
@@ -281,10 +281,11 @@ struct TrailDraftElevationTests {
         elevation.clear()
 
         #expect(elevation.summary == nil)
-        #expect(elevation.samples == nil)
         #expect(!elevation.isMeasuring)
-        let unfilled = elevation.filling(draft.routeCoordinates)
-        #expect(unfilled.compactMap(\.elevation).isEmpty)
+        #expect(
+            elevation.samples == nil,
+            "and there is nothing left for a save to put on the line"
+        )
     }
 
     /// A refusal is a length and no climb, which is what a free hiker's drawn
