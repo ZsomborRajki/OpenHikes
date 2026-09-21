@@ -56,6 +56,21 @@ nonisolated struct TrailLegEnds: Hashable, Sendable {
         self.end = end.routeCoordinate
     }
 
+    init(start: RouteCoordinate, end: RouteCoordinate) {
+        self.start = start
+        self.end = end
+    }
+
+    /// The same two places, the other way round.
+    ///
+    /// A walking path between two points is the same path whichever way it is
+    /// walked, which is what lets ``TrailDraft/reverse()`` turn a whole trail
+    /// round without asking OpenStreetMap anything. The pair is still ordered,
+    /// and deliberately: a leg's stored shape runs from its start to its end,
+    /// so a key that ignored direction would hand a reversed leg a shape drawn
+    /// backwards.
+    var flipped: Self { Self(start: end, end: start) }
+
     var startCoordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: start.latitude, longitude: start.longitude)
     }
@@ -207,6 +222,24 @@ nonisolated struct TrailLeg: Identifiable, Equatable, Sendable {
     /// hiker is looking at.
     var distanceMeters: Double
     var snap: TrailLegSnap
+
+    /// The same leg, walked the other way.
+    ///
+    /// The shape reversed and the two ends swapped, so a reversed trail is
+    /// drawn from the geometry it already has rather than asked for again —
+    /// see ``TrailDraft/reverse()``. The length and the state are properties
+    /// of the stretch rather than of the direction, so both survive; the
+    /// identity does not, because a leg is named by the waypoint it arrives at
+    /// and that is the other one now. `rebuildLegs` retargets it.
+    func flipped() -> Self {
+        Self(
+            id: id,
+            ends: ends.flipped,
+            coordinates: coordinates.reversed(),
+            distanceMeters: distanceMeters,
+            snap: snap
+        )
+    }
 
     /// A leg that follows nothing yet.
     ///

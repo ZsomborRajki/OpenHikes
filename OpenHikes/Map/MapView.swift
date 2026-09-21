@@ -214,6 +214,11 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.observeCommunityRoutes(community, on: mapView)
         #if canImport(UIKit)
         coordinator.installRouteTap(on: mapView)
+        // And the press that moves a point already down. A separate
+        // recognizer rather than more of the one above, because it answers a
+        // different gesture and begins only over one of the maker's own pins —
+        // see `MapTrailDraftDrag.swift`.
+        coordinator.installTrailDraftDrag(on: mapView)
         #endif
 
         // Raster tiles from the selected provider, replacing Apple's base map.

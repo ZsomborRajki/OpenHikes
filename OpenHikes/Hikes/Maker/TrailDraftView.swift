@@ -27,6 +27,7 @@
 //  declaring the environment value here would have cost.
 //
 
+import OpenHikesShared
 import SwiftData
 import SwiftUI
 
@@ -49,6 +50,16 @@ struct TrailDraftView: View {
     /// ``TrailDraftSave`` is asked by more than a button.
     @State private var refusal: TrailDraftRefusal?
     @State private var isConfirmingCancel = false
+    /// *Clear* is the one edit that asks first — see ``TrailDraftActionsMenu``
+    /// for why it is the only one.
+    @State private var isConfirmingClear = false
+    /// Whether the points are being rearranged.
+    ///
+    /// A `List` reorders only while this is `.active`, and a long press on a
+    /// row does nothing without it — both found the hard way on the hikes
+    /// list, and both recorded there. The way out is in the toolbar rather
+    /// than in the list, because in edit mode a row's tap belongs to the list.
+    @State private var editMode: EditMode = .inactive
     /// When the hiker asked to save, and `nil` whenever they have not.
     ///
     /// A date rather than a flag because it is also *the* date: the trail is
@@ -84,6 +95,10 @@ struct TrailDraftView: View {
 
             pointsSection
         }
+        // Reordering is the operation the list earns its place with, and a
+        // `List` offers it only while this is `.active` — a long press and a
+        // drag do nothing without it. See ``TrailDraftActionsMenu``.
+        .environment(\.editMode, $editMode)
         // On the screen's root, and that is the point of it rather than a
         // placement: a `List` is lazy, so the same pair on the search field's
         // own `Section` runs when that section scrolls out of view — and a
@@ -101,6 +116,11 @@ struct TrailDraftView: View {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel", role: .cancel, action: cancel)
                     .accessibilityIdentifier("trail-draft-cancel")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                TrailDraftActionsMenu(maker: maker, editMode: $editMode) {
+                    isConfirmingClear = true
+                }
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save", action: startNaming)
@@ -124,6 +144,19 @@ struct TrailDraftView: View {
             Button("Keep Drawing", role: .cancel) { /* stays */ }
         } message: {
             Text("The points you've put down will be deleted.")
+        }
+        // The one edit that asks. Inside this screen for the same reason the
+        // dialog above is — see ``TrailDraftActionsMenu`` for why *Clear* is
+        // the only one of the seven that gets a question.
+        .confirmationDialog(
+            "Clear this trail?",
+            isPresented: $isConfirmingClear,
+            titleVisibility: .visible
+        ) {
+            Button("Clear", role: .destructive, action: maker.clearDrawing)
+            Button("Keep Drawing", role: .cancel) { /* stays */ }
+        } message: {
+            Text("The points will be removed. You can undo this.")
         }
         .alert(
             "Name Your Trail",
@@ -175,6 +208,18 @@ struct TrailDraftView: View {
                         // row never has one: nothing arrives at it.
                         legNotice: draft.leg(arrivingAtWaypointAt: index)?.snap.notice
                     )
+                    .trailDraftReorderMenu($editMode)
+                }
+                // The two gestures a list already has a meaning for, and both
+                // of them go through the controller — the drawing has to be
+                // written down and the legs either side of what moved have to
+                // be asked about again.
+                .onMove { offsets, destination in
+                    HapticMoment.rowMoved.play()
+                    maker.reorderWaypoints(fromOffsets: offsets, toOffset: destination)
+                }
+                .onDelete { offsets in
+                    maker.removeWaypoints(atOffsets: offsets)
                 }
                 retryRow
             }
@@ -187,12 +232,27 @@ struct TrailDraftView: View {
                     .accessibilityIdentifier("trail-draft-length")
             }
         } footer: {
-            // One line for the whole line, saying the worst thing any leg has
-            // to report — see ``TrailDraft/notice``. The per-leg sentence is
-            // on the row it belongs to; this is what a hiker who has not
-            // scrolled sees.
-            if let notice = draft.notice {
-                TrailDraftNoticeLabel(notice: notice)
+            VStack(alignment: .leading, spacing: 6) {
+                // One line for the whole line, saying the worst thing any leg
+                // has to report — see ``TrailDraft/notice``. The per-leg
+                // sentence is on the row it belongs to; this is what a hiker
+                // who has not scrolled sees.
+                if let notice = draft.notice {
+                    TrailDraftNoticeLabel(notice: notice)
+                }
+                // The two gestures on the map that nothing on screen could
+                // otherwise announce. Both are discoverable only by being
+                // told: a leg looks like a drawing rather than a control, and
+                // a pin that answers a press but not a tap advertises
+                // nothing. Withheld until there is a line to do either to.
+                if !draft.legs.isEmpty {
+                    Text(
+                        """
+                        Tap a leg to add a point in the middle. \
+                        Press and hold a point to move it.
+                        """
+                    )
+                }
             }
         }
     }

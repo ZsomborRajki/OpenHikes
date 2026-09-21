@@ -36,6 +36,22 @@
 //    these two points, or Overpass refused. The line is real and saveable; it
 //    just is not following anything.
 //
+//  ## A drag is the one thing that is not rebuilt wholesale
+//
+//  Everything else here throws every pin and every polyline away and puts them
+//  back, because everything else happens when a hiker taps or when an answer
+//  lands — a few dozen objects, a few times a minute. A point under a finger
+//  moves at display rate, and removing and re-adding a pin sixty times a
+//  second is a pin that flickers.
+//
+//  So while ``TrailDraft/drag`` is set, one pin's `coordinate` is assigned —
+//  MapKit moves its view for free — and the one or two legs that point is an
+//  end of are replaced with straight rubber bands. Every other line, every
+//  other pin and the whole of the sheet below are untouched, and the wholesale
+//  rebuild happens once, when the finger lifts and the drawing changes. That
+//  is what ``MapView/Coordinator/trailDraftOverlays`` being **one polyline per
+//  leg, in leg order** is for: the drag reaches its two lines by index.
+//
 //  Applied imperatively off ``TrailDraft``, like every other overlay here, so
 //  a tap that adds a point moves MapKit and no SwiftUI view.
 //
@@ -50,7 +66,11 @@ import UIKit
 final class TrailDraftWaypointAnnotation: NSObject, MKAnnotation {
     static let reuseIdentifier = "trailDraftWaypoint"
 
-    @objc dynamic let coordinate: CLLocationCoordinate2D
+    /// `var` since Phase 3, and only for the drag: MapKit moves an
+    /// annotation's view when this changes, so a point under a finger follows
+    /// it without the pin being removed and added again sixty times a second.
+    /// Every other change to where a point is goes through a rebuild.
+    @objc dynamic var coordinate: CLLocationCoordinate2D
     /// One-based, because it is read by a person rather than indexed by code.
     let number: Int
 
@@ -97,6 +117,11 @@ extension MapView.Coordinator {
             _ = controller.isEditing
             _ = controller.draft.waypoints
             _ = controller.draft.legs
+            // The drag's observed half, and the only one: the coordinate under
+            // the finger is deliberately untracked, so a point being moved
+            // publishes one `Int` per frame and nothing that reads it is a
+            // SwiftUI body. See ``TrailDraft``.
+            _ = controller.draft.dragRevision
         } onChange: { coordinator, map, model in
             coordinator.trackTrailDraft(model, on: map)
         }
@@ -114,10 +139,23 @@ extension MapView.Coordinator {
         let isDrawing = controller.isEditing
         let legs = isDrawing ? controller.draft.legs : []
         let points = isDrawing ? controller.draft.coordinates : []
+        let held = isDrawing ? controller.draft.drag : nil
+        let snapping = controller.draft.snapsToPaths
         guard legs != trailDraftLegs
-            || !Self.isSameDraft(points, as: trailDraftCoordinates) else { return }
+            || !Self.isSameDraft(points, as: trailDraftCoordinates) else {
+            // Nothing has been committed, so this pass is a finger moving. The
+            // whole of what that costs is one pin's coordinate and at most two
+            // polylines — see ``applyTrailDraftDrag(_:snapping:on:)``.
+            applyTrailDraftDrag(held, snapping: snapping, on: mapView)
+            return
+        }
         trailDraftLegs = legs
         trailDraftCoordinates = points
+        // Whatever was bent is about to be drawn again from the committed
+        // geometry, so nothing is held as far as the map is concerned. Cleared
+        // before the rebuild rather than after it, or the call at the foot of
+        // this method would think it had nothing to do.
+        trailDraftDrag = nil
 
         if !trailDraftOverlays.isEmpty {
             mapView.removeOverlays(trailDraftOverlays)
@@ -136,6 +174,114 @@ extension MapView.Coordinator {
         }
         trailDraftAnnotations = pins
         mapView.addAnnotations(pins)
+        // A drag that is still held across a commit: an answer for another leg
+        // can land while a finger is down, and the rebuild above has just
+        // drawn that point where the draft still says it is.
+        applyTrailDraftDrag(held, snapping: snapping, on: mapView)
+    }
+
+    /// Moves one pin and reshapes the one or two legs it is an end of.
+    ///
+    /// The whole of what a drag costs per frame, and the reason ``TrailDraft``
+    /// keeps the moving coordinate off its published properties. A point in
+    /// the middle of a trail bends two legs, the first and last points bend
+    /// one, and every other leg, every other pin and the entire sheet below
+    /// are untouched.
+    ///
+    /// The bent legs are drawn straight and provisional: straight because the
+    /// shape they will take is a question for OpenStreetMap that is not worth
+    /// asking sixty times a second, and provisional — the same short dash a
+    /// leg waiting for an answer wears — because that is what they are about
+    /// to become. With path-following switched off there is no answer coming,
+    /// so they are drawn as the settled freehand lines they already are.
+    private func applyTrailDraftDrag(
+        _ held: TrailWaypointDrag?,
+        snapping: Bool,
+        on mapView: MKMapView
+    ) {
+        guard held != trailDraftDrag else { return }
+        let released = trailDraftDrag
+        trailDraftDrag = held
+
+        if let released, released.index != held?.index,
+           trailDraftCoordinates.indices.contains(released.index) {
+            movePin(released.index, to: trailDraftCoordinates[released.index])
+        }
+        if let held {
+            movePin(held.index, to: held.clCoordinate)
+        }
+
+        var bent: Set<Int> = []
+        if let released { bent.formUnion(released.adjacentLegIndices) }
+        if let held { bent.formUnion(held.adjacentLegIndices) }
+        for legIndex in bent.sorted() {
+            reshapeTrailDraftLeg(legIndex, held: held, snapping: snapping, on: mapView)
+        }
+    }
+
+    /// Puts one pin where it should be, which MapKit answers by moving its
+    /// view. Ignores an index the map no longer has — a commit can take the
+    /// point away between the drag being released and this running.
+    private func movePin(_ index: Int, to coordinate: CLLocationCoordinate2D) {
+        guard trailDraftAnnotations.indices.contains(index) else { return }
+        trailDraftAnnotations[index].coordinate = coordinate
+    }
+
+    /// Redraws one leg, bent to the held point or back to its settled shape.
+    ///
+    /// A polyline's points cannot be changed once it exists, so this is a
+    /// remove and an add — which is what MapKit's own moving overlays cost and
+    /// what the recording's tail already pays once per fix.
+    private func reshapeTrailDraftLeg(
+        _ index: Int,
+        held: TrailWaypointDrag?,
+        snapping: Bool,
+        on mapView: MKMapView
+    ) {
+        guard trailDraftOverlays.indices.contains(index),
+              trailDraftLegs.indices.contains(index) else { return }
+        let leg = trailDraftLegs[index]
+        let bent = held.map { moving in
+            Self.rubberBand(forLegAt: index, held: moving, between: trailDraftCoordinates)
+        } ?? []
+        let coordinates = bent.isEmpty
+            ? leg.coordinates.map { point in
+                CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
+            }
+            : bent
+        let snap: TrailLegSnap = if bent.isEmpty {
+            leg.snap
+        } else {
+            snapping ? .routing : .freehand
+        }
+
+        let previous = trailDraftOverlays[index]
+        mapView.removeOverlay(previous)
+        trailDraftLegStyles[ObjectIdentifier(previous)] = nil
+        let line = MKPolyline(coordinates: coordinates, count: coordinates.count)
+        trailDraftOverlays[index] = line
+        trailDraftLegStyles[ObjectIdentifier(line)] = snap
+        mapView.addOverlay(line, level: .aboveLabels)
+    }
+
+    /// The straight line leg `index` takes while `held` is being moved, and
+    /// **empty** when that leg is not one of its two.
+    ///
+    /// Leg *n* runs from point *n* to point *n + 1*, so the held point is
+    /// substituted into whichever end it is and the other end stays where the
+    /// draft has it.
+    private static func rubberBand(
+        forLegAt index: Int,
+        held: TrailWaypointDrag,
+        between points: [CLLocationCoordinate2D]
+    ) -> [CLLocationCoordinate2D] {
+        guard held.adjacentLegIndices.contains(index),
+              points.indices.contains(index),
+              points.indices.contains(index + 1) else { return [] }
+        return [
+            held.index == index ? held.clCoordinate : points[index],
+            held.index == index + 1 ? held.clCoordinate : points[index + 1],
+        ]
     }
 
     /// One polyline per leg, each remembering the state it should be drawn in.
@@ -146,10 +292,20 @@ extension MapView.Coordinator {
     /// rather than faint — see ``MapCommunityRoutes``.
     private func addTrailDraftLegs(_ legs: [TrailLeg], to mapView: MKMapView) {
         for leg in legs {
-            let coordinates = leg.coordinates.map { point in
+            // **One polyline per leg, always, and in the same order.** A drag
+            // reshapes the two lines either side of a point by index, so a leg
+            // that quietly contributed nothing here would shift every line
+            // after it onto the wrong leg. A shape that has collapsed to a
+            // single coordinate — two waypoints dropped on one spot, or a
+            // routed answer deduplicated down to a point — falls back to the
+            // straight line between the leg's ends, which is the degenerate
+            // line it is rather than no line at all.
+            var coordinates = leg.coordinates.map { point in
                 CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
             }
-            guard coordinates.count > 1 else { continue }
+            if coordinates.count < 2 {
+                coordinates = [leg.ends.startCoordinate, leg.ends.endCoordinate]
+            }
             let line = MKPolyline(coordinates: coordinates, count: coordinates.count)
             trailDraftOverlays.append(line)
             // Kept beside the overlay rather than on a subclass of it, so the
