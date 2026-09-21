@@ -181,8 +181,27 @@ extension OpenHikesModel {
             store: TrailDraftStore(context: container.mainContext),
             router: trailGraphProvider.map { provider in
                 OverpassTrailLegRouter(provider: provider)
-            }
+            },
+            placeSource: Self.makeTrailPointSource()
         )
+    }
+
+    /// Where the maker's *Search this area* asks, or `nil` for a launch that
+    /// must not ask anything.
+    ///
+    /// Guarded on ``AppLaunchEnvironment/isRunningTests`` exactly as
+    /// ``makeCommunityTransport()`` is, and for the harder half of the same
+    /// reason: this one reaches a **volunteer-run** public API that hands out
+    /// a handful of slots per address, so a suite that fell into it would be
+    /// spending a real hiker's quota to assert on a stub's worth of rows.
+    ///
+    /// The `nil` is not a stub and is not a failure either: it withdraws the
+    /// pill, the same shape ``TrailDraftController/canSnapToPaths`` takes for
+    /// a launch with no trail graph. A control that cannot answer is worse
+    /// than no control.
+    static func makeTrailPointSource() -> (any TrailPointSourcing)? {
+        guard !AppLaunchEnvironment.isRunningTests else { return nil }
+        return TrailPointSource()
     }
 }
 

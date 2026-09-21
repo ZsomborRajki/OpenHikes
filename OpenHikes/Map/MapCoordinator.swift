@@ -245,6 +245,20 @@ extension MapView {
         var hikePlaceAnnotations: [TrailPlaceAnnotation] = []
         var isObservingHikePlaces = false
         weak var hikePlaceController: TrailPlacePinController?
+        /// What OpenStreetMap last offered near the drawing, as the map has
+        /// drawn it. Nothing here is in the draft — see
+        /// `MapTrailPointCandidates.swift`.
+        var trailPointCandidateAnnotations: [TrailPointCandidateAnnotation] = []
+
+        #if canImport(UIKit)
+        /// The maker's own *Search this area*. A second instance of the
+        /// Community tab's control, never on screen at the same time as it —
+        /// see `MapTrailPointSearchControl.swift`.
+        weak var trailPointSearchControl: MapAreaSearchView?
+        #endif
+        /// Guards `observeTrailPointSearch` the way every other flag here
+        /// guards its own — a second registration can never be cancelled.
+        var isObservingTrailPointSearch = false
 
         #if canImport(UIKit)
         /// The press that moves a waypoint, or `nil` before the map has one.
@@ -336,6 +350,10 @@ extension MapView {
         /// Whether a callout is open, which the pill has to get out of the way
         /// of — see `withdrawAreaSearchForCallout(on:)`.
         var hasOpenCallout = false
+        /// Whether the trail maker has the strip at the top of the map, which
+        /// is the one exclusion in this feature that does not fall out of an
+        /// existing definition — see `withdrawAreaSearchForDrawing(_:)`.
+        var isDrawingTrail = false
         /// The last preview the camera was moved for, so opening one hike
         /// fits its route once rather than on every later rebuild.
         var fittedPreviewListingID: String?
@@ -872,6 +890,11 @@ extension MapView.Coordinator {
         // ``CommunityQueryPolicy`` before anything reaches the network, and
         // costs a comparison while browsing is off.
         community?.regionDidSettle(mapView.region)
+        // And the trail maker's own area search, which asks a different
+        // service about a smaller box and is otherwise the same offer. Nothing
+        // reaches the network here either: it is a comparison, and a tap is
+        // what spends a request. See ``TrailPointFinder/regionDidSettle(_:)``.
+        trailDraftController?.finder.regionDidSettle(mapView.region)
         // And place search, which asked the one location question in the app
         // that was never told where the hiker was.
         searchCompleter?.regionDidSettle(mapView.region)

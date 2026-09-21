@@ -71,6 +71,15 @@ final class TrailDraftController {
     /// a tap that adds a point re-renders no SwiftUI view.
     let draft: TrailDraft
 
+    /// What OpenStreetMap says is near the line, and the pill that asks.
+    ///
+    /// Held here rather than beside the draft because it is not part of the
+    /// drawing: nothing it holds is written down, saved or restored, and
+    /// closing the maker forgets all of it. What it shares with the draft is
+    /// only that three places that cannot see each other read it — see
+    /// ``TrailPointFinder``.
+    let finder: TrailPointFinder
+
     /// Whether the map should be offering to make a trail. Observed directly
     /// by ``MapView/Coordinator``, so showing or hiding the pill never
     /// re-renders a view.
@@ -138,10 +147,15 @@ final class TrailDraftController {
 
     @ObservationIgnored private var nextPlaceEditorToken = 0
 
-    init(store: TrailDraftStore? = nil, router: (any TrailLegRouting)? = nil) {
+    init(
+        store: TrailDraftStore? = nil,
+        router: (any TrailLegRouting)? = nil,
+        placeSource: (any TrailPointSourcing)? = nil
+    ) {
         self.store = store
         self.router = router
         draft = TrailDraft()
+        finder = TrailPointFinder(source: placeSource)
     }
 
     /// Reports whether the sheet has a screen pushed, which is the whole of
@@ -196,6 +210,9 @@ final class TrailDraftController {
             draft.cancelDrag()
             draft.stopRouting()
             legsInFlight.removeAll()
+            // Nothing on offer is the hiker's, so nothing survives the screen
+            // it was offered on — see ``TrailPointFinder/clear()``.
+            finder.clear()
         }
     }
 
@@ -216,7 +233,7 @@ final class TrailDraftController {
     func appendWaypoint(at coordinate: CLLocationCoordinate2D) {
         guard isEditing else { return }
         draft.append(coordinate)
-        persist()
+        commit()
         resolveLegs()
     }
 
@@ -231,7 +248,7 @@ final class TrailDraftController {
     func insertWaypoint(at coordinate: CLLocationCoordinate2D, intoLegAt index: Int) {
         guard isEditing else { return }
         draft.insert(coordinate, intoLegAt: index)
-        persist()
+        commit()
         resolveLegs()
     }
 
@@ -239,7 +256,7 @@ final class TrailDraftController {
     func removeWaypoints(atOffsets offsets: IndexSet) {
         guard isEditing else { return }
         draft.remove(atOffsets: offsets)
-        persist()
+        commit()
         resolveLegs()
     }
 
@@ -247,7 +264,7 @@ final class TrailDraftController {
     func reorderWaypoints(fromOffsets offsets: IndexSet, toOffset destination: Int) {
         guard isEditing else { return }
         draft.moveWaypoints(fromOffsets: offsets, toOffset: destination)
-        persist()
+        commit()
         resolveLegs()
     }
 
@@ -258,7 +275,7 @@ final class TrailDraftController {
     func reverse() {
         guard isEditing else { return }
         draft.reverse()
-        persist()
+        commit()
         resolveLegs()
     }
 
@@ -266,7 +283,7 @@ final class TrailDraftController {
     func closeTheLoop() {
         guard isEditing else { return }
         draft.closeTheLoop()
-        persist()
+        commit()
         resolveLegs()
     }
 
@@ -275,7 +292,7 @@ final class TrailDraftController {
     func clearDrawing() {
         guard isEditing else { return }
         draft.clearDrawing()
-        persist()
+        commit()
     }
 
     // MARK: - Places
@@ -308,7 +325,7 @@ final class TrailDraftController {
             symbol: symbol
         )
         draft.addPlace(place)
-        persist()
+        commit()
         return place
     }
 
@@ -316,14 +333,14 @@ final class TrailDraftController {
     func updatePlace(_ place: TrailPlace) {
         guard isEditing else { return }
         draft.updatePlace(place)
-        persist()
+        commit()
     }
 
     /// Moves a place. What a drag on its pin commits.
     func movePlace(id: UUID, to coordinate: CLLocationCoordinate2D) {
         guard isEditing else { return }
         draft.movePlace(id: id, to: coordinate)
-        persist()
+        commit()
     }
 
     /// Asks the maker's screen to open the editor on a place.
@@ -344,7 +361,50 @@ final class TrailDraftController {
     func removePlace(id: UUID) {
         guard isEditing else { return }
         draft.removePlace(id: id)
-        persist()
+        commit()
+    }
+
+    // MARK: - Places from OpenStreetMap
+
+    /// Asks what is on the ground near the drawing: what the maker's *Search
+    /// this area* pill runs.
+    ///
+    /// The one tap in this feature that spends a request of its own — every
+    /// other one spends a leg. Guarded on ``isEditing`` like every mutation
+    /// here, although this changes nothing: the pill is on the map, the map's
+    /// controls outlive the screen they belong to by the length of a pop
+    /// animation, and a search that landed after the maker closed would be a
+    /// page of candidates drawn over somebody's library.
+    func searchNearbyPlaces() {
+        guard isEditing else { return }
+        finder.search(along: draft.routeCoordinates, avoiding: draft.places)
+    }
+
+    /// Marks one of the places OpenStreetMap offered.
+    ///
+    /// **An unnamed candidate is named after what it is**, which is the whole
+    /// of what adopting adds to it: four fifths of the best answers this
+    /// feature has carry no name at all — see ``TrailPointQuery`` — and a
+    /// trail saved with six places called nothing is a trail whose GPX, whose
+    /// detail screen and whose published listing all read as a row of blanks.
+    /// ``TrailPlace/displayName`` already falls back to the symbol's word on
+    /// screen; this is what writes it down, so the hiker can then change it.
+    ///
+    /// The candidate leaves the offer as it becomes a place, so the pin under
+    /// the new pin goes with it.
+    ///
+    /// - Returns: the place that was marked, so the caller can open the editor
+    ///   on it — the same pair ``markPlace(at:named:symbol:)`` makes.
+    @discardableResult func adopt(_ candidate: TrailPlace) -> TrailPlace? {
+        guard isEditing else { return nil }
+        let marked = markPlace(
+            at: candidate.clCoordinate,
+            named: candidate.name.isEmpty ? candidate.symbol?.label ?? "" : candidate.name,
+            symbol: candidate.symbol
+        )
+        guard marked != nil else { return nil }
+        finder.take(candidate.id)
+        return marked
     }
 
     /// Takes places out of the list a screen is showing. What a swipe on a
@@ -353,7 +413,7 @@ final class TrailDraftController {
     func removePlaces(atRowOffsets offsets: IndexSet) {
         guard isEditing else { return }
         draft.removePlaces(atRowOffsets: offsets)
-        persist()
+        commit()
     }
 
     // MARK: - History
@@ -361,14 +421,14 @@ final class TrailDraftController {
     func undo() {
         guard isEditing else { return }
         draft.undo()
-        persist()
+        commit()
         resolveLegs()
     }
 
     func redo() {
         guard isEditing else { return }
         draft.redo()
-        persist()
+        commit()
         resolveLegs()
     }
 
@@ -397,7 +457,7 @@ final class TrailDraftController {
     ///   haptic.
     @discardableResult func endDrag() -> Bool {
         guard draft.endDrag() else { return false }
-        persist()
+        commit()
         resolveLegs()
         return true
     }
@@ -418,7 +478,7 @@ final class TrailDraftController {
     func setSnapsToPaths(_ snapping: Bool) {
         guard draft.snapsToPaths != snapping else { return }
         draft.setSnapsToPaths(snapping)
-        persist()
+        commit()
         resolveLegs()
     }
 
@@ -447,6 +507,23 @@ final class TrailDraftController {
             places: stored.places,
             snapsToPaths: stored.snapsToPaths
         )
+    }
+
+    /// What every edit ends with: the drawing written down, and whatever
+    /// OpenStreetMap offered put back in its place along the new line.
+    ///
+    /// One method rather than two calls at fourteen sites, because forgetting
+    /// either of them is invisible — a draft one gesture behind on disk, or a
+    /// candidate still labelled with the distance it sat at two points ago.
+    /// The re-rank costs nothing at all while nothing is on offer, which is
+    /// nearly always; see ``TrailPointFinder/rerank(along:)``.
+    private func commit() {
+        persist()
+        // Guarded rather than left to the re-rank's own guard: what is being
+        // avoided is building the argument, which is the whole flattened line.
+        // See ``TrailPointFinder/isOffering``.
+        guard finder.isOffering else { return }
+        finder.rerank(along: draft.routeCoordinates)
     }
 
     private func persist() {
@@ -516,5 +593,12 @@ final class TrailDraftController {
             return
         }
         draft.apply(route, to: ends)
+        // A leg that has just found a path is a line that has just changed
+        // shape, without the hiker having touched anything — so anything on
+        // offer beside it is now at a different distance along it. Nothing is
+        // written down here: a resolved shape is re-derivable and deliberately
+        // not part of the stored draft.
+        guard finder.isOffering else { return }
+        finder.rerank(along: draft.routeCoordinates)
     }
 }

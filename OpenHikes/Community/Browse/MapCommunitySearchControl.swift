@@ -129,7 +129,38 @@ private final class MapNoticeDismissButton: UIButton {
 
 /// The pill itself. Owns its appearance and its action, and nothing else —
 /// where it sits is decided in `MapView.addAreaSearchControl`.
+///
+/// **Two of these are built, and they belong to different features.** The
+/// *Community* tab's asks OpenStreetMap for waymarked routes; the trail
+/// maker's asks it what is on the ground near the line being drawn — see
+/// `MapTrailPointSearchControl.swift`. They are the same control because they
+/// are the same offer: one tap, one request, a spinner while it is out and a
+/// caption under it afterwards. What differs is who is asked, what the caption
+/// says and when the pill is on screen at all, and all three of those are the
+/// caller's.
 final class MapAreaSearchView: UIView {
+    /// What the automation calls the three things in here.
+    ///
+    /// Carried rather than spelled inside, because there are two instances of
+    /// this control on one map and two views answering to one identifier is a
+    /// UI test that finds whichever MapKit happens to have added first.
+    struct Identifiers: Equatable, Sendable {
+        let button: String
+        let notice: String
+        let dismiss: String
+
+        static let community = Self(
+            button: "community-search-this-area",
+            notice: "community-curated-notice",
+            dismiss: "community-curated-notice-dismiss"
+        )
+        static let trailPoints = Self(
+            button: "trail-draft-search-this-area",
+            notice: "trail-draft-search-notice",
+            dismiss: "trail-draft-search-notice-dismiss"
+        )
+    }
+
     private static let symbolPointSize: CGFloat = 15
     private static let horizontalPadding: CGFloat = 14
     /// Matches the other floating controls, so the pill reads as one of the
@@ -166,6 +197,7 @@ final class MapAreaSearchView: UIView {
     private static let noticeCornerRadius: CGFloat = 12
     private static let noticeSymbolPointSize: CGFloat = 11
 
+    private let identifiers: Identifiers
     private let onTap: () -> Void
     /// Takes the caption off by hand — see
     /// ``CommunityBrowser/dismissCuratedNotice()``.
@@ -187,7 +219,12 @@ final class MapAreaSearchView: UIView {
     /// which is the half of this that knows the map.
     private var noticeClearanceConstraint: NSLayoutConstraint?
 
-    init(onTap: @escaping () -> Void, onDismissNotice: @escaping () -> Void) {
+    init(
+        identifiers: Identifiers,
+        onTap: @escaping () -> Void,
+        onDismissNotice: @escaping () -> Void
+    ) {
+        self.identifiers = identifiers
         self.onTap = onTap
         self.onDismissNotice = onDismissNotice
         super.init(frame: .zero)
@@ -251,8 +288,9 @@ final class MapAreaSearchView: UIView {
     ///
     /// The whole notice rather than its sentence, because the glyph is part of
     /// what it says: a refusal is a warning and an empty area is not. See
-    /// ``CuratedTrailNotice``.
-    var notice: CuratedTrailNotice? {
+    /// ``MapCaptionNotice``, which is the shape both features' own notices
+    /// come to this control as.
+    var notice: MapCaptionNotice? {
         didSet {
             guard notice != oldValue else { return }
             noticeLabel?.text = notice?.text
@@ -305,7 +343,7 @@ final class MapAreaSearchView: UIView {
         // The glyph is the whole of the control, so it has to be named; the
         // caption beside it is what says what is being dismissed.
         dismiss.accessibilityLabel = String(localized: "Dismiss")
-        dismiss.accessibilityIdentifier = "community-curated-notice-dismiss"
+        dismiss.accessibilityIdentifier = identifiers.dismiss
         dismissButton = dismiss
         return dismiss
     }
@@ -413,7 +451,7 @@ final class MapAreaSearchView: UIView {
         )
         searchButton.translatesAutoresizingMaskIntoConstraints = false
         searchButton.titleLabel?.adjustsFontForContentSizeCategory = true
-        searchButton.accessibilityIdentifier = "community-search-this-area"
+        searchButton.accessibilityIdentifier = identifiers.button
         button = searchButton
 
         let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
@@ -489,7 +527,7 @@ final class MapAreaSearchView: UIView {
         label.adjustsFontForContentSizeCategory = true
         label.textColor = .label
         label.numberOfLines = 2
-        label.accessibilityIdentifier = "community-curated-notice"
+        label.accessibilityIdentifier = identifiers.notice
         noticeLabel = label
 
         let sentence = UIStackView(arrangedSubviews: [icon, label])
@@ -607,6 +645,11 @@ extension MapView.Coordinator {
         guard hasOpenCallout != open else { return }
         hasOpenCallout = open
         applyAreaSearchVisibility(animated: true)
+        // And the maker's pill, which is the same control in the same strip
+        // with the same callout drawn over it — see
+        // `MapTrailPointSearchControl.swift`. One flag, because there is one
+        // answer: a callout is open or it is not.
+        applyTrailPointSearchVisibility(animated: true)
     }
 
     /// Asks the map itself whether a callout is still up, rather than waiting
@@ -629,6 +672,29 @@ extension MapView.Coordinator {
         withdrawAreaSearchForCallout(open: open)
     }
 
+    /// Takes the *Community* tab's pill off the map while a trail is being
+    /// drawn, and puts it back when the maker closes.
+    ///
+    /// **This is a rule, and it is the one place in this feature that needed
+    /// one.** Everywhere else the map's controls exclude each other by falling
+    /// out of their own definitions — the camera pill and the maker's pill are
+    /// offered on opposite answers to *is a screen pushed*. These two are not:
+    /// selecting the *Community* tab is what raises this one and a tab
+    /// selection survives a push, so a hiker who is browsing shared trails and
+    /// then taps *make a trail* had two pills in the same strip at the top of
+    /// the map, one asking OpenStreetMap for routes and one asking it for
+    /// places.
+    ///
+    /// The maker's is the one that stays, because the maker is what the hiker
+    /// is doing. The tab underneath is not disturbed: the list is still there,
+    /// still describing the area it described, and closing the maker brings
+    /// its offer straight back.
+    func withdrawAreaSearchForDrawing(_ drawing: Bool) {
+        guard isDrawingTrail != drawing else { return }
+        isDrawingTrail = drawing
+        applyAreaSearchVisibility(animated: true)
+    }
+
     private func applyAreaSearchVisibility(animated: Bool) {
         #if os(iOS)
         guard let areaSearchControl else { return }
@@ -639,7 +705,9 @@ extension MapView.Coordinator {
         // to fill a list that is not there.
         // ...and not while a callout is standing where it draws — see
         // ``withdrawAreaSearchForCallout(open:)``.
-        let visible = community?.isBrowsing == true && !hasOpenCallout
+        // ...and not while the trail maker has the same strip — see
+        // ``withdrawAreaSearchForDrawing(_:)``.
+        let visible = community?.isBrowsing == true && !hasOpenCallout && !isDrawingTrail
         // Above the ceiling it stays put and stops answering. `zoomIn` has
         // something to say and nothing to do; the list's footer says it, and
         // a pill that disappeared at a zoom level would be reporting policy by
@@ -657,7 +725,7 @@ extension MapView.Coordinator {
         // header.
         // Cleared along with the pill when the tab goes, so the caption never
         // outlives the list it is about.
-        areaSearchControl.notice = visible ? community?.curatedNotice : nil
+        areaSearchControl.notice = visible ? community?.curatedNotice?.caption : nil
         // Hidden as well as transparent, for the reason the camera pill is:
         // an invisible view still answers hit tests, and this one sits over
         // the map the hiker is panning. Interaction goes at once rather than
@@ -688,7 +756,13 @@ extension MapView {
     /// How far below the map's safe area the pill sits. The same inset the
     /// map's other floating controls use, spelled here because that one is
     /// private to `MapView.swift` and this is the file that owns this control.
-    private static let areaSearchTopInset: CGFloat = 12
+    ///
+    /// Internal rather than private, along with the side clearance below,
+    /// because the trail maker's pill is the same control in the same strip
+    /// and has to be placed by the same two numbers — see
+    /// `MapTrailPointSearchControl.swift`. A second spelling of them is two
+    /// controls that drift a point apart and one screenshot nobody can explain.
+    static let areaSearchTopInset: CGFloat = 12
 
     /// How much room the control leaves on each side.
     ///
@@ -699,7 +773,7 @@ extension MapView {
     /// localisation truncates against and what a caption wraps against, and it
     /// clears the badge *sideways* only: the badge hangs lower than this strip,
     /// which is what ``MapAreaSearchView`` drops the caption past.
-    private static let areaSearchSideClearance: CGFloat = 56
+    static let areaSearchSideClearance: CGFloat = 56
 
     /// *Search this area*, centred at the top of the map.
     ///
@@ -720,11 +794,11 @@ extension MapView {
         _ coordinator: Coordinator,
         alignedTo guide: UILayoutGuide
     ) {
-        let control = MapAreaSearchView { [community] in
-            community.searchVisibleArea()
-        } onDismissNotice: { [community] in
-            community.dismissCuratedNotice()
-        }
+        let control = MapAreaSearchView(
+            identifiers: .community,
+            onTap: { [community] in community.searchVisibleArea() },
+            onDismissNotice: { [community] in community.dismissCuratedNotice() }
+        )
         control.translatesAutoresizingMaskIntoConstraints = false
         // Starts out of the way: nothing is offered until the map has settled
         // somewhere the list does not describe, and a pill that flashed in on

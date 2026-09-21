@@ -195,7 +195,12 @@ nonisolated enum CuratedTrailOutage: Equatable, Sendable {
     /// One unit rather than two: *1 min, 0 sec* is the formatter's honest
     /// answer to a `Retry-After: 60` and is not a thing to put on a pill.
     /// Rounded up, so a wait is never reported as already over.
-    private static func wait(_ retryAfter: TimeInterval) -> String? {
+    ///
+    /// Internal rather than private because the trail maker's own caption says
+    /// the same number about the same server — see ``TrailPointNotice``. The
+    /// sentences around it differ and are each feature's own; the way a
+    /// `Retry-After` is read to a person does not.
+    static func wait(_ retryAfter: TimeInterval) -> String? {
         guard retryAfter > 0 else { return nil }
         return Duration.seconds(Int(retryAfter.rounded(.up)))
             .formatted(
@@ -248,6 +253,15 @@ nonisolated enum CuratedTrailNotice: Equatable, Sendable {
         case .noTrailsHere: false
         case .outage: true
         }
+    }
+
+    /// The three of those together, which is what the control draws.
+    ///
+    /// The pill is shared with the trail maker, which raises its own notices
+    /// with its own words in them — see ``MapCaptionNotice``, and
+    /// ``TrailPointNotice`` for the other half of the pair.
+    var caption: MapCaptionNotice {
+        MapCaptionNotice(text: text, symbolName: symbolName, isWarning: isWarning)
     }
 }
 

@@ -6,12 +6,14 @@
 //  what the last one answered.
 //
 //  An actor for the reason ``OverpassTrailGraphProvider`` is one — it owns
-//  mutable state that arrives from concurrent requests — and it carries the
-//  same three seams for the reason that one does: an injectable transport, an
-//  injectable clock, and nothing static. See *Deliberate test seams* in the
-//  repository instructions. A suite must be able to drive every branch here
-//  without a network, and the rate-limit back-off is only observable against a
-//  clock somebody else is holding.
+//  mutable state that arrives from concurrent requests. It still takes the
+//  same three seams a suite drives it through — an injectable transport, an
+//  injectable clock, an injectable pause, and nothing static, see *Deliberate
+//  test seams* in the repository instructions — but it no longer *holds* them:
+//  they are handed to ``OverpassConversation``, which is where the rate-limit
+//  gate and the one busy retry moved when a second feature needed the same
+//  manners. What is left here is the two queries and the memory of what they
+//  answered.
 //
 //  ## Why the cache is keyed by relation, and why there are two of them
 //
@@ -39,7 +41,6 @@ import Algorithms
 import CoreLocation
 import Foundation
 import OrderedCollections
-import os
 
 /// What a geometry pass came back with.
 ///
@@ -176,17 +177,6 @@ nonisolated extension CuratedTrailSourcing {
 actor CuratedTrailSource: CuratedTrailSourcing {
     typealias Transport = @Sendable (URLRequest) async throws -> OverpassHTTPResponse
 
-    private static let logger = Logger(subsystem: "OpenHikes", category: "Community")
-
-    /// How long a busy answer may have taken and still be worth asking again,
-    /// in seconds.
-    ///
-    /// Above a dispatcher refusal, which is immediate — 8 seconds measured —
-    /// and well below the whole budget a query that ran and was abandoned
-    /// spends. See ``retryingWhenBusy(_:)`` for why the distinction is the
-    /// whole of the retry policy.
-    private static let busyRetryCeiling: TimeInterval = 20
-
     /// How many routes are kept in memory.
     ///
     /// Four pages of results. Enough that panning back and forth across two or
@@ -208,16 +198,11 @@ actor CuratedTrailSource: CuratedTrailSourcing {
         case absent
     }
 
-    private let endpoint: URL
-    private let transport: Transport
-    private let clock: @Sendable () -> Date
-    /// How this waits between a busy answer and asking once more.
-    ///
-    /// A seam beside ``clock`` and for the same reason: the retry below is
-    /// only observable against time somebody else is holding, and a suite that
-    /// waited two real seconds per case would be a suite nobody runs. See
-    /// *Deliberate test seams* in the repository instructions.
-    private let pause: @Sendable (TimeInterval) async throws -> Void
+    /// The gate in front of the endpoint, and the one retry a busy answer
+    /// gets — shared with every other feature that asks Overpass anything.
+    /// See ``OverpassConversation``, which is where the three seams this type
+    /// used to hold itself (a transport, a clock, a pause) now live.
+    private let conversation: OverpassConversation
     /// The routes this device already has, across launches. `nil` for a launch
     /// with nowhere to put them — a directory that cannot be created is a
     /// cache that is simply absent, which costs round trips and breaks
@@ -282,11 +267,14 @@ actor CuratedTrailSource: CuratedTrailSourcing {
         },
         transport: Transport? = nil
     ) {
-        self.endpoint = endpoint
-        self.clock = clock
-        self.pause = pause
+        conversation = OverpassConversation(
+            subject: "a curated search",
+            endpoint: endpoint,
+            clock: clock,
+            pause: pause,
+            transport: transport
+        )
         store = directory.map { CuratedTrailStore(directory: $0, clock: clock) }
-        self.transport = transport ?? OverpassRequest.liveTransport()
     }
 
     // MARK: - The cache
@@ -343,12 +331,11 @@ extension CuratedTrailSource {
             forgetLastAnswer()
             return []
         }
-        try checkRateLimit()
-
-        let listed = try await retryingWhenBusy {
-            try CuratedTrailDecoding.trails(
-                fromListing: try await send(query, awaiting: CuratedTrailQuery.listingTimeoutSeconds)
-            )
+        let listed = try await conversation.fetch(
+            query,
+            awaiting: CuratedTrailQuery.listingTimeoutSeconds
+        ) { body in
+            try CuratedTrailDecoding.trails(fromListing: body)
         }
         // Nearest first, by the same measure the published half is sorted by,
         // so a merged list is ordered by one rule rather than by two that
@@ -508,7 +495,7 @@ extension CuratedTrailSource {
         }
         guard !missing.isEmpty else { return (found, nil) }
         do {
-            try checkRateLimit()
+            try await conversation.checkRateLimit()
         } catch {
             return (found, error)
         }
@@ -538,10 +525,11 @@ extension CuratedTrailSource {
     /// already have evicted from.
     private func fetch(_ ids: [Int64]) async throws -> [Int64: CuratedTrail] {
         guard let query = CuratedTrailQuery.geometryQuery(ids: ids) else { return [:] }
-        let decoded = try await retryingWhenBusy {
-            try CuratedTrailDecoding.trails(
-                fromGeometry: try await send(query, awaiting: CuratedTrailQuery.geometryTimeoutSeconds)
-            )
+        let decoded = try await conversation.fetch(
+            query,
+            awaiting: CuratedTrailQuery.geometryTimeoutSeconds
+        ) { body in
+            try CuratedTrailDecoding.trails(fromGeometry: body)
         }
         var found: [Int64: CuratedTrail] = [:]
         // Collected and written once at the end rather than one at a time: a
@@ -565,87 +553,5 @@ extension CuratedTrailSource {
         }
         store?.save(fetched)
         return found
-    }
-}
-
-// MARK: - Talking to Overpass
-
-private extension CuratedTrailSource {
-    /// Throws while a `429`'s `Retry-After` is still running.
-    ///
-    /// Checked before a request rather than after, so a rate-limited browse
-    /// costs nothing at all rather than one refused round trip per search.
-    func checkRateLimit() throws {
-        guard let retryAfter, retryAfter > clock() else { return }
-        throw TrailGraphProviderError.rateLimited(
-            retryAfter: retryAfter.timeIntervalSince(clock())
-        )
-    }
-
-    /// Runs one Overpass pass, and runs it once more when the server answered
-    /// *not this second*.
-    ///
-    /// **One retry, and only for a refusal that came back quickly.** A
-    /// dispatcher refusal means every slot was taken at the instant we
-    /// knocked — measured at 8 seconds against `overpass-api.de` on
-    /// 2026-09-17, which is the server declining before the query starts — and
-    /// the next request is often admitted. A refusal that arrives after the
-    /// whole budget is a different animal: the server spent that budget and
-    /// gave up, so asking again buys another minute of the same, and the pill
-    /// would spin for two minutes to reach the sentence it could have drawn
-    /// after one. ``OverpassRequest/busyRetryDelay`` is the pause between
-    /// them, short because the condition is.
-    ///
-    /// The decode is inside, deliberately. Half of what *busy* looks like
-    /// arrives as a `200` carrying a `remark` — see
-    /// ``OverpassRequest/abort(_:)`` — so a retry wrapped around the request
-    /// alone would miss the half that never reaches an HTTP status.
-    ///
-    /// A `429` is not retried and must not be: it names the seconds it wants
-    /// to be left alone, and ``checkRateLimit()`` refuses the second attempt
-    /// anyway — which is also why this re-checks it, since a parallel request
-    /// can be refused during the pause.
-    func retryingWhenBusy<T>(_ work: () async throws -> T) async throws -> T {
-        let startedAt = clock()
-        do {
-            return try await work()
-        } catch {
-            guard OverpassRequest.isMomentarilyBusy(error),
-                  clock().timeIntervalSince(startedAt) < Self.busyRetryCeiling
-            else { throw error }
-            let waited = Int(clock().timeIntervalSince(startedAt))
-            Self.logger.notice(
-                "Overpass was busy after \(waited, privacy: .public)s; asking once more."
-            )
-            try await pause(OverpassRequest.busyRetryDelay)
-            try Task.checkCancellation()
-            try checkRateLimit()
-            return try await work()
-        }
-    }
-
-    /// - Parameter serverTimeout: The `[timeout:]` this query carries, which
-    ///   decides how long the client waits on it — see
-    ///   ``OverpassRequest/idleTimeout(forServerTimeout:)``. Stated by the
-    ///   caller that chose the query rather than parsed back out of it.
-    func send(_ query: String, awaiting serverTimeout: Int) async throws -> Data {
-        try Task.checkCancellation()
-        let response = try await transport(
-            OverpassRequest.post(query, to: endpoint, awaiting: serverTimeout)
-        )
-        do {
-            return try OverpassRequest.body(of: response)
-        } catch let error as TrailGraphProviderError {
-            if case .rateLimited(let delay) = error {
-                // `max` rather than assignment: two requests can be refused at
-                // once, and the later deadline is the one that holds.
-                let candidate = clock().addingTimeInterval(delay)
-                retryAfter = max(retryAfter ?? .distantPast, candidate)
-                Self.logger.error(
-                    "Overpass rate-limited a curated search for \(delay, privacy: .public)s."
-                )
-            }
-            throw error
-        }
     }
 }

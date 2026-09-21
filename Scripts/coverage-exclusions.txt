@@ -133,6 +133,7 @@ OpenHikes/Hikes/Detail/RouteLinePatternPicker.swift
 OpenHikes/Hikes/Trail/TrailBreakdownSection.swift
 OpenHikes/Hikes/Maker/TrailDraftActions.swift
 OpenHikes/Hikes/Maker/TrailDraftFields.swift
+OpenHikes/Hikes/Maker/TrailDraftNearbySection.swift
 OpenHikes/Hikes/Maker/TrailDraftPlaceSection.swift
 OpenHikes/Hikes/Maker/TrailDraftView.swift
 OpenHikes/Hikes/Maker/TrailPlaceEditor.swift

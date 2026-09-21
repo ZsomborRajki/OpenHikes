@@ -116,6 +116,10 @@ struct TrailDraftView: View {
                 search: search,
                 onEdit: editPlace
             )
+            // Under the places the hiker has marked, because that is what it
+            // is: the same kind of row, not yet taken. Absent entirely until a
+            // search has answered — see ``TrailDraftNearbySection``.
+            TrailDraftNearbySection(maker: maker, onEdit: editPlace)
         }
         // Reordering is the operation the list earns its place with, and a
         // `List` offers it only while this is `.active` — a long press and a

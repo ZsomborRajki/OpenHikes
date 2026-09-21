@@ -91,7 +91,12 @@ struct MapCoordinatorTests {
         sidePanelInset: CGFloat = 0,
         community: CommunityBrowser = CommunityBrowser(transport: nil, blockList: .scratch()),
         searchCompleter: SearchCompleter = SearchCompleter(),
-        locationManager: LocationManager? = nil
+        locationManager: LocationManager? = nil,
+        // A parameter with a default for the reason `community` is: the
+        // suite's own maker has no place source, so the file that asserts on
+        // the *Search this area* pill has to build one that can answer — see
+        // `MapCoordinatorTests+TrailPoints.swift`.
+        trailMaker: TrailDraftController? = nil
     ) -> MapView {
         MapView(
             locationManager: locationManager ?? self.locationManager,
@@ -108,7 +113,7 @@ struct MapCoordinatorTests {
             photoCapture: photoCapture,
             photoPins: photoPins,
             placePins: placePins,
-            trailMaker: trailMaker,
+            trailMaker: trailMaker ?? self.trailMaker,
             community: community,
             searchCompleter: searchCompleter,
             sidePanelInset: sidePanelInset

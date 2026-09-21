@@ -227,6 +227,11 @@ struct MapView: MapViewRepresentable, Equatable {
         // standing has to draw it on this first pass rather than waiting for
         // the next settle.
         coordinator.observeAreaPrompt(community)
+        // And the maker's own pill, for the same reason: a map rebuilt while
+        // the maker is open — a rotation does exactly that — has to draw it on
+        // this first pass rather than waiting for a navigation that will not
+        // come.
+        coordinator.observeTrailPointSearch(trailMaker)
 
         return mapView
     }
@@ -338,6 +343,9 @@ struct MapView: MapViewRepresentable, Equatable {
         addPhotoControls(to: mapView, coordinator, alignedTo: guide)
         addTrailDraftControls(to: mapView, coordinator, alignedTo: guide)
         addAreaSearchControl(to: mapView, coordinator, alignedTo: guide)
+        // The maker's own, in the same strip. Only one of the two is ever
+        // visible — see `MapTrailPointSearchControl.swift`.
+        addTrailPointSearchControl(to: mapView, coordinator, alignedTo: guide)
         // Replaces the placeholders above with real positions as soon as the
         // map has a height to measure against.
         coordinator.applySheetTop(on: mapView)
