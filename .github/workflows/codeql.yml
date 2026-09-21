@@ -59,8 +59,8 @@ jobs:
     # (2026-09-20): 52s to initialise, **51m44s** in `Build for analysis`, and
     # 3m17s for the whole of `analyze` — finalize 1m37s, queries 1m04s,
     # interpretation and upload the rest. So this is a build job with a query
-    # step stapled to it, and the `ARCHS` line below is the only lever that has
-    # ever moved the number.
+    # step stapled to it, and every lever that has ever moved the number is a
+    # flag on that one `xcodebuild` call below.
     timeout-minutes: 120
     # Reporting, not gating — the same stance the accessibility job in ci.yml
     # takes, for the same reason. CodeQL's Swift extractor tracks specific
@@ -96,38 +96,51 @@ jobs:
       # off outright rather than worked around. A simulator destination for the
       # same reason: it needs no device SDK and no provisioning profile.
       #
-      # `ARCHS=arm64` is what keeps this job inside the runner, and it is not a
-      # micro-optimisation. A *generic* simulator destination has no active
-      # architecture to narrow to, so Xcode falls back to the target's full
-      # `ARCHS` and `ONLY_ACTIVE_ARCH` reports `NO` whatever the configuration
-      # says — `xcodebuild -showBuildSettings` for the line above prints
-      # `ARCHS = arm64 x86_64`. That compiles every Swift file in the app, the
-      # widget, the watch app and the shared package twice, and because the
-      # extractor is traced onto the compiler it extracts each file twice too,
-      # into one database that is the same size and yields the same alerts. The
-      # green run 35511502709 spent 51m44s here and shows both slices:
-      # `-target arm64-apple-ios26.0-simulator` and
-      # `-target x86_64-apple-ios26.0-simulator`, and the same pair for the
-      # watch and for the packages' `ios12.0` deployment floor.
+      # Everything after that is about one thing: keeping this build inside a
+      # 3-core, 7 GB `macos-26-arm64` runner that the action sizes itself to
+      # with `CODEQL_RAM: 6144`, `CODEQL_THREADS: 3`. Eight jobs
+      # between 2026-09-20 and 2026-09-21 ended with "The hosted runner lost
+      # communication with the server", each after 80 to 117 minutes against a
+      # 41-to-62-minute green run. A runner that dies that way uploads no logs
+      # at all, so the annotation and the duration are the entire diagnostic.
+      # The 120-minute timeout was never reached and was never the problem.
       #
-      # `macos-26-arm64` is a 3-core, 7 GB machine — the action sizes itself to
-      # it and logs `CODEQL_RAM: 6144`, `CODEQL_THREADS: 3`. Three concurrent
-      # `swiftc` processes, each with an extractor writing TRAP files beside
-      # it, is already the whole of that box, and twice the compilations is
-      # what tipped it over: eight jobs between 2026-09-20 and 2026-09-21 died
-      # with "The hosted runner lost communication with the server", every one
-      # of them after 80 to 117 minutes against a 41-to-62-minute green run.
-      # The runner uploads no logs when it goes that way, so the annotation is
-      # the entire diagnostic — the duration is what identifies it.
+      # `ARCHS=arm64` cut the *volume* of work in half. A generic simulator
+      # destination has no active architecture to narrow to, so Xcode falls
+      # back to the target's full `ARCHS` and `ONLY_ACTIVE_ARCH` reports `NO`
+      # whatever the configuration says — `xcodebuild -showBuildSettings` for
+      # the destination above prints `ARCHS = arm64 x86_64`. That compiled
+      # every Swift file in the app, the widget, the watch app and the shared
+      # package twice, and because the extractor is traced onto the compiler it
+      # extracted each file twice too, into one database that is the same size
+      # and yields the same alerts. `ONLY_ACTIVE_ARCH=NO` is stated rather than
+      # left implied, so the pair reads the same way it would on a named
+      # destination. The x86_64 simulator slice is not lost coverage: the
+      # `builds` matrix in `ci.yml` still compiles it, on a job with no
+      # extractor attached and no history of this failure.
       #
-      # `ONLY_ACTIVE_ARCH=NO` is stated rather than left implied, so the pair
-      # reads the same way it would on a named destination. The x86_64
-      # simulator slice is not lost coverage: the `builds` matrix in `ci.yml`
-      # still compiles it, on a job that has no extractor attached and no
-      # history of this failure. If a run dies here again, the next lever is
-      # `-jobs 2` — fewer compiler-plus-extractor pairs alive at once, at the
-      # cost of wall clock — not a higher timeout, which never had anything to
-      # do with it.
+      # It was not enough on its own. Run 35566694058 carried that flag and
+      # died the same way, 91 minutes into this step — so what kills the runner
+      # is not how much work there is but how much of it is alive at once, and
+      # halving the total left the peak untouched. The same peak is visible in
+      # the last green run, 35511502709: inside its 51m44s build are single
+      # stalls of 582s, 468s and 185s between consecutive compile lines, which
+      # is a 7 GB machine swapping, not a 3-core machine computing.
+      #
+      # `-jobs 2` is the lever for that peak. Three concurrent `swiftc`
+      # processes, each with an extractor writing TRAP files beside it, is the
+      # whole of this box before the operating system takes its share; two
+      # leaves headroom, and wall clock is the thing this job has to spare.
+      # `COMPILER_INDEX_STORE_ENABLE=NO` drops index-while-building, which
+      # costs memory and a pass over every file to produce an index store that
+      # nothing here reads — the extractor builds its own database.
+      #
+      # If a run dies here again, the next lever is the runner, not the
+      # timeout, which never had anything to do with it: this job is alone on
+      # `macos-26` and a 6-core, 14 GB `macos-26-xlarge` would end the question
+      # — at a price, where everything above is free. Measure before paying:
+      # the build step's duration in a green run is the number that says
+      # whether the headroom arrived.
       #
       # Not piped through xcbeautify: this build is an input to the extractor
       # rather than a report for a human, and when extraction goes wrong the
@@ -141,8 +154,10 @@ jobs:
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             -skipPackagePluginValidation \
+            -jobs 2 \
             ARCHS=arm64 \
             ONLY_ACTIVE_ARCH=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
