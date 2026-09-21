@@ -12,8 +12,10 @@
 //  down*, has no unit test and cannot have one.
 //
 //  What the suites next door cover instead: `TrailDraftTests` the arithmetic,
-//  `TrailDraftSaveTests` the row that comes out, `TrailDraftControllerTests`
-//  the two pills' exclusion and the guards, and
+//  `TrailDraftLegTests` the legs and the toggle, `TrailLegRouterTests` the
+//  routing over the OpenStreetMap graph, `TrailDraftRoutingTests` who is
+//  asked and how often, `TrailDraftSaveTests` the row that comes out,
+//  `TrailDraftControllerTests` the two pills' exclusion and the guards, and
 //  `MapCoordinatorTests+TrailDraft` the map's half with a real `MKMapView` and
 //  a synthesised point. This is the one that presses the buttons.
 //
@@ -167,6 +169,73 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         XCTAssertTrue(
             waitUntil { maker.exists && !camera.exists },
             "backing out should hand the slot back"
+        )
+    }
+
+    /// The switch that makes legs follow mapped paths, and the one thing it
+    /// is gated on.
+    ///
+    /// **What this covers that nothing below it can**: the trail graph
+    /// reaching the maker at all. The router is handed to
+    /// ``TrailDraftController`` by `OpenHikesModel+Composition.swift`, and
+    /// whether that wiring happened is invisible to every unit test — the
+    /// maker builds and draws perfectly well with no router, which is exactly
+    /// the bug this would otherwise ship. The switch is offered when there is
+    /// a graph to ask and withheld when there is not, so its presence is the
+    /// wiring made visible.
+    ///
+    /// The routing itself is asserted next door in `TrailLegRouterTests`,
+    /// against graphs built in code: which path a leg follows is arithmetic
+    /// over coordinates, and driving it through a simulator would be a slower
+    /// way of asking a worse question — where the camera happens to be
+    /// pointing.
+    @MainActor
+    func testTheSwitchIsOfferedOnlyWhenThereIsAGraphToAsk() {
+        let withoutGraph = launchApp()
+        openTheMaker(in: withoutGraph)
+        XCTAssertFalse(
+            element("trail-draft-snap", in: withoutGraph).exists,
+            "a launch that cannot ask OpenStreetMap should not offer to"
+        )
+        withoutGraph.terminate()
+
+        let app = launchApp(
+            arguments: ["--ui-test-trail-graph=\(UITestFixture.trailGraphName)"]
+        )
+        openTheMaker(in: app)
+        XCTAssertTrue(
+            element("trail-draft-snap", in: app).waitForExistence(
+                timeout: UITestTimeout.navigation
+            ),
+            "a launch with a trail graph should offer to follow paths"
+        )
+    }
+
+    /// Turning it off keeps the drawing, which is the half of *re-resolve,
+    /// don't discard* a hiker would notice: a switch that threw away the
+    /// points would be one nobody could risk touching.
+    @MainActor
+    func testTurningPathFollowingOffKeepsTheDrawing() {
+        let app = launchApp(
+            arguments: ["--ui-test-trail-graph=\(UITestFixture.trailGraphName)"]
+        )
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
+
+        openTheMaker(in: app)
+        draw(Self.drawnPoints, on: map, in: app)
+
+        let snap = element("trail-draft-snap", in: app)
+        XCTAssertTrue(snap.waitForExistence(timeout: UITestTimeout.navigation))
+        snap.tap()
+
+        XCTAssertTrue(
+            element("trail-draft-point-3", in: app).exists,
+            "straightening the line should not take the points away"
+        )
+        XCTAssertTrue(
+            element("trail-draft-save", in: app).isEnabled,
+            "a straightened trail is still a trail"
         )
     }
 

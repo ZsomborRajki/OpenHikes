@@ -208,10 +208,23 @@ extension MapView {
         var isObservingTrailDraftControls = false
         /// The same, for the line and the pins.
         var isObservingTrailDraft = false
-        var trailDraftOverlay: MKPolyline?
+        /// One polyline per leg, since a leg is the thing that has a state —
+        /// see `MapTrailDraftOverlay.swift` for what the three line weights
+        /// mean.
+        var trailDraftOverlays: [MKPolyline] = []
+        /// Which state each of those should be drawn in, by object identity.
+        ///
+        /// Beside the overlays rather than on a subclass of `MKPolyline`, so
+        /// every other thing that asks MapKit about an overlay keeps exactly
+        /// one kind of answer to handle.
+        var trailDraftLegStyles: [ObjectIdentifier: TrailLegSnap] = [:]
         var trailDraftAnnotations: [TrailDraftWaypointAnnotation] = []
-        /// What the draft's overlay currently corresponds to, so a republish
-        /// of the same points removes and re-adds nothing.
+        /// What the draft's lines currently correspond to, so a republish of
+        /// the same draft removes and re-adds nothing. The legs rather than
+        /// the points, because an answer landing changes a leg's shape and
+        /// state without any point moving.
+        var trailDraftLegs: [TrailLeg] = []
+        /// And where the pins currently are.
         var trailDraftCoordinates: [CLLocationCoordinate2D] = []
 
         // MARK: Photo pins

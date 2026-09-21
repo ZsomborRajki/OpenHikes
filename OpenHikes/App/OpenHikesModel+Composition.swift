@@ -165,8 +165,24 @@ extension OpenHikesModel {
     /// nothing here that could reach the developer's own disk — and UI
     /// automation needs the maker to work for the same reason it needs the
     /// recorder to.
-    static func makeTrailMaker(container: ModelContainer) -> TrailDraftController {
-        TrailDraftController(store: TrailDraftStore(context: container.mainContext))
+    ///
+    /// The router is the recorder's own trail-graph provider wrapped in
+    /// ``OverpassTrailLegRouter``, so a drawn leg reads the z12 tiles a
+    /// recording has already downloaded and a recording reads the ones a
+    /// drawing downloaded. `nil` when there is no provider — a launch under
+    /// UI automation with no `--ui-test-trail-graph=` fixture — and the maker
+    /// then draws straight lines and does not offer a switch it could not
+    /// honour.
+    static func makeTrailMaker(
+        container: ModelContainer,
+        trailGraphProvider: (any TrailGraphProviding)?
+    ) -> TrailDraftController {
+        TrailDraftController(
+            store: TrailDraftStore(context: container.mainContext),
+            router: trailGraphProvider.map { provider in
+                OverpassTrailLegRouter(provider: provider)
+            }
+        )
     }
 }
 

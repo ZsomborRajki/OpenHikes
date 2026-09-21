@@ -176,16 +176,19 @@ struct TrailDraftControllerTests {
 
         maker.appendWaypoint(at: Self.coordinate(Line.south))
 
-        #expect(store.load().count == 1)
+        #expect(store.load().waypoints.count == 1)
     }
 
     @Test("a draft left behind comes back when the maker is opened again")
     func draftIsRestored() throws {
         let store = TrailDraftStore(context: try Fixture.modelContext())
-        store.save(waypoints: [
-            TrailWaypoint(coordinate: Self.coordinate(Line.south)),
-            TrailWaypoint(coordinate: Self.coordinate(Line.north)),
-        ])
+        store.save(
+            waypoints: [
+                TrailWaypoint(coordinate: Self.coordinate(Line.south)),
+                TrailWaypoint(coordinate: Self.coordinate(Line.north)),
+            ],
+            snapsToPaths: true
+        )
         // A fresh launch: a controller with nothing in memory.
         let maker = TrailDraftController(store: store)
 

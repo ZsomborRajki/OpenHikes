@@ -340,7 +340,7 @@ extension MapCoordinatorTests {
         trailMaker.appendWaypoint(at: Self.ridgeCoordinate(Ridge.south))
         trailMaker.appendWaypoint(at: Self.ridgeCoordinate(Ridge.north))
         await settle(until: "the draft's line to be drawn") {
-            coordinator.trailDraftOverlay != nil
+            !coordinator.trailDraftOverlays.isEmpty
         }
         #expect(coordinator.trailDraftAnnotations.count == 2)
         #expect(coordinator.trailDraftAnnotations.map(\.number) == [1, 2])
@@ -348,7 +348,7 @@ extension MapCoordinatorTests {
 
         trailMaker.setEditing(false)
         await settle(until: "the draft's line to be taken down") {
-            coordinator.trailDraftOverlay == nil
+            coordinator.trailDraftOverlays.isEmpty
         }
         #expect(coordinator.trailDraftAnnotations.isEmpty)
         #expect(!map.annotations.contains { $0 is TrailDraftWaypointAnnotation })
@@ -369,7 +369,7 @@ extension MapCoordinatorTests {
         await settle(until: "the first pin to be drawn") {
             coordinator.trailDraftAnnotations.count == 1
         }
-        #expect(coordinator.trailDraftOverlay == nil)
+        #expect(coordinator.trailDraftOverlays.isEmpty)
         #endif
     }
 
@@ -386,9 +386,9 @@ extension MapCoordinatorTests {
         trailMaker.appendWaypoint(at: Self.ridgeCoordinate(Ridge.south))
         trailMaker.appendWaypoint(at: Self.ridgeCoordinate(Ridge.north))
         await settle(until: "the draft's line to be drawn") {
-            coordinator.trailDraftOverlay != nil
+            !coordinator.trailDraftOverlays.isEmpty
         }
-        let line = try #require(coordinator.trailDraftOverlay)
+        let line = try #require(coordinator.trailDraftOverlays.first)
 
         let renderer = coordinator.mapView(map, rendererFor: line)
 
