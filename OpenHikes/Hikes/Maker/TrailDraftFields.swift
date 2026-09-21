@@ -471,22 +471,37 @@ struct TrailDraftLineHeader: View {
 /// something to say: a leg that snapped or that the hiker straightened
 /// themselves says nothing, so the list is quiet until something is worth
 /// reading. See ``TrailLegSnap/notice``.
+///
+/// **It reads the drawing itself rather than being handed three values off
+/// it**, and that is the render-isolation decision on this screen. A
+/// twenty-point trail waits on nineteen separate Overpass answers, and every
+/// one of them writes ``TrailDraft/legs`` and ``TrailDraft/distancesAlongLine``
+/// — so a parent body that read either of those to *build* these rows would be
+/// re-evaluated nineteen times, taking the places list, the candidate list and
+/// the search field with it, because a `View` holding a closure cannot be
+/// compared and is rebuilt whether or not anything it draws has changed. Read
+/// here, the same answer redraws the rows and the footer and nothing else —
+/// and a `List` is lazy, so it asks only the rows on screen.
 struct TrailDraftWaypointRow: View {
-    let number: Int
-    let distanceMeters: Double
-    let legNotice: TrailLegNotice?
+    let draft: TrailDraft
+    /// Where in the line this row sits. The number a hiker reads is one more:
+    /// a list is counted from one and an array from zero.
+    let index: Int
 
     var body: some View {
+        let number = index + 1
         VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Text("Point \(number)")
                 Spacer(minLength: 12)
-                Text(Self.length(distanceMeters))
+                Text(Self.length(draft.distanceAlongLine(toWaypointAt: index)))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
-            if let legNotice {
-                TrailDraftNoticeLabel(notice: legNotice)
+            // The leg *into* this point, which is why the first row never has
+            // one: nothing arrives at it.
+            if let notice = draft.leg(arrivingAtWaypointAt: index)?.snap.notice {
+                TrailDraftNoticeLabel(notice: notice)
                     .foregroundStyle(.secondary)
             }
         }
@@ -499,5 +514,57 @@ struct TrailDraftWaypointRow: View {
     private static func length(_ meters: Double) -> String {
         Measurement(value: meters, unit: UnitLength.meters)
             .formatted(.measurement(width: .abbreviated, usage: .road))
+    }
+}
+
+/// What the whole line has to say for itself, under the points.
+///
+/// Its own `View` for the reason the row above is: both of the things it draws
+/// are read off ``TrailDraft/legs``, which every leg that lands rewrites.
+struct TrailDraftLineFooter: View {
+    let draft: TrailDraft
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // One line for the whole line, saying the worst thing any leg has
+            // to report — see ``TrailDraft/notice``. The per-leg sentence is on
+            // the row it belongs to; this is what a hiker who has not scrolled
+            // sees.
+            if let notice = draft.notice {
+                TrailDraftNoticeLabel(notice: notice)
+            }
+            // The two gestures on the map that nothing on screen could
+            // otherwise announce. Both are discoverable only by being told: a
+            // leg looks like a drawing rather than a control, and a pin that
+            // answers a press but not a tap advertises nothing. Withheld until
+            // there is a line to do either to.
+            if !draft.legs.isEmpty {
+                Text(
+                    """
+                    Tap a leg to add a point in the middle. \
+                    Press and hold a point to move it.
+                    """
+                )
+            }
+        }
+    }
+}
+
+/// *Try Again*, offered only when Overpass refused something.
+///
+/// Not for a leg with nothing mapped under it and not for one the hiker
+/// straightened themselves: asking again about either would spend a request to
+/// be told the same thing. See ``TrailLegSnap/isRetryable``.
+///
+/// Its own `View` for the reason the two above are — it reads
+/// ``TrailDraft/legs``, and it is a row inside the same section they are.
+struct TrailDraftRetryRow: View {
+    let maker: TrailDraftController
+
+    var body: some View {
+        if maker.draft.hasRetryableLegs {
+            Button("Try Again", systemImage: "arrow.clockwise", action: maker.retryRefusedLegs)
+                .accessibilityIdentifier("trail-draft-retry")
+        }
     }
 }

@@ -168,6 +168,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         case recording = "05-recording-a-hike"
         case offline = "06-offline-maps"
         case walkHistory = "07-walk-summary"
+        case trailMaker = "08-draw-your-own-trail"
     }
 
     // MARK: - Frames
@@ -399,6 +400,68 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         )
         capture(as: .walkHistory)
     }
+
+    /// Drawing a trail: the one frame in the set that shows the app *making*
+    /// something rather than showing something.
+    ///
+    /// The map is the canvas and the sheet is the drawing, so this is the only
+    /// frame that needs both halves of the screen doing work at once — which
+    /// is why the sheet stays at its middle detent and the points go down in
+    /// the band above it.
+    ///
+    /// **The legs are straight and that is honest here.** A drawn leg follows
+    /// mapped paths by asking Overpass, and no launch running tests may reach
+    /// a volunteer-run API — see ``OpenHikesModel/makeTrailMaker(container:trailGraphProvider:)``.
+    /// A launch with no graph hides the *Follow Paths* switch rather than
+    /// offering one it could not honour, so what this shoots is exactly what a
+    /// hiker drawing freehand sees, and nothing in the frame claims otherwise.
+    ///
+    /// The map is put over the fixture route's trailhead through the
+    /// simulator's own location rather than by importing a hike, because
+    /// selecting a hike pushes its screen and the maker's pill is offered only
+    /// while no screen is pushed.
+    @MainActor
+    func testCapturesDrawingATrail() {
+        let app = makeApp(arguments: [
+            "--ui-test-expanded-sheet",
+            "--ui-test-enable-location",
+        ])
+        app.resetAuthorizationStatus(for: .location)
+        addLocationPermissionMonitor()
+        setSimulatedLocation(Self.trailhead)
+        defer { XCUIDevice.shared.location = nil }
+
+        launch(app)
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(
+            map.waitForExistence(timeout: UITestTimeout.navigation),
+            "the map should be up before anything is drawn on it"
+        )
+        openTrailMaker(in: app)
+        drawTrailPoints(Self.drawnTrail, on: map, in: app)
+
+        // The header is the sentence this frame is of — how long the line is
+        // so far — and it sits under the search field, which is the section a
+        // middle detent opens on.
+        XCTAssertTrue(
+            scrollIntoView(element("trail-draft-length", in: app), in: app),
+            "the maker should show the line's length beside its points"
+        )
+        capture(as: .trailMaker)
+    }
+
+    /// Four taps in the band above a sheet at its middle detent, spread so the
+    /// line bends twice rather than running straight across.
+    ///
+    /// Wider apart than ``TrailMakerUITests``' own offsets: that suite is
+    /// asserting that a tap becomes a point, and this one is a picture of a
+    /// route somebody planned.
+    private static let drawnTrail: [CGVector] = [
+        CGVector(dx: 0.24, dy: 0.42),
+        CGVector(dx: 0.44, dy: 0.24),
+        CGVector(dx: 0.68, dy: 0.34),
+        CGVector(dx: 0.80, dy: 0.17),
+    ]
 }
 
 /// The gestures and lookups the frames above are built from.

@@ -206,10 +206,15 @@ nonisolated extension TrailPointStore {
         else { return [] }
 
         let centre = area.coordinate
+        // One reading of the clock for the whole pass rather than one per
+        // file: twelve hundred of them answer the same question, and a pass
+        // that straddled a tick would age two files differently for no reason
+        // anybody could see.
+        let now = clock()
         let within = files.compactMap { url -> (url: URL, place: TrailPlace, distance: Double)? in
             guard let data = try? Data(contentsOf: url),
                   let stored = try? JSONDecoder().decode(StoredPlace.self, from: data),
-                  clock().timeIntervalSince(stored.fetchedAt) <= Self.lifetime
+                  now.timeIntervalSince(stored.fetchedAt) <= Self.lifetime
             else { return nil }
             let distance = RouteGeometry.distanceMeters(
                 from: centre,

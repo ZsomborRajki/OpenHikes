@@ -40,6 +40,7 @@
 //  rather than hiding it.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 
@@ -268,16 +269,20 @@ nonisolated enum TrailPlaceOrder {
         let coordinates = route.map { point in
             CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
         }
+        // Projected out of the places once rather than read off each of them
+        // inside the segment loop. ``TrailPlace/clCoordinate`` is computed, so
+        // the inner read built a fresh `CLLocationCoordinate2D` per segment
+        // per place — forty places against a snapped line is a hundred and
+        // twenty thousand of them for one re-rank.
+        let targets = places.map { place in (id: place.id, coordinate: place.clCoordinate) }
         var best: [UUID: TrailPlaceAnchor] = [:]
         best.reserveCapacity(places.count)
         var travelled: Double = 0
-        for index in 0..<(coordinates.count - 1) {
-            let start = coordinates[index]
-            let end = coordinates[index + 1]
+        for (start, end) in coordinates.adjacentPairs() {
             let length = RouteGeometry.distanceMeters(from: start, to: end)
-            for place in places {
+            for target in targets {
                 let projection = RouteGeometry.project(
-                    place.clCoordinate,
+                    target.coordinate,
                     onSegmentFrom: start,
                     to: end
                 )
@@ -288,12 +293,12 @@ nonisolated enum TrailPlaceOrder {
                 // Nearest to the line wins, not first along it. A trail that
                 // doubles back passes a place twice, and the crossing the
                 // hiker means is the one it actually touches.
-                guard let existing = best[place.id] else {
-                    best[place.id] = candidate
+                guard let existing = best[target.id] else {
+                    best[target.id] = candidate
                     continue
                 }
                 if candidate.offRouteMeters < existing.offRouteMeters {
-                    best[place.id] = candidate
+                    best[target.id] = candidate
                 }
             }
             travelled += length

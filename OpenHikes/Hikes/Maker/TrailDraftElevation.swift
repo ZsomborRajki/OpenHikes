@@ -39,6 +39,24 @@
 //  figure goes when a point goes down and comes back a couple of seconds
 //  later.
 //
+//  ## How coarse the answer is, and why it is left that way
+//
+//  ``CuratedElevationRequest/maximumShapePoints`` is two hundred, and its
+//  argument is about a curated route: twenty kilometres is the longest one
+//  ``CuratedTrailQuery`` will list, so two hundred is a height every hundred
+//  metres. **A drawn trail has no such ceiling** — nothing stops a hiker
+//  drawing a hut-to-hut week — so the same two hundred is one height every
+//  five hundred metres on a hundred-kilometre line.
+//
+//  Left at two hundred anyway, for three reasons that agree. The chart plots
+//  at most ``RouteProfile/plottedSampleBudget`` points, so a denser request
+//  buys resolution the screen cannot draw, on a call that is billed. The climb
+//  is a *true reading at a coarser interval* rather than an interpolation of a
+//  finer-looking one, which is the same claim ``CuratedElevation`` makes about
+//  its own sampling. And finer is not automatically more accurate here: the
+//  App Store fixture's own heights, sampled densely and unsmoothed, put that
+//  walk's ascent 200 m high — see `Screenshots/README.md`.
+//
 //  ## Nothing here may ever block drawing, or saving
 //
 //  The line, the legs, the list and Save do not know this file exists. A free

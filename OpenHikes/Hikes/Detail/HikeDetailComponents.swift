@@ -212,7 +212,13 @@ struct HikeElevationPlaceholder: View {
     var body: some View {
         ElevationPlaceholderView(
             tint: hike.tintOpaque,
-            message: "No elevation data in this file"
+            // "in this file" for as long as every hike without heights had
+            // arrived as one. A recorded walk with no barometer never had a
+            // file, and since the trail maker neither has a drawn trail — which
+            // is exactly the hike a free subscriber's drawn trail *always* is,
+            // because the heights ride the gate ``StadiaElevationSource``
+            // enforces.
+            message: "No elevation data for this hike"
         )
     }
 }
