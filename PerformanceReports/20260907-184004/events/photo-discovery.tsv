@@ -1,0 +1,117 @@
+# epoch_s	elapsed_s	kind	name	value	detail
+# scenario	photo-discovery
+# started_epoch_s	1788799509.630268
+# arguments	/Users/zsoraj/Library/Developer/CoreSimulator/Devices/18D7364B-BF16-41C4-A2B0-B0D39E981CC3/data/Containers/Bundle/Application/33DB8EE4-3CBC-4881-8E91-1FCB7A9125A9/OpenHikes.app/OpenHikes --ui-testing --ui-test-performance-log=photo-discovery --ui-test-expanded-sheet --ui-test-import-gpx=ThumseeLoopFast --ui-test-photo-library=12
+1788799509.6325529	0.002284791	interval	ModelContainerInit	54.200375	thread=main
+1788799509.659743	0.029474916	interval	AppModelInit	88.797291	thread=main
+1788799510.0383983	0.408130083	mark	OpenHikesViewBody		
+1788799510.0438874	0.413619208	mark	MapViewCreated		
+1788799510.1695611	0.539293166	mark	MapRecordingTraceApplied		chunks=0 tail=0
+1788799510.1696692	0.539401	mark	MapTileSourceRebuilt		osm|https://tile.openstreetmap.org/{z}/{x}/{y}.png|19
+1788799510.2007675	0.570499416	mark	MapUpdateCalled		
+1788799510.220657	0.590389041	mark	MapSheetBody		
+1788799510.2297547	0.599486541	interval	GPXParsed	5.621333	thread=off-main
+1788799510.3029168	0.67264875	mark	MapSheetHikesBody		0 hikes searching=false
+1788799510.3773096	0.747041416	mark	MapSheetHikesBody		0 hikes searching=false
+1788799510.4106944	0.780426166	mark	MapUpdateCalled		
+1788799510.4127426	0.7824745	mark	MapUpdateCalled		
+1788799510.4736996	0.8434315	mark	OpenHikesViewBody		
+1788799510.4739468	0.843678625	mark	MapUpdateCalled		
+1788799510.477556	0.847287875	mark	MapSheetBody		
+1788799510.4783902	0.848122041	mark	MapSheetHikesBody		0 hikes searching=false
+1788799510.4879014	0.857633458	mark	ScenePhaseChanged		active
+1788799510.4879656	0.857697375	interval	SceneDidBecomeActive	0.043375	thread=main
+1788799510.545539	0.915270708	stall	MainThread	974.70325	
+1788799510.5462298	0.915961666	mark	OpenHikesViewBody		
+1788799510.54669	0.916421875	mark	MapUpdateCalled		
+1788799510.5473778	0.917109666	mark	MapSheetBody		
+1788799510.5479462	0.917678083	mark	MapSheetHikesBody		0 hikes searching=false
+1788799510.5574663	0.927198083	interval	ScenePhaseTurn	69.543166	thread=main
+1788799510.566931	0.936662875	mark	MapSheetHikesBody		1 hikes searching=false
+1788799510.5799556	0.949687583	mark	OpenHikesViewBody		
+1788799510.5830348	0.95276675	mark	MapUpdateCalled		
+1788799510.583056	0.952787875	mark	MapRouteRebuilt		
+1788799510.592615	0.962346791	mark	OpenHikesViewBody		
+1788799510.5930269	0.962758833	mark	MapSheetBody		
+1788799510.5935004	0.96323225	mark	MapSheetHikesBody		1 hikes searching=false
+1788799510.599148	0.968879875	mark	MapSheetBody		
+1788799510.5997436	0.969475541	mark	MapSheetHikesBody		1 hikes searching=false
+1788799510.622655	0.992386791	mark	MapRouteRestyled		
+1788799510.628161	0.997892791	mark	OpenHikesViewBody		
+1788799510.6285903	0.998322208	mark	MapSheetBody		
+1788799510.629191	0.998922708	mark	MapSheetHikesBody		1 hikes searching=false
+1788799510.6328962	1.002628	sample	Process	82.2678451538086	cpu_s=1.984536 lowPower=0 thermal=nominal
+1788799510.6416426	1.011374416	mark	MapSheetBody		
+1788799510.6422114	1.011943416	mark	MapSheetHikesBody		1 hikes searching=false
+1788799511.632724	2.002455833	sample	Process	105.17414093017578	cpu_s=2.834228 lowPower=0 thermal=nominal
+1788799512.6346657	3.004397583	sample	Process	116.47103881835938	cpu_s=3.0765830000000003 lowPower=0 thermal=nominal
+1788799513.6343963	4.004128208	sample	Process	117.40853881835938	cpu_s=3.204135 lowPower=0 thermal=nominal
+1788799514.1047552	4.474486958	mark	MapSheetBody		
+1788799514.1286743	4.498406083	mark	HikeDetailBody		
+1788799514.16048	4.530211833	mark	HikePhotoSectionBody		0 photos
+1788799514.1608417	4.5305735	mark	PhotoOrderComputed		0 photos
+1788799514.2134583	4.58319025	interval	HikeDetailPrepared	1.889875	thread=off-main
+1788799514.2716022	4.641334125	mark	LiveFollowUpdate		no-fix
+1788799514.2725089	4.64224075	mark	HikeDetailBody		
+1788799514.2730377	4.6427696659999995	mark	TileClaimedBytesMeasured		keys=16 bytes=246691
+1788799514.2730443	4.642776291	interval	TileClaimedByteScan	0.587792	thread=off-main
+1788799514.2844338	4.65416575	mark	HikePhotoSectionBody		0 photos
+1788799514.2844658	4.654197791	mark	PhotoOrderComputed		0 photos
+1788799514.2868881	4.656620083	mark	ElevationChartBody		330 samples
+1788799514.3156266	4.685358458	mark	ElevationChartBody		330 samples
+1788799514.365512	4.735243916	mark	HikeDetailBody		
+1788799514.3662376	4.7359695	mark	HikePhotoSectionBody		0 photos
+1788799514.3662517	4.735983583	mark	PhotoOrderComputed		0 photos
+1788799514.3680882	4.73782025	mark	ElevationChartBody		330 samples
+1788799514.6345365	5.004268375	sample	Process	129.17418670654297	cpu_s=4.148027 lowPower=0 thermal=nominal
+1788799515.6326482	6.002380166	sample	Process	128.93981170654297	cpu_s=4.225499 lowPower=0 thermal=nominal
+1788799516.6345973	7.004329208	sample	Process	124.18978881835938	cpu_s=4.317143000000001 lowPower=0 thermal=nominal
+1788799517.6327481	8.002480083	sample	Process	123.84603881835938	cpu_s=4.3554010000000005 lowPower=0 thermal=nominal
+1788799518.633158	9.002889958	sample	Process	123.84603881835938	cpu_s=4.357033 lowPower=0 thermal=nominal
+1788799519.485196	9.854927958	mark	MapSheetBody		
+1788799519.4880288	9.857760708	mark	HikeDetailBody		
+1788799519.4887202	9.858452	mark	HikePhotoSectionBody		0 photos
+1788799519.4887412	9.858473083	mark	PhotoOrderComputed		0 photos
+1788799519.495608	9.865340041	mark	MapSheetBody		
+1788799519.501237	9.870968791	mark	HikeDetailBody		
+1788799519.50184	9.871572	mark	HikePhotoSectionBody		0 photos
+1788799519.5018575	9.871589415999999	mark	PhotoOrderComputed		0 photos
+1788799519.6345992	10.004331	sample	Process	128.68981170654297	cpu_s=4.796629 lowPower=0 thermal=nominal
+1788799520.6331837	11.002915541	sample	Process	128.09606170654297	cpu_s=4.8796479999999995 lowPower=0 thermal=nominal
+1788799521.6345847	12.004316458	sample	Process	128.18981170654297	cpu_s=5.102635 lowPower=0 thermal=nominal
+1788799522.6329982	13.002730208	sample	Process	128.20543670654297	cpu_s=5.199166 lowPower=0 thermal=nominal
+1788799523.633011	14.002742958	sample	Process	128.20543670654297	cpu_s=5.456327 lowPower=0 thermal=nominal
+1788799524.6326456	15.002377541	sample	Process	128.14293670654297	cpu_s=5.477087 lowPower=0 thermal=nominal
+1788799524.848878	15.218609916	mark	PhotoDiscoveryBody		0 matches
+1788799524.8658195	15.235551458	mark	PhotoDiscoveryBody		12 matches
+1788799525.633241	16.002972791	sample	Process	150.64295959472656	cpu_s=5.973325 lowPower=0 thermal=nominal
+1788799526.6345327	17.004264708	sample	Process	150.59608459472656	cpu_s=5.999516 lowPower=0 thermal=nominal
+1788799527.6346488	18.004380708	sample	Process	150.65858459472656	cpu_s=6.040452 lowPower=0 thermal=nominal
+1788799527.9260588	18.295790708	mark	MapSheetHikesBody		1 hikes searching=false
+1788799527.9295356	18.2992675	mark	HikeDetailBody		
+1788799527.9332423	18.302974208	mark	HikePhotoSectionBody		0 photos
+1788799527.933268	18.302999875	mark	PhotoOrderComputed		0 photos
+1788799527.9359982	18.305730125	mark	OpenHikesViewBody		
+1788799527.936339	18.306070708	mark	MapSheetBody		
+1788799527.9383109	18.308042791	mark	HikeDetailBody		
+1788799527.938923	18.308654666	mark	HikePhotoSectionBody		0 photos
+1788799527.9389396	18.308671416	mark	PhotoOrderComputed		0 photos
+1788799527.949755	18.319486875	mark	MapSheetBody		
+1788799527.9607542	18.330486	mark	HikeDetailBody		
+1788799527.9613512	18.331083	mark	HikePhotoSectionBody		0 photos
+1788799527.9613652	18.331097208	mark	PhotoOrderComputed		0 photos
+1788799528.6341562	19.003888083	sample	Process	150.73670959472656	cpu_s=6.204631 lowPower=0 thermal=nominal
+1788799529.6335607	20.003292458	sample	Process	150.58045959472656	cpu_s=6.208923 lowPower=0 thermal=nominal
+1788799530.6339145	21.003646375	sample	Process	150.37733459472656	cpu_s=6.249587000000001 lowPower=0 thermal=nominal
+1788799531.6343007	22.004032625	sample	Process	150.37733459472656	cpu_s=6.287939000000001 lowPower=0 thermal=nominal
+1788799532.633992	23.003723916	sample	Process	150.33045959472656	cpu_s=6.3266100000000005 lowPower=0 thermal=nominal
+1788799533.6342695	24.004001291	sample	Process	150.33045959472656	cpu_s=6.378068000000001 lowPower=0 thermal=nominal
+1788799534.6331844	25.002916333	sample	Process	150.47108459472656	cpu_s=6.6878210000000005 lowPower=0 thermal=nominal
+1788799535.6340027	26.003734541	sample	Process	150.47108459472656	cpu_s=6.717212000000001 lowPower=0 thermal=nominal
+1788799536.6330945	27.002826541	sample	Process	150.47108459472656	cpu_s=6.717739 lowPower=0 thermal=nominal
+1788799537.6327193	28.002451208	sample	Process	150.47108459472656	cpu_s=6.742398000000001 lowPower=0 thermal=nominal
+1788799538.6327894	29.00252125	sample	Process	150.43983459472656	cpu_s=6.946517 lowPower=0 thermal=nominal
+1788799538.6884882	29.058220166	stall	MainThread	328.807208	
+1788799539.6345477	30.004279708	sample	Process	150.31483459472656	cpu_s=7.298437 lowPower=0 thermal=nominal
+1788799540.6346204	31.004352333	sample	Process	150.31483459472656	cpu_s=7.520445 lowPower=0 thermal=nominal
+1788799541.633283	32.003014791	sample	Process	150.31483459472656	cpu_s=7.523090000000001 lowPower=0 thermal=nominal

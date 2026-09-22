@@ -1,0 +1,525 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test -project /Users/zsoraj/Documents/OpenHikes/OpenHikes.xcodeproj -scheme OpenHikesUI -configuration Debug -destination "platform=iOS Simulator,id=39CD80A0-822F-4AAB-8989-3CB433113D94" "-only-testing:OpenHikesUITests/PerformanceUITests/testPhotoDiscoverySelectionStaysInsideTheCell" -resultBundlePath /Users/zsoraj/Documents/OpenHikes/PerformanceReports/20260908-165712/result.xcresult -skipPackagePluginValidation
+
+2026-09-08 16:57:14.255 xcodebuild[91674:13327946]  DVTDeviceOperation: Encountered a build number "" that is incompatible with DVTBuildVersion.
+2026-09-08 16:57:14.357 xcodebuild[91674:13327904] [MT] DVTDeviceOperation: Encountered a build number "" that is incompatible with DVTBuildVersion.
+Resolve Package Graph
+
+
+Resolved source packages:
+  swift-numerics: https://github.com/apple/swift-numerics.git @ 1.1.1
+  SwiftLintPlugins: https://github.com/SimplyDanny/SwiftLintPlugins @ 0.65.1
+  OpenHikesShared: /Users/zsoraj/Documents/OpenHikes/OpenHikesShared @ local
+  swift-algorithms: https://github.com/apple/swift-algorithms/ @ 1.2.1
+  swift-collections: https://github.com/apple/swift-collections/ @ 1.6.0
+  swift-async-algorithms: https://github.com/apple/swift-async-algorithms/ @ 1.1.5
+
+Writing result bundle at path:
+	/Users/zsoraj/Documents/OpenHikes/PerformanceReports/20260908-165712/result.xcresult
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+Compile plug-in “SwiftLintBuildToolPlugin” in package “swiftlintplugins”
+[debug]: Compiling plugin to executable at /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/PluginExecutables/SwiftLintBuildToolPlugin
+[debug]: Using compiler /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc
+[debug]: Plugin compilation output directory '/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/PluginExecutables'
+[debug]: Computed hash of plugin compilation inputs: 8fc90fb3d158f1ce1fbd24aa636a1a1621e413da578700522ec4c67249780087
+
+
+Apply build tool plug-in “SwiftLintBuildToolPlugin” to target “OpenHikes” in project “OpenHikes”
+
+working directory:
+   /Users/zsoraj/Documents/OpenHikes
+tool mapping:
+   swiftlint: /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/SourcePackages/artifacts/swiftlintplugins/SwiftLintBinary/SwiftLintBinary.artifactbundle/macos/swiftlint [arm64-apple-macosx]
+tool search paths:
+   /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin
+   /Applications/Xcode.app/Contents/Developer/usr/bin
+   /Library/Apple/usr/bin
+   /System/Cryptexes/App/usr/bin
+   /Users/zsoraj/Library/Android/sdk/platform-tools
+   /Users/zsoraj/bin
+   /bin
+   /opt/homebrew/bin
+   /opt/homebrew/opt/ruby/bin
+   /opt/homebrew/sbin
+   /pkg/env/global/bin
+   /sbin
+   /usr/bin
+   /usr/local/bin
+   /usr/sbin
+   /var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin
+   /var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin
+   /var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin
+
+/usr/bin/sandbox-exec -p "(version 1)
+(deny default)
+(import \"system.sb\")
+(allow file-read*)
+(allow process*)
+(allow mach-lookup (global-name \"com.apple.lsd.mapdb\"))
+(allow mach-lookup (global-name \"com.apple.mobileassetd.v2\"))
+(allow file-write*
+    (subpath \"/private/tmp\")
+    (subpath \"/private/var/tmp\")
+    (subpath \"/private/var/folders/ds/8wdj8_sj45zc3q_c60w292zc0000gn/T\")
+    (subpath \"/private/var/folders/ds/8wdj8_sj45zc3q_c60w292zc0000gn/C\")
+)
+(deny file-write*
+    (subpath \"/Users/zsoraj/Documents/OpenHikes\")
+)
+(allow file-write*
+    (subpath \"/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/BuildToolPluginIntermediates/OpenHikes.output/OpenWidgetExtension/SwiftLintBuildToolPlugin\")
+    (subpath \"/private/var/folders/ds/8wdj8_sj45zc3q_c60w292zc0000gn/T/TemporaryItems\")
+)
+" /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/SourcePackages/artifacts/swiftlintplugins/SwiftLintBinary/SwiftLintBinary.artifactbundle/macos/swiftlint lint --quiet --force-exclude --cache-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/BuildToolPluginIntermediates/OpenHikes.output/OpenWidgetExtension/SwiftLintBuildToolPlugin/Cache /Users/zsoraj/Documents/OpenHikes/OpenWidget/HikeLiveActivity.swift /Users/zsoraj/Documents/OpenHikes/OpenWidget/HikeLiveActivityViews.swift /Users/zsoraj/Documents/OpenHikes/OpenWidget/HikeRecordingControl.swift /Users/zsoraj/Documents/OpenHikes/OpenWidget/OpenWidgetBundle.swift /Users/zsoraj/Documents/OpenHikes/OpenWidget/TrailWidget.swift /Users/zsoraj/Documents/OpenHikes/OpenWidget/TrailWidgetComponents.swift /Users/zsoraj/Documents/OpenHikes/OpenWidget/TrailWidgetPlaceholder.swift
+
+/usr/bin/sandbox-exec -p "(version 1)
+(deny default)
+(import \"system.sb\")
+(allow file-read*)
+(allow process*)
+(allow mach-lookup (global-name \"com.apple.lsd.mapdb\"))
+(allow mach-lookup (global-name \"com.apple.mobileassetd.v2\"))
+(allow file-write*
+    (subpath \"/private/tmp\")
+    (subpath \"/private/var/tmp\")
+    (subpath \"/private/var/folders/ds/8wdj8_sj45zc3q_c60w292zc0000gn/T\")
+    (subpath \"/private/var/folders/ds/8wdj8_sj45zc3q_c60w292zc0000gn/C\")
+)
+(deny file-write*
+    (subpath \"/Users/zsoraj/Documents/OpenHikes\")
+)
+(allow file-write*
+    (subpath \"/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/BuildToolPluginIntermediates/OpenHikes.output/OpenHikes/SwiftLintBuildToolPlugin\")
+    (subpath \"/private/var/folders/ds/8wdj8_sj45zc3q_c60w292zc0000gn/T/TemporaryItems\")
+)
+" /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/SourcePackages/artifacts/swiftlintplugins/SwiftLintBinary/SwiftLintBinary.artifactbundle/macos/swiftlint lint --quiet --force-exclude --cache-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/BuildToolPluginIntermediates/OpenHikes.output/OpenHikes/SwiftLintBuildToolPlugin/Cache /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/Configuration/ModelConfiguration+OpenHikes.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/Configuration/Secrets.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/Configuration/SettingsKey.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/Navigation/OpenHikesView.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/Navigation/OpenHikesView+Photos.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/Navigation/SheetLayoutReader.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/Navigation/SheetPresentation.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/Navigation/SheetRoute.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/AppLaunchEnvironment.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/OpenHikesApp.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/OpenHikesModel.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/OpenHikesModel+Composition.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/OpenHikesModel+LaunchSweeps.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/OpenHikesModel+SceneLifecycle.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/OpenHikesModel+Weather.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/App/SceneLifecycleGate.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/Diagnostics/FieldMetrics/FieldMetrics.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/Diagnostics/FieldMetrics/FieldMetricsDigest.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/Diagnostics/FieldMetrics/FieldMetricsDigest+MetricKit.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/Diagnostics/FieldMetrics/FieldMetricsStore.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/Diagnostics/FieldMetrics/FieldSignpost.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/Diagnostics/FieldMetrics/SeededFieldMetricsFixture.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/Diagnostics/MainThreadWatchdog.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/Diagnostics/PerformanceCounterProbe.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/Diagnostics/PerformanceLog.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/Diagnostics/ProcessResourceSample.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/Diagnostics/RenderInstrumentation.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/Color+Hex.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/Dismissal.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/GlassButtonStyle.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/LiquidGlass.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/MainActorDelivery.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/PowerStateMonitor.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/General/TapTarget.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/ElevationChartView.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/GPXExport.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/GPXImport.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/GPXInbox.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/Hike.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/Hike+Presentation.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/Hike+Statistics.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/Hike+TrailBreakdowns.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeAutoFollow.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeDeletion.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeDetailComponents.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeDetailInteraction.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeDetailPreparation.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeDetailView.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeDetailView+OfflineStorage.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeDifficultySection.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeFormat.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeImport.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeLocalState.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeRow.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeStatsViews.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeSupportingTypes.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeSurfaceSection.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeTitle.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeTrailAnalysis.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeWalk.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/HikeWalkHistory.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/OpenHikesSchema.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/RouteInference.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/RouteLinePatternPicker.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/RouteProfile.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/SeededWalkFixture.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/TrailBreakdown.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/TrailDifficulty.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/TrailSurface.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/TrailWalk.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/TrailWalkSession.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/WalkControls.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/WalkRow.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Hikes/WalkSummaryView.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Intents/HikeIntentContext.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Intents/HikeIntentCoordinator.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Intents/HikeIntentFailure.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Intents/HikeIntentReports.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Intents/HikeReportIntents.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Intents/OpenHikesShortcuts.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Intents/RecordingIntents.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/LiveActivity/HikeActivityPresenting.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/LiveActivity/HikeLiveActivityController.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/LiveActivity/SystemHikeActivityPresenter.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Location/BackgroundTrailTracker.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Location/BackgroundTrailTracker+LiveActivity.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Location/BackgroundTrailTracker+Snapshot.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Location/BackgroundTrailTracker+SnapshotWriter.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Location/DormantLocationSource.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Location/LocationManager.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Location/SignificantLocationFeed.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Location/SignificantLocationMonitor+CoreLocation.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Rendering/DirectionalPolylineRenderer.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Rendering/RouteLinePattern.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Rendering/TrailBasemapRenderer.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Search/HikeSearch.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Search/SearchCompleter.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Search/SearchFailure.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/Search/SearchQueryPolicy.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/DisplayedRoute.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/MapCoordinator.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/MapCoordinator+Attribution.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/MapCoordinator+Highlight.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/MapCoordinator+RouteStyles.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/MapCoordinator+TrackingButton.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/MapCoordinator+WalkHighlight.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/MapSheet.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/MapSheetHikes.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/MapSidePanel.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/MapState.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/MapView.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/TopEdgeReader.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Map/TrailWidgetReload.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/CameraCaptureMetadata.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/CameraPicker.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/HikePhoto.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/HikePhotoImage.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/HikePhotoImport.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/HikePhotoSection.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/HikePhotoStore.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/HikePhotoTimeline.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/HikePhotoViewer.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/LibraryPhotoMatch.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/LimitedLibraryPresenter.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/MapPhotoAnnotations.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/MapPhotoControls.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/PhotoCaptureController.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/PhotoCapturePresentation.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/PhotoCaptureSubject.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/PhotoDiscoveryController.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/PhotoDiscoverySheet.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/PhotoLibraryReader.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/PhotoLibrarySource.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/PhotoLibraryWriter.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/PhotoMapPin.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/PhotoMetadataStamp.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/PhotoTrailAnchor.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/PhotoViewerSelection.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/SeededPhotoFixture.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Purchases/MapEntitlement.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Purchases/MapEntitlementStore.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Purchases/MapPaywallView.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Purchases/MapPurchaseLinks.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Purchases/MapSubscriptionTerms.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/BundledTrailGraphProvider.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/HikeRecorder.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/HikeRecorder+Energy.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/HikeRecorder+Helpers.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/HikeRecorder+Lifecycle.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/HikeRecorder+Persistence.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/HikeRecorder+Reminders.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/HikeRecorder+State.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/OverpassDecodable.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/OverpassTrailGraphDecoding.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/OverpassTrailGraphProvider.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/RecordedWalk.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/RecordingDistanceAccumulator.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/RecordingEnergyPolicy.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/RecordingModels.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/RecordingObservables.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/RecordingPreparation.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/RecordingRouteReviewControls.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/RecordingSensors.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/RecordingSharedStateStore.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/RecordingTrailContext.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/RecordingView.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/RouteReviewSection.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/SerialAsyncQueue.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/TrackJournal.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/TrailGraph.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/TrailGraphCorridor.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/TrailMatcher.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/TrailMatcher+Interpolation.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/TrailMatcher+Scoring.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/TrailMatcherGraphIndex.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/TrailMatcherGraphIndex+EdgeGrid.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/TrailMatcherGraphIndex+Routing.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/TrailMatcherLegs.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/TrailMatcherModels.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Reminders/MovementReminder.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Reminders/MovementReminderActions.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Reminders/MovementReminderController.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Reminders/MovementReminderNotifying.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Reminders/MovementReminderPolicy.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Reminders/SystemMovementReminderNotifier.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Settings/CloudSyncSection.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Settings/FieldMetricsFormat.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Settings/FieldMetricsSection.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Settings/OfflineStorageActions.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Settings/SettingsView.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Sync/CloudSyncCoordinator.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Sync/CloudSyncOutcome.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Sync/CloudSyncStatus.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Sync/SyncedSettings.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/AutoSave/AutoSaveController.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/AutoSave/AutoSaveTileStore.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileCache.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileCache+DiskReads.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileCache+DurableQuota.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileCache+FileHelpers.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileCache+LegacyKeys.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileCache+MemoryTier.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileCache+MutationVersions.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileCache+Network.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileCache+StorageManagement.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileCache+TierDuplicates.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileCache+Transport.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileFailureLog.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileLoadGate.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileLoadResult.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileOwnership.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Cache/TileRetryAdvice.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Offline/OfflineDownloadClaim.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Offline/OfflineDownloadRegistry.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Offline/OfflineStorageAlerts.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Offline/OfflineTileDownloader.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Offline/OfflineTileDownloader+Completion.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Offline/OfflineTileDownloader+Planning.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Offline/OfflineTileDownloader+Quota.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Offline/StoredTileDeletion.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Rendering/CachingTileOverlayRenderer.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/Rendering/TileOverlay.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/LegacyTileKeyMigration.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/MapAttributionView.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/SlippyTileMath.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/TileAttribution.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/TileAttributionView.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/TileCacheKey.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/TileCorridor.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/TileNetworkPolicy.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/TileProvider.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Tiles/TileURLRedaction.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Weather/WeatherAttribution.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Weather/WeatherBadge.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Weather/WeatherDetailSheet.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Weather/WeatherFocusModifier.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Weather/WeatherManager.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Weather/WeatherReadingFormat.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Weather/WeatherReadingStore.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Weather/WeatherRequestState.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Weather/WeatherSubject.swift
+
+Process build tool plug-in results
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (22 targets)
+    Target 'OpenHikesUITests' in project 'OpenHikes'
+        ➜ Explicit dependency on target 'OpenHikes' in project 'OpenHikes'
+    Target 'OpenHikes' in project 'OpenHikes'
+        ➜ Explicit dependency on target 'SwiftLintBuildToolPlugin' in project 'SwiftLintPlugins'
+        ➜ Explicit dependency on target 'OpenWidgetExtension' in project 'OpenHikes'
+        ➜ Explicit dependency on target 'AsyncAlgorithms' in project 'swift-async-algorithms'
+        ➜ Explicit dependency on target 'Algorithms' in project 'swift-algorithms'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'HeapModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'OpenHikesShared' in project 'OpenHikesShared'
+    Target 'HeapModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'HeapModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'HeapModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'Algorithms' in project 'swift-algorithms'
+        ➜ Explicit dependency on target 'Algorithms' in project 'swift-algorithms'
+        ➜ Explicit dependency on target 'RealModule' in project 'swift-numerics'
+    Target 'Algorithms' in project 'swift-algorithms'
+        ➜ Explicit dependency on target 'RealModule' in project 'swift-numerics'
+    Target 'RealModule' in project 'swift-numerics'
+        ➜ Explicit dependency on target 'RealModule' in project 'swift-numerics'
+        ➜ Explicit dependency on target '_NumericsShims' in project 'swift-numerics'
+    Target 'RealModule' in project 'swift-numerics'
+        ➜ Explicit dependency on target '_NumericsShims' in project 'swift-numerics'
+    Target '_NumericsShims' in project 'swift-numerics' (no dependencies)
+    Target 'AsyncAlgorithms' in project 'swift-async-algorithms'
+        ➜ Explicit dependency on target 'AsyncAlgorithms' in project 'swift-async-algorithms'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+    Target 'AsyncAlgorithms' in project 'swift-async-algorithms'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+    Target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'ContainersPreview' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'InternalCollectionsUtilities' in project 'swift-collections' (no dependencies)
+    Target 'OpenWidgetExtension' in project 'OpenHikes'
+        ➜ Explicit dependency on target 'SwiftLintBuildToolPlugin' in project 'SwiftLintPlugins'
+        ➜ Explicit dependency on target 'OpenHikesShared' in project 'OpenHikesShared'
+    Target 'OpenHikesShared' in project 'OpenHikesShared'
+        ➜ Explicit dependency on target 'OpenHikesShared' in project 'OpenHikesShared'
+    Target 'OpenHikesShared' in project 'OpenHikesShared' (no dependencies)
+    Target 'SwiftLintBuildToolPlugin' in project 'SwiftLintPlugins'
+        ➜ Explicit dependency on target 'SwiftLintBuildToolPlugin' in project 'SwiftLintPlugins'
+    Target 'SwiftLintBuildToolPlugin' in project 'SwiftLintPlugins' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --version --output-format xml1
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --print-asset-tag-combinations --output-format xml1 /Users/zsoraj/Documents/OpenHikes/OpenHikes/Assets.xcassets
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+ReadFileContents /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/docc/features.json
+
+Build description signature: 50eff4f615f677149eade483ae5ad362
+Build description path: /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/XCBuildData/50eff4f615f677149eade483ae5ad362.xcbuilddata
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk /Users/zsoraj/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache
+    cd /Users/zsoraj/Documents/OpenHikes/OpenHikes.xcodeproj
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -o /Users/zsoraj/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache
+
+note: Disabling hardened runtime with ad-hoc codesigning. (in target 'OpenHikes' from project 'OpenHikes')
+SwiftDriver OpenHikes normal arm64 com.apple.xcode.tools.swift.compiler (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name OpenHikes -Onone @/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes.SwiftFileList -DDEBUG -default-isolation\=MainActor -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios26.0-simulator -g -module-cache-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -warnings-as-errors -index-store-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 6 -I /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64 -c -j14 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/zsoraj/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/zsoraj/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes_const_extract_protocols.json -Xcc -iquote -Xcc /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-generated-files.hmap -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-own-target-headers.hmap -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes-c6e73af986a4027c91831fe8dc8ab7ae-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-project-headers.hmap -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/SourcePackages/checkouts/swift-numerics/Sources/_NumericsShims/include -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/DerivedSources-normal/arm64 -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/DerivedSources/arm64 -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes-Swift.h -working-directory /Users/zsoraj/Documents/OpenHikes -experimental-emit-module-separately -disable-cmo
+
+ProcessInfoPlistFile /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenWidgetExtension.appex/Info.plist /Users/zsoraj/Documents/OpenHikes/OpenWidget/Info.plist (in target 'OpenWidgetExtension' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    builtin-infoPlistUtility /Users/zsoraj/Documents/OpenHikes/OpenWidget/Info.plist -producttype com.apple.product-type.app-extension -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenWidgetExtension.build/assetcatalog_generated_info.plist -o /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenWidgetExtension.appex/Info.plist
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ OpenHikes (in target 'OpenHikes' from project 'OpenHikes')
+
+EmitSwiftModule normal arm64 (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    
+
+SwiftCompile normal arm64 Compiling\ RecordingRouteReviewControls.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/RecordingRouteReviewControls.swift (in target 'OpenHikes' from project 'OpenHikes')
+
+SwiftCompile normal arm64 /Users/zsoraj/Documents/OpenHikes/OpenHikes/Recording/RecordingRouteReviewControls.swift (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    
+
+SwiftCompile normal arm64 Compiling\ PhotoDiscoverySheet.swift /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/PhotoDiscoverySheet.swift (in target 'OpenHikes' from project 'OpenHikes')
+
+SwiftCompile normal arm64 /Users/zsoraj/Documents/OpenHikes/OpenHikes/Photos/PhotoDiscoverySheet.swift (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling RecordingRouteReviewControls.swift (in target 'OpenHikes' from project 'OpenHikes')
+
+SwiftDriverJobDiscovery normal arm64 Compiling PhotoDiscoverySheet.swift (in target 'OpenHikes' from project 'OpenHikes')
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for OpenHikes (in target 'OpenHikes' from project 'OpenHikes')
+
+SwiftDriver\ Compilation\ Requirements OpenHikes normal arm64 com.apple.xcode.tools.swift.compiler (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name OpenHikes -Onone @/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes.SwiftFileList -DDEBUG -default-isolation\=MainActor -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios26.0-simulator -g -module-cache-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -warnings-as-errors -index-store-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 6 -I /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64 -c -j14 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/zsoraj/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/zsoraj/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes_const_extract_protocols.json -Xcc -iquote -Xcc /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-generated-files.hmap -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-own-target-headers.hmap -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes-c6e73af986a4027c91831fe8dc8ab7ae-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-project-headers.hmap -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/SourcePackages/checkouts/swift-numerics/Sources/_NumericsShims/include -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/DerivedSources-normal/arm64 -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/DerivedSources/arm64 -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes-Swift.h -working-directory /Users/zsoraj/Documents/OpenHikes -experimental-emit-module-separately -disable-cmo
+
+SwiftDriver\ Compilation OpenHikes normal arm64 com.apple.xcode.tools.swift.compiler (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name OpenHikes -Onone @/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes.SwiftFileList -DDEBUG -default-isolation\=MainActor -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios26.0-simulator -g -module-cache-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -warnings-as-errors -index-store-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 6 -I /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64 -c -j14 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/zsoraj/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/zsoraj/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes_const_extract_protocols.json -Xcc -iquote -Xcc /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-generated-files.hmap -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-own-target-headers.hmap -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes-c6e73af986a4027c91831fe8dc8ab7ae-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-project-headers.hmap -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/SourcePackages/checkouts/swift-numerics/Sources/_NumericsShims/include -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/DerivedSources-normal/arm64 -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/DerivedSources/arm64 -Xcc -I/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes-Swift.h -working-directory /Users/zsoraj/Documents/OpenHikes -experimental-emit-module-separately -disable-cmo
+
+Copy /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes.swiftsourceinfo (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes.swiftsourceinfo /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo
+
+Copy /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.swiftmodule/arm64-apple-ios-simulator.abi.json /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes.abi.json (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes.abi.json /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.swiftmodule/arm64-apple-ios-simulator.abi.json
+
+Ld /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/OpenHikes.debug.dylib normal (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios26.0-simulator -dynamiclib -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -L/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -L/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator -filelist /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes.LinkFileList -install_name @rpath/OpenHikes.debug.dylib -Xlinker -rpath -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -Xlinker -rpath -Xlinker @executable_path/Frameworks -Xlinker -dead_strip -Xlinker -object_path_lto -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes_lto.o -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -debug_variant -Xlinker -dependency_info -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes_dependency_info.dat -fobjc-link-runtime -fprofile-instr-generate -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes.swiftmodule @/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes-linker-args.resp -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Xlinker -alias -Xlinker _main -Xlinker ___debug_main_executable_dylib_entry_point -Xlinker -no_adhoc_codesign -o /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/OpenHikes.debug.dylib -Xlinker -add_ast_path -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-async-algorithms.build/Debug-iphonesimulator/AsyncAlgorithms.build/Objects-normal/arm64/AsyncAlgorithms.swiftmodule @/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-async-algorithms.build/Debug-iphonesimulator/AsyncAlgorithms.build/Objects-normal/arm64/AsyncAlgorithms-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/OrderedCollections.build/Objects-normal/arm64/OrderedCollections.swiftmodule @/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/OrderedCollections.build/Objects-normal/arm64/OrderedCollections-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/InternalCollectionsUtilities.build/Objects-normal/arm64/InternalCollectionsUtilities.swiftmodule @/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/InternalCollectionsUtilities.build/Objects-normal/arm64/InternalCollectionsUtilities-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/DequeModule.build/Objects-normal/arm64/DequeModule.swiftmodule @/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/DequeModule.build/Objects-normal/arm64/DequeModule-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/ContainersPreview.build/Objects-normal/arm64/ContainersPreview.swiftmodule @/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/ContainersPreview.build/Objects-normal/arm64/ContainersPreview-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Algorithms.swiftmodule @/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Algorithms-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-numerics.build/Debug-iphonesimulator/RealModule.build/Objects-normal/arm64/RealModule.swiftmodule @/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-numerics.build/Debug-iphonesimulator/RealModule.build/Objects-normal/arm64/RealModule-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/HeapModule.build/Objects-normal/arm64/HeapModule.swiftmodule @/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/HeapModule.build/Objects-normal/arm64/HeapModule-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikesShared.build/Debug-iphonesimulator/OpenHikesShared.build/Objects-normal/arm64/OpenHikesShared.swiftmodule @/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikesShared.build/Debug-iphonesimulator/OpenHikesShared.build/Objects-normal/arm64/OpenHikesShared-linker-args.resp
+
+ConstructStubExecutorLinkFileList /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-ExecutorLinkFileList-normal-arm64.txt (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    construct-stub-executor-link-file-list /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/OpenHikes.debug.dylib /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libPreviewsJITStubExecutor_no_swift_entry_point.a /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libPreviewsJITStubExecutor.a --output /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-ExecutorLinkFileList-normal-arm64.txt
+note: Using stub executor library with Swift entry point. (in target 'OpenHikes' from project 'OpenHikes')
+
+Ld /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/OpenHikes normal (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios26.0-simulator -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -L/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator -Xlinker -rpath -Xlinker @executable_path -Xlinker -rpath -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/PackageFrameworks -Xlinker -rpath -Xlinker @executable_path/Frameworks -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -debug_variant -e ___debug_blank_executor_main -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_dylib -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-DebugDylibPath-normal-arm64.txt -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_instlnm -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-DebugDylibInstallName-normal-arm64.txt -Xlinker -filelist -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes-ExecutorLinkFileList-normal-arm64.txt -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes.app-Simulated.xcent -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __ents_der -Xlinker /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes.app-Simulated.xcent.der /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/OpenHikes.debug.dylib -Xlinker -no_adhoc_codesign -o /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/OpenHikes
+
+CopySwiftLibs /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/OpenHikes.debug.dylib --scan-folder /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/Frameworks --scan-folder /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/PlugIns --scan-folder /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/SystemExtensions --scan-folder /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/Extensions --platform iphonesimulator --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+ProcessInfoPlistFile /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/Info.plist /Users/zsoraj/Documents/OpenHikes/OpenHikes/Info.plist (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    builtin-infoPlistUtility /Users/zsoraj/Documents/OpenHikes/OpenHikes/Info.plist -producttype com.apple.product-type.application -genpkginfo /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/PkgInfo -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/assetcatalog_generated_info.plist -scanforprivacyfile /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/PlugIns/OpenWidgetExtension.appex -o /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/Info.plist
+
+ExtractAppIntentsMetadata (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name OpenHikes --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk --xcode-version 17F113 --platform-family iOS --deployment-target 26.0 --bundle-identifier tappium.com.OpenHikes --output /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app --target-triple arm64-apple-ios26.0-simulator --binary-file /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/OpenHikes --dependency-file /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes_dependency_info.dat --stringsdata-file /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes.SwiftFileList --metadata-file-list /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes.DependencyMetadataFileList --static-metadata-file-list /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes.DependencyStaticMetadataFileList --swift-const-vals-list /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/Objects-normal/arm64/OpenHikes.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-09-08 16:57:21.878 appintentsmetadataprocessor[91722:13328349] Starting appintentsmetadataprocessor export
+2026-09-08 16:57:21.943 appintentsmetadataprocessor[91722:13328349] Writing Metadata.appintents
+2026-09-08 16:57:21.943 appintentsmetadataprocessor[91722:13328349] Metadata root: /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/Metadata.appintents
+
+CodeSign /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/OpenHikes.debug.dylib (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/OpenHikes.debug.dylib
+
+CodeSign /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/__preview.dylib (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/__preview.dylib
+/Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app/__preview.dylib: replacing existing signature
+
+CodeSign /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --entitlements /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikes.build/OpenHikes.app.xcent --timestamp\=none --generate-entitlement-der /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app
+
+Validate /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app (in target 'OpenHikes' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    builtin-validationUtility /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikes.app -shallow-bundle -infoplist-subpath Info.plist
+
+ProcessInfoPlistFile /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikesUITests-Runner.app/PlugIns/OpenHikesUITests.xctest/Info.plist /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikesUITests.build/empty-OpenHikesUITests.plist (in target 'OpenHikesUITests' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    builtin-infoPlistUtility /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikesUITests.build/empty-OpenHikesUITests.plist -producttype com.apple.product-type.bundle.ui-testing -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikesUITests.build/ProductTypeInfoPlistAdditions.plist -o /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikesUITests-Runner.app/PlugIns/OpenHikesUITests.xctest/Info.plist
+
+CopySwiftLibs /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikesUITests-Runner.app/PlugIns/OpenHikesUITests.xctest (in target 'OpenHikesUITests' from project 'OpenHikes')
+    cd /Users/zsoraj/Documents/OpenHikes
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikesUITests-Runner.app/PlugIns/OpenHikesUITests.xctest/OpenHikesUITests --scan-folder /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikesUITests-Runner.app/PlugIns/OpenHikesUITests.xctest/Frameworks --scan-folder /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikesUITests-Runner.app/PlugIns/OpenHikesUITests.xctest/PlugIns --scan-folder /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikesUITests-Runner.app/PlugIns/OpenHikesUITests.xctest/SystemExtensions --scan-folder /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikesUITests-Runner.app/PlugIns/OpenHikesUITests.xctest/Extensions --platform iphonesimulator --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Products/Debug-iphonesimulator/OpenHikesUITests-Runner.app/PlugIns/OpenHikesUITests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/zsoraj/Library/Developer/Xcode/DerivedData/OpenHikes-dsjbwflghsqoduenorzlwghaliyw/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/OpenHikesUITests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+2026-09-08 16:57:25.603544+0200 OpenHikesUITests-Runner[91730:13328583] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-09-08 16:57:26.089.
+Test Suite 'OpenHikesUITests.xctest' started at 2026-09-08 16:57:26.089.
+Test Suite 'PerformanceUITests' started at 2026-09-08 16:57:26.089.
+Test Case '-[OpenHikesUITests.PerformanceUITests testPhotoDiscoverySelectionStaysInsideTheCell]' started.
+    t =     0.00s Start Test at 2026-09-08 16:57:26.090
+    t =     0.01s Set Up
+    t =     0.02s Open tappium.com.OpenHikes
+    t =     0.02s     Launch tappium.com.OpenHikes
+2026-09-08 16:57:26.170 xcodebuild[91674:13327904] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-09-08 16:57:26.170 xcodebuild[91674:13327904] [MT] IDELaunchParametersSnapshot: no debugger version
+objc[91730]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_23F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.5.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x106a00310) and /Library/Developer/CoreSimulator/Volumes/iOS_23F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.5.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x105e98398). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =     0.69s         Setting up automation session
+    t =     1.43s         Wait for tappium.com.OpenHikes to idle
+    t =     2.99s Wait for tappium.com.OpenHikes to become Running Foreground
+    t =     2.99s Waiting 30.0s for "hike-row" Any to exist
+    t =     4.07s     Checking `Expect predicate `existsNoRetry == 1` for object "hike-row" Any`
+    t =     4.07s         Checking existence of `"hike-row" Any`
+    t =     4.17s Waiting 15.0s for "hike-row" Any to exist
+    t =     5.23s     Checking `Expect predicate `existsNoRetry == 1` for object "hike-row" Any`
+    t =     5.23s         Checking existence of `"hike-row" Any`
+    t =     5.29s Tap "hike-row" Any
+    t =     5.29s     Wait for tappium.com.OpenHikes to idle
+    t =     5.30s     Find the "hike-row" Any
+    t =     5.34s     Check for interrupting elements affecting "hike-row" Button
+    t =     5.38s     Synthesize event
+    t =     5.67s     Wait for tappium.com.OpenHikes to idle
+    t =     6.55s Waiting 10.0s for "Thumsee Loop (fast, simulated)" NavigationBar to exist
+    t =     7.62s     Checking `Expect predicate `existsNoRetry == 1` for object "Thumsee Loop (fast, simulated)" NavigationBar`
+    t =     7.62s         Checking existence of `"Thumsee Loop (fast, simulated)" NavigationBar`
+    t =     7.72s Waiting 30.0s for "performance-counters" Any to exist
+    t =     8.80s     Checking `Expect predicate `existsNoRetry == 1` for object "performance-counters" Any`
+    t =     8.80s         Checking existence of `"performance-counters" Any`
+    t =     8.83s Find the "performance-counters" Any
+    t =     9.36s Waiting 30.0s for "performance-counters" Any to exist
+    t =    10.43s     Checking `Expect predicate `existsNoRetry == 1` for object "performance-counters" Any`
+    t =    10.44s         Checking existence of `"performance-counters" Any`
+    t =    10.47s Find the "performance-counters" Any
+    t =    10.48s Checking existence of `ScrollView (First Match)`
+    t =    10.51s Checking existence of `"photo-discovery-button" Any`
+    t =    10.56s Find the "photo-discovery-button" Any
+    t =    10.62s Swipe up ScrollView (First Match)
+    t =    10.62s     Wait for tappium.com.OpenHikes to idle
+    t =    10.62s     Find the ScrollView (First Match)
+    t =    10.65s     Check for interrupting elements affecting ScrollView
+    t =    10.68s     Synthesize event
+    t =    11.11s     Wait for tappium.com.OpenHikes to idle
+    t =    12.03s Checking existence of `"photo-discovery-button" Button`
+    t =    12.10s Find the "photo-discovery-button" Button
+    t =    12.16s Swipe up ScrollView at {{8.0, 527.4}, {386.0, 338.6}}
+    t =    12.16s     Wait for tappium.com.OpenHikes to idle
+    t =    12.16s     Find the ScrollView at {{8.0, 527.4}, {386.0, 338.6}}
+    t =    12.18s     Check for interrupting elements affecting ScrollView
+    t =    12.21s     Synthesize event
+    t =    12.65s     Wait for tappium.com.OpenHikes to idle
+    t =    14.77s Checking existence of `"photo-discovery-button" Button`
+    t =    14.84s Find the "photo-discovery-button" Button
+    t =    14.90s Find the "photo-discovery-button" Button
+    t =    14.95s Find the Target Application 'tappium.com.OpenHikes'
+    t =    14.97s Waiting 30.0s for "performance-counters" Any to exist
+    t =    16.04s     Checking `Expect predicate `existsNoRetry == 1` for object "performance-counters" Any`
+    t =    16.04s         Checking existence of `"performance-counters" Any`
+    t =    16.05s Find the "performance-counters" Any
+    t =    16.07s Tap "photo-discovery-button" Button
+    t =    16.07s     Wait for tappium.com.OpenHikes to idle
+    t =    16.07s     Find the "photo-discovery-button" Button
+    t =    16.12s     Check for interrupting elements affecting "photo-discovery-button" Button
+    t =    16.16s     Synthesize event
+    t =    16.45s     Wait for tappium.com.OpenHikes to idle
+    t =    16.95s Waiting 30.0s for "photo-discovery-grid" Any to exist
+    t =    18.02s     Checking `Expect predicate `existsNoRetry == 1` for object "photo-discovery-grid" Any`
+    t =    18.02s         Checking existence of `"photo-discovery-grid" Any`
+    t =    20.12s Waiting 30.0s for "performance-counters" Any to exist
+    t =    21.19s     Checking `Expect predicate `existsNoRetry == 1` for object "performance-counters" Any`
+    t =    21.19s         Checking existence of `"performance-counters" Any`
+    t =    21.22s Find the "performance-counters" Any
+PERF-PHASE	photo-discovery	discovery-open	1788879462.156472	1788879467.3299341
+PERF-COUNT	photo-discovery	discovery-open	CPU.s	0.7570730000000001	
+PERF-COUNT	photo-discovery	discovery-open	Footprint.MB	22.890670776367188	
+PERF-COUNT	photo-discovery	discovery-open	HikeDetailBody	3.0	
+PERF-COUNT	photo-discovery	discovery-open	HikePhotoSectionBody	3.0	
+PERF-COUNT	photo-discovery	discovery-open	MapSheetBody	2.0	
+PERF-COUNT	photo-discovery	discovery-open	MapSheetHikesBody	1.0	
+PERF-COUNT	photo-discovery	discovery-open	OpenHikesViewBody	1.0	
+PERF-COUNT	photo-discovery	discovery-open	PhotoDiscoveryBody	2.0	
+PERF-COUNT	photo-discovery	discovery-open	PhotoOrderComputed	3.0	
+PERF-COUNT	photo-discovery	discovery-open	Process	5.0	
+    t =    21.24s Waiting 30.0s for "performance-counters" Any to exist
+    t =    22.32s     Checking `Expect predicate `existsNoRetry == 1` for object "performance-counters" Any`
+    t =    22.32s         Checking existence of `"performance-counters" Any`
+    t =    22.35s Find the "performance-counters" Any
+    t =    22.88s Waiting 30.0s for "performance-counters" Any to exist
+    t =    23.95s     Checking `Expect predicate `existsNoRetry == 1` for object "performance-counters" Any`
+    t =    23.96s         Checking existence of `"performance-counters" Any`
+    t =    23.99s Find the "performance-counters" Any
+    t =    24.01s Waiting 30.0s for "discovered-photo-0" Any to exist
+    t =    25.09s     Checking `Expect predicate `existsNoRetry == 1` for object "discovered-photo-0" Any`
+    t =    25.09s         Checking existence of `"discovered-photo-0" Any`
+    t =    25.22s Tap "photo-discovery-selection-count" Any[0.50, 0.50]
+    t =    25.22s     Wait for tappium.com.OpenHikes to idle
+    t =    25.23s     Find the "photo-discovery-selection-count" Any
+    t =    25.29s     Check for interrupting elements affecting "photo-discovery-selection-count" StaticText
+    t =    25.34s     Synthesize event
+    t =    25.34s         Find the "photo-discovery-selection-count" StaticText
+    t =    25.40s         Find the "photo-discovery-selection-count" StaticText
+    t =    25.46s         Find the "photo-discovery-selection-count" StaticText
+    t =    25.81s     Wait for tappium.com.OpenHikes to idle
+    t =    25.82s Waiting 30.0s for "performance-counters" Any to exist
+    t =    26.89s     Checking `Expect predicate `existsNoRetry == 1` for object "performance-counters" Any`
+    t =    26.89s         Checking existence of `"performance-counters" Any`
+    t =    26.93s Find the "performance-counters" Any
+    t =    27.45s Waiting 30.0s for "performance-counters" Any to exist
+    t =    28.53s     Checking `Expect predicate `existsNoRetry == 1` for object "performance-counters" Any`
+    t =    28.53s         Checking existence of `"performance-counters" Any`
+    t =    28.56s Find the "performance-counters" Any
+    t =    28.58s Waiting 30.0s for "performance-counters" Any to exist
+    t =    29.66s     Checking `Expect predicate `existsNoRetry == 1` for object "performance-counters" Any`
+    t =    29.66s         Checking existence of `"performance-counters" Any`
+    t =    29.69s Find the "performance-counters" Any
+    t =    29.71s Tap "discovered-photo-0" Any
+    t =    29.71s     Wait for tappium.com.OpenHikes to idle
+    t =    29.71s     Find the "discovered-photo-0" Any
+    t =    29.83s     Check for interrupting elements affecting "discovered-photo-0" Button
+    t =    29.88s     Synthesize event
+    t =    30.17s     Wait for tappium.com.OpenHikes to idle
+    t =    30.17s Tap "discovered-photo-1" Any
+    t =    30.17s     Wait for tappium.com.OpenHikes to idle
+    t =    30.18s     Find the "discovered-photo-1" Any
+    t =    30.31s     Check for interrupting elements affecting "discovered-photo-1" Button
+    t =    30.36s     Synthesize event
+    t =    30.66s     Wait for tappium.com.OpenHikes to idle
+    t =    30.66s Tap "discovered-photo-2" Any
+    t =    30.66s     Wait for tappium.com.OpenHikes to idle
+    t =    30.66s     Find the "discovered-photo-2" Any
+    t =    30.79s     Check for interrupting elements affecting "discovered-photo-2" Button
+    t =    30.84s     Synthesize event
+    t =    31.13s     Wait for tappium.com.OpenHikes to idle
+    t =    31.14s Tap "discovered-photo-3" Any
+    t =    31.14s     Wait for tappium.com.OpenHikes to idle
+    t =    31.15s     Find the "discovered-photo-3" Any
+    t =    31.28s     Check for interrupting elements affecting "discovered-photo-3" Button
+    t =    31.33s     Synthesize event
+    t =    31.63s     Wait for tappium.com.OpenHikes to idle
+    t =    32.63s Waiting 30.0s for "performance-counters" Any to exist
+    t =    33.70s     Checking `Expect predicate `existsNoRetry == 1` for object "performance-counters" Any`
+    t =    33.70s         Checking existence of `"performance-counters" Any`
+    t =    33.73s Find the "performance-counters" Any
+PERF-PHASE	photo-discovery	discovery-select	1788879475.7941241	1788879479.837229
+PERF-COUNT	photo-discovery	discovery-select	CPU.s	0.807332999999999	
+PERF-COUNT	photo-discovery	discovery-select	Process	4.0	
+    t =    33.75s Waiting 30.0s for "photo-discovery-select-all-button" Any to exist
+    t =    34.81s     Checking `Expect predicate `existsNoRetry == 1` for object "photo-discovery-select-all-button" Any`
+    t =    34.81s         Checking existence of `"photo-discovery-select-all-button" Any`
+    t =    34.90s Waiting 30.0s for "performance-counters" Any to exist
+    t =    35.95s     Checking `Expect predicate `existsNoRetry == 1` for object "performance-counters" Any`
+    t =    35.95s         Checking existence of `"performance-counters" Any`
+    t =    35.98s Find the "performance-counters" Any
+    t =    36.00s Tap "photo-discovery-select-all-button" Any
+    t =    36.00s     Wait for tappium.com.OpenHikes to idle
+    t =    36.00s     Find the "photo-discovery-select-all-button" Any
+    t =    36.06s     Check for interrupting elements affecting "photo-discovery-select-all-button" Button
+    t =    36.11s     Synthesize event
+    t =    36.40s     Wait for tappium.com.OpenHikes to idle
+    t =    37.41s Waiting 30.0s for "performance-counters" Any to exist
+    t =    38.47s     Checking `Expect predicate `existsNoRetry == 1` for object "performance-counters" Any`
+    t =    38.47s         Checking existence of `"performance-counters" Any`
+    t =    38.50s Find the "performance-counters" Any
+PERF-PHASE	photo-discovery	discovery-select-all	1788879482.087539	1788879484.610892
+PERF-COUNT	photo-discovery	discovery-select-all	CPU.s	0.19803899999999874	
+PERF-COUNT	photo-discovery	discovery-select-all	Footprint.MB	0.140625	
+PERF-COUNT	photo-discovery	discovery-select-all	Process	3.0	
+    t =    38.52s Waiting 30.0s for "performance-counters" Any to exist
+    t =    39.58s     Checking `Expect predicate `existsNoRetry == 1` for object "performance-counters" Any`
+    t =    39.58s         Checking existence of `"performance-counters" Any`
+    t =    39.61s Find the "performance-counters" Any
+    t =    39.63s Pressing Home button
+    t =    42.10s Open tappium.com.OpenHikes
+    t =    42.10s     Activate tappium.com.OpenHikes
+    t =    42.14s         Wait for tappium.com.OpenHikes to idle
+    t =    42.14s Wait for tappium.com.OpenHikes to become Running Foreground
+    t =    42.14s Waiting 30.0s for "performance-counters" Any to exist
+    t =    43.17s     Checking `Expect predicate `existsNoRetry == 1` for object "performance-counters" Any`
+    t =    43.17s         Checking existence of `"performance-counters" Any`
+    t =    43.20s Find the "performance-counters" Any
+PERF-PHASE	photo-discovery	finish	1788879485.7191072	1788879489.31267
+PERF-COUNT	photo-discovery	finish	CPU.s	0.5417170000000002	
+PERF-COUNT	photo-discovery	finish	HikeDetailBody	9.0	
+PERF-COUNT	photo-discovery	finish	HikePhotoSectionBody	9.0	
+PERF-COUNT	photo-discovery	finish	MapSheetBody	6.0	
+PERF-COUNT	photo-discovery	finish	MapSheetHikesBody	2.0	
+PERF-COUNT	photo-discovery	finish	OpenHikesViewBody	6.0	
+PERF-COUNT	photo-discovery	finish	PhotoOrderComputed	9.0	
+PERF-COUNT	photo-discovery	finish	Process	3.0	
+PERF-COUNT	photo-discovery	finish	SceneDidBecomeActive	1.0	
+PERF-COUNT	photo-discovery	finish	ScenePhaseChanged	4.0	
+PERF-COUNT	photo-discovery	finish	ScenePhaseTurn	4.0	
+PERF-COUNT	photo-discovery	finish	SceneResignActive	2.0	
+PERF-COUNT	photo-discovery	finish	SceneResignSave	2.0	
+    t =    43.22s Pressing Home button
+    t =    45.70s Tear Down
+Test Case '-[OpenHikesUITests.PerformanceUITests testPhotoDiscoverySelectionStaysInsideTheCell]' passed (45.998 seconds).
+Test Suite 'PerformanceUITests' passed at 2026-09-08 16:58:12.088.
+	 Executed 1 test, with 0 failures (0 unexpected) in 45.998 (45.999) seconds
+Test Suite 'OpenHikesUITests.xctest' passed at 2026-09-08 16:58:12.089.
+	 Executed 1 test, with 0 failures (0 unexpected) in 45.998 (46.000) seconds
+Test Suite 'Selected tests' passed at 2026-09-08 16:58:12.089.
+	 Executed 1 test, with 0 failures (0 unexpected) in 45.998 (46.001) seconds
+2026-09-08 16:58:12.430 xcodebuild[91674:13327904] [MT] IDETestOperationsObserverDebug: 50.059 elapsed -- Testing started completed.
+2026-09-08 16:58:12.430 xcodebuild[91674:13327904] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-09-08 16:58:12.430 xcodebuild[91674:13327904] [MT] IDETestOperationsObserverDebug: 50.059 sec, +50.059 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/zsoraj/Documents/OpenHikes/PerformanceReports/20260908-165712/result.xcresult
+
+** TEST SUCCEEDED **
+
+Testing started

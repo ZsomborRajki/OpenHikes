@@ -1,0 +1,126 @@
+# epoch_s	elapsed_s	kind	name	value	detail
+# scenario	offline-browsing
+# started_epoch_s	1787785220.824429
+# arguments	/Users/zsoraj/Library/Developer/CoreSimulator/Devices/C0080CF5-FB27-4F8A-B5CE-2968F1CFC9A4/data/Containers/Bundle/Application/1B319A75-44F9-4BE3-9B73-127AE434DB25/OpenHikes.app/OpenHikes --ui-testing --ui-test-performance-log=offline-browsing --ui-test-offline --ui-test-import-gpx=ThumseeLoopFast
+1787785220.8272996	0.002870541	interval	ModelContainerInit	37.262583	
+1787785220.8498383	0.025409125	interval	AppModelInit	67.203958	
+1787785221.043022	0.218593	mark	OpenHikesViewBody		
+1787785221.0437922	0.219363208	mark	MapViewCreated		
+1787785221.0960932	0.271664041	mark	MapRecordingTraceApplied		chunks=0 tail=0
+1787785221.0962055	0.271776333	mark	MapTileSourceRebuilt		osm|https://tile.openstreetmap.org/{z}/{x}/{y}.png|19
+1787785221.1068084	0.2823795	mark	MapUpdateCalled		
+1787785221.1242695	0.299840458	mark	MapSheetBody		
+1787785221.1297007	0.305271666	interval	GPXParsed	2.863084	
+1787785221.1993654	0.374936458	mark	MapSheetHikesBody		0 hikes searching=false
+1787785221.2357643	0.411335333	mark	MapSheetHikesBody		0 hikes searching=false
+1787785221.265129	0.440700166	mark	MapUpdateCalled		
+1787785221.2671466	0.4427175	mark	MapUpdateCalled		
+1787785221.3266244	0.502195375	stall	MainThread	543.898833	
+1787785221.3272889	0.502859916	mark	OpenHikesViewBody		
+1787785221.3295057	0.505076541	mark	MapUpdateCalled		
+1787785221.3295295	0.505100458	mark	MapRouteRebuilt		
+1787785221.3326192	0.508190166	mark	MapSheetBody		
+1787785221.333096	0.508666958	mark	MapSheetHikesBody		0 hikes searching=false
+1787785221.347507	0.523077958	mark	OpenHikesViewBody		
+1787785221.350888	0.526459041	mark	MapSheetBody		
+1787785221.3517585	0.527329458	mark	MapSheetHikesBody		0 hikes searching=false
+1787785221.363959	0.53953	mark	ScenePhaseChanged		active
+1787785221.395743	0.571313833	mark	MapSheetHikesBody		1 hikes searching=false
+1787785221.4280207	0.603591625	mark	OpenHikesViewBody		
+1787785221.4460845	0.621655375	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.446086	0.621656833	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4461026	0.621673541	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4461052	0.621676208	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.446111	0.621682041	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4461322	0.621703166	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.446235	0.621805791	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4465318	0.622102625	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4465473	0.622118208	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4469006	0.6224715	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4469614	0.622532333	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4469671	0.622538125	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4469864	0.622557458	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4470084	0.622579416	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4470181	0.622589125	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.447086	0.622657041	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4471493	0.622720333	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4479303	0.623501416	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4479463	0.62351725	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4479666	0.6235375	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4479773	0.623548291	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4489076	0.624478583	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.448924	0.624494916	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4489355	0.624506375	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.448961	0.624532083	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.448968	0.624538958	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4489758	0.624546875	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.449065	0.624635875	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4490745	0.624645458	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.449731	0.625302041	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.449761	0.625331916	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4510565	0.6266275	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4512136	0.626784458	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.451226	0.626797	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4513285	0.626899375	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4514291	0.627000208	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.451613	0.627183958	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4525447	0.628115708	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4526668	0.628237666	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.452674	0.628244916	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4530358	0.628606833	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4542015	0.629772416	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4542692	0.62984025	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4543104	0.629881375	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4545195	0.630090583	mark	TileFetchSuppressed		purpose=interactive reason=offline
+1787785221.4681766	0.643747583	mark	MapSheetBody		
+1787785221.4687557	0.644326583	mark	MapSheetHikesBody		1 hikes searching=false
+1787785221.4807703	0.65634125	mark	MapRouteRestyled		
+1787785221.4919639	0.667534916	mark	MapSheetHikesBody		1 hikes searching=false
+1787785221.4940689	0.669639833	mark	MapSheetBody		
+1787785221.4945006	0.670071666	mark	MapSheetHikesBody		1 hikes searching=false
+1787785221.4958951	0.671466125	mark	OpenHikesViewBody		
+1787785221.4984777	0.674048666	mark	MapSheetBody		
+1787785221.499084	0.674655	mark	MapSheetHikesBody		1 hikes searching=false
+1787785221.8282366	1.0038075	sample	Process	98.78351593017578	cpu_s=2.387806 lowPower=0 thermal=nominal
+1787785222.8281164	2.0036875	sample	Process	111.83041381835938	cpu_s=2.894745 lowPower=0 thermal=nominal
+1787785223.8280385	3.0036095	sample	Process	116.31478881835938	cpu_s=3.009727 lowPower=0 thermal=nominal
+1787785224.828128	4.003698958	sample	Process	116.22103881835938	cpu_s=3.047898 lowPower=0 thermal=nominal
+1787785225.8282027	5.003773708	sample	Process	116.22103881835938	cpu_s=3.050383 lowPower=0 thermal=nominal
+1787785226.8281696	6.003740583	sample	Process	115.93978881835938	cpu_s=3.0913180000000002 lowPower=0 thermal=nominal
+1787785227.828153	7.00372375	sample	Process	115.83041381835938	cpu_s=3.12728 lowPower=0 thermal=nominal
+1787785228.8280604	8.003631291	sample	Process	116.11166381835938	cpu_s=3.2165950000000003 lowPower=0 thermal=nominal
+1787785228.950896	8.126467041	mark	MapSheetBody		
+1787785228.9562728	8.131843875	mark	MapSheetBody		
+1787785229.8281133	9.003684375	sample	Process	117.06478881835938	cpu_s=3.35525 lowPower=0 thermal=nominal
+1787785230.8283346	10.003905541	sample	Process	117.01791381835938	cpu_s=3.450883 lowPower=0 thermal=nominal
+1787785231.828642	11.004212791	sample	Process	117.01791381835938	cpu_s=3.499648 lowPower=0 thermal=nominal
+1787785232.8285491	12.004120125	sample	Process	117.01791381835938	cpu_s=3.570257 lowPower=0 thermal=nominal
+1787785233.8281126	13.003683666	sample	Process	117.06478881835938	cpu_s=3.620815 lowPower=0 thermal=nominal
+1787785234.8280854	14.003656375	sample	Process	117.06478881835938	cpu_s=3.6821550000000003 lowPower=0 thermal=nominal
+1787785235.8281467	15.003717666	sample	Process	117.00228881835938	cpu_s=3.7683670000000005 lowPower=0 thermal=nominal
+1787785236.8290036	16.0045745	sample	Process	117.00228881835938	cpu_s=3.820101 lowPower=0 thermal=nominal
+1787785237.828158	17.003728916	sample	Process	117.00228881835938	cpu_s=3.863221 lowPower=0 thermal=nominal
+1787785238.8280723	18.003643333	sample	Process	117.00228881835938	cpu_s=3.983595 lowPower=0 thermal=nominal
+1787785239.828606	19.00417675	sample	Process	117.00228881835938	cpu_s=4.048527 lowPower=0 thermal=nominal
+1787785240.828111	20.003681833	sample	Process	117.00228881835938	cpu_s=4.142837 lowPower=0 thermal=nominal
+1787785241.828672	21.004243	sample	Process	117.00228881835938	cpu_s=4.196299000000001 lowPower=0 thermal=nominal
+1787785242.8281016	22.003672666	sample	Process	117.00228881835938	cpu_s=4.251642 lowPower=0 thermal=nominal
+1787785243.8281386	23.003709583	sample	Process	117.00228881835938	cpu_s=4.3692400000000005 lowPower=0 thermal=nominal
+1787785244.8281567	24.003727666	sample	Process	117.00228881835938	cpu_s=4.397366 lowPower=0 thermal=nominal
+1787785245.828137	25.003707958	sample	Process	117.00228881835938	cpu_s=4.428748 lowPower=0 thermal=nominal
+1787785246.827037	26.002608166	mark	ScenePhaseChanged		inactive
+1787785246.8280766	26.003647625	sample	Process	117.00228881835938	cpu_s=4.469323000000001 lowPower=0 thermal=nominal
+1787785246.8521392	26.027710291	mark	MapSheetHikesBody		1 hikes searching=false
+1787785246.8602133	26.03578425	mark	OpenHikesViewBody		
+1787785246.861376	26.036946958	mark	MapSheetBody		
+1787785246.8679276	26.043498458	mark	MapSheetBody		
+1787785246.868979	26.044550041	mark	OpenHikesViewBody		
+1787785247.4850924	26.660663291	mark	ScenePhaseChanged		background
+1787785247.4935212	26.669092083	mark	MapSheetHikesBody		1 hikes searching=false
+1787785247.4953878	26.670958875	mark	OpenHikesViewBody		
+1787785247.498616	26.674187	mark	MapSheetBody		
+1787785247.6021411	26.777712166	mark	MapSheetHikesBody		1 hikes searching=false
+1787785247.609021	26.784591833	mark	MapSheetBody		
+1787785247.6098835	26.7854545	mark	OpenHikesViewBody		
+1787785247.8370137	27.012584708	sample	Process	93.09603881835938	cpu_s=4.669503 lowPower=0 thermal=nominal
+1787785248.8365753	28.012146291	sample	Process	93.09603881835938	cpu_s=4.674498 lowPower=0 thermal=nominal

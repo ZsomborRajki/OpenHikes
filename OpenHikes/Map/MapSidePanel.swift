@@ -57,16 +57,14 @@ struct MapSidePanel<Content: View>: View {
         content
             .frame(width: MapSidePanelLayout.width)
             .frame(maxHeight: .infinity)
-            // The sheet's background is clear glass over the map
-            // (`presentationBackground` in `OpenHikesView`); this is the same
-            // surface, shaped rather than edge-to-edge because a panel has all
-            // four of its own edges.
+            // An overlay has no system sheet material of its own. Use
+            // adaptive glass here too, bounded by the panel's four edges.
             .background {
                 #if os(visionOS)
                 Color.clear
                 #else
                 Color.clear.glassEffect(
-                    .clear,
+                    .regular,
                     in: .rect(cornerRadius: MapSidePanelLayout.cornerRadius)
                 )
                 #endif

@@ -584,7 +584,7 @@ private extension MapSheetHikes {
         .buttonStyle(.plain)
         // The drawn route's row is tinted, and the tint needs something to be
         // a percentage *of*. Fifteen percent of a colour laid straight over
-        // the sheet's clear glass is fifteen percent of the map underneath —
+        // the sheet's glass is fifteen percent of the map underneath —
         // which on one tile is a visible blue wash and on the next is nothing
         // at all, and "nothing at all" is what a hiker sees most of the time.
         // The surface makes it the same tint on every tile; it is also the

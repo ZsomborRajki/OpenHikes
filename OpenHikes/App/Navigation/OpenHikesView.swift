@@ -413,13 +413,11 @@ struct OpenHikesView: View {
                 )
                     .presentationDetents(SheetPresentation.detents, selection: sheet.detentBinding)
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-                    .presentationBackground {
-                        #if os(visionOS)
-                        Color.clear
-                        #else
-                        Color.clear.glassEffect(.clear, in: Rectangle())
-                        #endif
-                    }
+                    // Keep the system's adaptive sheet glass rather than
+                    // replacing it with a separate clear-glass surface.
+                    #if os(visionOS)
+                    .presentationBackground(Color.clear)
+                    #endif
                     .presentationDragIndicator(.visible)
                     .interactiveDismissDisabled()
             }

@@ -1,0 +1,340 @@
+# epoch_s	elapsed_s	kind	name	value	detail
+# scenario	background-recording
+# started_epoch_s	1788799234.522377
+# arguments	/Users/zsoraj/Library/Developer/CoreSimulator/Devices/18D7364B-BF16-41C4-A2B0-B0D39E981CC3/data/Containers/Bundle/Application/33DB8EE4-3CBC-4881-8E91-1FCB7A9125A9/OpenHikes.app/OpenHikes --ui-testing --ui-test-performance-log=background-recording --ui-test-expanded-sheet --ui-test-enable-location --ui-test-trail-graph=ThumseeRidgePath
+1788799234.5242195	0.0018425	interval	ModelContainerInit	59.821791	thread=main
+1788799234.5595477	0.037170667	interval	AppModelInit	100.522584	thread=main
+1788799234.7727978	0.250420917	mark	OpenHikesViewBody		
+1788799234.7805362	0.258159084	mark	MapViewCreated		
+1788799234.8345487	0.312171584	mark	MapRecordingTraceApplied		chunks=0 tail=0
+1788799234.8347278	0.312350792	mark	MapTileSourceRebuilt		osm|https://tile.openstreetmap.org/{z}/{x}/{y}.png|19
+1788799234.8471253	0.32474825	mark	MapUpdateCalled		
+1788799234.8741202	0.351743209	mark	MapSheetBody		
+1788799234.9629762	0.440599084	mark	MapSheetHikesBody		0 hikes searching=false
+1788799235.015203	0.492825959	mark	MapSheetHikesBody		0 hikes searching=false
+1788799235.0507007	0.528323584	mark	MapUpdateCalled		
+1788799235.0530434	0.530666375	mark	MapUpdateCalled		
+1788799235.0535789	0.531201834	mark	LocationFixDelivered		
+1788799235.0536225	0.5312455	mark	LocationPublished		
+1788799235.1171856	0.594808542	mark	OpenHikesViewBody		
+1788799235.1174214	0.595044417	mark	MapUpdateCalled		
+1788799235.1204815	0.598104542	mark	MapSheetBody		
+1788799235.121262	0.598885167	mark	MapSheetHikesBody		0 hikes searching=false
+1788799235.128895	0.606518125	mark	MapCentered		
+1788799235.1359737	0.613596709	mark	ScenePhaseChanged		active
+1788799235.1362407	0.613863667	interval	SceneDidBecomeActive	0.241917	thread=main
+1788799235.1496496	0.627272625	stall	MainThread	690.755709	
+1788799235.3983278	0.87595075	mark	OpenHikesViewBody		
+1788799235.399481	0.877104125	mark	MapSheetBody		
+1788799235.4074981	0.885121042	mark	BackgroundFixDelivered		
+1788799235.4109728	0.88859575	interval	ScenePhaseTurn	274.973833	thread=main
+1788799235.414498	0.892121	mark	OpenHikesViewBody		
+1788799235.4159844	0.893607417	mark	MapSheetBody		
+1788799235.5247355	1.002358417	sample	Process	68.0022201538086	cpu_s=2.339471 lowPower=0 thermal=nominal
+1788799235.8799386	1.3575615	interval	TileNetworkFetch	724.6165	thread=off-main
+1788799236.0107749	1.488397834	interval	TileNetworkFetch	855.460083	thread=off-main
+1788799236.029074	1.5066969590000001	interval	TileNetworkFetch	873.738625	thread=off-main
+1788799236.1952026	1.672825542	interval	TileNetworkFetch	1039.889541	thread=off-main
+1788799236.2428987	1.720521584	interval	TileNetworkFetch	1087.585875	thread=off-main
+1788799236.2649412	1.742564209	interval	TileNetworkFetch	383.640958	thread=off-main
+1788799236.313952	1.7915750419999998	interval	TileNetworkFetch	1158.619667	thread=off-main
+1788799236.337007	1.814630042	interval	TileNetworkFetch	307.261666	thread=off-main
+1788799236.3370552	1.814678084	interval	TileNetworkFetch	325.361334	thread=off-main
+1788799236.3880115	1.8656345	interval	TileNetworkFetch	192.087333	thread=off-main
+1788799236.4386208	1.916243709	mark	LocationFixDelivered		
+1788799236.4386806	1.9163037090000001	mark	LocationPublished		
+1788799236.4479685	1.925591584	interval	TileNetworkFetch	204.312125	thread=off-main
+1788799236.48199	1.959613084	interval	TileNetworkFetch	216.300917	thread=off-main
+1788799236.5156503	1.993273292	interval	TileNetworkFetch	200.799708	thread=off-main
+1788799236.5244389	2.002061834	sample	Process	98.01791381835938	cpu_s=3.096148 lowPower=0 thermal=nominal
+1788799236.5341067	2.011729709	interval	TileNetworkFetch	195.944708	thread=off-main
+1788799236.5785735	2.0561965	interval	TileNetworkFetch	240.410625	thread=off-main
+1788799236.6738467	2.151469667	interval	TileNetworkFetch	285.036167	thread=off-main
+1788799236.7256227	2.203245542	interval	TileNetworkFetch	276.85475	thread=off-main
+1788799236.7261398	2.203762834	mark	MapSheetBody		
+1788799236.7530563	2.230679167	mark	MapSheetBody		
+1788799236.7994952	2.277118125	interval	TileNetworkFetch	316.715	thread=off-main
+1788799236.8839862	2.361609125	interval	TileNetworkFetch	367.598042	thread=off-main
+1788799236.918507	2.3961300420000002	interval	TileNetworkFetch	383.617667	thread=off-main
+1788799237.0728388	2.550461834	interval	TileNetworkFetch	493.629875	thread=off-main
+1788799237.0910223	2.5686452920000002	interval	TileNetworkFetch	416.409666	thread=off-main
+1788799237.091368	2.568990834	interval	TileNetworkFetch	364.902292	thread=off-main
+1788799237.0914092	2.569032125	interval	TileNetworkFetch	291.249666	thread=off-main
+1788799237.304909	2.782531959	interval	TileNetworkFetch	420.204209	thread=off-main
+1788799237.5251665	3.002789459	sample	Process	101.97103881835938	cpu_s=3.363808 lowPower=0 thermal=nominal
+1788799237.538353	3.015976	interval	TileNetworkFetch	619.132958	thread=off-main
+1788799237.7505405	3.228163459	interval	TileNetworkFetch	676.177792	thread=off-main
+1788799238.21347	3.691093	interval	TileNetworkFetch	1120.847333	thread=off-main
+1788799238.5244184	4.002041375	sample	Process	102.04916381835938	cpu_s=3.517266 lowPower=0 thermal=nominal
+1788799238.5404005	4.018023584	mark	MapSheetHikesBody		0 hikes searching=false
+1788799238.541895	4.019517792	mark	OpenHikesViewBody		
+1788799238.572446	4.050069209	mark	RecordingEnergyProfileApplied		precise filter=10.0
+1788799238.5750868	4.05270975	mark	LiveActivityStart		recording
+1788799238.5752752	4.052898167	mark	OpenHikesViewBody		
+1788799238.5761096	4.053732625	mark	MapSheetBody		
+1788799238.5769732	4.054596125	mark	MapSheetHikesBody		1 hikes searching=false
+1788799238.5936723	4.071295292	mark	RecordingFixDelivered		
+1788799238.5936859	4.071308959	mark	RecordingFixReceived		
+1788799238.593804	4.071426875	interval	RecordingTailRebuilt	0.039292	thread=main
+1788799238.5938754	4.071498417	mark	OpenHikesViewBody		
+1788799238.5941646	4.071787542	mark	LiveFixAccepted		
+1788799238.5946448	4.072267709	mark	RecordingFixDelivered		
+1788799238.5946653	4.07228825	mark	RecordingFixReceived		
+1788799238.5947134	4.072336334	interval	RecordingTailRebuilt	0.015042	thread=main
+1788799238.5947325	4.072355417	mark	LiveFixAccepted		
+1788799238.595078	4.072701042	mark	MapSheetHikesBody		1 hikes searching=false
+1788799238.5971403	4.07476325	mark	OpenHikesViewBody		
+1788799238.5974739	4.075096792	mark	MapSheetBody		
+1788799238.6206427	4.098265625	mark	RecordingBody		
+1788799238.6292484	4.106871292	mark	RecordingClockTick		
+1788799238.6467361	4.124359042	mark	RecordingPhotoPinsBody		0 photos
+1788799238.646749	4.124371917	mark	PhotoOrderComputed		0 photos
+1788799238.6937337	4.171356625	mark	MapSheetBody		
+1788799238.700139	4.177761917	mark	RecordingBody		
+1788799238.7011423	4.178765292	mark	RecordingPhotoPinsBody		0 photos
+1788799238.7011662	4.178789042	mark	PhotoOrderComputed		0 photos
+1788799238.7498474	4.227470334	mark	MapRecordingTraceApplied		chunks=0 tail=2
+1788799238.8382554	4.315878375	mark	MapRouteRestyled		
+1788799238.8406367	4.31825975	mark	RecordingPhotoPinsBody		0 photos
+1788799238.840678	4.318301	mark	PhotoOrderComputed		0 photos
+1788799238.8432717	4.320894625	interval	TrailMatcherWork	2.941958	thread=off-main
+1788799238.8437064	4.321329459	mark	MapSheetHikesBody		1 hikes searching=false
+1788799238.8474646	4.325087625	mark	OpenHikesViewBody		
+1788799238.847766	4.325389	mark	MapSheetBody		
+1788799238.84964	4.327262917	mark	RecordingBody		
+1788799238.8501902	4.327813125	mark	RecordingPhotoPinsBody		0 photos
+1788799238.8502152	4.327838084	mark	PhotoOrderComputed		0 photos
+1788799238.8558729	4.333495917	interval	RecordingTailRebuilt	0.013292	thread=main
+1788799238.8559158	4.333538792	mark	LiveTrailMatchApplied		
+1788799238.912325	4.389947917	interval	TileNetworkFetch	1819.6846249999999	thread=off-main
+1788799239.380601	4.858224	interval	TileNetworkFetch	2287.97425	thread=off-main
+1788799239.4448125	4.922435542	mark	RecordingFixDelivered		
+1788799239.4448655	4.922488459	mark	RecordingFixReceived		
+1788799239.444883	4.922506125	mark	RecordingFixRejected		
+1788799239.5248344	5.002457292	sample	Process	109.45543670654297	cpu_s=4.319132 lowPower=0 thermal=nominal
+1788799239.6362517	5.113874792	mark	RecordingClockTick		
+1788799240.0586076	5.536230542	interval	TileNetworkFetch	2753.013791	thread=off-main
+1788799240.329953	5.807576042	interval	TileNetworkFetch	2790.726542	thread=off-main
+1788799240.3893218	5.866944834	interval	TileNetworkFetch	2638.060833	thread=off-main
+1788799240.4020472	5.879670209	interval	TileNetworkFetch	2187.635792	thread=off-main
+1788799240.5012426	5.978865584	interval	TileNetworkFetch	1587.946833	thread=off-main
+1788799240.5203586	5.997981459	interval	TileNetworkFetch	1139.031291	thread=off-main
+1788799240.524445	6.002067959	sample	Process	112.83043670654297	cpu_s=4.412992 lowPower=0 thermal=nominal
+1788799240.6419945	6.119617459	interval	TileNetworkFetch	582.675584	thread=off-main
+1788799240.6559858	6.133608917	interval	TileNetworkFetch	325.322333	thread=off-main
+1788799240.661538	6.139160917	mark	RecordingClockTick		
+1788799240.7379677	6.215590834	interval	TileNetworkFetch	347.705916	thread=off-main
+1788799240.76698	6.244603	interval	TileNetworkFetch	364.306583	thread=off-main
+1788799240.8120608	6.289683834	interval	TileNetworkFetch	309.906625	thread=off-main
+1788799240.8120823	6.289705334	interval	TileNetworkFetch	291.03175	thread=off-main
+1788799240.8232746	6.300897584	interval	TileNetworkFetch	180.489416	thread=off-main
+1788799241.0492957	6.526918584	interval	TileNetworkFetch	392.607792	thread=off-main
+1788799241.2016675	6.679290625	interval	TileNetworkFetch	462.626541	thread=off-main
+1788799241.2217684	6.6993913339999995	interval	TileNetworkFetch	453.964666	thread=off-main
+1788799241.2861712	6.763794209	interval	TileNetworkFetch	472.930292	thread=off-main
+1788799241.290181	6.767803959	interval	TileNetworkFetch	476.917916	thread=off-main
+1788799241.4074476	6.885070667	interval	TileNetworkFetch	357.110916	thread=off-main
+1788799241.4074478	6.885070709	interval	TileNetworkFetch	583.434083	thread=off-main
+1788799241.4084446	6.886067625	interval	TileNetworkFetch	205.915542	thread=off-main
+1788799241.4658198	6.943442834	interval	TileNetworkFetch	243.311709	thread=off-main
+1788799241.5180562	6.99567925	interval	TileNetworkFetch	230.840666	thread=off-main
+1788799241.5248802	7.00250325	sample	Process	113.01793670654297	cpu_s=4.616439 lowPower=0 thermal=nominal
+1788799241.6065452	7.084168125	interval	TileNetworkFetch	315.772625	thread=off-main
+1788799241.6065452	7.084168167	interval	TileNetworkFetch	197.581792	thread=off-main
+1788799241.6346877	7.112310667	interval	TileNetworkFetch	225.733167	thread=off-main
+1788799241.6363328	7.113955834	mark	RecordingClockTick		
+1788799241.6742256	7.1518485	interval	TileNetworkFetch	265.258875	thread=off-main
+1788799241.7535288	7.231151709	interval	TileNetworkFetch	286.750917	thread=off-main
+1788799241.8606396	7.338262667	interval	TileNetworkFetch	341.821917	thread=off-main
+1788799242.1156375	7.593260417	interval	TileNetworkFetch	507.72725	thread=off-main
+1788799242.1156375	7.593260417	interval	TileNetworkFetch	507.734166	thread=off-main
+1788799242.154971	7.632593792	interval	TileNetworkFetch	519.503459	thread=off-main
+1788799242.3016186	7.779241459	interval	TileNetworkFetch	626.668333	thread=off-main
+1788799242.4777293	7.95535225	interval	TileNetworkFetch	722.788291	thread=off-main
+1788799242.5243595	8.001982375	sample	Process	113.00231170654297	cpu_s=4.775481 lowPower=0 thermal=nominal
+1788799242.5400765	8.017699375	interval	TileNetworkFetch	678.378875	thread=off-main
+1788799242.6159072	8.093530292	interval	TileNetworkFetch	498.653042	thread=off-main
+1788799242.6349049	8.112527917	mark	RecordingClockTick		
+1788799242.7712944	8.248917334	interval	TileNetworkFetch	654.023833	thread=off-main
+1788799242.912367	8.389990167	interval	TileNetworkFetch	756.638958	thread=off-main
+1788799243.0611756	8.538798584	interval	TileNetworkFetch	758.420917	thread=off-main
+1788799243.3858504	8.863473334	interval	TileNetworkFetch	907.41	thread=off-main
+1788799243.5252044	9.002827459	sample	Process	112.65856170654297	cpu_s=4.869762 lowPower=0 thermal=nominal
+1788799243.6257305	9.103353584	interval	TileNetworkFetch	1085.067542	thread=off-main
+1788799243.634873	9.112495875	mark	RecordingClockTick		
+1788799243.7205968	9.198219834	interval	TileNetworkFetch	1103.823792	thread=off-main
+1788799243.8413363	9.318959125	interval	TileNetworkFetch	1069.416375	thread=off-main
+1788799243.9122436	9.389866709	interval	TileNetworkFetch	998.902125	thread=off-main
+1788799244.0029502	9.480573209	interval	TileNetworkFetch	941.02125	thread=off-main
+1788799244.0542154	9.531838375	interval	TileNetworkFetch	667.557875	thread=off-main
+1788799244.0978074	9.575430334	interval	TileNetworkFetch	471.388625	thread=off-main
+1788799244.125587	9.603210042	interval	TileNetworkFetch	404.246584	thread=off-main
+1788799244.1432998	9.620922792	interval	TileNetworkFetch	301.301875	thread=off-main
+1788799244.175136	9.652758959	interval	TileNetworkFetch	262.134834	thread=off-main
+1788799244.2035248	9.681147750000001	interval	TileNetworkFetch	199.7755	thread=off-main
+1788799244.2192643	9.696887292	interval	TileNetworkFetch	164.193958	thread=off-main
+1788799244.2626257	9.74024875	interval	TileNetworkFetch	164.09675	thread=off-main
+1788799244.2895226	9.76714575	interval	TileNetworkFetch	163.038459	thread=off-main
+1788799244.3448057	9.82242875	interval	TileNetworkFetch	200.820125	thread=off-main
+1788799244.3717513	9.849374375	interval	TileNetworkFetch	195.769875	thread=off-main
+1788799244.4717731	9.949396042	interval	TileNetworkFetch	267.506709	thread=off-main
+1788799244.4717855	9.949408625	interval	TileNetworkFetch	251.837	thread=off-main
+1788799244.471799	9.949421917	interval	TileNetworkFetch	208.420459	thread=off-main
+1788799244.473834	9.951457	interval	TileNetworkFetch	183.626417	thread=off-main
+1788799244.5251777	10.002800709	sample	Process	112.61168670654297	cpu_s=4.9858210000000005 lowPower=0 thermal=nominal
+1788799244.6308203	10.108443167	mark	RecordingClockTick		
+1788799245.5243487	11.001971667	sample	Process	112.61168670654297	cpu_s=5.020455 lowPower=0 thermal=nominal
+1788799245.6307547	11.108377667	mark	RecordingClockTick		
+1788799246.5243528	12.001975667	sample	Process	112.56481170654297	cpu_s=5.042415 lowPower=0 thermal=nominal
+1788799246.630754	12.108376959	mark	RecordingClockTick		
+1788799247.52517	13.002793042	sample	Process	112.56481170654297	cpu_s=5.067133 lowPower=0 thermal=nominal
+1788799247.6306658	13.108288875	mark	RecordingClockTick		
+1788799247.7756753	13.253298209	mark	ScenePhaseChanged		inactive
+1788799247.7765384	13.25416125	interval	SceneResignSave	0.012625	thread=main
+1788799247.7767313	13.254354334	interval	SceneResignActive	0.9915	thread=main
+1788799247.7775705	13.255193375	interval	ScenePhaseTurn	1.831958	thread=main
+1788799247.7804587	13.258081709	mark	OpenHikesViewBody		
+1788799247.7818847	13.259507542	mark	MapSheetBody		
+1788799247.7893665	13.266989417	mark	RecordingBody		
+1788799247.7904282	13.268051167	mark	RecordingPhotoPinsBody		0 photos
+1788799247.7904565	13.268079542	mark	PhotoOrderComputed		0 photos
+1788799248.5243785	14.002001625	sample	Process	112.56481170654297	cpu_s=5.112187 lowPower=0 thermal=nominal
+1788799249.0540314	14.531654334	mark	ScenePhaseChanged		background
+1788799249.0545776	14.532200459	interval	SceneResignSave	0.011208	thread=main
+1788799249.0547326	14.532355459	interval	SceneResignActive	0.653125	thread=main
+1788799249.061825	14.539447959	mark	OpenHikesViewBody		
+1788799249.065036	14.542659042	mark	MapSheetBody		
+1788799249.0710819	14.548704917	mark	RecordingBody		
+1788799249.0715594	14.5491825	mark	RecordingPhotoPinsBody		0 photos
+1788799249.0715754	14.549198417	mark	PhotoOrderComputed		0 photos
+1788799249.1934607	14.671083625	interval	ScenePhaseTurn	139.379791	thread=main
+1788799249.52626	15.003882792	sample	Process	86.65856170654297	cpu_s=5.208731 lowPower=0 thermal=nominal
+1788799250.5243905	16.002013375	sample	Process	86.65856170654297	cpu_s=5.209239 lowPower=0 thermal=nominal
+1788799251.526237	17.00386	sample	Process	86.65856170654297	cpu_s=5.209541 lowPower=0 thermal=nominal
+1788799251.984434	17.462056875	mark	RecordingFixDelivered		
+1788799251.9844797	17.462102625	mark	RecordingFixReceived		
+1788799251.9845257	17.462148667	interval	RecordingTailRebuilt	0.007125	thread=main
+1788799251.9845753	17.462198334	mark	LiveFixAccepted		
+1788799251.9891047	17.466727834	interval	TrailMatcherWork	2.428125	thread=off-main
+1788799251.989193	17.466815875	interval	RecordingTailRebuilt	0.005667	thread=main
+1788799251.9892404	17.466863292	mark	LiveTrailMatchApplied		
+1788799252.5262458	18.003868792	sample	Process	86.68981170654297	cpu_s=5.2414309999999995 lowPower=0 thermal=nominal
+1788799253.5262349	19.003857875	sample	Process	86.68981170654297	cpu_s=5.241777000000001 lowPower=0 thermal=nominal
+1788799254.5262282	20.003851292	sample	Process	86.68981170654297	cpu_s=5.242248999999999 lowPower=0 thermal=nominal
+1788799255.5273173	21.004940292	sample	Process	86.68981170654297	cpu_s=5.2424919999999995 lowPower=0 thermal=nominal
+1788799255.9852648	21.46288775	mark	LocationFixDelivered		
+1788799255.9853234	21.462946417	mark	LocationPublished		
+1788799255.9853718	21.462994917	mark	RecordingFixDelivered		
+1788799255.985385	21.463007834	mark	RecordingFixReceived		
+1788799255.9854312	21.463054292	interval	RecordingTailRebuilt	0.009	thread=main
+1788799255.9854815	21.463104375	mark	LiveFixAccepted		
+1788799255.9874482	21.465071167	interval	TrailMatcherWork	0.295917	thread=off-main
+1788799255.9876447	21.465267625	interval	RecordingTailRebuilt	0.00725	thread=main
+1788799255.9876802	21.465303125	mark	LiveTrailMatchApplied		
+1788799256.5272431	22.004866125	sample	Process	86.68981170654297	cpu_s=5.245531 lowPower=0 thermal=nominal
+1788799257.5262437	23.003866709	sample	Process	86.67418670654297	cpu_s=5.2468580000000005 lowPower=0 thermal=nominal
+1788799258.5266993	24.004322334	sample	Process	86.67418670654297	cpu_s=5.247202000000001 lowPower=0 thermal=nominal
+1788799259.5262334	25.003856334	sample	Process	86.67418670654297	cpu_s=5.2475190000000005 lowPower=0 thermal=nominal
+1788799259.9916673	25.46929025	mark	RecordingFixDelivered		
+1788799259.9917126	25.469335667	mark	RecordingFixReceived		
+1788799259.9917672	25.46939025	interval	RecordingTailRebuilt	0.008458	thread=main
+1788799259.9918203	25.469443417	mark	LiveFixAccepted		
+1788799259.9922187	25.469841625	mark	LiveActivityUpdate		interval
+1788799259.993522	25.471144834	interval	TrailMatcherWork	0.262625	thread=off-main
+1788799259.993782	25.471405084	interval	RecordingTailRebuilt	0.006333	thread=main
+1788799259.9938138	25.471436792	mark	LiveTrailMatchApplied		
+1788799260.5289738	26.006596709	sample	Process	86.67418670654297	cpu_s=5.252573 lowPower=0 thermal=nominal
+1788799261.5262396	27.003862542	sample	Process	86.67418670654297	cpu_s=5.252944 lowPower=0 thermal=nominal
+1788799262.016883	27.494505917	mark	ScenePhaseChanged		inactive
+1788799262.029216	27.506839125	mark	MapRecordingTraceApplied		chunks=0 tail=5
+1788799262.0379748	27.515597834	mark	OpenHikesViewBody		
+1788799262.0399976	27.5176205	mark	MapSheetBody		
+1788799262.0475163	27.525139292	mark	RecordingBody		
+1788799262.0485835	27.526206375	mark	RecordingPhotoPinsBody		0 photos
+1788799262.048602	27.526225209	mark	PhotoOrderComputed		0 photos
+1788799262.0530581	27.530681125	interval	ScenePhaseTurn	36.121709	thread=main
+1788799262.2704413	27.74806425	mark	ScenePhaseChanged		active
+1788799262.270994	27.748616834	interval	SceneDidBecomeActive	0.507375	thread=main
+1788799262.273253	27.750875834	interval	ScenePhaseTurn	2.765083	thread=main
+1788799262.2736197	27.751242625	mark	OpenHikesViewBody		
+1788799262.2818494	27.759472292	mark	MapSheetBody		
+1788799262.2859476	27.763570584	mark	RecordingClockTick		
+1788799262.2877045	27.765327417	mark	RecordingBody		
+1788799262.288657	27.766279917	mark	RecordingPhotoPinsBody		0 photos
+1788799262.2886703	27.766293334	mark	PhotoOrderComputed		0 photos
+1788799262.524515	28.002138	sample	Process	112.15856170654297	cpu_s=5.557753000000001 lowPower=0 thermal=nominal
+1788799263.2863295	28.763952417	mark	RecordingClockTick		
+1788799263.525163	29.002786	sample	Process	112.15856170654297	cpu_s=5.6595130000000005 lowPower=0 thermal=nominal
+1788799263.6279163	29.105539334	interval	TileNetworkFetch	74.674583	thread=off-main
+1788799263.6401653	29.117788334	interval	TileNetworkFetch	87.125875	thread=off-main
+1788799263.6766212	29.15424425	interval	TileNetworkFetch	123.549	thread=off-main
+1788799263.7018933	29.179516292	interval	TileNetworkFetch	148.775167	thread=off-main
+1788799263.732869	29.210491875	interval	TileNetworkFetch	179.592875	thread=off-main
+1788799263.7606573	29.238280209	interval	TileNetworkFetch	207.603667	thread=off-main
+1788799263.7945194	29.272142459	interval	TileNetworkFetch	165.478125	thread=off-main
+1788799263.8228817	29.300504792	interval	TileNetworkFetch	181.871833	thread=off-main
+1788799263.854435	29.332058	interval	TileNetworkFetch	176.873125	thread=off-main
+1788799263.8953283	29.372951375	interval	TileNetworkFetch	192.566708	thread=off-main
+1788799264.2876148	29.765237709	mark	RecordingClockTick		
+1788799264.5245254	30.002148375	sample	Process	112.28358459472656	cpu_s=5.763713 lowPower=0 thermal=nominal
+1788799265.2941217	30.771744792	mark	RecordingClockTick		
+1788799265.525374	31.002997	sample	Process	112.28358459472656	cpu_s=5.799971 lowPower=0 thermal=nominal
+1788799265.5782917	31.055914584	mark	ScenePhaseChanged		inactive
+1788799265.580189	31.057811959	interval	SceneResignSave	0.028	thread=main
+1788799265.5809464	31.058569375	interval	SceneResignActive	2.48075	thread=main
+1788799265.5823083	31.059931375	interval	ScenePhaseTurn	3.851458	thread=main
+1788799265.587876	31.065498959	mark	OpenHikesViewBody		
+1788799265.590076	31.067698917	mark	MapSheetBody		
+1788799265.597059	31.074681917	mark	RecordingBody		
+1788799265.5984757	31.07609875	mark	RecordingPhotoPinsBody		0 photos
+1788799265.5985065	31.076129375	mark	PhotoOrderComputed		0 photos
+1788799266.524361	32.001983834	sample	Process	112.28358459472656	cpu_s=5.832744 lowPower=0 thermal=nominal
+1788799266.8817642	32.359387209	mark	ScenePhaseChanged		background
+1788799266.8821526	32.359775584	interval	SceneResignSave	0.008084	thread=main
+1788799266.8822737	32.359896584	interval	SceneResignActive	0.470042	thread=main
+1788799266.8876333	32.365256375	mark	OpenHikesViewBody		
+1788799266.8904395	32.3680625	mark	MapSheetBody		
+1788799266.8960364	32.373659375	mark	RecordingBody		
+1788799266.8964803	32.374103209	mark	RecordingPhotoPinsBody		0 photos
+1788799266.8964932	32.374116125	mark	PhotoOrderComputed		0 photos
+1788799267.0167198	32.494342834	interval	ScenePhaseTurn	134.913291	thread=main
+1788799267.5245268	33.002149834	sample	Process	87.34608459472656	cpu_s=5.916791000000001 lowPower=0 thermal=nominal
+1788799267.7955472	33.273170334	mark	ScenePhaseChanged		inactive
+1788799267.8119175	33.289540459	mark	OpenHikesViewBody		
+1788799267.814652	33.292274959	mark	MapSheetBody		
+1788799267.8244376	33.302060584	mark	RecordingBody		
+1788799267.8257754	33.303398459	mark	RecordingPhotoPinsBody		0 photos
+1788799267.8258014	33.303424375	mark	PhotoOrderComputed		0 photos
+1788799267.8305492	33.308172334	interval	ScenePhaseTurn	34.9525	thread=main
+1788799268.0449598	33.52258275	mark	ScenePhaseChanged		active
+1788799268.0455453	33.523168334	interval	SceneDidBecomeActive	0.542458	thread=main
+1788799268.047573	33.525196042	interval	ScenePhaseTurn	2.570458	thread=main
+1788799268.0478811	33.525504084	mark	OpenHikesViewBody		
+1788799268.060686	33.538309209	mark	MapSheetBody		
+1788799268.0639803	33.541603417	mark	RecordingClockTick		
+1788799268.0655131	33.543136042	mark	RecordingBody		
+1788799268.0665038	33.544126709	mark	RecordingPhotoPinsBody		0 photos
+1788799268.0665212	33.544144209	mark	PhotoOrderComputed		0 photos
+1788799268.5250225	34.002645417	sample	Process	99.95545959472656	cpu_s=6.477867 lowPower=0 thermal=nominal
+1788799269.068195	34.545818084	mark	RecordingClockTick		
+1788799269.1252477	34.602870584	mark	ScenePhaseChanged		inactive
+1788799269.1261253	34.603748334	interval	SceneResignSave	0.024041	thread=main
+1788799269.1265826	34.604205709	interval	SceneResignActive	1.283833	thread=main
+1788799269.1277134	34.605336334	interval	ScenePhaseTurn	2.416458	thread=main
+1788799269.1374059	34.615028917	mark	OpenHikesViewBody		
+1788799269.1392877	34.616910625	mark	MapSheetBody		
+1788799269.1452029	34.62282575	mark	RecordingBody		
+1788799269.146521	34.624144167	mark	RecordingPhotoPinsBody		0 photos
+1788799269.146543	34.624166042	mark	PhotoOrderComputed		0 photos
+1788799269.524381	35.002003792	sample	Process	99.98670959472656	cpu_s=6.545807 lowPower=0 thermal=nominal
+1788799270.4352438	35.91286675	mark	ScenePhaseChanged		background
+1788799270.4358912	35.913514209	interval	SceneResignSave	0.012166	thread=main
+1788799270.4363234	35.913946417	interval	SceneResignActive	1.038542	thread=main
+1788799270.442075	35.919698084	mark	OpenHikesViewBody		
+1788799270.4460742	35.923697167	mark	MapSheetBody		
+1788799270.4541001	35.931723125	mark	RecordingBody		
+1788799270.4547353	35.932358167	mark	RecordingPhotoPinsBody		0 photos
+1788799270.4547532	35.932376084	mark	PhotoOrderComputed		0 photos
+1788799270.5244725	36.002095542	sample	Process	100.03358459472656	cpu_s=6.604570000000001 lowPower=0 thermal=nominal
+1788799270.5789068	36.05652975	interval	ScenePhaseTurn	143.62	thread=main
+1788799271.52421	37.001832917	sample	Process	87.37733459472656	cpu_s=6.642275 lowPower=0 thermal=nominal
