@@ -50,6 +50,23 @@ struct LocationPublishingTests {
         )
     }
 
+    /// The low-frequency half of the fix, for a body that only needs to know
+    /// whether to *offer* something at the hiker's position — see the maker's
+    /// *My Location* rows. A rejected fix is not a fix.
+    @Test("there is a fix only once a fix has been published")
+    func hasFixFollowsTheFirstPublishedFix() async {
+        let manager = LocationManager()
+        #expect(!manager.hasFix)
+
+        manager.locationManager(CLLocationManager(), didUpdateLocations: [location(horizontalAccuracy: -1)])
+        await Task.yield()
+        #expect(!manager.hasFix)
+
+        manager.locationManager(CLLocationManager(), didUpdateLocations: [location(horizontalAccuracy: 10)])
+        await Task.yield()
+        #expect(manager.hasFix)
+    }
+
     @Test("invalid and stale fixes are rejected")
     func invalidAndStaleFixesAreRejected() async {
         let staleManager = LocationManager()
