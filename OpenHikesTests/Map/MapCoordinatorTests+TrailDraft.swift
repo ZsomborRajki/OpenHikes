@@ -328,6 +328,8 @@ extension MapCoordinatorTests {
                 viewFor: TrailDraftWaypointAnnotation(
                     coordinate: map.convert(point, toCoordinateFrom: map),
                     number: 1,
+                    role: .start,
+                    name: "",
                     distanceAlongLineMeters: 0
                 )
             )
@@ -465,25 +467,44 @@ extension MapCoordinatorTests {
         #endif
     }
 
-    @Test("a waypoint pin draws its number and speaks it")
-    func waypointPinIsNumbered() {
+    /// A pin says what its row says, which is the whole of what makes the map
+    /// and the list readable against each other — see ``TrailStopRowView``.
+    @Test("a waypoint pin is named by its stop, or by its place in the route")
+    func waypointPinSpeaksLikeItsRow() {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
         defer { detach(map) }
-        let annotation = TrailDraftWaypointAnnotation(
+        let unnamed = TrailDraftWaypointAnnotation(
             coordinate: Self.ridgeCoordinate(Ridge.south),
             number: 3,
+            role: .stop(number: 2),
+            name: "",
             distanceAlongLineMeters: 1250
         )
 
-        let view = coordinator.mapView(map, viewFor: annotation)
+        let view = coordinator.mapView(map, viewFor: unnamed)
 
         #expect(view != nil)
-        #expect(annotation.title == "Point 3")
+        // Nothing has named it, so it is what it is to the route.
+        #expect(unnamed.title == "Stop 2")
         // The second line of its callout: how far along the trail it sits,
         // which is the same figure the list row carries.
-        #expect(annotation.subtitle?.isEmpty == false)
+        #expect(unnamed.subtitle?.isEmpty == false)
+
+        let named = TrailDraftWaypointAnnotation(
+            coordinate: Self.ridgeCoordinate(Ridge.south),
+            number: 3,
+            role: .stop(number: 2),
+            name: "Lurdy Ház",
+            distanceAlongLineMeters: 1250
+        )
+
+        // The name leads, and the role moves to the line underneath rather
+        // than being dropped — a named pin still has to say where in the route
+        // it sits.
+        #expect(named.title == "Lurdy Ház")
+        #expect(named.subtitle?.contains("Stop 2") == true)
         #endif
     }
 }

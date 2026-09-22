@@ -6,25 +6,28 @@
 //
 //  ## One menu rather than a row of controls
 //
-//  Seven verbs — undo, redo, reorder, reverse, close the loop, clear, and
-//  leaving reorder mode — over a screen that already carries a search field, a
-//  switch, a list of points and two toolbar buttons. Spread across the screen
-//  they would be most of it; in a menu they are one glyph, and the two that
-//  matter while drawing (a tap on the map, and Save) keep the room.
+//  Four verbs — undo, redo, reverse, close the loop, and clear — over a screen
+//  that already carries a route, a switch, a list of places and two toolbar
+//  buttons. Spread across the screen they would be most of it; in a menu they
+//  are one glyph, and the two that matter while drawing (a tap on the map, and
+//  Save) keep the room.
 //
-//  It is in the navigation bar rather than in the list, and that is not a
-//  layout preference. **A `List` in edit mode gives a row's tap to the list**,
-//  so the control that turns edit mode *off* cannot be a row inside it — the
-//  hiker would be unable to reach the way out. The same trap the hikes list
-//  records: see the note on its own Done control in `MapSheetHikes.swift`.
+//  ## Reorder is not here any more, and neither is Done
 //
-//  ## Reorder is reached twice, and the second way is the discoverable one
+//  Both were the cost of reordering being a *mode*: the hiker asked for it from
+//  this menu or from a long press on a row, the list went into edit mode, and a
+//  Done control took it back out — with a row's tap belonging to the list for
+//  as long as it was on. The maker's rows are Apple Maps' directions rows now,
+//  which carry their grabbers permanently, so the list is in edit mode from the
+//  moment it appears and there is nothing to enter, leave or offer. See
+//  ``TrailDraftView``.
 //
-//  From this menu, and from a long press on a row. The long press is a
-//  `.contextMenu` rather than a `LongPressGesture` of our own, and that is the
-//  finding the hikes list paid for: a long press on a row that is a `Button`
-//  still fires the button. A context menu is the platform's own long press and
-//  suppresses what is underneath it.
+//  What that removed along with them is the `.contextMenu` this file used to
+//  carry — a long press on a row that offered *Reorder Points*, which was the
+//  discoverable half of a mode that no longer exists. The finding behind it is
+//  still true and is still worth not rediscovering: a `LongPressGesture` on a
+//  row that is a `Button` fires the button, and a `.contextMenu` is the
+//  platform's own long press and suppresses what is underneath it.
 //
 //  ## Nothing inside the menu carries an identifier
 //
@@ -44,16 +47,14 @@
 
 import SwiftUI
 
-/// The maker's edit menu, and the Done control that replaces it while the list
-/// is being reordered.
+/// The maker's edit menu.
 ///
 /// Its own `View` for the reason every other piece of this screen is one: it
 /// reads ``TrailDraft/canUndo``, ``TrailDraft/canRedo`` and the two shape
 /// questions, and declared inside ``TrailDraftView``'s body those reads would
-/// rebuild the list of points every time a point went down.
+/// rebuild the whole route every time a stop went down.
 struct TrailDraftActionsMenu: View {
     let maker: TrailDraftController
-    @Binding var editMode: EditMode
     /// Asked rather than done here, because the dialog that asks belongs to
     /// the screen — a modal presented from a toolbar closure is presented from
     /// the toolbar, which is not inside the sheet's contents. See
@@ -63,23 +64,18 @@ struct TrailDraftActionsMenu: View {
     private var draft: TrailDraft { maker.draft }
 
     var body: some View {
-        if editMode == .active {
-            Button("Done") { withAnimation { editMode = .inactive } }
-                .accessibilityIdentifier("trail-draft-reorder-done")
-        } else {
-            Menu {
-                historySection
-                shapeSection
-                Section {
-                    Button("Clear", systemImage: "trash", role: .destructive, action: onClear)
-                        .disabled(draft.isEmpty)
-                }
-            } label: {
-                Label("Edit Trail", systemImage: "ellipsis.circle")
+        Menu {
+            historySection
+            shapeSection
+            Section {
+                Button("Clear", systemImage: "trash", role: .destructive, action: onClear)
+                    .disabled(draft.isEmpty)
             }
-            .accessibilityIdentifier("trail-draft-actions")
-            .disabled(draft.isEmpty && !draft.canUndo && !draft.canRedo)
+        } label: {
+            Label("Edit Trail", systemImage: "ellipsis.circle")
         }
+        .accessibilityIdentifier("trail-draft-actions")
+        .disabled(draft.isEmpty && !draft.canUndo && !draft.canRedo)
     }
 
     @ViewBuilder private var historySection: some View {
@@ -93,36 +89,10 @@ struct TrailDraftActionsMenu: View {
 
     @ViewBuilder private var shapeSection: some View {
         Section {
-            Button("Reorder Points", systemImage: "arrow.up.arrow.down") {
-                withAnimation { editMode = .active }
-            }
-            .disabled(!draft.canBeRearranged)
             Button("Reverse", systemImage: "arrow.left.arrow.right", action: maker.reverse)
                 .disabled(!draft.canBeRearranged)
             Button("Close the Loop", systemImage: "arrow.trianglehead.clockwise", action: maker.closeTheLoop)
                 .disabled(!draft.canCloseTheLoop)
         }
-    }
-}
-
-/// The long press on a row that offers to rearrange the line.
-///
-/// A modifier rather than a `.contextMenu` written into the `ForEach`, so the
-/// reason it is a context menu at all travels with it — see the file header.
-struct TrailDraftReorderMenu: ViewModifier {
-    @Binding var editMode: EditMode
-
-    func body(content: Content) -> some View {
-        content.contextMenu {
-            Button("Reorder Points", systemImage: "arrow.up.arrow.down") {
-                withAnimation { editMode = .active }
-            }
-        }
-    }
-}
-
-extension View {
-    func trailDraftReorderMenu(_ editMode: Binding<EditMode>) -> some View {
-        modifier(TrailDraftReorderMenu(editMode: editMode))
     }
 }

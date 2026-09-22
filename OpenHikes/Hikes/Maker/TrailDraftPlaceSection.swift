@@ -7,12 +7,11 @@
 //
 //  Its own `View` for the reason every other piece of this screen is one — see
 //  `TrailDraftFields.swift`: only a `View` is a render boundary, and a place
-//  marked, renamed or dragged would otherwise rebuild the list of waypoints
-//  above it.
+//  marked, renamed or dragged would otherwise rebuild the route above it.
 //
 //  ## Along-route order, and no way to reorder it
 //
-//  The waypoints above can be dragged into a different order, because their
+//  The stops above can be dragged into a different order, because their
 //  order *is* the trail. These cannot, and the absence is the design rather
 //  than a gap: a place is a spot on the ground, so where it sits in this list
 //  is a fact about the line rather than a rank anybody chose. Bending the
@@ -23,11 +22,17 @@
 //
 //  A tap on the map is the main one and it is not in this file: it drops a pin
 //  and *Mark a Place* is a button in its callout — see
-//  ``TrailDraftPinAction``. What the menu below adds is the three spots a tap
+//  ``TrailDraftPinAction``. What the rows below add is the three spots a tap
 //  cannot reach conveniently: the middle of the screen, the hiker's own
 //  position, and a place that was searched for by name. Each of them lands in
 //  the same ``TrailDraftController/markPlace(at:named:symbol:)`` and opens the
 //  same editor.
+//
+//  The third of those used to be fed by the maker's own *Find a Place* field.
+//  That field is gone and the fact it kept is not: the search sheet a stop row
+//  opens remembers what it last resolved, which is the same "the place you just
+//  looked up" and is now reachable from two lists rather than one. See
+//  ``TrailStopSearchRun/lastPick``.
 //
 
 import CoreLocation
@@ -42,9 +47,9 @@ struct TrailDraftPlaceSection: View {
     let completer: SearchCompleter
     /// The hiker's own position, or `nil` for a launch with no location.
     var locationManager: LocationManager?
-    /// What the screen's own *Find a Place* field last found, so it can be
-    /// marked by name — see ``TrailDraftSearchRun/lastResult``.
-    let search: TrailDraftSearchRun
+    /// What the stop search sheet last resolved, so it can be marked by name
+    /// — see ``TrailStopSearchRun/lastPick``.
+    let search: TrailStopSearchRun
     /// Opens the editor on a place. The screen's, because the sheet belongs to
     /// the screen — see ``TrailDraftView``.
     var onEdit: (UUID) -> Void
@@ -54,7 +59,7 @@ struct TrailDraftPlaceSection: View {
     var body: some View {
         Section {
             if draft.placeRows.isEmpty {
-                Text("Tap the map and choose Mark a Place, or use the button below.")
+                Text("Tap the map and choose Mark a Place, or use the rows below.")
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("trail-draft-places-empty")
             } else {
@@ -72,7 +77,7 @@ struct TrailDraftPlaceSection: View {
                     maker.removePlaces(atRowOffsets: offsets)
                 }
             }
-            addMenu
+            addRows
         } header: {
             Text("Places")
         } footer: {
@@ -82,32 +87,34 @@ struct TrailDraftPlaceSection: View {
 
     /// The three spots a tap on the map cannot reach conveniently.
     ///
-    /// A `Menu` rather than three rows, for the reason
-    /// ``TrailDraftActionsMenu`` is one: this screen already carries a search
-    /// field, a switch, a list of points and a list of places, and three more
-    /// rows would be most of what is left. Nothing inside carries an
-    /// identifier — a `Menu`'s contents are rebuilt by the system when it
-    /// opens, and one on a button inside does not survive that. Reached by
-    /// title; see that type for what the finding cost.
-    @ViewBuilder private var addMenu: some View {
-        Menu {
-            Button("At the Map's Centre", systemImage: "scope", action: markMapCentre)
-                .disabled(completer.region == nil)
-            Button("At My Location", systemImage: "location", action: markMyLocation)
-                .disabled(currentCoordinate == nil)
-            // The only one of the four that arrives already named. Withheld
-            // rather than disabled, because until a lookup has answered there
-            // is no such place to describe — an entry reading "Mark" with
-            // nothing after it says less than no entry at all.
-            if let found = search.lastResult, !found.name.isEmpty {
-                Button("Mark \(found.name)", systemImage: "magnifyingglass") {
-                    markSearchResult(found)
-                }
+    /// **Rows rather than a `Menu`, and that is a constraint rather than a
+    /// preference.** It was a menu, for the reason ``TrailDraftActionsMenu`` is
+    /// one — this screen carried a search field, a switch and two lists, and
+    /// three more rows would have been most of what was left. Two things
+    /// changed. The search field went into a sheet of its own, which is the
+    /// room; and the list is now in ``EditMode/active`` permanently so the
+    /// route's rows can carry their grabbers — and **a `Menu` inside a `List`
+    /// in edit mode does not open at all**. A `Button` does, which is what the
+    /// route's own rows rest on, so this is the shape that survives. Found by
+    /// pressing it: nothing else on this screen would have said so, and
+    /// `testMarkingAPlaceFromTheList` is here to keep saying it.
+    @ViewBuilder private var addRows: some View {
+        Button("At the Map's Centre", systemImage: "scope", action: markMapCentre)
+            .disabled(completer.region == nil)
+            .accessibilityIdentifier("trail-draft-add-place")
+        Button("At My Location", systemImage: "location", action: markMyLocation)
+            .disabled(currentCoordinate == nil)
+            .accessibilityIdentifier("trail-draft-add-place-here")
+        // The only one of the four that arrives already named. Withheld
+        // rather than disabled, because until a lookup has answered there
+        // is no such place to describe — a row reading "Mark" with
+        // nothing after it says less than no row at all.
+        if let found = search.lastPick, !found.name.isEmpty {
+            Button("Mark \(found.name)", systemImage: "magnifyingglass") {
+                markSearchResult(found)
             }
-        } label: {
-            Label("Mark a Place", systemImage: "mappin.and.ellipse")
+            .accessibilityIdentifier("trail-draft-add-place-found")
         }
-        .accessibilityIdentifier("trail-draft-add-place")
     }
 
     /// The hiker's last known position, or `nil` for a launch with no location
@@ -116,7 +123,7 @@ struct TrailDraftPlaceSection: View {
     /// Read in an action rather than in the body wherever it can be — see
     /// ``LocationManager``, whose published fix is the highest-frequency
     /// source in the app. The one read that *is* in a body is the `disabled`
-    /// above, and it is deliberate: a menu entry that silently did nothing
+    /// above, and it is deliberate: a row that silently did nothing
     /// would be worse than one that says it cannot. A fix arriving re-renders
     /// this section and nothing else, which is what this file being its own
     /// `View` is for.
@@ -134,7 +141,7 @@ struct TrailDraftPlaceSection: View {
         mark(at: here)
     }
 
-    private func markSearchResult(_ found: TrailPlaceSearchResult) {
+    private func markSearchResult(_ found: TrailStopSearchPick) {
         guard let place = maker.markPlace(at: found.clCoordinate, named: found.name) else { return }
         HapticMoment.targetHit.play()
         onEdit(place.id)
