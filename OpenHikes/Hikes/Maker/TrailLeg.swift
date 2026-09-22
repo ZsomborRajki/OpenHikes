@@ -211,6 +211,25 @@ nonisolated struct TrailLegNotice: Equatable, Sendable {
     let isWarning: Bool
 }
 
+/// One way of getting from a leg's start to its end: the shape, how long it
+/// is, and how long it takes when a router said.
+///
+/// A leg holds one of these as its drawn line and any others the router found
+/// as ``TrailLeg/alternatives`` — the grey lines a hiker taps to choose between,
+/// as in Apple Maps.
+nonisolated struct TrailLegPath: Equatable, Sendable {
+    var coordinates: [RouteCoordinate]
+    var distanceMeters: Double
+    /// Apple Maps' own estimate, or `nil` where only a distance is known — the
+    /// trail graph's answers and every straight line. See
+    /// ``TrailDraft/travelTime(of:)`` for what stands in.
+    var travelTime: TimeInterval?
+
+    func reversed() -> Self {
+        Self(coordinates: coordinates.reversed(), distanceMeters: distanceMeters, travelTime: travelTime)
+    }
+}
+
 /// One stretch of the drawn line, between two consecutive waypoints.
 nonisolated struct TrailLeg: Identifiable, Equatable, Sendable {
     /// The waypoint this leg **arrives at**.
@@ -236,6 +255,28 @@ nonisolated struct TrailLeg: Identifiable, Equatable, Sendable {
     /// hiker is looking at.
     var distanceMeters: Double
     var snap: TrailLegSnap
+    /// See ``TrailLegPath/travelTime``.
+    var travelTime: TimeInterval?
+    /// The other ways the router found, each a choice the map offers. Empty for
+    /// anything but a routed leg.
+    var alternatives: [TrailLegPath] = []
+
+    var path: TrailLegPath {
+        TrailLegPath(coordinates: coordinates, distanceMeters: distanceMeters, travelTime: travelTime)
+    }
+
+    /// The same leg with alternative `index` drawn and the current shape offered
+    /// in its place, or `nil` for an index that is not there.
+    func choosing(alternative index: Int) -> Self? {
+        guard alternatives.indices.contains(index) else { return nil }
+        var chosen = self
+        let taken = alternatives[index]
+        chosen.alternatives[index] = path
+        chosen.coordinates = taken.coordinates
+        chosen.distanceMeters = taken.distanceMeters
+        chosen.travelTime = taken.travelTime
+        return chosen
+    }
 
     /// The same leg, walked the other way.
     ///
@@ -251,7 +292,9 @@ nonisolated struct TrailLeg: Identifiable, Equatable, Sendable {
             ends: ends.flipped,
             coordinates: coordinates.reversed(),
             distanceMeters: distanceMeters,
-            snap: snap
+            snap: snap,
+            travelTime: travelTime,
+            alternatives: alternatives.map { $0.reversed() }
         )
     }
 
@@ -284,6 +327,9 @@ nonisolated struct TrailLegRoute: Equatable, Sendable {
     var coordinates: [RouteCoordinate]
     var distanceMeters: Double
     var snap: TrailLegSnap
+    var travelTime: TimeInterval?
+    /// Other paths between the same ends, best first. See ``TrailLeg/alternatives``.
+    var alternatives: [TrailLegPath] = []
 
     /// The straight line between `ends`, in `snap`. What every refusal and
     /// every gap answers with, because a leg always draws something.

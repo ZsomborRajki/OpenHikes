@@ -59,30 +59,9 @@ import Algorithms
 import CoreLocation
 import Foundation
 
-/// One place as OpenStreetMap listed it: what to draw, and which element it
-/// was.
-///
-/// The pair exists for the second half, which has exactly one job — being the
-/// name of the file the first half is kept in, so the same spring is the same
-/// row across searches rather than a fresh `UUID` every time.
-nonisolated struct FoundTrailPlace: Codable, Equatable, Sendable {
-    /// `node`, `way` or `relation`, as Overpass spelled it.
-    ///
-    /// Kept beside the id rather than folded into it because the two together
-    /// are the identity: node 123 and way 123 are different things in
-    /// different places.
-    let elementType: String
-    let elementID: Int64
-    /// The place itself, which is what everything outside this file works in.
-    ///
-    /// **The OSM id is here and never on ``TrailPlace``.** That value is what
-    /// ``TrailPoint`` mirrors to CloudKit and what a GPX `<wpt>` is written
-    /// from, and an id on it would be a claim a marked place cannot keep: a
-    /// hiker drags it, renames it and saves it, and it stops being the element
-    /// it came from the moment they do.
-    let place: TrailPlace
-
-    /// A file name that cannot leave the directory it is written in.
+nonisolated extension TrailPlaceOSM {
+    /// A file name that cannot leave the directory it is written in, so the
+    /// same spring is the same file across searches.
     ///
     /// Readable rather than hashed, because a directory somebody can inspect
     /// is worth having when the thing being debugged is *why is this spring
@@ -131,7 +110,7 @@ nonisolated struct TrailPointStore: Sendable {
     /// One element, and when it was fetched.
     private struct StoredPlace: Codable {
         let fetchedAt: Date
-        let found: FoundTrailPlace
+        let place: TrailPlace
     }
 
     private let directory: URL
@@ -158,7 +137,8 @@ nonisolated extension TrailPointStore {
     /// already has the answer in hand, and a hiker drawing a trail has nothing
     /// to do about a full disk. The next search asks Overpass again, which is
     /// what would have happened anyway.
-    func save(_ found: [FoundTrailPlace]) {
+    /// Places with no ``TrailPlace/osm`` have nowhere to be filed and are skipped.
+    func save(_ found: [TrailPlace]) {
         guard !found.isEmpty,
               (try? FileManager.default.createDirectory(
                   at: directory,
@@ -166,10 +146,11 @@ nonisolated extension TrailPointStore {
               )) != nil
         else { return }
         let now = clock()
-        for element in found {
-            let stored = StoredPlace(fetchedAt: now, found: element)
+        for place in found {
+            guard let osm = place.osm else { continue }
+            let stored = StoredPlace(fetchedAt: now, place: place)
             guard let data = try? JSONEncoder().encode(stored) else { continue }
-            let url = fileURL(for: element)
+            let url = fileURL(for: osm)
             try? data.write(to: url, options: .atomic)
             // Stamped from the same clock a read stamps with, so the eviction
             // order is one clock's opinion rather than a mixture of this one's
@@ -218,10 +199,10 @@ nonisolated extension TrailPointStore {
             else { return nil }
             let distance = RouteGeometry.distanceMeters(
                 from: centre,
-                to: stored.found.place.clCoordinate
+                to: stored.place.clCoordinate
             )
             guard distance <= area.radiusMeters else { return nil }
-            return (url: url, place: stored.found.place, distance: distance)
+            return (url: url, place: stored.place, distance: distance)
         }
         // `min(count:)` rather than a full sort and a `prefix`, which is the
         // same question ``trim()`` asks below and is worth asking the same
@@ -241,8 +222,8 @@ nonisolated extension TrailPointStore {
 // MARK: - Keeping the directory bounded
 
 nonisolated private extension TrailPointStore {
-    func fileURL(for found: FoundTrailPlace) -> URL {
-        directory.appendingPathComponent("\(found.fileNameStem).json")
+    func fileURL(for element: TrailPlaceOSM) -> URL {
+        directory.appendingPathComponent("\(element.fileNameStem).json")
     }
 
     /// Moves `url` to the newest end of the eviction order.

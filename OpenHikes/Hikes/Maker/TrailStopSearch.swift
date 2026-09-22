@@ -33,14 +33,6 @@
 //  shared, this sheet clears it on the way out, exactly as the field it
 //  replaced did.
 //
-//  ## No travel mode
-//
-//  Apple Maps puts a car/walk/transit selector above this list. There is none
-//  here and there will not be: a leg between two points either follows the
-//  paths OpenStreetMap has mapped or it does not, which is the *Follow Paths*
-//  switch on the screen below — one question, asked once, about the whole
-//  trail, rather than a mode chosen per stop.
-//
 
 import CoreLocation
 import MapKit
@@ -50,22 +42,24 @@ import SwiftUI
 /// Which row a search was started from, and therefore what picking a result
 /// does.
 ///
-/// The two cases are the two things a row can be on the screen below: a stop
-/// that is already down, which a result *moves*; and the *Add Stop* row at the
-/// bottom, which has no point behind it and appends one. Carried by the sheet
-/// rather than decided when a result lands, because it is a fact about the tap
-/// that opened it.
+/// The cases are the things a row can be on the screen below: a stop that is
+/// already down, which a result *moves*; an open start or destination field,
+/// which a result fills; and the *Add Stop* row at the bottom, which appends.
+/// Carried by the sheet rather than decided when a result lands, because it is
+/// a fact about the tap that opened it.
 nonisolated enum TrailStopSearchTarget: Equatable, Sendable {
     /// Replace the place this point stands for, keeping its place in the line.
     case existing(id: UUID, role: TrailStopRole)
     /// Put a new stop on the end.
     case newStop
+    /// Fill the open start or destination field.
+    case open(TrailStopRole)
 
     /// What the sheet is called while it is up. The row's own word, so a hiker
     /// who opened the wrong row can see that they did.
     var title: String {
         switch self {
-        case .existing(_, let role): role.title
+        case .existing(_, let role), .open(let role): role.title
         case .newStop: String(localized: "Add Stop")
         }
     }

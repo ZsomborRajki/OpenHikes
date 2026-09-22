@@ -47,8 +47,9 @@ import Foundation
 import MapKit
 import os
 
-/// What is at a coordinate, in words, or `nil` for a lookup that found nothing
-/// or could not be made.
+/// What MapKit knows about a coordinate, or `nil` for a lookup that found
+/// nothing or could not be made. A stop's name and the place sheet's address
+/// are both read off it — see ``TrailStopName``.
 ///
 /// A seam for the reason the tile, transport, elevation and trail-point sources
 /// are ones — see *Deliberate test seams* in the repository instructions. The
@@ -58,13 +59,13 @@ import os
 /// the code rather than about the network the runner was on.
 @MainActor
 protocol TrailStopNaming {
-    func name(at coordinate: CLLocationCoordinate2D) async -> String?
+    func mapItem(at coordinate: CLLocationCoordinate2D) async -> MKMapItem?
 }
 
 /// MapKit's answer to *what is here*.
 @MainActor
 struct MapKitTrailStopNaming: TrailStopNaming {
-    func name(at coordinate: CLLocationCoordinate2D) async -> String? {
+    func mapItem(at coordinate: CLLocationCoordinate2D) async -> MKMapItem? {
         let location = CLLocation(
             latitude: coordinate.latitude,
             longitude: coordinate.longitude
@@ -74,8 +75,7 @@ struct MapKitTrailStopNaming: TrailStopNaming {
         guard let request = MKReverseGeocodingRequest(location: location) else {
             return nil
         }
-        guard let items = try? await request.mapItems else { return nil }
-        return TrailStopName.here(items.first)
+        return try? await request.mapItems.first
     }
 }
 
@@ -117,6 +117,11 @@ nonisolated enum TrailStopName {
     /// which is an item MapKit could not place: its `name` in that state is the
     /// placeholder described above, and a row reading "Unknown Location" says
     /// strictly less than one reading "Stop 2".
+    /// The whole address, for the place sheet, where there is room for it.
+    static func address(of item: MKMapItem) -> String? {
+        first(of: [item.address?.fullAddress, item.address?.shortAddress])
+    }
+
     static func here(_ item: MKMapItem?) -> String? {
         guard let item else { return nil }
         return first(of: [item.address?.shortAddress, item.address?.fullAddress])
@@ -232,7 +237,7 @@ final class TrailStopNamer {
             // leave the point as finished-with as an answer does, and a second
             // call arriving mid-request must not queue the same point again.
             settled.insert(waypoint.id)
-            let name = await source.name(at: waypoint.clCoordinate)
+            let name = TrailStopName.here(await source.mapItem(at: waypoint.clCoordinate))
             guard !Task.isCancelled else { return }
             guard let name else {
                 Self.logger.info("No name found for a drawn point")

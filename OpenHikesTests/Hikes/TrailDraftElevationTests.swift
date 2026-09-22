@@ -26,6 +26,7 @@
 
 import CoreLocation
 import Foundation
+import MapKit
 @testable import OpenHikes
 import Synchronization
 import Testing
@@ -320,28 +321,46 @@ struct TrailDraftElevationTests {
         #expect(source.askedCounts == [2])
     }
 
-    /// **Marking a place asks nothing**, and that is the split
+    /// **Adding places asks nothing**, and that is the split
     /// ``TrailDraftController/commitLine()`` exists for: a place is a spot
-    /// beside the trail, the line is the number it already was, and a hiker
-    /// marking the six springs along a climb would otherwise spend six billed
-    /// calls being told so.
-    @Test("marking, renaming, moving and removing a place ask nothing")
-    func aPlaceEditAsksNothing() async throws {
+    /// beside the trail, the line is the number it already was, and a search
+    /// adding forty springs would otherwise spend a billed call being told so.
+    @Test("adding and removing places ask nothing")
+    func placesAskNothing() async throws {
         let source = StubHeightSource(heights: Heights.all)
-        let maker = Self.maker(source: source)
+        let spring = TrailPlace(coordinate: Line.at(Line.second), name: "Spring", symbol: .water)
+        let maker = TrailDraftController(
+            placeSource: OnePlace(place: spring),
+            elevationSource: source,
+            elevationPause: { _ in /* instant */ }
+        )
+        maker.setEditing(true)
         maker.appendWaypoint(at: Line.at(Line.first))
         maker.appendWaypoint(at: Line.at(Line.third))
         await Self.measured(maker.elevation, by: source)
 
-        var place = try #require(
-            maker.markPlace(at: Line.at(Line.second), named: "Spring", symbol: .water)
+        maker.finder.regionDidSettle(
+            MKCoordinateRegion(
+                center: Line.at(Line.second),
+                latitudinalMeters: Self.searchSpanMeters,
+                longitudinalMeters: Self.searchSpanMeters
+            )
         )
-        place.name = "The spring"
-        maker.updatePlace(place)
-        maker.movePlace(id: place.id, to: Line.at(Line.fourth))
+        maker.searchNearbyPlaces()
+        await Self.settle { !maker.draft.places.isEmpty }
+        let place = try #require(maker.draft.places.first)
         maker.removePlace(id: place.id)
         await Self.settle { source.askedCounts.count > 1 }
 
-        #expect(source.askedCounts == [2], "four place edits, and not one question")
+        #expect(source.askedCounts == [2], "a search and a removal, and not one question")
+    }
+
+    /// Small enough to be a searchable area.
+    private static let searchSpanMeters: Double = 2000
+
+    private struct OnePlace: TrailPointSourcing {
+        let place: TrailPlace
+
+        func places(near _: CommunitySearchArea) -> [TrailPlace] { [place] }
     }
 }

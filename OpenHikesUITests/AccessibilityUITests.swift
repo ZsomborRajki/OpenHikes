@@ -452,10 +452,9 @@ nonisolated final class AccessibilityUITests: XCTestCase {
 /// screen below belongs to #607's maker.
 extension AccessibilityUITests {
     /// The trail maker, which is the densest screen the app has added since
-    /// the community preview: a search field, a switch, a list of numbered
-    /// points with a running climb and length on its header, a list of places,
-    /// an edit menu of seven verbs and two ways out — over a map that is
-    /// simultaneously a drawing canvas.
+    /// the community preview: a travel-mode tray, a switch, a list of stops
+    /// with a running length, time and climb on its header, an edit menu and
+    /// two ways out — over a map that is simultaneously a drawing canvas.
     ///
     /// It is swept with a line already drawn, because nearly all of it is
     /// absent from an empty one: the points, the figures, the footer that
@@ -477,30 +476,22 @@ extension AccessibilityUITests {
         try audit(app)
     }
 
-    /// And the place editor, which is a sheet *over* that canvas — so a sweep
-    /// of the screen behind it never sees the one control in this feature
-    /// whose whole state is a tint and a border.
+    /// And the place sheet, which is a sheet *over* that canvas — so a sweep of
+    /// the screen behind it never sees the card a tap on the map opens.
     @MainActor
-    func testTrailPlaceEditorPassesAccessibilityAudit() throws {
+    func testTrailPlaceSheetPassesAccessibilityAudit() throws {
         let app = launchApp(arguments: ["--ui-test-expanded-sheet"])
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
 
         openTrailMaker(in: app)
         drawTrailPoints(Array(Self.drawnPoints.prefix(2)), on: map, in: app)
-        // Through the callout a tap on the map opens, which is the flow
-        // ``TrailMakerUITests`` drives and the fast one. The same place is
-        // reachable from the sheet's own *Mark a Place* menu, and that route
-        // was measured at eleven minutes for this one case: a `Menu` inside a
-        // `List` inside a sheet does not settle for `tapWhenReady`, and this
-        // suite is already the slowest job in the workflow.
         map.coordinate(withNormalizedOffset: Self.drawnPoints[2]).tap()
-        confirmDroppedPin("trail-draft-pin-mark-a-place", in: app)
         XCTAssertTrue(
-            element("trail-place-name", in: app).waitForExistence(
+            element("trail-place-sheet", in: app).waitForExistence(
                 timeout: UITestTimeout.navigation
             ),
-            "marking a place should open the editor on it"
+            "a tap on the map should open the place sheet"
         )
 
         try audit(app)

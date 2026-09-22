@@ -140,8 +140,8 @@ extension MapView.Coordinator {
     ///
     /// The same reason the Community one is withdrawn: MapKit draws a callout
     /// *above* its pin, so a pin the camera has framed near the top of the map
-    /// opens underneath the pill — and in this feature every tap opens a
-    /// callout, including the one on the provisional pin a tap drops. Driven
+    /// opens underneath the pill. The maker's own pins open the place sheet
+    /// rather than a callout, so this is about the shared hikes' pins. Driven
     /// from ``withdrawAreaSearchForCallout(open:)``, which is where
     /// ``hasOpenCallout`` is kept, because there is one answer for both.
     func applyTrailPointSearchVisibility(animated: Bool) {

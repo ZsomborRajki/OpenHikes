@@ -78,146 +78,6 @@ import CoreLocation
 import Foundation
 import Observation
 
-/// One point a hiker put down, and the identity that lets a list draw it.
-///
-/// Latitude and longitude rather than a `CLLocationCoordinate2D`, because that
-/// type is neither `Equatable` nor `Hashable` — and an `@Observable` filters a
-/// same-value write only for a value that can answer whether it is one (see
-/// *Render isolation, in practice*). The same reason ``RouteCoordinate``
-/// stores its pair that way.
-///
-/// The id is what a row is keyed on and what a reorder moves, so it survives
-/// the point being moved on the ground: two waypoints dropped on the same spot
-/// are still two waypoints.
-nonisolated struct TrailWaypoint: Identifiable, Hashable, Sendable {
-    let id: UUID
-    var latitude: Double
-    var longitude: Double
-    /// What this spot is called, or empty for one nothing has named yet.
-    ///
-    /// A waypoint acquired a name when the list became a list of *stops* rather
-    /// than of numbered points: a row reading "Lurdy Ház" is the one thing that
-    /// makes a route readable without the map beside it, and it is what the
-    /// search sheet writes back into the row it was opened from — see
-    /// ``TrailStopSearchSheet``.
-    ///
-    /// Two things can fill it and they are not the same. A search result
-    /// arrives named by MapKit and the hiker chose it. A point put down by a
-    /// tap on the map arrives with nothing, and ``TrailStopNaming`` asks what
-    /// is there a moment later; that answer is a *description* rather than a
-    /// choice, which is why it is never recorded as a step of undo and why
-    /// moving the point throws it away again. Empty is a state and not a
-    /// missing value: ``TrailStopRole/title`` is what a nameless stop reads as.
-    var name: String = ""
-
-    init(
-        latitude: Double,
-        longitude: Double,
-        id: UUID = UUID(),
-        name: String = ""
-    ) {
-        self.id = id
-        self.latitude = latitude
-        self.longitude = longitude
-        self.name = name
-    }
-
-    init(coordinate: CLLocationCoordinate2D, id: UUID = UUID(), name: String = "") {
-        self.init(
-            latitude: coordinate.latitude,
-            longitude: coordinate.longitude,
-            id: id,
-            name: name
-        )
-    }
-
-    var clCoordinate: CLLocationCoordinate2D {
-        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-    }
-
-    /// The shape a saved route and a stored draft are both written in.
-    var routeCoordinate: RouteCoordinate {
-        RouteCoordinate(latitude: latitude, longitude: longitude)
-    }
-}
-
-/// What a point is to the route it is in: where it starts, somewhere it passes
-/// through, or where it ends.
-///
-/// Derived from a point's place in the list rather than stored on it, and that
-/// is the same argument ``TrailPlace`` makes for having no rank: the role *is*
-/// the position, so storing it would be a second answer to a question the list
-/// already answers — and one that a reorder, an insert or a delete would leave
-/// behind. Dragging the last stop to the top makes it the start, with nothing
-/// written anywhere.
-///
-/// A one-point draft is a start and nothing else: there is no line yet, so
-/// calling it the end as well would be two words for one pin.
-/// The cases are in alphabetical order rather than in route order, which reads
-/// oddly and is the linter's `sorted_enum_cases` rather than a statement: the
-/// order a route is walked in is ``of(waypointAt:in:)`` below.
-nonisolated enum TrailStopRole: Hashable, Sendable {
-    case end
-    case start
-    /// The *n*th stop along the way, counted from one, as a hiker reads it.
-    case stop(number: Int)
-
-    static func of(waypointAt index: Int, in count: Int) -> Self {
-        if index == 0 { return .start }
-        if index == count - 1 { return .end }
-        return .stop(number: index)
-    }
-
-    /// What a row reads when nothing has named the point — the fallback
-    /// ``TrailWaypoint/name`` describes, and the word beside a named one.
-    var title: String {
-        switch self {
-        case .start: String(localized: "Start")
-        case .stop(let number): String(localized: "Stop \(number)")
-        case .end: String(localized: "Destination")
-        }
-    }
-
-    /// The glyph on the route's own line. Filled at the two ends and hollow in
-    /// between, which is the whole of what a picture of a route has to say:
-    /// these are where it begins and finishes, and those are places it passes.
-    var systemImageName: String {
-        switch self {
-        case .start, .end: "circle.fill"
-        case .stop: "circle"
-        }
-    }
-}
-
-/// A point under a finger: which one, and where it is right now.
-///
-/// The whole of the untracked channel this file's header describes. It carries
-/// the waypoint's **place in the list** rather than its identity, because the
-/// one thing that reads it is the map — which has the pins and the leg
-/// polylines in that order and has to move the *n*th of each. The list cannot
-/// change underneath a drag: the only thing that could change it is the sheet,
-/// and the finger doing this is on the map.
-nonisolated struct TrailWaypointDrag: Equatable, Sendable {
-    let index: Int
-    var latitude: Double
-    var longitude: Double
-
-    init(index: Int, coordinate: CLLocationCoordinate2D) {
-        self.index = index
-        latitude = coordinate.latitude
-        longitude = coordinate.longitude
-    }
-
-    var clCoordinate: CLLocationCoordinate2D {
-        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-    }
-
-    /// The legs this point is an end of: the one arriving at it and the one
-    /// leaving it, in leg indices. Both, either or neither will be in range —
-    /// the first point has nothing arriving and the last has nothing leaving.
-    var adjacentLegIndices: [Int] { [index - 1, index] }
-}
-
 @Observable
 final class TrailDraft {
     /// Non-isolated so releasing the last reference never requires proving
@@ -241,6 +101,16 @@ final class TrailDraft {
     /// and the one this feature exists to give.
     private(set) var snapsToPaths = true
     private(set) var travelMode: TrailTravelMode = .hiking
+
+    /// Whether the one point in a one-point draft is the **destination**, with
+    /// the start field still open.
+    ///
+    /// The one extra fact two empty fields need: with none or two-plus points
+    /// every row's role follows from its place in the list, and with exactly one
+    /// it does not — a hiker who fills *Destination* first has a point that is
+    /// not a start. False whenever the count is anything but one, so there is
+    /// no stale answer lying about for the next time it is.
+    private(set) var startIsOpen = false
 
     /// How far along the line each waypoint sits, in the order they were put
     /// down. Empty for an empty draft; `0` for the first point of any other.
@@ -314,18 +184,34 @@ final class TrailDraft {
     /// trail, which is why ``TrailDraftSave`` refuses it.
     var canBeSaved: Bool { waypoints.count > 1 }
 
-    /// Whether there is nothing here at all — no line and nothing marked.
+    /// Whether there is nothing here at all — no line and no places.
     ///
     /// Both halves, because this is what decides whether the durable draft is
     /// worth keeping and whether Cancel has anything to ask about. A hiker who
-    /// marked the hut before drawing anything has done work, and a Cancel that
+    /// found the huts before drawing anything has done work, and a Cancel that
     /// threw it away without asking would be the same loss a cleared line is.
     var isEmpty: Bool { waypoints.isEmpty && places.isEmpty }
 
     /// The drawing as one value: what a step of undo remembers, and what a
     /// restore puts back. See ``TrailDraftContents``.
     var contents: TrailDraftContents {
-        TrailDraftContents(waypoints: waypoints, places: places)
+        TrailDraftContents(waypoints: waypoints, places: places, startIsOpen: startIsOpen)
+    }
+
+    /// The route list's rows: two open fields over an empty draft, one open
+    /// field beside a lone point, and the points themselves from two on.
+    var slots: [TrailStopSlot] {
+        let points = waypoints.enumerated().map { TrailStopSlot.point(index: $0.offset, id: $0.element.id) }
+        switch waypoints.count {
+        case 0: return [.open(.start), .open(.end)]
+        case 1: return startIsOpen ? [.open(.start)] + points : points + [.open(.end)]
+        default: return points
+        }
+    }
+
+    /// The whole line's time at this mode's pace, or Apple Maps' where it said.
+    var travelTime: TimeInterval {
+        legs.reduce(0) { $0 + travelTime(of: $1.path) }
     }
 
     /// Where the pins go. The points themselves, never the resolved shape.
@@ -379,10 +265,6 @@ final class TrailDraft {
     var canUndo: Bool { history.canUndo }
     var canRedo: Bool { history.canRedo }
 
-    /// Whether the line can be edited at all — two points is the smallest
-    /// thing a reorder, a reverse or a loop is about.
-    var canBeRearranged: Bool { waypoints.count > 1 }
-
     /// Whether joining the end back to the start would change anything.
     ///
     /// False for a line that already ends where it began, which is what stops
@@ -403,6 +285,7 @@ final class TrailDraft {
     func append(_ coordinate: CLLocationCoordinate2D, named name: String = "") {
         history.record(contents)
         waypoints.append(TrailWaypoint(coordinate: coordinate, name: name))
+        startIsOpen = false
         rebuildLegs()
     }
 
@@ -423,13 +306,15 @@ final class TrailDraft {
         with waypoints: [TrailWaypoint],
         places: [TrailPlace],
         snapsToPaths: Bool,
-        travelMode: TrailTravelMode = .hiking
+        travelMode: TrailTravelMode = .hiking,
+        startIsOpen: Bool = false
     ) {
         cancelDrag()
         history.forget()
         self.waypoints = waypoints
         self.places = places
         self.travelMode = travelMode
+        self.startIsOpen = waypoints.count == 1 && startIsOpen
         memo = TrailLegMemo()
         legs = []
         setSnapsToPaths(snapsToPaths)
@@ -452,6 +337,7 @@ final class TrailDraft {
         guard !isEmpty else { return }
         waypoints = []
         places = []
+        startIsOpen = false
         rebuildLegs()
     }
 
@@ -493,7 +379,14 @@ final class TrailDraft {
     /// reason above: these are read by rows of a list that is being rebuilt
     /// underneath them.
     func role(ofWaypointAt index: Int) -> TrailStopRole {
-        TrailStopRole.of(waypointAt: index, in: waypoints.count)
+        if waypoints.count == 1, startIsOpen { return .end }
+        return TrailStopRole.of(waypointAt: index, in: waypoints.count)
+    }
+
+    /// How long a path takes: Apple Maps' estimate when it gave one, and this
+    /// mode's pace over the distance otherwise.
+    func travelTime(of path: TrailLegPath) -> TimeInterval {
+        path.travelTime ?? path.distanceMeters / travelMode.paceMetersPerSecond
     }
 
     /// What the point at `index` is called, or empty for one nothing has
@@ -556,6 +449,8 @@ final class TrailDraft {
             leg.coordinates = route.coordinates
             leg.distanceMeters = route.distanceMeters
             leg.snap = route.snap
+            leg.travelTime = route.travelTime
+            leg.alternatives = route.alternatives
         }
     }
 
@@ -638,6 +533,7 @@ final class TrailDraft {
         cancelDrag()
         waypoints = restored.waypoints
         places = restored.places
+        startIsOpen = restored.waypoints.count == 1 && restored.startIsOpen
         rebuildLegs()
     }
 
@@ -648,6 +544,8 @@ final class TrailDraft {
             leg.coordinates = leg.ends.straightCoordinates
             leg.distanceMeters = leg.ends.straightDistanceMeters
             leg.snap = .freehand
+            leg.travelTime = nil
+            leg.alternatives = []
         }
     }
 
@@ -821,14 +719,68 @@ extension TrailDraft {
         rebuildLegs()
     }
 
-    /// Takes points out of the line. What a swipe on a row does.
+    /// Takes points out of the line. What the delete control on a row does.
+    ///
+    /// A route cut down to one point keeps that point in the field it was in:
+    /// delete the start of a two-point route and what is left is still the
+    /// destination, with the start field open again — as in Apple Maps.
     func remove(atOffsets offsets: IndexSet) {
-        let kept = waypoints.enumerated()
-            .filter { !offsets.contains($0.offset) }
-            .map(\.element)
+        let kept = waypoints.enumerated().filter { !offsets.contains($0.offset) }
         guard kept.count != waypoints.count else { return }
         history.record(contents)
-        waypoints = kept
+        let wasDestination = kept.count == 1 && role(ofWaypointAt: kept[0].offset) == .end
+        waypoints = kept.map(\.element)
+        startIsOpen = wasDestination
+        rebuildLegs()
+    }
+
+    /// Puts a stop where it belongs: into an open field while there is one —
+    /// the start first — and otherwise into the leg nearest to it.
+    ///
+    /// What the map's place sheet does, so a tap that meant "on the way" never
+    /// silently becomes a new destination.
+    ///
+    /// - Parameter preferredLeg: the leg a thumb landed on, which wins over the
+    ///   nearest one where a trail doubles back. Ignored when out of range.
+    func addStop(
+        _ coordinate: CLLocationCoordinate2D,
+        named name: String = "",
+        preferringLeg preferredLeg: Int? = nil
+    ) {
+        guard !fillOpenField(with: coordinate, named: name) else { return }
+        let leg = preferredLeg.flatMap { legs.indices.contains($0) ? $0 : nil }
+            ?? nearestLegIndex(to: coordinate)
+        guard let leg else { return }
+        insert(coordinate, intoLegAt: leg, named: name)
+    }
+
+    /// Fills the first open field — the start, then the destination — and
+    /// answers whether there was one.
+    @discardableResult func fillOpenField(
+        with coordinate: CLLocationCoordinate2D,
+        named name: String = ""
+    ) -> Bool {
+        guard case .open(let role) = slots.first(where: { $0.waypointIndex == nil }) else { return false }
+        fill(role, with: coordinate, named: name)
+        return true
+    }
+
+    /// Fills the open start or destination field. Does nothing when that field
+    /// is not open — a filled end is changed through its own row instead.
+    func fill(
+        _ role: TrailStopRole,
+        with coordinate: CLLocationCoordinate2D,
+        named name: String = ""
+    ) {
+        guard slots.contains(.open(role)) else { return }
+        history.record(contents)
+        let point = TrailWaypoint(coordinate: coordinate, name: name)
+        if role == .start {
+            waypoints.insert(point, at: 0)
+        } else {
+            waypoints.append(point)
+        }
+        startIsOpen = waypoints.count == 1 && role == .end
         rebuildLegs()
     }
 
@@ -860,8 +812,14 @@ extension TrailDraft {
     /// directly, because their identities are still the old list's: a leg is
     /// named by the waypoint it arrives at, and every one of those has changed.
     func reverse() {
-        guard canBeRearranged else { return }
+        guard !waypoints.isEmpty else { return }
         history.record(contents)
+        // One point swaps fields, the way Apple Maps' swap button moves a lone
+        // destination up into the start.
+        if waypoints.count == 1 {
+            startIsOpen.toggle()
+            return
+        }
         let flipped = travelMode == .hiking ? legs.reversed().map { $0.flipped() } : []
         waypoints.reverse()
         rebuildLegs(reusing: flipped)
@@ -898,6 +856,7 @@ extension TrailDraft {
         history.record(contents)
         cancelDrag()
         waypoints = []
+        startIsOpen = false
         // The places go with the line, because *Clear* is the hiker starting
         // this trail again and a hut marked against a route that no longer
         // exists is not the start of anything. One step of undo brings back
@@ -921,71 +880,27 @@ extension TrailDraft {
 
     // MARK: Places
 
-    /// Marks a place. What the callout's *Mark a Place* does, and what the
-    /// three add flows in the maker's list do.
+    /// Adds what a place search found, as one step of undo.
     ///
-    /// A step like every other edit, so a place dropped by a mis-tap is undone
-    /// rather than hunted for and deleted.
-    func addPlace(_ place: TrailPlace) {
+    /// Places come from OpenStreetMap now, not from a hand-marked pin, so a
+    /// search is the one way in and a hiker who regrets it takes it back with
+    /// one *Undo* rather than forty deletes. Nothing within
+    /// ``TrailPointRanking/alreadyMarkedMeters`` of a place already here is
+    /// added twice.
+    func addPlaces(_ found: [TrailPlace]) {
+        let fresh = TrailPointRanking.excluding(places, from: found)
+        guard !fresh.isEmpty else { return }
         history.record(contents)
-        places.append(place)
+        places.append(contentsOf: fresh)
         rankPlaces()
     }
 
-    /// Writes a place's name, symbol, note or coordinate back, matched by
-    /// identity.
-    ///
-    /// Silent for a place that is no longer here and for one that would not
-    /// change: the editor is a sheet over a drawing that can be undone
-    /// underneath it, and a write of the same values would cost a step of
-    /// history that puts nothing back.
-    func updatePlace(_ place: TrailPlace) {
-        guard let index = places.firstIndex(where: { $0.id == place.id }),
-              !places[index].matches(place) else { return }
-        history.record(contents)
-        places[index] = place
-        rankPlaces()
-    }
-
-    /// Moves a place to a new spot. What a drag on its pin commits.
-    ///
-    /// Its own verb rather than ``updatePlace(_:)`` with a rebuilt value,
-    /// because the map has a coordinate and nothing else: reading the rest of
-    /// the place out to put it straight back is how a drag that races the
-    /// editor writes yesterday's name.
-    func movePlace(id: UUID, to coordinate: CLLocationCoordinate2D) {
-        guard let index = places.firstIndex(where: { $0.id == id }) else { return }
-        guard places[index].latitude != coordinate.latitude
-            || places[index].longitude != coordinate.longitude else { return }
-        history.record(contents)
-        places[index].latitude = coordinate.latitude
-        places[index].longitude = coordinate.longitude
-        rankPlaces()
-    }
-
+    /// Takes one place off this trail — the place sheet's *Remove*. A step of
+    /// undo, like every other edit here.
     func removePlace(id: UUID) {
         guard let index = places.firstIndex(where: { $0.id == id }) else { return }
         history.record(contents)
         places.remove(at: index)
-        rankPlaces()
-    }
-
-    /// Takes places out of the list a screen is showing. What a swipe on a
-    /// place row does.
-    ///
-    /// The offsets are into ``placeRows`` — the order the line meets them —
-    /// rather than into ``places``, because that is the list the hiker swiped
-    /// on and the two are not the same order. Resolved to identities here
-    /// rather than at the call site, so a screen never has to know that.
-    func removePlaces(atRowOffsets offsets: IndexSet) {
-        let doomed = Set(
-            offsets.compactMap { offset in
-                placeRows.indices.contains(offset) ? placeRows[offset].id : nil
-            }
-        )
-        guard !doomed.isEmpty else { return }
-        history.record(contents)
-        places.removeAll { doomed.contains($0.id) }
         rankPlaces()
     }
 
@@ -997,7 +912,7 @@ extension TrailDraft {
     /// Which leg of the line runs nearest to `coordinate`, or `nil` when there
     /// is no line.
     ///
-    /// What *Add Stop* asks when the tap that raised the callout did not land
+    /// What *Add Stop* asks when the tap that dropped the pin did not land
     /// on a leg. Measured on the ground rather than on the glass, unlike the
     /// leg hit-test that answers a thumb: this is a question about where a
     /// point belongs in a route, and the answer must not depend on how the
@@ -1031,6 +946,22 @@ extension TrailDraft {
             }
         }
         return best
+    }
+
+    /// Draws alternative `index` for the leg at `legIndex`, offering the shape
+    /// it replaces in its place — a tap on a grey route on the map.
+    ///
+    /// **Not a step of undo**, for the reason a stop's name is not: it changes
+    /// which way the line goes between two points the hiker already chose, not
+    /// the points, and undo is a history of the points. The memo remembers the
+    /// choice, so a reorder or an undo that brings these ends back brings the
+    /// chosen shape with them.
+    func chooseAlternative(_ index: Int, forLegAt legIndex: Int) {
+        guard legs.indices.contains(legIndex),
+              let chosen = legs[legIndex].choosing(alternative: index) else { return }
+        var updated = legs
+        updated[legIndex] = chosen
+        publish(updated)
     }
 
     // MARK: A point under a finger

@@ -62,32 +62,33 @@ nonisolated struct TrailStopConnector: Shape {
 }
 
 /// One row of the route: its dot, its stems, what it is called and how far
-/// along it sits.
+/// along it sits — or, for an open start or destination, the field waiting to
+/// be filled.
 struct TrailStopRowView: View {
     let draft: TrailDraft
-    /// Where in the line this row sits.
-    let index: Int
-    /// Opens the search sheet on this stop.
+    /// Where in ``TrailDraft/slots`` this row sits.
+    let position: Int
+    /// Opens the search sheet on this row.
     var onSearch: () -> Void
 
     /// Wide enough to centre a dot under a fingertip and narrow enough that the
     /// text column still has a phone's width at an accessibility type size. The
     /// same kind of number ``PhotoCalloutMetrics`` holds.
-    private static let railWidth: CGFloat = 26
+    static let railWidth: CGFloat = 26
     private static let dotSize: CGFloat = 11
-    private static let stemWidth: CGFloat = 2
-    private static let stemDash: [CGFloat] = [2, 4]
+    static let stemWidth: CGFloat = 2
+    static let stemDash: [CGFloat] = [2, 4]
     /// What makes a row a row. On the text column rather than on the row, for
     /// the reason the file header gives.
-    private static let rowPadding: CGFloat = 11
+    static let rowPadding: CGFloat = 11
 
     var body: some View {
-        let role = draft.role(ofWaypointAt: index)
-        let name = draft.name(ofWaypointAt: index)
+        let slots = draft.slots
+        let slot = slots.indices.contains(position) ? slots[position] : .open(.end)
         Button(action: onSearch) {
             HStack(alignment: .center, spacing: 0) {
-                rail(role)
-                text(role, name: name)
+                rail(Self.role(of: slot, in: draft), isOpen: slot.waypointIndex == nil, count: slots.count)
+                text(slot)
                     .padding(.vertical, Self.rowPadding)
                 Spacer(minLength: 0)
             }
@@ -96,48 +97,44 @@ struct TrailStopRowView: View {
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         .listRowSeparator(.hidden)
-        // One element rather than four, the rule every composite row here
-        // follows — see ``HikeRow``. The identifier is unchanged from the
-        // numbered rows it replaces, and deliberately so: it is what the map's
-        // own callout, the automation and this screen all name a point by, and
-        // the row's *place in the line* is still exactly what it means.
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("trail-draft-point-\(index + 1)")
+        .accessibilityIdentifier(Self.identifier(of: slot))
         .accessibilityHint("Opens a search for somewhere to put this stop")
     }
 
-    /// The dot, with the half-stems either side of it.
+    static func role(of slot: TrailStopSlot, in draft: TrailDraft) -> TrailStopRole {
+        switch slot {
+        case .open(let role): role
+        case .point(let index, _): draft.role(ofWaypointAt: index)
+        }
+    }
+
+    private static func identifier(of slot: TrailStopSlot) -> String {
+        switch slot {
+        case .open(.start): "trail-draft-open-start"
+        case .open: "trail-draft-open-destination"
+        case .point(let index, _): "trail-draft-point-\(index + 1)"
+        }
+    }
+
+    /// The dot, with the half-stems either side of it. Hollow for an open
+    /// field, which has nothing in it yet.
     ///
     /// `maxHeight: .infinity` on both stems is what makes them meet the row's
     /// edges: the row is as tall as the padded text column beside them, and a
     /// stem that sized itself would stop short of it.
     @ViewBuilder
-    private func rail(_ role: TrailStopRole) -> some View {
+    private func rail(_ role: TrailStopRole, isOpen: Bool, count: Int) -> some View {
         VStack(spacing: 0) {
-            stem(drawn: index > 0)
-            Image(systemName: role.systemImageName)
+            TrailStopStem(isDrawn: position > 0)
+            Image(systemName: isOpen ? "circle" : role.systemImageName)
                 .font(.system(size: Self.dotSize, weight: .black))
-                .foregroundStyle(.tint)
-            stem(drawn: index < draft.waypoints.count - 1)
+                .foregroundStyle(isOpen ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.tint))
+            // The last row's lower stem reaches *Add Stop* when there is one.
+            TrailStopStem(isDrawn: position < count - 1 || draft.canBeSaved)
         }
         .frame(width: Self.railWidth)
-        // The whole rail is decoration: the row says what it is in words.
         .accessibilityHidden(true)
-    }
-
-    @ViewBuilder
-    private func stem(drawn: Bool) -> some View {
-        TrailStopConnector()
-            .stroke(
-                drawn ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.clear),
-                style: StrokeStyle(
-                    lineWidth: Self.stemWidth,
-                    lineCap: .round,
-                    dash: Self.stemDash
-                )
-            )
-            .frame(width: Self.railWidth, height: nil)
-            .frame(maxHeight: .infinity)
     }
 
     /// What this stop is called, what it is to the route, and how far along it
@@ -149,28 +146,34 @@ struct TrailStopRowView: View {
     /// plus whatever the leg into it has to report, so the rows stay a
     /// consistent height while the names land one at a time.
     @ViewBuilder
-    private func text(_ role: TrailStopRole, name: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if name.isEmpty {
-                Text(role.title)
-            } else {
-                Text(name).lineLimit(2)
-            }
-            HStack(spacing: 6) {
-                if !name.isEmpty {
+    private func text(_ slot: TrailStopSlot) -> some View {
+        switch slot {
+        case .open(let role):
+            Text(role == .start ? LocalizedStringKey("Choose Start") : "Choose Destination")
+                .foregroundStyle(.secondary)
+        case .point(let index, _):
+            let role = draft.role(ofWaypointAt: index)
+            let name = draft.name(ofWaypointAt: index)
+            VStack(alignment: .leading, spacing: 2) {
+                if name.isEmpty {
                     Text(role.title)
-                    Text(verbatim: "·")
+                } else {
+                    Text(name).lineLimit(2)
                 }
-                Text(Self.length(draft.distanceAlongLine(toWaypointAt: index)))
-                    .monospacedDigit()
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            // The leg *into* this stop, which is why the first row never has
-            // one: nothing arrives at it.
-            if let notice = draft.leg(arrivingAtWaypointAt: index)?.snap.notice {
-                TrailDraftNoticeLabel(notice: notice)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    if !name.isEmpty {
+                        Text(role.title)
+                        Text(verbatim: "·")
+                    }
+                    Text(Self.length(draft.distanceAlongLine(toWaypointAt: index)))
+                        .monospacedDigit()
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                if let notice = draft.leg(arrivingAtWaypointAt: index)?.snap.notice {
+                    TrailDraftNoticeLabel(notice: notice)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -181,33 +184,54 @@ struct TrailStopRowView: View {
     }
 }
 
-/// *Add Stop*, and it never goes away.
+/// Half of the dotted line between two rows — see the file header.
+private struct TrailStopStem: View {
+    let isDrawn: Bool
+
+    var body: some View {
+        TrailStopConnector()
+            .stroke(
+                isDrawn ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.clear),
+                style: StrokeStyle(
+                    lineWidth: TrailStopRowView.stemWidth,
+                    lineCap: .round,
+                    dash: TrailStopRowView.stemDash
+                )
+            )
+            .frame(width: TrailStopRowView.railWidth)
+            .frame(maxHeight: .infinity)
+    }
+}
+
+/// *Add Stop*, under a route that has both ends.
 ///
-/// The one row of the route section that is not a point, kept at the bottom of
-/// it whatever the line is doing — including for a draft with nothing in it,
-/// where it is the only way in that is not a tap on the map. That permanence is
-/// the whole of what makes the section read as a route being built rather than
-/// as a list of things that happen to be there.
+/// Absent while a start or destination field is still open: that field is the
+/// way in, and a second row offering the same thing would be two answers to
+/// one question. Once both are filled it stays at the bottom whatever the line
+/// is doing, as in Apple Maps, and what it adds joins the end of the list to be
+/// dragged into place.
 ///
 /// It carries the same rail as the rows above it, with a stem reaching up to
 /// the last of them, so the line the route is drawn as arrives at the place a
 /// hiker adds to it.
 struct TrailAddStopRow: View {
-    let draft: TrailDraft
     var onAdd: () -> Void
-
-    private static let railWidth: CGFloat = 26
-    private static let rowPadding: CGFloat = 11
-    private static let stemWidth: CGFloat = 2
-    private static let stemDash: [CGFloat] = [2, 4]
 
     var body: some View {
         Button(action: onAdd) {
             HStack(alignment: .center, spacing: 0) {
-                rail
+                VStack(spacing: 0) {
+                    TrailStopStem(isDrawn: true)
+                    Image(systemName: "plus.circle.fill")
+                        .font(.body)
+                        .foregroundStyle(.tint)
+                    Color.clear.frame(maxHeight: .infinity)
+                }
+                .frame(width: TrailStopRowView.railWidth)
+                .accessibilityHidden(true)
                 Text("Add Stop")
                     .foregroundStyle(.tint)
-                    .padding(.vertical, Self.rowPadding)
+                    .padding(.vertical, TrailStopRowView.rowPadding)
                 Spacer(minLength: 0)
             }
             .contentShape(.rect)
@@ -215,36 +239,10 @@ struct TrailAddStopRow: View {
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         .listRowSeparator(.hidden)
-        // Never draggable and never deletable: it is a control rather than a
-        // stop, and in a list whose rows are all reorderable an *Add* row that
-        // could be dragged into the middle of the route would be a control that
-        // lies about what it is.
+        // Not a stop, so it has no place in the order and nothing to delete.
         .moveDisabled(true)
         .deleteDisabled(true)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("trail-draft-add-stop")
-    }
-
-    @ViewBuilder private var rail: some View {
-        VStack(spacing: 0) {
-            TrailStopConnector()
-                .stroke(
-                    draft.waypoints.isEmpty
-                        ? AnyShapeStyle(.clear)
-                        : AnyShapeStyle(.tertiary),
-                    style: StrokeStyle(
-                        lineWidth: Self.stemWidth,
-                        lineCap: .round,
-                        dash: Self.stemDash
-                    )
-                )
-                .frame(maxHeight: .infinity)
-            Image(systemName: "plus.circle.fill")
-                .font(.body)
-                .foregroundStyle(.tint)
-            Color.clear.frame(maxHeight: .infinity)
-        }
-        .frame(width: Self.railWidth)
-        .accessibilityHidden(true)
     }
 }

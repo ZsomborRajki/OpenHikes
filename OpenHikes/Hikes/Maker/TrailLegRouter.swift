@@ -116,6 +116,17 @@ actor OverpassTrailLegRouter: TrailLegRouting {
     /// ``TrailLegGap/tooFarApart``.
     static let maximumLegMeters = 20_000.0
 
+    /// How many other ways a leg offers beside the one it draws — Apple Maps
+    /// shows at most three routes in all.
+    static let maximumAlternatives = 2
+
+    /// How much longer than the best an alternative may be. A route half as
+    /// long again is a real choice on foot; twice as long is a different walk.
+    static let maximumAlternativeStretch = 1.5
+
+    /// How much of an alternative may run along a route already offered.
+    static let maximumSharedFraction = 0.7
+
     /// The graph index that was last built, and the regions it came from.
     private struct BuiltIndex {
         let regions: Set<TrailGraphRegion>
@@ -250,21 +261,38 @@ nonisolated private extension OverpassTrailLegRouter {
               let end = snapPoint(for: ends.endCoordinate, in: index) else {
             return .straight(along: ends, .unmapped(.noPathBetween))
         }
-        let shape = shape(from: start, to: end, along: ends, using: &index)
-        guard !shape.isEmpty else {
+        // Both ends on one edge: the edge itself is the way, and there is
+        // nothing to offer beside it.
+        guard start.edgeIndex != end.edgeIndex else {
+            return route(along: [shape(through: nil, from: start, to: end, along: ends, in: index)])
+        }
+        guard let best = path(from: start, to: end, using: &index, ceiling: budget(along: ends)) else {
             return .straight(along: ends, .unmapped(.noPathBetween))
         }
+        let paths = [best.path] + alternatives(to: best, from: start, to: end, using: &index)
+        return route(along: paths.map { path in
+            shape(through: path, from: start, to: end, along: ends, in: index)
+        })
+    }
+
+    /// The first shape drawn, the rest offered beside it.
+    static func route(along shapes: [[CLLocationCoordinate2D]]) -> TrailLegRoute {
+        let paths = shapes.map { shape in
+            TrailLegPath(
+                coordinates: shape.map { RouteCoordinate(latitude: $0.latitude, longitude: $0.longitude) },
+                distanceMeters: length(of: shape)
+            )
+        }
         return TrailLegRoute(
-            coordinates: shape.map { point in
-                RouteCoordinate(latitude: point.latitude, longitude: point.longitude)
-            },
-            distanceMeters: length(of: shape),
-            snap: .snapped
+            coordinates: paths[0].coordinates,
+            distanceMeters: paths[0].distanceMeters,
+            snap: .snapped,
+            alternatives: Array(paths.dropFirst())
         )
     }
 
-    /// The whole drawn shape of a snapped leg, and empty when the two ends
-    /// are not joined by anything within the budget.
+    /// The whole drawn shape of a snapped leg through `path`, or along the one
+    /// edge both ends snapped onto when there is no path.
     ///
     /// **It starts and ends at the waypoints, not at their projections.** A
     /// tapped point stays where it was tapped: moving it onto the path would
@@ -274,24 +302,30 @@ nonisolated private extension OverpassTrailLegRouter {
     /// nothing at all when the tap landed on the line, which is the usual
     /// case.
     static func shape(
+        through path: TrailMatcherGraphIndex.NodePath?,
         from start: SnapPoint,
         to end: SnapPoint,
         along ends: TrailLegEnds,
-        using index: inout TrailMatcherGraphIndex
+        in index: TrailMatcherGraphIndex
     ) -> [CLLocationCoordinate2D] {
         var shape = [ends.startCoordinate, start.coordinate]
-        if start.edgeIndex != end.edgeIndex {
-            guard let path = path(from: start, to: end, along: ends, using: &index) else {
-                return []
-            }
+        if let path {
             shape.append(contentsOf: path.nodes.compactMap { index.nodes[$0]?.coordinate })
         }
         shape.append(contentsOf: [end.coordinate, ends.endCoordinate])
         return index.deduplicated(shape)
     }
 
+    /// A way through the graph, and what it costs end to end — the node path
+    /// plus the stretch of snapped edge at either end.
+    struct FoundPath {
+        let path: TrailMatcherGraphIndex.NodePath
+        let total: Double
+    }
+
     /// The cheapest way through the graph between the two edges the ends
-    /// snapped onto.
+    /// snapped onto, avoiding `banned` edges and costing no more than
+    /// `ceiling` end to end.
     ///
     /// Four combinations, because either end of either edge can be the one
     /// the route leaves through — the same enumeration
@@ -302,32 +336,104 @@ nonisolated private extension OverpassTrailLegRouter {
     static func path(
         from start: SnapPoint,
         to end: SnapPoint,
-        along ends: TrailLegEnds,
-        using index: inout TrailMatcherGraphIndex
-    ) -> TrailMatcherGraphIndex.NodePath? {
-        let budget = min(
-            maximumLegMeters,
-            ends.straightDistanceMeters * maximumDetourFactor
-                + minimumDetourAllowanceMeters
-        )
-        var best: (path: TrailMatcherGraphIndex.NodePath, total: Double)?
+        using index: inout TrailMatcherGraphIndex,
+        ceiling: Double,
+        banning banned: Set<Int> = []
+    ) -> FoundPath? {
+        var best: FoundPath?
         for from in endpoints(of: start, in: index) {
             for to in endpoints(of: end, in: index) {
-                let available = budget - from.cost - to.cost
-                guard available >= 0 else { continue }
-                guard let path = index.shortestPath(
-                    from: from.nodeID,
-                    to: to.nodeID,
-                    maximumDistance: available,
-                    bannedNodes: [],
-                    bannedEdges: []
-                ) else { continue }
+                let available = ceiling - from.cost - to.cost
+                guard available >= 0,
+                      let path = index.shortestPath(
+                          from: from.nodeID,
+                          to: to.nodeID,
+                          maximumDistance: available,
+                          bannedNodes: [],
+                          bannedEdges: banned
+                      ) else { continue }
                 let total = from.cost + path.distance + to.cost
                 if let current = best, current.total <= total { continue }
-                best = (path, total)
+                best = FoundPath(path: path, total: total)
             }
         }
-        return best?.path
+        return best
+    }
+
+    /// How far a leg may wander before it is not the leg the hiker drew.
+    static func budget(along ends: TrailLegEnds) -> Double {
+        min(
+            maximumLegMeters,
+            ends.straightDistanceMeters * maximumDetourFactor + minimumDetourAllowanceMeters
+        )
+    }
+
+    /// Up to ``maximumAlternatives`` other ways between the same two snapped
+    /// points, each genuinely different from what is already on offer.
+    ///
+    /// Not Yen's k-shortest paths, which ``TrailMatcherGraphIndex`` also
+    /// offers: on a path network the second- and third-shortest are the
+    /// shortest with one corner cut differently, which is not a choice anyone
+    /// would tap. Each round bans the **middle half** of every path found so
+    /// far and asks again, so what comes back has to leave the others somewhere
+    /// in the middle and rejoin them — a different valley, the other side of a
+    /// lake. What shares more than ``maximumSharedFraction`` of its length with
+    /// one already found, or costs more than ``maximumAlternativeStretch``
+    /// times the best end to end, is not offered.
+    ///
+    /// Asked through the same four combinations the best path is, because the
+    /// best may leave its snapped edge through an interior node an alternative
+    /// has no use for.
+    static func alternatives(
+        to best: FoundPath,
+        from start: SnapPoint,
+        to end: SnapPoint,
+        using index: inout TrailMatcherGraphIndex
+    ) -> [TrailMatcherGraphIndex.NodePath] {
+        let ceiling = best.total * maximumAlternativeStretch
+        var offered = [best.path]
+        while offered.count <= maximumAlternatives {
+            let banned = offered.reduce(into: Set<Int>()) { banned, path in
+                banned.formUnion(middleEdges(of: path, in: index))
+            }
+            guard !banned.isEmpty,
+                  let candidate = path(from: start, to: end, using: &index, ceiling: ceiling, banning: banned),
+                  isDistinct(candidate.path, from: offered, in: index) else { break }
+            offered.append(candidate.path)
+        }
+        return Array(offered.dropFirst())
+    }
+
+    /// The edges that reach into the middle half of `path`'s length — every
+    /// one of them, however short the path, so a path of one or two edges
+    /// still has something to be different from.
+    static func middleEdges(
+        of path: TrailMatcherGraphIndex.NodePath,
+        in index: TrailMatcherGraphIndex
+    ) -> Set<Int> {
+        let middle = (path.distance / 4)...(path.distance * 3 / 4)
+        var travelled = 0.0
+        var banned = Set<Int>()
+        for edge in path.edgeIndices {
+            let length = index.edges[edge].lengthMeters
+            if (travelled...(travelled + length)).overlaps(middle) { banned.insert(edge) }
+            travelled += length
+        }
+        return banned
+    }
+
+    static func isDistinct(
+        _ candidate: TrailMatcherGraphIndex.NodePath,
+        from offered: [TrailMatcherGraphIndex.NodePath],
+        in index: TrailMatcherGraphIndex
+    ) -> Bool {
+        guard candidate.distance > 0 else { return false }
+        let own = Set(candidate.edgeIndices)
+        return offered.allSatisfy { path in
+            let shared = own.intersection(path.edgeIndices)
+                .reduce(0) { $0 + index.edges[$1].lengthMeters }
+            return shared <= candidate.distance * maximumSharedFraction
+        }
     }
 
     /// The two nodes a snapped point can leave its edge through, and what

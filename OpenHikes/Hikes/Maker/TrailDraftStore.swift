@@ -7,7 +7,7 @@
 //  Its own type rather than three calls spread through the controller,
 //  because "there is exactly one draft row" is a rule and a rule wants one
 //  place to live. Every write goes through
-//  ``save(waypoints:places:snapsToPaths:travelMode:)``, which updates the row that is
+//  ``save(waypoints:places:snapsToPaths:travelMode:startIsOpen:)``, which updates the row that is
 //  there rather than inserting beside it.
 //
 //  A failed read or write is logged and swallowed, deliberately. What is at
@@ -19,7 +19,7 @@
 //
 //  Swallowed is not the same as ignored. A read that threw is answered as a
 //  failure rather than as an empty store, because the two differ by exactly
-//  one thing: whether ``save(waypoints:places:snapsToPaths:travelMode:)`` writes a second
+//  one thing: whether ``save(waypoints:places:snapsToPaths:travelMode:startIsOpen:)`` writes a second
 //  row beside the first. See the note on it.
 //
 
@@ -48,6 +48,7 @@ nonisolated struct StoredTrailDraft: Equatable, Sendable {
     var places: [TrailPlace] = []
     var snapsToPaths: Bool
     var travelMode: TrailTravelMode = .hiking
+    var startIsOpen = false
 
     /// Both lists, because either on its own is a drawing worth coming back
     /// to — see ``TrailDraft/isEmpty``.
@@ -97,7 +98,8 @@ struct TrailDraftStore {
                 },
                 places: record.places,
                 snapsToPaths: record.snapsToPaths,
-                travelMode: record.travelMode
+                travelMode: record.travelMode,
+                startIsOpen: record.startIsOpen
             )
         } catch {
             log("load", error)
@@ -119,7 +121,8 @@ struct TrailDraftStore {
         waypoints: [TrailWaypoint],
         places: [TrailPlace],
         snapsToPaths: Bool,
-        travelMode: TrailTravelMode = .hiking
+        travelMode: TrailTravelMode = .hiking,
+        startIsOpen: Bool = false
     ) {
         let points = waypoints.map(\.routeCoordinate)
         // Written in the same statement that writes the points, every time, so
@@ -135,6 +138,7 @@ struct TrailDraftStore {
                 record.places = places
                 record.snapsToPaths = snapsToPaths
                 record.travelMode = travelMode
+                record.startIsOpen = startIsOpen
                 record.updatedAt = .now
             } else {
                 context.insert(
@@ -144,7 +148,8 @@ struct TrailDraftStore {
                         places: places,
                         snapsToPaths: snapsToPaths,
                         updatedAt: .now,
-                        travelMode: travelMode
+                        travelMode: travelMode,
+                        startIsOpen: startIsOpen
                     )
                 )
             }
@@ -180,7 +185,7 @@ struct TrailDraftStore {
     /// Throwing rather than answering `nil`, because "the fetch failed" and
     /// "there is no draft" are the same word to a caller that cannot tell them
     /// apart, and one of the three callers writes a row on the second — see
-    /// ``save(waypoints:places:snapsToPaths:travelMode:)``.
+    /// ``save(waypoints:places:snapsToPaths:travelMode:startIsOpen:)``.
     private func existingRecord() throws -> TrailDraftRecord? {
         var descriptor = FetchDescriptor<TrailDraftRecord>()
         descriptor.fetchLimit = 1

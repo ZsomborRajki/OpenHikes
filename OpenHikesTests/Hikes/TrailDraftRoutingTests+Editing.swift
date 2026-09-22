@@ -123,12 +123,12 @@ extension TrailDraftRoutingTests {
         #expect(asked.last == Self.ends(Trail.first, Trail.third))
     }
 
-    @Test("inserting into a leg asks about the two it became")
+    @Test("adding a stop into a leg asks about the two it became")
     func insertingAsksTwice() async {
         let router = StubTrailLegRouter(answering: .snapped)
         let maker = await Self.drawn([Trail.first, Trail.fourth], over: router)
 
-        maker.insertWaypoint(at: Self.place(Trail.second), intoLegAt: 0)
+        maker.addStop(at: Self.place(Trail.second), preferringLeg: 0)
 
         await settleDelegateHop(until: "the two new legs to settle") {
             maker.draft.legs.count == 2

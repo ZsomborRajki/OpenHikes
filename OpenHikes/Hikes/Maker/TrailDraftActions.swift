@@ -7,8 +7,7 @@
 //  ## One menu rather than a row of controls
 //
 //  Four verbs — undo, redo, reverse, close the loop, and clear — over a screen
-//  that already carries a route, a switch, a list of places and two toolbar
-//  buttons. Spread across the screen they would be most of it; in a menu they
+//  that already carries a route, a switch and two toolbar buttons. Spread across the screen they would be most of it; in a menu they
 //  are one glyph, and the two that matter while drawing (a tap on the map, and
 //  Save) keep the room.
 //
@@ -90,7 +89,7 @@ struct TrailDraftActionsMenu: View {
     @ViewBuilder private var shapeSection: some View {
         Section {
             Button("Reverse", systemImage: "arrow.left.arrow.right", action: maker.reverse)
-                .disabled(!draft.canBeRearranged)
+                .disabled(draft.waypoints.isEmpty)
             Button("Close the Loop", systemImage: "arrow.trianglehead.clockwise", action: maker.closeTheLoop)
                 .disabled(!draft.canCloseTheLoop)
         }

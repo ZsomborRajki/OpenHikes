@@ -5,10 +5,9 @@
 //  Where the places near a drawn trail come from.
 //
 //  One request, one answer, and nothing held in memory. What a search answers
-//  is drawn as candidates and is gone on the next search or when the maker
-//  closes — unlike ``CuratedTrailSource``, whose unit is a *relation* a hiker
-//  comes back to and which therefore keeps a memory cache in front of its disk
-//  one.
+//  goes onto the trail and the draft is what keeps it — unlike
+//  ``CuratedTrailSource``, whose unit is a *relation* a hiker comes back to and
+//  which therefore keeps a memory cache in front of its disk one.
 //
 //  **What is kept is on disk, and it is kept for one case.** A refused search
 //  would otherwise draw an empty map in a valley that answered an hour ago,
@@ -137,7 +136,7 @@ nonisolated struct TrailPointSource: TrailPointSourcing {
         // somewhere else since would come back to a fall-back ranked for a
         // trail they no longer have. See ``TrailPointStore``.
         store?.save(found)
-        return found.map(\.place)
+        return found
     }
 
     /// `@concurrent` rather than taking the caller's isolation, for the reason

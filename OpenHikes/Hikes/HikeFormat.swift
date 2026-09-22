@@ -64,6 +64,32 @@ nonisolated enum HikeFormat {
             : duration.formatted(spokenShortStyle)
     }
 
+    private static let travelTimeStyle = Duration.UnitsFormatStyle(
+        allowedUnits: [.hours, .minutes],
+        width: .abbreviated
+    )
+    private static let spokenTravelTimeStyle = Duration.UnitsFormatStyle(
+        allowedUnits: [.hours, .minutes],
+        width: .wide
+    )
+
+    /// How long a planned route takes, as Apple Maps writes it on a route —
+    /// "1 hr, 5 min" — rounded up to the minute, and never "0 min": a leg too
+    /// short to time still takes a minute to walk.
+    static func travelTime(_ interval: TimeInterval) -> String {
+        guard interval.isFinite else { return "—" }
+        return Duration.seconds(plannedMinutes(interval) * 60).formatted(travelTimeStyle)
+    }
+
+    static func spokenTravelTime(_ interval: TimeInterval) -> String {
+        guard interval.isFinite else { return "—" }
+        return Duration.seconds(plannedMinutes(interval) * 60).formatted(spokenTravelTimeStyle)
+    }
+
+    private static func plannedMinutes(_ interval: TimeInterval) -> Double {
+        max(1, (interval / 60).rounded(.up))
+    }
+
     /// The date and the time to the minute — what a photograph, a map pin and
     /// the sync status all put beside themselves.
     ///

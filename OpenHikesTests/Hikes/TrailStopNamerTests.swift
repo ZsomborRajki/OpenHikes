@@ -14,6 +14,7 @@
 //
 
 import CoreLocation
+import MapKit
 @testable import OpenHikes
 import Testing
 
@@ -34,12 +35,16 @@ struct TrailStopNamerTests {
 
         private var waiting: [CheckedContinuation<Void, Never>] = []
 
-        func name(at coordinate: CLLocationCoordinate2D) async -> String? {
+        func mapItem(at coordinate: CLLocationCoordinate2D) async -> MKMapItem? {
             asked.append(coordinate)
             await withCheckedContinuation { continuation in
                 waiting.append(continuation)
             }
-            return answers.isEmpty ? nil : answers.removeFirst()
+            guard !answers.isEmpty, let answer = answers.removeFirst() else { return nil }
+            return MKMapItem(
+                location: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude),
+                address: MKAddress(fullAddress: answer, shortAddress: answer)
+            )
         }
 
         /// Lets the question currently open return. Answers whether there was

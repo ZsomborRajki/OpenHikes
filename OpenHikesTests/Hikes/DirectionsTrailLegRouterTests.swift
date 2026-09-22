@@ -25,24 +25,47 @@ struct DirectionsTrailLegRouterTests {
         #expect(request.transportType == expected)
         #expect(request.source?.location.coordinate.latitude == Self.ends.start.latitude)
         #expect(request.destination?.location.coordinate.longitude == Self.ends.end.longitude)
+        #expect(request.requestsAlternateRoutes)
     }
 
     @Test("the routed shape and its measured length are kept")
     func geometry() async throws {
         let bend = RouteCoordinate(latitude: 47.50, longitude: 19.05)
         let router = DirectionsTrailLegRouter(mode: .walking) { ends, _ in
-            [ends.start, bend, ends.end]
+            [.init(coordinates: [ends.start, bend, ends.end], travelTime: 600)]
         }
         let route = try #require(await router.route(Self.ends))
         #expect(route.snap == .snapped)
         #expect(route.coordinates.contains(bend))
         #expect(route.distanceMeters > Self.ends.straightDistanceMeters)
+        #expect(route.travelTime == 600)
+        #expect(route.alternatives.isEmpty)
+    }
+
+    @Test("Apple's other routes are offered beside the first, each with its own time")
+    func alternatives() async throws {
+        let east = RouteCoordinate(latitude: 47.50, longitude: 19.05)
+        let north = RouteCoordinate(latitude: 47.51, longitude: 19.04)
+        let router = DirectionsTrailLegRouter(mode: .driving) { ends, _ in
+            [
+                .init(coordinates: [ends.start, east, ends.end], travelTime: 300),
+                .init(coordinates: [ends.start, north, ends.end], travelTime: 420),
+            ]
+        }
+        let route = try #require(await router.route(Self.ends))
+        #expect(route.coordinates.contains(east))
+        #expect(route.alternatives.count == 1)
+        let alternative = try #require(route.alternatives.first)
+        #expect(alternative.coordinates.contains(north))
+        #expect(alternative.coordinates.first == Self.ends.start)
+        #expect(alternative.coordinates.last == Self.ends.end)
+        #expect(alternative.travelTime == 420)
     }
 
     @Test("unchecked access from a stop is visibly degraded")
     func accessConnector() async throws {
         let router = DirectionsTrailLegRouter(mode: .driving) { ends, _ in
-            [RouteCoordinate(latitude: 47.505, longitude: 19.045), ends.end]
+            [.init(coordinates: [RouteCoordinate(latitude: 47.505, longitude: 19.045), ends.end])]
         }
         let route = try #require(await router.route(Self.ends))
         #expect(route.snap == .unmapped(.endpointOffNetwork))
@@ -93,7 +116,7 @@ struct DirectionsTrailLegRouterTests {
     @Test("invalid geometry cannot become a snapped route")
     func invalidGeometry() async {
         let router = DirectionsTrailLegRouter(mode: .walking) { ends, _ in
-            [ends.start, RouteCoordinate(latitude: .nan, longitude: 19)]
+            [.init(coordinates: [ends.start, RouteCoordinate(latitude: .nan, longitude: 19)])]
         }
         #expect(await router.route(Self.ends)?.snap == .unmapped(.noDirections))
     }
@@ -124,7 +147,7 @@ struct DirectionsTrailLegRouterTests {
         private var waiting: CheckedContinuation<Void, Never>?
         private var started: CheckedContinuation<Void, Never>?
 
-        func calculate(_ ends: TrailLegEnds) async -> [RouteCoordinate] {
+        func calculate(_ ends: TrailLegEnds) async -> [DirectionsTrailLegRouter.Answer] {
             count += 1
             if count == 1 {
                 await withCheckedContinuation { continuation in
@@ -133,7 +156,7 @@ struct DirectionsTrailLegRouterTests {
                     started = nil
                 }
             }
-            return ends.straightCoordinates
+            return [.init(coordinates: ends.straightCoordinates)]
         }
 
         func waitUntilStarted() async {
@@ -150,10 +173,10 @@ struct DirectionsTrailLegRouterTests {
     private actor Calls {
         var count = 0
 
-        func calculate(_ ends: TrailLegEnds) throws -> [RouteCoordinate] {
+        func calculate(_ ends: TrailLegEnds) throws -> [DirectionsTrailLegRouter.Answer] {
             count += 1
             if count == 1 { throw URLError(.notConnectedToInternet) }
-            return ends.straightCoordinates
+            return [.init(coordinates: ends.straightCoordinates)]
         }
     }
 }

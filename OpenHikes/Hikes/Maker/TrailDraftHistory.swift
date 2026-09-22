@@ -50,6 +50,9 @@ import Foundation
 nonisolated struct TrailDraftContents: Equatable, Sendable {
     var waypoints: [TrailWaypoint] = []
     var places: [TrailPlace] = []
+    /// See ``TrailDraft/startIsOpen``. Part of a step because deleting a start
+    /// and undoing it has to put the lone point back in the field it was in.
+    var startIsOpen = false
 }
 
 /// The undo and redo stacks for one drawing.

@@ -128,16 +128,16 @@ struct TrailDraftNoticeLabel: View {
     }
 }
 
-/// What the line is so far: how long, and — once anybody has been able to
-/// measure it — what it climbs and drops.
+/// What the line is so far: how long, how long it takes, and — once anybody
+/// has been able to measure it — what it climbs and drops.
 ///
 /// Its own `View` and this is the one on the screen that most needed to be.
 /// The length changes when the drawing does, so a body carrying it rebuilds
 /// the list of points at exactly the moments that list has to be rebuilt
 /// anyway. The climb does not: it lands a couple of seconds after the hiker
 /// stops, from a task nobody is watching, and a figure read in
-/// ``TrailDraftView``'s body would rebuild every stop, every place and every
-/// candidate row to say it. See ``TrailDraftElevation``.
+/// ``TrailDraftView``'s body would rebuild every stop to say it. See
+/// ``TrailDraftElevation``.
 ///
 /// **Nothing at all is drawn where there is no height**, which is a free
 /// hiker's drawn trail, a build with no key and every launch running tests.
@@ -155,6 +155,8 @@ struct TrailDraftLineHeader: View {
         let climb = elevation.summary
         let waiting = elevation.isMeasuring
         let length = Self.length(draft.distanceMeters)
+        // Only once there is a line: a lone point takes no time to walk.
+        let time = draft.canBeSaved ? draft.travelTime : nil
         // Stacked rather than clipped at the accessibility type sizes, where
         // three figures and a heading do not fit across a phone. The audit
         // measures exactly this — see ``AccessibilityUITests``.
@@ -162,11 +164,11 @@ struct TrailDraftLineHeader: View {
             HStack(spacing: 12) {
                 Text("Route")
                 Spacer(minLength: 12)
-                figures(climb, waiting: waiting, length: length)
+                figures(climb, waiting: waiting, time: time, length: length)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text("Route")
-                figures(climb, waiting: waiting, length: length)
+                figures(climb, waiting: waiting, time: time, length: length)
             }
         }
         // One element rather than four, and a value rather than four labels,
@@ -177,7 +179,7 @@ struct TrailDraftLineHeader: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Route")
         .accessibilityValue(
-            Self.spoken(draft.distanceMeters, climb: climb, measuring: waiting)
+            Self.spoken(draft.distanceMeters, climb: climb, measuring: waiting, travelTime: time)
         )
     }
 
@@ -185,6 +187,7 @@ struct TrailDraftLineHeader: View {
     private func figures(
         _ climb: RouteElevationSummary?,
         waiting: Bool,
+        time: TimeInterval?,
         length: String
     ) -> some View {
         HStack(spacing: 10) {
@@ -204,11 +207,16 @@ struct TrailDraftLineHeader: View {
             if let loss = climb?.lossMeters {
                 Label(Self.height(loss), systemImage: "arrow.down")
             }
+            if let time {
+                Label(HikeFormat.travelTime(time), systemImage: "clock")
+            }
+            // On the length alone: an identifier on the row would be pushed
+            // down onto the time and the climb too.
             Text(length)
+                .accessibilityIdentifier("trail-draft-length")
         }
         .monospacedDigit()
         .imageScale(.small)
-        .accessibilityIdentifier("trail-draft-length")
     }
 
     private static func height(_ meters: Double) -> String {
@@ -233,12 +241,14 @@ struct TrailDraftLineHeader: View {
     static func spoken(
         _ meters: Double,
         climb: RouteElevationSummary?,
-        measuring: Bool = false
+        measuring: Bool = false,
+        travelTime: TimeInterval? = nil
     ) -> String {
         let length = Measurement(value: meters, unit: UnitLength.meters)
             .formatted(.measurement(width: .wide, usage: .road))
         let parts = [
             length,
+            travelTime.map(HikeFormat.spokenTravelTime),
             measuring ? String(localized: "measuring the climb") : nil,
             climb?.gainMeters.map { gain in
                 String(localized: "\(Self.spokenHeight(gain)) of climb")
@@ -256,17 +266,15 @@ struct TrailDraftLineHeader: View {
 /// Its own `View` for the reason the header above is: everything it draws is
 /// read off ``TrailDraft/legs``, which every leg that lands rewrites.
 ///
-/// It carries the empty state too, which used to be a row inside the section.
-/// It cannot be a row any more: ``TrailAddStopRow`` is always the last one, and
-/// a "there is nothing here" row sitting above a control that offers to put
-/// something there would be the section saying two things at once.
+/// It carries the empty state too: while a start or destination field is open,
+/// one sentence says how to fill them.
 struct TrailDraftLineFooter: View {
     let draft: TrailDraft
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if draft.waypoints.isEmpty {
-                Text("Tap the map to put down your first stop, or search for one above.")
+            if !draft.canBeSaved {
+                Text("Choose a start and a destination above, or tap the map.")
                     .accessibilityIdentifier("trail-draft-empty")
             }
             // One line for the whole line, saying the worst thing any leg has
@@ -276,15 +284,14 @@ struct TrailDraftLineFooter: View {
             if let notice = draft.notice {
                 TrailDraftNoticeLabel(notice: notice)
             }
-            // The two gestures on the map that nothing on screen could
-            // otherwise announce. Both are discoverable only by being told: a
-            // leg looks like a drawing rather than a control, and a pin that
-            // answers a press but not a tap advertises nothing. Withheld until
+            // The gestures on the map that nothing on screen could otherwise
+            // announce: a grey route looks like scenery rather than a choice,
+            // and a pin that answers a press advertises nothing. Withheld until
             // there is a line to do either to.
             if !draft.legs.isEmpty {
                 Text(
                     """
-                    Tap a leg to add a stop in the middle. \
+                    Tap the map to add a stop, or a grey route to take it instead. \
                     Press and hold a stop to move it.
                     """
                 )

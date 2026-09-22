@@ -133,6 +133,11 @@ nonisolated struct TrailPlace: Codable, Hashable, Identifiable, Sendable {
     /// Anything else worth saying about it. Empty for most places, for the
     /// reason ``name`` is empty rather than absent.
     var note: String
+    /// Where OpenStreetMap keeps this place and what else it says about it —
+    /// `nil` for a place that did not come from there, such as an imported
+    /// `<wpt>`. Kept in the draft for the place sheet, and not written to a
+    /// saved hike's ``TrailPoint``.
+    var osm: TrailPlaceOSM?
 
     init(
         latitude: Double,
@@ -140,6 +145,7 @@ nonisolated struct TrailPlace: Codable, Hashable, Identifiable, Sendable {
         name: String = "",
         symbol: TrailPlaceSymbol? = nil,
         note: String = "",
+        osm: TrailPlaceOSM? = nil,
         id: UUID = UUID()
     ) {
         self.id = id
@@ -148,6 +154,7 @@ nonisolated struct TrailPlace: Codable, Hashable, Identifiable, Sendable {
         self.name = name
         self.symbol = symbol
         self.note = note
+        self.osm = osm
     }
 
     init(
@@ -155,6 +162,7 @@ nonisolated struct TrailPlace: Codable, Hashable, Identifiable, Sendable {
         name: String = "",
         symbol: TrailPlaceSymbol? = nil,
         note: String = "",
+        osm: TrailPlaceOSM? = nil,
         id: UUID = UUID()
     ) {
         self.init(
@@ -163,6 +171,7 @@ nonisolated struct TrailPlace: Codable, Hashable, Identifiable, Sendable {
             name: name,
             symbol: symbol,
             note: note,
+            osm: osm,
             id: id
         )
     }
@@ -193,17 +202,68 @@ nonisolated struct TrailPlace: Codable, Hashable, Identifiable, Sendable {
         symbol?.systemImageName ?? "mappin"
     }
 
-    /// Whether this place would draw and read identically to `other`.
-    ///
-    /// Everything but the identity, which is what the editor compares to
-    /// decide whether a dismissal is worth a write — see
-    /// ``TrailPlaceEditor``.
-    func matches(_ other: Self) -> Bool {
-        latitude == other.latitude
-            && longitude == other.longitude
-            && name == other.name
-            && symbol == other.symbol
-            && note == other.note
+}
+
+/// An OpenStreetMap element, and the tags on it a hiker would want to read.
+nonisolated struct TrailPlaceOSM: Codable, Hashable, Sendable {
+    /// `node`, `way` or `relation`, as Overpass spells it.
+    let elementType: String
+    let elementID: Int64
+    var facts: [TrailPlaceFact] = []
+
+    /// The element's page on openstreetmap.org — where to read everything else
+    /// and where to correct it.
+    var url: URL? {
+        URL(string: "https://www.openstreetmap.org/\(elementType)/\(elementID)")
+    }
+}
+
+/// One thing OpenStreetMap says about a place: its height, its hours, whether
+/// the water is drinkable.
+nonisolated struct TrailPlaceFact: Codable, Hashable, Sendable {
+    /// The tags read, in the order a place sheet lists them. Alphabetical here
+    /// for the linter; ``Kind/allCases`` is the order. The raw value is the
+    /// tag itself.
+    enum Kind: String, CaseIterable, Codable, Sendable {
+        case access = "access"
+        case capacity = "capacity"
+        case description = "description"
+        case drinkingWater = "drinking_water"
+        case elevation = "ele"
+        case fee = "fee"
+        case openingHours = "opening_hours"
+        case operatorName = "operator"
+        case phone = "phone"
+        case website = "website"
+
+        static let allCases: [Self] = [
+            .elevation, .description, .drinkingWater, .openingHours, .fee,
+            .access, .capacity, .operatorName, .phone, .website,
+        ]
+
+        /// The tag, then the fallbacks OpenStreetMap also uses for it.
+        var tagKeys: [String] {
+            switch self {
+            case .phone: [rawValue, "contact:phone"]
+            case .website: [rawValue, "contact:website", "url"]
+            default: [rawValue]
+            }
+        }
+    }
+
+    let kind: Kind
+    /// The tag's value as written. Bounded when read — see ``facts(in:)``.
+    let value: String
+
+    /// Every fact `tags` states, in display order. Values are bounded the way a
+    /// keyword is, because they arrive off the wire.
+    static func facts(in tags: [String: String]) -> [Self] {
+        Kind.allCases.compactMap { kind in
+            kind.tagKeys.lazy
+                .compactMap { BoundedText.bounded(tags[$0], to: .keywords) }
+                .first
+                .map { Self(kind: kind, value: $0) }
+        }
     }
 }
 

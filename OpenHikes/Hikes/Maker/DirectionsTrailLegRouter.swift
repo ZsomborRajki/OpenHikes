@@ -6,7 +6,14 @@ import OpenHikesShared
 /// One instance per mode; ordered endpoints never share an answer with another
 /// mode or with the reverse journey. Only settled answers enter the bounded cache.
 actor DirectionsTrailLegRouter: TrailLegRouting {
-    typealias Calculate = @Sendable (TrailLegEnds, TrailTravelMode) async throws -> [RouteCoordinate]
+    /// One route Apple Maps offered: its line and its own time estimate.
+    struct Answer: Equatable, Sendable {
+        var coordinates: [RouteCoordinate]
+        var travelTime: TimeInterval?
+    }
+
+    /// Apple's routes between the two ends, best first. Empty for none.
+    typealias Calculate = @Sendable (TrailLegEnds, TrailTravelMode) async throws -> [Answer]
 
     private let mode: TrailTravelMode
     private let calculate: Calculate
@@ -23,9 +30,9 @@ actor DirectionsTrailLegRouter: TrailLegRouting {
         guard !Task.isCancelled else { return nil }
         if let cached = cache[ends] { return cached }
         do {
-            let coordinates = try await calculate(ends, mode)
+            let answers = try await calculate(ends, mode)
             try Task.checkCancellation()
-            let result = Self.route(along: ends, coordinates: coordinates)
+            let result = Self.route(along: ends, answers: answers)
             if cache.updateValue(result, forKey: ends) == nil { order.append(ends) }
             while order.count > TrailLegMemo.capacity {
                 cache.removeValue(forKey: order.removeFirst())
@@ -46,21 +53,35 @@ actor DirectionsTrailLegRouter: TrailLegRouting {
     /// stop, but do not present a substantial unchecked connector as routed.
     private static let endpointToleranceMeters = 10.0
 
-    private static func route(along ends: TrailLegEnds, coordinates: [RouteCoordinate]) -> TrailLegRoute {
-        guard coordinates.count > 1,
-              coordinates.allSatisfy({ Mercator.isRepresentable(latitude: $0.latitude, longitude: $0.longitude) }),
-              let first = coordinates.first, let last = coordinates.last else {
+    /// The first usable answer drawn, the rest offered as alternatives. Every
+    /// shape runs from the stop itself to the stop itself, connectors included.
+    private static func route(along ends: TrailLegEnds, answers: [Answer]) -> TrailLegRoute {
+        let usable = answers.filter { answer in
+            answer.coordinates.count > 1
+                && answer.coordinates.allSatisfy { point in
+                    Mercator.isRepresentable(latitude: point.latitude, longitude: point.longitude)
+                }
+        }
+        guard let best = usable.first,
+              let first = best.coordinates.first, let last = best.coordinates.last else {
             return .straight(along: ends, .unmapped(.noDirections))
         }
         let connected = distance(ends.start, first) <= endpointToleranceMeters
             && distance(last, ends.end) <= endpointToleranceMeters
-        let shape = [ends.start] + coordinates + [ends.end]
-        let length = zip(shape, shape.dropFirst()).reduce(0) { $0 + distance($1.0, $1.1) }
+        let paths = usable.map { path(along: ends, $0) }
         return TrailLegRoute(
-            coordinates: shape,
-            distanceMeters: length,
-            snap: connected ? .snapped : .unmapped(.endpointOffNetwork)
+            coordinates: paths[0].coordinates,
+            distanceMeters: paths[0].distanceMeters,
+            snap: connected ? .snapped : .unmapped(.endpointOffNetwork),
+            travelTime: paths[0].travelTime,
+            alternatives: Array(paths.dropFirst())
         )
+    }
+
+    private static func path(along ends: TrailLegEnds, _ answer: Answer) -> TrailLegPath {
+        let shape = [ends.start] + answer.coordinates + [ends.end]
+        let length = zip(shape, shape.dropFirst()).reduce(0) { $0 + distance($1.0, $1.1) }
+        return TrailLegPath(coordinates: shape, distanceMeters: length, travelTime: answer.travelTime)
     }
 
     private static func distance(_ from: RouteCoordinate, _ to: RouteCoordinate) -> Double {
@@ -88,6 +109,7 @@ nonisolated extension DirectionsTrailLegRouter {
             location: CLLocation(latitude: ends.end.latitude, longitude: ends.end.longitude),
             address: nil
         )
+        request.requestsAlternateRoutes = true
         switch mode {
         case .walking: request.transportType = .walking
         case .cycling: request.transportType = .cycling
@@ -97,21 +119,28 @@ nonisolated extension DirectionsTrailLegRouter {
         return request
     }
 
+    /// Apple's own limit on alternatives is three routes; this keeps the same.
+    private static let maximumRoutes = 3
+
     @concurrent
-    static func calculate(_ ends: TrailLegEnds, mode: TrailTravelMode) async throws -> [RouteCoordinate] {
+    static func calculate(_ ends: TrailLegEnds, mode: TrailTravelMode) async throws -> [Answer] {
         try Task.checkCancellation()
         let handle = Handle(directions: MKDirections(request: request(for: ends, mode: mode)))
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
             let response = try await handle.directions.calculate()
             try Task.checkCancellation()
-            guard let route = response.routes.first else { return [] }
-            let line = route.polyline
-            var coordinates = [CLLocationCoordinate2D](
-                repeating: kCLLocationCoordinate2DInvalid, count: line.pointCount
-            )
-            line.getCoordinates(&coordinates, range: NSRange(location: 0, length: line.pointCount))
-            return coordinates.map { RouteCoordinate(latitude: $0.latitude, longitude: $0.longitude) }
+            return response.routes.prefix(maximumRoutes).map { route in
+                let line = route.polyline
+                var coordinates = [CLLocationCoordinate2D](
+                    repeating: kCLLocationCoordinate2DInvalid, count: line.pointCount
+                )
+                line.getCoordinates(&coordinates, range: NSRange(location: 0, length: line.pointCount))
+                return Answer(
+                    coordinates: coordinates.map { RouteCoordinate(latitude: $0.latitude, longitude: $0.longitude) },
+                    travelTime: route.expectedTravelTime
+                )
+            }
         } onCancel: {
             handle.directions.cancel()
         }

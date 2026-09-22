@@ -265,13 +265,18 @@ struct TrailDraftEditingTests {
         #expect(reversed.distanceMeters == 1234)
     }
 
-    @Test("reversing one point does nothing")
+    /// Apple Maps' swap button: a lone start becomes a lone destination with
+    /// the start field open, and one undo puts it back.
+    @Test("reversing one point swaps which field it is in")
     func reversingOnePoint() {
         let draft = Self.settledDraft([Line.first])
 
         draft.reverse()
 
-        #expect(!draft.canUndo)
+        #expect(draft.startIsOpen)
+        #expect(draft.role(ofWaypointAt: 0) == .end)
+        draft.undo()
+        #expect(!draft.startIsOpen)
     }
 
     // MARK: Closing the loop

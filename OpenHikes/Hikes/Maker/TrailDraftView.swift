@@ -4,21 +4,19 @@
 //
 //  The maker: the sheet's half of drawing a trail.
 //
-//  The map above is the canvas and this is everything that is not the canvas —
-//  the route so far, what is marked along it, and the two ways out.
-//  What the trail is *called* is not among them: it is asked for once, in an
-//  alert, at the moment Save is tapped, exactly as a stopped recording is
-//  named — see ``RecordingControls``. A field standing open beside the stops
-//  asked the question for the whole of the drawing and had to be answered
-//  before it could be scrolled past, when the answer is only wanted at the
-//  end. It draws no map of its own and never could: the map it is
-//  about is the one behind the sheet, which is the whole reason this is a
+//  The map above is the canvas and this is everything that is not the canvas:
+//  the travel mode, the route so far, and the two ways out. What the trail is
+//  *called* is not among them: it is asked for once, in an alert, at the
+//  moment Save is tapped, exactly as a stopped recording is named — see
+//  ``RecordingControls``. It draws no map of its own and never could: the map
+//  it is about is the one behind the sheet, which is the whole reason this is a
 //  pushed screen rather than a modal over the map.
 //
 //  ## The route is Apple Maps' directions list
 //
-//  A start, its numbered stops and a destination, joined by a dotted line, with
-//  a grabber on every row and *Add Stop* pinned underneath — see
+//  It opens with two empty fields, *start* and *destination*, and a start, its
+//  numbered stops and a destination joined by a dotted line once they are
+//  filled, with a grabber on every row and *Add Stop* underneath — see
 //  ``TrailStopRowView`` and ``TrailAddStopRow``. Three things follow from that
 //  and each is load-bearing rather than styling.
 //
@@ -30,15 +28,13 @@
 //  a stop is removed with the red circle on the leading edge now.
 //
 //  **A row is a field.** Tapping one opens ``TrailStopSearchSheet`` on it, and
-//  the place picked there fills that row and takes the camera to it — which is
-//  why the *Find a Place* field that used to head this screen is gone rather
-//  than kept beside it. Every search still moves the map; it just leaves a stop
-//  where it arrives.
+//  the place picked there fills that row and takes the camera to it. Every
+//  search moves the map; it just leaves a stop where it arrives.
 //
-//  **A stop the hiker only tapped on the map still says where it is.**
-//  ``TrailStopNamer`` asks what is at the coordinate a second later. There is
-//  an icon-only travel-mode selector above the stops. Follow Paths remains
-//  independent: turning it off draws freehand in any mode.
+//  **The map is the other way in.** A tap opens ``TrailPlaceSheet`` — Apple
+//  Maps' place card — on a dropped pin, a stop or one of the trail's places,
+//  and its *Add Stop* is what puts a point down. The places themselves live on
+//  the map and on their cards, not in this list.
 //
 //  Every mutation goes through ``TrailDraftController`` rather than through
 //  ``TrailDraft`` directly, because the controller is the one that also writes
@@ -65,8 +61,8 @@ struct TrailDraftView: View {
     let completer: SearchCompleter
     /// How a picked place moves the camera.
     let mapController: MapController
-    /// The hiker's own position, for *Mark a Place → At My Location*. `nil`
-    /// for a launch with no location, which withholds that one entry.
+    /// The hiker's own position, for the search sheet's *My Location* row.
+    /// `nil` for a launch with no location, which withholds that one row.
     var locationManager: LocationManager?
     var onCancel: () -> Void
     var onSaved: (Hike) -> Void
@@ -101,23 +97,10 @@ struct TrailDraftView: View {
     /// Whether the search sheet is up.
     ///
     /// A flag beside the run above rather than an `item:` presentation off
-    /// ``TrailStopSearchRun/target``, for the reason ``isEditingPlace`` is one:
-    /// the target is what the sheet is *about* and this is whether it is on
-    /// screen, and a hiker who swipes it away has changed the second without
-    /// changing the first.
+    /// ``TrailStopSearchRun/target``: the target is what the sheet is *about*
+    /// and this is whether it is on screen, and a hiker who swipes it away has
+    /// changed the second without changing the first.
     @State private var isSearchingStop = false
-    /// What is being typed into the place editor. Held here rather than in the
-    /// sheet, so it survives the sheet being torn down while the write it
-    /// carries is going through — see ``TrailPlaceEdit``.
-    @State private var placeEdit = TrailPlaceEdit()
-    /// Whether that sheet is up.
-    ///
-    /// A flag beside the edit above rather than an `item:` presentation off
-    /// ``TrailDraftController/placeEditorRequest``, because the request is a
-    /// one-shot token the map raises and this is a presentation the screen
-    /// owns: the hiker can close the sheet, and the token that opened it does
-    /// not change when they do.
-    @State private var isEditingPlace = false
     /// Whether the camera has already been taken to the drawing this screen was
     /// opened on.
     ///
@@ -140,18 +123,6 @@ struct TrailDraftView: View {
             if maker.canSnapToPaths {
                 TrailDraftSnapToggle(maker: maker)
             }
-
-            TrailDraftPlaceSection(
-                maker: maker,
-                completer: completer,
-                locationManager: locationManager,
-                search: search,
-                onEdit: editPlace
-            )
-            // Under the places the hiker has marked, because that is what it
-            // is: the same kind of row, not yet taken. Absent entirely until a
-            // search has answered — see ``TrailDraftNearbySection``.
-            TrailDraftNearbySection(maker: maker, onEdit: editPlace)
         }
         // **Always on, and that is the redesign rather than an oversight.**
         // A `List` shows its reorder grabbers and offers its drag only while
@@ -188,14 +159,6 @@ struct TrailDraftView: View {
         .onDisappear {
             search.end()
             completer.clear()
-        }
-        // The map asks and this screen presents: a callout's *Edit* and the
-        // *Mark a Place* that follows a tap both land on the controller, which
-        // is the one thing the map and this screen can both see. See
-        // ``TrailDraftController/placeEditorRequest``.
-        .onChange(of: maker.placeEditorRequest) { _, request in
-            guard let request else { return }
-            editPlace(request.placeID)
         }
         .navigationTitle("New Trail")
         #if os(iOS)
@@ -274,18 +237,9 @@ struct TrailDraftView: View {
         .alert(isPresented: showingRefusal, error: refusal) {
             Button("OK", role: .cancel) { /* dismisses */ }
         }
-        // Inside this screen, like the two dialogs and the alert above, and
-        // for the reason ``TrailPlaceEditor``'s own header gives: it cannot be
-        // a push, because a push would take the canvas down under it.
-        .sheet(isPresented: $isEditingPlace, onDismiss: commitPlaceEdit) {
-            TrailPlaceEditor(maker: maker, edit: placeEdit) {
-                isEditingPlace = false
-            }
-        }
-        // Inside this screen for the reason the place editor is, and it cannot
-        // be a push for the same one: a push would take the canvas down under
-        // it, and the camera this sheet moves is the one behind it. See
-        // ``TrailPlaceEditor``'s header.
+        // Inside this screen, like the dialogs and alerts above, and it cannot
+        // be a push: a push would take the canvas down under it, and the camera
+        // this sheet moves is the one behind it.
         .sheet(isPresented: $isSearchingStop, onDismiss: search.end) {
             TrailStopSearchSheet(
                 completer: completer,
@@ -295,19 +249,15 @@ struct TrailDraftView: View {
                 onClose: { isSearchingStop = false }
             )
         }
+        // What a tap on the map opens — see ``TrailPlaceSheet``.
+        .modifier(TrailPlaceSheetPresenter(maker: maker))
     }
 
     /// The route: where it starts, what it passes through, where it ends, and
     /// the row that adds another.
     ///
-    /// The header carries the running length and the climb, and it is its own
-    /// `View` for the second of those — see ``TrailDraftLineHeader``.
-    ///
-    /// **``TrailAddStopRow`` is outside the `ForEach` and always present**,
-    /// including over an empty draft, where it is the only way to start a route
-    /// that is not a tap on the map. That is the Apple Maps arrangement and it
-    /// is the reason this reads as a route being built: the way to add to it
-    /// does not come and go with what is already there.
+    /// The header carries the running length, the time and the climb, and it
+    /// is its own `View` for the last of those — see ``TrailDraftLineHeader``.
     @ViewBuilder private var routeSection: some View {
         Section {
             // The rows are handed the draft rather than values read off it, and
@@ -315,31 +265,47 @@ struct TrailDraftView: View {
             // reason: every leg that lands rewrites `legs`, and reading it here
             // would rebuild this whole screen once per answer. See
             // ``TrailStopRowView``.
-            ForEach(Array(draft.waypoints.enumerated()), id: \.element.id) { index, waypoint in
-                TrailStopRowView(draft: draft, index: index) {
-                    searchForStop(.existing(
-                        id: waypoint.id,
-                        role: draft.role(ofWaypointAt: index)
-                    ))
+            let slots = draft.slots
+            let canReorder = draft.waypoints.count > 1
+            ForEach(Array(slots.enumerated()), id: \.element.id) { position, slot in
+                TrailStopRowView(draft: draft, position: position) {
+                    searchForStop(target(for: slot))
                 }
+                // An open field has no place in the order and nothing to
+                // delete, and a lone stop has nothing to be reordered against.
+                .moveDisabled(!canReorder)
+                .deleteDisabled(slot.waypointIndex == nil)
             }
             // The two gestures a list already has a meaning for, and both
             // of them go through the controller — the drawing has to be
             // written down and the legs either side of what moved have to
-            // be asked about again.
+            // be asked about again. Offsets are rows; with an open field
+            // among them they are not waypoint indices, so deletes are
+            // translated, and moves only happen when there is none.
             .onMove { offsets, destination in
                 HapticMoment.rowMoved.play()
                 maker.reorderWaypoints(fromOffsets: offsets, toOffset: destination)
             }
             .onDelete { offsets in
-                maker.removeWaypoints(atOffsets: offsets)
+                let waypoints = IndexSet(offsets.compactMap { slots[$0].waypointIndex })
+                maker.removeWaypoints(atOffsets: waypoints)
             }
-            TrailAddStopRow(draft: draft) { searchForStop(.newStop) }
+            if draft.canBeSaved {
+                TrailAddStopRow { searchForStop(.newStop) }
+            }
             TrailDraftRetryRow(maker: maker)
         } header: {
             TrailDraftLineHeader(draft: draft, elevation: maker.elevation)
         } footer: {
             TrailDraftLineFooter(draft: draft)
+        }
+    }
+
+    /// What a row's search fills: the stop it already holds, or its open field.
+    private func target(for slot: TrailStopSlot) -> TrailStopSearchTarget {
+        switch slot {
+        case .open(let role): .open(role)
+        case let .point(index, id): .existing(id: id, role: draft.role(ofWaypointAt: index))
         }
     }
 
@@ -376,8 +342,10 @@ struct TrailDraftView: View {
         mapController.showDrawnLine(draft.coordinates)
     }
 
-    /// Opens the search sheet on a row.
+    /// Opens the search sheet on a row. The place sheet goes first: two
+    /// sheets from one screen is a presentation SwiftUI refuses.
     private func searchForStop(_ target: TrailStopSearchTarget) {
+        maker.select(nil)
         search.begin(target)
         isSearchingStop = true
     }
@@ -385,11 +353,8 @@ struct TrailDraftView: View {
     /// Puts the place the sheet found into the row it was opened from, and
     /// takes the camera there.
     ///
-    /// **The camera move is what the *Find a Place* field used to be for**, and
-    /// keeping it is the whole reason that field could be removed rather than
-    /// merely replaced: a hiker who searches for a valley still ends up looking
-    /// at it. What has changed is that they arrive with a stop already down,
-    /// which they can drag, rename by searching again, or swipe away.
+    /// A hiker who searches for a valley ends up looking at it, with a stop
+    /// already down they can drag, change by searching again, or delete.
     ///
     /// The target is read off the run rather than captured when the row was
     /// tapped, so a sheet swiped away and reopened on another row cannot
@@ -400,6 +365,8 @@ struct TrailDraftView: View {
             maker.placeWaypoint(id, at: pick.clCoordinate, named: pick.name)
         case .newStop:
             maker.appendWaypoint(at: pick.clCoordinate, named: pick.name)
+        case .open(let role):
+            maker.fill(role, at: pick.clCoordinate, named: pick.name)
         case nil:
             // The sheet was already on its way out. Nothing is put down for a
             // row nobody is looking at.
@@ -414,25 +381,6 @@ struct TrailDraftView: View {
             )
         )
         isSearchingStop = false
-    }
-
-    /// Opens the editor on a place, or does nothing for one that has gone —
-    /// a callout can outlive the place it is about by an undo.
-    private func editPlace(_ id: UUID) {
-        guard let place = draft.place(id: id) else { return }
-        placeEdit.begin(place)
-        isEditingPlace = true
-    }
-
-    /// Writes what was typed, on the way out.
-    ///
-    /// On `onDismiss` rather than on the Done button, so a sheet swiped away
-    /// keeps the name as surely as one dismissed by the button — see
-    /// ``TrailPlaceEditor`` for why there is no third answer.
-    private func commitPlaceEdit() {
-        guard let edited = placeEdit.edited else { return }
-        maker.updatePlace(edited)
-        placeEdit.begin(nil)
     }
 
     /// Cancel throws a drawing away, so it asks first — but only when there is

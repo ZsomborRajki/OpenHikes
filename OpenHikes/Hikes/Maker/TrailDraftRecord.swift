@@ -95,6 +95,10 @@ final class TrailDraftRecord {
     /// existed, for the same migration-policy reason as ``snapsToPaths``.
     var travelMode = TrailTravelMode.hiking
 
+    /// See ``TrailDraft/startIsOpen``: a lone point that is a destination
+    /// resumes as one.
+    var startIsOpen = false
+
     /// When this was last written, so a later phase that offers to resume a
     /// draft has something to say about it. Read by nothing today.
     var updatedAt = Date.distantPast
@@ -105,7 +109,8 @@ final class TrailDraftRecord {
         places: [TrailPlace],
         snapsToPaths: Bool,
         updatedAt: Date,
-        travelMode: TrailTravelMode = .hiking
+        travelMode: TrailTravelMode = .hiking,
+        startIsOpen: Bool = false
     ) {
         self.waypoints = waypoints
         self.waypointNames = waypointNames
@@ -113,5 +118,6 @@ final class TrailDraftRecord {
         self.snapsToPaths = snapsToPaths
         self.updatedAt = updatedAt
         self.travelMode = travelMode
+        self.startIsOpen = startIsOpen
     }
 }

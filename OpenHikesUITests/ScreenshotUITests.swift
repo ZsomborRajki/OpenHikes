@@ -470,11 +470,15 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// ``liftDrawnTrailClearOfTheSheet(in:)`` pans afterwards, which is the
     /// same answer `liftRecordedLineClearOfTheSheet(in:)` gives to the same
     /// problem on the recording frame.
+    ///
+    /// **Tapped ends first.** The first two fill the start and the destination
+    /// and every later one goes into the nearest leg, so the west-to-east
+    /// zigzag is tapped as its two ends and then its two middle stops.
     private static let drawnTrail: [CGVector] = [
         CGVector(dx: 0.26, dy: 0.30),
+        CGVector(dx: 0.80, dy: 0.15),
         CGVector(dx: 0.43, dy: 0.16),
         CGVector(dx: 0.64, dy: 0.25),
-        CGVector(dx: 0.80, dy: 0.15),
     ]
 
     /// How far the drawn line is panned up afterwards, in fractions of the

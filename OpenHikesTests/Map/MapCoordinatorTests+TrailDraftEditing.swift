@@ -5,8 +5,8 @@
 //  The two edits that can only be made on the map, against a real `MKMapView`.
 //
 //  Both are arithmetic in screen space and neither is reachable from the
-//  maker's screen: a tap on a leg *inserts* rather than appends, and a press
-//  on a pin takes hold of it. What decides either is where a thumb landed
+//  maker's screen: a stop added from a pin dropped on a leg goes *into* that
+//  leg, and a press on a pin takes hold of it. What decides either is where a thumb landed
 //  relative to something MapKit is drawing, so the only way to ask is to put a
 //  map on screen, aim it at a fixture and convert a point through it.
 //
@@ -88,16 +88,14 @@ extension MapCoordinatorTests {
         #expect(coordinator.trailDraftLegIndex(at: onTheLeg, in: map) == 0)
 
         // The tap drops a pin that *remembers* the leg, and *Add Stop* is what
-        // puts the point into it — see ``TrailDraftDroppedPin/legIndex``.
-        #expect(coordinator.dropTrailDraftPin(at: onTheLeg, in: map))
-        let pin = try #require(coordinator.trailDraftDroppedPin)
-        #expect(pin.legIndex == 0, "the tap did not remember the leg it landed on")
-        coordinator.applyTrailDraftPin(
-            .addStop,
-            at: pin.coordinate,
-            legIndex: pin.legIndex,
-            in: map
-        )
+        // puts the point into it — see ``TrailDraftDroppedPinSpot/legIndex``.
+        #expect(coordinator.handleTrailDraftTap(at: onTheLeg, in: map))
+        guard case .droppedPin(let spot) = trailMaker.selection else {
+            Issue.record("a tap should drop a pin")
+            return
+        }
+        #expect(spot.legIndex == 0, "the tap did not remember the leg it landed on")
+        trailMaker.addStop(at: spot.clCoordinate, preferringLeg: spot.legIndex)
 
         #expect(trailMaker.draft.waypoints.count == 3)
         let inserted = try #require(trailMaker.draft.waypoints.dropFirst().first)
@@ -106,10 +104,10 @@ extension MapCoordinatorTests {
         #endif
     }
 
-    /// And a tap anywhere else remembers no leg, so its pin offers the verbs
-    /// of an empty drawing rather than an *Add Stop* with nowhere to go.
+    /// And a tap anywhere else remembers no leg, so *Add Stop* fills an open
+    /// field or finds the nearest leg itself.
     @Test("a tap away from every leg carries no leg")
-    func tapAwayFromALegCarriesNoLeg() throws {
+    func tapAwayFromALegCarriesNoLeg() {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
@@ -120,10 +118,12 @@ extension MapCoordinatorTests {
         // No line drawn at all, so nothing can be tapped on.
         let anywhere = CGPoint(x: map.bounds.midX, y: map.bounds.midY)
         #expect(coordinator.trailDraftLegIndex(at: anywhere, in: map) == nil)
-        #expect(coordinator.dropTrailDraftPin(at: anywhere, in: map))
-        let pin = try #require(coordinator.trailDraftDroppedPin)
-        #expect(pin.legIndex == nil)
-        #expect(pin.actions == [.startHere, .markAPlace])
+        #expect(coordinator.handleTrailDraftTap(at: anywhere, in: map))
+        guard case .droppedPin(let spot) = trailMaker.selection else {
+            Issue.record("a tap should drop a pin")
+            return
+        }
+        #expect(spot.legIndex == nil)
         #endif
     }
 

@@ -79,6 +79,46 @@ struct TrailDraftStoreTests {
         #expect(!TrailDraftStore(context: context).load().snapsToPaths)
     }
 
+    /// A lone destination resumes as a destination, with its start field
+    /// still open, rather than turning into a start overnight.
+    @Test("a lone destination comes back as one")
+    func aLoneDestinationSurvives() throws {
+        let context = try context()
+        TrailDraftStore(context: context).save(
+            waypoints: Self.waypoints([Line.north]),
+            places: [],
+            snapsToPaths: true,
+            startIsOpen: true
+        )
+
+        #expect(TrailDraftStore(context: context).load().startIsOpen)
+    }
+
+    /// And a place keeps what OpenStreetMap said about it, which is what its
+    /// sheet reads after a relaunch.
+    @Test("a place's OpenStreetMap details survive a launch")
+    func placeDetailsSurvive() throws {
+        let context = try context()
+        let spring = TrailPlace(
+            latitude: Line.south,
+            longitude: Line.longitude,
+            name: "Spring",
+            symbol: .water,
+            osm: TrailPlaceOSM(
+                elementType: "node",
+                elementID: 42,
+                facts: [TrailPlaceFact(kind: .drinkingWater, value: "yes")]
+            )
+        )
+        TrailDraftStore(context: context).save(
+            waypoints: Self.waypoints([Line.south]),
+            places: [spring],
+            snapsToPaths: true
+        )
+
+        #expect(TrailDraftStore(context: context).load().places.first?.osm == spring.osm)
+    }
+
     /// And a store with nothing in it answers the way a new draft starts,
     /// which is what makes ``StoredTrailDraft/nothing`` the right empty
     /// answer rather than a second kind of default.

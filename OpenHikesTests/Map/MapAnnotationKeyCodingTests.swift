@@ -34,7 +34,7 @@ struct MapAnnotationKeyCodingTests {
         ("TrailDraftDroppedPin", TrailDraftDroppedPin.self),
         ("TrailDraftWaypointAnnotation", TrailDraftWaypointAnnotation.self),
         ("TrailPlaceAnnotation", TrailPlaceAnnotation.self),
-        ("TrailPointCandidateAnnotation", TrailPointCandidateAnnotation.self),
+        ("TrailDraftTravelTimeAnnotation", TrailDraftTravelTimeAnnotation.self),
         ("CommunityMapAnnotation", CommunityMapAnnotation.self),
         ("CommunityPhotoMapAnnotation", CommunityPhotoMapAnnotation.self),
         ("PhotoMapAnnotation", PhotoMapAnnotation.self),

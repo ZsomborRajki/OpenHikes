@@ -78,15 +78,15 @@ struct TrailDraftSaveTests {
     func savesThePlaces() throws {
         let context = try context()
         let draft = Self.draft([Line.south, Line.north])
-        draft.addPlace(
+        draft.addPlaces([
             TrailPlace(
                 latitude: (Line.south + Line.north) / 2,
                 longitude: Line.longitude,
                 name: "Spring",
                 symbol: .water,
                 note: "Runs all summer"
-            )
-        )
+            ),
+        ])
 
         let hike = try #require(
             TrailDraftSave.hike(from: draft, named: "Ridge", into: context).hike
@@ -110,9 +110,7 @@ struct TrailDraftSaveTests {
         let context = try context()
         let draft = Self.draft([Line.south, Line.north])
         let before = draft.distanceMeters
-        draft.addPlace(
-            TrailPlace(latitude: Line.south, longitude: Line.longitude + 0.01)
-        )
+        draft.addPlaces([TrailPlace(latitude: Line.south, longitude: Line.longitude + 0.01)])
 
         let hike = try #require(
             TrailDraftSave.hike(from: draft, named: "Ridge", into: context).hike
@@ -128,7 +126,7 @@ struct TrailDraftSaveTests {
     func placesDoNotSatisfyTheFloor() throws {
         let context = try context()
         let draft = Self.draft([Line.south])
-        draft.addPlace(TrailPlace(latitude: Line.north, longitude: Line.longitude))
+        draft.addPlaces([TrailPlace(latitude: Line.north, longitude: Line.longitude)])
 
         let outcome = TrailDraftSave.hike(from: draft, named: "Ridge", into: context)
 
