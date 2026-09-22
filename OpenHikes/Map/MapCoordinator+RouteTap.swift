@@ -133,6 +133,48 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         true
     }
 
+    /// Whether this map's tap has to wait for another recognizer to give up,
+    /// which for exactly one of them it does: **MapKit's own double tap.**
+    ///
+    /// A single tap and the first half of a double tap are the same touch, and
+    /// until this existed the two were told apart by nobody. The recognizer
+    /// above fired on the first of them, at once; MapKit's own single tap fires
+    /// only once its double tap has failed, about half a second later, and one
+    /// of the things it does then is close whatever callout is open. So a tap
+    /// on the canvas dropped a pin, opened its callout, and had it taken away
+    /// again half a second later — the flicker
+    /// ``TrailDraftDroppedPin/mayReopen`` was written to paper over, by
+    /// reopening the callout the map had just closed.
+    ///
+    /// Sequencing behind the double tap removes the cause rather than the
+    /// symptom: this fires at the same moment MapKit's single tap does, so the
+    /// close happens *before* there is anything to close, and the pin goes down
+    /// once and stays. It also fixes the bug on the other side of the same
+    /// confusion, which nothing had noticed: a double tap to zoom in was a
+    /// single tap *as well*, so zooming into a shared hike's line opened it,
+    /// and zooming in while drawing dropped a pin.
+    ///
+    /// **Asked here rather than wired up at install time**, and that is the
+    /// whole of why this works where the earlier attempt did not: MapKit builds
+    /// its gesture recognizers lazily, so `mapView.gestureRecognizers` holds no
+    /// double tap when ``installRouteTap(on:)`` runs and there was nothing to
+    /// require the failure of. This delegate method is asked afresh for every
+    /// pair of recognizers each time one of them begins, by which time MapKit's
+    /// own are there.
+    ///
+    /// The cost is that a tap on a line is answered a double-tap interval later
+    /// than it used to be. That is what every tap on this map already paid —
+    /// MapKit's own handling of it was always behind the same wait — and it is
+    /// the price of the two taps meaning different things.
+    func gestureRecognizer(
+        _ recognizer: UIGestureRecognizer,
+        shouldRequireFailureOf other: UIGestureRecognizer
+    ) -> Bool {
+        guard recognizer === routeTapRecognizer,
+              let tap = other as? UITapGestureRecognizer else { return false }
+        return tap.numberOfTapsRequired > 1
+    }
+
     /// Whether a recognizer on this map may start.
     ///
     /// Only one of the two this delegate answers for is ever refused, and it

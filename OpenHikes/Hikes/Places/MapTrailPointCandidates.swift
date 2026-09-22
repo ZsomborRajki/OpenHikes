@@ -31,11 +31,10 @@
 //  ``MapView/Coordinator/isTapClaimed(at:in:)`` gives a tap to any
 //  `MKAnnotationView`, so a candidate answers a touch without anything being
 //  added anywhere and without the canvas's own tap ever seeing it. MapKit then
-//  opens the callout itself, which is why none of the half-second reopening
-//  dance ``TrailDraftDroppedPin/mayReopen`` needs applies here: that one is
-//  about a callout *this app* opens from its own recognizer, racing MapKit's
-//  handling of the same tap. This is MapKit's own selection, on MapKit's own
-//  schedule.
+//  opens the callout itself, which is why none of the reopening dance
+//  ``TrailDraftDroppedPin/mayReopen`` needs applies here: that one is about a
+//  callout *this app* opens from its own recognizer, racing MapKit's handling
+//  of the same tap. This is MapKit's own selection, on MapKit's own schedule.
 //
 //  ## Marking one does not open the editor, and the other three flows do
 //

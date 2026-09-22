@@ -64,20 +64,26 @@ final class TrailDraftDroppedPin: NSObject, MKAnnotation {
     let actions: [TrailDraftPinAction]
     /// Whether this pin's callout may be opened again after the map closes it.
     ///
-    /// **MapKit finishes with a tap about half a second after this app does**,
-    /// and one of the things it does then is close whatever callout is open —
-    /// including the one this pin has just opened. Measured on a simulator:
-    /// the pin is selected at +1 ms and deselected at +500 ms, every time, so
-    /// a hiker saw a pin appear and nothing to press. Our recognizer sits
-    /// *alongside* MapKit's own by design (see ``installRouteTap(on:)``), and
-    /// there is no recognizer of MapKit's to sequence behind — its dismissal
-    /// is not one.
+    /// **MapKit finishes with a tap after this app's own recognizer does**, and
+    /// one of the things it does then is close whatever callout is open —
+    /// including the one this pin has just opened. It is measured rather than
+    /// assumed, twice: at **+500 ms** when the route tap fired on the first
+    /// touch, and at **+150 ms** now that the tap is sequenced behind MapKit's
+    /// own double tap (see
+    /// ``MapView/Coordinator/gestureRecognizer(_:shouldRequireFailureOf:)``).
+    /// It did not go away, because the recognizer that does it is not on the
+    /// map view at all — `mapView.gestureRecognizers` holds only this app's
+    /// own two, at install time and at tap time both — so there is nothing left
+    /// to sequence behind.
     ///
-    /// So the first close is treated as the map saying *now I have finished
-    /// with that tap*, and the callout is opened again. Once, and only once: a
-    /// budget rather than a timer, because a duration long enough to be safe
-    /// on a cold simulator is a pin that appears late on a phone. The second
-    /// close is the hiker's, and it takes the pin with it.
+    /// So the first close is still treated as the map saying *now I have
+    /// finished with that tap*, and the callout is opened again. Once, and only
+    /// once: a budget rather than a timer, because a duration long enough to be
+    /// safe on a cold simulator is a callout that opens late on a phone. The
+    /// second close is the hiker's, and it takes the pin with it.
+    ///
+    /// What changed is that the hiker no longer *sees* it — see
+    /// ``MapView/Coordinator/dismissTrailDraftPin(for:on:)``.
     var mayReopen = true
 
     @objc let title: String? = String(localized: "Dropped Pin")
@@ -256,15 +262,14 @@ extension MapView.Coordinator {
         removeTrailDraftDroppedPin(from: mapView)
         trailDraftDroppedPin = pin
         mapView.addAnnotation(pin)
-        // **A turn later, and it has to be.** This runs from a recognizer that
-        // deliberately sits *alongside* MapKit's own — see
-        // ``installRouteTap(on:)`` — and one of the things MapKit's own tap
-        // does is dismiss whatever callout is open. Selecting synchronously
-        // puts the callout up and has it taken straight back down inside the
-        // same gesture, which reads as a tap that did nothing at all: the
-        // pin was there, the buttons were never reachable, and every
-        // `TrailMakerUITests` that draws a line failed on the first run of
-        // this phase saying so.
+        // **A turn later, and it still has to be.** MapKit's own single tap
+        // dismisses whatever callout is open, and this recognizer now fires in
+        // the same cycle as it — sequenced behind the double tap they were
+        // always both waiting on. Which of the two runs first inside that cycle
+        // is not ours to decide, so the selection is put on the far side of it:
+        // selecting synchronously would risk putting the callout up and having
+        // it taken straight back down inside one gesture, which reads as a tap
+        // that did nothing at all.
         //
         // The guard is what makes the hop safe: a second tap between the two
         // turns has already replaced this pin, and selecting it then would
@@ -308,31 +313,40 @@ extension MapView.Coordinator {
         return nil
     }
 
-    /// Answers a closed callout: the first close reopens it, and the second
-    /// takes the pin away.
+    /// Answers a closed callout: the map's own close reopens it, and the
+    /// hiker's takes the pin away.
+    ///
+    /// **The reopen is synchronous and unanimated, and that is the whole of
+    /// what the hiker stopped seeing.** It used to hop a turn and animate, so
+    /// MapKit's close and this reopen were two separate frames with an
+    /// animation each — the callout opened, closed and opened again in front of
+    /// somebody who had tapped once. Reopening inside the same callback means
+    /// no frame is ever drawn with the callout down, so there is nothing to
+    /// see; `animated: false` is what keeps it that way, since an animated
+    /// reopen would fade in from nothing however early it started. The budget
+    /// on ``TrailDraftDroppedPin/mayReopen`` is what makes the synchronous call
+    /// safe from recursion: the second close finds it spent.
+    ///
+    /// The *removal* still hops a turn, because that one really is a mutation
+    /// of what MapKit is enumerating — a selection change is a selection
+    /// change, and taking the annotation out from under it is not. The guard is
+    /// re-asked on the way through, so a tap that dropped the next pin before
+    /// this ran finds a different pin here and leaves it alone.
     ///
     /// Only its own pin: `didDeselect` fires for every annotation on the map,
     /// and a photo pin closing must not take this one.
-    ///
-    /// A turn later either way, because it arrives *during* MapKit's own
-    /// deselection — reopening or removing inside that callback is a mutation
-    /// of the thing being enumerated. The guard is re-asked on the way
-    /// through, so a tap that dropped the next pin before this ran finds a
-    /// different pin here and leaves it alone.
-    ///
-    /// See ``TrailDraftDroppedPin/mayReopen`` for why the first close is not
-    /// the hiker's.
     func dismissTrailDraftPin(for annotation: (any MKAnnotation)?, on mapView: MKMapView) {
-        guard let pin = annotation as? TrailDraftDroppedPin else { return }
-        DispatchQueue.main.async { [weak self, weak mapView] in
-            guard let self, let mapView, trailDraftDroppedPin === pin else { return }
-            guard pin.mayReopen else {
+        guard let pin = annotation as? TrailDraftDroppedPin,
+              trailDraftDroppedPin === pin else { return }
+        guard pin.mayReopen else {
+            DispatchQueue.main.async { [weak self, weak mapView] in
+                guard let self, let mapView, trailDraftDroppedPin === pin else { return }
                 removeTrailDraftDroppedPin(from: mapView)
-                return
             }
-            pin.mayReopen = false
-            mapView.selectAnnotation(pin, animated: true)
+            return
         }
+        pin.mayReopen = false
+        mapView.selectAnnotation(pin, animated: false)
     }
 
     /// Takes the provisional pin off the map, if there is one.

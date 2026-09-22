@@ -150,10 +150,19 @@ extension MapCoordinatorTests {
 
     /// **The first close of a dropped pin's callout is the map's, not the
     /// hiker's** — see ``TrailDraftDroppedPin/mayReopen``. Without this the
-    /// callout went up and came down half a second later, every time, and
-    /// every `TrailMakerUITests` that draws a line failed saying the buttons
-    /// were never there.
-    @Test("the map closing a dropped pin's callout opens it again, once")
+    /// callout went up and came down a moment later, every time, and ten of
+    /// `TrailMakerUITests` failed saying the buttons were never there. It was
+    /// measured again after the route tap started requiring MapKit's own double
+    /// tap to fail: the close moved from +500 ms to +150 ms and did not go
+    /// away, because the recognizer that does it is not on the map view.
+    ///
+    /// **The reopen is synchronous, and that is the half a hiker can see.** It
+    /// used to hop a runloop turn and animate, which drew the callout closing
+    /// and opening again; reopening inside this callback means no frame is
+    /// drawn without it. Asserting it here is asserting that there is no hop:
+    /// the pin is selected again by the time this call returns, with nothing
+    /// awaited in between.
+    @Test("the map closing a dropped pin's callout opens it again at once, once")
     func theFirstDismissalReopensTheCallout() async throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
@@ -178,8 +187,8 @@ extension MapCoordinatorTests {
         let view = try #require(coordinator.mapView(map, viewFor: pin))
 
         coordinator.mapView(map, didDeselect: view)
-        await settleMainActor()
 
+        // Before any `await`, which is what says the reopen was synchronous.
         #expect(coordinator.trailDraftDroppedPin === pin, "the map's own dismissal is not the hiker's")
         #expect(!pin.mayReopen, "and the budget for it is spent")
 
