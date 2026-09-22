@@ -247,7 +247,10 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         drawTrailPoints(Self.drawnPoints, on: map, in: app)
 
         let snap = element("trail-draft-snap", in: app)
-        XCTAssertTrue(snap.waitForExistence(timeout: UITestTimeout.navigation))
+        XCTAssertTrue(
+            scrollIntoView(snap, in: app),
+            "the Follow Paths switch should remain reachable below the stops"
+        )
         snap.tap()
 
         XCTAssertTrue(

@@ -99,7 +99,7 @@ nonisolated struct TrailLegMemo: Equatable, Sendable {
     private static func isWorthRemembering(_ snap: TrailLegSnap) -> Bool {
         switch snap {
         case .snapped, .unmapped: true
-        case .freehand, .refused, .routing: false
+        case .freehand, .refused, .directionsUnavailable, .routing: false
         }
     }
 

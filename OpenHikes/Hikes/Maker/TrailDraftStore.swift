@@ -7,7 +7,7 @@
 //  Its own type rather than three calls spread through the controller,
 //  because "there is exactly one draft row" is a rule and a rule wants one
 //  place to live. Every write goes through
-//  ``save(waypoints:places:snapsToPaths:)``, which updates the row that is
+//  ``save(waypoints:places:snapsToPaths:travelMode:)``, which updates the row that is
 //  there rather than inserting beside it.
 //
 //  A failed read or write is logged and swallowed, deliberately. What is at
@@ -19,7 +19,7 @@
 //
 //  Swallowed is not the same as ignored. A read that threw is answered as a
 //  failure rather than as an empty store, because the two differ by exactly
-//  one thing: whether ``save(waypoints:places:snapsToPaths:)`` writes a second
+//  one thing: whether ``save(waypoints:places:snapsToPaths:travelMode:)`` writes a second
 //  row beside the first. See the note on it.
 //
 
@@ -27,8 +27,7 @@ import Foundation
 import os
 import SwiftData
 
-/// What was left half-drawn: the points, and whether they were following
-/// mapped paths.
+/// What was left half-drawn: the points and routing choices.
 ///
 /// A type rather than a tuple for the reason ``CommunityNearbyAnswer`` is one:
 /// the second field is the one a reader has to be able to find, and a caller
@@ -48,6 +47,7 @@ nonisolated struct StoredTrailDraft: Equatable, Sendable {
     /// anything at all.
     var places: [TrailPlace] = []
     var snapsToPaths: Bool
+    var travelMode: TrailTravelMode = .hiking
 
     /// Both lists, because either on its own is a drawing worth coming back
     /// to — see ``TrailDraft/isEmpty``.
@@ -96,7 +96,8 @@ struct TrailDraftStore {
                     )
                 },
                 places: record.places,
-                snapsToPaths: record.snapsToPaths
+                snapsToPaths: record.snapsToPaths,
+                travelMode: record.travelMode
             )
         } catch {
             log("load", error)
@@ -114,7 +115,12 @@ struct TrailDraftStore {
     /// unsorted fetch limit hands back. Losing one write of a convenience is
     /// the cheaper failure, and it is the same one a refused `context.save()`
     /// already takes.
-    func save(waypoints: [TrailWaypoint], places: [TrailPlace], snapsToPaths: Bool) {
+    func save(
+        waypoints: [TrailWaypoint],
+        places: [TrailPlace],
+        snapsToPaths: Bool,
+        travelMode: TrailTravelMode = .hiking
+    ) {
         let points = waypoints.map(\.routeCoordinate)
         // Written in the same statement that writes the points, every time, so
         // the two columns cannot come apart through a path that remembered one
@@ -128,6 +134,7 @@ struct TrailDraftStore {
                 record.waypointNames = names
                 record.places = places
                 record.snapsToPaths = snapsToPaths
+                record.travelMode = travelMode
                 record.updatedAt = .now
             } else {
                 context.insert(
@@ -136,7 +143,8 @@ struct TrailDraftStore {
                         waypointNames: names,
                         places: places,
                         snapsToPaths: snapsToPaths,
-                        updatedAt: .now
+                        updatedAt: .now,
+                        travelMode: travelMode
                     )
                 )
             }
@@ -172,7 +180,7 @@ struct TrailDraftStore {
     /// Throwing rather than answering `nil`, because "the fetch failed" and
     /// "there is no draft" are the same word to a caller that cannot tell them
     /// apart, and one of the three callers writes a row on the second — see
-    /// ``save(waypoints:places:snapsToPaths:)``.
+    /// ``save(waypoints:places:snapsToPaths:travelMode:)``.
     private func existingRecord() throws -> TrailDraftRecord? {
         var descriptor = FetchDescriptor<TrailDraftRecord>()
         descriptor.fetchLimit = 1
