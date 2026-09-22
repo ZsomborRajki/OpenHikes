@@ -1,0 +1,141 @@
+# epoch_s	elapsed_s	kind	name	value	detail
+# scenario	chart-scrub
+# started_epoch_s	1787785070.596564
+# arguments	/Users/zsoraj/Library/Developer/CoreSimulator/Devices/C0080CF5-FB27-4F8A-B5CE-2968F1CFC9A4/data/Containers/Bundle/Application/1B319A75-44F9-4BE3-9B73-127AE434DB25/OpenHikes.app/OpenHikes --ui-testing --ui-test-performance-log=chart-scrub --ui-test-expanded-sheet --ui-test-import-gpx=ThumseeLoopFast
+1787785070.599385	0.002821042	interval	ModelContainerInit	37.113708	
+1787785070.6224399	0.02587575	interval	AppModelInit	66.719125	
+1787785070.8178399	0.221275917	mark	OpenHikesViewBody		
+1787785070.818639	0.222074875	mark	MapViewCreated		
+1787785070.8730173	0.276453375	mark	MapRecordingTraceApplied		chunks=0 tail=0
+1787785070.873143	0.276578792	mark	MapTileSourceRebuilt		osm|https://tile.openstreetmap.org/{z}/{x}/{y}.png|19
+1787785070.8838165	0.287252334	mark	MapUpdateCalled		
+1787785070.902819	0.306254959	mark	MapSheetBody		
+1787785070.909907	0.313343084	interval	GPXParsed	4.348625	
+1787785070.9802675	0.383703542	mark	MapSheetHikesBody		0 hikes searching=false
+1787785071.0297043	0.433140292	mark	MapSheetHikesBody		0 hikes searching=false
+1787785071.0615823	0.465018209	mark	MapUpdateCalled		
+1787785071.0636067	0.467042792	mark	MapUpdateCalled		
+1787785071.1253319	0.528767792	mark	ScenePhaseChanged		active
+1787785071.1258714	0.529307334	stall	MainThread	570.088625	
+1787785071.18274	0.586176	mark	OpenHikesViewBody		
+1787785071.188598	0.592033917	mark	MapUpdateCalled		
+1787785071.1886334	0.592069292	mark	MapRouteRebuilt		
+1787785071.190261	0.59369675	mark	MapSheetBody		
+1787785071.1961486	0.599584542	mark	MapSheetHikesBody		1 hikes searching=false
+1787785071.211821	0.615256917	mark	MapSheetHikesBody		1 hikes searching=false
+1787785071.2185993	0.622035209	mark	OpenHikesViewBody		
+1787785071.2290504	0.632486459	mark	MapSheetBody		
+1787785071.2296062	0.633042209	mark	MapSheetHikesBody		1 hikes searching=false
+1787785071.2537017	0.657137709	mark	MapRouteRestyled		
+1787785071.2553668	0.658802667	mark	MapSheetHikesBody		1 hikes searching=false
+1787785071.2564328	0.659868709	mark	MapSheetBody		
+1787785071.2568655	0.6603015	mark	MapSheetHikesBody		1 hikes searching=false
+1787785071.2589426	0.662378667	mark	OpenHikesViewBody		
+1787785071.2611876	0.664623417	mark	MapSheetBody		
+1787785071.2616887	0.66512475	mark	MapSheetHikesBody		1 hikes searching=false
+1787785071.5993507	1.002786584	sample	Process	100.67416381835938	cpu_s=2.57329 lowPower=0 thermal=nominal
+1787785072.6005046	2.003940667	sample	Process	110.98668670654297	cpu_s=3.0327360000000003 lowPower=0 thermal=nominal
+1787785073.4368365	2.840272542	mark	MapSheetHikesBody		1 hikes searching=false
+1787785073.599459	3.002894917	sample	Process	116.03356170654297	cpu_s=3.239888 lowPower=0 thermal=nominal
+1787785073.6170495	3.020485459	mark	MapSheetBody		
+1787785073.6459854	3.049421209	mark	HikeDetailBody		
+1787785073.650949	3.054384959	mark	HikePhotoSectionBody		0 photos
+1787785073.7239683	3.127404209	interval	HikeDetailPrepared	1.374583	
+1787785073.7736173	3.17705325	mark	LiveFollowUpdate		no-fix
+1787785073.7746153	3.178051167	mark	HikeDetailBody		
+1787785073.775405	3.178840959	mark	TileClaimedBytesMeasured		keys=16 bytes=247320
+1787785073.7754166	3.178852459	interval	TileClaimedByteScan	0.843542	
+1787785073.7790532	3.182489125	mark	HikePhotoSectionBody		0 photos
+1787785073.786409	3.189844834	mark	ElevationChartBody		330 samples
+1787785073.820421	3.223856959	mark	ElevationChartBody		330 samples
+1787785073.834232	3.237667959	mark	HikeDetailBody		
+1787785073.8345506	3.237986667	mark	HikePhotoSectionBody		0 photos
+1787785073.8369598	3.240395834	mark	ElevationChartBody		330 samples
+1787785074.600544	4.003979959	sample	Process	127.58045959472656	cpu_s=4.078592 lowPower=0 thermal=nominal
+1787785075.6005623	5.003998209	sample	Process	126.89295959472656	cpu_s=4.093208 lowPower=0 thermal=nominal
+1787785076.6006246	6.004060542	sample	Process	121.81483459472656	cpu_s=4.168131 lowPower=0 thermal=nominal
+1787785077.6006336	7.0040695	sample	Process	122.11170959472656	cpu_s=4.425753 lowPower=0 thermal=nominal
+1787785078.5996244	8.003060375	sample	Process	121.54920959472656	cpu_s=4.444183 lowPower=0 thermal=nominal
+1787785079.6005783	9.004014167	sample	Process	121.54920959472656	cpu_s=4.479751 lowPower=0 thermal=nominal
+1787785080.6005597	10.003995709	sample	Process	121.54920959472656	cpu_s=4.481624000000001 lowPower=0 thermal=nominal
+1787785081.6014693	11.004905209	sample	Process	121.43983459472656	cpu_s=4.519844 lowPower=0 thermal=nominal
+1787785082.6011577	12.004593709	sample	Process	121.43983459472656	cpu_s=4.746088 lowPower=0 thermal=nominal
+1787785083.6004775	13.003913334	sample	Process	121.40858459472656	cpu_s=4.952324999999999 lowPower=0 thermal=nominal
+1787785084.5996165	14.003052459	sample	Process	121.37733459472656	cpu_s=4.985676000000001 lowPower=0 thermal=nominal
+1787785085.600578	15.004014	sample	Process	121.39295959472656	cpu_s=5.2052179999999995 lowPower=0 thermal=nominal
+1787785086.600566	16.004001917	sample	Process	121.31483459472656	cpu_s=5.430268000000001 lowPower=0 thermal=nominal
+1787785087.600916	17.00435175	sample	Process	121.31483459472656	cpu_s=5.652464 lowPower=0 thermal=nominal
+1787785087.975286	17.378721917	mark	MapSheetHikesBody		1 hikes searching=false
+1787785087.979645	17.383081	mark	MapSheetBody		
+1787785087.9814944	17.384930417	mark	OpenHikesViewBody		
+1787785087.982168	17.385603875	mark	HikeDetailBody		
+1787785087.9834263	17.386862209	mark	HikePhotoSectionBody		0 photos
+1787785087.9873848	17.390820709	mark	HikeDetailBody		
+1787785087.9876976	17.391133584	mark	HikePhotoSectionBody		0 photos
+1787785087.9943929	17.39782875	mark	MapSheetBody		
+1787785088.0021439	17.405579709	mark	HikeDetailBody		
+1787785088.0025215	17.405957375	mark	HikePhotoSectionBody		0 photos
+1787785088.6004732	18.003909042	sample	Process	125.53358459472656	cpu_s=5.962256 lowPower=0 thermal=nominal
+1787785089.6005955	19.004031375	sample	Process	125.54920959472656	cpu_s=6.046023000000001 lowPower=0 thermal=nominal
+1787785090.6004927	20.003928625	sample	Process	125.56483459472656	cpu_s=6.26879 lowPower=0 thermal=nominal
+1787785091.6005335	21.0039695	sample	Process	125.56483459472656	cpu_s=6.4885139999999994 lowPower=0 thermal=nominal
+1787785092.6011171	22.004553084	sample	Process	125.56483459472656	cpu_s=6.713049 lowPower=0 thermal=nominal
+1787785093.5996192	23.003055042	sample	Process	125.53358459472656	cpu_s=6.734443 lowPower=0 thermal=nominal
+1787785094.6004684	24.00390425	sample	Process	125.53358459472656	cpu_s=6.768326 lowPower=0 thermal=nominal
+1787785095.600634	25.004070084	sample	Process	125.53358459472656	cpu_s=6.770389 lowPower=0 thermal=nominal
+1787785096.6005485	26.003984417	sample	Process	125.53358459472656	cpu_s=6.803649999999999 lowPower=0 thermal=nominal
+1787785097.6005805	27.004016375	sample	Process	125.53358459472656	cpu_s=6.838266999999999 lowPower=0 thermal=nominal
+1787785098.6004627	28.003898542	sample	Process	125.53358459472656	cpu_s=6.986667 lowPower=0 thermal=nominal
+1787785098.9061036	28.309539625	mark	ElevationChartBody		330 samples
+1787785098.9463277	28.349763542	mark	HikeDetailBody		
+1787785098.9466767	28.350112625	mark	HikePhotoSectionBody		0 photos
+1787785098.9475272	28.350963	mark	ElevationChartBody		330 samples
+1787785098.9849882	28.388424125	mark	ElevationChartBody		330 samples
+1787785099.0175314	28.420967375	mark	ElevationChartBody		330 samples
+1787785099.0675929	28.471028834	mark	ElevationChartBody		330 samples
+1787785099.102233	28.505668792	mark	ElevationChartBody		330 samples
+1787785099.1431298	28.546565667	mark	ElevationChartBody		330 samples
+1787785099.1776948	28.581130834	mark	ElevationChartBody		330 samples
+1787785099.217394	28.620830084	mark	ElevationChartBody		330 samples
+1787785099.2502773	28.653713209	mark	ElevationChartBody		330 samples
+1787785099.289886	28.693321959	mark	ElevationChartBody		330 samples
+1787785099.3249273	28.728363167	mark	ElevationChartBody		330 samples
+1787785099.3675213	28.77095725	mark	ElevationChartBody		330 samples
+1787785099.4009116	28.804347625	mark	ElevationChartBody		330 samples
+1787785099.4407618	28.844197709	mark	ElevationChartBody		330 samples
+1787785099.4732034	28.87663925	mark	ElevationChartBody		330 samples
+1787785099.5119672	28.915403042	mark	ElevationChartBody		330 samples
+1787785099.5455844	28.949020292	mark	HikeDetailBody		
+1787785099.5458465	28.949282375	mark	HikePhotoSectionBody		0 photos
+1787785099.5471318	28.950567709	mark	LiveFollowUpdate		no-fix
+1787785099.6005127	29.00394875	sample	Process	125.03358459472656	cpu_s=7.802719999999999 lowPower=0 thermal=nominal
+1787785100.6004941	30.00393	sample	Process	125.01795959472656	cpu_s=7.831815 lowPower=0 thermal=nominal
+1787785101.599625	31.003061	sample	Process	125.01795959472656	cpu_s=7.86453 lowPower=0 thermal=nominal
+1787785101.814489	31.217924834	mark	ScenePhaseChanged		inactive
+1787785101.8192527	31.22268875	mark	MapSheetHikesBody		1 hikes searching=false
+1787785101.8244781	31.227914042	mark	MapSheetHikesBody		1 hikes searching=false
+1787785101.8428051	31.246241	mark	OpenHikesViewBody		
+1787785101.8443832	31.247819167	mark	MapSheetBody		
+1787785101.8508663	31.254302167	mark	HikeDetailBody		
+1787785101.8516395	31.255075375	mark	HikePhotoSectionBody		0 photos
+1787785101.8656392	31.26907525	mark	MapSheetBody		
+1787785101.8676255	31.271061417	mark	HikeDetailBody		
+1787785101.8679705	31.271406417	mark	HikePhotoSectionBody		0 photos
+1787785101.869812	31.273247917	mark	OpenHikesViewBody		
+1787785101.8704703	31.273906292	mark	HikeDetailBody		
+1787785101.8706696	31.274105459	mark	HikePhotoSectionBody		0 photos
+1787785102.4440432	31.847479125	mark	ScenePhaseChanged		background
+1787785102.454255	31.857691167	mark	OpenHikesViewBody		
+1787785102.4579666	31.861402542	mark	MapSheetBody		
+1787785102.5087266	31.912162542	mark	HikeDetailBody		
+1787785102.5095484	31.912984334	mark	HikePhotoSectionBody		0 photos
+1787785102.600517	32.003953084	sample	Process	125.15858459472656	cpu_s=8.148352 lowPower=0 thermal=nominal
+1787785102.7687335	32.1721695	mark	MapSheetHikesBody		1 hikes searching=false
+1787785102.818584	32.22202	mark	MapSheetHikesBody		1 hikes searching=false
+1787785102.8192694	32.222705292	mark	OpenHikesViewBody		
+1787785102.8195434	32.22297925	mark	HikeDetailBody		
+1787785102.820214	32.223649875	mark	HikePhotoSectionBody		0 photos
+1787785102.825145	32.228580917	mark	MapSheetBody		
+1787785102.8274941	32.230930042	mark	HikeDetailBody		
+1787785102.8276877	32.231123584	mark	HikePhotoSectionBody		0 photos
+1787785103.5998578	33.00329375	sample	Process	100.43983459472656	cpu_s=8.333642000000001 lowPower=0 thermal=nominal

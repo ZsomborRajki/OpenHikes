@@ -1,0 +1,30 @@
+# epoch_s	elapsed_s	kind	name	value	detail
+# scenario	manual-graph-only
+# started_epoch_s	1786720258.8920999
+# arguments	/Users/zsoraj/Library/Developer/CoreSimulator/Devices/C0080CF5-FB27-4F8A-B5CE-2968F1CFC9A4/data/Containers/Bundle/Application/042EDEB8-83B9-4992-A10A-E81A4AE80900/OpenTrails.app/OpenTrails --ui-testing --ui-test-performance-log=manual-graph-only --ui-test-trail-graph=ThumseeRidgePath
+1786720258.8935223	0.001422291	interval	ModelContainerInit	24.514417	
+1786720258.9120364	0.019936458	interval	AppModelInit	47.856875	
+1786720258.9972587	0.105158875	mark	OpenTrailsViewBody		
+1786720258.9979355	0.105835583	mark	MapViewCreated		
+1786720259.047849	0.155749	mark	MapRecordingTraceApplied		chunks=0 tail=0
+1786720259.0479388	0.155838875	mark	MapTileSourceRebuilt		osm|https://tile.openstreetmap.org/{z}/{x}/{y}.png|19
+1786720259.0546343	0.162534541	mark	MapUpdateCalled		
+1786720259.0643888	0.172288875	mark	MapSheetBody		
+1786720259.1052444	0.213144625	mark	MapSheetHikesBody		0 hikes searching=false
+1786720259.145307	0.253207166	mark	MapSheetHikesBody		0 hikes searching=false
+1786720259.1694639	0.277364041	mark	MapUpdateCalled		
+1786720259.1711826	0.279082666	mark	MapUpdateCalled		
+1786720259.2267706	0.33467075	stall	MainThread	362.608208	
+1786720259.2369127	0.344812916	mark	OpenTrailsViewBody		
+1786720259.2371275	0.345027625	mark	MapUpdateCalled		
+1786720259.237786	0.345686291	mark	MapSheetBody		
+1786720259.2381163	0.346016291	mark	MapSheetHikesBody		0 hikes searching=false
+1786720259.8942778	1.002177916	sample	Process	77.2834701538086	cpu_s=1.288583
+1786720260.8942027	2.002102875	sample	Process	78.3928451538086	cpu_s=1.385494
+1786720261.8942254	3.0021255	sample	Process	78.2365951538086	cpu_s=1.398559
+1786720262.8942327	4.002132916	sample	Process	78.2365951538086	cpu_s=1.399807
+1786720263.8942714	5.002171541	sample	Process	78.1115951538086	cpu_s=1.401753
+1786720264.894224	6.002123958	sample	Process	77.8459701538086	cpu_s=1.403294
+1786720265.894208	7.002108166	sample	Process	77.7522201538086	cpu_s=1.404451
+1786720266.8942397	8.002139708	sample	Process	77.7522201538086	cpu_s=1.4052580000000001
+1786720267.8942702	9.002170291	sample	Process	77.7522201538086	cpu_s=1.406227

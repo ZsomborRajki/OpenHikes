@@ -1,0 +1,150 @@
+# epoch_s	elapsed_s	kind	name	value	detail
+# scenario	background-recording
+# started_epoch_s	1787778612.161193
+# arguments	/Users/zsoraj/Library/Developer/CoreSimulator/Devices/C0080CF5-FB27-4F8A-B5CE-2968F1CFC9A4/data/Containers/Bundle/Application/9B2F451D-15EC-44AD-B2EE-62746FC65AC0/OpenHikes.app/OpenHikes --ui-testing --ui-test-performance-log=background-recording --ui-test-expanded-sheet --ui-test-enable-location --ui-test-trail-graph=ThumseeRidgePath
+1787778612.1634567	0.002263792	interval	ModelContainerInit	42.611625	
+1787778612.1912618	0.030068792	interval	AppModelInit	77.337083	
+1787778612.3911633	0.229970375	mark	OpenHikesViewBody		
+1787778612.3921196	0.230926834	mark	MapViewCreated		
+1787778612.444468	0.283275042	mark	MapRecordingTraceApplied		chunks=0 tail=0
+1787778612.444613	0.283420125	mark	MapTileSourceRebuilt		osm|https://tile.openstreetmap.org/{z}/{x}/{y}.png|19
+1787778612.4558794	0.294686459	mark	MapUpdateCalled		
+1787778612.4750285	0.313835709	mark	MapSheetBody		
+1787778612.543097	0.381904084	mark	MapSheetHikesBody		0 hikes searching=false
+1787778612.6087298	0.447537	mark	MapSheetHikesBody		0 hikes searching=false
+1787778612.6409094	0.479716542	mark	MapUpdateCalled		
+1787778612.6435313	0.4823385	mark	MapUpdateCalled		
+1787778612.644063	0.482870167	mark	LocationFixDelivered		
+1787778612.71907	0.557877042	stall	MainThread	549.359417	
+1787778613.1634305	1.002237459	sample	Process	107.22103881835938	cpu_s=2.628997 lowPower=0 thermal=nominal
+1787778613.7891698	1.627977	mark	LocationFixDelivered		
+1787778613.7892933	1.628100459	mark	LocationPublished		
+1787778613.7901196	1.628926834	mark	MapCentered		
+1787778614.1640484	2.002855584	sample	Process	136.12733459472656	cpu_s=3.184778 lowPower=0 thermal=nominal
+1787778614.4854753	2.324282334	mark	ScenePhaseChanged		active
+1787778614.495412	2.33421925	mark	OpenHikesViewBody		
+1787778614.4959164	2.334723542	mark	MapUpdateCalled		
+1787778614.4968078	2.335614917	mark	MapSheetBody		
+1787778614.4971766	2.335983834	mark	MapSheetHikesBody		0 hikes searching=false
+1787778614.6265156	2.4653226249999998	mark	OpenHikesViewBody		
+1787778614.6304371	2.469244125	mark	MapSheetBody		
+1787778614.6308775	2.469684625	mark	MapSheetHikesBody		0 hikes searching=false
+1787778614.6343164	2.473123584	mark	MapSheetBody		
+1787778614.6345656	2.473372709	mark	MapSheetHikesBody		0 hikes searching=false
+1787778615.164448	3.003255125	sample	Process	182.65865325927734	cpu_s=4.111128 lowPower=0 thermal=nominal
+1787778616.164583	4.00339	sample	Process	170.36177825927734	cpu_s=4.132532 lowPower=0 thermal=nominal
+1787778616.4086616	4.24746875	mark	MapSheetHikesBody		0 hikes searching=false
+1787778616.4411325	4.279939542	mark	RecordingEnergyProfileApplied		precise filter=10.0
+1787778616.4417994	4.280606584	mark	MapSheetHikesBody		1 hikes searching=false
+1787778616.4561212	4.29492825	mark	OpenHikesViewBody		
+1787778616.4563534	4.295160625	mark	OpenHikesViewBody		
+1787778616.456614	4.295421167	mark	OpenHikesViewBody		
+1787778616.456755	4.295561917	mark	MapSheetBody		
+1787778616.456999	4.295806167	mark	MapSheetHikesBody		1 hikes searching=false
+1787778616.4775498	4.316356875	mark	RecordingBody		
+1787778616.482537	4.321344167	mark	RecordingClockTick		
+1787778616.51991	4.358717084	mark	MapSheetBody		
+1787778616.5203083	4.359115459	mark	MapSheetHikesBody		1 hikes searching=false
+1787778616.54334	4.382147084	mark	RecordingBody		
+1787778616.5615318	4.400338834	mark	RecordingFixReceived		
+1787778616.561658	4.400464917	interval	RecordingTailRebuilt	0.036458	
+1787778616.5617733	4.400580375	mark	LiveFixAccepted		
+1787778616.564245	4.403052125	mark	RecordingBody		
+1787778616.5676777	4.406484959	mark	MapSheetHikesBody		1 hikes searching=false
+1787778616.6013346	4.440141709	mark	MapRecordingTraceApplied		chunks=0 tail=1
+1787778616.6074898	4.446296917	mark	MapRouteRestyled		
+1787778616.6103644	4.449171459	mark	MapSheetHikesBody		1 hikes searching=false
+1787778616.619601	4.458408084	mark	MapSheetBody		
+1787778616.6200025	4.458809584	mark	MapSheetHikesBody		1 hikes searching=false
+1787778616.6221724	4.4609795	mark	RecordingBody		
+1787778616.625048	4.463855042	mark	OpenHikesViewBody		
+1787778616.628171	4.466978	mark	MapSheetBody		
+1787778616.628604	4.467411125	mark	MapSheetHikesBody		1 hikes searching=false
+1787778616.6365101	4.475317292	mark	RecordingBody		
+1787778616.79707	4.635877209	mark	RecordingFixReceived		
+1787778616.7971187	4.63592575	mark	RecordingFixRejected		
+1787778617.1644135	5.003220542	sample	Process	189.87742614746094	cpu_s=5.055906 lowPower=0 thermal=nominal
+1787778617.5702853	5.4090925	mark	RecordingClockTick		
+1787778618.164296	6.003103	sample	Process	189.78367614746094	cpu_s=5.101176000000001 lowPower=0 thermal=nominal
+1787778618.5973268	6.436133875	mark	RecordingClockTick		
+1787778619.1639798	7.002786792	sample	Process	189.75242614746094	cpu_s=5.187106 lowPower=0 thermal=nominal
+1787778619.5670192	7.405826417	mark	RecordingClockTick		
+1787778620.1636624	8.0024695	sample	Process	189.75242614746094	cpu_s=5.229994 lowPower=0 thermal=nominal
+1787778620.5710227	8.409829792	mark	RecordingClockTick		
+1787778621.1641078	9.002914959	sample	Process	189.59617614746094	cpu_s=5.237736 lowPower=0 thermal=nominal
+1787778621.571102	9.409909	mark	RecordingClockTick		
+1787778622.163603	10.00241025	sample	Process	189.29930114746094	cpu_s=5.286034000000001 lowPower=0 thermal=nominal
+1787778622.5709395	10.409746625	mark	RecordingClockTick		
+1787778622.6346002	10.47340725	mark	ScenePhaseChanged		inactive
+1787778622.6402357	10.479042792	mark	OpenHikesViewBody		
+1787778622.6423287	10.48113575	mark	MapSheetBody		
+1787778622.642917	10.481723959	mark	MapSheetHikesBody		1 hikes searching=false
+1787778622.6531749	10.491981959	mark	RecordingBody		
+1787778623.1644258	11.003232875	sample	Process	189.86180114746094	cpu_s=5.400187000000001 lowPower=0 thermal=nominal
+1787778624.007854	11.846661209	mark	ScenePhaseChanged		background
+1787778624.020976	11.859783125	mark	OpenHikesViewBody		
+1787778624.024454	11.86326125	mark	MapSheetBody		
+1787778624.0249336	11.863740625	mark	MapSheetHikesBody		1 hikes searching=false
+1787778624.0337653	11.872572375	mark	RecordingBody		
+1787778624.1635103	12.002317417	sample	Process	109.43992614746094	cpu_s=5.503296000000001 lowPower=0 thermal=nominal
+1787778625.1665602	13.005367292	sample	Process	97.18992614746094	cpu_s=5.5065479999999996 lowPower=0 thermal=nominal
+1787778626.168104	14.006911042	sample	Process	97.18992614746094	cpu_s=5.507412 lowPower=0 thermal=nominal
+1787778626.8341289	14.672935875	mark	RecordingFixReceived		
+1787778626.8342662	14.673073292	interval	RecordingTailRebuilt	0.058667	
+1787778626.8343747	14.673181709	mark	LiveFixAccepted		
+1787778626.8435044	14.682311417	interval	TrailMatcherWork	7.291667	
+1787778626.843636	14.682443083999999	interval	RecordingTailRebuilt	0.015208	
+1787778626.8437042	14.682511375	mark	LiveTrailMatchApplied		
+1787778627.1665254	15.005332375	sample	Process	97.29930114746094	cpu_s=5.525863 lowPower=0 thermal=nominal
+1787778628.1665108	16.005317917	sample	Process	97.15867614746094	cpu_s=5.527306 lowPower=0 thermal=nominal
+1787778629.1637037	17.002510667	sample	Process	97.15867614746094	cpu_s=5.52846 lowPower=0 thermal=nominal
+1787778630.1665416	18.005348792	sample	Process	97.15867614746094	cpu_s=5.529067 lowPower=0 thermal=nominal
+1787778630.8449059	18.683713042	mark	LocationFixDelivered		
+1787778630.8451211	18.683928167	mark	LocationPublished		
+1787778630.8453314	18.684138625	mark	RecordingFixReceived		
+1787778630.845523	18.684330125	interval	RecordingTailRebuilt	0.035542	
+1787778630.8457956	18.684602792	mark	LiveFixAccepted		
+1787778630.8500261	18.688833125	interval	TrailMatcherWork	0.417958	
+1787778630.8507624	18.689569375	interval	RecordingTailRebuilt	0.016666	
+1787778630.8508592	18.689666375	mark	LiveTrailMatchApplied		
+1787778631.1665432	19.005350459	sample	Process	97.15867614746094	cpu_s=5.537095 lowPower=0 thermal=nominal
+1787778632.1665838	20.005390834	sample	Process	97.09617614746094	cpu_s=5.540784999999999 lowPower=0 thermal=nominal
+1787778633.1665392	21.00534625	sample	Process	97.09617614746094	cpu_s=5.541334999999999 lowPower=0 thermal=nominal
+1787778634.1681821	22.00698925	sample	Process	97.09617614746094	cpu_s=5.542089 lowPower=0 thermal=nominal
+1787778634.8530996	22.69190675	mark	RecordingFixReceived		
+1787778634.8532531	22.692060167	interval	RecordingTailRebuilt	0.020084	
+1787778634.8534522	22.692259375	mark	LiveFixAccepted		
+1787778634.8571594	22.695966542	interval	TrailMatcherWork	0.446125	
+1787778634.8578243	22.696631417	interval	RecordingTailRebuilt	0.020041	
+1787778634.8579056	22.696712625	mark	LiveTrailMatchApplied		
+1787778635.1665938	23.005400959	sample	Process	97.09617614746094	cpu_s=5.548642 lowPower=0 thermal=nominal
+1787778636.166549	24.005356167	sample	Process	97.09617614746094	cpu_s=5.549655 lowPower=0 thermal=nominal
+1787778636.8717897	24.710596917	mark	ScenePhaseChanged		inactive
+1787778636.8881018	24.726908875	mark	MapRecordingTraceApplied		chunks=0 tail=4
+1787778636.8964534	24.7352605	mark	OpenHikesViewBody		
+1787778636.8985016	24.73730875	mark	MapSheetBody		
+1787778636.8988862	24.737693417	mark	MapSheetHikesBody		1 hikes searching=false
+1787778636.9083683	24.747175375	mark	RecordingBody		
+1787778637.1231782	24.96198525	mark	ScenePhaseChanged		active
+1787778637.1440878	24.982894875	mark	OpenHikesViewBody		
+1787778637.1454794	24.984286542	mark	MapSheetBody		
+1787778637.1459246	24.984731709	mark	MapSheetHikesBody		1 hikes searching=false
+1787778637.1508536	24.989660625	mark	RecordingClockTick		
+1787778637.152268	24.991074959	mark	RecordingBody		
+1787778637.164415	25.003221959	sample	Process	122.26805114746094	cpu_s=5.741594 lowPower=0 thermal=nominal
+1787778638.153618	25.992425292	mark	RecordingClockTick		
+1787778638.16442	26.003227042	sample	Process	122.20555114746094	cpu_s=5.848853 lowPower=0 thermal=nominal
+1787778639.1535792	26.992386292	mark	RecordingClockTick		
+1787778639.1644554	27.003262584	sample	Process	122.26805114746094	cpu_s=6.058247 lowPower=0 thermal=nominal
+1787778639.3660884	27.204895459	mark	ScenePhaseChanged		inactive
+1787778639.3719985	27.210805584	mark	OpenHikesViewBody		
+1787778639.3736482	27.212455209	mark	MapSheetBody		
+1787778639.3742614	27.2130685	mark	MapSheetHikesBody		1 hikes searching=false
+1787778639.380035	27.218841917	mark	RecordingBody		
+1787778640.1644092	28.003216292	sample	Process	122.25242614746094	cpu_s=6.089363 lowPower=0 thermal=nominal
+1787778640.669486	28.508293125	mark	ScenePhaseChanged		background
+1787778640.6763382	28.515145292	mark	OpenHikesViewBody		
+1787778640.6795733	28.518380417	mark	MapSheetBody		
+1787778640.6800058	28.518812916999998	mark	MapSheetHikesBody		1 hikes searching=false
+1787778640.6886666	28.527473584	mark	RecordingBody		
+1787778641.1665196	29.005326792	sample	Process	97.00242614746094	cpu_s=6.173978 lowPower=0 thermal=nominal

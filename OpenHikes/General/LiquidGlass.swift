@@ -27,26 +27,11 @@ import SwiftUI
 extension Color {
     /// What content sits on inside a glass sheet.
     ///
-    /// The rule in this file's header has always been that content stays on
-    /// the ordinary material *below* the controls layer. On iOS 26 the sheet
-    /// supplied that material by itself: ``MapSheet`` is presented on clear
-    /// glass over live map imagery, and clear glass was substantial enough to
-    /// read a chart's grid lines and a faint tint against. iOS 27's is not.
-    /// What was a light wash over the map became the map, and everything drawn
-    /// at a low alpha — an elevation profile's fill, the selected hike's
-    /// colour, the unmapped share of a difficulty bar — was being read against
-    /// whatever tiles happened to be underneath it.
-    ///
-    /// The glass stays: it is what the sheet looks like, and the hiker asked
-    /// for that. What changes is that the handful of things which have to be
-    /// *read* get something of their own to be read against, rather than every
-    /// one of them guessing at an alpha that works over both a snowfield and a
-    /// forest — which is the same argument ``WeatherBadge`` gives for being on
-    /// glass rather than on `.ultraThinMaterial`, pointed the other way.
-    ///
-    /// Opaque rather than a `Material`, for the reason
-    /// ``ElevationChartView``'s callout is: a material samples its backdrop,
-    /// and the backdrop is the thing being hidden from.
+    /// Fine chart details, selection tints and breakdown bars need a stable
+    /// backing regardless of the map underneath the sheet's adaptive glass.
+    /// Opaque rather than a `Material`: another material would sample the
+    /// same backdrop these details need separation from. This belongs only
+    /// behind those content elements, never across the whole sheet.
     static let contentSurface: Color = {
         #if os(macOS)
         Color(nsColor: .windowBackgroundColor)
