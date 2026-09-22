@@ -85,7 +85,7 @@ struct TrailDraftNameField: View {
 ///
 /// It writes through ``TrailDraftController`` rather than onto the draft, like
 /// every other mutation in this feature, because turning it back on is a
-/// question for OpenStreetMap and the controller is what asks — see
+/// question for the selected routing provider and the controller is what asks — see
 /// ``TrailDraftController/setSnapsToPaths(_:)``.
 struct TrailDraftSnapToggle: View {
     let maker: TrailDraftController
@@ -98,12 +98,11 @@ struct TrailDraftSnapToggle: View {
             ))
             .accessibilityIdentifier("trail-draft-snap")
         } footer: {
-            Text(
-                """
-                Legs run along paths mapped in OpenStreetMap. \
-                Turn this off to draw straight lines.
-                """
-            )
+            if maker.draft.travelMode == .hiking {
+                Text("Legs run along paths mapped in OpenStreetMap. Turn this off to draw straight lines.")
+            } else {
+                Text("Routes use Apple Maps directions. Turn this off to draw straight lines.")
+            }
         }
     }
 }
@@ -294,7 +293,7 @@ struct TrailDraftLineFooter: View {
     }
 }
 
-/// *Try Again*, offered only when Overpass refused something.
+/// *Try Again*, offered when a routing provider was temporarily unavailable.
 ///
 /// Not for a leg with nothing mapped under it and not for one the hiker
 /// straightened themselves: asking again about either would spend a request to

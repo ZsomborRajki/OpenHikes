@@ -166,13 +166,13 @@ extension OpenHikesModel {
     /// automation needs the maker to work for the same reason it needs the
     /// recorder to.
     ///
-    /// The router is the recorder's own trail-graph provider wrapped in
+    /// The hiking router is the recorder's own trail-graph provider wrapped in
     /// ``OverpassTrailLegRouter``, so a drawn leg reads the z12 tiles a
     /// recording has already downloaded and a recording reads the ones a
     /// drawing downloaded. `nil` when there is no provider — a launch under
     /// UI automation with no `--ui-test-trail-graph=` fixture — and the maker
     /// then draws straight lines and does not offer a switch it could not
-    /// honour.
+    /// honour in Hiking mode. Other modes use Apple Maps directions.
     static func makeTrailMaker(
         container: ModelContainer,
         trailGraphProvider: (any TrailGraphProviding)?
@@ -184,8 +184,23 @@ extension OpenHikesModel {
             },
             placeSource: Self.makeTrailPointSource(),
             elevationSource: Self.makeTrailElevationSource(),
-            naming: Self.makeTrailStopNaming()
+            naming: Self.makeTrailStopNaming(),
+            travelRouters: Self.makeDirectionsRouters()
         )
+    }
+
+    /// Tests exercise the selector without asking Apple's live service. Unit
+    /// suites inject geometry at the router seam; UI launches get a no-route answer.
+    static func makeDirectionsRouters() -> [TrailTravelMode: any TrailLegRouting] {
+        var routers: [TrailTravelMode: any TrailLegRouting] = [:]
+        for mode in TrailTravelMode.allCases where mode != .hiking {
+            if AppLaunchEnvironment.isRunningTests {
+                routers[mode] = DirectionsTrailLegRouter(mode: mode, calculate: { _, _ in [] })
+            } else {
+                routers[mode] = DirectionsTrailLegRouter(mode: mode)
+            }
+        }
+        return routers
     }
 
     /// What a point put down by a tap on the map is called, or `nil` for a
