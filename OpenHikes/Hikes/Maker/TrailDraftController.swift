@@ -70,11 +70,16 @@ nonisolated struct TrailDraftDroppedPinSpot: Equatable, Sendable {
     let latitude: Double
     let longitude: Double
     let legIndex: Int?
+    /// What the place is called, for a pin dropped on one of the map's own
+    /// labels, or empty for open map — which ``TrailStopNamer`` names once it
+    /// is a stop. See `MapTrailDraftFeatures.swift`.
+    let name: String
 
-    init(coordinate: CLLocationCoordinate2D, legIndex: Int?) {
+    init(coordinate: CLLocationCoordinate2D, legIndex: Int?, name: String = "") {
         latitude = coordinate.latitude
         longitude = coordinate.longitude
         self.legIndex = legIndex
+        self.name = name
     }
 
     var clCoordinate: CLLocationCoordinate2D {
@@ -209,8 +214,8 @@ final class TrailDraftController {
         } ?? TrailDraftElevation(draft: drawing, source: elevationSource)
         geocoder = naming
         namer = TrailStopNamer(source: naming)
-        namer.onNamed { [weak self] id, name in
-            self?.receiveName(name, for: id)
+        namer.onNamed { [weak self] question, name in
+            self?.receiveName(name, for: question)
         }
         finder.onFound { [weak self] places in
             self?.addPlaces(places)
@@ -375,8 +380,14 @@ final class TrailDraftController {
     /// still true of the point it is about, and the persist below is what keeps
     /// it; the namer is cancelled on the way out anyway, so this is the race
     /// rather than the ordinary path.
-    private func receiveName(_ name: String, for id: UUID) {
-        draft.describe(waypointWith: id, as: name)
+    ///
+    /// Refused for a stop that has moved since it was asked about: a drag
+    /// keeps the point's id, and the answer is the address of the spot it
+    /// left. The namer asks again about where it stands now.
+    private func receiveName(_ name: String, for question: TrailStopQuestion) {
+        guard let point = draft.waypoints.first(where: { $0.id == question.id }),
+              TrailStopQuestion(point) == question else { return }
+        draft.describe(waypointWith: question.id, as: name)
         persist()
     }
 

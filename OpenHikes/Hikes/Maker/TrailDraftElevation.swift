@@ -199,6 +199,14 @@ final class TrailDraftElevation {
     /// One question, asked about the line as it now stands.
     private func measure() async {
         guard let source else { return }
+        // Not while a leg is still waiting for its path. Its straight
+        // placeholder is not the line that will be saved, the answer would be
+        // thrown away when the leg lands, and every call is billed. A leg that
+        // lands asks again — see ``TrailDraftController`` — so the last one
+        // to land is what gets measured. Overpass often takes longer than the
+        // settle between two legs, so without this a long route paid for a
+        // question per gap.
+        guard !draft.isRouting else { return }
         let route = draft.routeCoordinates
         // One point is a place rather than a trail, and has no climb —
         // ``TrailDraftSave`` refuses to save it for the same reason.

@@ -768,7 +768,9 @@ private extension MapView.Coordinator {
 
 extension MapView.Coordinator {
     func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
-        guard !(annotation is MKUserLocation) else { return nil }
+        // MapKit's own, for a label a tap selected while drawing — it is
+        // deselected at once. See `MapTrailDraftFeatures.swift`.
+        guard !(annotation is MKUserLocation), !(annotation is MKMapFeatureAnnotation) else { return nil }
         if let photoAnnotation = annotation as? PhotoMapAnnotation {
             return photoAnnotationView(for: photoAnnotation, on: mapView)
         }

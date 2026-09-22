@@ -33,6 +33,13 @@
 //  shared, this sheet clears it on the way out, exactly as the field it
 //  replaced did.
 //
+//  ## The travel mode is not chosen here
+//
+//  Apple Maps puts its car/walk/transit selector above this list; the maker
+//  puts it above the stops instead — see ``TrailTravelModePicker``. It is a
+//  property of the whole draft rather than of one stop, so a search that
+//  fills a row changes where the line goes and never how it is routed.
+//
 
 import CoreLocation
 import MapKit
@@ -226,8 +233,8 @@ struct TrailStopSearchSheet: View {
         NavigationStack {
             List {
                 queryField
-                if let here = currentCoordinate, query.isEmpty {
-                    myLocationRow(here)
+                if locationManager?.hasFix == true, query.isEmpty {
+                    myLocationRow
                 }
                 suggestions
                 if run.didFail { failureRow }
@@ -291,14 +298,17 @@ struct TrailStopSearchSheet: View {
     /// resolved here would be the address of the spot they *were* at when they
     /// tapped — the same thing ``TrailDraft/move(waypointAt:to:)`` throws a
     /// name away for.
-    @ViewBuilder
-    private func myLocationRow(_ coordinate: CLLocationCoordinate2D) -> some View {
+    ///
+    /// Offered on ``LocationManager/hasFix`` and resolved on the tap, so the
+    /// sheet is not rebuilt once a second while the hiker is typing.
+    @ViewBuilder private var myLocationRow: some View {
         Section {
             Button {
+                guard let here = locationManager?.coordinate else { return }
                 onPick(
                     TrailStopSearchPick(
                         name: String(localized: "My Location"),
-                        coordinate: coordinate
+                        coordinate: here
                     )
                 )
             } label: {
@@ -360,14 +370,6 @@ struct TrailStopSearchSheet: View {
                 .foregroundStyle(.secondary)
                 .accessibilityIdentifier("trail-stop-search-failed")
         }
-    }
-
-    /// Read in an action rather than in a body wherever it can be — see
-    /// ``LocationManager``. The one read in a body is the row's own presence,
-    /// which is deliberate: a row that appeared only after a fix is better than
-    /// one that is there and does nothing.
-    private var currentCoordinate: CLLocationCoordinate2D? {
-        locationManager?.coordinate
     }
 
     /// **The field is not written with what was tapped**, and the absence is

@@ -82,13 +82,16 @@ struct TrailPlaceCard: Equatable {
     init?(_ selection: TrailDraftSelection, in draft: TrailDraft) {
         switch selection {
         case .droppedPin(let spot):
-            title = String(localized: "Dropped Pin")
+            // A label's own name when the pin went down on one — see
+            // `MapTrailDraftFeatures.swift` — and Apple Maps' heading otherwise.
+            title = spot.name.isEmpty ? String(localized: "Dropped Pin") : spot.name
             systemImage = "mappin"
             tint = .red
             latitude = spot.latitude
             longitude = spot.longitude
-            // Named by its address when it becomes a stop, as a tapped stop is.
-            primary = .addStop(name: "", preferredLeg: spot.legIndex)
+            // A named pin's stop keeps that name. An unnamed one is named by
+            // its address when it becomes a stop, as a tapped stop is.
+            primary = .addStop(name: spot.name, preferredLeg: spot.legIndex)
         case .place(let id):
             guard let row = draft.placeRows.first(where: { $0.id == id }) else { return nil }
             let place = row.place

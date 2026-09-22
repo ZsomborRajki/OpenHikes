@@ -136,8 +136,12 @@ extension MapView.Coordinator {
     private static let alternativeLineWidth: CGFloat = 6
     private static let alternativeLineAlpha: CGFloat = 0.4
 
-    /// Draws every leg's alternatives and every time bubble. Called before the
-    /// legs themselves are added, so the drawn line lies over its alternatives.
+    /// Draws every leg's alternatives and every time bubble.
+    ///
+    /// The alternatives go **under** the drawn line, which is already on the
+    /// map and stays there across a commit — see `MapTrailDraftOverlay.swift`
+    /// — so they are inserted below the lowest of its legs rather than added
+    /// on top of them.
     func addTrailDraftRouteChoices(for legs: [TrailLeg], of draft: TrailDraft, to mapView: MKMapView) {
         removeTrailDraftRouteChoices(from: mapView)
         var layer = TrailDraftRouteChoiceLayer()
@@ -167,7 +171,16 @@ extension MapView.Coordinator {
             }
         }
         trailDraftRouteChoices = layer
-        mapView.addOverlays(layer.lines, level: .aboveLabels)
+        // `overlays(in:)` lists a level bottom first, so the first of the
+        // draft's own lines in it is the one everything goes beneath.
+        let lowestLeg = mapView.overlays(in: .aboveLabels).first { overlay in
+            (overlay as? MKPolyline).map { trailDraftLegStyles[ObjectIdentifier($0)] != nil } == true
+        }
+        if let lowestLeg {
+            for line in layer.lines { mapView.insertOverlay(line, below: lowestLeg) }
+        } else {
+            mapView.addOverlays(layer.lines, level: .aboveLabels)
+        }
         mapView.addAnnotations(layer.times)
     }
 

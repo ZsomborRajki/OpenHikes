@@ -41,8 +41,13 @@ actor DirectionsTrailLegRouter: TrailLegRouting {
         } catch {
             if Task.isCancelled || error is CancellationError
                 || (error as? URLError)?.code == .cancelled { return nil }
+            // *No route* is an answer and is cached; a phone with no signal
+            // can be told the same thing by MapKit, and caching that would
+            // leave the leg saying so after the signal came back, with no
+            // *Try Again* to offer. So the network is asked about first.
             if let mapError = error as? MKError,
-               mapError.code == .directionsNotFound || mapError.code == .placemarkNotFound {
+               mapError.code == .directionsNotFound || mapError.code == .placemarkNotFound,
+               !TrailDirectionsFailure.isOffline(error) {
                 return .straight(along: ends, .unmapped(.noDirections))
             }
             return .straight(along: ends, .directionsUnavailable(TrailDirectionsFailure(error)))
@@ -51,7 +56,15 @@ actor DirectionsTrailLegRouter: TrailLegRouting {
 
     /// MapKit can stop at a road entrance instead of the pin. Keep the chosen
     /// stop, but do not present a substantial unchecked connector as routed.
-    private static let endpointToleranceMeters = 10.0
+    ///
+    /// The hiking router's own snap radius rather than a figure of its own.
+    /// Apple's directions start and end on the nearest road or path, so a stop
+    /// put down on a meadow, a car park or a summit is routinely tens of
+    /// metres from where the route begins — at ten metres nearly every
+    /// walking and cycling leg wore the warning. A hiking leg already joins
+    /// its path by a connector this long without saying anything, and one
+    /// rule about how far is still *at* the stop is the honest one.
+    static let endpointToleranceMeters = OverpassTrailLegRouter.snapRadiusMeters
 
     /// The first usable answer drawn, the rest offered as alternatives. Every
     /// shape runs from the stop itself to the stop itself, connectors included.
@@ -154,14 +167,27 @@ nonisolated enum TrailDirectionsFailure: Equatable, Sendable {
     case unavailable
 
     init(_ error: any Error) {
-        if let network = error as? URLError,
-           [.notConnectedToInternet, .networkConnectionLost, .dataNotAllowed].contains(network.code) {
+        if Self.isOffline(error) {
             self = .offline
         } else if (error as? MKError)?.code == .loadingThrottled {
             self = .busy
         } else {
             self = .unavailable
         }
+    }
+
+    /// Whether the phone could not reach the network at all.
+    ///
+    /// Through the underlying error as well as the error itself: MapKit
+    /// rarely hands a `URLError` over bare, and reports a lost connection as
+    /// one of its own errors with the network's reason underneath.
+    static func isOffline(_ error: any Error) -> Bool {
+        let offline: Set<URLError.Code> = [.notConnectedToInternet, .networkConnectionLost, .dataNotAllowed]
+        if let network = error as? URLError, offline.contains(network.code) { return true }
+        guard let underlying = (error as NSError).userInfo[NSUnderlyingErrorKey] as? any Error else {
+            return false
+        }
+        return isOffline(underlying)
     }
 
     var text: String {

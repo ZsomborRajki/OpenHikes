@@ -177,6 +177,87 @@ struct TrailStopNamerTests {
         #expect(stub.asked.count == 1)
     }
 
+    /// A dragged stop keeps its id and loses its name, so a record kept by id
+    /// alone left its row reading "Stop 2" for the rest of the drawing.
+    @Test("a stop that moves is asked about again, where it now stands")
+    func aMovedStopIsAskedAgain() async {
+        let stub = Stub()
+        stub.answers = ["Before", "After"]
+        let namer = TrailStopNamer(source: stub)
+        var named: [String] = []
+        namer.onNamed { _, name in named.append(name) }
+        let point = TrailWaypoint(coordinate: Self.coordinate(Ridge.south))
+
+        namer.nameUnnamed(in: [point])
+        await settle()
+        stub.answer()
+        await settle()
+
+        let moved = TrailWaypoint(coordinate: Self.coordinate(Ridge.north), id: point.id)
+        namer.nameUnnamed(in: [moved])
+        await settle()
+        stub.answer()
+        await settle()
+
+        #expect(stub.asked.map(\.latitude) == [Ridge.south, Ridge.north])
+        #expect(named == ["Before", "After"])
+    }
+
+    /// End to end through the controller: the answer for where a stop *was*
+    /// lands after it has been dragged, and must not name it; the stop is then
+    /// asked about where it stands now.
+    @Test("a dragged stop is named where it now stands, not where it was")
+    func aDraggedStopIsNamedWhereItStands() async {
+        let stub = Stub()
+        stub.answers = ["Before", "After"]
+        let maker = TrailDraftController(naming: stub)
+        maker.setEditing(true)
+
+        maker.appendWaypoint(at: Self.coordinate(Ridge.south))
+        await settle()
+        #expect(stub.asked.count == 1)
+
+        let id = maker.draft.waypoints[0].id
+        maker.placeWaypoint(id, at: Self.coordinate(Ridge.north), named: "")
+        stub.answer()
+        await settle()
+        #expect(maker.draft.name(ofWaypointAt: 0).isEmpty, "the address of the spot it left")
+        #expect(stub.asked.map(\.latitude) == [Ridge.south, Ridge.north])
+
+        stub.answer()
+        await settle()
+        #expect(maker.draft.name(ofWaypointAt: 0) == "After")
+    }
+
+    /// A drain cancelled by closing the maker can still be finishing its last
+    /// request when the next one starts. It used to hand the handle back on
+    /// the way out, so the next call started a second drain beside the running
+    /// one — two lookups at once.
+    @Test("a drain that was cleared cannot let a second one start beside the next")
+    func aClearedDrainDoesNotDoubleTheNext() async {
+        let stub = Stub()
+        stub.answers = [nil, nil, nil]
+        let namer = TrailStopNamer(source: stub)
+
+        namer.nameUnnamed(in: Self.waypoints([Ridge.south]))
+        await settle()
+        namer.clear()
+        namer.nameUnnamed(in: Self.waypoints([Ridge.middle]))
+        await settle()
+        #expect(stub.asked.count == 2, "the cleared question is still open, and the new one has started")
+
+        // The cleared drain's request comes back and that drain ends.
+        stub.answer()
+        await settle()
+        namer.nameUnnamed(in: Self.waypoints([Ridge.north]))
+        await settle()
+
+        #expect(stub.asked.count == 2, "the third must wait for the second")
+        stub.answer()
+        await settle()
+        #expect(stub.asked.count == 3)
+    }
+
     /// A hiker who closes the maker and comes back has plausibly moved, and one
     /// more attempt per point per opening is a bound they set with their thumb.
     @Test("closing the maker forgets what was asked, so reopening asks again")

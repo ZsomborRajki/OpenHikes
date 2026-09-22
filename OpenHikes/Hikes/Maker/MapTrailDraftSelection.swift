@@ -35,13 +35,22 @@ final class TrailDraftDroppedPin: NSObject, MKAnnotation {
 
     @objc dynamic let coordinate: CLLocationCoordinate2D
 
+    /// What the place under the pin is called, for a pin dropped on one of the
+    /// map's own labels, or empty for open map — see
+    /// `MapTrailDraftFeatures.swift`.
+    let placeName: String
+
     /// Both keys, because MapKit reads them by key-value coding once a second
-    /// annotation is up — see `MapAnnotationKeyCodingTests`.
-    @objc let title: String? = String(localized: "Dropped Pin")
+    /// annotation is up — see `MapAnnotationKeyCodingTests`. The place's name,
+    /// or *Dropped Pin* for a spot that has none — Apple Maps' own heading for
+    /// both.
+    @objc let title: String?
     @objc let subtitle: String? = nil
 
-    init(coordinate: CLLocationCoordinate2D) {
+    init(coordinate: CLLocationCoordinate2D, placeName: String = "") {
         self.coordinate = coordinate
+        self.placeName = placeName
+        title = placeName.isEmpty ? String(localized: "Dropped Pin") : placeName
     }
 }
 
@@ -57,6 +66,10 @@ extension MapView.Coordinator {
         guard !isTapClaimed(at: point, in: mapView) else { return false }
         if let alternative = trailDraftAlternative(at: point, in: mapView) {
             controller.chooseRoute(alternative.alternativeIndex, forLegAt: alternative.legIndex)
+        } else if isNamedTrailDraftPin(near: point, in: mapView) {
+            // The label under this touch was selected first, and named the pin
+            // — see `MapTrailDraftFeatures.swift`. An unnamed pin dropped over
+            // it would throw the name away.
         } else {
             // The leg is asked on the glass, while the tap is still a tap —
             // see ``TrailDraftDroppedPinSpot``.
@@ -69,8 +82,12 @@ extension MapView.Coordinator {
         return true
     }
 
-    /// A tap on one of the maker's own annotations. Answers whether it was one.
+    /// A tap on one of the maker's own annotations, or on one of the map's own
+    /// labels while drawing. Answers whether it was one.
     func selectTrailDraftAnnotation(_ view: MKAnnotationView, on mapView: MKMapView) -> Bool {
+        // A label becomes the maker's dropped pin — see
+        // `MapTrailDraftFeatures.swift`.
+        if selectTrailDraftFeature(view.annotation, on: mapView) { return true }
         guard let controller = trailDraftController, controller.isEditing,
               let annotation = view.annotation else { return false }
         switch annotation {
@@ -95,7 +112,8 @@ extension MapView.Coordinator {
     func applyTrailDraftSelection(_ selection: TrailDraftSelection?, on mapView: MKMapView) {
         let spot: TrailDraftDroppedPinSpot? = if case .droppedPin(let spot) = selection { spot } else { nil }
         if let pin = trailDraftDroppedPin, let spot,
-           pin.coordinate.latitude == spot.latitude, pin.coordinate.longitude == spot.longitude {
+           pin.coordinate.latitude == spot.latitude, pin.coordinate.longitude == spot.longitude,
+           pin.placeName == spot.name {
             return
         }
         if let pin = trailDraftDroppedPin {
@@ -103,7 +121,7 @@ extension MapView.Coordinator {
             mapView.removeAnnotation(pin)
         }
         guard let spot else { return }
-        let pin = TrailDraftDroppedPin(coordinate: spot.clCoordinate)
+        let pin = TrailDraftDroppedPin(coordinate: spot.clCoordinate, placeName: spot.name)
         trailDraftDroppedPin = pin
         mapView.addAnnotation(pin)
     }
