@@ -74,11 +74,8 @@ nonisolated enum TrailStopSearchTarget: Equatable, Sendable {
 
 /// A place the sheet is about to hand back: what it is called, and where.
 ///
-/// One value for both lists, where the maker used to carry two. The *places*
-/// list marks one of these and the *route* goes through one, which are
-/// different lists for the reason ``TrailDraft`` gives — but "a place a lookup
-/// found" is one fact, and keeping two types for it meant two ways of deciding
-/// what MapKit had actually said.
+/// An empty name is a stop for ``TrailStopNamer`` to name — which is what the
+/// *My Location* row hands back, for the reason it gives.
 nonisolated struct TrailStopSearchPick: Equatable, Sendable {
     var name: String
     var latitude: Double
@@ -120,8 +117,7 @@ nonisolated struct TrailStopSearchPick: Equatable, Sendable {
 /// A reference type rather than the sheet's `@State`, and for once the reason
 /// is not the screen underneath: this is held by ``TrailDraftView``, so it
 /// survives the sheet being torn down while the resolve it started is still in
-/// flight — the same arrangement ``TrailPlaceEdit`` has, and for the same
-/// reason. A hiker who taps a row and swipes the sheet away has not asked for
+/// flight. A hiker who taps a row and swipes the sheet away has not asked for
 /// the stop to be put down, and the `target` going `nil` is what says so.
 @MainActor
 @Observable
@@ -136,19 +132,6 @@ final class TrailStopSearchRun {
     /// so the sheet does not keep reporting a failure the hiker has moved on
     /// from.
     private(set) var didFail = false
-
-    /// The last place this sheet actually resolved, kept after it has closed.
-    ///
-    /// It is what lets the *places* list offer to mark it — the fourth of that
-    /// list's add flows, and the only one that arrives with a name already on
-    /// it. Before this sheet existed the maker's own *Find a Place* field kept
-    /// the same thing for the same menu; the field is gone and the fact it held
-    /// is not, because a hiker who has just searched out the hut at the col has
-    /// plausibly two uses for it.
-    ///
-    /// Observed, so the entry appears with the answer, and read by one small
-    /// section's body and nothing else — see ``TrailDraftPlaceSection``.
-    private(set) var lastPick: TrailStopSearchPick?
 
     @ObservationIgnored private var task: Task<Void, Never>?
 
@@ -207,7 +190,6 @@ final class TrailStopSearchRun {
                 didFail = true
                 return
             }
-            if lastPick != pick { lastPick = pick }
             deliver(pick)
         }
     }
@@ -293,11 +275,14 @@ struct TrailStopSearchSheet: View {
     /// wants it most: a walk starts where you are standing, and the alternative
     /// is searching for the name of a car park you are looking at.
     ///
-    /// Named rather than reverse-geocoded. "My Location" is what the hiker
-    /// chose and is true wherever they end up standing, while an address
-    /// resolved here would be the address of the spot they *were* at when they
-    /// tapped — the same thing ``TrailDraft/move(waypointAt:to:)`` throws a
-    /// name away for.
+    /// **The stop it puts down is not called "My Location".** Apple Maps' row
+    /// means the hiker, and follows them; this one puts a point where they are
+    /// standing *now*, which stays there. A row reading "My Location" would be
+    /// true until they took a step, and the draft is kept across launches, so
+    /// tomorrow it would name yesterday's car park after wherever the phone
+    /// happens to be. The stop goes down unnamed instead and
+    /// ``TrailStopNamer`` gives it the address of the spot it stands on — the
+    /// one description of it that stays true, and the one a tapped stop gets.
     ///
     /// Offered on ``LocationManager/hasFix`` and resolved on the tap, so the
     /// sheet is not rebuilt once a second while the hiker is typing.
@@ -305,12 +290,7 @@ struct TrailStopSearchSheet: View {
         Section {
             Button {
                 guard let here = locationManager?.coordinate else { return }
-                onPick(
-                    TrailStopSearchPick(
-                        name: String(localized: "My Location"),
-                        coordinate: here
-                    )
-                )
+                onPick(TrailStopSearchPick(name: "", coordinate: here))
             } label: {
                 Label("My Location", systemImage: "location.fill")
             }
