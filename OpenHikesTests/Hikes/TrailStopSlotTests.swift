@@ -231,4 +231,48 @@ struct TrailStopSlotTests {
 
         #expect(draft.legs == before)
     }
+
+    // MARK: What wakes the list
+
+    /// The maker's screen builds its list from ``TrailDraft/slots`` and nothing
+    /// else, so this is the whole of what rebuilds it. A name landing and a
+    /// stop being moved rewrite the points without adding or taking away a
+    /// row, and must leave it alone; the rows read those themselves.
+    @Test("naming or moving a stop leaves the rows alone, and adding one does not")
+    func onlyARowComingOrGoingWakesTheList() async throws {
+        let draft = TrailDraft()
+        draft.addStop(Self.coordinate(Line.south))
+        draft.addStop(Self.coordinate(Line.north))
+        let rows = ObservationCounter { _ = draft.slots }
+        await rows.settle()
+
+        let first = try #require(draft.waypoints.first)
+        draft.describe(waypointWith: first.id, as: "Lurdy Ház")
+        draft.move(waypointAt: 1, to: Self.coordinate(Line.north, Line.aside))
+        await rows.settle()
+        // Precondition for the zero below: both writes really happened.
+        #expect(draft.name(ofWaypointAt: 0) == "Lurdy Ház")
+        #expect(draft.waypoints[1].longitude == Line.aside)
+        #expect(rows.count == 0, "nothing came or went")
+
+        draft.addStop(Self.coordinate(Line.middle, Line.aside))
+        await rows.settle()
+        #expect(rows.count == 1, "a stop coming is a row coming")
+    }
+
+    /// The one edit that changes the open field without adding or removing a
+    /// point, and so the one path to ``TrailDraft/slots`` that does not pass
+    /// through the legs being rebuilt.
+    @Test("reversing a lone point moves it between the two fields")
+    func reversingALonePointSwapsTheFields() throws {
+        let draft = TrailDraft()
+        draft.addStop(Self.coordinate(Line.south))
+        let point = try #require(draft.waypoints.first)
+        #expect(draft.slots == [.point(index: 0, id: point.id), .open(.end)])
+
+        draft.reverse()
+
+        #expect(draft.slots == [.open(.start), .point(index: 0, id: point.id)])
+        #expect(!draft.canBeSaved)
+    }
 }

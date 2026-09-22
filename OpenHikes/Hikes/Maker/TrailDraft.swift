@@ -182,7 +182,11 @@ final class TrailDraft {
 
     /// Whether there is a line here at all. One point is a place rather than a
     /// trail, which is why ``TrailDraftSave`` refuses it.
-    var canBeSaved: Bool { waypoints.count > 1 }
+    ///
+    /// Read off ``slots`` rather than the points — the same answer, because a
+    /// line is exactly a draft with no field left open — so the screens that
+    /// ask are not woken by a stop being named or moved.
+    var canBeSaved: Bool { !slots.contains { $0.waypointIndex == nil } }
 
     /// Whether there is nothing here at all — no line and no places.
     ///
@@ -200,14 +204,15 @@ final class TrailDraft {
 
     /// The route list's rows: two open fields over an empty draft, one open
     /// field beside a lone point, and the points themselves from two on.
-    var slots: [TrailStopSlot] {
-        let points = waypoints.enumerated().map { TrailStopSlot.point(index: $0.offset, id: $0.element.id) }
-        switch waypoints.count {
-        case 0: return [.open(.start), .open(.end)]
-        case 1: return startIsOpen ? [.open(.start)] + points : points + [.open(.end)]
-        default: return points
-        }
-    }
+    ///
+    /// **Stored, and written only when a row comes or goes** — never when a
+    /// point is named or moved. The maker's screen builds its list from this,
+    /// and every row is keyed by a point's identity, so a name landing, a drag
+    /// and a searched place filling a row change no row at all. Derived from
+    /// ``waypoints`` instead, each of those rebuilt the whole screen to find
+    /// that nothing had come or gone. The rows read what did change
+    /// themselves — see ``TrailStopRowView``.
+    private(set) var slots = TrailStopSlot.rows(for: [], startIsOpen: false)
 
     /// The whole line's time at this mode's pace, or Apple Maps' where it said.
     var travelTime: TimeInterval {
@@ -520,7 +525,17 @@ final class TrailDraft {
                 rebuilt.append(TrailLeg.straight(arrivingAt: next.id, along: ends))
             }
         }
+        refreshSlots()
         publish(rebuilt)
+    }
+
+    /// Brings ``slots`` up to the points and the open field. Every edit that
+    /// can add, remove or reorder a point ends in `rebuildLegs`, which is
+    /// where this is called; the one that changes only the open field —
+    /// reversing a lone point — calls it itself.
+    private func refreshSlots() {
+        let rows = TrailStopSlot.rows(for: waypoints, startIsOpen: startIsOpen)
+        if slots != rows { slots = rows }
     }
 
     /// Puts the waypoint list back to something the history handed over.
@@ -818,6 +833,7 @@ extension TrailDraft {
         // destination up into the start.
         if waypoints.count == 1 {
             startIsOpen.toggle()
+            refreshSlots()
             return
         }
         let flipped = travelMode == .hiking ? legs.reversed().map { $0.flipped() } : []

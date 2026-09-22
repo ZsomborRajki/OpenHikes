@@ -146,6 +146,18 @@ nonisolated enum TrailStopSlot: Hashable, Sendable {
         guard case .point(let index, _) = self else { return nil }
         return index
     }
+
+    /// The rows for `waypoints`: two open fields over none, one open field
+    /// beside a lone point — the start's, when `startIsOpen` says the point is
+    /// the destination — and the points themselves from two on.
+    static func rows(for waypoints: [TrailWaypoint], startIsOpen: Bool) -> [Self] {
+        let points = waypoints.enumerated().map { Self.point(index: $0.offset, id: $0.element.id) }
+        switch waypoints.count {
+        case 0: return [.open(.start), .open(.end)]
+        case 1: return startIsOpen ? [.open(.start)] + points : points + [.open(.end)]
+        default: return points
+        }
+    }
 }
 
 /// A point under a finger: which one, and where it is right now.

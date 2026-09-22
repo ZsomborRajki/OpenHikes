@@ -264,9 +264,12 @@ struct TrailDraftView: View {
             // the footer and the retry row are their own views for the same
             // reason: every leg that lands rewrites `legs`, and reading it here
             // would rebuild this whole screen once per answer. See
-            // ``TrailStopRowView``.
+            // ``TrailStopRowView``. The same goes for the points themselves —
+            // a name landing or a stop being dragged rewrites them — which is
+            // why the only thing read here is ``TrailDraft/slots``, which
+            // changes when a row comes or goes and at no other time.
             let slots = draft.slots
-            let canReorder = draft.waypoints.count > 1
+            let canReorder = draft.canBeSaved
             ForEach(Array(slots.enumerated()), id: \.element.id) { position, slot in
                 TrailStopRowView(draft: draft, position: position) {
                     searchForStop(target(for: slot))
