@@ -290,9 +290,22 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         )
         let field = prompt.textFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: UITestTimeout.navigation))
-        field.tap()
+        // Typed into the field the alert focused on the way in, rather than
+        // tapped first: a tap on a field that already has the keyboard opens
+        // the edit menu over it — AutoFill, Paste.
         field.typeText(name)
-        prompt.buttons["Save"].tap()
+        // **The alert can move under the press.** On a freshly created
+        // simulator the software keyboard hides while a name is typed and
+        // comes back a moment later, carrying the alert up with it, and a
+        // press aimed at where Save was lands on the dimmed screen behind it —
+        // the alert stays up with the name typed in, and the save never
+        // happens. Seen in a screen recording of exactly that. Pressed again
+        // only if it happened: a press that landed has taken the alert down.
+        let save = prompt.buttons["Save"]
+        save.tap()
+        if !waitUntil(timeout: UITestTimeout.existence, { !prompt.exists }) {
+            save.tap()
+        }
     }
 
 }
