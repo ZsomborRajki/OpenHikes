@@ -263,5 +263,51 @@ final class MapController {
         )
     }
 
+    /// Ask the map to frame a line that is not a hike's — the one the trail
+    /// maker is drawing.
+    ///
+    /// ``fitToRoute()`` cannot answer this: it fits the *selected hike's*
+    /// overlay, which while a trail is being drawn is a different line or no
+    /// line at all. A hiker who leaves a half-drawn trail, looks at another
+    /// walk and comes back needs the camera to be where their points are, and
+    /// this is what takes it there.
+    ///
+    /// Does nothing for an empty line, which is the ordinary case: a maker
+    /// opened on nothing should leave the camera exactly where the hiker was
+    /// looking, because that is where they are about to put their first point.
+    ///
+    /// A single point gets a fixed span rather than a fitted one — a line of
+    /// one coordinate has no extent, and `MKMapRect` would frame the whole
+    /// world or nothing at all.
+    func showDrawnLine(_ coordinates: [CLLocationCoordinate2D]) {
+        guard let first = coordinates.first else { return }
+        guard coordinates.count > 1 else {
+            show(
+                MKCoordinateRegion(
+                    center: first,
+                    latitudinalMeters: Self.lonePointSpanMeters,
+                    longitudinalMeters: Self.lonePointSpanMeters
+                )
+            )
+            return
+        }
+        // MapKit's own union rather than four `min`/`max`es over latitude and
+        // longitude, because those are wrong across the antimeridian and this
+        // is: `MKMapPoint` is already projected, so the rect it unions is the
+        // rect the map draws.
+        var points = coordinates
+        let bounds = MKPolyline(coordinates: &points, count: points.count)
+            .boundingMapRect
+        var framed = MKCoordinateRegion(bounds)
+        // Room around the line, so the two end pins are inside the frame rather
+        // than on its edge — a pin is drawn above its coordinate and would
+        // otherwise sit half off the top of the map.
+        framed.span.latitudeDelta *= Self.drawnLinePadding
+        framed.span.longitudeDelta *= Self.drawnLinePadding
+        show(framed)
+    }
+
     private static let photoSpotSpanMeters: CLLocationDistance = 500
+    private static let lonePointSpanMeters: CLLocationDistance = 1000
+    private static let drawnLinePadding: Double = 1.4
 }

@@ -43,6 +43,24 @@ final class TrailDraftRecord {
     /// is a new session.
     var waypoints: [RouteCoordinate] = []
 
+    /// What each of those points is called, in the same order, and empty for
+    /// one nothing has named — see ``TrailWaypoint/name``.
+    ///
+    /// **A second array beside the first rather than a richer point**, and the
+    /// reason is the store rather than the shape: ``waypoints`` is already a
+    /// `RouteCoordinate` column, and changing what a column *is* needs a
+    /// migration this phase of the project does not have — see *Schema and
+    /// migration policy*. A new column with an inline default does not, which
+    /// is exactly how ``places`` was added, so a row written before names
+    /// existed resumes as a drawing whose points are named by their roles.
+    ///
+    /// The cost is that the pairing is an invariant rather than a type, so
+    /// ``TrailDraftStore`` zips defensively: a row with the two lengths out of
+    /// step resumes with the coordinates it has and no names, because a line in
+    /// the wrong place is a worse failure than a line with nothing written
+    /// beside it.
+    var waypointNames: [String] = []
+
     /// The places marked along it, in the order they were marked.
     ///
     /// ``TrailPlace`` itself rather than a second encoded shape, because it is
@@ -77,11 +95,13 @@ final class TrailDraftRecord {
 
     init(
         waypoints: [RouteCoordinate],
+        waypointNames: [String],
         places: [TrailPlace],
         snapsToPaths: Bool,
         updatedAt: Date
     ) {
         self.waypoints = waypoints
+        self.waypointNames = waypointNames
         self.places = places
         self.snapsToPaths = snapsToPaths
         self.updatedAt = updatedAt
