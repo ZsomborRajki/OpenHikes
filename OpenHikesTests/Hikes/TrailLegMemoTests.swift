@@ -110,4 +110,25 @@ struct TrailLegMemoTests {
         #expect(memo.count == TrailLegMemo.capacity)
         #expect(memo.leg(first.ends, arrivingAt: UUID()) == nil)
     }
+
+    /// The routers' own caches, which live as long as the app does: one per
+    /// travel mode, so an unbounded one grows with every leg ever asked.
+    @Test("a router's answers are bounded the same way, oldest first")
+    func theAnswerCacheIsBounded() {
+        var cache = TrailLegAnswerCache()
+        let first = Self.ends(47.0)
+        cache.store(.straight(along: first, .snapped), for: first)
+        cache.store(.straight(along: first, .unmapped(.noPathBetween)), for: first)
+        #expect(cache.count == 1, "answering the same leg again keeps one slot")
+        #expect(cache[first]?.snap == .unmapped(.noPathBetween))
+
+        for step in 1...TrailLegMemo.capacity {
+            let ends = Self.ends(47.0 + Double(step) / 100)
+            cache.store(.straight(along: ends, .snapped), for: ends)
+        }
+
+        #expect(cache.count == TrailLegMemo.capacity)
+        #expect(cache[first] == nil)
+        #expect(cache[Self.ends(47.0 + Double(TrailLegMemo.capacity) / 100)] != nil)
+    }
 }

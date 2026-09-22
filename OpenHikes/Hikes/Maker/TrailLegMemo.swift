@@ -109,3 +109,30 @@ nonisolated struct TrailLegMemo: Equatable, Sendable {
         }
     }
 }
+
+/// A router's settled answers by their two ends, bounded the way the memo is.
+///
+/// Each router lives as long as the app does — the maker holds one per travel
+/// mode — so an unbounded cache is a line drawn in May still in memory in
+/// August, a few hundred coordinates per leg ever asked. Oldest first past
+/// ``TrailLegMemo/capacity``, for the reason the memo gives; losing one costs
+/// a question, which for the trail graph is usually answered from the tiles
+/// on disk.
+nonisolated struct TrailLegAnswerCache: Sendable {
+    private var answers: [TrailLegEnds: TrailLegRoute] = [:]
+    /// The keys in the order they were first answered.
+    private var order: [TrailLegEnds] = []
+
+    var count: Int { answers.count }
+
+    subscript(ends: TrailLegEnds) -> TrailLegRoute? { answers[ends] }
+
+    /// Keeps `route` as the answer for `ends`. Only a settled answer belongs
+    /// here — a refusal is never cached, so *Try Again* can ask again.
+    mutating func store(_ route: TrailLegRoute, for ends: TrailLegEnds) {
+        if answers.updateValue(route, forKey: ends) == nil { order.append(ends) }
+        while order.count > TrailLegMemo.capacity {
+            answers.removeValue(forKey: order.removeFirst())
+        }
+    }
+}

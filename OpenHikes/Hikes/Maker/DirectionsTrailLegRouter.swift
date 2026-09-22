@@ -17,8 +17,7 @@ actor DirectionsTrailLegRouter: TrailLegRouting {
 
     private let mode: TrailTravelMode
     private let calculate: Calculate
-    private var cache: [TrailLegEnds: TrailLegRoute] = [:]
-    private var order: [TrailLegEnds] = []
+    private var cache = TrailLegAnswerCache()
 
     init(mode: TrailTravelMode, calculate: @escaping Calculate = DirectionsTrailLegRouter.calculate) {
         precondition(mode != .hiking)
@@ -33,10 +32,7 @@ actor DirectionsTrailLegRouter: TrailLegRouting {
             let answers = try await calculate(ends, mode)
             try Task.checkCancellation()
             let result = Self.route(along: ends, answers: answers)
-            if cache.updateValue(result, forKey: ends) == nil { order.append(ends) }
-            while order.count > TrailLegMemo.capacity {
-                cache.removeValue(forKey: order.removeFirst())
-            }
+            cache.store(result, for: ends)
             return result
         } catch {
             if Task.isCancelled || error is CancellationError

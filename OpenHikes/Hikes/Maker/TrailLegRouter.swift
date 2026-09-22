@@ -36,7 +36,8 @@
 //  and on again costs nothing, and so Phase 3's reorder — which moves rows
 //  around without moving anything on the ground — re-resolves only the legs
 //  whose two ends actually changed. **A refusal is never cached**, because
-//  *Retry* would then have nothing to do.
+//  *Retry* would then have nothing to do. The cache is bounded, oldest first,
+//  because the router outlives every drawing — see ``TrailLegAnswerCache``.
 //
 //  One built index is kept beside it, keyed on the set of regions it was
 //  built from. Consecutive legs of one walk are in one area, so the second
@@ -147,7 +148,9 @@ actor OverpassTrailLegRouter: TrailLegRouting {
     }
 
     private let provider: any TrailGraphProviding
-    private var cache: [TrailLegEnds: TrailLegRoute] = [:]
+    /// Bounded, because this router lives as long as the app — see
+    /// ``TrailLegAnswerCache``.
+    private var cache = TrailLegAnswerCache()
     private var index: BuiltIndex?
 
     init(provider: any TrailGraphProviding) {
@@ -189,7 +192,7 @@ actor OverpassTrailLegRouter: TrailLegRouting {
     /// Only the settled ones: a refusal never reaches here. See the file
     /// header.
     private func settling(_ route: TrailLegRoute, for ends: TrailLegEnds) -> TrailLegRoute {
-        cache[ends] = route
+        cache.store(route, for: ends)
         return route
     }
 
