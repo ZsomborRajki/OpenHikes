@@ -137,6 +137,11 @@ struct TrailDraftView: View {
         // keep. See ``TrailDraftActionsMenu``, which lost that entry, its Done
         // control and the context menu it carried, all to this one line.
         .environment(\.editMode, .constant(.active))
+        // The mode bar sits right under the title, as it does in Apple Maps'
+        // directions card. A grouped list's own top margin left a blank row's
+        // height above it — a row the medium detent, which is where the map
+        // and this list share the screen, cannot spare.
+        .contentMargins(.top, Self.topMargin, for: .scrollContent)
         // **The camera goes to the drawing that is already there.** A draft
         // outlives the screen it is drawn on — it is on disk between launches —
         // so a hiker who backs out, looks at another trail and comes back would
@@ -330,6 +335,10 @@ struct TrailDraftView: View {
     /// The same kind of number ``MapController/showPhotoSpot(_:)`` holds, and a
     /// different one, because the two answer different questions.
     private static let pickedStopSpanMeters: CLLocationDistance = 1000
+
+    /// Between the title and the mode bar — see the `contentMargins` in the
+    /// body.
+    private static let topMargin: CGFloat = 4
 
     /// Takes the camera to whatever is already drawn, once per opening.
     ///

@@ -45,6 +45,11 @@ struct TrailPlaceSheetPresenter: ViewModifier {
                 .presentationDetents([.height(Self.peekHeight), .medium, .large])
                 .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                 .presentationContentInteraction(.scrolls)
+                // A sheet stays a sheet in landscape. Left to adapt, a
+                // vertically compact phone presents it as a full-screen cover
+                // — the whole map hidden behind a card about one spot on it,
+                // on the one screen whose job is the map.
+                .presentationCompactAdaptation(.none)
         }
     }
 
@@ -204,17 +209,22 @@ private struct TrailPlaceCardView: View {
                 .frame(width: 44, height: 44)
                 .background(card.tint, in: .circle)
                 .accessibilityHidden(true)
+            // `Color.primary` and `Color.secondary` rather than the
+            // hierarchical `.primary` and `.secondary`: this sits in a
+            // section header, whose own foreground is grey, and a hierarchical
+            // level is taken from that — which drew the title in the grey of a
+            // disabled row.
             VStack(alignment: .leading, spacing: 2) {
                 Text(card.title)
                     .font(.title2.bold())
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.primary)
                     .lineLimit(2)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityIdentifier("trail-place-title")
                 if let subtitle = card.subtitle {
                     Text(subtitle)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondary)
                 }
             }
             Spacer(minLength: 0)
@@ -234,32 +244,38 @@ private struct TrailPlaceCardView: View {
         HStack(spacing: 8) {
             switch card.primary {
             case let .addStop(name, leg):
-                action("Add Stop", systemImage: "plus", prominent: true, identifier: "trail-place-add-stop") {
+                action(
+                    "Add Stop",
+                    systemImage: "plus",
+                    prominent: true,
+                    role: nil,
+                    identifier: "trail-place-add-stop"
+                ) {
                     maker.select(nil)
                     maker.addStop(at: card.coordinate, named: name, preferringLeg: leg)
                     HapticMoment.targetHit.play()
                 }
             case .removeStop(let id):
-                action("Remove Stop", systemImage: "trash", prominent: true, identifier: "trail-place-remove-stop") {
+                // Destructive, and drawn so: the card's one filled button is
+                // otherwise the accent, which is what *Add Stop* looks like.
+                action(
+                    "Remove Stop",
+                    systemImage: "trash",
+                    prominent: true,
+                    role: .destructive,
+                    identifier: "trail-place-remove-stop"
+                ) {
                     maker.select(nil)
                     maker.removeStop(id: id)
                 }
             }
-            ShareLink(
-                item: TrailPlaceCoordinates.mapsURL(card.coordinate, named: card.title),
-                subject: Text(card.title),
-                message: Text(shareMessage)
-            ) {
-                Label("Share", systemImage: "square.and.arrow.up")
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            }
-            .buttonStyle(.bordered)
-            .accessibilityIdentifier("trail-place-share")
+            shareButton
             if case .addStop = card.primary {
                 action(
                     card.removablePlace == nil ? "Remove Pin" : "Remove",
                     systemImage: card.removablePlace == nil ? "mappin.slash" : "trash",
                     prominent: false,
+                    role: card.removablePlace == nil ? nil : .destructive,
                     identifier: "trail-place-remove"
                 ) {
                     maker.select(nil)
@@ -267,8 +283,23 @@ private struct TrailPlaceCardView: View {
                 }
             }
         }
-        .labelStyle(.titleAndIcon)
-        .font(.subheadline.weight(.semibold))
+        // One height for the row, whichever button's word needs the most room
+        // at the hiker's type size.
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var shareButton: some View {
+        ShareLink(
+            item: TrailPlaceCoordinates.mapsURL(card.coordinate, named: card.title),
+            subject: Text(card.title),
+            message: Text(shareMessage)
+        ) {
+            Label("Share", systemImage: "square.and.arrow.up")
+                .labelStyle(TrailPlaceActionLabelStyle())
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.roundedRectangle(radius: TrailPlaceActionLabelStyle.cornerRadius))
+        .accessibilityIdentifier("trail-place-share")
     }
 
     private var shareMessage: String {
@@ -282,19 +313,47 @@ private struct TrailPlaceCardView: View {
         _ title: LocalizedStringKey,
         systemImage: String,
         prominent: Bool,
+        role: ButtonRole?,
         identifier: String,
         perform: @escaping () -> Void
     ) -> some View {
         let label = Label(title, systemImage: systemImage)
-            .frame(maxWidth: .infinity, minHeight: 44)
+            .labelStyle(TrailPlaceActionLabelStyle())
         Group {
             if prominent {
-                Button(action: perform) { label }.buttonStyle(.borderedProminent)
+                Button(role: role, action: perform) { label }
+                    .buttonStyle(.borderedProminent)
+                    .tint(role == .destructive ? .red : nil)
             } else {
-                Button(action: perform) { label }.buttonStyle(.bordered)
+                Button(role: role, action: perform) { label }.buttonStyle(.bordered)
             }
         }
+        .buttonBorderShape(.roundedRectangle(radius: TrailPlaceActionLabelStyle.cornerRadius))
         .accessibilityIdentifier(identifier)
+    }
+}
+
+/// Apple Maps' action buttons: the glyph over one short word.
+///
+/// Three of them share the card's width, which at the default type size is a
+/// little over a hundred points each — too narrow for a glyph *beside* "Remove
+/// Pin", which is how they wrapped onto two lines when they were drawn that
+/// way. Stacked, each word has its button's whole width to itself.
+private struct TrailPlaceActionLabelStyle: LabelStyle {
+    static let cornerRadius: CGFloat = 14
+
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(spacing: 4) {
+            configuration.icon
+                .font(.body.weight(.semibold))
+                .imageScale(.medium)
+            configuration.title
+                .font(.caption.weight(.semibold))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 6)
     }
 }
 
