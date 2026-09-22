@@ -28,11 +28,11 @@
 //  The map appends a waypoint and the maker's screen toggles snapping, cancels
 //  and saves — and all of them land on ``TrailDraft`` through this object,
 //  because this is the one that also knows the draft has to be written down
-//  and that a change to the line is a question for OpenStreetMap. A screen
+//  and that a change to the line is a question for its routing provider. A screen
 //  that mutated the draft directly would leave the durable copy behind by
 //  exactly one tap and the line unrouted, every time.
 //
-//  ## Legs are routed one at a time, and a refusal is not retried by itself
+//  ## Legs are routed one at a time, and a failure is not retried by itself
 //
 //  Every pass takes the legs that want an answer and do not have one, marks
 //  them, and asks about them **in order, one at a time**. Concurrently would
@@ -41,7 +41,7 @@
 //  field; sequentially, the second leg usually joins the download the first
 //  one started — see ``OverpassTrailLegRouter``.
 //
-//  A leg that was refused stays refused until the hiker taps *Retry*. Asking
+//  A leg whose provider failed stays failed until the hiker taps *Retry*. Asking
 //  again on the next tap would mean one extra request per point put down,
 //  aimed at the server that has just said it is busy, and the hiker would see
 //  the same sentence appear and disappear without having done anything.
@@ -129,19 +129,21 @@ final class TrailDraftController {
 
     /// Whether this maker can make a leg follow a path at all.
     ///
-    /// False for a launch with no trail-graph provider — a preview, or UI
-    /// automation started without `--ui-test-trail-graph=`. The toggle is
-    /// hidden rather than shown switched off, because a control that cannot
-    /// change anything is worse than no control: the honest statement is that
-    /// this launch draws straight lines.
-    var canSnapToPaths: Bool { router != nil }
+    /// False when this launch has no provider for the selected mode. A
+    /// preview can draw freehand without pretending to ask a routing service.
+    var canSnapToPaths: Bool { routers[draft.travelMode] != nil }
 
     /// Where the draft is kept between launches, or `nil` for a launch that
     /// remembers nothing — a preview, or a suite asking only about the pill.
     @ObservationIgnored private let store: TrailDraftStore?
 
-    /// Where a leg's shape comes from, or `nil` for a launch that cannot ask.
-    @ObservationIgnored private let router: (any TrailLegRouting)?
+    /// Each mode has its own provider and therefore its own geometry cache.
+    @ObservationIgnored private let routers: [TrailTravelMode: any TrailLegRouting]
+    /// Readable by tests so a superseded pass can be joined before asserting
+    /// that its late answer left the current line untouched.
+    @ObservationIgnored private(set) var routingTask: Task<Void, Never>?
+    @ObservationIgnored private var routingQueue: [TrailLegEnds] = []
+    @ObservationIgnored private var routingGeneration = 0
 
     /// The legs a question is currently out about, so a second pass started by
     /// the next tap does not ask about them again beside the first.
@@ -179,10 +181,13 @@ final class TrailDraftController {
         placeSource: (any TrailPointSourcing)? = nil,
         elevationSource: (any CuratedElevationSourcing)? = nil,
         elevationPause: (@Sendable (TimeInterval) async throws -> Void)? = nil,
-        naming: (any TrailStopNaming)? = nil
+        naming: (any TrailStopNaming)? = nil,
+        travelRouters: [TrailTravelMode: any TrailLegRouting] = [:]
     ) {
         self.store = store
-        self.router = router
+        var providers = travelRouters
+        providers[.hiking] = router
+        routers = providers
         let drawing = TrailDraft()
         draft = drawing
         finder = TrailPointFinder(source: placeSource)
@@ -242,24 +247,19 @@ final class TrailDraftController {
             // arrives a couple of seconds later either way.
             elevation.drawingDidChange()
         } else {
-            // The questions already on the wire are not cancelled — the
-            // download behind them is shared with the map and with recording,
-            // and abandoning it would waste a request that is nearly paid
-            // for. They are only disowned: the legs stop being drawn as
-            // waiting, the claims are released, and an answer landing
-            // afterwards finds no leg asking for it and is dropped. Reopening
-            // asks again and the router answers from memory.
+            // Stop this editor's requests. The graph provider retains any
+            // download another caller still owns through its waiter count.
+            // The generation check also rejects a provider's late answer.
             // A finger cannot survive the screen it was on. A drag left held
             // would put the pin back where it was on the next open, which is
             // right, but the map would have been taken down mid-gesture and
             // never told to stop.
             draft.cancelDrag()
-            draft.stopRouting()
-            legsInFlight.removeAll()
+            cancelRouting()
             // Nothing on offer is the hiker's, so nothing survives the screen
             // it was offered on — see ``TrailPointFinder/clear()``.
             finder.clear()
-            // Unlike a leg, a height question *is* cancelled on the way out:
+            // A height question is cancelled on the way out too:
             // there is no shared download behind it and nothing else is
             // waiting for it, so a request nobody will read is a request worth
             // dropping. The next open asks again.
@@ -377,12 +377,11 @@ final class TrailDraftController {
         resolveLegs()
     }
 
-    /// Walks the line the other way. Asks for nothing — see
-    /// ``TrailDraft/reverse()``, which turns the shapes round rather than
-    /// discarding them — but still goes through here, because the reversed
-    /// list is what has to be written down.
+    /// Walks the line the other way. Hiking turns settled shapes around;
+    /// direction-dependent modes ask their provider about the reverse trip.
     func reverse() {
         guard isEditing else { return }
+        cancelRouting()
         draft.reverse()
         commitLine()
         resolveLegs()
@@ -400,6 +399,7 @@ final class TrailDraftController {
     /// undoable half of the pair ``discard()`` is the other end of.
     func clearDrawing() {
         guard isEditing else { return }
+        cancelRouting()
         draft.clearDrawing()
         commitLine()
     }
@@ -586,12 +586,13 @@ final class TrailDraftController {
     /// something a hiker can try rather than something they have to commit to.
     func setSnapsToPaths(_ snapping: Bool) {
         guard draft.snapsToPaths != snapping else { return }
+        cancelRouting()
         draft.setSnapsToPaths(snapping)
         commitLine()
         resolveLegs()
     }
 
-    /// Asks again about the legs Overpass refused.
+    /// Asks again about legs whose routing provider was temporarily unavailable.
     ///
     /// The only thing that does: an ordinary pass leaves a refusal alone, for
     /// the reason the file header gives.
@@ -602,6 +603,7 @@ final class TrailDraftController {
     /// Throws the drawing away: what Cancel does, and what a completed Save
     /// does with what it has just turned into a hike.
     func discard() {
+        cancelRouting()
         draft.clear()
         store?.clear()
         // The heights go with the line they were read for. Nothing else would
@@ -623,7 +625,8 @@ final class TrailDraftController {
         draft.replace(
             with: stored.waypoints,
             places: stored.places,
-            snapsToPaths: stored.snapsToPaths
+            snapsToPaths: stored.snapsToPaths,
+            travelMode: stored.travelMode
         )
     }
 
@@ -673,7 +676,8 @@ final class TrailDraftController {
         store.save(
             waypoints: draft.waypoints,
             places: draft.places,
-            snapsToPaths: draft.snapsToPaths
+            snapsToPaths: draft.snapsToPaths,
+            travelMode: draft.travelMode
         )
     }
 
@@ -683,29 +687,61 @@ final class TrailDraftController {
         isAvailable = available
     }
 
-    /// Asks about every leg that wants an answer and has not been asked.
-    ///
-    /// One unstructured task per pass rather than one long-lived one, and it
-    /// is not cancelled by the next pass: the legs it is working through are
-    /// claimed in ``legsInFlight`` before it starts, so the pass a second tap
-    /// begins takes only what is left. Cancelling instead would throw away a
-    /// download already on the wire every time a hiker put down another point
-    /// — which is exactly when they are putting down several.
+}
+
+extension TrailDraftController {
+    /// One queue across taps, so newly appended stops cannot start another
+    /// network request beside the current one. A generation also rejects an
+    /// old answer if a provider ignores cancellation while the mode changes.
     private func resolveLegs(retryingRefusals: Bool = false) {
-        guard let router, isEditing else { return }
+        guard let router = routers[draft.travelMode], isEditing else { return }
         let pending = draft
             .legsAwaitingRoutes(retryingRefusals: retryingRefusals)
             .filter { ends in !legsInFlight.contains(ends) }
         guard !pending.isEmpty else { return }
         legsInFlight.formUnion(pending)
+        routingQueue.append(contentsOf: pending)
         draft.beginRouting(pending)
-        Task { [weak self] in
-            for ends in pending {
+        guard routingTask == nil else { return }
+        let generation = routingGeneration
+        routingTask = Task { [weak self] in
+            while let ends = self?.nextRoutingLeg(generation: generation) {
                 let route = await router.route(ends)
-                guard let self else { return }
+                guard !Task.isCancelled, let self,
+                      routingGeneration == generation else { return }
                 receive(route, for: ends)
             }
         }
+    }
+
+    private func nextRoutingLeg(generation: Int) -> TrailLegEnds? {
+        guard generation == routingGeneration else { return nil }
+        while !routingQueue.isEmpty {
+            let ends = routingQueue.removeFirst()
+            if draft.legs.contains(where: { $0.ends == ends && $0.snap.isRouting }) {
+                return ends
+            }
+            legsInFlight.remove(ends)
+        }
+        routingTask = nil
+        return nil
+    }
+
+    private func cancelRouting() {
+        routingGeneration &+= 1
+        routingTask?.cancel()
+        routingTask = nil
+        routingQueue = []
+        legsInFlight.removeAll()
+        draft.stopRouting()
+    }
+
+    func setTravelMode(_ mode: TrailTravelMode) {
+        guard isEditing, draft.travelMode != mode else { return }
+        cancelRouting()
+        draft.setTravelMode(mode)
+        commitLine()
+        resolveLegs()
     }
 
     /// Takes one answer, whatever has happened to the drawing meanwhile.
@@ -719,11 +755,9 @@ final class TrailDraftController {
     /// **A cancelled question has to be given back as well as released.**
     /// Cancellation is not a failure and is not drawn as one, but a leg left
     /// marked as waiting is never asked about again — ``TrailDraft/legsAwaitingRoutes(retryingRefusals:)``
-    /// skips it — so it would stay dashed for the rest of the drawing. There
-    /// is nothing here that cancels one of these, but the provider's shared
-    /// download has its own reasons to: a leg can be waiting on the same
-    /// region a recording is prefetching, and that recording stopping takes
-    /// the request with it.
+    /// skips it — so it would stay dashed for the rest of the drawing.
+    /// A routing edit can also cancel the pass. Its generation check prevents
+    /// this receiver from publishing a provider answer that arrives anyway.
     private func receive(_ route: TrailLegRoute?, for ends: TrailLegEnds) {
         legsInFlight.remove(ends)
         // Either way the line has stopped waiting on this leg, and the climb

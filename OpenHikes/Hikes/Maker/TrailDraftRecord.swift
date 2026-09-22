@@ -89,6 +89,12 @@ final class TrailDraftRecord {
     /// the way a new draft would begin.
     var snapsToPaths = true
 
+    /// Which network the draft asks to follow.
+    ///
+    /// An inline hiking default preserves drafts written before travel modes
+    /// existed, for the same migration-policy reason as ``snapsToPaths``.
+    var travelMode = TrailTravelMode.hiking
+
     /// When this was last written, so a later phase that offers to resume a
     /// draft has something to say about it. Read by nothing today.
     var updatedAt = Date.distantPast
@@ -98,12 +104,14 @@ final class TrailDraftRecord {
         waypointNames: [String],
         places: [TrailPlace],
         snapsToPaths: Bool,
-        updatedAt: Date
+        updatedAt: Date,
+        travelMode: TrailTravelMode = .hiking
     ) {
         self.waypoints = waypoints
         self.waypointNames = waypointNames
         self.places = places
         self.snapsToPaths = snapsToPaths
         self.updatedAt = updatedAt
+        self.travelMode = travelMode
     }
 }

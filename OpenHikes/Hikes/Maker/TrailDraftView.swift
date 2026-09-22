@@ -37,8 +37,8 @@
 //
 //  **A stop the hiker only tapped on the map still says where it is.**
 //  ``TrailStopNamer`` asks what is at the coordinate a second later. There is
-//  no travel-mode selector and there will not be: whether a leg follows mapped
-//  paths is the *Follow Paths* switch below, asked once about the whole trail.
+//  an icon-only travel-mode selector above the stops. Follow Paths remains
+//  independent: turning it off draws freehand in any mode.
 //
 //  Every mutation goes through ``TrailDraftController`` rather than through
 //  ``TrailDraft`` directly, because the controller is the one that also writes
@@ -132,11 +132,11 @@ struct TrailDraftView: View {
 
     var body: some View {
         List {
+            TrailTravelModePicker(maker: maker)
             routeSection
 
-            // Withheld entirely on a launch that has no trail graph to ask —
-            // a preview, or UI automation started without a fixture. A switch
-            // that cannot change the line is worse than no switch.
+            // Withheld when this launch has no provider for the chosen mode.
+            // A switch that cannot change the line is worse than no switch.
             if maker.canSnapToPaths {
                 TrailDraftSnapToggle(maker: maker)
             }

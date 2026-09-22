@@ -240,6 +240,7 @@ final class TrailDraft {
     /// a route that follows the ground is the answer nearly everybody wants
     /// and the one this feature exists to give.
     private(set) var snapsToPaths = true
+    private(set) var travelMode: TrailTravelMode = .hiking
 
     /// How far along the line each waypoint sits, in the order they were put
     /// down. Empty for an empty draft; `0` for the first point of any other.
@@ -421,12 +422,15 @@ final class TrailDraft {
     func replace(
         with waypoints: [TrailWaypoint],
         places: [TrailPlace],
-        snapsToPaths: Bool
+        snapsToPaths: Bool,
+        travelMode: TrailTravelMode = .hiking
     ) {
         cancelDrag()
         history.forget()
         self.waypoints = waypoints
         self.places = places
+        self.travelMode = travelMode
+        memo = TrailLegMemo()
         legs = []
         setSnapsToPaths(snapsToPaths)
         rebuildLegs()
@@ -463,6 +467,15 @@ final class TrailDraft {
         guard snapsToPaths != snapping else { return }
         snapsToPaths = snapping
         if !snapping { straightenLegs() }
+    }
+
+    /// A mode owns its shapes. Undo keeps the current mode and resolves its legs anew.
+    func setTravelMode(_ mode: TrailTravelMode) {
+        guard travelMode != mode else { return }
+        cancelDrag()
+        travelMode = mode
+        memo = TrailLegMemo()
+        straightenLegs()
     }
 
     /// How far along the line a waypoint sits, for the row that names it.
@@ -511,7 +524,7 @@ final class TrailDraft {
         return legs.compactMap { leg in
             switch leg.snap {
             case .freehand: leg.ends
-            case .refused: retryingRefusals ? leg.ends : nil
+            case .refused, .directionsUnavailable: retryingRefusals ? leg.ends : nil
             case .routing, .snapped, .unmapped: nil
             }
         }
@@ -834,7 +847,9 @@ extension TrailDraft {
 
     /// Walks the line the other way.
     ///
-    /// **Nothing is re-asked for.** Every leg already has its shape; reversing
+    /// Hiking reuses its undirected graph shapes. Other modes must route the
+    /// ordered endpoints again, because access can depend on direction.
+    /// Every hiking leg already has its shape; reversing
     /// the trail turns each of them round, which is the array reversed and
     /// each leg's own coordinates reversed with its two ends swapped. A route
     /// between two places is the same path walked either way, so this is exact
@@ -847,7 +862,7 @@ extension TrailDraft {
     func reverse() {
         guard canBeRearranged else { return }
         history.record(contents)
-        let flipped = legs.reversed().map { $0.flipped() }
+        let flipped = travelMode == .hiking ? legs.reversed().map { $0.flipped() } : []
         waypoints.reverse()
         rebuildLegs(reusing: flipped)
     }

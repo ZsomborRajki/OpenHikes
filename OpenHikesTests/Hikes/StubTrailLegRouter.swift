@@ -29,6 +29,7 @@ actor StubTrailLegRouter: TrailLegRouting {
     private var isHolding: Bool
     /// The callers waiting for that release.
     private var waiting: [CheckedContinuation<Void, Never>] = []
+    private var observingRequest: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
 
     init(answering snap: TrailLegSnap?, holding: Bool = false) {
         self.snap = snap
@@ -37,6 +38,9 @@ actor StubTrailLegRouter: TrailLegRouting {
 
     func route(_ ends: TrailLegEnds) async -> TrailLegRoute? {
         asked.append(ends)
+        let ready = observingRequest.filter { $0.count <= asked.count }
+        observingRequest.removeAll { $0.count <= asked.count }
+        for observer in ready { observer.continuation.resume() }
         if isHolding {
             await withCheckedContinuation { continuation in
                 waiting.append(continuation)
@@ -61,6 +65,13 @@ actor StubTrailLegRouter: TrailLegRouting {
     }
 
     func askedCount() -> Int { asked.count }
+
+    func waitUntilAsked(_ count: Int = 1) async {
+        guard asked.count < count else { return }
+        await withCheckedContinuation { continuation in
+            observingRequest.append((count, continuation))
+        }
+    }
 
     /// Which legs were asked about, in order.
     ///
