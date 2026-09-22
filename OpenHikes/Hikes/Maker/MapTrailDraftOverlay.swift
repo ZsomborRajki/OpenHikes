@@ -36,21 +36,23 @@
 //    these two points, or Overpass refused. The line is real and saveable; it
 //    just is not following anything.
 //
-//  ## A drag is the one thing that is not rebuilt wholesale
+//  ## Nothing is rebuilt wholesale
 //
-//  Everything else here throws every pin and every polyline away and puts them
-//  back, because everything else happens when a hiker taps or when an answer
-//  lands — a few dozen objects, a few times a minute. A point under a finger
-//  moves at display rate, and removing and re-adding a pin sixty times a
-//  second is a pin that flickers.
+//  A commit is diffed against what is drawn. A leg keeps its polyline for as
+//  long as it is the same leg with the same shape and state — matched by the
+//  id of the waypoint it arrives at — and a pin is the same annotation for as
+//  long as its waypoint exists, with its number, role, name and distance
+//  written onto it in place. So an answer landing replaces one line and
+//  touches no pin but the subtitles further along, where it used to take every
+//  pin and every line off the map and put them back: nineteen times over for a
+//  twenty-stop route, each time closing whatever callout was open.
 //
-//  So while ``TrailDraft/drag`` is set, one pin's `coordinate` is assigned —
-//  MapKit moves its view for free — and the one or two legs that point is an
-//  end of are replaced with straight rubber bands. Every other line, every
-//  other pin and the whole of the sheet below are untouched, and the wholesale
-//  rebuild happens once, when the finger lifts and the drawing changes. That
-//  is what ``MapView/Coordinator/trailDraftOverlays`` being **one polyline per
-//  leg, in leg order** is for: the drag reaches its two lines by index.
+//  A drag is cheaper still. While ``TrailDraft/drag`` is set, one pin's
+//  `coordinate` is assigned — MapKit moves its view for free — and the one or
+//  two legs that point is an end of are replaced with straight rubber bands.
+//  That is what ``MapView/Coordinator/trailDraftOverlays`` being **one
+//  polyline per leg, in leg order** is for: the drag reaches its two lines by
+//  index, and the diff keeps that order.
 //
 //  Applied imperatively off ``TrailDraft``, like every other overlay here, so
 //  a tap that adds a point moves MapKit and no SwiftUI view.
@@ -66,59 +68,111 @@ import UIKit
 final class TrailDraftWaypointAnnotation: NSObject, MKAnnotation {
     static let reuseIdentifier = "trailDraftWaypoint"
 
+    /// The waypoint this pin stands for, which is what a commit matches pins
+    /// by — so a pin outlives a reorder, a leg landing and a stop being named,
+    /// and only a stop that has gone takes its pin with it.
+    let waypointID: UUID
+
     /// `var` since Phase 3, and only for the drag: MapKit moves an
     /// annotation's view when this changes, so a point under a finger follows
     /// it without the pin being removed and added again sixty times a second.
-    /// Every other change to where a point is goes through a rebuild.
+    /// A committed move is written here too, by ``update(from:)``.
     @objc dynamic var coordinate: CLLocationCoordinate2D
     /// One-based, because it is read by a person rather than indexed by code.
     /// It is no longer *drawn* — the callout says what the stop is instead —
     /// but it is still what ``TrailDraftWaypointCalloutActions`` removes a
     /// point by, and still what the list row's identifier counts.
-    let number: Int
+    private(set) var number: Int
     /// What this stop is to the route, so the pin's callout and the row in the
     /// sheet say the same thing about it.
-    let role: TrailStopRole
+    private(set) var role: TrailStopRole
     /// What it is called, or empty for a stop nothing has named yet — see
     /// ``TrailWaypoint/name``.
-    let name: String
+    ///
+    private(set) var name: String
     /// How far along the line this point sits, which is the callout's second
     /// line and the same figure the list row carries.
-    let distanceAlongLineMeters: Double
+    private(set) var distanceAlongLineMeters: Double
 
     init(
         coordinate: CLLocationCoordinate2D,
+        waypointID: UUID,
         number: Int,
         role: TrailStopRole,
         name: String,
         distanceAlongLineMeters: Double
     ) {
+        self.waypointID = waypointID
         self.coordinate = coordinate
         self.number = number
         self.role = role
         self.name = name
         self.distanceAlongLineMeters = distanceAlongLineMeters
+        title = Self.title(name: name, role: role)
+        subtitle = Self.subtitle(name: name, role: role, along: distanceAlongLineMeters)
     }
 
     /// The callout's heading, and what VoiceOver reaches a waypoint by — a
     /// polyline is not an accessibility element and cannot be made one.
     ///
+    /// Stored and `dynamic` rather than computed, because MapKit observes both
+    /// keys: an open callout rewrites itself when they change, which is what
+    /// lets ``update(from:)`` reach a pin without taking it off the map.
+    @objc private(set) dynamic var title: String?
+
+    /// What it is to the route and how far along it sits — see
+    /// ``subtitle(name:role:along:)``.
+    @objc private(set) dynamic var subtitle: String?
+
+    /// Brings the pin up to what its waypoint now is, writing only what
+    /// changed — each write is a KVO notification MapKit acts on.
+    ///
+    /// - Returns: whether the role changed, which is the one thing drawn on
+    ///   the pin itself rather than in its callout — see
+    ///   ``MapView/Coordinator/trailDraftPinDigit(for:)``.
+    @discardableResult func update(from pin: TrailDraftPinFacts) -> Bool {
+        let roleChanged = role != pin.role
+        if coordinate.latitude != pin.coordinate.latitude
+            || coordinate.longitude != pin.coordinate.longitude {
+            coordinate = pin.coordinate
+        }
+        number = pin.number
+        role = pin.role
+        name = pin.name
+        distanceAlongLineMeters = pin.distanceAlongLineMeters
+        let newTitle = Self.title(name: name, role: role)
+        if title != newTitle { title = newTitle }
+        let newSubtitle = Self.subtitle(name: name, role: role, along: distanceAlongLineMeters)
+        if subtitle != newSubtitle { subtitle = newSubtitle }
+        return roleChanged
+    }
+
     /// The same rule ``TrailStopRowView`` draws by, so a hiker reading the pin
     /// and a hiker reading the row are told the same thing: the name when there
     /// is one, and what the stop is to the route when there is not.
-    var title: String? {
+    private static func title(name: String, role: TrailStopRole) -> String {
         name.isEmpty ? role.title : name
     }
 
-    /// What it is to the route and how far along it sits, in the hiker's own
-    /// units. The role is repeated here only when the line above is a name,
-    /// which is the one case where it would otherwise not be said at all.
-    var subtitle: String? {
-        let length = Measurement(value: distanceAlongLineMeters, unit: UnitLength.meters)
+    /// In the hiker's own units. The role is repeated here only when the
+    /// heading is a name, which is the one case where it would otherwise not
+    /// be said at all.
+    private static func subtitle(name: String, role: TrailStopRole, along meters: Double) -> String {
+        let length = Measurement(value: meters, unit: UnitLength.meters)
             .formatted(.measurement(width: .abbreviated, usage: .road))
         guard !name.isEmpty else { return length }
         return "\(role.title) · \(length)"
     }
+}
+
+/// What one waypoint's pin should say, read off the draft in one pass.
+nonisolated struct TrailDraftPinFacts {
+    let waypointID: UUID
+    let coordinate: CLLocationCoordinate2D
+    let number: Int
+    let role: TrailStopRole
+    let name: String
+    let distanceAlongLineMeters: Double
 }
 
 extension MapView.Coordinator {
@@ -172,14 +226,14 @@ extension MapView.Coordinator {
         }
     }
 
-    /// Rebuilds the legs and the pins wholesale rather than diffing them.
+    /// Brings the legs and the pins on the map up to the draft, touching only
+    /// what changed — see the file header.
     ///
-    /// At most a few dozen of each, and this runs when a hiker taps or when a
-    /// leg's route lands — never at drag or fix frequency. The guard in front
-    /// of it is what keeps a republish of the same draft from removing and
-    /// re-adding everything, and it compares the *legs* rather than the
-    /// waypoints because a leg changes shape and state without a point
-    /// moving: that is what an answer arriving is.
+    /// Runs when a hiker taps or when a leg's route lands — never at drag or
+    /// fix frequency. The guard in front of the diff is what lets a finger
+    /// moving cost one pin and two lines, and it compares the *legs* rather
+    /// than the waypoints because a leg changes shape and state without a
+    /// point moving: that is what an answer arriving is.
     private func applyTrailDraft(_ controller: TrailDraftController, on mapView: MKMapView) {
         let isDrawing = controller.isEditing
         let legs = isDrawing ? controller.draft.legs : []
@@ -198,63 +252,53 @@ extension MapView.Coordinator {
         // feature that does not fall out of an existing definition. See
         // ``withdrawAreaSearchForDrawing(_:)``.
         withdrawAreaSearchForDrawing(isDrawing)
+        // And the map's own labels, which a tap may pick only while drawing —
+        // see `MapTrailDraftFeatures.swift`.
+        refreshTrailDraftFeatureSelection(on: mapView)
         guard legs != trailDraftLegs
             || !Self.isSameDraft(points, as: trailDraftCoordinates) else {
             // Nothing has been committed, so this pass is a finger moving. The
             // whole of what that costs is one pin's coordinate and at most two
             // polylines — see ``applyTrailDraftDrag(_:snapping:on:)``.
             applyTrailDraftDrag(held, snapping: snapping, on: mapView)
+            // Or a stop has been named: ``TrailStopNamer``'s answer moves no
+            // point and no leg, so without this the pin would keep saying
+            // "Stop 1" beside a row that reads the address.
+            renameTrailDraftPins(isDrawing ? controller.draft.waypoints : [], on: mapView)
             return
         }
-        trailDraftLegs = legs
         trailDraftCoordinates = points
         // Whatever was bent is about to be drawn again from the committed
         // geometry, so nothing is held as far as the map is concerned. Cleared
-        // before the rebuild rather than after it, or the call at the foot of
+        // before the diff rather than after it, or the call at the foot of
         // this method would think it had nothing to do.
         trailDraftDrag = nil
 
-        if !trailDraftOverlays.isEmpty {
-            mapView.removeOverlays(trailDraftOverlays)
-            trailDraftOverlays = []
-            trailDraftLegStyles = [:]
-        }
-        if !trailDraftAnnotations.isEmpty {
-            mapView.removeAnnotations(trailDraftAnnotations)
-            trailDraftAnnotations = []
-            // One of them may have been the open callout — the same tidy-up
-            // ``applyPhotoPins(_:on:)`` does, for the same reason: removing a
-            // selected annotation takes its callout without MapKit reliably
-            // reporting a deselection.
-            refreshOpenCallout(on: mapView)
-        }
+        syncTrailDraftLegs(legs, on: mapView)
         // The provisional pin belonged to the drawing as it was. A tap that
         // changed the line has answered the question it was asking, and one
         // left standing would offer *Add Stop* into a leg that has gone.
         if !isDrawing { removeTrailDraftDroppedPin(from: mapView) }
-        guard !points.isEmpty else { return }
-
-        addTrailDraftLegs(legs, to: mapView)
         let distances = controller.draft.distancesAlongLine
-        let waypoints = controller.draft.waypoints
-        let pins = points.enumerated().map { index, coordinate in
-            TrailDraftWaypointAnnotation(
-                coordinate: coordinate,
-                number: index + 1,
-                role: TrailStopRole.of(waypointAt: index, in: points.count),
-                // Read off the draft rather than carried in `points`, which is
-                // the coordinates alone. Answers for an index the two lists
-                // disagree about, which they can for one observation pass after
-                // an edit.
-                name: waypoints.indices.contains(index) ? waypoints[index].name : "",
-                distanceAlongLineMeters: distances.indices.contains(index) ? distances[index] : 0
-            )
-        }
-        trailDraftAnnotations = pins
-        mapView.addAnnotations(pins)
+        let waypoints = isDrawing ? controller.draft.waypoints : []
+        syncTrailDraftPins(
+            waypoints.enumerated().map { index, waypoint in
+                TrailDraftPinFacts(
+                    waypointID: waypoint.id,
+                    coordinate: waypoint.clCoordinate,
+                    number: index + 1,
+                    role: TrailStopRole.of(waypointAt: index, in: waypoints.count),
+                    name: waypoint.name,
+                    // Answers for an index the two lists disagree about, which
+                    // they can for one observation pass after an edit.
+                    distanceAlongLineMeters: distances.indices.contains(index) ? distances[index] : 0
+                )
+            },
+            on: mapView
+        )
         // A drag that is still held across a commit: an answer for another leg
-        // can land while a finger is down, and the rebuild above has just
-        // drawn that point where the draft still says it is.
+        // can land while a finger is down, and the diff above has just put
+        // that point back where the draft still says it is.
         applyTrailDraftDrag(held, snapping: snapping, on: mapView)
     }
 
@@ -300,6 +344,103 @@ extension MapView.Coordinator {
     /// Puts one pin where it should be, which MapKit answers by moving its
     /// view. Ignores an index the map no longer has — a commit can take the
     /// point away between the drag being released and this running.
+    /// Brings each pin's name up to its waypoint's, in place.
+    private func renameTrailDraftPins(_ waypoints: [TrailWaypoint], on mapView: MKMapView) {
+        let names = Dictionary(waypoints.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        for pin in trailDraftAnnotations {
+            guard let name = names[pin.waypointID], name != pin.name else { continue }
+            pin.update(from: TrailDraftPinFacts(
+                waypointID: pin.waypointID,
+                coordinate: pin.coordinate,
+                number: pin.number,
+                role: pin.role,
+                name: name,
+                distanceAlongLineMeters: pin.distanceAlongLineMeters
+            ))
+        }
+    }
+
+    /// Makes the pins on the map the pins in `facts`, in that order, keeping
+    /// every pin whose waypoint is still there.
+    ///
+    /// Matched by waypoint id, so a reorder or a leg landing updates pins in
+    /// place and only a stop that has gone is taken off the map. The one
+    /// thing drawn on the pin rather than in its callout — the stop's number —
+    /// is redrawn when a role changes, which it does for the old destination
+    /// every time a point is appended.
+    private func syncTrailDraftPins(_ facts: [TrailDraftPinFacts], on mapView: MKMapView) {
+        var existing: [UUID: TrailDraftWaypointAnnotation] = [:]
+        for pin in trailDraftAnnotations where existing[pin.waypointID] == nil {
+            existing[pin.waypointID] = pin
+        }
+        var kept: [TrailDraftWaypointAnnotation] = []
+        var added: [TrailDraftWaypointAnnotation] = []
+        kept.reserveCapacity(facts.count)
+        for fact in facts {
+            if let pin = existing.removeValue(forKey: fact.waypointID) {
+                if pin.update(from: fact) { redrawTrailDraftPinDigit(pin, on: mapView) }
+                kept.append(pin)
+            } else {
+                let pin = TrailDraftWaypointAnnotation(
+                    coordinate: fact.coordinate,
+                    waypointID: fact.waypointID,
+                    number: fact.number,
+                    role: fact.role,
+                    name: fact.name,
+                    distanceAlongLineMeters: fact.distanceAlongLineMeters
+                )
+                kept.append(pin)
+                added.append(pin)
+            }
+        }
+        let gone = Array(existing.values)
+        trailDraftAnnotations = kept
+        if !gone.isEmpty {
+            mapView.removeAnnotations(gone)
+            // One of them may have been the open callout — the same tidy-up
+            // ``applyPhotoPins(_:on:)`` does, for the same reason: removing a
+            // selected annotation takes its callout without MapKit reliably
+            // reporting a deselection.
+            refreshOpenCallout(on: mapView)
+        }
+        if !added.isEmpty { mapView.addAnnotations(added) }
+    }
+
+    /// Makes the lines on the map one per leg, in leg order, keeping every
+    /// line whose leg has not changed.
+    ///
+    /// A leg is matched by the id of the waypoint it arrives at and kept only
+    /// when it is *equal* — same ends, same shape, same state — because a
+    /// line's dash is fixed when its renderer is made, and a leg that changed
+    /// state needs a new one.
+    private func syncTrailDraftLegs(_ legs: [TrailLeg], on mapView: MKMapView) {
+        var existing: [UUID: (leg: TrailLeg, line: MKPolyline)] = [:]
+        for (leg, line) in zip(trailDraftLegs, trailDraftOverlays) where existing[leg.id] == nil {
+            existing[leg.id] = (leg, line)
+        }
+        var lines: [MKPolyline] = []
+        lines.reserveCapacity(legs.count)
+        for leg in legs {
+            if let drawn = existing[leg.id], drawn.leg == leg {
+                existing[leg.id] = nil
+                lines.append(drawn.line)
+            } else {
+                let line = Self.trailDraftLine(for: leg)
+                trailDraftLegStyles[ObjectIdentifier(line)] = leg.snap
+                mapView.addOverlay(line, level: .aboveLabels)
+                lines.append(line)
+            }
+        }
+        let kept = Set(lines.map { ObjectIdentifier($0) })
+        let gone = trailDraftOverlays.filter { !kept.contains(ObjectIdentifier($0)) }
+        if !gone.isEmpty {
+            mapView.removeOverlays(gone)
+            for line in gone { trailDraftLegStyles[ObjectIdentifier(line)] = nil }
+        }
+        trailDraftOverlays = lines
+        trailDraftLegs = legs
+    }
+
     private func movePin(_ index: Int, to coordinate: CLLocationCoordinate2D) {
         guard trailDraftAnnotations.indices.contains(index) else { return }
         trailDraftAnnotations[index].coordinate = coordinate
@@ -362,37 +503,29 @@ extension MapView.Coordinator {
         ]
     }
 
-    /// One polyline per leg, each remembering the state it should be drawn in.
+    /// The polyline one leg is drawn as.
     ///
     /// Above the shared hikes' lines and the hiker's own, because this is the
-    /// one the hiker is working on. All of it is still `.aboveLabels`: the
-    /// raster tile overlay is opaque, so anything below that level is buried
-    /// rather than faint — see ``MapCommunityRoutes``.
-    private func addTrailDraftLegs(_ legs: [TrailLeg], to mapView: MKMapView) {
-        for leg in legs {
-            // **One polyline per leg, always, and in the same order.** A drag
-            // reshapes the two lines either side of a point by index, so a leg
-            // that quietly contributed nothing here would shift every line
-            // after it onto the wrong leg. A shape that has collapsed to a
-            // single coordinate — two waypoints dropped on one spot, or a
-            // routed answer deduplicated down to a point — falls back to the
-            // straight line between the leg's ends, which is the degenerate
-            // line it is rather than no line at all.
-            var coordinates = leg.coordinates.map { point in
-                CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
-            }
-            if coordinates.count < 2 {
-                coordinates = [leg.ends.startCoordinate, leg.ends.endCoordinate]
-            }
-            let line = MKPolyline(coordinates: coordinates, count: coordinates.count)
-            trailDraftOverlays.append(line)
-            // Kept beside the overlay rather than on a subclass of it, so the
-            // draft's lines stay plain `MKPolyline`s and everything that asks
-            // MapKit about an overlay keeps one answer. `rendererFor` looks
-            // the state up by identity.
-            trailDraftLegStyles[ObjectIdentifier(line)] = leg.snap
-            mapView.addOverlay(line, level: .aboveLabels)
+    /// one the hiker is working on — see ``syncTrailDraftLegs(_:on:)``, which
+    /// adds it `.aboveLabels`: the raster tile overlay is opaque, so anything
+    /// below that level is buried rather than faint. See
+    /// ``MapCommunityRoutes``.
+    ///
+    /// **Always a line.** A drag reshapes the two lines either side of a point
+    /// by index, so a leg that quietly contributed nothing here would shift
+    /// every line after it onto the wrong leg. A shape that has collapsed to a
+    /// single coordinate — two waypoints dropped on one spot, or a routed
+    /// answer deduplicated down to a point — falls back to the straight line
+    /// between the leg's ends, which is the degenerate line it is rather than
+    /// no line at all.
+    private static func trailDraftLine(for leg: TrailLeg) -> MKPolyline {
+        var coordinates = leg.coordinates.map { point in
+            CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
         }
+        if coordinates.count < 2 {
+            coordinates = [leg.ends.startCoordinate, leg.ends.endCoordinate]
+        }
+        return MKPolyline(coordinates: coordinates, count: coordinates.count)
     }
 
     /// Whether two sets of pins would draw identically.
@@ -490,6 +623,18 @@ extension MapView.Coordinator {
         attachTrailDraftWaypointCallout(for: annotation, to: view, on: mapView)
         #endif
         return view
+    }
+
+    /// Redraws the number inside a pin that is already on the map, for a stop
+    /// whose role changed under it — the destination becoming *Stop 2* when a
+    /// point is appended after it. A pin that is not on screen has no view and
+    /// is drawn right when MapKit next asks for one.
+    private func redrawTrailDraftPinDigit(_ pin: TrailDraftWaypointAnnotation, on mapView: MKMapView) {
+        #if canImport(UIKit)
+        guard let view = mapView.view(for: pin) else { return }
+        trailDraftNumberLabel(in: view, diameter: Self.trailDraftPinDiameter).text =
+            Self.trailDraftPinDigit(for: pin.role)
+        #endif
     }
 
     #if canImport(UIKit)

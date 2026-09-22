@@ -96,6 +96,7 @@ extension MapCoordinatorTests {
             .addStop,
             at: pin.coordinate,
             legIndex: pin.legIndex,
+            named: "",
             in: map
         )
 

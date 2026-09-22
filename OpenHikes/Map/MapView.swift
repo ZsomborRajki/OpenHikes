@@ -245,6 +245,8 @@ struct MapView: MapViewRepresentable, Equatable {
         } ?? Self.systemBaseMapKey
         guard coordinator.tileSourceKey != key else { return }
         coordinator.tileSourceKey = key
+        // Apple's labels are only tappable where they are drawn.
+        defer { coordinator.refreshTrailDraftFeatureSelection(on: mapView) }
 
         #if os(iOS)
         // The chrome on this map follows the *map*, not the interface.

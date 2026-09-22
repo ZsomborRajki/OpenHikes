@@ -228,6 +228,7 @@ extension MapCoordinatorTests {
             .startHere,
             at: pin.coordinate,
             legIndex: pin.legIndex,
+            named: "",
             in: map
         )
 
@@ -327,6 +328,7 @@ extension MapCoordinatorTests {
                 map,
                 viewFor: TrailDraftWaypointAnnotation(
                     coordinate: map.convert(point, toCoordinateFrom: map),
+                    waypointID: UUID(),
                     number: 1,
                     role: .start,
                     name: "",
@@ -477,6 +479,7 @@ extension MapCoordinatorTests {
         defer { detach(map) }
         let unnamed = TrailDraftWaypointAnnotation(
             coordinate: Self.ridgeCoordinate(Ridge.south),
+            waypointID: UUID(),
             number: 3,
             role: .stop(number: 2),
             name: "",
@@ -494,6 +497,7 @@ extension MapCoordinatorTests {
 
         let named = TrailDraftWaypointAnnotation(
             coordinate: Self.ridgeCoordinate(Ridge.south),
+            waypointID: UUID(),
             number: 3,
             role: .stop(number: 2),
             name: "Lurdy Ház",

@@ -86,7 +86,17 @@ final class TrailDraftDroppedPin: NSObject, MKAnnotation {
     /// ``MapView/Coordinator/dismissTrailDraftPin(for:on:)``.
     var mayReopen = true
 
-    @objc let title: String? = String(localized: "Dropped Pin")
+    /// What the place is called, for a pin dropped on one of the map's own
+    /// labels — a summit, a car park, a hut — or empty for a tap on open map.
+    ///
+    /// Carried to whichever verb is pressed, so the stop arrives named the way
+    /// the label read rather than as an address worked out a second later.
+    /// See `MapTrailDraftFeatures.swift`.
+    let placeName: String
+
+    /// The place's name, or *Dropped Pin* for a spot that has none — Apple
+    /// Maps' own heading for both.
+    @objc let title: String?
 
     /// Nothing under the heading — the buttons are what this callout carries
     /// — but **declared rather than left out**.
@@ -103,11 +113,14 @@ final class TrailDraftDroppedPin: NSObject, MKAnnotation {
     init(
         coordinate: CLLocationCoordinate2D,
         legIndex: Int?,
-        actions: [TrailDraftPinAction]
+        actions: [TrailDraftPinAction],
+        placeName: String = ""
     ) {
         self.coordinate = coordinate
         self.legIndex = legIndex
         self.actions = actions
+        self.placeName = placeName
+        title = placeName.isEmpty ? String(localized: "Dropped Pin") : placeName
     }
 }
 
@@ -258,18 +271,41 @@ extension MapView.Coordinator {
         #if os(iOS)
         guard let controller = trailDraftController, controller.isEditing else { return false }
         guard !isTapClaimed(at: point, in: mapView) else { return false }
-        let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
-        // Asked on the glass, while the tap is still a tap: which leg a thumb
-        // aimed at is a question about pixels, and the answer is carried on
-        // the pin rather than re-derived when a button is pressed a second
-        // later at a camera that may have moved.
-        let leg = trailDraftLegIndex(at: point, in: mapView)
+        showTrailDraftPin(
+            at: mapView.convert(point, toCoordinateFrom: mapView),
+            // Asked on the glass, while the tap is still a tap: which leg a
+            // thumb aimed at is a question about pixels, and the answer is
+            // carried on the pin rather than re-derived when a button is
+            // pressed a second later at a camera that may have moved.
+            legIndex: trailDraftLegIndex(at: point, in: mapView),
+            named: "",
+            offering: controller,
+            in: mapView
+        )
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    #if os(iOS)
+    /// Puts the provisional pin down at a coordinate and opens its callout —
+    /// the half a tap on open map and a tap on one of the map's own labels
+    /// share. See `MapTrailDraftFeatures.swift` for the second.
+    func showTrailDraftPin(
+        at coordinate: CLLocationCoordinate2D,
+        legIndex leg: Int?,
+        named placeName: String,
+        offering controller: TrailDraftController,
+        in mapView: MKMapView
+    ) {
         let pin = TrailDraftDroppedPin(
             coordinate: coordinate,
             legIndex: leg,
             actions: TrailDraftPinAction.offered(
                 forWaypointCount: controller.draft.waypoints.count
-            )
+            ),
+            placeName: placeName
         )
         removeTrailDraftDroppedPin(from: mapView)
         trailDraftDroppedPin = pin
@@ -290,11 +326,8 @@ extension MapView.Coordinator {
             guard let self, let mapView, trailDraftDroppedPin === pin else { return }
             mapView.selectAnnotation(pin, animated: true)
         }
-        return true
-        #else
-        return false
-        #endif
     }
+    #endif
 
     /// The maker's own annotation views: a waypoint's numbered dot, a marked
     /// place's balloon, the grey balloon of a place OpenStreetMap offered, and
@@ -384,10 +417,15 @@ extension MapView.Coordinator {
     /// ``addTrailDraftWaypoint(at:in:)`` was split from its recognizer: this
     /// is the half worth asserting on, and a `UIButton` inside a callout
     /// inside an `MKAnnotationView` is not something a suite can press.
+    ///
+    /// - Parameter name: what the place under the pin is called, for a pin
+    ///   dropped on one of the map's own labels; empty for open map, which
+    ///   ``TrailStopNamer`` describes afterwards.
     func applyTrailDraftPin(
         _ action: TrailDraftPinAction,
         at coordinate: CLLocationCoordinate2D,
         legIndex: Int?,
+        named name: String,
         in mapView: MKMapView
     ) {
         guard let controller = trailDraftController else { return }
@@ -397,7 +435,7 @@ extension MapView.Coordinator {
         // are the same edit at three lengths of line — a point on the end —
         // and the words differ because what they mean to a hiker does.
         case .startHere, .setAsDestination, .makeDestination:
-            controller.appendWaypoint(at: coordinate)
+            controller.appendWaypoint(at: coordinate, named: name)
         case .addStop:
             // The leg the thumb was on, or the one the ground says is nearest.
             // An append is the fallback rather than a refusal: a trail with no
@@ -405,14 +443,14 @@ extension MapView.Coordinator {
             // this verb once there are two points — so the `nil` here is the
             // race where a leg went away under an open callout.
             if let leg = legIndex ?? controller.draft.nearestLegIndex(to: coordinate) {
-                controller.insertWaypoint(at: coordinate, intoLegAt: leg)
+                controller.insertWaypoint(at: coordinate, intoLegAt: leg, named: name)
             } else {
-                controller.appendWaypoint(at: coordinate)
+                controller.appendWaypoint(at: coordinate, named: name)
             }
         case .markAPlace:
             // Marked and then opened for naming, which is one gesture from the
             // hiker's side — see ``TrailDraftController/markPlace(at:named:symbol:)``.
-            if let place = controller.markPlace(at: coordinate) {
+            if let place = controller.markPlace(at: coordinate, named: name) {
                 controller.requestPlaceEditor(for: place.id)
             }
         }
@@ -451,6 +489,7 @@ extension MapView.Coordinator {
                 action,
                 at: annotation.coordinate,
                 legIndex: annotation.legIndex,
+                named: annotation.placeName,
                 in: mapView
             )
         }
@@ -472,10 +511,9 @@ extension MapView.Coordinator {
         actions.onRemove { [weak self, weak mapView] in
             guard let self, let mapView else { return }
             mapView.deselectAnnotation(annotation, animated: true)
-            // By place in the list rather than by identity, because that is
-            // what the pin knows: the annotations are rebuilt from the
-            // waypoints in order, and the number on the dot is that place plus
-            // one. A list that changed under an open callout is the race the
+            // By place in the list, read when the button is pressed: every
+            // commit writes each pin's number back as its place plus one, so
+            // a pin that has survived a reorder still names the right row. A list that changed under an open callout is the race the
             // controller's own bounds check answers.
             trailDraftController?.removeWaypoints(
                 atOffsets: IndexSet(integer: annotation.number - 1)

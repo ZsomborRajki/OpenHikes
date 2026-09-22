@@ -35,7 +35,7 @@
 //  Its own type, and free of MapKit, because *which verbs a callout offers* is
 //  a rule rather than a drawing — and the callout it is drawn in is a
 //  `UIStackView` inside a `MKAnnotationView`, which is not a thing a suite can
-//  interrogate. See ``MapView/Coordinator/applyTrailDraftPin(_:)`` for the
+//  interrogate. See ``MapView/Coordinator/applyTrailDraftPin(_:at:legIndex:named:in:)`` for the
 //  half that acts on one.
 //
 

@@ -722,6 +722,9 @@ private func performSearch() {
     searchFocused = false
     let request = MKLocalSearch.Request()
     request.naturalLanguageQuery = query
+    // The three the suggestions are drawn from — see ``SearchCompleter`` for
+    // why a summit or a lake is one of them.
+    request.resultTypes = [.address, .pointOfInterest, .physicalFeature]
     // The same bias the completer's suggestions already carry. Without it a
     // typed Return is answered globally while the suggestions above it are
     // answered locally, so the two halves of one search field disagree.
