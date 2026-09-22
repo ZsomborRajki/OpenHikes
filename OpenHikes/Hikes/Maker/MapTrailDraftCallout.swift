@@ -88,6 +88,18 @@ final class TrailDraftDroppedPin: NSObject, MKAnnotation {
 
     @objc let title: String? = String(localized: "Dropped Pin")
 
+    /// Nothing under the heading — the buttons are what this callout carries
+    /// — but **declared rather than left out**.
+    ///
+    /// `subtitle` is an optional requirement of `MKAnnotation` to Swift and a
+    /// plain key to Objective-C, and MapKit reads it by key when it lays out a
+    /// marker's label: a class that does not answer to it at all takes the
+    /// process down with `valueForUndefinedKey:`. It is reached with a second
+    /// pin on the map, which is what makes it a crash a tap on an empty canvas
+    /// never finds. Every other annotation in this app declares both keys, and
+    /// `MapAnnotationKeyCodingTests` holds all of them to it.
+    @objc let subtitle: String? = nil
+
     init(
         coordinate: CLLocationCoordinate2D,
         legIndex: Int?,
