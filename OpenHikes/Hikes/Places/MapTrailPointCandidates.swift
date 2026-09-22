@@ -212,7 +212,7 @@ extension MapView.Coordinator {
     /// Marks one of the offered places, and takes its provisional pin away.
     ///
     /// Split from the button's own closure for the reason
-    /// ``applyTrailDraftPin(_:at:legIndex:in:)`` was split from its callout: a
+    /// ``applyTrailDraftPin(_:at:legIndex:named:in:)`` was split from its callout: a
     /// `UIButton` inside a callout inside an `MKAnnotationView` is not
     /// something a suite can press, and this is the half worth asserting on.
     ///

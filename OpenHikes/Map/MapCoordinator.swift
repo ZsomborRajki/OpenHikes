@@ -780,7 +780,9 @@ private extension MapView.Coordinator {
 
 extension MapView.Coordinator {
     func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
-        guard !(annotation is MKUserLocation) else { return nil }
+        // MapKit's own, for a label a tap selected while drawing — it is
+        // deselected at once. See `MapTrailDraftFeatures.swift`.
+        guard !(annotation is MKUserLocation), !(annotation is MKMapFeatureAnnotation) else { return nil }
         if let photoAnnotation = annotation as? PhotoMapAnnotation {
             return photoAnnotationView(for: photoAnnotation, on: mapView)
         }
@@ -833,6 +835,8 @@ extension MapView.Coordinator {
     }
 
     func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+        // A label on the map, tapped while drawing, becomes the maker's pin.
+        if selectTrailDraftFeature(view.annotation, on: mapView) { return }
         // `canShowCallout = false` doesn't reliably suppress MapKit's own
         // callout for the blue dot, so deselect immediately to dismiss it.
         guard view.annotation is MKUserLocation else {

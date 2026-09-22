@@ -118,6 +118,15 @@ final class LocationManager: NSObject {
 
     private(set) var coordinate: CLLocationCoordinate2D?
 
+    /// Whether there has been a fix at all this launch.
+    ///
+    /// The low-frequency half of ``coordinate``: written once, from `false`
+    /// to `true`, so a SwiftUI body can decide whether to *offer* something at
+    /// the hiker's position without enrolling in the once-a-second fix feed.
+    /// Observation registers per property, so reading this reads nothing else.
+    /// The coordinate itself is read in the action that uses it.
+    private(set) var hasFix = false
+
     /// What CoreLocation currently allows this app, as the app's own
     /// observable state.
     ///
@@ -340,6 +349,7 @@ final class LocationManager: NSObject {
         // rate here is the rate every downstream body is allowed to move at.
         // Anything re-rendering faster than this is following something else.
         coordinate = next
+        if !hasFix { hasFix = true }
     }
 
     /// Returns a current fix only when its uncertainty is narrow enough for

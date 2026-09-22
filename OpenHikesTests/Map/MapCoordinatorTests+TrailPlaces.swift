@@ -5,7 +5,7 @@
 //  The callout's buttons and the place pins, against a real `MKMapView`.
 //
 //  Two halves that cannot be reached anywhere else. What a callout button
-//  *does* is ``MapView/Coordinator/applyTrailDraftPin(_:at:legIndex:in:)``,
+//  *does* is ``MapView/Coordinator/applyTrailDraftPin(_:at:legIndex:named:in:)``,
 //  and restating its decision in a suite of its own would be a mirror with no
 //  compiler behind it — so it is driven here, where the coordinator is real.
 //  And a place pin's marker, glyph, callout and the tap rules around it are
@@ -61,6 +61,7 @@ extension MapCoordinatorTests {
                 verb,
                 at: Self.placeCoordinate(Place.north),
                 legIndex: nil,
+                named: "",
                 in: map
             )
 
@@ -91,6 +92,7 @@ extension MapCoordinatorTests {
             .addStop,
             at: Self.placeCoordinate(Place.south + 0.0005),
             legIndex: 1,
+            named: "",
             in: map
         )
 
@@ -117,6 +119,7 @@ extension MapCoordinatorTests {
             .addStop,
             at: Self.placeCoordinate(Place.middle + 0.0005),
             legIndex: nil,
+            named: "",
             in: map
         )
 
@@ -139,6 +142,7 @@ extension MapCoordinatorTests {
             .markAPlace,
             at: Self.placeCoordinate(Place.middle),
             legIndex: nil,
+            named: "",
             in: map
         )
 

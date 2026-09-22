@@ -10,17 +10,24 @@ extension TrailMakerUITests {
         CGVector(dx: secondPointX, dy: secondPointY),
     ]
 
+    /// A segment of the system's segmented control, found by the word it is
+    /// spoken by. Its content's own identifiers are not guaranteed to reach
+    /// the automation through the control, the way a `Menu`'s entries do not.
+    private func travelMode(_ label: String, in app: XCUIApplication) -> XCUIElement {
+        app.segmentedControls["trail-draft-mode"].buttons[label]
+    }
+
     @MainActor
     func testTravelModeIconsChangeTheRouteAndKeepTheStops() {
         let app = launchApp()
         openTrailMaker(in: app)
-        let hiking = element("trail-draft-mode-hiking", in: app)
+        let hiking = travelMode("Hiking", in: app)
         XCTAssertTrue(hiking.isSelected)
         let map = element("trail-map", in: app)
         drawTrailPoints(Self.travelModePoints, on: map, in: app)
 
-        for mode in ["walking", "cycling", "driving"] {
-            let button = element("trail-draft-mode-\(mode)", in: app)
+        for mode in ["Walking", "Cycling", "Driving"] {
+            let button = travelMode(mode, in: app)
             XCTAssertTrue(button.isHittable)
             button.tap()
             XCTAssertTrue(waitUntil { button.isSelected })

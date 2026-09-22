@@ -11,7 +11,7 @@
 //
 //  **What pressing one does is asserted next door**, in
 //  `MapCoordinatorTests+TrailDraft`, against the real
-//  ``MapView/Coordinator/applyTrailDraftPin(_:at:legIndex:in:)`` and a real
+//  ``MapView/Coordinator/applyTrailDraftPin(_:at:legIndex:named:in:)`` and a real
 //  `MKMapView`. Restating that method here would be a mirror with no compiler
 //  behind it, which is a thing this repository has already paid for once.
 //

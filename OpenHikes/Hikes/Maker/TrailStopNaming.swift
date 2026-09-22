@@ -28,10 +28,18 @@
 //  The same shape ``TrailDraftController`` routes legs in, and for the same
 //  reason: a hiker putting down five points in five seconds is five questions,
 //  and five at once from one phone is the burst that earns a rate limit. They
-//  are queued and drained one at a time instead, newest last, and an id that
+//  are queued and drained one at a time instead, newest last, and a point that
 //  has been answered — or refused — is not asked about again. A refusal is not
 //  retried by itself, exactly as a refused leg is not: asking again on the next
 //  tap would spend a request per point to be told the same thing.
+//
+//  **A point is its id *and* where it stands.** A stop that is dragged keeps its
+//  id and loses its name, so a record kept by id alone would call the dragged
+//  stop finished-with and leave its row reading "Stop 2" for the rest of the
+//  drawing. Keyed by ``TrailStopQuestion`` instead, the moved stop is a new
+//  question, and an answer that lands after the move is about the spot it left
+//  — which is why the answer carries the question back and
+//  ``TrailDraftController`` refuses it for a stop that has moved since.
 //
 //  ## MapKit's own geocoder, not Core Location's
 //
@@ -146,26 +154,54 @@ nonisolated enum TrailStopName {
 /// it *writes* is part of the drawing, which is why the controller hands it a
 /// way to write rather than the draft itself — the name has to be persisted in
 /// the same turn it lands, and persisting is the controller's job.
+/// One lookup: which point, and where it stood when it was asked about.
+///
+/// The key the namer keeps its record by, rather than the bare id — see the
+/// file header for the dragged stop that made the difference.
+nonisolated struct TrailStopQuestion: Hashable, Sendable {
+    let id: UUID
+    let latitude: Double
+    let longitude: Double
+
+    init(_ waypoint: TrailWaypoint) {
+        id = waypoint.id
+        latitude = waypoint.latitude
+        longitude = waypoint.longitude
+    }
+
+    var clCoordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+}
+
 @MainActor
 final class TrailStopNamer {
     private static let logger = Logger(subsystem: "OpenHikes", category: "TrailDraft")
 
     private let source: (any TrailStopNaming)?
 
-    /// Every point this namer is finished with: answered, or asked and refused.
-    /// Kept so a point is asked about exactly once — see the file header for
-    /// why a refusal is not retried by itself.
-    private var settled: Set<UUID> = []
+    /// Every point this namer is finished with, where it stood: answered, or
+    /// asked and refused. Kept so a spot is asked about exactly once — see the
+    /// file header for why a refusal is not retried by itself, and for why a
+    /// stop that moves is asked about again.
+    private var settled: Set<TrailStopQuestion> = []
 
-    /// What is waiting to be asked, oldest first, and what each one is about.
-    private var queue: [TrailWaypoint] = []
+    /// What is waiting to be asked, oldest first.
+    private var queue: [TrailStopQuestion] = []
 
     /// The one drain in progress, or `nil` when the queue is empty.
     private var drain: Task<Void, Never>?
 
+    /// Which drain is the current one. A drain cancelled by ``clear()`` can
+    /// still be finishing its last request when the next one starts, and it
+    /// must not hand the handle back on the way out — that would leave the new
+    /// drain running unrecorded, and the next call would start a second beside
+    /// it: two lookups at once, the burst this queue exists to prevent.
+    private var drainGeneration = 0
+
     /// How a name reaches the drawing. Set by the controller, because writing
     /// one also means writing the draft down.
-    private var apply: ((UUID, String) -> Void)?
+    private var apply: ((TrailStopQuestion, String) -> Void)?
 
     init(source: (any TrailStopNaming)?) {
         self.source = source
@@ -175,7 +211,7 @@ final class TrailStopNamer {
     /// every launch running tests.
     var canAsk: Bool { source != nil }
 
-    func onNamed(_ apply: @escaping (UUID, String) -> Void) {
+    func onNamed(_ apply: @escaping (TrailStopQuestion, String) -> Void) {
         self.apply = apply
     }
 
@@ -188,12 +224,13 @@ final class TrailStopNamer {
     /// a drawing spends nearly all of its life in.
     func nameUnnamed(in waypoints: [TrailWaypoint]) {
         guard source != nil else { return }
-        let waiting = Set(queue.map(\.id))
-        let wanted = waypoints.filter { waypoint in
-            waypoint.name.isEmpty
-                && !settled.contains(waypoint.id)
-                && !waiting.contains(waypoint.id)
-        }
+        let waiting = Set(queue)
+        let wanted = waypoints
+            .filter(\.name.isEmpty)
+            .map(TrailStopQuestion.init)
+            .filter { question in
+                !settled.contains(question) && !waiting.contains(question)
+            }
         guard !wanted.isEmpty else { return }
         queue.append(contentsOf: wanted)
         startDraining()
@@ -207,6 +244,7 @@ final class TrailStopNamer {
     /// who has plausibly moved, and one more attempt per point per opening is a
     /// bound a hiker sets with their thumb.
     func clear() {
+        drainGeneration &+= 1
         drain?.cancel()
         drain = nil
         queue = []
@@ -215,9 +253,11 @@ final class TrailStopNamer {
 
     private func startDraining() {
         guard drain == nil else { return }
+        let generation = drainGeneration
         drain = Task { [weak self] in
             await self?.drainQueue()
-            self?.drain = nil
+            guard let self, drainGeneration == generation else { return }
+            drain = nil
         }
     }
 
@@ -227,18 +267,18 @@ final class TrailStopNamer {
         guard let source else { return }
         while !queue.isEmpty {
             guard !Task.isCancelled else { return }
-            let waypoint = queue.removeFirst()
+            let question = queue.removeFirst()
             // Marked settled *before* the answer, not after: a refusal must
             // leave the point as finished-with as an answer does, and a second
             // call arriving mid-request must not queue the same point again.
-            settled.insert(waypoint.id)
-            let name = await source.name(at: waypoint.clCoordinate)
+            settled.insert(question)
+            let name = await source.name(at: question.clCoordinate)
             guard !Task.isCancelled else { return }
             guard let name else {
                 Self.logger.info("No name found for a drawn point")
                 continue
             }
-            apply?(waypoint.id, name)
+            apply?(question, name)
         }
     }
 }

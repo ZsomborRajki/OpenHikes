@@ -51,6 +51,22 @@ struct DirectionsTrailLegRouterTests {
         #expect(route.coordinates.last == Self.ends.end)
     }
 
+    /// Apple's directions begin on the nearest road or path, which for a stop
+    /// on a meadow or a summit is tens of metres away. At a ten-metre
+    /// tolerance nearly every walking leg wore the warning.
+    @Test("a route that begins a short walk from the stop is still routed")
+    func nearbyAccessIsRouted() async throws {
+        // About forty metres north of each end.
+        let router = DirectionsTrailLegRouter(mode: .walking) { ends, _ in
+            [
+                RouteCoordinate(latitude: ends.start.latitude + 0.00036, longitude: ends.start.longitude),
+                RouteCoordinate(latitude: ends.end.latitude + 0.00036, longitude: ends.end.longitude),
+            ]
+        }
+        let route = try #require(await router.route(Self.ends))
+        #expect(route.snap == .snapped)
+    }
+
     @Test("a missing route is an answer rather than a service refusal")
     func noRoute() async throws {
         let router = DirectionsTrailLegRouter(mode: .cycling) { _, _ in
@@ -75,6 +91,24 @@ struct DirectionsTrailLegRouterTests {
         #expect(route.snap == .directionsUnavailable(.busy))
         #expect(route.snap.isRetryable)
         #expect(route.snap.notice?.text.contains("Apple Maps") == true)
+    }
+
+    /// MapKit reports a lost connection as one of its own errors with the
+    /// network's reason underneath — sometimes as *no route*. Read at face
+    /// value that was a settled answer, cached, and never offered *Try Again*.
+    @Test("a MapKit error with no network underneath is offline, and retryable")
+    func wrappedOffline() async throws {
+        let offline = URLError(.notConnectedToInternet)
+        let failures: [MKError] = [
+            MKError(.serverFailure, userInfo: [NSUnderlyingErrorKey: offline]),
+            MKError(.directionsNotFound, userInfo: [NSUnderlyingErrorKey: offline]),
+        ]
+        for failure in failures {
+            let router = DirectionsTrailLegRouter(mode: .walking) { _, _ in throw failure }
+            let route = try #require(await router.route(Self.ends))
+            #expect(route.snap == .directionsUnavailable(.offline))
+            #expect(route.snap.isRetryable)
+        }
     }
 
     @Test("cache preserves direction and does not remember refusals")

@@ -103,7 +103,7 @@ struct TrailDraftPlaceSection: View {
             .disabled(completer.region == nil)
             .accessibilityIdentifier("trail-draft-add-place")
         Button("At My Location", systemImage: "location", action: markMyLocation)
-            .disabled(currentCoordinate == nil)
+            .disabled(locationManager?.hasFix != true)
             .accessibilityIdentifier("trail-draft-add-place-here")
         // The only one of the four that arrives already named. Withheld
         // rather than disabled, because until a lookup has answered there
@@ -120,13 +120,11 @@ struct TrailDraftPlaceSection: View {
     /// The hiker's last known position, or `nil` for a launch with no location
     /// or one that has not had a fix yet.
     ///
-    /// Read in an action rather than in the body wherever it can be — see
-    /// ``LocationManager``, whose published fix is the highest-frequency
-    /// source in the app. The one read that *is* in a body is the `disabled`
-    /// above, and it is deliberate: a row that silently did nothing
-    /// would be worse than one that says it cannot. A fix arriving re-renders
-    /// this section and nothing else, which is what this file being its own
-    /// `View` is for.
+    /// Read only in an action — see ``LocationManager``, whose published fix is
+    /// the highest-frequency source in the app. The body asks
+    /// ``LocationManager/hasFix`` instead, which changes once: a row that
+    /// silently did nothing would be worse than one that says it cannot, and
+    /// that answer does not need the once-a-second feed behind it.
     private var currentCoordinate: CLLocationCoordinate2D? {
         locationManager?.coordinate
     }

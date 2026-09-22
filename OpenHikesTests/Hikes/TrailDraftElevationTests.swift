@@ -320,6 +320,32 @@ struct TrailDraftElevationTests {
         #expect(source.askedCounts == [2])
     }
 
+    /// A leg still waiting for its path is a straight placeholder, and
+    /// measuring it spends a billed call on a line that is about to change.
+    /// Overpass is often slower than the settle, so a long route used to pay
+    /// for one of these per gap between two legs.
+    @Test("a line with a leg still routing is not measured until it lands")
+    func aRoutingLineWaitsForItsLegs() async {
+        let source = StubHeightSource(heights: Heights.all)
+        let router = StubTrailLegRouter(answering: .snapped, holding: true)
+        let maker = TrailDraftController(
+            router: router,
+            elevationSource: source,
+            elevationPause: { _ in /* instant */ }
+        )
+        maker.setEditing(true)
+
+        maker.appendWaypoint(at: Line.at(Line.first))
+        maker.appendWaypoint(at: Line.at(Line.third))
+        await router.waitUntilAsked()
+        await Self.settle { !source.askedCounts.isEmpty }
+        #expect(source.askedCounts.isEmpty, "nothing is asked while the leg is out")
+
+        await router.release()
+        await Self.measured(maker.elevation, by: source)
+        #expect(source.askedCounts.count == 1, "the leg landing asks once")
+    }
+
     /// **Marking a place asks nothing**, and that is the split
     /// ``TrailDraftController/commitLine()`` exists for: a place is a spot
     /// beside the trail, the line is the number it already was, and a hiker

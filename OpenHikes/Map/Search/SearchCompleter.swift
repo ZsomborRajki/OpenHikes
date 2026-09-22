@@ -37,7 +37,11 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
     override init() {
         super.init()
         completer.delegate = self
-        completer.resultTypes = [.address, .pointOfInterest]
+        // Physical features are the peaks, passes, lakes and valleys a hiker
+        // actually types — "Watzmann", "Königssee" — and without them the
+        // completer offers the hotel named after the mountain rather than the
+        // mountain. `MapSheet.performSearch()` asks for the same three.
+        completer.resultTypes = [.address, .pointOfInterest, .physicalFeature]
         // `.default` rather than `.required`: a hiker searching for a trail
         // they are about to drive to should still be able to reach it, so this
         // ranks the visible map up rather than fencing the answer inside it.
