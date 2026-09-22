@@ -119,17 +119,17 @@ nonisolated enum TrailStopName {
         return first(of: [item.name, item.address?.shortAddress, item.address?.fullAddress])
     }
 
+    /// The whole address, for the place sheet, where there is room for it.
+    static func address(of item: MKMapItem) -> String? {
+        first(of: [item.address?.fullAddress, item.address?.shortAddress])
+    }
+
     /// The best line for a coordinate nobody named — a tap on the map.
     ///
     /// The address and nothing else. `nil` for an item with no address at all,
     /// which is an item MapKit could not place: its `name` in that state is the
     /// placeholder described above, and a row reading "Unknown Location" says
     /// strictly less than one reading "Stop 2".
-    /// The whole address, for the place sheet, where there is room for it.
-    static func address(of item: MKMapItem) -> String? {
-        first(of: [item.address?.fullAddress, item.address?.shortAddress])
-    }
-
     static func here(_ item: MKMapItem?) -> String? {
         guard let item else { return nil }
         return first(of: [item.address?.shortAddress, item.address?.fullAddress])

@@ -10,19 +10,18 @@
 //  different kind of thing from a waypoint: a waypoint is a *rank* — it is the
 //  third place the line goes through — while this is a *place on the ground*.
 //  The consequence is written into every screen that touches the two. A
-//  waypoint is dragged in a list and numbered; a place is dragged by its pin
-//  and never numbered, and is listed by how far along the line it sits rather
-//  than by an order anybody chose.
+//  waypoint is dragged in a list and numbered; a place is never numbered, and
+//  is described by how far along the line it sits rather than by an order
+//  anybody chose.
 //
 //  ## Two names for one idea, and why
 //
 //  The row in the store is ``TrailPoint`` — that is the name the plan issue
 //  gives it and the name CloudKit carries as `CD_TrailPoint`. This is the
 //  value it is read and written as, and the word on screen is **place**,
-//  because *point* already means a waypoint in the maker: the list's header
-//  says "Points" and every pin on the line is labelled "Point 3". Two things
-//  called the same word on one screen is the sort of collision nobody can
-//  explain to a hiker afterwards.
+//  because *point* already meant a waypoint in the maker when this was named,
+//  and a *stop* is one now. Two things called the same word on one screen is
+//  the sort of collision nobody can explain to a hiker afterwards.
 //
 //  The same shape ``HikeWalk`` and ``TrailWalkRecord`` already take: a `@Model`
 //  for the row, a `Sendable` value for everything that is not the store. It is
@@ -36,8 +35,7 @@
 //  make: a `<wpt>` that arrived in somebody else's GPX carrying a `<sym>` this
 //  app has no glyph for. Defaulting one of those to *viewpoint* would be the
 //  app inventing a fact about a place it has never been. So ``symbol`` is
-//  optional, `nil` draws a plain pin, and the picker offers it as a choice
-//  rather than hiding it.
+//  optional, and `nil` draws a plain pin.
 //
 
 import Algorithms

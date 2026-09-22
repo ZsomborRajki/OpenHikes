@@ -6,10 +6,11 @@
 //
 //  ## One menu rather than a row of controls
 //
-//  Four verbs — undo, redo, reverse, close the loop, and clear — over a screen
-//  that already carries a route, a switch and two toolbar buttons. Spread across the screen they would be most of it; in a menu they
-//  are one glyph, and the two that matter while drawing (a tap on the map, and
-//  Save) keep the room.
+//  Five verbs — undo, redo, reverse, close the loop, and clear — over a screen
+//  that already carries a route, a switch and two toolbar buttons. Spread
+//  across the screen they would be most of it; in a menu they are one glyph,
+//  and the two that matter while drawing (a tap on the map, and Save) keep the
+//  room.
 //
 //  ## Reorder is not here any more, and neither is Done
 //

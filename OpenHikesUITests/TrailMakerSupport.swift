@@ -32,23 +32,18 @@ extension XCTestCase {
         )
     }
 
-    /// Taps the map at each offset, answers the callout, and waits for the
-    /// point to be listed.
+    /// Puts a stop down at each offset, through the place sheet a tap on the
+    /// map opens. The first two fill the start and the destination; every
+    /// later one goes into the leg nearest to it, as *Add Stop* does.
     ///
     /// **Two gestures per point**, and that is the canvas rather than the
-    /// helper: a tap drops a provisional pin and asks, and the button in its
-    /// callout is what draws — see ``TrailDraftPinAction``. Which verb is
-    /// offered follows from how much line there is, which is why the name is
-    /// computed from the index rather than passed in: a helper that had to be
-    /// told would hide the rule it is exercising.
+    /// helper: a tap drops a pin and asks, and the sheet's *Add Stop* is what
+    /// draws — see ``TrailPlaceSheet``.
     ///
     /// Waiting on the row rather than tapping three times and asserting once:
     /// a tap that missed is indistinguishable from one the app has not
     /// processed yet, and only the wait tells them apart. No fixed sleep —
     /// each point is its own effect to wait on.
-    /// Puts a stop down at each offset, through the place sheet a tap on the
-    /// map opens. The first two fill the start and the destination; every
-    /// later one goes into the leg nearest to it, as *Add Stop* does.
     @MainActor
     func drawTrailPoints(_ offsets: [CGVector], on map: XCUIElement, in app: XCUIApplication) {
         for (index, offset) in offsets.enumerated() {
