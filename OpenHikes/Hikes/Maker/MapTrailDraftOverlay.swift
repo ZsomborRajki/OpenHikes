@@ -72,27 +72,52 @@ final class TrailDraftWaypointAnnotation: NSObject, MKAnnotation {
     /// Every other change to where a point is goes through a rebuild.
     @objc dynamic var coordinate: CLLocationCoordinate2D
     /// One-based, because it is read by a person rather than indexed by code.
+    /// It is no longer *drawn* — the callout says what the stop is instead —
+    /// but it is still what ``TrailDraftWaypointCalloutActions`` removes a
+    /// point by, and still what the list row's identifier counts.
     let number: Int
+    /// What this stop is to the route, so the pin's callout and the row in the
+    /// sheet say the same thing about it.
+    let role: TrailStopRole
+    /// What it is called, or empty for a stop nothing has named yet — see
+    /// ``TrailWaypoint/name``.
+    let name: String
     /// How far along the line this point sits, which is the callout's second
     /// line and the same figure the list row carries.
     let distanceAlongLineMeters: Double
 
-    init(coordinate: CLLocationCoordinate2D, number: Int, distanceAlongLineMeters: Double) {
+    init(
+        coordinate: CLLocationCoordinate2D,
+        number: Int,
+        role: TrailStopRole,
+        name: String,
+        distanceAlongLineMeters: Double
+    ) {
         self.coordinate = coordinate
         self.number = number
+        self.role = role
+        self.name = name
         self.distanceAlongLineMeters = distanceAlongLineMeters
     }
 
     /// The callout's heading, and what VoiceOver reaches a waypoint by — a
     /// polyline is not an accessibility element and cannot be made one.
+    ///
+    /// The same rule ``TrailStopRowView`` draws by, so a hiker reading the pin
+    /// and a hiker reading the row are told the same thing: the name when there
+    /// is one, and what the stop is to the route when there is not.
     var title: String? {
-        String(localized: "Point \(number)")
+        name.isEmpty ? role.title : name
     }
 
-    /// How far along the trail it is, in the hiker's own units.
+    /// What it is to the route and how far along it sits, in the hiker's own
+    /// units. The role is repeated here only when the line above is a name,
+    /// which is the one case where it would otherwise not be said at all.
     var subtitle: String? {
-        Measurement(value: distanceAlongLineMeters, unit: UnitLength.meters)
+        let length = Measurement(value: distanceAlongLineMeters, unit: UnitLength.meters)
             .formatted(.measurement(width: .abbreviated, usage: .road))
+        guard !name.isEmpty else { return length }
+        return "\(role.title) · \(length)"
     }
 }
 
@@ -211,10 +236,17 @@ extension MapView.Coordinator {
 
         addTrailDraftLegs(legs, to: mapView)
         let distances = controller.draft.distancesAlongLine
+        let waypoints = controller.draft.waypoints
         let pins = points.enumerated().map { index, coordinate in
             TrailDraftWaypointAnnotation(
                 coordinate: coordinate,
                 number: index + 1,
+                role: TrailStopRole.of(waypointAt: index, in: points.count),
+                // Read off the draft rather than carried in `points`, which is
+                // the coordinates alone. Answers for an index the two lists
+                // disagree about, which they can for one observation pass after
+                // an edit.
+                name: waypoints.indices.contains(index) ? waypoints[index].name : "",
                 distanceAlongLineMeters: distances.indices.contains(index) ? distances[index] : 0
             )
         }
@@ -437,8 +469,14 @@ extension MapView.Coordinator {
         view.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
 
         #if canImport(UIKit)
+        // **What the row says, not where the point sits in the array.** The
+        // list is a start, its numbered stops and a destination, and a pin
+        // reading "2" beside a row reading "Stop 1" is the map and the sheet
+        // counting two different things in front of one hiker. The two ends
+        // carry no digit at all, which is also what Apple Maps draws: they are
+        // told apart by being the ends.
         let label = trailDraftNumberLabel(in: view, diameter: diameter)
-        label.text = "\(annotation.number)"
+        label.text = Self.trailDraftPinDigit(for: annotation.role)
 
         let layer = view.layer
         layer.backgroundColor = UIColor(Color.accentColor).cgColor
@@ -455,6 +493,15 @@ extension MapView.Coordinator {
     }
 
     #if canImport(UIKit)
+    /// What a pin draws inside itself: a stop's number, and nothing for either
+    /// end of the route. See ``TrailStopRole``.
+    private static func trailDraftPinDigit(for role: TrailStopRole) -> String {
+        switch role {
+        case .start, .end: ""
+        case .stop(let number): "\(number)"
+        }
+    }
+
     /// The label inside a recycled pin, made once and found again afterwards.
     ///
     /// Tagged rather than subclassed: `dequeueReusableAnnotationView` hands
@@ -469,9 +516,9 @@ extension MapView.Coordinator {
         label.textAlignment = .center
         label.textColor = .white
         label.font = .systemFont(ofSize: 12, weight: .semibold)
-        // Decoration: the number is already in the annotation's title, which
-        // is what VoiceOver reads, and a label inside a pin would otherwise
-        // announce the digit a second time.
+        // Decoration: what this pin is is already in the annotation's title,
+        // which is what VoiceOver reads, and a label inside a pin would
+        // otherwise announce the digit a second time.
         label.isAccessibilityElement = false
         view.addSubview(label)
         return label

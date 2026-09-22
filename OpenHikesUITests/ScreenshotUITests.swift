@@ -442,8 +442,11 @@ nonisolated final class ScreenshotUITests: XCTestCase {
 
         liftDrawnTrailClearOfTheSheet(in: app)
         // The header is the sentence this frame is of — how long the line is
-        // so far — and it sits under the search field, which is the section a
-        // middle detent opens on.
+        // so far — and it is now the first thing in the list rather than the
+        // second: the *Find a Place* field that used to sit above it went with
+        // the search that moved into a sheet of its own. The scroll stays,
+        // because what a middle detent opens on is a question about the
+        // device's height rather than about this screen.
         XCTAssertTrue(
             scrollIntoView(element("trail-draft-length", in: app), in: app),
             "the maker should show the line's length beside its points"

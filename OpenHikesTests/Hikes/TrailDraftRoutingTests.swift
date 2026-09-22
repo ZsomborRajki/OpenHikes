@@ -76,7 +76,7 @@ struct TrailDraftRoutingTests {
     /// **What an answer landing is allowed to invalidate.** The maker's screen
     /// reads ``TrailDraft/waypoints`` to build its list and nothing else about
     /// the line; the rows, the footer and the retry control read
-    /// ``TrailDraft/legs`` themselves — see ``TrailDraftWaypointRow``. That
+    /// ``TrailDraft/legs`` themselves — see ``TrailStopRowView``. That
     /// split is only worth anything while a leg answering leaves the two lists
     /// the screen's own body reads exactly as they were, which is what a
     /// nineteen-answer trail would otherwise pay nineteen full rebuilds for.

@@ -296,13 +296,20 @@ nonisolated final class TrailMakerUITests: XCTestCase {
 /// a real simulator does, and three of them were wrong the first time on the
 /// hikes list. This is where they are pressed.
 extension TrailMakerUITests {
-    /// A swipe takes a point out, and the menu puts it back.
+    /// Taking a stop out, and putting it back.
     ///
     /// The pair rather than either alone: delete is the destructive half of
-    /// this phase and undo is what makes it safe, so a suite that covered only
+    /// this screen and undo is what makes it safe, so a suite that covered only
     /// the first would be green on a build where the second never appeared.
+    ///
+    /// **Through the red circle rather than a swipe**, and that is the cost of
+    /// the rows carrying their grabbers permanently: a `List` in edit mode
+    /// offers its delete on the leading edge and does not answer a swipe at
+    /// all. The same pairing Apple Maps' own directions rows have — a handle
+    /// trailing, a minus leading — and the swipe that used to do this is gone
+    /// with the mode it belonged to.
     @MainActor
-    func testSwipingAPointAwayAndUndoingIt() {
+    func testRemovingAStopAndUndoingIt() {
         let app = launchApp()
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
@@ -311,11 +318,16 @@ extension TrailMakerUITests {
         drawTrailPoints(Self.drawnPoints, on: map, in: app)
 
         let third = element("trail-draft-point-3", in: app)
-        element("trail-draft-point-2", in: app).swipeLeft()
+        // The circle sits inside the row's leading edge, before the route's own
+        // dot. A coordinate rather than a query, because it is the `List`'s own
+        // view and carries no identifier this app could give it.
+        element("trail-draft-point-2", in: app)
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: 0.5))
+            .tap()
         let delete = app.buttons["Delete"]
         XCTAssertTrue(
             delete.waitForExistence(timeout: UITestTimeout.existence),
-            "a swipe on a point should offer to delete it"
+            "the delete circle on a stop should offer to remove it"
         )
         delete.tap()
         XCTAssertTrue(
@@ -383,13 +395,17 @@ extension TrailMakerUITests {
         )
     }
 
-    /// Reordering, reached the way the hikes list taught: a context menu, then
-    /// edit mode, then the list's own drag, then the way out.
+    /// Reordering, which no longer has to be asked for.
     ///
-    /// A long press straight onto a drag does nothing — `List` reorders only in
-    /// edit mode — and the drag itself has to be slow and held, because a
-    /// reorder commits on the drop. Both were paid for once on `HikeOrderUITests`
-    /// and neither is rediscovered here.
+    /// **The whole point of the test is that nothing precedes the drag.** Phase
+    /// 6 reached this through a context menu on a row and an edit mode with a
+    /// Done control; the maker's list is Apple Maps' directions list now and is
+    /// in edit mode from the moment it appears, so the grabber is on every row
+    /// and the first gesture is the move itself.
+    ///
+    /// The drag still has to be slow and held, because a reorder commits on the
+    /// *drop*. That was paid for once on `HikeOrderUITests` and is not
+    /// rediscovered here.
     @MainActor
     func testReorderingThePoints() {
         let app = launchApp()
@@ -402,18 +418,6 @@ extension TrailMakerUITests {
 
         let third = element("trail-draft-point-3", in: app)
         let second = element("trail-draft-point-2", in: app)
-        third.press(forDuration: 1.0)
-        let reorder = app.buttons["Reorder Points"]
-        XCTAssertTrue(
-            reorder.waitForExistence(timeout: UITestTimeout.existence),
-            "a long press on a point should offer to rearrange the line"
-        )
-        reorder.tap()
-        let done = element("trail-draft-reorder-done", in: app)
-        XCTAssertTrue(
-            done.waitForExistence(timeout: UITestTimeout.existence),
-            "taking the offer should put the list into reorder mode"
-        )
 
         // The trailing edge is where the grabber is; slow, and held at the
         // end, because the move is committed on the drop.
@@ -432,10 +436,11 @@ extension TrailMakerUITests {
             "reordering the points should change the trail they describe"
         )
 
-        done.tap()
+        // And the edit menu was never taken away, because there is no mode to
+        // be in — the Done control that used to replace it is gone.
         XCTAssertTrue(
-            waitUntil { element("trail-draft-actions", in: app).exists },
-            "leaving reorder mode should hand the menu back"
+            element("trail-draft-actions", in: app).exists,
+            "the edit menu stays put while rows are being dragged"
         )
         XCTAssertTrue(
             element("trail-draft-save", in: app).isEnabled,
@@ -534,6 +539,119 @@ extension TrailMakerUITests {
     }
 }
 
+// MARK: - The route list, and the search behind it
+
+/// The Apple Maps arrangement: a start, its stops and its destination, each row
+/// a field that opens a search, with *Add Stop* pinned under them.
+///
+/// Only a simulator can answer the two questions here. **Does a row still
+/// answer a tap while the list is permanently in edit mode** — which is the one
+/// thing the redesign rests on, and which the hikes list's own finding says is
+/// false for a `NavigationLink` — and does a place picked in the sheet land in
+/// the row the sheet was opened from. `TrailDraftTests` covers what the draft
+/// does with a name once it has one; neither of these is reachable from there.
+extension TrailMakerUITests {
+    /// *Add Stop* opens the search, and it is there before anything is drawn.
+    @MainActor
+    func testAddStopOpensTheSearch() {
+        let app = launchApp()
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
+
+        openTrailMaker(in: app)
+
+        // Present over an empty draft, which is the half that makes the section
+        // read as a route being built rather than as a list of what is there.
+        let add = element("trail-draft-add-stop", in: app)
+        XCTAssertTrue(
+            add.waitForExistence(timeout: UITestTimeout.navigation),
+            "an empty maker should still offer to add a stop"
+        )
+        add.tap()
+
+        XCTAssertTrue(
+            element("trail-stop-search-field", in: app).waitForExistence(
+                timeout: UITestTimeout.navigation
+            ),
+            "Add Stop should open the search sheet"
+        )
+        element("trail-stop-search-cancel", in: app).tap()
+        XCTAssertTrue(
+            waitUntil { !element("trail-stop-search-field", in: app).exists },
+            "cancelling should put the search away"
+        )
+    }
+
+    /// A stop row answers a tap, with the list in edit mode the whole time.
+    ///
+    /// **This is the assertion the redesign stands on.** A `List` gives a row's
+    /// tap to the list once edit mode is on — that is what the hikes list found
+    /// for its `NavigationLink` rows, and it is why reordering used to be a mode
+    /// with a way out. These rows are `Button`s and are tapped while the
+    /// grabbers are showing; if that ever stops working, this goes red here
+    /// rather than in a hiker's hands.
+    @MainActor
+    func testTappingAStopOpensTheSearchOnThatRow() {
+        let app = launchApp()
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
+
+        openTrailMaker(in: app)
+        drawTrailPoints(Self.drawnPoints, on: map, in: app)
+
+        // The middle of three, so the sheet has a role to name that is neither
+        // of the two ends — which is what says it opened on *this* row.
+        element("trail-draft-point-2", in: app).tap()
+
+        XCTAssertTrue(
+            element("trail-stop-search-field", in: app).waitForExistence(
+                timeout: UITestTimeout.navigation
+            ),
+            "a stop row should open the search even with the list in edit mode"
+        )
+        XCTAssertTrue(
+            app.navigationBars["Stop 1"].exists,
+            "the sheet should say which row it was opened from"
+        )
+        element("trail-stop-search-cancel", in: app).tap()
+
+        // And the drawing is untouched: opening a search places nothing.
+        XCTAssertTrue(
+            waitUntil { element("trail-draft-point-3", in: app).exists },
+            "cancelling the search should leave the route as it was"
+        )
+    }
+
+    /// Every row says what it is to the route, and the words are the ones a
+    /// hiker reads rather than a number.
+    ///
+    /// Under automation nothing reverse-geocodes — `makeTrailStopNaming()` is
+    /// `nil` when tests are running — so these are exactly the fallbacks, which
+    /// is what makes them assertable at all.
+    @MainActor
+    func testTheRouteReadsAsStartStopsAndDestination() {
+        let app = launchApp()
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
+
+        openTrailMaker(in: app)
+        drawTrailPoints(Self.drawnPoints, on: map, in: app)
+
+        XCTAssertTrue(
+            element("trail-draft-point-1", in: app).label.contains("Start"),
+            "the first row is where the route starts"
+        )
+        XCTAssertTrue(
+            element("trail-draft-point-2", in: app).label.contains("Stop 1"),
+            "the middle row is a stop, counted from one"
+        )
+        XCTAssertTrue(
+            element("trail-draft-point-3", in: app).label.contains("Destination"),
+            "the last row is where the route ends"
+        )
+    }
+}
+
 // MARK: - Marking places
 
 /// The other half of Phase 4, and the half that cannot be reached without a
@@ -546,6 +664,45 @@ extension TrailMakerUITests {
 /// `MapCoordinatorTests+TrailPlaces` for the pins against a real map. None of
 /// that says whether a hiker can get from a tap on the map to a named spring.
 extension TrailMakerUITests {
+    /// Marking a place from the list, which is the half a tap on the map does
+    /// not reach.
+    ///
+    /// **This exists because the controls here were a `Menu` and stopped
+    /// working.** A `Menu` inside a `List` does not open once the list is in
+    /// edit mode, which the route's grabbers now require permanently — so the
+    /// three entries are ordinary `Button` rows, and nothing on the screen
+    /// would have said they were broken. `testMarkingAPlaceFromTheMap` next
+    /// door goes through the map's callout instead and was green the whole
+    /// time it was.
+    @MainActor
+    func testMarkingAPlaceFromTheList() {
+        let app = launchApp()
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
+
+        openTrailMaker(in: app)
+
+        let centre = element("trail-draft-add-place", in: app)
+        XCTAssertTrue(
+            centre.waitForExistence(timeout: UITestTimeout.navigation),
+            "the places list should offer to mark the map's centre"
+        )
+        centre.tap()
+
+        XCTAssertTrue(
+            element("trail-place-name", in: app).waitForExistence(
+                timeout: UITestTimeout.navigation
+            ),
+            "marking a place from the list should open the editor on it"
+        )
+        element("trail-place-done", in: app).tap()
+
+        XCTAssertTrue(
+            waitUntil { !element("trail-draft-places-empty", in: app).exists },
+            "and the place should be listed"
+        )
+    }
+
     /// The whole place flow: tap the map, mark a place, name it, and find it
     /// listed under the points with the symbol it was given.
     @MainActor

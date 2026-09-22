@@ -88,6 +88,14 @@ final class TrailDraftController {
     /// waits rather than being asked per tap.
     let elevation: TrailDraftElevation
 
+    /// What the points a hiker merely tapped are called.
+    ///
+    /// Held here like the two above, and unlike them what it produces *is*
+    /// written down: a name is part of the drawing, so it goes through
+    /// ``receiveName(_:for:)`` below rather than onto the draft directly. See
+    /// ``TrailStopNamer``.
+    let namer: TrailStopNamer
+
     /// Whether the map should be offering to make a trail. Observed directly
     /// by ``MapView/Coordinator``, so showing or hiding the pill never
     /// re-renders a view.
@@ -161,12 +169,17 @@ final class TrailDraftController {
     ///     is billed. See ``OpenHikesModel/makeTrailElevationSource()``.
     ///   - elevationPause: the debounce in front of that source, exposed for
     ///     the reason ``TrailDraftElevation``'s own parameter is.
+    ///   - naming: what a tapped point is called, or `nil` for a launch that
+    ///     must not ask — a preview, or a suite, for the reason
+    ///     `elevationSource` is `nil` in both. See
+    ///     ``OpenHikesModel/makeTrailStopNaming()``.
     init(
         store: TrailDraftStore? = nil,
         router: (any TrailLegRouting)? = nil,
         placeSource: (any TrailPointSourcing)? = nil,
         elevationSource: (any CuratedElevationSourcing)? = nil,
-        elevationPause: (@Sendable (TimeInterval) async throws -> Void)? = nil
+        elevationPause: (@Sendable (TimeInterval) async throws -> Void)? = nil,
+        naming: (any TrailStopNaming)? = nil
     ) {
         self.store = store
         self.router = router
@@ -176,6 +189,10 @@ final class TrailDraftController {
         elevation = elevationPause.map { pause in
             TrailDraftElevation(draft: drawing, source: elevationSource, pause: pause)
         } ?? TrailDraftElevation(draft: drawing, source: elevationSource)
+        namer = TrailStopNamer(source: naming)
+        namer.onNamed { [weak self] id, name in
+            self?.receiveName(name, for: id)
+        }
     }
 
     /// Reports whether the sheet has a screen pushed, which is the whole of
@@ -215,6 +232,10 @@ final class TrailDraftController {
         if editing {
             restoreIfNeeded()
             resolveLegs()
+            // A restored draft is a line whose points this launch has never
+            // asked about — and one drawn before names existed has none at
+            // all. Asked on open for the reason the heights are.
+            namer.nameUnnamed(in: draft.waypoints)
             // A restored draft is a line nobody has measured this launch, and
             // it is a line the hiker is looking at — so the figure is asked
             // for on open exactly as it is asked for after an edit, and
@@ -243,6 +264,9 @@ final class TrailDraftController {
             // waiting for it, so a request nobody will read is a request worth
             // dropping. The next open asks again.
             elevation.clear()
+            // Cancelled for the same reason, and with the record of what has
+            // been asked — see ``TrailStopNamer/clear()``.
+            namer.clear()
         }
     }
 
@@ -260,9 +284,38 @@ final class TrailDraftController {
     /// ``PhotoCaptureController/requestCamera()`` makes and for the same
     /// reason: the map's recognizer sees every tap, and the one that arrives
     /// as the screen is leaving must not be the one that changes the trail.
-    func appendWaypoint(at coordinate: CLLocationCoordinate2D) {
+    ///
+    /// - Parameter name: what it is called, for a point picked out of the
+    ///   search sheet. Empty for a tap on the map, which ``TrailStopNamer``
+    ///   describes a moment later.
+    func appendWaypoint(at coordinate: CLLocationCoordinate2D, named name: String = "") {
         guard isEditing else { return }
-        draft.append(coordinate)
+        draft.append(coordinate, named: Self.bounded(name))
+        commitLine()
+        resolveLegs()
+    }
+
+    /// Puts a named place into the row a hiker opened the search sheet from.
+    ///
+    /// The one verb the sheet has, and it covers both of the things a row can
+    /// be when it is tapped: a stop that is already down — which this *moves*,
+    /// keeping its place in the line — and the *Add Stop* row at the bottom,
+    /// which has no point behind it and appends one. Which of the two is
+    /// decided by the sheet's own ``TrailStopSearchTarget``, not here.
+    ///
+    /// By identity rather than by row, because a sheet is a presentation the
+    /// drawing can change underneath: a leg landing while the hiker is typing
+    /// does not move any point, but an undo reached from the map's callout
+    /// can, and a row index captured when the sheet opened would then name the
+    /// wrong stop.
+    func placeWaypoint(
+        _ id: UUID,
+        at coordinate: CLLocationCoordinate2D,
+        named name: String
+    ) {
+        guard isEditing,
+              let index = draft.waypoints.firstIndex(where: { $0.id == id }) else { return }
+        draft.place(waypointAt: index, at: coordinate, named: Self.bounded(name))
         commitLine()
         resolveLegs()
     }
@@ -275,11 +328,37 @@ final class TrailDraftController {
     /// not by starting again. Which of the two a tap means is decided on the
     /// map, by whether it landed on a line — see
     /// ``MapView/Coordinator/addTrailDraftWaypoint(at:in:)``.
-    func insertWaypoint(at coordinate: CLLocationCoordinate2D, intoLegAt index: Int) {
+    func insertWaypoint(
+        at coordinate: CLLocationCoordinate2D,
+        intoLegAt index: Int,
+        named name: String = ""
+    ) {
         guard isEditing else { return }
-        draft.insert(coordinate, intoLegAt: index)
+        draft.insert(coordinate, intoLegAt: index, named: Self.bounded(name))
         commitLine()
         resolveLegs()
+    }
+
+    /// Writes what ``TrailStopNamer`` worked out a point is called, and writes
+    /// the drawing down with it.
+    ///
+    /// Not ``commitLine()``: nothing geometric moved, so no leg wants asking
+    /// about again and the climb is the number it already was — the same split
+    /// marking a place makes, and for the same reason. Not guarded on
+    /// ``isEditing`` either, because a name that landed as the screen closed is
+    /// still true of the point it is about, and the persist below is what keeps
+    /// it; the namer is cancelled on the way out anyway, so this is the race
+    /// rather than the ordinary path.
+    private func receiveName(_ name: String, for id: UUID) {
+        draft.describe(waypointWith: id, as: name)
+        persist()
+    }
+
+    /// The bound every name in this app is taken through where it enters — see
+    /// ``HikeTitle``. A stop's name arrives from MapKit rather than from a
+    /// keyboard, which is the unattended half that bound is for.
+    private static func bounded(_ name: String) -> String {
+        BoundedText.boundedOrEmpty(name, to: .title)
     }
 
     /// Takes points out of the line. What a swipe on a row does.
@@ -530,6 +609,10 @@ final class TrailDraftController {
         // draft is never measured, so a figure left here would be the climb of
         // a trail that has just been saved or thrown away.
         elevation.clear()
+        // And the names go with the points they were about, for the same
+        // reason: a question still out about one of them has nothing left to
+        // answer.
+        namer.clear()
     }
 
     private func restoreIfNeeded() {
@@ -556,6 +639,12 @@ final class TrailDraftController {
     private func commitLine() {
         commit()
         elevation.drawingDidChange()
+        // Every edit to the line, rather than only the two that add a point:
+        // a restore brings back points nothing has named, a delete can leave a
+        // named point in flight beside an unnamed one, and asking after all of
+        // them costs nothing once each has been asked once. See
+        // ``TrailStopNamer/nameUnnamed(in:)``.
+        namer.nameUnnamed(in: draft.waypoints)
     }
 
     /// What every edit ends with: the drawing written down, and whatever

@@ -78,9 +78,22 @@ struct TrailDraftStore {
     func load() -> StoredTrailDraft {
         do {
             guard let record = try existingRecord() else { return .nothing }
+            // The names are read only when there is exactly one per point. Two
+            // columns holding one list is an invariant rather than a type — see
+            // ``TrailDraftRecord/waypointNames`` — and the honest answer to a
+            // row where they have come apart is the line with nothing written
+            // beside it, never a name matched to whichever point shares its
+            // index.
+            let names = record.waypointNames.count == record.waypoints.count
+                ? record.waypointNames
+                : []
             return StoredTrailDraft(
-                waypoints: record.waypoints.map { point in
-                    TrailWaypoint(latitude: point.latitude, longitude: point.longitude)
+                waypoints: record.waypoints.enumerated().map { index, point in
+                    TrailWaypoint(
+                        latitude: point.latitude,
+                        longitude: point.longitude,
+                        name: names.indices.contains(index) ? names[index] : ""
+                    )
                 },
                 places: record.places,
                 snapsToPaths: record.snapsToPaths
@@ -103,9 +116,16 @@ struct TrailDraftStore {
     /// already takes.
     func save(waypoints: [TrailWaypoint], places: [TrailPlace], snapsToPaths: Bool) {
         let points = waypoints.map(\.routeCoordinate)
+        // Written in the same statement that writes the points, every time, so
+        // the two columns cannot come apart through a path that remembered one
+        // and forgot the other — the invariant
+        // ``TrailDraftRecord/waypointNames`` describes, kept by there being one
+        // writer.
+        let names = waypoints.map(\.name)
         do {
             if let record = try existingRecord() {
                 record.waypoints = points
+                record.waypointNames = names
                 record.places = places
                 record.snapsToPaths = snapsToPaths
                 record.updatedAt = .now
@@ -113,6 +133,7 @@ struct TrailDraftStore {
                 context.insert(
                     TrailDraftRecord(
                         waypoints: points,
+                        waypointNames: names,
                         places: places,
                         snapsToPaths: snapsToPaths,
                         updatedAt: .now
