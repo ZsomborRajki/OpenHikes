@@ -75,6 +75,7 @@
 //  offered it went with the rest of the maker's ⋯ menu.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import Observation
@@ -766,11 +767,13 @@ extension TrailDraft {
     /// the destination, with the start open above it, and one dragged over it
     /// the start again. Two open fields and no point have nothing to say about
     /// the draft; the list keeps that order itself. A list that does not name
-    /// every point exactly once changes nothing.
+    /// every point changes nothing, and one naming a point twice counts it once.
     func arrangeRows(_ order: [String]) {
         let byRow = Dictionary(uniqueKeysWithValues: waypoints.map { ($0.id.uuidString, $0) })
-        let points = order.compactMap { byRow[$0] }
-        guard points.count == waypoints.count, Set(points.map(\.id)).count == points.count else { return }
+        // Unique first, so every point below is a different waypoint and
+        // naming as many as there are means naming each exactly once.
+        let points = order.uniqued().compactMap { byRow[$0] }
+        guard points.count == waypoints.count else { return }
         let loneIsDestination = points.count == 1 && order.first != points[0].id.uuidString
         guard points != waypoints || loneIsDestination != startIsOpen else { return }
         waypoints = points
