@@ -47,8 +47,8 @@ struct PlaceCardHeader<Leading: View, Title: View, Subtitle: View, Trailing: Vie
 }
 
 extension PlaceCardHeader where Trailing == EmptyView {
-    /// A header with nothing to control: a hike's or a walk's, whose actions
-    /// sit on the subtitle's line or further down the page.
+    /// A header with nothing to control: a finished walk's, whose actions sit
+    /// further down the page.
     init(
         @ViewBuilder leading: () -> Leading,
         @ViewBuilder title: () -> Title,

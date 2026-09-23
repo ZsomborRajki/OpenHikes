@@ -550,6 +550,10 @@ private extension HikeDetailView {
             }
         } subtitle: {
             dateAndActions
+        } trailing: {
+            // Reads the session as a reference, like ``WalkControls`` below:
+            // this body never dereferences it.
+            WalkToggleButton(hike: hike, profile: profile, session: walkSession)
         }
     }
 

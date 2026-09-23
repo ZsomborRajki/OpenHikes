@@ -54,14 +54,51 @@ nonisolated final class WalkUITests: XCTestCase {
         XCTAssertTrue(pill.waitForNonExistence(timeout: UITestTimeout.existence))
         expectPhase(phase, contains: "Active")
 
-        scrollToTap(app.buttons["Pause Hike"], in: app)
+        scrollToTap(app.buttons["walk-controls-toggle"], in: app)
         expectPhase(phase, contains: "Paused")
         XCTAssertFalse(
             app.buttons["Pause"].exists,
             "the recording's own Pause must not appear on a hike screen"
         )
 
-        app.buttons["Resume Hike"].tap()
+        app.buttons["walk-controls-toggle"].tap()
+        expectPhase(phase, contains: "Active")
+    }
+
+    /// The title row's Start begins a walk off the route, where no fix could,
+    /// and becomes its Pause — with the controls group under the progress row
+    /// appearing beside it, and no pill announcing a start the hiker asked for.
+    @MainActor
+    func testStartingAWalkByHandTurnsTheButtonIntoPause() {
+        let app = makeApp(arguments: [
+            "--ui-test-expanded-sheet",
+            "--ui-test-enable-location",
+            "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+        ])
+        app.resetAuthorizationStatus(for: .location)
+        addLocationPermissionMonitor()
+        setSimulatedLocation(UITestFixture.offTrailCoordinate)
+        defer { XCUIDevice.shared.location = nil }
+
+        launch(app)
+        openHikeDetail(in: app)
+        let toggle = app.buttons["walk-toggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: UITestTimeout.existence))
+        XCTAssertEqual(toggle.label, "Start Hike")
+        XCTAssertFalse(element("walk-controls", in: app).exists)
+
+        toggle.tap()
+        let phase = element("walk-phase", in: app)
+        XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.existence))
+        expectPhase(phase, contains: "Active")
+        expectLabel(toggle, contains: "Pause Hike")
+        XCTAssertTrue(element("walk-controls", in: app).exists, "End is still in the controls group")
+        XCTAssertFalse(element("walk-started-pill", in: app).exists)
+
+        toggle.tap()
+        expectPhase(phase, contains: "Paused")
+        expectLabel(toggle, contains: "Resume Hike")
+        toggle.tap()
         expectPhase(phase, contains: "Active")
     }
 
@@ -248,14 +285,14 @@ nonisolated final class WalkUITests: XCTestCase {
             "reopening must preserve both coverage and remaining distance"
         )
 
-        XCTAssertTrue(scrollUntilVisible(app.buttons["Pause Hike"], in: app))
-        app.buttons["Pause Hike"].tap()
+        XCTAssertTrue(scrollUntilVisible(app.buttons["walk-controls-toggle"], in: app))
+        app.buttons["walk-controls-toggle"].tap()
         expectPhase(phase, contains: "Paused")
         scrollToTap(follow, in: app)
         expectPhase(phase, contains: "Paused")
         scrollToTap(follow, in: app)
-        XCTAssertTrue(scrollUntilVisible(app.buttons["Resume Hike"], in: app))
-        app.buttons["Resume Hike"].tap()
+        XCTAssertTrue(scrollUntilVisible(app.buttons["walk-controls-toggle"], in: app))
+        app.buttons["walk-controls-toggle"].tap()
         expectPhase(phase, contains: "Active")
         XCTAssertEqual(follow.value as? String, "0", "Resume must preserve the display preference")
     }
