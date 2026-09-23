@@ -437,6 +437,11 @@ struct OpenHikesView: View {
             // second copy behind a double tap.
             .onChange(of: appModel.trailMaker.openRequest) { _, _ in
                 sheet.path = [.trailDraft]
+                // The map is the maker's canvas, and a hike left selected
+                // would still be drawn across it. Let go of it rather than
+                // hide it: a new trail is not about the old one, and a saved
+                // drawing selects itself anyway — see `showSavedHike`.
+                selectedHike = nil
                 // The compact detent is only tall enough for the search field,
                 // and `.large` covers the map the maker is drawn on. See
                 // ``SheetPresentation/makeRoomForTheMap()``.
