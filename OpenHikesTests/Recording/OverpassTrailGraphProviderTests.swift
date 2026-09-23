@@ -130,6 +130,32 @@ struct OverpassTrailGraphProviderTests {
         #expect(edge.displayName == "Alpine Route")
         #expect(edge.surface == "gravel")
         #expect(edge.tracktype == "grade2")
+        #expect(edge.highway == "path")
+        #expect(edge.isTrail)
+    }
+
+    /// The trail maker needs the lanes that join one path to the next, and a
+    /// recording must still never be matched onto them — so a road is kept
+    /// and says it is a road, and a motorway is not kept at all.
+    @Test("roads are kept and marked, motorways are not")
+    func decodesRoads() throws {
+        let payload = """
+        {
+            "elements": [
+                {"type":"node","id":1,"lat":47.6300,"lon":12.8600},
+                {"type":"node","id":2,"lat":47.6310,"lon":12.8600},
+                {"type":"node","id":3,"lat":47.6320,"lon":12.8600},
+                {"type":"way","id":10,"nodes":[1,2],"tags":{"highway":"service"}},
+                {"type":"way","id":11,"nodes":[2,3],"tags":{"highway":"motorway"}}
+            ]
+        }
+        """
+        let graph = try OverpassTrailGraphProvider.decodeGraph(from: Data(payload.utf8))
+
+        let edge = try #require(graph.edges.first)
+        #expect(graph.edges.count == 1)
+        #expect(edge.highway == "service")
+        #expect(!edge.isTrail)
     }
 
     /// The same `200` that is not an answer, and here the stake is a *cached*
@@ -383,8 +409,10 @@ struct OverpassTrailGraphProviderTests {
         let query = try #require(
             form?.queryItems?.first { $0.name == "data" }?.value
         )
-        #expect(query.contains("rel(bw.trails)"))
-        #expect(query.contains("node(w.trails)"))
+        #expect(query.contains("rel(bw.ways)"))
+        #expect(query.contains("node(w.ways)"))
+        #expect(query.contains("|residential|"), "the roads that join trails are asked for")
+        #expect(!query.contains("motorway"))
         #expect(!query.contains(">>"))
     }
 

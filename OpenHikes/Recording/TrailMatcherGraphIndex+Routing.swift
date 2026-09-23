@@ -100,7 +100,7 @@ nonisolated extension TrailMatcherGraphIndex {
             let rootNodes = Array(previous.nodes[0...spurIndex])
             let rootEdges = Array(previous.edgeIndices.prefix(spurIndex))
             let rootDistance = rootEdges.reduce(0.0) { sum, edgeIdx in
-                sum + edges[edgeIdx].lengthMeters
+                sum + cost(ofEdge: edgeIdx)
             }
             guard rootDistance <= maximumDistance else { continue }
             var bannedEdges = Set<Int>()
