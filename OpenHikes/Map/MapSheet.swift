@@ -164,7 +164,7 @@ struct MapSheet: View {
                     // screens away redraw every row on the map screen.
                     .equatable()
             }
-            .navigationDestination(for: SheetRoute.self, destination: navigationDestinationView)
+            .navigationDestination(for: SheetRoute.self, destination: pushedScreen)
             #if os(iOS)
             // The sheet's own screen has no navigation bar: the search field
             // and the settings button are its chrome, and they are drawn at
@@ -458,6 +458,18 @@ struct MapSheet: View {
                 presentation.path.removeLast()
             }
         )
+    }
+
+    /// A destination on the sheet's own glass.
+    ///
+    /// A pushed screen otherwise gets the stack's opaque system background,
+    /// which the root never has: the sheet was clear glass on the search screen
+    /// and a white slab on every screen pushed over it, plainest at the compact
+    /// detent where only the bar shows. Cleared here, once, so every
+    /// destination shares the root's glass rather than each opting in.
+    private func pushedScreen(for route: SheetRoute) -> some View {
+        navigationDestinationView(for: route)
+            .containerBackground(.clear, for: .navigation)
     }
 
     @ViewBuilder
