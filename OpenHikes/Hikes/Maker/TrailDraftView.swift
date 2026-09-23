@@ -21,10 +21,14 @@
 //  rather than styling.
 //
 //  **Every stop can be moved and deleted at any time, as in Apple Maps.** A
-//  filled row always shows a grabber, and a trailing swipe deletes it; there
-//  is no Edit/Done mode to enter first and no leading delete circles. `List`
-//  cannot offer both at once, so the stops are a UIKit list inside this one
-//  — see ``TrailStopList`` for why and how.
+//  press and hold lifts a filled row to drag it, and a trailing swipe deletes
+//  it; there is no Edit/Done mode to enter first and no leading delete
+//  circles. That is `onMove` on the stops' `ForEach` outside edit mode, which
+//  on iOS 27 drags on a press and hold and keeps the swipe. iOS 27's own
+//  `reorderable()` was tried first and measured in a standalone prototype: it
+//  dropped a stop moved one row up at the *end* of the list and ignored one
+//  moved one row down, in a sheet or out of one, where `onMove` placed all
+//  three test drags correctly.
 //
 //  **A row is a field.** Tapping one opens ``TrailStopSearchSheet`` on it, and
 //  the place picked there fills that row and takes the camera to it. Every
@@ -251,22 +255,31 @@ struct TrailDraftView: View {
     /// is its own `View` for the last of those — see ``TrailDraftLineHeader``.
     @ViewBuilder private var routeSection: some View {
         Section {
-            // The stops are handed the draft rather than values read off it,
-            // and the footer and the retry row are their own views for the
-            // same reason: every leg that lands rewrites `legs`, and a name
-            // landing or a stop being dragged rewrites the points, and reading
-            // either here would rebuild this whole screen for it. Nothing in
-            // this body reads the draft's stops at all — ``TrailStopList``
-            // reads ``TrailDraft/slots`` and each of its rows the rest.
-            TrailStopList(
-                draft: draft,
-                onSearch: { searchForStop(target(for: $0)) },
-                onMove: { reorderWaypoint($0, before: $1) },
-                onStep: { adjustWaypoint($0, direction: $1) },
-                onDelete: { maker.removeStop(id: $0) }
-            )
-            .listRowInsets(EdgeInsets())
-            .listRowSeparator(.hidden)
+            // The rows are handed the draft rather than values read off it, and
+            // the footer and the retry row are their own views for the same
+            // reason: every leg that lands rewrites `legs`, and reading it here
+            // would rebuild this whole screen once per answer. See
+            // ``TrailStopRowView``. The same goes for the points themselves —
+            // a name landing or a stop being dragged rewrites them — which is
+            // why the only thing read here is ``TrailDraft/slots``, which
+            // changes when a row comes or goes and at no other time.
+            //
+            // Three `ForEach`es so that only the stops can be picked up: an
+            // open field sits before them or after them and has no place in
+            // their order, and the stops' offsets are then the waypoints' own.
+            let slots = draft.slots
+            let fieldsBefore = Array(slots.prefix { $0.waypointIndex == nil })
+            let stops = slots.filter { $0.waypointIndex != nil }
+            ForEach(fieldsBefore) { openFieldRow($0, in: slots) }
+                .listRowInsets(TrailStopRowView.rowInsets)
+                .listRowSeparator(.hidden)
+            ForEach(stops) { stopRow($0, in: slots) }
+                .onMove(perform: moveStops)
+                .listRowInsets(TrailStopRowView.rowInsets)
+                .listRowSeparator(.hidden)
+            ForEach(Array(slots.dropFirst(fieldsBefore.count + stops.count))) { openFieldRow($0, in: slots) }
+                .listRowInsets(TrailStopRowView.rowInsets)
+                .listRowSeparator(.hidden)
             if draft.canBeSaved {
                 TrailAddStopRow { searchForStop(.newStop) }
             }
@@ -276,6 +289,42 @@ struct TrailDraftView: View {
         } footer: {
             TrailDraftLineFooter(draft: draft)
         }
+    }
+
+    /// A start or destination field still waiting for a place.
+    private func openFieldRow(_ slot: TrailStopSlot, in slots: [TrailStopSlot]) -> some View {
+        TrailStopRowView(draft: draft, position: slots.firstIndex(of: slot) ?? 0) {
+            searchForStop(target(for: slot))
+        }
+    }
+
+    /// A filled stop, with the two gestures it has at all times: the press and
+    /// hold that drags it and a trailing swipe that deletes it.
+    ///
+    /// One view whatever the slot, with no `if` around it. Every slot here is a
+    /// stop, so the optional identity is only ever there to unwrap — and a
+    /// `ForEach` of conditional rows is where iOS 27's list reordering was
+    /// seen to move a row on screen and never report the move.
+    private func stopRow(_ slot: TrailStopSlot, in slots: [TrailStopSlot]) -> some View {
+        let id = slot.stopID
+        return TrailStopRowView(
+            draft: draft,
+            position: slots.firstIndex(of: slot) ?? 0,
+            onStep: id.map { id in { adjustWaypoint(id, direction: $0) } },
+            onSearch: { searchForStop(target(for: slot)) }
+        )
+        .swipeActions(edge: .trailing) {
+            Button("Delete", systemImage: "trash", role: .destructive) {
+                if let id { maker.removeStop(id: id) }
+            }
+        }
+    }
+
+    /// A drop from the stops' drag. The stops' `ForEach` holds every waypoint
+    /// in order and nothing else, so its offsets are the draft's.
+    private func moveStops(from offsets: IndexSet, to destination: Int) {
+        HapticMoment.rowMoved.play()
+        maker.reorderWaypoints(fromOffsets: offsets, toOffset: destination)
     }
 
     /// What a row's search fills: the stop it already holds, or its open field.
@@ -307,7 +356,7 @@ struct TrailDraftView: View {
     }
 
     /// Moves a stop immediately before `targetID`, or to the end for `nil`.
-    /// Where a drag's drop and a VoiceOver step both land.
+    /// Where a VoiceOver step lands; a drag is ``moveStops(from:to:)``.
     private func reorderWaypoint(_ sourceID: UUID, before targetID: UUID?) {
         guard
             let sourceIndex = draft.waypoints.firstIndex(where: { $0.id == sourceID })
