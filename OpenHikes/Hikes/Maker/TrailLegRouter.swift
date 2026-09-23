@@ -30,6 +30,15 @@
 //  for a tile the first is already downloading, and joins it instead of
 //  opening a second connection.
 //
+//  ## Roads, and Apple Maps behind them
+//
+//  The graph has the roads that join trails in it as well as the trails —
+//  see ``TrailGraphHighway`` — and this router alone builds its index over
+//  both, costing a road more than a path. A recording still sees trails only.
+//  A leg the graph still cannot join, or that Overpass would not answer for,
+//  is put to Apple Maps' walking directions before it is drawn straight; see
+//  ``OverpassTrailLegRouter/route(_:)``.
+//
 //  ## What is cached here, and what deliberately is not
 //
 //  Settled answers are cached by ``TrailLegEnds``, so toggling snapping off
@@ -149,28 +158,61 @@ actor OverpassTrailLegRouter: TrailLegRouting {
     }
 
     private let provider: any TrailGraphProviding
+    /// Asked when the graph has no answer — see ``route(_:)``.
+    private let fallback: (any TrailLegRouting)?
     /// Bounded, because this router lives as long as the app — see
     /// ``TrailLegAnswerCache``.
     private var cache = TrailLegAnswerCache()
     private var index: BuiltIndex?
 
-    init(provider: any TrailGraphProviding) {
+    /// - Parameter fallback: Apple Maps walking directions, asked for a leg
+    ///   the trail graph could not route. `nil` in a suite about the graph.
+    init(provider: any TrailGraphProviding, fallback: (any TrailLegRouting)? = nil) {
         self.provider = provider
+        self.fallback = fallback
     }
 
+    /// The graph's answer, or Apple Maps' walking route when the graph has
+    /// none and Apple does.
+    ///
+    /// The graph goes first because it knows the mountain: Apple's walking
+    /// network is roads and town footpaths, and above the valley it has
+    /// nothing a hiker would call a route. Apple goes second because a
+    /// straight line through a village is worse than its pavement — a
+    /// corner of the graph with a way missing, or an Overpass that is busy,
+    /// should not cost the hiker the route every map app would have drawn.
+    ///
+    /// An Apple answer is timed at the hiking pace like every other hiking
+    /// leg, so one leg of a walk is not quoted at Apple's walking speed and
+    /// the next at ours. It is cached only when both questions were settled:
+    /// a refusal is never cached, see the file header, and neither is an
+    /// Apple failure the leg could be asked about again.
     func route(_ ends: TrailLegEnds) async -> TrailLegRoute? {
         if let cached = cache[ends] { return cached }
+        guard let own = await graphRoute(ends) else { return nil }
+        guard Self.asksFallback(own), let fallback else {
+            return own.snap.isRetryable ? own : settling(own, for: ends)
+        }
+        guard let other = await fallback.route(ends) else { return nil }
+        let answer = Self.followsAWay(other) ? Self.atHikingPace(other) : own
+        guard !own.snap.isRetryable, !other.snap.isRetryable else { return answer }
+        return settling(answer, for: ends)
+    }
+
+    /// What the trail graph says about `ends`, cached by nobody, or `nil`
+    /// when the question was cancelled.
+    private func graphRoute(_ ends: TrailLegEnds) async -> TrailLegRoute? {
         guard ends.straightDistanceMeters <= Self.maximumLegMeters else {
-            return settling(.straight(along: ends, .unmapped(.tooFarApart)), for: ends)
+            return .straight(along: ends, .unmapped(.tooFarApart))
         }
         let corridor = Self.corridor(along: ends)
         do {
             let graph = try await graph(covering: corridor)
             try Task.checkCancellation()
             guard let graph, !graph.isEmpty else {
-                return settling(.straight(along: ends, .unmapped(.noPathBetween)), for: ends)
+                return .straight(along: ends, .unmapped(.noPathBetween))
             }
-            return settling(resolve(ends, over: graph, covering: corridor), for: ends)
+            return resolve(ends, over: graph, covering: corridor)
         } catch {
             // A cancelled leg is not a degraded one. The draft changed under
             // the question — a point went down, or the maker closed — and
@@ -183,7 +225,6 @@ actor OverpassTrailLegRouter: TrailLegRouting {
                 \(String(describing: outage), privacy: .public)
                 """
             )
-            // Deliberately not cached: *Retry* has to be able to ask again.
             return .straight(along: ends, .refused(outage))
         }
     }
@@ -240,8 +281,8 @@ actor OverpassTrailLegRouter: TrailLegRouting {
     ) -> TrailLegRoute {
         let regions = Set(corridor.compactMap(provider.region(containing:)))
         var built = index?.regions == regions
-            ? (index?.value ?? TrailMatcherGraphIndex(graph: graph))
-            : TrailMatcherGraphIndex(graph: graph)
+            ? (index?.value ?? TrailMatcherGraphIndex(graph: graph, network: .walking))
+            : TrailMatcherGraphIndex(graph: graph, network: .walking)
         let route = Self.route(ends, using: &built)
         index = BuiltIndex(regions: regions, value: built)
         return route
@@ -257,6 +298,35 @@ actor OverpassTrailLegRouter: TrailLegRouting {
 // thread. Static because none of it touches the actor's state — the index is
 // handed in `inout` so its own shortest-path cache is kept.
 nonisolated private extension OverpassTrailLegRouter {
+    /// A graph answer worth a second opinion: no path joined the ends, or
+    /// Overpass could not be asked. Too far apart is not one — Apple would
+    /// route it, but the leg would still be a day's walk with no shape.
+    static func asksFallback(_ route: TrailLegRoute) -> Bool {
+        switch route.snap {
+        case .unmapped(.noPathBetween), .refused: true
+        default: false
+        }
+    }
+
+    /// An Apple answer that draws a way rather than a straight line —
+    /// including one that stops short of a stop, which says so beside it.
+    static func followsAWay(_ route: TrailLegRoute) -> Bool {
+        route.snap == .snapped || route.snap == .unmapped(.endpointOffNetwork)
+    }
+
+    /// `route` without Apple's travel times, so ``TrailDraft`` times it at
+    /// ``TrailTravelMode/hiking``'s pace.
+    static func atHikingPace(_ route: TrailLegRoute) -> TrailLegRoute {
+        var paced = route
+        paced.travelTime = nil
+        paced.alternatives = route.alternatives.map { path in
+            var path = path
+            path.travelTime = nil
+            return path
+        }
+        return paced
+    }
+
     static func route(
         _ ends: TrailLegEnds,
         using index: inout TrailMatcherGraphIndex
@@ -363,6 +433,10 @@ nonisolated private extension OverpassTrailLegRouter {
     }
 
     /// How far a leg may wander before it is not the leg the hiker drew.
+    ///
+    /// In the walking index's cost rather than in metres, which makes it
+    /// stricter on roads than on paths — a leg that would have to follow a
+    /// main road for most of its length is one Apple Maps answers better.
     static func budget(along ends: TrailLegEnds) -> Double {
         min(
             maximumLegMeters,
@@ -417,9 +491,9 @@ nonisolated private extension OverpassTrailLegRouter {
         var travelled = 0.0
         var banned = Set<Int>()
         for edge in path.edgeIndices {
-            let length = index.edges[edge].lengthMeters
-            if (travelled...(travelled + length)).overlaps(middle) { banned.insert(edge) }
-            travelled += length
+            let cost = index.cost(ofEdge: edge)
+            if (travelled...(travelled + cost)).overlaps(middle) { banned.insert(edge) }
+            travelled += cost
         }
         return banned
     }
@@ -433,26 +507,28 @@ nonisolated private extension OverpassTrailLegRouter {
         let own = Set(candidate.edgeIndices)
         return offered.allSatisfy { path in
             let shared = own.intersection(path.edgeIndices)
-                .reduce(0) { $0 + index.edges[$1].lengthMeters }
+                .reduce(0) { $0 + index.cost(ofEdge: $1) }
             return shared <= candidate.distance * maximumSharedFraction
         }
     }
 
     /// The two nodes a snapped point can leave its edge through, and what
-    /// reaching each of them costs.
+    /// reaching each of them costs — in the index's own units, so a stretch
+    /// of road costs what it would anywhere else on the route.
     static func endpoints(
         of point: SnapPoint,
         in index: TrailMatcherGraphIndex
     ) -> [TrailMatcherGraphIndex.Endpoint] {
         let edge = index.edges[point.edgeIndex]
+        let weight = index.edgeWeights[point.edgeIndex]
         return [
             TrailMatcherGraphIndex.Endpoint(
                 nodeID: edge.fromNodeID,
-                cost: point.offsetMeters
+                cost: point.offsetMeters * weight
             ),
             TrailMatcherGraphIndex.Endpoint(
                 nodeID: edge.toNodeID,
-                cost: max(0, edge.lengthMeters - point.offsetMeters)
+                cost: max(0, edge.lengthMeters - point.offsetMeters) * weight
             ),
         ]
     }

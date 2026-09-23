@@ -137,9 +137,18 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     // that file for why manners against a volunteer-run API are not a thing to
     // write twice.
 
+    /// What a cached tile holds. Raised whenever that changes, so a tile
+    /// written before is treated as expired rather than as current: fetched
+    /// again as soon as there is a connection, and still read in the meantime
+    /// by a recording that has nothing newer. Format 2 added the roads that
+    /// join trails — see ``TrailGraphHighway``.
+    nonisolated static let cacheFormat = 2
+
     private struct CachedGraph: Codable, Sendable {
         let fetchedAt: Date
         let graph: TrailGraph
+        /// `nil` in every file written before formats were counted.
+        var format: Int?
     }
 
     private struct BoundingBox: Sendable {
@@ -288,7 +297,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         fetchID: UUID
     ) throws {
         clearFetch(key, fetchID: fetchID)
-        let cached = CachedGraph(fetchedAt: clock(), graph: graph)
+        let cached = CachedGraph(fetchedAt: clock(), graph: graph, format: Self.cacheFormat)
         memory[key] = cached
         try write(cached, for: key)
         trimCache()
@@ -407,9 +416,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         allowExpired: Bool
     ) throws -> CachedGraph? {
         if let cached = memory[key] {
-            if allowExpired || clock().timeIntervalSince(cached.fetchedAt)
-                <= Self.cacheLifetime { return cached }
-            return nil
+            return allowExpired || isCurrent(cached) ? cached : nil
         }
 
         let url = fileURL(for: key)
@@ -419,15 +426,18 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
                 CachedGraph.self,
                 from: Data(contentsOf: url)
             )
-            guard allowExpired
-                || clock().timeIntervalSince(cached.fetchedAt)
-                    <= Self.cacheLifetime else { return nil }
+            guard allowExpired || isCurrent(cached) else { return nil }
             memory[key] = cached
             return cached
         } catch {
             try? FileManager.default.removeItem(at: url)
             throw TrailGraphProviderError.storage(error.localizedDescription)
         }
+    }
+
+    private func isCurrent(_ cached: CachedGraph) -> Bool {
+        cached.format == Self.cacheFormat
+            && clock().timeIntervalSince(cached.fetchedAt) <= Self.cacheLifetime
     }
 
     private func write(
@@ -516,10 +526,10 @@ private extension OverpassTrailGraphProvider {
         let bounds = "\(box.south),\(box.west),\(box.north),\(box.east)"
         return """
         [out:json][timeout:\(queryTimeoutSeconds)];
-        way["highway"~"^(path|footway|track|bridleway|steps|cycleway|via_ferrata)$"](\(bounds))->.trails;
-        rel(bw.trails)["route"="hiking"]->.routes;
-        node(w.trails)->.trailNodes;
-        (.trails;.routes;.trailNodes;);
+        way["highway"~"^(\(TrailGraphHighway.all.joined(separator: "|")))$"](\(bounds))->.ways;
+        rel(bw.ways)["route"="hiking"]->.routes;
+        node(w.ways)->.wayNodes;
+        (.ways;.routes;.wayNodes;);
         out body;
         """
     }

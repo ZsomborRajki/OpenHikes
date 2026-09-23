@@ -85,14 +85,29 @@ nonisolated struct TrailMatcherGraphIndex {
         let end: CLLocationCoordinate2D
     }
 
+    /// Which of a graph's ways an index is built over, and what walking one
+    /// costs. See ``TrailGraphHighway`` for why there are two.
+    enum Network {
+        /// Trails only, each metre costing a metre. What a recording is
+        /// matched against and a breakdown measured over.
+        case trails
+        /// Trails and the roads joining them, roads costing more — so a
+        /// drawn leg takes a path wherever one goes and a lane only to
+        /// reach the next.
+        case walking
+    }
+
     let nodes: [Int64: TrailGraphNode]
     let edges: [TrailGraphEdge]
     let edgeEndpoints: [EdgeEndpoints]
+    /// What a metre of each edge costs a route, by edge index: `1` for every
+    /// edge of a ``Network/trails`` index.
+    let edgeWeights: [Double]
     let adjacency: [Int64: [Adjacency]]
     let grid: EdgeGrid
     var shortestPathCache: [NodePair: NodePath] = [:]
 
-    init(graph: TrailGraph) {
+    init(graph: TrailGraph, network: Network = .trails) {
         let nodeMap = Dictionary(
             uniqueKeysWithValues: graph.nodes.map { node in (node.id, node) }
         )
@@ -100,34 +115,45 @@ nonisolated struct TrailMatcherGraphIndex {
         var endpoints: [EdgeEndpoints] = []
         validEdges.reserveCapacity(graph.edges.count)
         endpoints.reserveCapacity(graph.edges.count)
-        for edge in graph.edges {
+        for edge in graph.edges where network == .walking || edge.isTrail {
             guard let start = nodeMap[edge.fromNodeID]?.coordinate,
                   let end = nodeMap[edge.toNodeID]?.coordinate else { continue }
             validEdges.append(edge)
             endpoints.append(EdgeEndpoints(start: start, end: end))
         }
-        nodes = nodeMap
+        // Only the nodes a kept edge touches, so a trails index built from a
+        // graph with roads in it holds what one built from a trails-only
+        // graph always did.
+        if network == .walking {
+            nodes = nodeMap
+        } else {
+            let touched = Set(validEdges.flatMap { [$0.fromNodeID, $0.toNodeID] })
+            nodes = nodeMap.filter { id, _ in touched.contains(id) }
+        }
         edges = validEdges
         edgeEndpoints = endpoints
+        edgeWeights = validEdges.map { edge in
+            network == .walking ? TrailGraphHighway.walkingCost(of: edge.highway) : 1
+        }
         grid = EdgeGrid(endpoints: endpoints)
         var adjacencyMap: [Int64: [Adjacency]] = [:]
         for (edgeIndex, edge) in validEdges.enumerated() {
+            let cost = edge.lengthMeters * edgeWeights[edgeIndex]
             adjacencyMap[edge.fromNodeID, default: []].append(
-                Adjacency(
-                    nodeID: edge.toNodeID,
-                    edgeIndex: edgeIndex,
-                    distance: edge.lengthMeters
-                )
+                Adjacency(nodeID: edge.toNodeID, edgeIndex: edgeIndex, distance: cost)
             )
             adjacencyMap[edge.toNodeID, default: []].append(
-                Adjacency(
-                    nodeID: edge.fromNodeID,
-                    edgeIndex: edgeIndex,
-                    distance: edge.lengthMeters
-                )
+                Adjacency(nodeID: edge.fromNodeID, edgeIndex: edgeIndex, distance: cost)
             )
         }
         adjacency = adjacencyMap
+    }
+
+    /// What crossing all of edge `index` costs a route: its length for a
+    /// trails index, and more than that for a road in a walking one. The unit
+    /// every ``NodePath/distance`` is in.
+    func cost(ofEdge index: Int) -> Double {
+        edges[index].lengthMeters * edgeWeights[index]
     }
 }
 

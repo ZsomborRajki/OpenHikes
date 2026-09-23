@@ -52,13 +52,10 @@ extension OverpassTrailGraphProvider {
         )
     }
 
-    /// The `highway` values this app treats as walkable trail. Everything
-    /// outside it is road, and drawing a hiker onto one would be worse than
-    /// leaving the trace alone.
-    static let allowedHighways: Set<String> = [
-        "path", "footway", "track", "bridleway", "steps", "cycleway",
-        "via_ferrata",
-    ]
+    /// The `highway` values kept: trails, and the roads that join them. Which
+    /// of those a question may use is ``TrailMatcherGraphIndex``'s to decide,
+    /// not the decoder's — see ``TrailGraphHighway``.
+    static let allowedHighways = Set(TrailGraphHighway.all)
 
     nonisolated static func buildElementIndex(
         from elements: [OverpassElement]
@@ -138,7 +135,8 @@ extension OverpassTrailGraphProvider {
                         trailVisibility: element.tags["trail_visibility"],
                         access: element.tags["access"],
                         surface: element.tags["surface"],
-                        tracktype: element.tags["tracktype"]
+                        tracktype: element.tags["tracktype"],
+                        highway: highway
                     )
                 )
             }

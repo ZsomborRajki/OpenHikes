@@ -44,6 +44,10 @@ nonisolated struct TrailGraphEdge: Codable, Equatable, Hashable, Sendable {
     /// OSM `tracktype` (`grade1`…`grade5`), the firmness scale tracks carry
     /// instead of a `surface` tag often enough to be worth keeping.
     let tracktype: String?
+    /// OSM `highway`, which is what says whether this is a trail or a road
+    /// joining two — see ``TrailGraphHighway``. `nil` on edges decoded before
+    /// roads were downloaded, all of which were trails.
+    let highway: String?
 
     var displayName: String? {
         hikingRouteName ?? name
@@ -60,7 +64,8 @@ nonisolated struct TrailGraphEdge: Codable, Equatable, Hashable, Sendable {
         trailVisibility: String? = nil,
         access: String? = nil,
         surface: String? = nil,
-        tracktype: String? = nil
+        tracktype: String? = nil,
+        highway: String? = nil
     ) {
         self.id = id
         self.fromNodeID = fromNodeID
@@ -73,6 +78,11 @@ nonisolated struct TrailGraphEdge: Codable, Equatable, Hashable, Sendable {
         self.access = access
         self.surface = surface
         self.tracktype = tracktype
+        self.highway = highway
+    }
+
+    var isTrail: Bool {
+        TrailGraphHighway.isTrail(highway)
     }
 }
 

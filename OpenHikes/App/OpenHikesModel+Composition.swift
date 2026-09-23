@@ -172,21 +172,24 @@ extension OpenHikesModel {
     /// drawing downloaded. `nil` when there is no provider — a launch under
     /// UI automation with no `--ui-test-trail-graph=` fixture — and the maker
     /// then draws straight lines and does not offer a switch it could not
-    /// honour in Hiking mode. Other modes use Apple Maps directions.
+    /// honour in Hiking mode. Other modes use Apple Maps directions, and
+    /// Hiking asks the Walking router — the same instance, so the same cache
+    /// — for a leg the graph cannot join.
     static func makeTrailMaker(
         container: ModelContainer,
         graph trailGraphProvider: (any TrailGraphProviding)?,
         defaults: UserDefaults
     ) -> TrailDraftController {
-        TrailDraftController(
+        let directions = Self.makeDirectionsRouters()
+        return TrailDraftController(
             store: TrailDraftStore(context: container.mainContext),
             router: trailGraphProvider.map { provider in
-                OverpassTrailLegRouter(provider: provider)
+                OverpassTrailLegRouter(provider: provider, fallback: directions[.walking])
             },
             placeSource: Self.makeTrailPointSource(),
             elevationSource: Self.makeTrailElevationSource(),
             naming: Self.makeTrailStopNaming(),
-            travelRouters: Self.makeDirectionsRouters(),
+            travelRouters: directions,
             // The model's own defaults, so a UI-testing launch keeps its
             // recents in the scratch domain rather than the developer's.
             recents: TrailStopRecents(defaults: defaults),
