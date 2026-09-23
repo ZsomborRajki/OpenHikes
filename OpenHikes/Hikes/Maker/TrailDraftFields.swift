@@ -278,9 +278,9 @@ struct TrailDraftLineFooter: View {
                     .accessibilityIdentifier("trail-draft-empty")
             }
             // One line for the whole line, saying the worst thing any leg has
-            // to report — see ``TrailDraft/notice``. The per-leg sentence is on
-            // the row it belongs to; this is what a hiker who has not scrolled
-            // sees.
+            // to report — see ``TrailDraft/notice``. The rows print only a
+            // title, so this is the one place a sighted hiker reads it; the
+            // per-leg sentence is each row's accessibility value.
             if let notice = draft.notice {
                 TrailDraftNoticeLabel(notice: notice)
             }

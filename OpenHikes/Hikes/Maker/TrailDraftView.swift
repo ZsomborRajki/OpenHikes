@@ -20,11 +20,11 @@
 //  ``TrailAddStopRow``. Three things follow from that and each is load-bearing
 //  rather than styling.
 //
-//  **The list rests outside edit mode.** That removes the leading delete
-//  circles and gives filled stops the platform's trailing swipe action. A
-//  filled row also has a trailing handle at all times: drag it between rows,
-//  or onto *Add Stop* to move it to the end. There is no Edit/Done mode to
-//  enter first.
+//  **Every stop can be moved and deleted at any time, as in Apple Maps.** A
+//  filled row always shows a grabber, and a trailing swipe deletes it; there
+//  is no Edit/Done mode to enter first and no leading delete circles. `List`
+//  cannot offer both at once, so the stops are a UIKit list inside this one
+//  — see ``TrailStopList`` for why and how.
 //
 //  **A row is a field.** Tapping one opens ``TrailStopSearchSheet`` on it, and
 //  the place picked there fills that row and takes the camera to it. Every
@@ -53,14 +53,6 @@ import MapKit
 import OpenHikesShared
 import SwiftData
 import SwiftUI
-
-/// The last known screen frame of each filled route row.
-///
-/// A stable reference rather than value state so layout measurements do not
-/// rebuild the list they measure.
-private final class TrailStopDragSession {
-    var frames: [UUID: CGRect] = [:]
-}
 
 struct TrailDraftView: View {
     let maker: TrailDraftController
@@ -101,8 +93,6 @@ struct TrailDraftView: View {
     /// The stop search, held here rather than in the sheet that runs it — see
     /// ``TrailStopSearchRun``.
     @State private var search = TrailStopSearchRun()
-    /// Geometry shared by the reorder handles and their drop calculation.
-    @State private var stopDrag = TrailStopDragSession()
     /// Whether the search sheet is up.
     ///
     /// A flag beside the run above rather than an `item:` presentation off
@@ -261,29 +251,22 @@ struct TrailDraftView: View {
     /// is its own `View` for the last of those — see ``TrailDraftLineHeader``.
     @ViewBuilder private var routeSection: some View {
         Section {
-            // The rows are handed the draft rather than values read off it, and
-            // the footer and the retry row are their own views for the same
-            // reason: every leg that lands rewrites `legs`, and reading it here
-            // would rebuild this whole screen once per answer. See
-            // ``TrailStopRowView``. The same goes for the points themselves —
-            // a name landing or a stop being dragged rewrites them — which is
-            // why the only thing read here is ``TrailDraft/slots``, which
-            // changes when a row comes or goes and at no other time.
-            let slots = draft.slots
-            ForEach(Array(slots.enumerated()), id: \.element.id) { position, slot in
-                if case .point(_, let id) = slot {
-                    filledStopRow(slot, id: id, position: position)
-                } else {
-                    TrailStopRowView(
-                        draft: draft,
-                        position: position,
-                        onReorder: nil,
-                        onReorderAdjustment: nil
-                    ) {
-                        searchForStop(target(for: slot))
-                    }
-                }
-            }
+            // The stops are handed the draft rather than values read off it,
+            // and the footer and the retry row are their own views for the
+            // same reason: every leg that lands rewrites `legs`, and a name
+            // landing or a stop being dragged rewrites the points, and reading
+            // either here would rebuild this whole screen for it. Nothing in
+            // this body reads the draft's stops at all — ``TrailStopList``
+            // reads ``TrailDraft/slots`` and each of its rows the rest.
+            TrailStopList(
+                draft: draft,
+                onSearch: { searchForStop(target(for: $0)) },
+                onMove: { reorderWaypoint($0, before: $1) },
+                onStep: { adjustWaypoint($0, direction: $1) },
+                onDelete: { maker.removeStop(id: $0) }
+            )
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
             if draft.canBeSaved {
                 TrailAddStopRow { searchForStop(.newStop) }
             }
@@ -295,28 +278,6 @@ struct TrailDraftView: View {
         }
     }
 
-    /// A tappable search field with its two always-available editing gestures:
-    /// trailing-edge swipe to delete, and a drag from its reorder handle.
-    private func filledStopRow(_ slot: TrailStopSlot, id: UUID, position: Int) -> some View {
-        TrailStopRowView(
-            draft: draft,
-            position: position,
-            onReorder: { reorderWaypoint(id, droppedAt: $0) },
-            onReorderAdjustment: { adjustWaypoint(id, direction: $0) },
-            onSearch: { searchForStop(target(for: slot)) }
-        )
-        .onGeometryChange(for: CGRect.self) { proxy in
-            proxy.frame(in: .global)
-        } action: { frame in
-            stopDrag.frames[id] = frame
-        }
-        .swipeActions(edge: .trailing) {
-            Button("Delete", systemImage: "trash", role: .destructive) {
-                maker.removeStop(id: id)
-            }
-        }
-    }
-
     /// What a row's search fills: the stop it already holds, or its open field.
     private func target(for slot: TrailStopSlot) -> TrailStopSearchTarget {
         switch slot {
@@ -325,21 +286,8 @@ struct TrailDraftView: View {
         }
     }
 
-    /// Resolves a screen position to the gap the handle was dropped into.
-    private func reorderWaypoint(_ sourceID: UUID, droppedAt location: CGPoint) {
-        let targetID = draft.waypoints
-            .filter { $0.id != sourceID }
-            .compactMap { waypoint in
-                stopDrag.frames[waypoint.id].map { (id: waypoint.id, frame: $0) }
-            }
-            .sorted { $0.frame.minY < $1.frame.minY }
-            .first { location.y < $0.frame.midY }?
-            .id
-        reorderWaypoint(sourceID, before: targetID)
-    }
-
-    /// VoiceOver's adjustable action moves through the same ordering one row
-    /// at a time: decrement is earlier, increment is later.
+    /// VoiceOver's *Move Up* and *Move Down* step through the same ordering
+    /// one row at a time: decrement is earlier, increment is later.
     private func adjustWaypoint(_ sourceID: UUID, direction: AccessibilityAdjustmentDirection) {
         let waypoints = draft.waypoints
         guard let sourceIndex = waypoints.firstIndex(where: { $0.id == sourceID }) else { return }
@@ -358,8 +306,8 @@ struct TrailDraftView: View {
         }
     }
 
-    /// Moves the dragged stop immediately before `targetID`, or to the end
-    /// when the handle is dropped below every filled row.
+    /// Moves a stop immediately before `targetID`, or to the end for `nil`.
+    /// Where a drag's drop and a VoiceOver step both land.
     private func reorderWaypoint(_ sourceID: UUID, before targetID: UUID?) {
         guard
             let sourceIndex = draft.waypoints.firstIndex(where: { $0.id == sourceID })
@@ -375,8 +323,8 @@ struct TrailDraftView: View {
             destinationIndex = draft.waypoints.endIndex
         }
 
-        // SwiftUI's move offset names the insertion point before the source
-        // is removed. Both of these shapes therefore leave the row in place.
+        // A move offset names the insertion point before the source is
+        // removed. Both of these shapes therefore leave the row in place.
         guard sourceIndex != destinationIndex, sourceIndex + 1 != destinationIndex else {
             return
         }

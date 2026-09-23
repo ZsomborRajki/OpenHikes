@@ -11,19 +11,28 @@
 //  gone because the number was never the interesting fact; the order is, and
 //  the list already draws that.
 //
+//  It says that in one line, as Apple Maps' directions list does: the name
+//  when there is one, the role until then. The distance along the line and the
+//  leg's notice that used to sit underneath are the row's accessibility value
+//  now — the map draws the first and the footer sums up the second, so only a
+//  VoiceOver user would have lost them.
+//
 //  ## The line is drawn by the rows, not between them
 //
-//  There is no view between two rows of a `List` to draw anything in, so each
+//  There is no view between two rows of a list to draw anything in, so each
 //  row draws its own half: a dotted stem from its top edge to its dot for every
 //  row but the first, and from its dot to its bottom edge for every row but the
 //  last. Two halves meeting at a shared edge look like one line, and the three
-//  things that make that true rather than nearly true are all here:
+//  things that make that true rather than nearly true are:
 //
-//  - the separator is hidden, or a hairline crosses the stem at every join;
-//  - the row's insets are zero top and bottom, so the stem reaches the edge
-//    rather than stopping at the content and leaving a gap in the padding;
+//  - no separators, or a hairline crosses the stem at every join;
+//  - no vertical margins around the row, so the stem reaches the edge rather
+//    than stopping at the content and leaving a gap in the padding;
 //  - the padding that makes the row a comfortable height is on the *text*
 //    column instead, which is what the stem is then measured against.
+//
+//  The first two are ``TrailStopList``'s, which hosts these rows in UIKit
+//  cells, and ``TrailAddStopRow``'s own, which is still a `List` row.
 //
 //  ## It reads the drawing itself
 //
@@ -32,8 +41,7 @@
 //  ``TrailDraft/legs`` and ``TrailDraft/distancesAlongLine``. A parent body
 //  that read either of those to *build* these rows would be re-evaluated
 //  nineteen times and take everything else on the screen with it. Read here,
-//  the same answer redraws the rows and nothing else — and a `List` is lazy, so
-//  it asks only the rows on screen.
+//  the same answer redraws the rows and nothing else.
 //
 //  Names are the third thing read that way, and the most frequent: a stop named
 //  by ``TrailStopNamer`` lands seconds after a tap, one point at a time.
@@ -68,80 +76,59 @@ struct TrailStopRowView: View {
     let draft: TrailDraft
     /// Where in ``TrailDraft/slots`` this row sits.
     let position: Int
-    /// Receives the handle's global drop point. Open fields pass `nil`, because
+    /// Moves the stop one row earlier or later, for VoiceOver. The drag itself
+    /// is UIKit's — see ``TrailStopList``. Open fields pass `nil`, because
     /// there is no waypoint there to move.
-    var onReorder: ((CGPoint) -> Void)?
-    /// VoiceOver's equivalent of moving the same handle up or down.
-    var onReorderAdjustment: ((AccessibilityAdjustmentDirection) -> Void)?
+    var onStep: ((AccessibilityAdjustmentDirection) -> Void)?
     /// Opens the search sheet on this row.
     var onSearch: () -> Void
 
-    /// Keeps the row under the finger until its drop commits the new order.
-    @GestureState private var reorderOffset: CGFloat = 0
-
-    /// Wide enough to centre a dot under a fingertip and narrow enough that the
-    /// text column still has a phone's width at an accessibility type size. The
-    /// same kind of number ``PhotoCalloutMetrics`` holds.
-    static let railWidth: CGFloat = 26
+    /// The rows' measurements are Apple Maps' directions card, taken off a
+    /// 3× screenshot of it: with the 16-point inset every row in the card has,
+    /// this puts the dot's centre 25.5 points in from the card's edge, and
+    /// ``railSpacing`` starts the text at 48, where Maps starts its names.
+    static let railWidth: CGFloat = 19
+    /// Between the rail and the text column.
+    static let railSpacing: CGFloat = 13
     private static let dotSize: CGFloat = 11
     static let stemWidth: CGFloat = 2
     static let stemDash: [CGFloat] = [2, 4]
     /// What makes a row a row. On the text column rather than on the row, for
-    /// the reason the file header gives.
-    static let rowPadding: CGFloat = 11
+    /// the reason the file header gives. Either side of one line of body text
+    /// it makes a 52-point row at the default type size, which is Maps' own:
+    /// 150 pixels cap-top to cap-top in a 3× screenshot, where both sheets are
+    /// drawn at 96% at the medium detent — the same 34-pixel capitals in each
+    /// say the scale is shared, so the pixels compare directly.
+    static let rowPadding: CGFloat = 16
 
     var body: some View {
         let slots = draft.slots
         let slot = slots.indices.contains(position) ? slots[position] : .open(.end)
-        HStack(spacing: 0) {
-            Button(action: onSearch) {
-                HStack(alignment: .center, spacing: 0) {
-                    rail(
-                        Self.role(of: slot, in: draft),
-                        isOpen: slot.waypointIndex == nil,
-                        count: slots.count
-                    )
-                    text(slot)
-                        .padding(.vertical, Self.rowPadding)
-                    Spacer(minLength: 0)
-                }
-                .contentShape(.rect)
+        Button(action: onSearch) {
+            HStack(alignment: .center, spacing: Self.railSpacing) {
+                rail(
+                    Self.role(of: slot, in: draft),
+                    isOpen: slot.waypointIndex == nil,
+                    count: slots.count
+                )
+                text(slot)
+                    .lineLimit(1)
+                    .padding(.vertical, Self.rowPadding)
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier(Self.identifier(of: slot))
-            .accessibilityHint("Opens a search for somewhere to put this stop")
-
-            if let onReorder {
-                Image(systemName: "line.3.horizontal")
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(.rect)
-                    .gesture(reorderGesture(onDrop: onReorder))
-                    .accessibilityIdentifier("trail-draft-reorder-\(position + 1)")
-                    .accessibilityLabel("Reorder stop")
-                    .accessibilityValue("Position \(position + 1) of \(slots.count)")
-                    .accessibilityHint("Drag to another stop to change its position")
-                    .accessibilityAdjustableAction { direction in
-                        onReorderAdjustment?(direction)
-                    }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(spokenDetail(slot))
+        .accessibilityIdentifier(Self.identifier(of: slot))
+        .accessibilityHint("Opens a search for somewhere to put this stop")
+        .accessibilityActions {
+            if let onStep {
+                Button("Move Up") { onStep(.decrement) }
+                Button("Move Down") { onStep(.increment) }
             }
         }
-        .offset(y: reorderOffset)
-        .zIndex(reorderOffset == 0 ? 0 : 1)
-        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-        .listRowSeparator(.hidden)
-    }
-
-    private func reorderGesture(onDrop: @escaping (CGPoint) -> Void) -> some Gesture {
-        DragGesture(minimumDistance: 4, coordinateSpace: .global)
-            .updating($reorderOffset) { value, offset, _ in
-                offset = value.translation.height
-            }
-            .onEnded { value in
-                onDrop(value.location)
-            }
     }
 
     static func role(of slot: TrailStopSlot, in draft: TrailDraft) -> TrailStopRole {
@@ -179,14 +166,10 @@ struct TrailStopRowView: View {
         .accessibilityHidden(true)
     }
 
-    /// What this stop is called, what it is to the route, and how far along it
-    /// sits.
-    ///
-    /// A named stop leads with its name and says its role underneath, because
-    /// the name is what a hiker is scanning for; an unnamed one leads with the
-    /// role, which is all there is to say. Either way exactly two lines of text
-    /// plus whatever the leg into it has to report, so the rows stay a
-    /// consistent height while the names land one at a time.
+    /// What this stop is called: its name once it has one, its role until
+    /// then. One line and nothing under it, as in Apple Maps — the row is there
+    /// to be found in a list, and what the route does between two stops is the
+    /// map's to draw and the footer's to sum up.
     @ViewBuilder
     private func text(_ slot: TrailStopSlot) -> some View {
         switch slot {
@@ -194,30 +177,25 @@ struct TrailStopRowView: View {
             Text(role == .start ? LocalizedStringKey("Choose Start") : "Choose Destination")
                 .foregroundStyle(.secondary)
         case .point(let index, _):
-            let role = draft.role(ofWaypointAt: index)
             let name = draft.name(ofWaypointAt: index)
-            VStack(alignment: .leading, spacing: 2) {
-                if name.isEmpty {
-                    Text(role.title)
-                } else {
-                    Text(name).lineLimit(2)
-                }
-                HStack(spacing: 6) {
-                    if !name.isEmpty {
-                        Text(role.title)
-                        Text(verbatim: "·")
-                    }
-                    Text(Self.length(draft.distanceAlongLine(toWaypointAt: index)))
-                        .monospacedDigit()
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                if let notice = draft.leg(arrivingAtWaypointAt: index)?.snap.notice {
-                    TrailDraftNoticeLabel(notice: notice)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            Text(name.isEmpty ? draft.role(ofWaypointAt: index).title : name)
         }
+    }
+
+    /// What the row no longer prints, still said to VoiceOver: the role a
+    /// name hides, how far along the stop sits, and what the leg into it has
+    /// to report. The eye gets the second from the map and the third from the
+    /// footer; a listener gets neither, so they are here.
+    private func spokenDetail(_ slot: TrailStopSlot) -> String {
+        guard case .point(let index, _) = slot else { return "" }
+        let isNamed = !draft.name(ofWaypointAt: index).isEmpty
+        return [
+            isNamed ? draft.role(ofWaypointAt: index).title : nil,
+            Self.length(draft.distanceAlongLine(toWaypointAt: index)),
+            draft.leg(arrivingAtWaypointAt: index)?.snap.notice?.text,
+        ]
+        .compactMap(\.self)
+        .joined(separator: ", ")
     }
 
     private static func length(_ meters: Double) -> String {
@@ -261,7 +239,7 @@ struct TrailAddStopRow: View {
 
     var body: some View {
         Button(action: onAdd) {
-            HStack(alignment: .center, spacing: 0) {
+            HStack(alignment: .center, spacing: TrailStopRowView.railSpacing) {
                 VStack(spacing: 0) {
                     TrailStopStem(isDrawn: true)
                     Image(systemName: "plus.circle.fill")

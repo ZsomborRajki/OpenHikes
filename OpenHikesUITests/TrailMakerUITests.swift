@@ -51,6 +51,10 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         CGVector(dx: 0.50, dy: 0.42),
     ]
 
+    /// Points past the trailing edge of a stop row's content to the middle of
+    /// the list's reorder grabber, which the list draws outside that content.
+    private static let grabberOffset: CGFloat = 22
+
     /// The whole feature end to end: open the maker from the map, put three
     /// points down, save, and find the trail in the library.
     @MainActor
@@ -407,13 +411,14 @@ extension TrailMakerUITests {
         )
         // **It went in at row two, which is the whole of what *into* means.**
         // An append would leave row two sitting at the trail's old length; an
-        // insert moves it somewhere short of it.
+        // insert moves it somewhere short of it. The rows print only a title,
+        // so the distance is read from their accessibility value.
         XCTAssertFalse(
-            element("trail-draft-point-2", in: app).label.contains(length),
+            (element("trail-draft-point-2", in: app).value as? String ?? "").contains(length),
             "a point appended to the end would have left row two at \(length)"
         )
         XCTAssertTrue(
-            third.label.contains(element("trail-draft-length", in: app).label),
+            (third.value as? String ?? "").contains(element("trail-draft-length", in: app).label),
             "the last row should sit at the trail's full length"
         )
     }
@@ -436,12 +441,16 @@ extension TrailMakerUITests {
         let second = element("trail-draft-point-2", in: app)
         XCTAssertFalse(app.navigationBars.buttons["Edit"].exists)
 
-        // Slow and held at both ends, because the row's drag starts after the
-        // press and its move is committed on the drop.
-        element("trail-draft-reorder-3", in: app)
-            .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
+        // The list's own grabber, which sits just past the trailing edge of
+        // the row's content, so it is reached from the row rather than by an
+        // identifier of its own. Slow and held at both ends, as in
+        // `HikeOrderUITests`: a reorder commits on the drop, and a quick flick
+        // is over before the list has decided it was a drag.
+        let grabber = CGVector(dx: Self.grabberOffset, dy: 0)
+        element("trail-draft-point-3", in: app)
+            .coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(grabber).press(
             forDuration: 0.8,
-            thenDragTo: second.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)),
+            thenDragTo: second.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.1)).withOffset(grabber),
             withVelocity: .slow,
             thenHoldForDuration: 0.8
         )
