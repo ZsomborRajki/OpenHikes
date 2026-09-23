@@ -83,7 +83,7 @@ enum SharedStoreSandbox {
 
     static let trailFileName = "trail-snapshot.json"
     static let recordingFileName = "recording-snapshot.json"
-    static let basemapSetFileName = "trail-basemaps.json"
+    static let basemapSetDirectoryName = "basemap-sets"
     static let basemapDirectoryName = "basemaps"
 
     static func trailSnapshot(
@@ -142,6 +142,18 @@ enum SharedStoreSandbox {
             },
             generatedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
+    }
+
+    /// Where `hikeID`'s basemap manifest lives, with its directory created so
+    /// a test can write bytes there directly.
+    static func basemapSetURL(in root: URL, for hikeID: UUID) throws -> URL {
+        let directory = root.appendingPathComponent(basemapSetDirectoryName, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory.appendingPathComponent(basemapSetFileName(for: hikeID))
+    }
+
+    static func basemapSetFileName(for hikeID: UUID) -> String {
+        "\(hikeID.uuidString).json"
     }
 
     static func polyline(_ count: Int) -> [SharedTrailSnapshot.CodableCoordinate] {

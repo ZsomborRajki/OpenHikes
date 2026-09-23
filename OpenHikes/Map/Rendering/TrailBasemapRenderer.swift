@@ -14,6 +14,11 @@
 //  `inFlight` and `generation` — consistent across overlapping calls, so a
 //  burst of selection changes ends with the *last* selection on disk.
 //
+//  One set per trail, not one in total. A widget pinned to a trail draws that
+//  trail whatever is selected, so the selection's set sits beside the pinned
+//  trails' sets rather than replacing them, and every prune spares the
+//  pinned ones — see `PinnedHikes`.
+//
 //  Nothing here runs on the live-fix path. The images depend only on where
 //  the trail is, so they're re-rendered when its geometry changes and left
 //  alone while a position moves across them — that's what makes shipping
@@ -31,7 +36,9 @@ import AppKit
 #endif
 
 actor TrailBasemapRenderer {
-    static let shared = TrailBasemapRenderer()
+    static let shared = TrailBasemapRenderer(
+        pinnedHikeIDs: SharedHikeCataloguePublisher.pinnedTrails
+    )
     private static let jpegCompressionQuality: CGFloat = 0.9
     private static let fnvOffsetBasis: UInt64 = 0xcbf2_9ce4_8422_2325
     private static let fnvPrime: UInt64 = 0x100_0000_01b3
@@ -94,18 +101,50 @@ actor TrailBasemapRenderer {
 
     private let render: Render
 
+    /// Which trails a placed widget is pinned to, or that WidgetKit cannot
+    /// say.
+    ///
+    /// The container holds a set per trail, and this is what decides which
+    /// ones outlive a change of selection: a widget pinned to a trail draws
+    /// that trail's map whatever the app has selected, so pruning to the
+    /// selection alone took the map out from under it and left the pinned
+    /// trail's line on a grey fill. ``PinnedTrails/unknown`` prunes nothing
+    /// but the selection's own superseded frames — a set nothing draws is bytes, and a pinned one
+    /// deleted on a guess is a grey widget.
+    ///
+    /// A seam for the reason ``Render`` is one, and the default is the
+    /// suites': nothing is pinned. ``shared`` asks WidgetKit.
+    typealias PinnedHikes = @Sendable () async -> PinnedTrails
+
+    private let pinnedHikeIDs: PinnedHikes
+
     private struct RenderRequest: Equatable {
         let hikeID: UUID
         let coverage: UnitMercatorRect
     }
 
-    /// The render that owns the output directory right now. A pass checks
-    /// this back after every suspension and abandons itself if it's no longer
-    /// the one — an actor only serializes up to the next `await`, so without
-    /// it two trails selected in quick succession would interleave, and the
-    /// older pass's prune would delete the newer one's images out from under
-    /// its manifest.
+    /// Which bookkeeping a pass answers to — see ``inFlight`` and
+    /// ``pinnedInFlight``.
+    private enum Lane {
+        /// The selected trail, which a newer selection or a deselection
+        /// overtakes. Carries the ``generation`` the pass started at.
+        case selection(generation: Int)
+        /// A trail a widget is pinned to, which nothing but a re-render of
+        /// the same trail overtakes.
+        case pinned
+    }
+
+    /// The selection's render right now. A pass checks this back after every
+    /// suspension and abandons itself if it's no longer the one — an actor
+    /// only serializes up to the next `await`, so without it two trails
+    /// selected in quick succession would interleave, and the older pass
+    /// would publish a set for a trail nobody is looking at.
     private var inFlight: RenderRequest?
+
+    /// The pinned trails' renders, one per trail. Kept apart from
+    /// ``inFlight`` because a selection change is not a reason to stop one: a
+    /// pinned trail is on a Home Screen whatever is selected.
+    private var pinnedInFlight: [UUID: RenderRequest] = [:]
 
     /// Bumped by ``invalidate()``. A render that started before the bump has
     /// been overtaken by events (the trail was deselected or deleted) and
@@ -123,57 +162,128 @@ actor TrailBasemapRenderer {
     ///     `MKMapSnapshotter` pass. Supplied only by tests; see ``Render``.
     ///   - widgetReload: where a finished pass asks for the widget to be
     ///     redrawn. Supplied only by tests; see ``TrailWidgetReload``.
-    init(render: Render? = nil, widgetReload: TrailWidgetReload = .system) {
+    ///   - pinnedHikeIDs: which trails' sets outlive a change of selection;
+    ///     see ``PinnedHikes``.
+    init(
+        render: Render? = nil,
+        widgetReload: TrailWidgetReload = .system,
+        pinnedHikeIDs: @escaping PinnedHikes = { .known([]) }
+    ) {
         self.render = render ?? TrailBasemapRenderer.renderWithMapKit
         self.widgetReload = widgetReload
+        self.pinnedHikeIDs = pinnedHikeIDs
     }
 
     /// Whether this pass is still the one whose results are wanted.
-    private func stillCurrent(_ request: RenderRequest, since generation: Int) -> Bool {
-        inFlight == request && self.generation == generation
+    private func stillCurrent(_ request: RenderRequest, in lane: Lane) -> Bool {
+        switch lane {
+        case .selection(let startedAt):
+            inFlight == request && generation == startedAt
+        case .pinned:
+            pinnedInFlight[request.hikeID] == request
+        }
     }
 
-    /// Renders `polyline`'s surroundings unless the images on disk already
-    /// frame it. Safe to call on every selection change and every foreground —
-    /// the common case is a manifest load, a bounds comparison, and no render.
-    func refreshIfNeeded(hikeID: UUID, polyline: [SharedTrailSnapshot.CodableCoordinate]) async {
-        guard polyline.count > 1, let coverage = UnitMercatorRect(bounding: polyline) else { return }
+    /// Every trail a pass is writing images for right now, which no prune may
+    /// take: the images land before the manifest naming them does.
+    private var renderingHikeIDs: Set<UUID> {
+        Set(pinnedInFlight.keys).union(inFlight.map { [$0.hikeID] } ?? [])
+    }
 
-        let request = RenderRequest(hikeID: hikeID, coverage: coverage)
+    /// Renders the selected trail's surroundings unless the images on disk
+    /// already frame it. Safe to call on every selection change and every
+    /// foreground — the common case is a manifest load, a bounds comparison,
+    /// and no render.
+    func refreshIfNeeded(hikeID: UUID, polyline: [SharedTrailSnapshot.CodableCoordinate]) async {
         // Identical work is already running; anything else supersedes it.
-        guard inFlight != request else { return }
-        if let existing = SharedStore.loadBasemapSet(for: hikeID),
-           existing.coverage.isEquivalent(to: coverage),
-           // A manifest whose images have been pruned away is worse than no
-           // manifest: without this check it would keep claiming the work is
-           // done while the widget quietly fell back to the line glyph.
-           SharedStore.hasAllBasemapImages(in: existing),
-           Self.holdsEveryCombination(existing),
-           Self.isAtIntendedScale(existing) { return }
+        guard let request = Self.request(hikeID: hikeID, polyline: polyline),
+              inFlight != request,
+              !Self.isPublished(request)
+        else { return }
 
         inFlight = request
-        let startedAt = generation
         defer { if inFlight == request { inFlight = nil } }
+        await renderAndPublish(request, in: .selection(generation: generation))
+    }
+
+    /// Renders a pinned trail's surroundings unless the images on disk already
+    /// frame it — the map a widget pinned to a trail that is not selected has
+    /// no other way to get. Called from the pinned-trail sweep in
+    /// `SharedHikeCataloguePublisher`.
+    ///
+    /// Beside the selection's render rather than through it: the two would
+    /// otherwise overtake each other, and a launch runs both at once.
+    func refreshPinned(hikeID: UUID, polyline: [SharedTrailSnapshot.CodableCoordinate]) async {
+        guard let request = Self.request(hikeID: hikeID, polyline: polyline),
+              pinnedInFlight[hikeID] != request,
+              // The selection is already rendering exactly this; its set is
+              // the one this pass would publish.
+              inFlight != request,
+              !Self.isPublished(request)
+        else { return }
+
+        pinnedInFlight[hikeID] = request
+        defer { if pinnedInFlight[hikeID] == request { pinnedInFlight[hikeID] = nil } }
+        await renderAndPublish(request, in: .pinned)
+    }
+
+    /// Deletes every set but those for `hikeIDs` and whatever is rendering —
+    /// the sweep's half of keeping the container bounded by what is on a
+    /// screen. Through the actor so it cannot take a pass's images between
+    /// their landing and the manifest that names them.
+    func prune(keeping hikeIDs: Set<UUID>) {
+        SharedStore.pruneBasemaps(keeping: hikeIDs.union(renderingHikeIDs))
+    }
+
+    private static func request(
+        hikeID: UUID,
+        polyline: [SharedTrailSnapshot.CodableCoordinate]
+    ) -> RenderRequest? {
+        guard polyline.count > 1, let coverage = UnitMercatorRect(bounding: polyline) else { return nil }
+        return RenderRequest(hikeID: hikeID, coverage: coverage)
+    }
+
+    /// Whether the stored set already frames `request`, whole.
+    private static func isPublished(_ request: RenderRequest) -> Bool {
+        guard let existing = SharedStore.loadBasemapSet(for: request.hikeID) else { return false }
+        return existing.coverage.isEquivalent(to: request.coverage)
+            // A manifest whose images have been pruned away is worse than no
+            // manifest: without this check it would keep claiming the work is
+            // done while the widget quietly fell back to the line glyph.
+            && SharedStore.hasAllBasemapImages(in: existing)
+            && holdsEveryCombination(existing)
+            && isAtIntendedScale(existing)
+    }
+
+    /// Whether another pass could have written files under the same names as
+    /// this one — the same trail and the same coverage in the other lane, or
+    /// an identical selection render started after a deselection overtook
+    /// this one. Names are derived from exactly those two, so deleting ours
+    /// would delete theirs.
+    private func anotherPassSharesNames(with request: RenderRequest, in lane: Lane) -> Bool {
+        switch lane {
+        case .selection(let startedAt):
+            pinnedInFlight[request.hikeID] == request
+                || (inFlight == request && generation != startedAt)
+        case .pinned:
+            inFlight == request
+        }
+    }
+
+    private func renderAndPublish(_ request: RenderRequest, in lane: Lane) async {
+        let hikeID = request.hikeID
+        let coverage = request.coverage
 
         // Every early return below leaves behind whatever this pass had already
         // written — files with no manifest pointing at them, reclaimed only by
         // the *next* successful render's prune, which may never come if the
         // user doesn't select another trail. So the pass cleans up after
-        // itself.
+        // itself, naming its own files rather than pruning to a keep-set,
+        // which is what makes this safe to do while another pass is writing.
         var written: Set<String> = []
         var published = false
         defer {
-            // Unless something else is mid-render: its files aren't ours to
-            // judge, and its own prune reclaims ours along with any others.
-            // Naming our files rather than pruning to a keep-set is what makes
-            // this safe to do while another pass is writing.
-            //
-            // `inFlight` is still *this* request here — `defer`s run in
-            // reverse order, so the one that clears it hasn't run yet — so
-            // "nothing else is rendering" means nil or our own request, not
-            // nil alone.
-            let supersededByAnotherPass = inFlight != nil && inFlight != request
-            if !published, !supersededByAnotherPass, !written.isEmpty {
+            if !published, !written.isEmpty, !anotherPassSharesNames(with: request, in: lane) {
                 SharedStore.removeBasemapImages(named: written)
             }
         }
@@ -184,7 +294,7 @@ actor TrailBasemapRenderer {
             for appearance in TrailBasemapAppearance.allCases {
                 let input = RenderInput(unitRect: framed, variant: variant, appearance: appearance)
                 guard let rendered = await render(input) else { continue }
-                guard stillCurrent(request, since: startedAt) else { return }
+                guard stillCurrent(request, in: lane) else { return }
 
                 let fileName = Self.fileName(
                     hikeID: hikeID,
@@ -223,15 +333,29 @@ actor TrailBasemapRenderer {
         // Leave whatever was already there: a basemap framing a previous
         // trail is wrong, but the widget only ever pairs a set with the hike
         // it was rendered for, so it simply falls back to the line glyph.
-        guard !images.isEmpty, stillCurrent(request, since: startedAt) else { return }
+        guard !images.isEmpty else { return }
+
+        // Asked before the manifest lands rather than after, so nothing
+        // between the save and the prune below can suspend. Only the
+        // selection's pass prunes other trails: it is the one that leaves a
+        // set behind every time the hiker looks at another trail.
+        let pinned: PinnedTrails = switch lane {
+        case .selection: await pinnedHikeIDs()
+        case .pinned: .unknown
+        }
+        guard stillCurrent(request, in: lane) else { return }
 
         // Order matters. The images land first, the manifest that points at
         // them second, and only then is anything deleted — so a widget
         // reading mid-render sees either the whole old set or the whole new
         // one, never a manifest pointing at a file that isn't there yet.
-        SharedStore.saveBasemapSet(TrailBasemapSet(hikeID: hikeID, coverage: coverage, images: images))
+        let set = TrailBasemapSet(hikeID: hikeID, coverage: coverage, images: images)
+        SharedStore.saveBasemapSet(set)
         published = true
-        SharedStore.pruneBasemapImages(keeping: Set(images.map(\.fileName)))
+        SharedStore.pruneBasemapImages(supersededBy: set)
+        if case .known(let pinned) = pinned {
+            SharedStore.pruneBasemaps(keeping: pinned.union(renderingHikeIDs).union([hikeID]))
+        }
         // Unless a live recording owns the widget, in which case these images
         // are not what it is drawing and the redraw waits for the recording to
         // release it — see ``TrailWidgetReload``. An actor rather than the
@@ -240,12 +364,21 @@ actor TrailBasemapRenderer {
         widgetReload.requestUnlessRecording()
     }
 
-    /// Drops the rendered basemaps, and makes any render currently in flight
-    /// throw its results away rather than write them.
-    func invalidate() {
+    /// Drops the rendered basemaps of every trail no widget is pinned to, and
+    /// makes the selection's render currently in flight throw its results
+    /// away rather than write them.
+    ///
+    /// A pinned trail's set stays, and so does a pinned trail's render: this
+    /// is deselection, and a pinned widget is not following the selection.
+    /// When WidgetKit cannot say what is pinned nothing is dropped — see
+    /// ``PinnedHikes`` — and the next prune that can tell does it instead.
+    func invalidate() async {
         generation &+= 1
         inFlight = nil
-        SharedStore.clearBasemaps()
+        guard case .known(let pinned) = await pinnedHikeIDs() else { return }
+        // Read after the `await`: a selection made meanwhile is rendering, and
+        // its images are on disk ahead of their manifest.
+        SharedStore.pruneBasemaps(keeping: pinned.union(renderingHikeIDs))
     }
 
     // MARK: Naming
@@ -269,7 +402,12 @@ actor TrailBasemapRenderer {
         }
         return "\(hikeID.uuidString)-\(String(hash, radix: 36))-\(variant.rawValue)-\(appearance.rawValue).jpg"
     }
+}
 
+/// The MapKit half, in an extension in this same file because the actor's
+/// body reached the length SwiftLint enforces once it kept a set per trail.
+/// Nothing here touches the bookkeeping above.
+extension TrailBasemapRenderer {
     // MARK: Rendering
 
     /// One corner of the region asked for, in both of the spellings the

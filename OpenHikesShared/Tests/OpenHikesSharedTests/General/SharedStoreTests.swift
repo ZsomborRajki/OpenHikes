@@ -87,10 +87,11 @@ struct SharedStoreTests {
             let garbage = Data("this is not a snapshot".utf8)
             try garbage.write(to: root.appendingPathComponent(SharedStoreSandbox.trailFileName))
             try garbage.write(to: root.appendingPathComponent(SharedStoreSandbox.recordingFileName))
-            try garbage.write(to: root.appendingPathComponent(SharedStoreSandbox.basemapSetFileName))
+            let hike = UUID()
+            try garbage.write(to: SharedStoreSandbox.basemapSetURL(in: root, for: hike))
             #expect(SharedStore.load() == nil)
             #expect(SharedStore.loadRecording() == nil)
-            #expect(SharedStore.loadBasemapSet(for: UUID()) == nil)
+            #expect(SharedStore.loadBasemapSet(for: hike) == nil)
         }
     }
 
@@ -104,8 +105,12 @@ struct SharedStoreTests {
         }
     }
 
-    @Test("clearing takes the rendered basemaps with it")
-    func clearingRemovesBasemaps() throws {
+    /// Deselection is not a reason to take a map away: a widget pinned to the
+    /// trail being left is still drawing it. Which sets go is the renderer's
+    /// call, because it is the side that knows what is pinned — see
+    /// `TrailBasemapRenderer.invalidate()`.
+    @Test("clearing the selected trail leaves the rendered basemaps alone")
+    func clearingSparesBasemaps() throws {
         try withSharedStoreSandbox { _ in
             let set = SharedStoreSandbox.basemapSet()
             SharedStore.saveBasemapSet(set)
@@ -114,8 +119,8 @@ struct SharedStoreTests {
 
             SharedStore.clear()
 
-            #expect(SharedStore.loadBasemapSet(for: set.hikeID) == nil)
-            #expect(SharedStore.basemapImageData(named: set.images[0].fileName) == nil)
+            #expect(SharedStore.loadBasemapSet(for: set.hikeID) == set)
+            #expect(SharedStore.hasAllBasemapImages(in: set))
         }
     }
 

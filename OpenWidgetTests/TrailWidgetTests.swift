@@ -110,6 +110,8 @@ struct TrailWidgetTests {
 
     init() {
         SharedStore.clear()
+        // No longer part of `clear()`: deselection spares a pinned trail's map.
+        SharedStore.clearBasemaps()
         try? SharedStore.clearRecording()
         try? SharedStore.clearPendingRecordingFixes()
         // The entry carries a temperature now, and a reading left behind by
@@ -263,19 +265,22 @@ struct TrailWidgetTests {
         #expect(try #require(entry.snapshot).polyline.count > 1, "the trail is still there to draw")
     }
 
-    /// `SharedStore.clear()` takes the images with the snapshot; a manifest
-    /// left behind would pair with the next trail that happened to share an id
-    /// and, more practically, waste the container.
-    @Test("clearing the trail clears its rendered maps too")
-    func clearingRemovesBasemaps() {
+    /// Deselecting takes the trail off an unconfigured widget, and its map
+    /// with it, but not off a widget pinned to that trail: the pinned widget's
+    /// snapshot and map both outlive the selection. Before sets were kept per
+    /// trail, selecting another trail left a pinned widget drawing its line on
+    /// a grey fill.
+    @Test("deselecting leaves a widget pinned to the trail its map")
+    func deselectingSparesAPinnedTrailsMap() throws {
         let stored = Self.snapshot()
         SharedStore.save(stored)
         SharedStore.saveBasemapSet(Self.basemapSet(for: stored.hikeID))
 
         SharedStore.clear()
 
-        #expect(SharedStore.loadBasemapSet(for: stored.hikeID) == nil)
         #expect(TrailWidgetProvider.currentEntry().basemaps == nil)
+        let pinned = TrailWidgetProvider.currentEntry(pinnedTo: stored.hikeID)
+        #expect(try #require(pinned.basemaps).hikeID == stored.hikeID)
     }
 
     // MARK: Families

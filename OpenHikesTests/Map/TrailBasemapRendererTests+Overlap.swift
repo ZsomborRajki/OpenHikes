@@ -99,8 +99,8 @@ extension TrailBasemapRendererTests {
     /// Run at both the first snapshot and the second, because the older pass
     /// is in a different state at each: at the first it has written nothing
     /// and simply returns, at the second it is holding an image on disk that
-    /// no manifest will ever name, and `pruneBasemapImages(keeping:)` in the
-    /// newer pass is what reclaims it. The outcome has to be the same either
+    /// no manifest will ever name, and its own cleanup — or the newer pass's
+    /// prune — is what reclaims it. The outcome has to be the same either
     /// way, which is what the file-set assertion says.
     @Test(
         "a superseded render cannot publish after the newer render",

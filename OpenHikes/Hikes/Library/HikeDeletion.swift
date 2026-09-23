@@ -202,14 +202,16 @@ nonisolated enum HikeDeletion {
         remove(workoutIDs, from: workouts)
         // The App Group copies of these trails, which nothing else would take.
         // A widget pinned to a deleted hike is *meant* to keep its snapshot
-        // through a mere deselection — see ``SharedStore/clear()`` — so the
-        // deletion has to be the thing that says otherwise, or the route
-        // outlives the hike on somebody's Home Screen until the next sweep.
+        // and its map through a mere deselection — see ``SharedStore/clear()``
+        // — so the deletion has to be the thing that says otherwise, or the
+        // route outlives the hike on somebody's Home Screen until the next
+        // sweep.
         //
         // After the save, like the workouts and for the same reason: a refusal
         // leaves the snapshot beside the hike that is still in the list.
         for hikeID in deletedIDs {
             SharedStore.clearTrailSnapshot(for: hikeID)
+            SharedStore.clearBasemaps(for: hikeID)
         }
     }
 

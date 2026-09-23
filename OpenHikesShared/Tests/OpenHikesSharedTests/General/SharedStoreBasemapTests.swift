@@ -2,8 +2,8 @@
 //  SharedStoreBasemapTests.swift
 //  OpenHikesSharedTests
 //
-//  The basemap half of the App Group contract: a manifest in one file and its
-//  images in a directory beside it, with nothing but the code below keeping
+//  The basemap half of the App Group contract: a manifest per trail and their
+//  images in a directory beside them, with nothing but the code below keeping
 //  the two in step.
 //
 
@@ -81,14 +81,83 @@ struct SharedStoreBasemapTests {
         }
     }
 
-    /// Pruning enumerates the directory, so it has to cope with there not
-    /// being one — the ordinary state after ``SharedStore/clear()``.
-    @Test("pruning an images directory that was never created does nothing")
+    /// Pruning enumerates the directories, so it has to cope with there not
+    /// being any — the ordinary state after ``SharedStore/clearBasemaps()``.
+    @Test("pruning directories that were never created does nothing")
     func pruningWithoutADirectoryIsHarmless() throws {
         try withSharedStoreSandbox { _ in
-            SharedStore.pruneBasemapImages(keeping: ["a.png"])
+            SharedStore.pruneBasemaps(keeping: [UUID()])
+            SharedStore.pruneBasemapImages(supersededBy: SharedStoreSandbox.basemapSet())
+            SharedStore.clearBasemaps(for: UUID())
             SharedStore.removeBasemapImages(named: ["a.png"])
             #expect(SharedStore.basemapImageData(named: "a.png") == nil)
         }
+    }
+
+    // MARK: One set per trail
+
+    /// The bug this layout exists for: a widget pinned to one trail drew its
+    /// line on a grey fill as soon as another trail was selected, because the
+    /// selection's set was written over the only manifest there was.
+    @Test("saving one trail's set leaves another trail's set in place")
+    func setsForTwoTrailsCoexist() throws {
+        try withSharedStoreSandbox { _ in
+            let pinned = SharedStoreSandbox.basemapSet()
+            let selected = SharedStoreSandbox.basemapSet()
+            SharedStore.saveBasemapSet(pinned)
+            SharedStore.saveBasemapSet(selected)
+
+            #expect(SharedStore.loadBasemapSet(for: pinned.hikeID) == pinned)
+            #expect(SharedStore.loadBasemapSet(for: selected.hikeID) == selected)
+        }
+    }
+
+    /// What bounds the container: every trail not kept loses its manifest and
+    /// its images, including a stray image named for no trail at all — the
+    /// shape an abandoned write leaves.
+    @Test("pruning keeps the named trails' sets and takes everything else")
+    func pruningKeepsByTrail() throws {
+        try withSharedStoreSandbox { _ in
+            let kept = Self.publishedSet()
+            let dropped = Self.publishedSet()
+            SharedStore.writeBasemapImage(Data("png".utf8), named: "stray.png")
+
+            SharedStore.pruneBasemaps(keeping: [kept.hikeID])
+
+            #expect(SharedStore.loadBasemapSet(for: kept.hikeID) == kept)
+            #expect(SharedStore.hasAllBasemapImages(in: kept))
+            #expect(SharedStore.loadBasemapSet(for: dropped.hikeID) == nil)
+            #expect(SharedStore.basemapImageData(named: dropped.images[0].fileName) == nil)
+            #expect(SharedStore.basemapImageData(named: "stray.png") == nil)
+        }
+    }
+
+    /// A deleted hike's map, and nobody else's.
+    @Test("clearing one trail's basemaps leaves the others")
+    func clearingOneTrailSparesTheOthers() throws {
+        try withSharedStoreSandbox { _ in
+            let deleted = Self.publishedSet()
+            let other = Self.publishedSet()
+
+            SharedStore.clearBasemaps(for: deleted.hikeID)
+
+            #expect(SharedStore.loadBasemapSet(for: deleted.hikeID) == nil)
+            #expect(SharedStore.basemapImageData(named: deleted.images[0].fileName) == nil)
+            #expect(SharedStore.loadBasemapSet(for: other.hikeID) == other)
+            #expect(SharedStore.hasAllBasemapImages(in: other))
+        }
+    }
+
+    /// A manifest with its one image on disk, named the way the renderer
+    /// names images — after the trail — since that is what the prunes read.
+    private static func publishedSet() -> TrailBasemapSet {
+        let hikeID = UUID()
+        let set = SharedStoreSandbox.basemapSet(
+            hikeID: hikeID,
+            fileNames: ["\(hikeID.uuidString)-square-light.jpg"]
+        )
+        SharedStore.saveBasemapSet(set)
+        SharedStore.writeBasemapImage(Data("png".utf8), named: set.images[0].fileName)
+        return set
     }
 }

@@ -24,7 +24,12 @@ public enum SharedStore {
     private static let trailSnapshotDirectoryName = "trail-snapshots"
     private static let recordingFileName = "recording-snapshot.json"
     private static let weatherFileName = "weather-reading.json"
-    private static let basemapSetFileName = "trail-basemaps.json"
+    /// The directory the basemap manifests live in, one per trail, for the
+    /// reason ``trailSnapshotDirectoryName`` is a directory: a widget pinned to
+    /// a trail that is not the selected one needs its own map, so there is
+    /// more than one set, and ``pruneBasemaps(keeping:)`` has to be able to
+    /// list them.
+    private static let basemapSetDirectoryName = "basemap-sets"
     private static let basemapDirectoryName = "basemaps"
 
     /// Resolves the container root every path below is built from — a
@@ -141,19 +146,22 @@ public enum SharedStore {
         try? data.write(to: fileURL, options: .atomic)
     }
 
-    /// Removes the stored snapshot and any rendered basemaps — used when the
-    /// tracked hike is deselected or deleted, so a stale trail doesn't linger
-    /// in the widget.
-    /// **The per-hike snapshots are deliberately left alone.** This is
-    /// deselection, and a widget pinned to a trail is not following the
-    /// selection — taking its route away because the hiker looked at
-    /// something else is the bug #468 was filed about, in a new place. What
-    /// bounds that set is ``pruneTrailSnapshots(keeping:)``, which is driven
-    /// by what is on a screen rather than by what is selected.
+    /// Removes the stored snapshot — used when the tracked hike is deselected
+    /// or deleted, so a stale trail doesn't linger in the widget.
+    ///
+    /// **The per-hike snapshots and the basemaps are deliberately left
+    /// alone.** This is deselection, and a widget pinned to a trail is not
+    /// following the selection — taking its route or its map away because the
+    /// hiker looked at something else is the bug #468 was filed about, in a
+    /// new place. What bounds the snapshots is
+    /// ``pruneTrailSnapshots(keeping:)``, and what bounds the basemaps is
+    /// ``pruneBasemaps(keeping:)``, both driven by what is on a screen rather
+    /// than by what is selected. The app's deselection path reaches the second
+    /// through `TrailBasemapRenderer.invalidate()`, which knows which trails
+    /// are pinned.
     public static func clear() {
         guard let fileURL else { return }
         try? FileManager.default.removeItem(at: fileURL)
-        clearBasemaps()
     }
 
     // MARK: The hike catalogue
@@ -395,15 +403,23 @@ public enum SharedStore {
             return nil
         }
     }
+}
 
+/// The basemaps, in an extension in this same file because the enum's body
+/// reached the length SwiftLint enforces once a set was kept per trail.
+extension SharedStore {
     // MARK: Basemaps
 
     // Kept in files of their own rather than inside the snapshot: the
     // snapshot is small and rewritten on every live fix, while these are
     // hundreds of KB and rewritten only when the trail's geometry changes.
 
-    private static var basemapSetURL: URL? {
-        containerURL?.appendingPathComponent(basemapSetFileName)
+    private static var basemapSetDirectoryURL: URL? {
+        containerURL?.appendingPathComponent(basemapSetDirectoryName, isDirectory: true)
+    }
+
+    private static func basemapSetURL(for hikeID: UUID) -> URL? {
+        basemapSetDirectoryURL?.appendingPathComponent("\(hikeID.uuidString).json")
     }
 
     private static var basemapDirectoryURL: URL? {
@@ -425,16 +441,21 @@ public enum SharedStore {
     /// on every timeline reload forever, and a battery cost that presents as
     /// nothing at all is worth being able to see.
     public static func loadBasemapSet(for hikeID: UUID) -> TrailBasemapSet? {
-        guard let basemapSetURL, let data = try? Data(contentsOf: basemapSetURL),
-              let set = decodeUnversioned(TrailBasemapSet.self, from: data, named: basemapSetFileName),
+        guard let url = basemapSetURL(for: hikeID), let data = try? Data(contentsOf: url),
+              let set = decodeUnversioned(TrailBasemapSet.self, from: data, named: url.lastPathComponent),
               set.hikeID == hikeID
         else { return nil }
         return set
     }
 
+    /// Writes `set` beside the other trails' sets rather than over them — a
+    /// widget pinned to one trail keeps its map while another is selected.
     public static func saveBasemapSet(_ set: TrailBasemapSet) {
-        guard let basemapSetURL, let data = try? JSONEncoder().encode(set) else { return }
-        try? data.write(to: basemapSetURL, options: .atomic)
+        guard let directory = basemapSetDirectoryURL,
+              let url = basemapSetURL(for: set.hikeID),
+              let data = try? JSONEncoder().encode(set) else { return }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? data.write(to: url, options: .atomic)
     }
 
     /// Raw image bytes for a ``TrailBasemap/fileName``, or `nil` if the file
@@ -468,17 +489,60 @@ public enum SharedStore {
         } catch { return false }
     }
 
-    /// Deletes every basemap image except `fileNames`. Called after a render
-    /// so the previous trail's images (and any half-written leftovers) don't
-    /// accumulate in the container.
-    public static func pruneBasemapImages(keeping fileNames: Set<String>) {
-        guard let directory = basemapDirectoryURL,
-              let contents = try? FileManager.default
-                  .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-        else { return }
-        for url in contents where !fileNames.contains(url.lastPathComponent) {
+    /// Deletes every manifest and image that belongs to none of `hikeIDs` —
+    /// what keeps the container bounded by the trails something is drawing
+    /// rather than by every trail ever selected. Images are attributed to a
+    /// trail by the id their name starts with, which is how the renderer names
+    /// them, so a half-written leftover of a trail that is kept survives here
+    /// and one of a trail that is not goes with the rest.
+    public static func pruneBasemaps(keeping hikeIDs: Set<UUID>) {
+        let keptManifests = Set(hikeIDs.map { "\($0.uuidString).json" })
+        for url in contents(of: basemapSetDirectoryURL) where !keptManifests.contains(url.lastPathComponent) {
             try? FileManager.default.removeItem(at: url)
         }
+        for url in contents(of: basemapDirectoryURL) {
+            let owner = basemapOwner(ofImageNamed: url.lastPathComponent)
+            if owner.map(hikeIDs.contains) != true {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+    }
+
+    /// Deletes `set`'s trail's images that `set` does not name: the frames a
+    /// re-render of the same trail superseded. Every other trail's images are
+    /// left alone, which is what lets this run while a pinned trail's set sits
+    /// beside it.
+    public static func pruneBasemapImages(supersededBy set: TrailBasemapSet) {
+        let kept = Set(set.images.map(\.fileName))
+        for url in contents(of: basemapDirectoryURL)
+        where basemapOwner(ofImageNamed: url.lastPathComponent) == set.hikeID
+            && !kept.contains(url.lastPathComponent) {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    /// Removes one trail's manifest and images — what a deleted hike leaves
+    /// behind.
+    public static func clearBasemaps(for hikeID: UUID) {
+        if let url = basemapSetURL(for: hikeID) { try? FileManager.default.removeItem(at: url) }
+        for url in contents(of: basemapDirectoryURL)
+        where basemapOwner(ofImageNamed: url.lastPathComponent) == hikeID {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    /// The trail an image was rendered for, read off the id its name starts
+    /// with, or `nil` for a name that does not start with one.
+    private static func basemapOwner(ofImageNamed fileName: String) -> UUID? {
+        UUID(uuidString: String(fileName.prefix(UUID().uuidString.count)))
+    }
+
+    private static func contents(of directory: URL?) -> [URL] {
+        guard let directory else { return [] }
+        return (try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        )) ?? []
     }
 
     /// Deletes exactly `fileNames`, for a render that wrote images and then
@@ -492,8 +556,9 @@ public enum SharedStore {
         }
     }
 
+    /// Removes every trail's manifest and images.
     public static func clearBasemaps() {
-        if let url = basemapSetURL { try? FileManager.default.removeItem(at: url) }
+        if let dir = basemapSetDirectoryURL { try? FileManager.default.removeItem(at: dir) }
         if let dir = basemapDirectoryURL { try? FileManager.default.removeItem(at: dir) }
     }
 }

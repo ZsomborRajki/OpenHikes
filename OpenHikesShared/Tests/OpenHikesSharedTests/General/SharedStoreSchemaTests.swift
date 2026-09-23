@@ -138,7 +138,7 @@ struct SharedStoreSchemaTests {
             object["trailID"] = object.removeValue(forKey: "hikeID")
             try SharedStoreSandbox.write(
                 object,
-                to: root.appendingPathComponent(SharedStoreSandbox.basemapSetFileName)
+                to: SharedStoreSandbox.basemapSetURL(in: root, for: set.hikeID)
             )
 
             #expect(SharedStore.loadBasemapSet(for: set.hikeID) == nil)
