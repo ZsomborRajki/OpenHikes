@@ -139,7 +139,7 @@ nonisolated struct TrailPointSource: TrailPointSourcing {
             query,
             awaiting: TrailPointQuery.timeoutSeconds
         ) { body in
-            try TrailPointDecoding.found(in: body)
+            try TrailPointDecoding.found(in: body, showing: symbols)
         }
         // Written before the answer is handed back, and everything Overpass
         // said rather than the forty that will be drawn: which forty those are

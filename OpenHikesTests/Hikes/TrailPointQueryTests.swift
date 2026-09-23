@@ -206,6 +206,22 @@ struct TrailPointQueryTests {
         #expect(TrailPointQuery.symbol(for: tags) == .summit)
     }
 
+    /// **The tie-break is among the switches that are on.** With *Summits*
+    /// off in the maker, that same peak was asked for as a viewpoint, and a
+    /// hiker who kept *Viewpoints* on is owed it — drawn as a summit, the
+    /// finder would throw it away as a kind they turned off.
+    @Test("with summits switched off, a peak that is also a viewpoint is a viewpoint")
+    func aPeakWithSummitsOffIsAViewpoint() {
+        let tags = ["natural": "peak", "tourism": "viewpoint", "amenity": "bench"]
+        let summitsOff = Set(TrailPointQuery.searchableSymbols).subtracting([.summit])
+
+        #expect(TrailPointQuery.symbol(for: tags, among: summitsOff) == .viewpoint)
+        #expect(
+            TrailPointQuery.symbol(for: tags, among: summitsOff.subtracting([.viewpoint])) == nil,
+            "with both off it is nothing this search asked for"
+        )
+    }
+
     /// Two of the eight symbols get no mapping on purpose: the only OSM answer
     /// for a junction *is* the guidepost this deliberately never asks for, and
     /// a hazard is a judgement about a place rather than a tag on one.

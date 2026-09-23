@@ -204,8 +204,8 @@ struct TrailPointFinderTests {
     }
 
     /// **The pin never goes on the map**, whichever way it arrives: from an
-    /// answer that carried it anyway — a summit asked for as a viewpoint is
-    /// still a summit — or from what the disk kept from before the switch.
+    /// answer that carried it anyway — a mirror can answer with more than was
+    /// asked — or from what the disk kept from before the switch.
     @Test("a kind switched off is never added, from an answer or from the disk")
     func aSwitchedOffKindIsNeverAdded() async {
         let hut = Self.place(47.6005, 12.92, name: "Hut", symbol: .shelter)

@@ -212,8 +212,8 @@ final class TrailPointFinder {
     ) async -> Outcome {
         // Filtered here as well as in the request, before the ranking spends
         // any of its forty on a kind that is switched off: the store answers
-        // with whatever it kept, and one element can carry two kinds' tags — a
-        // summit asked for as a viewpoint still comes back a summit.
+        // with whatever it kept, under the symbol it was drawn as when it was
+        // kept, and a source is only asked to leave the others out.
         let wanted = { (place: TrailPlace) in place.symbol.map(symbols.contains) ?? true }
         do {
             let found = try await source.places(near: area, showing: symbols).filter(wanted)

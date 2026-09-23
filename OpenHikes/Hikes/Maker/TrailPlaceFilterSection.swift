@@ -38,9 +38,13 @@ struct TrailPlaceFilterSection: View {
                         }
                     } icon: {
                         // The pin's own glyph on the pin's own colour, so the
-                        // row names the thing on the map it switches.
+                        // row names the thing on the map it switches. A fixed
+                        // point size, as ``TrailListRowGlyph`` uses, because
+                        // the circle is fixed: a text style grew the glyph
+                        // past its edge at the larger accessibility sizes,
+                        // white on a white row. The title beside it scales.
                         Image(systemName: symbol.systemImageName)
-                            .font(.footnote.weight(.semibold))
+                            .font(.system(size: Self.glyphSize, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: Self.iconSize, height: Self.iconSize)
                             .background(symbol.tint, in: .circle)
@@ -75,6 +79,9 @@ struct TrailPlaceFilterSection: View {
 
     /// The coloured circle behind a row's glyph — Settings' row-icon size.
     private static let iconSize: CGFloat = 28
+
+    /// The glyph inside that circle: footnote's size at the default text size.
+    private static let glyphSize: CGFloat = 13
 
     /// What a row is called: the plural of what the pin says.
     ///

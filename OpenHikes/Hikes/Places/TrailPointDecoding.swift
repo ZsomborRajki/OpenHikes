@@ -37,7 +37,14 @@ nonisolated enum TrailPointDecoding {
     /// Order is not meaning here — it is Overpass's own — and what the hiker
     /// sees is sorted against the line they are drawing before it reaches a
     /// screen. See ``TrailPointRanking``.
-    static func found(in data: Data) throws -> [TrailPlace] {
+    ///
+    /// `symbols` are the kinds the request asked for, and an element carrying
+    /// several kinds' tags is drawn as the first of those — see
+    /// ``TrailPointQuery/symbol(for:among:)``.
+    static func found(
+        in data: Data,
+        showing symbols: Set<TrailPlaceSymbol> = Set(TrailPlaceSymbol.allCases)
+    ) throws -> [TrailPlace] {
         let response: Response
         do {
             response = try JSONDecoder().decode(Response.self, from: data)
@@ -45,7 +52,7 @@ nonisolated enum TrailPointDecoding {
             throw TrailGraphProviderError.malformedGraph(error.localizedDescription)
         }
         if let abort = OverpassRequest.abort(response.remark) { throw abort }
-        return response.elements.compactMap(found(in:))
+        return response.elements.compactMap { found(in: $0, showing: symbols) }
     }
 
     /// One element as a place, or `nil` for one this app cannot draw.
@@ -60,8 +67,8 @@ nonisolated enum TrailPointDecoding {
     /// The tag one is worth stating: a place with no symbol would draw a plain
     /// pin and read as "Place", which is a thing the hiker marked themselves
     /// rather than an answer to *what is here*.
-    private static func found(in element: Element) -> TrailPlace? {
-        guard let symbol = TrailPointQuery.symbol(for: element.tags) else { return nil }
+    private static func found(in element: Element, showing symbols: Set<TrailPlaceSymbol>) -> TrailPlace? {
+        guard let symbol = TrailPointQuery.symbol(for: element.tags, among: symbols) else { return nil }
         guard let type = element.type, let id = element.id else { return nil }
         guard let latitude = element.lat ?? element.center?.lat,
               let longitude = element.lon ?? element.center?.lon,
