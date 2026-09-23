@@ -3,7 +3,7 @@
 //  OpenHikes
 //
 //  The route-sized work behind the hike detail screen: one walk of the route
-//  that yields the elevation profile and every stat tile, off the main actor.
+//  that yields the elevation profile and every stat, off the main actor.
 //
 
 import Foundation
@@ -54,17 +54,20 @@ nonisolated enum HikeDetailPreparation {
         distanceMeters: Double,
         statistics: HikeRouteStatistics
     ) -> [Stat] {
+        // The first three are the place card's strip — the same three, in the
+        // same order, as the recording screen's — and the rest its list.
         let items: [Stat?] = [
             Stat(
                 "Distance",
                 Measurement(value: distanceMeters, unit: UnitLength.meters)
-                    .formatted(.measurement(width: .abbreviated, usage: .road))
+                    .formatted(.measurement(width: .abbreviated, usage: .road)),
+                headline: true
             ),
             statistics.duration.map { duration in
-                Stat("Duration", HikeFormat.duration(duration))
+                Stat("Duration", HikeFormat.duration(duration), headline: true)
             },
             statistics.elevationGain.map { gain in
-                Stat("Elevation Gain", HikeFormat.elevation(gain))
+                Stat("Elevation Gain", HikeFormat.elevation(gain), headline: true)
             },
             statistics.elevationLoss.map { loss in
                 Stat("Elevation Loss", HikeFormat.elevation(loss))

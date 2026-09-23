@@ -3,8 +3,8 @@
 //  OpenHikes
 //
 //  Pause, Resume and End for the walk under way, under the progress bar of
-//  the hike being walked — in the shape `RecordingControls` has, with the
-//  route's own tint rather than recording red.
+//  the hike being walked — the walk's counterpart of `RecordingCard`'s
+//  controls, with the route's own tint rather than recording red.
 //
 //  The controls exist only once there is a walk to control: opening a trail
 //  is not walking it. Until then this draws the offer, if a matched fix has

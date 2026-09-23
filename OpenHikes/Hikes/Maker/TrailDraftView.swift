@@ -8,7 +8,7 @@
 //  the travel mode, the route so far, and the two ways out. What the trail is
 //  *called* is not among them: it is asked for once, in an alert, at the
 //  moment Save is tapped, exactly as a stopped recording is named — see
-//  ``RecordingControls``. It draws no map of its own and never could: the map
+//  ``RecordingCard``. It draws no map of its own and never could: the map
 //  it is about is the one behind the sheet, which is the whole reason this is a
 //  pushed screen rather than a modal over the map.
 //
@@ -225,7 +225,7 @@ struct TrailDraftView: View {
             // itself a presentation — a push onto the sheet's stack, or the
             // refusal alert below — and asking for one while the alert that
             // asked the question is still dismissing is how the second one
-            // gets dropped. ``RecordingControls``'s Stop alert saves from a
+            // gets dropped. ``RecordingCard``'s Stop alert saves from a
             // `Task` too, for the reason its own work is asynchronous.
             Button("Save") { Task { save(madeOn: madeOn) } }
             Button("Cancel", role: .cancel) { /* the drawing stays */ }
@@ -518,7 +518,7 @@ struct TrailDraftView: View {
     /// Asks what to call it, with the field blank.
     ///
     /// Blank rather than pre-filled with the default, which is the trap
-    /// ``RecordingControls``'s Stop button records: the placeholder is already
+    /// ``RecordingCard``'s Stop button records: the placeholder is already
     /// showing what a blank field writes, and filling the field with the same
     /// string makes *blank* impossible to choose without deleting it first.
     private func startNaming() {

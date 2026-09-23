@@ -130,11 +130,11 @@ nonisolated final class AccessibilityLabelUITests: XCTestCase {
         XCTAssertTrue(spoken.contains("remaining"), "got \"\(spoken)\"")
     }
 
-    /// Two texts in a rounded rectangle are one fact, and the caption is drawn
-    /// uppercased — which VoiceOver spells out ("A V G Speed") unless the
-    /// label is spoken from the original.
+    /// A caption and a number in the stats strip are one fact, and the caption
+    /// is drawn uppercased — which VoiceOver spells out ("A V G Speed") unless
+    /// the label is spoken from the original.
     @MainActor
-    func testStatTilesReadAsLabelAndValue() {
+    func testStatFiguresReadAsLabelAndValue() {
         let app = launchApp(
             arguments: [
                 "--ui-test-expanded-sheet",
@@ -148,11 +148,11 @@ nonisolated final class AccessibilityLabelUITests: XCTestCase {
             .firstMatch
         XCTAssertTrue(
             distance.waitForExistence(timeout: UITestTimeout.existence),
-            "the stats grid should expose a tile named \"Distance\""
+            "the stats strip should expose a figure named \"Distance\""
         )
         XCTAssertFalse(
             (distance.value as? String ?? "").isEmpty,
-            "a stat tile's number belongs in its accessibility value"
+            "a stat figure's number belongs in its accessibility value"
         )
     }
 

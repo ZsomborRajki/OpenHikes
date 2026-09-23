@@ -4,13 +4,14 @@
 //
 
 import Foundation
-import os
 import SwiftUI
 #if os(iOS)
 import UIKit
 #endif
 
 struct RecordingView: View {
+    private static let cardID = "recording-card"
+
     let recorder: HikeRecorder
     var mapController: MapController
     /// Offers the map's camera pill while a walk is being recorded. Optional
@@ -50,19 +51,25 @@ struct RecordingView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                RecordingHeader(recorder: recorder)
-                RecordingRecoveryNotice(recorder: recorder)
-                RecordingConditionsNotice(recorder: recorder)
-                RecordingStatsGrid(stats: recorder.stats)
-                RecordingControls(
+        ScrollViewReader { proxy in
+            ScrollView {
+                RecordingCard(
                     recorder: recorder,
                     onSaved: onSaved,
                     onDiscarded: onDiscarded
                 )
+                .padding()
+                .id(Self.cardID)
             }
-            .padding()
+            // The review is drawn at the top of the card, which is only where
+            // the hiker is looking if the card is scrolled to its top: one who
+            // was reading the numbers when they stopped would otherwise be
+            // left below the decision. A reader rather than a bound scroll
+            // position, so scrolling writes no state into this body.
+            .onChange(of: recorder.phase) { _, phase in
+                guard phase == .reviewing else { return }
+                withAnimation { proxy.scrollTo(Self.cardID, anchor: .top) }
+            }
         }
         .navigationTitle("Record Hike")
         #if os(iOS)
@@ -104,7 +111,7 @@ struct RecordingView: View {
         // reason the pins above are one — see ``RecordingHaptics``.
         .background { RecordingHaptics(recorder: recorder) }
         // The phase is a coloured dot and a word at the top of a scrolling
-        // screen, so a change nobody is looking at is a change nobody hears.
+        // card, so a change nobody is looking at is a change nobody hears.
         .onChange(of: recorder.phase) { _, phase in
             AccessibilityNotification.Announcement(phase.accessibilityTitle)
                 .post()
@@ -138,8 +145,9 @@ struct RecordingView: View {
 /// It is **not** true, and used to be claimed here, that the screen's body
 /// re-runs on every accepted fix. `HikeRecorder.stats` is a `let` holding a
 /// stable ``RecordingStats``, and `@Observable` instruments `var`s only, so
-/// reading it registers the reference and nothing in it: the per-fix reader is
-/// ``RecordingStatsGrid``, which is the boundary, and the screen's own
+/// reading it registers the reference and nothing in it: the per-fix readers
+/// are ``RecordingStatsSection`` and the trail line under the card's title,
+/// which are the boundaries, and the screen's own
 /// observable inputs are `phase` and `currentHike`, both of which move a
 /// handful of times a session. The note is worth keeping as a correction
 /// because the wrong version made a per-fix body pass on this screen sound
@@ -160,502 +168,5 @@ private struct RecordingPhotoPins: View {
                 guard let photo = hike.photos.first(where: { $0.id == photoID }) else { return }
                 onOpen(photo)
             }
-    }
-}
-
-private struct RecordingRecoveryNotice: View {
-    let recorder: HikeRecorder
-
-    private let noticePadding: CGFloat = 12
-    private let noticeRadius: CGFloat = 12
-    private let noticeSpacingResumed: CGFloat = 10
-    private let noticeSpacingDecision: CGFloat = 6
-
-    @ViewBuilder var body: some View {
-        switch recorder.recoveryState {
-        case .absent: EmptyView()
-        case .resumed:
-            HStack(spacing: noticeSpacingResumed) {
-                Label(
-                    "Recording resumed after OpenHikes restarted.",
-                    systemImage: "arrow.clockwise.circle"
-                )
-                .font(.subheadline)
-                Spacer()
-                Button("Dismiss") {
-                    recorder.dismissRecoveryNotice()
-                }
-                .font(.caption)
-            }
-            .padding(noticePadding)
-            // Orange-tinted glass rather than a flat 12% orange wash: the
-            // notice keeps the colour that says "recovered" while staying a
-            // card that floats over the screen rather than a block painted
-            // onto it.
-            .glassSurface(
-                .regular.tint(.orange),
-                in: .rect(cornerRadius: noticeRadius)
-            )
-        case .needsDecision(let summary):
-            VStack(alignment: .leading, spacing: noticeSpacingDecision) {
-                Label("Recovered recording", systemImage: "clock.arrow.circlepath")
-                    .font(.headline)
-                Text(
-                    "\(distance(summary.distanceMeters)) · "
-                        + "\(summary.pointCount.formatted()) points · "
-                        + "\(HikeFormat.duration(max(0, summary.lastUpdatedAt.timeIntervalSince(summary.startedAt))))"
-                )
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                Text("Resume it, stop to save it, or discard it below.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(noticePadding)
-            .glassSurface(
-                .regular.tint(.orange),
-                in: .rect(cornerRadius: noticeRadius)
-            )
-        }
-    }
-
-    private func distance(_ meters: Double) -> String {
-        Measurement(value: meters, unit: UnitLength.meters)
-            .formatted(.measurement(width: .abbreviated, usage: .road))
-    }
-}
-
-/// Warns about system settings that quietly degrade a recording without
-/// stopping it. Never blocks: a hike recorded in Low Power Mode is worth far
-/// more than one refused on principle.
-private struct RecordingConditionsNotice: View {
-    let recorder: HikeRecorder
-
-    var body: some View {
-        #if os(iOS)
-        if recorder.isActive, !warnings.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(warnings, id: \.self) { warning in
-                    Label(warning, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        #endif
-    }
-
-    #if os(iOS)
-    private var warnings: [String] {
-        var warnings: [String] = []
-        // The energy profile's own words rather than a separate sentence about
-        // Low Power Mode: the profile is what the app did about it, and two
-        // messages about the same condition would contradict each other.
-        if let reason = recorder.energyProfile.reason {
-            warnings.append(reason)
-        }
-        if UIApplication.shared.backgroundRefreshStatus != .available {
-            warnings.append(
-                "Background App Refresh is off, so the track may be sparse while OpenHikes isn't open."
-            )
-        }
-        return warnings
-    }
-    #endif
-}
-
-private struct RecordingHeader: View {
-    let recorder: HikeRecorder
-    /// Read here, on the render path, unlike ``MapView/Coordinator``'s
-    /// notification observers — and for the opposite reason. The coordinator
-    /// gates work that MapKit does off SwiftUI's path entirely; this gates
-    /// whether a `TimelineView` is *in the hierarchy at all*, which is a
-    /// question only SwiftUI can answer. Scene phase changes a handful of
-    /// times per hike, so the redraw it costs is bounded by transitions rather
-    /// than by fixes.
-    @Environment(\.scenePhase)
-    private var scenePhase
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(phaseColor)
-                .frame(width: 10, height: 10)
-                .accessibilityHidden(true)
-            Text(phaseTitle)
-                .font(.headline)
-            Spacer()
-            // Only while the readout is on screen. A recording keeps running
-            // in the user's pocket for hours, and iOS does *not* suspend a
-            // `TimelineView` in an app held awake by background location — it
-            // was measured redrawing at a steady 1 Hz with the screen off,
-            // which is ~21,600 pointless redraws over a six-hour walk. The
-            // elapsed value is derived from a timestamp, not accumulated, so
-            // nothing is lost by not counting: the readout is correct again on
-            // the first tick after return.
-            if recorder.sessionStartedAt != nil, scenePhase == .active {
-                TimelineView(.periodic(from: .now, by: 1)) { _ in
-                    // The tick only says *when* to redraw; the value comes
-                    // from ``HikeRecorder/elapsedSeconds()``, which counts
-                    // from a monotonic source wherever it has one rather than
-                    // from the wall clock.
-                    PhaseClock(readout: HikeFormat.duration(recorder.elapsedSeconds()))
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("recording-phase")
-    }
-
-    private var phaseTitle: String {
-        recorder.phase.accessibilityTitle
-    }
-
-    private var phaseColor: Color {
-        switch recorder.phase {
-        case .recording: .red
-        case .recovering, .waitingForFix, .saving: .orange
-        case .paused: .secondary
-        case .reviewing: .orange
-        case .idle: .green
-        case .failed: .red
-        }
-    }
-}
-
-private extension HikeRecorder.Phase {
-    var accessibilityTitle: String {
-        switch self {
-        case .idle: "Ready"
-        case .recovering: "Recovering"
-        case .waitingForFix: "Finding GPS"
-        case .recording: "Recording"
-        case .paused: "Paused"
-        case .saving: "Saving"
-        case .reviewing: "Review Route"
-        case .failed: "Needs Attention"
-        }
-    }
-}
-
-private struct RecordingStatsGrid: View {
-    let stats: RecordingStats
-
-    var body: some View {
-        StatGrid {
-            StatTile(label: "Distance", value: distance)
-            StatTile(label: "Elevation Gain", value: elevationGain)
-            StatTile(label: "Moving", value: HikeFormat.duration(stats.movingSeconds))
-            StatTile(label: "Current Speed", value: currentSpeed)
-            StatTile(label: "Avg Speed", value: averageSpeed)
-            StatTile(label: "Accuracy", value: accuracy)
-            // `StatTile` already exposes itself as one label/value element;
-            // only the identifier UI automation waits on is added here.
-            StatTile(label: "Points", value: stats.pointCount.formatted())
-                .accessibilityIdentifier("recording-point-count")
-        }
-
-        RecordingTrailCard(
-            trail: stats.currentTrail,
-            isStale: stats.isCurrentTrailStale,
-            dominantTrailName: stats.dominantTrailName
-        )
-    }
-
-    private var distance: String {
-        Measurement(value: stats.distanceMeters, unit: UnitLength.meters)
-            .formatted(.measurement(width: .abbreviated, usage: .road))
-    }
-
-    private var elevationGain: String {
-        guard let gain = stats.elevationGainMeters else { return "—" }
-        return HikeFormat.elevation(
-            Measurement(value: gain, unit: UnitLength.meters)
-        )
-    }
-
-    private var averageSpeed: String {
-        guard let speed = stats.averageSpeedMetersPerSecond else { return "—" }
-        return HikeFormat.speed(
-            Measurement(value: speed, unit: UnitSpeed.metersPerSecond)
-        )
-    }
-
-    /// The last few minutes rather than the whole walk — and the word
-    /// "Stopped" rather than a rounded-down number, because a hiker standing
-    /// at a viewpoint is not travelling at 0.1 km/h, they have stopped, and
-    /// the distance beside this has stopped counting for the same reason.
-    private var currentSpeed: String {
-        if stats.isStationary { return "Stopped" }
-        guard let speed = stats.recentSpeedMetersPerSecond else { return "—" }
-        return HikeFormat.speed(
-            Measurement(value: speed, unit: UnitSpeed.metersPerSecond)
-        )
-    }
-
-    /// A radius, so it is formatted like the distance above it rather than
-    /// hard-coded to metres — which is what it was, and what made this the one
-    /// figure on the recording screen a US hiker could not read.
-    private var accuracy: String {
-        guard let horizontalAccuracy = stats.horizontalAccuracy else { return "Searching…" }
-        guard horizontalAccuracy <= RecordingFixPolicy.maximumHorizontalAccuracy else { return "Weak signal" }
-        let radius = Measurement(value: horizontalAccuracy, unit: UnitLength.meters)
-            .formatted(.measurement(width: .abbreviated, usage: .road))
-        return "±\(radius)"
-    }
-}
-
-/// What OpenStreetMap knows about the ground underfoot, while the walk is
-/// still happening.
-///
-/// The graph this reads was already being downloaded, matched against and
-/// then thrown away: live matching resolves the way under every fix in order
-/// to snap the line, and only the trail's *name* ever reached the screen. The
-/// grade and the surface come from the same edge at no additional cost.
-private struct RecordingTrailCard: View {
-    private static let symbolName =
-        "point.topleft.down.to.point.bottomright.curvepath"
-    /// How far the card fades while the match behind it is being overtaken.
-    /// Enough to read as "a moment out of date" and not so far as to read as
-    /// disabled.
-    private static let staleOpacity: CGFloat = 0.6
-
-    let trail: RecordingTrailContext?
-    let isStale: Bool
-    let dominantTrailName: String?
-
-    var body: some View {
-        if let trail, !trail.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                Label(
-                    trail.name ?? "On a mapped trail",
-                    systemImage: Self.symbolName
-                )
-                .font(.subheadline.weight(.medium))
-                if !trail.descriptors.isEmpty {
-                    Text(trail.descriptors.joined(separator: " · "))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // Dimmed rather than removed while the match is being overtaken by
-            // newer fixes, so the card never blinks — see
-            // ``RecordingStats/isCurrentTrailStale``.
-            .opacity(isStale ? Self.staleOpacity : 1)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(accessibilityLabel(for: trail))
-        } else if let dominantTrailName {
-            // Past tense: the live trail is cleared when matching stops, so
-            // the only way to reach this is a walk that has finished.
-            Text("Followed: \(dominantTrailName)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// One sentence rather than a glyph, a name and a middle dot. The symbol
-    /// is decorative and `·` is spoken, both of which `Label` and the
-    /// interpolation above would otherwise hand to VoiceOver verbatim.
-    private func accessibilityLabel(for trail: RecordingTrailContext) -> String {
-        let name = trail.name.map { "On \($0)" } ?? "On a mapped trail"
-        guard !trail.descriptors.isEmpty else { return name }
-        return "\(name). \(trail.descriptors.joined(separator: ", "))"
-    }
-}
-
-private struct RecordingControls: View {
-    /// How close two adjacent glass controls have to come before they merge.
-    private static let controlGlassSpacing: CGFloat = 8
-
-    let recorder: HikeRecorder
-    var onSaved: (Hike) -> Void
-    var onDiscarded: (UUID?) -> Void
-
-    @State private var showDiscardConfirmation = false
-    @State private var showStopAlert = false
-    @State private var stopNameDraft = ""
-    /// The name the walk has earned, taken once when the hiker asks to stop.
-    ///
-    /// Held here rather than read in `body`, which is the whole reason it is
-    /// a `@State`: ``HikeRecorder/suggestedTitle`` reads the live distance,
-    /// and a body observing that re-runs on every accepted fix. A button's
-    /// action is not a body, so reading it there costs one look and creates
-    /// no dependency. `nil` when no trail covered enough of the walk.
-    @State private var stopNameSuggestion: String?
-
-    var body: some View {
-        VStack(spacing: 12) {
-            phaseControls
-        }
-        .frame(maxWidth: .infinity)
-        .confirmationDialog(
-            "Discard this recording?",
-            isPresented: $showDiscardConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Discard Recording", role: .destructive) {
-                Task {
-                    let hikeID = recorder.currentHike?.id
-                    await recorder.discard()
-                    if recorder.phase == .idle {
-                        onDiscarded(hikeID)
-                    }
-                }
-            }
-            Button("Cancel", role: .cancel) { /* no-op */ }
-        } message: {
-            Text("The recorded track cannot be recovered after it is discarded.")
-        }
-        .alert("Name Your Hike", isPresented: $showStopAlert) {
-            // The trail the walk mostly followed, when there is one, and the
-            // draft's own name — the time of day and the date — when there
-            // is not. A placeholder is a promise about what happens if the
-            // hiker types nothing, so this is the same answer ``persist``
-            // writes, measured moments earlier against the live distance.
-            TextField(
-                stopNameSuggestion ?? recorder.currentHike?.title ?? "Hike name",
-                text: $stopNameDraft
-            )
-            Button("Save") {
-                Task { await stopAndSave() }
-            }
-            Button("Cancel", role: .cancel) { /* no-op */ }
-        } message: {
-            Text("Give this hike a name, or leave it blank to keep the default.")
-        }
-    }
-
-    @ViewBuilder private var phaseControls: some View {
-        switch recorder.phase {
-        case .idle:
-            Button("Start Recording", systemImage: "record.circle") {
-                Task { await recorder.start() }
-            }
-            .prominentGlassButtonStyle()
-            .tint(.red)
-        case .recovering:
-            ProgressView("Recovering recorded hike…")
-                .frame(maxWidth: .infinity)
-        case .waitingForFix, .recording:
-            // Two `.glass` buttons side by side: a container renders them in
-            // one pass and lets them blend as they meet, which is what makes
-            // a pair read as one control group rather than two panes.
-            GlassStack(spacing: Self.controlGlassSpacing) {
-                HStack {
-                    Button("Pause", systemImage: "pause.fill") {
-                        recorder.pause()
-                    }
-                    .glassButtonStyle()
-
-                    stopButton
-                }
-            }
-        case .paused:
-            GlassStack(spacing: Self.controlGlassSpacing) {
-                HStack {
-                    Button("Resume", systemImage: "play.fill") {
-                        Task { await recorder.resume() }
-                    }
-                    .glassButtonStyle()
-
-                    stopButton
-                }
-            }
-            discardButton
-        case .saving:
-            ProgressView("Saving recorded hike…")
-                .frame(maxWidth: .infinity)
-        case .reviewing:
-            if let review = recorder.routeReview {
-                RecordingRouteReviewControls(
-                    recorder: recorder,
-                    review: review
-                ) { hike in
-                    onSaved(hike)
-                }
-            }
-            discardButton
-        case .failed(let failure):
-            if recorder.canRetrySave {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(failure.errorDescription ?? "The hike could not be saved.")
-                        .font(.headline)
-                    if let suggestion = failure.recoverySuggestion {
-                        Text(suggestion)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    Button("Retry Save") {
-                        Task { await retrySave() }
-                    }
-                    .prominentGlassButtonStyle()
-                    .accessibilityIdentifier("recording-retry-save")
-                    discardButton
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } else if recorder.isActive {
-                discardButton
-            } else {
-                Button("Try Again") {
-                    recorder.dismissFailure()
-                }
-                .prominentGlassButtonStyle()
-            }
-        }
-    }
-
-    private var stopButton: some View {
-        Button("Stop", systemImage: "stop.fill") {
-            // Deliberately blank rather than pre-filled with the default
-            // title. The alert's own copy says "leave it blank to keep the
-            // default" and the field's placeholder already shows that default,
-            // so pre-filling made the field impossible to leave blank —
-            // tapping Stop → Save without typing sent the default through as
-            // `customName`, and `normalizedCustomName` only nils out an
-            // *empty* string, so the hike was permanently flagged user-named.
-            // The rendered name was identical, which is why nothing looked
-            // wrong; the state was just no longer true.
-            stopNameDraft = ""
-            stopNameSuggestion = recorder.suggestedTitle
-            showStopAlert = true
-        }
-        .prominentGlassButtonStyle()
-        .tint(.red)
-    }
-
-    private var discardButton: some View {
-        Button("Discard Recording", role: .destructive) {
-            showDiscardConfirmation = true
-        }
-        .glassButtonStyle()
-    }
-
-    private func stopAndSave() async {
-        let customName = stopNameDraft.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
-        do {
-            let outcome = try await recorder.stop(customName: customName)
-            if case .saved(let hike) = outcome {
-                onSaved(hike)
-            }
-        } catch {
-            HikeRecorder.logger.error(
-                "Recording save failed: \(error.localizedDescription, privacy: .public)"
-            )
-        }
-    }
-
-    private func retrySave() async {
-        do {
-            onSaved(try await recorder.retrySave())
-        } catch {
-            HikeRecorder.logger.error(
-                "Recording save retry failed: \(error.localizedDescription, privacy: .public)"
-            )
-        }
     }
 }

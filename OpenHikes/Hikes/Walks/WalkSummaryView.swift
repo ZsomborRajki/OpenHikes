@@ -58,7 +58,7 @@ struct WalkSummaryView: View {
             VStack(alignment: .leading, spacing: 24) {
                 header
                 completion
-                statsGrid
+                statsSummary
                 showOnMapButton
             }
             .padding()
@@ -82,20 +82,17 @@ struct WalkSummaryView: View {
         }
     }
 
+    /// The place-card title row the hike detail opens with.
     private var header: some View {
-        HStack(spacing: 14) {
+        PlaceCardHeader {
             if let hike {
                 HikeHeaderSymbol(hike: hike)
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(hike?.displayTitle ?? "Hike")
-                    .font(.title2.bold())
-                    .accessibilityAddTraits(.isHeader)
-                Text(walk.startedAt.formatted(date: .complete, time: .shortened))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
+        } title: {
+            Text(hike?.displayTitle ?? "Hike")
+                .accessibilityAddTraits(.isHeader)
+        } subtitle: {
+            Text(walk.startedAt.formatted(date: .complete, time: .shortened))
         }
     }
 
@@ -125,20 +122,23 @@ struct WalkSummaryView: View {
         .accessibilityIdentifier("walk-completion")
     }
 
-    private var statsGrid: some View {
-        StatGrid {
-            StatTile(label: "Active Time", value: HikeFormat.duration(walk.activeSeconds))
-            StatTile(label: "Furthest Point", value: Self.length(walk.furthestDistanceMeters))
-            StatTile(label: "Trail Distance", value: Self.length(walk.routeDistanceMeters))
-            if let ascentMeters {
-                StatTile(
-                    label: "Trail Ascent",
-                    value: HikeFormat.elevation(Measurement(value: ascentMeters, unit: UnitLength.meters))
-                )
-            }
-            StatTile(label: "Started", value: HikeFormat.timestamp(walk.startedAt))
-            StatTile(label: "Ended", value: HikeFormat.timestamp(walk.endedAt))
+    /// The walk's own two figures in the strip, and the trail's and the
+    /// clock's in the list under them.
+    private var statsSummary: some View {
+        var stats = [
+            Stat("Active Time", HikeFormat.duration(walk.activeSeconds), headline: true),
+            Stat("Furthest Point", Self.length(walk.furthestDistanceMeters), headline: true),
+            Stat("Trail Distance", Self.length(walk.routeDistanceMeters)),
+        ]
+        if let ascentMeters {
+            stats.append(Stat(
+                "Trail Ascent",
+                HikeFormat.elevation(Measurement(value: ascentMeters, unit: UnitLength.meters))
+            ))
         }
+        stats.append(Stat("Started", HikeFormat.timestamp(walk.startedAt)))
+        stats.append(Stat("Ended", HikeFormat.timestamp(walk.endedAt)))
+        return StatSummary(stats: stats)
     }
 
     /// *Show on Map*, and the one case where it cannot draw.

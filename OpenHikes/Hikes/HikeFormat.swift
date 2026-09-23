@@ -121,7 +121,7 @@ nonisolated enum HikeFormat {
     /// This was `length(_:)`, and it formatted `usage: .asProvided` on a
     /// measurement built in metres, so it rendered metres to every reader in
     /// the world while the distance beside it used `usage: .road` and adapted.
-    /// A US reader read "3.1 mi" and "1,250 m" in the same `StatGrid` — and
+    /// A US reader read "3.1 mi" and "1,250 m" in the same stats card — and
     /// ``WidgetFormat/elevation(meters:locale:)`` had already been given the
     /// conversion below, so the app and the widget disagreed about the same
     /// hike. That is the same bug ``speed(_:locale:)`` and

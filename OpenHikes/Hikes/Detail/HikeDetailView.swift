@@ -317,7 +317,7 @@ struct HikeDetailView: View {
                 elevationSection
                 progressSection
                 header
-                statsGrid
+                statsSummary
                 photoSection
                 placeSection
                 surfaceSection
@@ -486,56 +486,54 @@ private extension HikeDetailView {
 
     // MARK: Header
 
+    /// The same place-card title row the recording screen opens with, so a
+    /// hike looks the same while it is recorded as after it is saved.
     private var header: some View {
-        HStack(spacing: 14) {
+        PlaceCardHeader {
             HikeHeaderSymbol(hike: hike)
-
-            VStack(alignment: .leading, spacing: 4) {
-                if interaction.isEditingTitle {
-                    TextField(hike.title, text: $interaction.titleDraft)
-                        .font(.title2.bold())
-                        .accessibilityLabel("Hike name")
-                        .accessibilityIdentifier("hike-title-field")
-                        .focused($isTitleFieldFocused)
-                        .onAppear { isTitleFieldFocused = true }
-                        // The return key is the whole of how a rename is
-                        // confirmed here, and the keyboard toolbar that used
-                        // to carry a *Done* beside it is deliberately gone.
-                        //
-                        // A `ToolbarItemGroup(placement: .keyboard)` on this
-                        // field is what stopped the app ever reporting itself
-                        // idle, which XCUITest pays for at 60 seconds a
-                        // gesture. On a simulator in the state that provokes
-                        // it, `testRenamingAHikeUpdatesItsRow` took 677.9s
-                        // across eight of those waits; with this accessory
-                        // removed and nothing else changed, 28.3s. Nothing is
-                        // spinning — the app sits at 0% CPU throughout — so
-                        // what is left over is an animation that never
-                        // reports completion, not work.
-                        //
-                        // It is the accessory arriving and leaving *with the
-                        // field* that does it rather than the accessory
-                        // itself, and both halves cost 60s. Declared here, the
-                        // app stalls from the moment the pencil is tapped.
-                        // Hoisted onto the always-present header and gated on
-                        // `isEditingTitle`, the keyboard rises clean and the
-                        // commit stalls instead, because the button leaves as
-                        // the keyboard does — 138.8s, which is the shape #539
-                        // was filed on. ``CommunityReviewView`` keeps its own
-                        // keyboard *Done*, where it is the only way to reach
-                        // the decision, and measures clean at 20.5s on the
-                        // same simulator: there both the field and the
-                        // accessory are always in the hierarchy.
-                        .submitLabel(.done)
-                        .onSubmit { commitTitleEdit() }
-                } else {
-                    Text(hike.displayTitle)
-                        .font(.title2.bold())
-                        .accessibilityAddTraits(.isHeader)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                dateAndActions
+        } title: {
+            if interaction.isEditingTitle {
+                TextField(hike.title, text: $interaction.titleDraft)
+                    .accessibilityLabel("Hike name")
+                    .accessibilityIdentifier("hike-title-field")
+                    .focused($isTitleFieldFocused)
+                    .onAppear { isTitleFieldFocused = true }
+                    // The return key is the whole of how a rename is
+                    // confirmed here, and the keyboard toolbar that used
+                    // to carry a *Done* beside it is deliberately gone.
+                    //
+                    // A `ToolbarItemGroup(placement: .keyboard)` on this
+                    // field is what stopped the app ever reporting itself
+                    // idle, which XCUITest pays for at 60 seconds a
+                    // gesture. On a simulator in the state that provokes
+                    // it, `testRenamingAHikeUpdatesItsRow` took 677.9s
+                    // across eight of those waits; with this accessory
+                    // removed and nothing else changed, 28.3s. Nothing is
+                    // spinning — the app sits at 0% CPU throughout — so
+                    // what is left over is an animation that never
+                    // reports completion, not work.
+                    //
+                    // It is the accessory arriving and leaving *with the
+                    // field* that does it rather than the accessory
+                    // itself, and both halves cost 60s. Declared here, the
+                    // app stalls from the moment the pencil is tapped.
+                    // Hoisted onto the always-present header and gated on
+                    // `isEditingTitle`, the keyboard rises clean and the
+                    // commit stalls instead, because the button leaves as
+                    // the keyboard does — 138.8s, which is the shape #539
+                    // was filed on. ``CommunityReviewView`` keeps its own
+                    // keyboard *Done*, where it is the only way to reach
+                    // the decision, and measures clean at 20.5s on the
+                    // same simulator: there both the field and the
+                    // accessory are always in the hierarchy.
+                    .submitLabel(.done)
+                    .onSubmit { commitTitleEdit() }
+            } else {
+                Text(hike.displayTitle)
+                    .accessibilityAddTraits(.isHeader)
             }
+        } subtitle: {
+            dateAndActions
         }
     }
 
@@ -547,8 +545,6 @@ private extension HikeDetailView {
     private var dateAndActions: some View {
         HStack(spacing: 0) {
             Text(hike.date.formatted(date: .abbreviated, time: .omitted))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
 
             Spacer(minLength: 8)
 
@@ -610,12 +606,8 @@ private extension HikeDetailView {
 
     // MARK: Stats
 
-    private var statsGrid: some View {
-        StatGrid {
-            ForEach(statItems) { stat in
-                StatTile(label: stat.label, value: stat.value)
-            }
-        }
+    private var statsSummary: some View {
+        StatSummary(stats: statItems)
     }
 
     // MARK: Photos

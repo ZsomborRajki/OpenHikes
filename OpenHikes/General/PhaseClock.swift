@@ -18,11 +18,10 @@ import SwiftUI
 /// clock silently freezes — which is exactly what happened the first time this
 /// was extracted. The string is what makes the tick visible to the diff.
 ///
-/// Two screens draw one of these, and both had their own copy down to the
-/// modifier order: ``RecordingView``'s header while a recording runs, and
-/// ``WalkControls``' while a trail is being followed. The rule above was the
-/// part worth having once — a second copy of a view is cheap, and a second
-/// copy of the reason it cannot hold a reference is what gets edited away.
+/// ``WalkControls`` draws one while a trail is being followed. The recording
+/// screen's clock is a ``StatFigure`` in its stats strip instead, and keeps
+/// the same rule for the same reason: it stores the formatted value, never
+/// the recorder.
 struct PhaseClock: View {
     let readout: String
 

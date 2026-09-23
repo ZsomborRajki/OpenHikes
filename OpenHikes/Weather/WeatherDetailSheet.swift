@@ -236,7 +236,7 @@ struct WeatherDetailView: View {
                 }
             }
             // A glyph, a number and a phrase that are one fact — the same
-            // shape ``StatTile`` and ``DetailRow`` take.
+            // shape ``StatRow`` and ``DetailRow`` take.
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(placeName.map { "Conditions in \($0)" } ?? "Current conditions")
             .accessibilityValue("\(snapshot.spokenTemperature()), \(snapshot.conditionDescription)")
