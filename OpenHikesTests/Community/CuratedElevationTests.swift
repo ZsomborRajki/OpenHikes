@@ -20,6 +20,8 @@ import Testing
 @Suite("Curated elevation")
 struct CuratedElevationTests {
     private static let key = "test-key"
+    /// Far enough that a moved point is a different place by any reading.
+    private static let aLongWayOff = 0.01
 
     private static func route(_ count: Int) -> [RouteCoordinate] {
         (0..<count).map { index in
@@ -302,6 +304,63 @@ struct CuratedElevationTests {
             filled.allSatisfy { $0.elevation == nil },
             "an answer this app cannot decode is an answer it does not use"
         )
+    }
+
+    // MARK: What was measured, and which line it is about
+
+    /// The heights are kept with the points they were read at, so a caller
+    /// that comes back later can tell whether they are still about its line.
+    ///
+    /// This is the half the trail maker needs and the curated screen does not:
+    /// a curated route is opened once and never edited, while a drawing moves
+    /// under the answer.
+    @Test("samples describe the route they were read for")
+    func samplesDescribeTheirRoute() async throws {
+        let stub = StubTransport()
+        stub.answer(heights: [600, 620, 640])
+        let source = StadiaElevationSource(apiKey: Self.key, entitlement: { .entitled }, transport: stub.transport)
+        let route = Self.route(3)
+
+        let samples = try #require(await source.samples(of: route))
+
+        #expect(samples.describes(route))
+        #expect(samples.filling(route).compactMap(\.elevation) == [600, 620, 640])
+    }
+
+    /// And a line that has changed under them is refused rather than filled
+    /// approximately.
+    ///
+    /// The failure this forbids is silent and entirely plausible on screen: a
+    /// leg that snapped while the save alert was open lengthens the route, so
+    /// every sampled index moves and a height read on a summit is written on
+    /// to a point in a valley.
+    @Test("samples refuse a line that has changed under them")
+    func samplesRefuseAChangedRoute() async throws {
+        let stub = StubTransport()
+        stub.answer(heights: [600, 620, 640])
+        let source = StadiaElevationSource(apiKey: Self.key, entitlement: { .entitled }, transport: stub.transport)
+
+        let samples = try #require(await source.samples(of: Self.route(3)))
+        let longer = Self.route(4)
+
+        #expect(!samples.describes(longer), "four points is a different question")
+        #expect(samples.filling(longer).allSatisfy { $0.elevation == nil })
+    }
+
+    /// A route the same length whose points have moved is refused too — the
+    /// count is the cheap half of the check and not the whole of it.
+    @Test("samples refuse a line whose points have moved")
+    func samplesRefuseAMovedRoute() async throws {
+        let stub = StubTransport()
+        stub.answer(heights: [600, 620, 640])
+        let source = StadiaElevationSource(apiKey: Self.key, entitlement: { .entitled }, transport: stub.transport)
+
+        let samples = try #require(await source.samples(of: Self.route(3)))
+        var moved = Self.route(3)
+        moved[1].latitude += Self.aLongWayOff
+
+        #expect(!samples.describes(moved))
+        #expect(samples.filling(moved).allSatisfy { $0.elevation == nil })
     }
 
     /// The source a launch gets when it must not ask — a suite, or a UI test

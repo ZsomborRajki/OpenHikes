@@ -73,6 +73,30 @@ struct TrailDraftRoutingTests {
         #expect(await router.askedCount() == 1)
     }
 
+    /// **What an answer landing is allowed to invalidate.** The maker's screen
+    /// reads ``TrailDraft/waypoints`` to build its list and nothing else about
+    /// the line; the rows, the footer and the retry control read
+    /// ``TrailDraft/legs`` themselves — see ``TrailDraftWaypointRow``. That
+    /// split is only worth anything while a leg answering leaves the two lists
+    /// the screen's own body reads exactly as they were, which is what a
+    /// nineteen-answer trail would otherwise pay nineteen full rebuilds for.
+    @Test("a leg answering changes the legs and leaves the points alone")
+    func answersLeaveThePointsAlone() async {
+        let router = StubTrailLegRouter(answering: .snapped)
+        let maker = Self.maker(router)
+        Self.draw([Line.south, Line.north], on: maker)
+        let points = maker.draft.waypoints
+        let places = maker.draft.placeRows
+
+        await settleDelegateHop(until: "the leg to be routed") {
+            maker.draft.legs.first?.snap == .snapped
+        }
+
+        #expect(maker.draft.waypoints == points, "the list of points is untouched")
+        #expect(maker.draft.placeRows == places)
+        #expect(maker.draft.distanceMeters > 0, "and the line did change")
+    }
+
     /// Marked in the same turn the question is asked, so the line is never a
     /// settled straight one while an answer about it is on the wire.
     @Test("a leg being asked about is drawn as waiting straight away")

@@ -215,6 +215,41 @@ extension MapCoordinatorTests {
         )
     }
 
+    /// **A grey pin is a thing to look at.** A candidate and a place the hiker
+    /// marked carry the same title and the same subtitle, and everything that
+    /// separates them on screen — the colour, the thinning, the verbs in the
+    /// callout — is invisible to a screen reader. Without the sentence below,
+    /// a hiker swiping through the map's elements hears forty pins and cannot
+    /// tell which three are theirs.
+    ///
+    /// Asserted here rather than in the accessibility sweep because there is
+    /// no launch that can reach one: ``OpenHikesModel/makeTrailPointSource()``
+    /// answers `nil` for every test, deliberately, so no candidate pin exists
+    /// under automation.
+    @Test("a candidate pin says out loud that it is only an offer")
+    func aCandidatePinSaysItIsAnOffer() async throws {
+        let maker = Self.drawingMaker(offering: [Self.place(47.601, 12.901)])
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(trailMaker: maker), coordinator)
+        defer { detach(map) }
+
+        maker.finder.regionDidSettle(Self.searchableRegion())
+        maker.searchNearbyPlaces()
+        await settle(until: "the candidate to reach the map") {
+            coordinator.trailPointCandidateAnnotations.count == 1
+        }
+        let annotation = try #require(coordinator.trailPointCandidateAnnotations.first)
+        let view = coordinator.trailPointCandidateView(for: annotation, on: map)
+
+        let spoken = try #require(view.accessibilityLabel)
+        #expect(spoken.contains("Water"), "it still says what the place is")
+        #expect(
+            spoken != annotation.title,
+            "and it says more than the title a marked place would read with"
+        )
+        #expect(spoken.contains("not on your trail yet"))
+    }
+
     /// Taking one is the only thing in this phase that writes anything down.
     /// The provisional pin goes because the candidate does, and a marked
     /// place's own pin arrives in its place — two pins on one spot is what

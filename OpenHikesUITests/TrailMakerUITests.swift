@@ -71,7 +71,7 @@ nonisolated final class TrailMakerUITests: XCTestCase {
             "the map should be up before anything is drawn"
         )
 
-        openTheMaker(in: app)
+        openTrailMaker(in: app)
 
         // Nothing is down yet, and the screen says what to do about it.
         XCTAssertTrue(
@@ -84,7 +84,7 @@ nonisolated final class TrailMakerUITests: XCTestCase {
             "a trail with no points cannot be saved"
         )
 
-        draw(Self.drawnPoints, on: map, in: app)
+        drawTrailPoints(Self.drawnPoints, on: map, in: app)
 
         // Three points, in the order they went down, with the running length
         // on the header beside them.
@@ -127,8 +127,8 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
 
-        openTheMaker(in: app)
-        draw(Array(Self.drawnPoints.prefix(2)), on: map, in: app)
+        openTrailMaker(in: app)
+        drawTrailPoints(Array(Self.drawnPoints.prefix(2)), on: map, in: app)
 
         element("trail-draft-cancel", in: app).tap()
         let discard = app.buttons["Discard"]
@@ -144,7 +144,7 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         )
 
         // And nothing was kept: reopening the maker starts from nothing.
-        openTheMaker(in: app)
+        openTrailMaker(in: app)
         XCTAssertTrue(
             element("trail-draft-empty", in: app).waitForExistence(
                 timeout: UITestTimeout.navigation
@@ -213,7 +213,7 @@ nonisolated final class TrailMakerUITests: XCTestCase {
     @MainActor
     func testTheSwitchIsOfferedOnlyWhenThereIsAGraphToAsk() {
         let withoutGraph = launchApp()
-        openTheMaker(in: withoutGraph)
+        openTrailMaker(in: withoutGraph)
         XCTAssertFalse(
             element("trail-draft-snap", in: withoutGraph).exists,
             "a launch that cannot ask OpenStreetMap should not offer to"
@@ -223,7 +223,7 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         let app = launchApp(
             arguments: ["--ui-test-trail-graph=\(UITestFixture.trailGraphName)"]
         )
-        openTheMaker(in: app)
+        openTrailMaker(in: app)
         XCTAssertTrue(
             element("trail-draft-snap", in: app).waitForExistence(
                 timeout: UITestTimeout.navigation
@@ -243,8 +243,8 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
 
-        openTheMaker(in: app)
-        draw(Self.drawnPoints, on: map, in: app)
+        openTrailMaker(in: app)
+        drawTrailPoints(Self.drawnPoints, on: map, in: app)
 
         let snap = element("trail-draft-snap", in: app)
         XCTAssertTrue(snap.waitForExistence(timeout: UITestTimeout.navigation))
@@ -261,23 +261,6 @@ nonisolated final class TrailMakerUITests: XCTestCase {
     }
 
     // MARK: - Helpers
-
-    /// Opens the maker from the map's own pill, which is the only way in.
-    @MainActor
-    private func openTheMaker(in app: XCUIApplication) {
-        let pill = element("map-trail-maker-button", in: app)
-        XCTAssertTrue(
-            pill.waitForExistence(timeout: UITestTimeout.existence),
-            "the search screen should offer to make a trail"
-        )
-        pill.tap()
-        XCTAssertTrue(
-            element("trail-draft-save", in: app).waitForExistence(
-                timeout: UITestTimeout.navigation
-            ),
-            "tapping the pill should open the maker"
-        )
-    }
 
     /// Answers the alert Save opens, which is the only place the maker asks
     /// what the trail is called.
@@ -299,61 +282,6 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         prompt.buttons["Save"].tap()
     }
 
-    /// Taps the map at each offset, answers the callout, and waits for the
-    /// point to be listed.
-    ///
-    /// **Two gestures per point since Phase 4**, and that is the canvas rather
-    /// than the helper: a tap drops a provisional pin and asks, and the button
-    /// in its callout is what draws — see ``TrailDraftPinAction``. Which verb
-    /// is offered follows from how much line there is, which is why the name
-    /// is computed from the index rather than passed in: a helper that had to
-    /// be told would hide the rule it is exercising.
-    ///
-    /// Waiting on the row rather than tapping three times and asserting once:
-    /// a tap that missed is indistinguishable from one the app has not
-    /// processed yet, and only the wait tells them apart. No fixed sleep —
-    /// each point is its own effect to wait on.
-    @MainActor
-    private func draw(_ offsets: [CGVector], on map: XCUIElement, in app: XCUIApplication) {
-        for (index, offset) in offsets.enumerated() {
-            map.coordinate(withNormalizedOffset: offset).tap()
-            confirmDroppedPin(Self.verb(forPointAt: index), in: app)
-            let row = element("trail-draft-point-\(index + 1)", in: app)
-            XCTAssertTrue(
-                row.waitForExistence(timeout: UITestTimeout.navigation),
-                "the callout should put point \(index + 1) down"
-            )
-        }
-    }
-
-    /// The identifier of the verb a callout offers for the *n*th point.
-    ///
-    /// Mirrors ``TrailDraftPinAction/offered(forWaypointCount:)``, spelled out
-    /// rather than read from it: this suite is the one that presses buttons,
-    /// and a helper that computed the identifier from the same source as the
-    /// app would be green on a build where the button never appeared.
-    private static func verb(forPointAt index: Int) -> String {
-        switch index {
-        case 0: "trail-draft-pin-start-here"
-        case 1: "trail-draft-pin-set-as-destination"
-        default: "trail-draft-pin-make-destination"
-        }
-    }
-
-    /// Presses one of the buttons inside the pin's callout.
-    ///
-    /// The buttons are a `UIStackView` this app owns inside MapKit's own
-    /// callout, so unlike a `Menu`'s contents they keep their identifiers —
-    /// see ``TrailDraftPinAction/accessibilityIdentifier``.
-    @MainActor
-    private func confirmDroppedPin(_ identifier: String, in app: XCUIApplication) {
-        let button = element(identifier, in: app)
-        XCTAssertTrue(
-            button.waitForExistence(timeout: UITestTimeout.navigation),
-            "a tap on the map should open a callout offering \(identifier)"
-        )
-        button.tap()
-    }
 }
 
 // MARK: - Editing what is already drawn
@@ -379,8 +307,8 @@ extension TrailMakerUITests {
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
 
-        openTheMaker(in: app)
-        draw(Self.drawnPoints, on: map, in: app)
+        openTrailMaker(in: app)
+        drawTrailPoints(Self.drawnPoints, on: map, in: app)
 
         let third = element("trail-draft-point-3", in: app)
         element("trail-draft-point-2", in: app).swipeLeft()
@@ -413,9 +341,9 @@ extension TrailMakerUITests {
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
 
-        openTheMaker(in: app)
+        openTrailMaker(in: app)
         let ends = Array(Self.drawnPoints.prefix(2))
-        draw(ends, on: map, in: app)
+        drawTrailPoints(ends, on: map, in: app)
         let length = element("trail-draft-length", in: app).label
 
         // Halfway between the two taps, which on a launch with no trail graph
@@ -468,8 +396,8 @@ extension TrailMakerUITests {
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
 
-        openTheMaker(in: app)
-        draw(Self.drawnPoints, on: map, in: app)
+        openTrailMaker(in: app)
+        drawTrailPoints(Self.drawnPoints, on: map, in: app)
         let length = element("trail-draft-length", in: app).label
 
         let third = element("trail-draft-point-3", in: app)
@@ -522,8 +450,8 @@ extension TrailMakerUITests {
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
 
-        openTheMaker(in: app)
-        draw(Self.lopsidedPoints, on: map, in: app)
+        openTrailMaker(in: app)
+        drawTrailPoints(Self.lopsidedPoints, on: map, in: app)
         let second = element("trail-draft-point-2", in: app).label
 
         chooseAction("Reverse", in: app)
@@ -553,8 +481,8 @@ extension TrailMakerUITests {
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
 
-        openTheMaker(in: app)
-        draw(Self.drawnPoints, on: map, in: app)
+        openTrailMaker(in: app)
+        drawTrailPoints(Self.drawnPoints, on: map, in: app)
 
         chooseAction("Clear", in: app)
         let confirm = app.buttons["Clear"]
@@ -626,7 +554,7 @@ extension TrailMakerUITests {
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
 
-        openTheMaker(in: app)
+        openTrailMaker(in: app)
 
         // Nothing marked yet, and the screen says both ways to start.
         XCTAssertTrue(
@@ -675,7 +603,7 @@ extension TrailMakerUITests {
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
 
-        openTheMaker(in: app)
+        openTrailMaker(in: app)
         map.coordinate(withNormalizedOffset: Self.drawnPoints[0]).tap()
         confirmDroppedPin("trail-draft-pin-mark-a-place", in: app)
         let name = element("trail-place-name", in: app)

@@ -582,6 +582,18 @@ final class TrailDraft {
     /// against the waypoints, so the figure beside a place is the same one the
     /// header and the saved hike carry.
     private func rankPlaces() {
+        // Guarded rather than left to ``TrailPlaceOrder/ordered(_:along:)``'s
+        // own empty case, because what is avoided is *building the argument*:
+        // ``routeCoordinates`` flattens every leg into a fresh array, which on
+        // a snapped trail is thousands of coordinates, and a hiker who has
+        // marked nothing — most of them, most of the time — would pay for it
+        // on every tap and on every leg that lands. The same guard
+        // ``TrailDraftController/commit()`` makes in front of the finder's
+        // re-rank, for the same reason.
+        guard !places.isEmpty else {
+            if !placeRows.isEmpty { placeRows = [] }
+            return
+        }
         let ranked = TrailPlaceOrder.ordered(places, along: routeCoordinates)
         guard placeRows != ranked else { return }
         placeRows = ranked

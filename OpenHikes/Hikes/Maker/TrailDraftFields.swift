@@ -2,7 +2,8 @@
 //  TrailDraftFields.swift
 //  OpenHikes
 //
-//  The maker's fields, its snapping switch, its notices and its waypoint row.
+//  The maker's fields, its snapping switch, its notices, its running figures
+//  and its waypoint row.
 //
 //  Each is its own `View` type and that is a render-isolation decision rather
 //  than tidiness: only a `View` is a boundary, so a name typed into a field
@@ -340,6 +341,129 @@ struct TrailDraftNoticeLabel: View {
     }
 }
 
+/// What the line is so far: how long, and — once anybody has been able to
+/// measure it — what it climbs and drops.
+///
+/// Its own `View` and this is the one on the screen that most needed to be.
+/// The length changes when the drawing does, so a body carrying it rebuilds
+/// the list of points at exactly the moments that list has to be rebuilt
+/// anyway. The climb does not: it lands a couple of seconds after the hiker
+/// stops, from a task nobody is watching, and a figure read in
+/// ``TrailDraftView``'s body would rebuild every point, every place and every
+/// candidate row to say it. See ``TrailDraftElevation``.
+///
+/// **Nothing at all is drawn where there is no height**, which is a free
+/// hiker's drawn trail, a build with no key and every launch running tests.
+/// That is the same degradation a curated route already has — a line, a
+/// length, and no chart — rather than a prompt for a subscription in the
+/// middle of a drawing.
+struct TrailDraftLineHeader: View {
+    let draft: TrailDraft
+    let elevation: TrailDraftElevation
+
+    var body: some View {
+        // Read once and handed to both layouts below, so the one that is
+        // discarded costs a measurement rather than a second read of an
+        // observable.
+        let climb = elevation.summary
+        let waiting = elevation.isMeasuring
+        let length = Self.length(draft.distanceMeters)
+        // Stacked rather than clipped at the accessibility type sizes, where
+        // three figures and a heading do not fit across a phone. The audit
+        // measures exactly this — see ``AccessibilityUITests``.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                Text("Points")
+                Spacer(minLength: 12)
+                figures(climb, waiting: waiting, length: length)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Points")
+                figures(climb, waiting: waiting, length: length)
+            }
+        }
+        // One element rather than four, and a value rather than four labels,
+        // the rule every composite row here follows — see ``HikeRow``. The
+        // units are spoken in full because "km" and "m" are read out as
+        // letters otherwise; ``HikeFormat/spokenElevation(_:locale:)`` is the
+        // same fix the elevation chart already carries.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Points")
+        .accessibilityValue(
+            Self.spoken(draft.distanceMeters, climb: climb, measuring: waiting)
+        )
+    }
+
+    @ViewBuilder
+    private func figures(
+        _ climb: RouteElevationSummary?,
+        waiting: Bool,
+        length: String
+    ) -> some View {
+        HStack(spacing: 10) {
+            // The same thing the *Search this area* pill's spinner says, in
+            // the slot the answer will land in: a figure is coming. It is on
+            // screen once, after the hiker stops drawing, for as long as one
+            // request takes — never during the drawing itself.
+            if waiting {
+                ProgressView()
+                    #if os(iOS)
+                    .controlSize(.mini)
+                    #endif
+            }
+            if let gain = climb?.gainMeters {
+                Label(Self.height(gain), systemImage: "arrow.up")
+            }
+            if let loss = climb?.lossMeters {
+                Label(Self.height(loss), systemImage: "arrow.down")
+            }
+            Text(length)
+        }
+        .monospacedDigit()
+        .imageScale(.small)
+        .accessibilityIdentifier("trail-draft-length")
+    }
+
+    private static func height(_ meters: Double) -> String {
+        HikeFormat.elevation(Measurement(value: meters, unit: UnitLength.meters))
+    }
+
+    /// The same height with its unit said in full, because "m" is read out as
+    /// a letter otherwise.
+    private static func spokenHeight(_ meters: Double) -> String {
+        HikeFormat.spokenElevation(Measurement(value: meters, unit: UnitLength.meters))
+    }
+
+    private static func length(_ meters: Double) -> String {
+        Measurement(value: meters, unit: UnitLength.meters)
+            .formatted(.measurement(width: .abbreviated, usage: .road))
+    }
+
+    /// The same figures as a sentence, with every unit said in full.
+    ///
+    /// The spinner is a shape and says nothing, so the sentence is where a
+    /// hiker who cannot see it is told a number is on its way.
+    static func spoken(
+        _ meters: Double,
+        climb: RouteElevationSummary?,
+        measuring: Bool = false
+    ) -> String {
+        let length = Measurement(value: meters, unit: UnitLength.meters)
+            .formatted(.measurement(width: .wide, usage: .road))
+        let parts = [
+            length,
+            measuring ? String(localized: "measuring the climb") : nil,
+            climb?.gainMeters.map { gain in
+                String(localized: "\(Self.spokenHeight(gain)) of climb")
+            },
+            climb?.lossMeters.map { loss in
+                String(localized: "\(Self.spokenHeight(loss)) of descent")
+            },
+        ]
+        return parts.compactMap(\.self).joined(separator: ", ")
+    }
+}
+
 /// One point in the list, named by its place in the line and how far along it
 /// sits.
 ///
@@ -347,22 +471,37 @@ struct TrailDraftNoticeLabel: View {
 /// something to say: a leg that snapped or that the hiker straightened
 /// themselves says nothing, so the list is quiet until something is worth
 /// reading. See ``TrailLegSnap/notice``.
+///
+/// **It reads the drawing itself rather than being handed three values off
+/// it**, and that is the render-isolation decision on this screen. A
+/// twenty-point trail waits on nineteen separate Overpass answers, and every
+/// one of them writes ``TrailDraft/legs`` and ``TrailDraft/distancesAlongLine``
+/// — so a parent body that read either of those to *build* these rows would be
+/// re-evaluated nineteen times, taking the places list, the candidate list and
+/// the search field with it, because a `View` holding a closure cannot be
+/// compared and is rebuilt whether or not anything it draws has changed. Read
+/// here, the same answer redraws the rows and the footer and nothing else —
+/// and a `List` is lazy, so it asks only the rows on screen.
 struct TrailDraftWaypointRow: View {
-    let number: Int
-    let distanceMeters: Double
-    let legNotice: TrailLegNotice?
+    let draft: TrailDraft
+    /// Where in the line this row sits. The number a hiker reads is one more:
+    /// a list is counted from one and an array from zero.
+    let index: Int
 
     var body: some View {
+        let number = index + 1
         VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Text("Point \(number)")
                 Spacer(minLength: 12)
-                Text(Self.length(distanceMeters))
+                Text(Self.length(draft.distanceAlongLine(toWaypointAt: index)))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
-            if let legNotice {
-                TrailDraftNoticeLabel(notice: legNotice)
+            // The leg *into* this point, which is why the first row never has
+            // one: nothing arrives at it.
+            if let notice = draft.leg(arrivingAtWaypointAt: index)?.snap.notice {
+                TrailDraftNoticeLabel(notice: notice)
                     .foregroundStyle(.secondary)
             }
         }
@@ -375,5 +514,57 @@ struct TrailDraftWaypointRow: View {
     private static func length(_ meters: Double) -> String {
         Measurement(value: meters, unit: UnitLength.meters)
             .formatted(.measurement(width: .abbreviated, usage: .road))
+    }
+}
+
+/// What the whole line has to say for itself, under the points.
+///
+/// Its own `View` for the reason the row above is: both of the things it draws
+/// are read off ``TrailDraft/legs``, which every leg that lands rewrites.
+struct TrailDraftLineFooter: View {
+    let draft: TrailDraft
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // One line for the whole line, saying the worst thing any leg has
+            // to report — see ``TrailDraft/notice``. The per-leg sentence is on
+            // the row it belongs to; this is what a hiker who has not scrolled
+            // sees.
+            if let notice = draft.notice {
+                TrailDraftNoticeLabel(notice: notice)
+            }
+            // The two gestures on the map that nothing on screen could
+            // otherwise announce. Both are discoverable only by being told: a
+            // leg looks like a drawing rather than a control, and a pin that
+            // answers a press but not a tap advertises nothing. Withheld until
+            // there is a line to do either to.
+            if !draft.legs.isEmpty {
+                Text(
+                    """
+                    Tap a leg to add a point in the middle. \
+                    Press and hold a point to move it.
+                    """
+                )
+            }
+        }
+    }
+}
+
+/// *Try Again*, offered only when Overpass refused something.
+///
+/// Not for a leg with nothing mapped under it and not for one the hiker
+/// straightened themselves: asking again about either would spend a request to
+/// be told the same thing. See ``TrailLegSnap/isRetryable``.
+///
+/// Its own `View` for the reason the two above are — it reads
+/// ``TrailDraft/legs``, and it is a row inside the same section they are.
+struct TrailDraftRetryRow: View {
+    let maker: TrailDraftController
+
+    var body: some View {
+        if maker.draft.hasRetryableLegs {
+            Button("Try Again", systemImage: "arrow.clockwise", action: maker.retryRefusedLegs)
+                .accessibilityIdentifier("trail-draft-retry")
+        }
     }
 }

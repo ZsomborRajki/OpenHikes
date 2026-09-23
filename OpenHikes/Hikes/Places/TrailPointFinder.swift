@@ -25,6 +25,17 @@
 //  an ordinary ``TrailPlace`` through the controller, exactly as *Mark a
 //  Place* does.
 //
+//  ## Except when Overpass refuses, and this device already knows something
+//
+//  Then the pins come off the disk instead — see ``TrailPointStore``, which is
+//  what a successful search writes. They are still candidates, they are still
+//  drawn as an offer, and the caption under the pill still says the search was
+//  refused, because what is drawn is *what happens to be on this device near
+//  here* rather than an answer. It is the same bargain the curated list makes
+//  one feature over, for the same reason: three of five first attempts came
+//  back `504` the day this was measured, and drawing the twenty places a
+//  valley answered with an hour ago beats drawing nothing.
+//
 //  ## One tap, one request, and never a pan
 //
 //  Behind a button for the reason *Search this area* is: Overpass allows a
@@ -204,15 +215,21 @@ final class TrailPointFinder {
         guard let source, let area = searchableArea, !isSearching else { return }
         isSearching = true
         task?.cancel()
+        // Read here rather than inside the task, because it decides whether
+        // the disk is touched at all and it is a main-actor read: a refusal
+        // never replaces candidates that are already on offer, so there is
+        // nothing to read the store for when there are some.
+        let mayDrawFromDisk = !isOffering
         task = Task { [weak self] in
-            let answer: Result<[TrailPlace], any Error>
-            do {
-                answer = .success(try await source.places(near: area))
-            } catch {
-                answer = .failure(error)
-            }
+            let outcome = await Self.answer(
+                from: source,
+                near: area,
+                along: route,
+                avoiding: placed,
+                mayDrawFromDisk: mayDrawFromDisk
+            )
             guard let self, !Task.isCancelled else { return }
-            receive(answer, along: route, avoiding: placed)
+            receive(outcome, along: route)
         }
     }
 
@@ -263,40 +280,100 @@ final class TrailPointFinder {
         publish([])
     }
 
-    /// One answer, however long it took.
-    private func receive(
-        _ answer: Result<[TrailPlace], any Error>,
+    /// What one search came back with, already chosen and already paid for off
+    /// the main actor.
+    ///
+    /// An enumeration rather than a `Result`, because a refusal is not only an
+    /// error here: it may arrive carrying the places this device already had,
+    /// and the third case is not a failure at all — a cancelled search is one
+    /// nobody is waiting for.
+    private enum Outcome {
+        case offered([TrailPlace])
+        case refused(CuratedTrailOutage, standingIn: [TrailPlace])
+        case cancelled
+    }
+
+    /// The whole of a search, with every route-sized step behind an `await`.
+    ///
+    /// `static` and handed everything it needs, so nothing here touches the
+    /// finder while the finder is not looking: what comes back is one value,
+    /// applied in one turn of the main actor by ``receive(_:along:)``.
+    private static func answer(
+        from source: any TrailPointSourcing,
+        near area: CommunitySearchArea,
         along route: [RouteCoordinate],
-        avoiding placed: [TrailPlace]
-    ) {
-        isSearching = false
-        switch answer {
-        case .success(let found):
-            let offered = Self.excluding(placed, from: found)
-            chosen = TrailPointRanking.chosen(
-                from: offered,
-                along: route,
-                around: searchableArea?.coordinate
+        avoiding placed: [TrailPlace],
+        mayDrawFromDisk: Bool
+    ) async -> Outcome {
+        do {
+            let found = try await source.places(near: area)
+            return .offered(
+                await TrailPointRanking.offered(
+                    from: found,
+                    along: route,
+                    in: area,
+                    excluding: placed
+                )
             )
-            publish(TrailPointRanking.rows(of: chosen, along: route))
-            notice = chosen.isEmpty ? .nothingHere : nil
-        case .failure(let error):
+        } catch {
             // A cancelled search is not a refusal and must not be drawn as
             // one — the same carve-out ``CuratedTrailOutage/init(_:)`` makes,
             // and the same two spellings of it. There is nothing to report
             // because nobody is waiting: the hiker closed the maker.
-            guard let outage = CuratedTrailOutage(error) else { return }
+            guard let outage = CuratedTrailOutage(error) else { return .cancelled }
+            guard mayDrawFromDisk else { return .refused(outage, standingIn: []) }
+            // Only now, on a path where a round trip has already failed, is
+            // every file in the cache directory worth reading — see
+            // ``TrailPointStore/places(near:limit:)``. More are asked for than
+            // will be drawn, because the store can only sort by distance from
+            // the middle of the map and the line decides the rest.
+            let stored = await source.cachedPlaces(
+                near: area,
+                limit: TrailPointQuery.maximumStoredResults
+            )
+            return .refused(
+                outage,
+                standingIn: await TrailPointRanking.offered(
+                    from: stored,
+                    along: route,
+                    in: area,
+                    excluding: placed
+                )
+            )
+        }
+    }
+
+    /// One answer, however long it took, applied in one turn.
+    private func receive(_ outcome: Outcome, along route: [RouteCoordinate]) {
+        isSearching = false
+        switch outcome {
+        case .cancelled:
+            return
+        case .offered(let places):
+            chosen = places
+            publish(TrailPointRanking.rows(of: places, along: route))
+            notice = places.isEmpty ? .nothingHere : nil
+        case let .refused(outage, standingIn):
             Self.logger.info(
                 """
                 A place search was refused: \
-                \(String(describing: outage), privacy: .public)
+                \(String(describing: outage), privacy: .public); \
+                drawing \(standingIn.count, privacy: .public) places already on this device.
                 """
             )
             // The candidates that were already on offer stay. They are still
             // true — this refusal is about the request that was going to
             // replace them — and taking a map's worth of pins away to report
             // that a server is busy would be the failure doing more damage
-            // than the thing that failed.
+            // than the thing that failed. `standingIn` is empty in exactly
+            // that case; see ``search(along:avoiding:)``.
+            if !standingIn.isEmpty, chosen.isEmpty {
+                chosen = standingIn
+                publish(TrailPointRanking.rows(of: standingIn, along: route))
+            }
+            // Whatever was drawn, the caption still says the search failed.
+            // What came off the disk is not an answer and must never be
+            // offered as one — see ``TrailPointStore``.
             notice = .outage(outage)
         }
     }
@@ -310,32 +387,4 @@ final class TrailPointFinder {
         rows = updated
     }
 
-    /// `found` without the places the hiker already has.
-    ///
-    /// By where they are rather than by identity, because there is no identity
-    /// to compare: a marked place carries a `UUID` this device made and an
-    /// Overpass answer is a fresh one every search. What a hiker would see
-    /// without this is their own hut with a second, provisional pin under it,
-    /// offering to add the hut again.
-    ///
-    /// The tolerance is a few metres because that is what the two coordinates
-    /// actually differ by: a hiker who marked a spring by tapping the map put
-    /// their pin where OpenStreetMap's node is, give or take a thumb.
-    private static func excluding(
-        _ placed: [TrailPlace],
-        from found: [TrailPlace]
-    ) -> [TrailPlace] {
-        guard !placed.isEmpty else { return found }
-        return found.filter { candidate in
-            !placed.contains { marked in
-                RouteGeometry.distanceMeters(
-                    from: marked.clCoordinate,
-                    to: candidate.clCoordinate
-                ) <= alreadyMarkedMeters
-            }
-        }
-    }
-
-    /// How close a candidate has to be to a marked place to be the same place.
-    private static let alreadyMarkedMeters: Double = 25
 }

@@ -14,6 +14,12 @@
 //  saved hike, and a pin that looked like the ones that are would be this app
 //  claiming the hiker had marked forty things they have not looked at yet.
 //
+//  **Every one of those differences is something to look at**, which is why
+//  the pin says the same thing in words — see ``TrailPointCandidateAnnotation/spokenDescription``.
+//  A candidate and a marked place carry the same title and the same subtitle,
+//  so without it a hiker swiping through the map's elements hears forty pins
+//  and cannot tell which three are theirs.
+//
 //  Decluttering is *wanted* here rather than tolerated. There are up to forty
 //  of these — see ``TrailPointQuery/maximumResults`` — and MapKit thinning
 //  them as the hiker zooms out is exactly the behaviour a provisional layer
@@ -81,6 +87,20 @@ final class TrailPointCandidateAnnotation: NSObject, MKAnnotation {
         let parts = [kind, distance].compactMap(\.self)
         guard !parts.isEmpty else { return nil }
         return parts.joined(separator: " · ")
+    }
+
+    /// What a screen reader is told, which has to say more than the callout
+    /// draws.
+    ///
+    /// Colour, thinning and which buttons the callout carries are the whole of
+    /// what separates one of these from a place the hiker marked, and not one
+    /// of them is audible. So the pin says the part that matters: nothing has
+    /// been added to the trail yet. It is set on the *view* rather than folded
+    /// into ``subtitle``, because the subtitle is a line of text under a pin
+    /// on a map and this is a sentence.
+    var spokenDescription: String {
+        let drawn = [title, subtitle].compactMap(\.self).joined(separator: ", ")
+        return String(localized: "\(drawn). Found in OpenStreetMap, not on your trail yet.")
     }
 
     init(row: TrailPlaceRow) {
@@ -151,6 +171,10 @@ extension MapView.Coordinator {
         view.markerTintColor = .systemGray
         view.displayPriority = .defaultLow
         view.accessibilityIdentifier = "trail-point-candidate"
+        // Overrides the title-and-subtitle MapKit would otherwise read, which
+        // is word for word what a place the hiker marked reads — see
+        // ``TrailPointCandidateAnnotation/spokenDescription``.
+        view.accessibilityLabel = annotation.spokenDescription
         attachTrailPointCandidateCallout(for: annotation, to: view, on: mapView)
         #endif
         // Last rather than beside the annotation, on the principle the marked

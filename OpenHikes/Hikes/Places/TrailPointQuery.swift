@@ -119,6 +119,17 @@ nonisolated enum TrailPointQuery {
     /// against is a screenshot rather than a paragraph.
     static let maximumResults = 40
 
+    /// How many stored places a refused search may draw from.
+    ///
+    /// Five times what is ever offered, because the two are ranked against
+    /// different things. ``TrailPointStore`` answers *nearest the middle of
+    /// the map*, which is all a directory of files can be sorted by; which of
+    /// those are worth a pin is decided against the line the hiker is drawing,
+    /// afterwards. Drawing wider is what gives that second ranking something
+    /// to choose from — and much wider would make a refusal cost more
+    /// arithmetic than the search it stands in for.
+    static let maximumStoredResults = maximumResults * 5
+
     /// One kind of place: what OpenStreetMap calls it, and which of the eight
     /// symbols it is drawn as.
     ///

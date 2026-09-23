@@ -11,7 +11,7 @@ it. OpenHikes is `TARGETED_DEVICE_FAMILY = 1`, so there is no iPad set at all.
 
 **Between one and ten of them.** Not ten: only the first three appear in search
 results, and every frame past the first few is one more thing to re-shoot when
-the UI moves. The seven captured here are already more than most listings use.
+the UI moves. The eight captured here are already more than most listings use.
 
 The order below is the upload order, and it is the order the frames are named
 in, because App Store Connect orders screenshots by the order they arrive.
@@ -25,6 +25,21 @@ in, because App Store Connect orders screenshots by the order they arrive.
 | 5 | `05-recording-a-hike` | It records, with live figures and the line so far |
 | 6 | `06-offline-maps` | It works with no signal |
 | 7 | `07-walk-summary` | A trail walked end to end |
+| 8 | `08-draw-your-own-trail` | Plan Saturday: tap the map and make the trail |
+
+Frame 8 is eighth deliberately rather than by arriving last. It is the only one
+that shows the app *making* something rather than showing something, which is an
+argument for putting it in the first three — and which of the eight those are is
+a listing decision rather than a capture one, so it is appended here and moving
+it is a rename. Nothing in the capture depends on the number.
+
+Its legs are straight lines, and that is honest rather than a limitation of the
+harness: a drawn leg follows mapped paths by asking Overpass, no launch running
+tests may reach a volunteer-run API, and a launch with no walking graph hides the
+*Follow Paths* switch instead of offering one it cannot honour. The frame is
+exactly what a hiker drawing freehand sees. Shooting a snapped line would need a
+seeded graph wide enough to route across a valley, which nothing in the
+repository has.
 
 ## Capturing
 
@@ -49,6 +64,16 @@ carries a tile cache, a photo library and possibly a simulated location from an
 earlier run, and all three show up in a screenshot. It also means a capture
 cannot collide with `Scripts/run-ui-tests.sh`, which claims its own device for
 the same reason.
+
+**The locale is pinned, to `en_IE`.** A simulator inherits the Mac's region, and
+every figure in this app is formatted through the reader's locale on purpose —
+so on a machine set to Hungary the whole set came out reading "2,4 km",
+"2 000 m" and "2026. Sep 6.", all correct and none of it what an English listing
+wants. `en_IE` is the one that is English, metric and writes a date most of the
+world reads: `en_US` is imperial and `en_GB` prints road distances in miles,
+which this app honours, so an `en_GB` frame reads "6.6 mi" beside a German place
+name. `--locale en_US` is the right call for a US listing and will print miles.
+The watch script has pinned its own for the same reason since it was written.
 
 `ScreenshotUITests` is deliberately **not** in `suites` in
 `Scripts/run-ui-tests.sh`: it asserts almost nothing and exists to produce

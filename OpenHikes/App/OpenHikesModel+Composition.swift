@@ -182,8 +182,31 @@ extension OpenHikesModel {
             router: trailGraphProvider.map { provider in
                 OverpassTrailLegRouter(provider: provider)
             },
-            placeSource: Self.makeTrailPointSource()
+            placeSource: Self.makeTrailPointSource(),
+            elevationSource: Self.makeTrailElevationSource()
         )
+    }
+
+    /// Where the maker's climb and descent come from, or `nil` for a launch
+    /// that must not ask.
+    ///
+    /// The same guard ``makeTrailPointSource()`` makes, for the commercial
+    /// half of the same reason: every call is billed against the key the paid
+    /// map styles are behind, and a suite that fell into it would be spending
+    /// real money to assert on a stub's worth of numbers.
+    ///
+    /// ``StadiaElevationSource``'s own entitlement check is the *other* guard
+    /// and not a substitute for this one. That one asks whether the hiker has
+    /// paid; this one asks whether anybody is watching — and a developer
+    /// running the suite may well be a subscriber, which is exactly the launch
+    /// where the first guard would let every assertion reach the network.
+    ///
+    /// `nil` rather than ``DormantElevationSource`` so nothing is even
+    /// scheduled: see ``TrailDraftElevation/isAvailable``, which is what keeps
+    /// a suite from holding a debounce it will never spend.
+    static func makeTrailElevationSource() -> (any CuratedElevationSourcing)? {
+        guard !AppLaunchEnvironment.isRunningTests else { return nil }
+        return StadiaElevationSource()
     }
 
     /// Where the maker's *Search this area* asks, or `nil` for a launch that

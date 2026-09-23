@@ -104,6 +104,12 @@ enum TrailDraftSave {
     /// answer the placeholder promised: ``HikeTitle/drawn(name:madeOn:)``
     /// names the trail after the day it was drawn.
     ///
+    /// - Parameter heights: what the line was measured at, or `nil` for a
+    ///   drawing nothing has measured — a free hiker's, a build with no key,
+    ///   or one saved before the answer landed. They are applied only if they
+    ///   are still about *this* line; see ``RouteHeightSamples/describes(_:)``,
+    ///   which is what keeps a leg that snapped while the alert was open from
+    ///   putting a summit's height on a point in a valley.
     /// - Parameter save: The seam the commit goes through, so a suite can
     ///   refuse it — the same shape ``HikeImport`` and
     ///   ``HikePhotoImport/remove(_:from:store:save:)`` take theirs in. There
@@ -114,11 +120,17 @@ enum TrailDraftSave {
         named name: String,
         into context: ModelContext,
         madeOn date: Date = .now,
+        heights: RouteHeightSamples? = nil,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) -> TrailDraftSaveOutcome {
         let waypoints = draft.waypoints
         guard waypoints.count > 1 else { return .refused(.tooShort) }
 
+        // Flattened once and used twice, because it is the expensive half of
+        // this function: a snapped trail is thousands of coordinates and
+        // ``TrailDraft/routeCoordinates`` builds the array afresh on every
+        // read.
+        let route = draft.routeCoordinates
         let hike = Hike(
             // Bounded here, where the name leaves the maker: this is the point
             // at which a typed string starts reaching payloads with ceilings
@@ -133,7 +145,14 @@ enum TrailDraftSave {
             // widget, GPX export and *Follow This Trail*. A freehand or
             // degraded leg contributes its two ends and is indistinguishable
             // from what Phase 1 wrote — see ``TrailDraft/routeCoordinates``.
-            route: draft.routeCoordinates
+            //
+            // With whatever heights were read for it, on the two hundred
+            // points they were read at. That is the whole of what makes a
+            // drawn trail open with a profile, a climb and a descent: nothing
+            // downstream of here knows where a height came from, so the
+            // detail screen, the stat grid, GPX export and a published
+            // listing all draw them without a line added to any of them.
+            route: heights?.filling(route) ?? route
         )
         context.insert(hike)
         // After the insert, because a ``TrailPoint`` is a row of its own and a

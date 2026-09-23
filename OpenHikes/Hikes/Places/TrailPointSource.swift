@@ -4,24 +4,19 @@
 //
 //  Where the places near a drawn trail come from.
 //
-//  One request, one answer, and — for now — nothing kept. That is the whole
-//  difference between this and ``CuratedTrailSource``, which caches in memory
-//  and on disk because its unit is a *relation* a hiker comes back to: panning
-//  to an area again, opening a route whose line the list already fetched. What
-//  a search answers here is drawn as candidates and is gone on the next search
-//  or when the maker closes.
+//  One request, one answer, and nothing held in memory. What a search answers
+//  is drawn as candidates and is gone on the next search or when the maker
+//  closes — unlike ``CuratedTrailSource``, whose unit is a *relation* a hiker
+//  comes back to and which therefore keeps a memory cache in front of its disk
+//  one.
 //
-//  **That is a deferral rather than a decision, and the issue records which.**
-//  A store of the same shape ``CuratedTrailStore`` has — one file per element,
-//  read back only as *what happens to be on this device near here* — is worth
-//  having for the case this type otherwise handles badly: a refused search
-//  draws an empty map, in a valley that may have answered an hour ago, and
-//  three of five first attempts came back `504` the day this was measured. It
-//  is listed under Phase 6 of #607 with the two constraints it has to keep: the
-//  OSM element id belongs on the stored record and never on ``TrailPlace``,
-//  which is the value ``TrailPoint`` mirrors, and the file cap is picked
-//  against the fetch rather than copied from the curated one — a page there is
-//  25 relations, and one search here fetches some 578 elements to offer 40.
+//  **What is kept is on disk, and it is kept for one case.** A refused search
+//  would otherwise draw an empty map in a valley that answered an hour ago,
+//  and three of five first attempts came back `504` the day this was measured.
+//  So a successful search is written down, and the failure branch of a search
+//  — and nowhere else — reads it back as *what happens to be on this device
+//  near here*. See ``TrailPointStore``, which owns that bargain, the cap and
+//  the argument for both.
 //
 //  What stays refused is the *other* shape: one file per search **box**, so a
 //  later search inside a stored one costs no request. That is the coverage
@@ -34,7 +29,8 @@
 //  query, the decode and the seam.
 //
 //  A `struct` rather than an actor for exactly that reason: it holds nothing
-//  mutable. The conversation behind it does, and that one is an actor.
+//  mutable. The conversation behind it does, and that one is an actor; the
+//  store is a value over a directory, like ``CuratedTrailStore``.
 //
 
 import Foundation
@@ -62,6 +58,31 @@ nonisolated protocol TrailPointSourcing: Sendable {
     /// than as a broken editor: **nothing here may ever block drawing.**
     @concurrent
     func places(near area: CommunitySearchArea) async throws -> [TrailPlace]
+
+    /// Places already on this device standing within `area`, nearest its
+    /// centre first, asking nothing of Overpass.
+    ///
+    /// **What a refused search draws instead of nothing.** It makes no claim
+    /// to be the area's places — nothing records which areas have been
+    /// searched — so it is only ever used where the alternative is an empty
+    /// map and the hiker has already been told the search was refused. The
+    /// same bargain ``CuratedTrailSourcing/cachedTrails(near:limit:)`` makes
+    /// one feature over, and for the same reasons.
+    ///
+    /// Never throws. A cache with nothing in it is an answer, and this is
+    /// reached on a path where something has already failed.
+    @concurrent
+    func cachedPlaces(near area: CommunitySearchArea, limit: Int) async -> [TrailPlace]
+}
+
+nonisolated extension TrailPointSourcing {
+    /// Nothing, for a source that keeps nothing.
+    ///
+    /// A default rather than a requirement every conformance restates: the
+    /// stand-ins a suite runs against reach no network, so there is nothing
+    /// for them to have failed to reach and nothing for them to fall back to.
+    @concurrent
+    func cachedPlaces(near area: CommunitySearchArea, limit: Int) async -> [TrailPlace] { [] }
 }
 
 /// Places from the public Overpass API.
@@ -69,11 +90,17 @@ nonisolated struct TrailPointSource: TrailPointSourcing {
     typealias Transport = @Sendable (URLRequest) async throws -> OverpassHTTPResponse
 
     private let conversation: OverpassConversation
+    /// Where an answer is written down, or `nil` for a launch with nowhere to
+    /// write — which is what a `Caches` directory the system will not name
+    /// looks like.
+    private let store: TrailPointStore?
 
     /// - Parameters:
     ///   - clock: See *Deliberate test seams* in the repository instructions.
     ///     The rate-limit gate is only observable against time somebody else
-    ///     is holding.
+    ///     is holding, and so is a stored place's age.
+    ///   - directory: where answers are kept. `nil` keeps nothing, which is
+    ///     what a suite about the wire format wants.
     ///   - transport: `nil` builds the live one, which is the only thing here
     ///     that reaches the network.
     init(
@@ -82,6 +109,7 @@ nonisolated struct TrailPointSource: TrailPointSourcing {
         pause: @escaping @Sendable (TimeInterval) async throws -> Void = { seconds in
             try await Task.sleep(for: .seconds(seconds))
         },
+        directory: URL? = TrailPointStore.defaultDirectory(),
         transport: Transport? = nil
     ) {
         conversation = OverpassConversation(
@@ -91,13 +119,35 @@ nonisolated struct TrailPointSource: TrailPointSourcing {
             pause: pause,
             transport: transport
         )
+        store = directory.map { TrailPointStore(directory: $0, clock: clock) }
     }
 
     func places(near area: CommunitySearchArea) async throws -> [TrailPlace] {
         let boxes = TrailPointQuery.searchBoxes(for: area)
         guard let query = TrailPointQuery.query(in: boxes) else { return [] }
-        return try await conversation.fetch(query, awaiting: TrailPointQuery.timeoutSeconds) { body in
-            try TrailPointDecoding.places(from: body)
+        let found = try await conversation.fetch(
+            query,
+            awaiting: TrailPointQuery.timeoutSeconds
+        ) { body in
+            try TrailPointDecoding.found(in: body)
         }
+        // Written before the answer is handed back, and everything Overpass
+        // said rather than the forty that will be drawn: which forty those are
+        // was decided against the line as it stood, and a hiker who has drawn
+        // somewhere else since would come back to a fall-back ranked for a
+        // trail they no longer have. See ``TrailPointStore``.
+        store?.save(found)
+        return found.map(\.place)
+    }
+
+    /// `@concurrent` rather than taking the caller's isolation, for the reason
+    /// ``CuratedTrailSource/cachedTrails(near:limit:)`` is: it reads every file
+    /// in the cache directory, which is not work to do on the actor a hiker is
+    /// waiting on — and it is what the requirement asks for, so a version
+    /// without it would be witnessed by the protocol extension's `[]` instead
+    /// and this would quietly never run.
+    @concurrent
+    func cachedPlaces(near area: CommunitySearchArea, limit: Int) async -> [TrailPlace] {
+        store?.places(near: area, limit: limit) ?? []
     }
 }

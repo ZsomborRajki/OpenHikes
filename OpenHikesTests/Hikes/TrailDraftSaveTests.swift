@@ -43,6 +43,33 @@ struct TrailDraftSaveTests {
         try Fixture.modelContext()
     }
 
+    private enum Heights {
+        static let bottom: Double = 600
+        static let top: Double = 900
+        static let climb: [Double] = [bottom, top]
+        static let gained: Double = 300
+        /// Far enough to make a third point somewhere else.
+        static let step: Double = 0.004
+    }
+
+    /// Heights read for exactly `draft`'s line, as the maker would have them.
+    ///
+    /// Built by hand rather than through a stubbed source, because what is
+    /// under test here is what a *save* does with them — see
+    /// ``TrailDraftElevationTests`` for how they are asked for.
+    private static func heights(
+        for draft: TrailDraft,
+        of metres: [Double]
+    ) -> RouteHeightSamples {
+        let route = draft.routeCoordinates
+        return RouteHeightSamples(
+            routePointCount: route.count,
+            indexes: Array(route.indices),
+            coordinates: route,
+            heights: metres
+        )
+    }
+
     // MARK: The places
 
     /// A drawn trail's places go with it, as ``TrailPoint`` rows — the one
@@ -240,6 +267,87 @@ struct TrailDraftSaveTests {
         #expect(refusal == .notSaved)
         try context.save()
         #expect(try context.fetch(FetchDescriptor<Hike>()).isEmpty)
+    }
+
+    // MARK: The heights
+
+    /// The heights read for the line are written on to it, on the points they
+    /// were read at.
+    ///
+    /// This is the whole of what makes a drawn trail open with a profile: from
+    /// here on nothing knows where a height came from, so the chart, the stat
+    /// grid, GPX export and a published listing all draw it with nothing added
+    /// to any of them.
+    @Test("the heights are saved on the line")
+    func savesTheHeights() throws {
+        let context = try context()
+        let draft = Self.draft([Line.south, Line.north])
+
+        let hike = try #require(
+            TrailDraftSave.hike(
+                from: draft,
+                named: "Ridge",
+                into: context,
+                heights: Self.heights(for: draft, of: Heights.climb)
+            ).hike
+        )
+
+        #expect(hike.route.compactMap(\.elevation) == Heights.climb)
+    }
+
+    /// Heights read for a *different* line are refused rather than applied as
+    /// far as they go.
+    ///
+    /// The failure this forbids is silent and plausible: a leg that snapped
+    /// while the name alert was open lengthens the route, and a height read on
+    /// a summit would be written on to a point in a valley. The saved trail
+    /// simply has no profile, which is what it had a moment earlier.
+    @Test("heights read for another line are not saved")
+    func refusesHeightsForAnotherLine() throws {
+        let context = try context()
+        let drawn = Self.draft([Line.south, Line.north])
+        let elsewhere = Self.draft([Line.south, Line.north, Line.north + Heights.step])
+
+        let hike = try #require(
+            TrailDraftSave.hike(
+                from: drawn,
+                named: "Ridge",
+                into: context,
+                heights: Self.heights(for: elsewhere, of: Heights.climb + [Heights.top])
+            ).hike
+        )
+
+        #expect(hike.route.allSatisfy { $0.elevation == nil })
+    }
+
+    /// And the saved row is one the detail screen draws a profile and a climb
+    /// from.
+    ///
+    /// ``HikeDetailPreparation`` is the single walk behind both the hike's own
+    /// screen and a published listing's, so asserting on it is asserting on
+    /// both — and it is the only thing that says the heights survive being a
+    /// `Hike` rather than merely being handed to one.
+    @Test("a saved drawn trail prepares into a profile and a climb")
+    func preparesIntoAProfile() async throws {
+        let context = try context()
+        let draft = Self.draft([Line.south, Line.north])
+
+        let hike = try #require(
+            TrailDraftSave.hike(
+                from: draft,
+                named: "Ridge",
+                into: context,
+                heights: Self.heights(for: draft, of: Heights.climb)
+            ).hike
+        )
+        let prepared = try await HikeDetailPreparation.prepare(
+            route: hike.route,
+            distanceMeters: hike.distanceMeters
+        )
+
+        #expect(prepared.profile.samples.count > 1, "a chart is drawn from more than one sample")
+        #expect(prepared.profile.elevation.gainMeters == Heights.gained)
+        #expect(prepared.stats.contains { $0.label == "Elevation Gain" })
     }
 
     /// The drawing itself is untouched by a save, refused or not: clearing it

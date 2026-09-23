@@ -232,9 +232,8 @@ struct TrailDraftView: View {
     /// The points, in the order they were put down, with how far along each
     /// one sits.
     ///
-    /// The header carries the running length, which is the figure a hiker is
-    /// actually watching while they draw — climb joins it once there are
-    /// heights to ask for.
+    /// The header carries the running length and the climb, and it is its own
+    /// `View` for the second of those — see ``TrailDraftLineHeader``.
     @ViewBuilder private var pointsSection: some View {
         Section {
             if draft.waypoints.isEmpty {
@@ -242,15 +241,14 @@ struct TrailDraftView: View {
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("trail-draft-empty")
             } else {
+                // The rows are handed the draft rather than three values read
+                // off it, and the footer and the retry row are their own views
+                // for the same reason: every leg that lands rewrites `legs`,
+                // and reading it here would rebuild this whole screen once per
+                // answer. See ``TrailDraftWaypointRow``.
                 ForEach(Array(draft.waypoints.enumerated()), id: \.element.id) { index, _ in
-                    TrailDraftWaypointRow(
-                        number: index + 1,
-                        distanceMeters: draft.distanceAlongLine(toWaypointAt: index),
-                        // The leg *into* this point, which is why the first
-                        // row never has one: nothing arrives at it.
-                        legNotice: draft.leg(arrivingAtWaypointAt: index)?.snap.notice
-                    )
-                    .trailDraftReorderMenu($editMode)
+                    TrailDraftWaypointRow(draft: draft, index: index)
+                        .trailDraftReorderMenu($editMode)
                 }
                 // The two gestures a list already has a meaning for, and both
                 // of them go through the controller — the drawing has to be
@@ -263,51 +261,12 @@ struct TrailDraftView: View {
                 .onDelete { offsets in
                     maker.removeWaypoints(atOffsets: offsets)
                 }
-                retryRow
+                TrailDraftRetryRow(maker: maker)
             }
         } header: {
-            HStack {
-                Text("Points")
-                Spacer(minLength: 12)
-                Text(Self.length(draft.distanceMeters))
-                    .monospacedDigit()
-                    .accessibilityIdentifier("trail-draft-length")
-            }
+            TrailDraftLineHeader(draft: draft, elevation: maker.elevation)
         } footer: {
-            VStack(alignment: .leading, spacing: 6) {
-                // One line for the whole line, saying the worst thing any leg
-                // has to report — see ``TrailDraft/notice``. The per-leg
-                // sentence is on the row it belongs to; this is what a hiker
-                // who has not scrolled sees.
-                if let notice = draft.notice {
-                    TrailDraftNoticeLabel(notice: notice)
-                }
-                // The two gestures on the map that nothing on screen could
-                // otherwise announce. Both are discoverable only by being
-                // told: a leg looks like a drawing rather than a control, and
-                // a pin that answers a press but not a tap advertises
-                // nothing. Withheld until there is a line to do either to.
-                if !draft.legs.isEmpty {
-                    Text(
-                        """
-                        Tap a leg to add a point in the middle. \
-                        Press and hold a point to move it.
-                        """
-                    )
-                }
-            }
-        }
-    }
-
-    /// *Try Again*, offered only when Overpass refused something.
-    ///
-    /// Not for a leg with nothing mapped under it and not for one the hiker
-    /// straightened themselves: asking again about either would spend a
-    /// request to be told the same thing. See ``TrailLegSnap/isRetryable``.
-    @ViewBuilder private var retryRow: some View {
-        if draft.hasRetryableLegs {
-            Button("Try Again", systemImage: "arrow.clockwise", action: maker.retryRefusedLegs)
-                .accessibilityIdentifier("trail-draft-retry")
+            TrailDraftLineFooter(draft: draft)
         }
     }
 
@@ -377,19 +336,29 @@ struct TrailDraftView: View {
             from: draft,
             named: name.text,
             into: modelContext,
-            madeOn: date
+            madeOn: date,
+            // Whatever the heights were last read for, applied only if they
+            // are still about this line — nothing here waits for an answer
+            // that has not landed. See ``TrailDraftElevation``.
+            heights: maker.elevation.samples
         ) {
         case .saved(let hike):
+            // The one tier of ``HapticMoment`` this screen did not already
+            // speak. A tap on the map, a point picked up and a row dropped are
+            // all *texture* and all already here; this is the outcome the
+            // hiker asked for, waited on, and is about to be shown — the same
+            // moment a published hike and an imported one each play.
+            //
+            // Not the walk tier: a drawn trail has not been walked, and those
+            // seven patterns are for a phone in a pocket.
+            HapticMoment.outcomeSucceeded.play()
             maker.discard()
             name.clear()
             onSaved(hike)
         case .refused(let refused):
+            HapticMoment.outcomeFailed.play()
             refusal = refused
         }
     }
 
-    private static func length(_ meters: Double) -> String {
-        Measurement(value: meters, unit: UnitLength.meters)
-            .formatted(.measurement(width: .abbreviated, usage: .road))
-    }
 }

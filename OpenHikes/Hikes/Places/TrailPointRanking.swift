@@ -33,12 +33,83 @@
 //  a candidate is an unmarked ``TrailPlace``, so *where does this sit along
 //  the line* is already answered, once per route rather than once per place.
 //
+//  ## And the choosing is done off the main actor
+//
+//  Which follows from the sizes above rather than from a rule. 578 candidates
+//  against a snapped line of a few thousand coordinates is over a million
+//  projections, each of them trigonometry, and the actor it would otherwise
+//  run on is the one drawing the map the hiker is looking at. So
+//  ``offered(from:along:in:excluding:limit:)`` is `@concurrent` and is the
+//  whole of what a search does between the answer landing and the pins going
+//  down; the re-placing that follows every tap stays where it is, because
+//  forty places is a fortieth of the work.
+//
 
 import Algorithms
 import CoreLocation
 import Foundation
 
 nonisolated enum TrailPointRanking {
+    /// The whole choosing step, off the main actor: the places the hiker has
+    /// already marked taken out, and the nearest `limit` of what is left
+    /// picked against the line.
+    ///
+    /// One function rather than two calls at each of the two sites that need
+    /// it — a search that answered and a refusal drawing from disk — because
+    /// the pair has to stay in that order. Excluding after choosing would let
+    /// the hiker's own hut take one of the forty places on offer and then be
+    /// removed from it, so a search would quietly offer thirty-nine.
+    ///
+    /// - Parameter area: where the map is looking, which is what the ranking
+    ///   falls back to when there is no line yet. A whole
+    ///   ``CommunitySearchArea`` rather than its centre because a
+    ///   `CLLocationCoordinate2D` is not `Sendable` and this crosses an
+    ///   isolation boundary.
+    @concurrent
+    static func offered(
+        from found: [TrailPlace],
+        along route: [RouteCoordinate],
+        in area: CommunitySearchArea?,
+        excluding placed: [TrailPlace],
+        limit: Int = TrailPointQuery.maximumResults
+    ) async -> [TrailPlace] {
+        chosen(
+            from: excluding(placed, from: found),
+            along: route,
+            around: area?.coordinate,
+            limit: limit
+        )
+    }
+
+    /// `found` without the places the hiker already has.
+    ///
+    /// By where they are rather than by identity, because there is no identity
+    /// to compare: a marked place carries a `UUID` this device made and an
+    /// Overpass answer carries whatever the store or the decoder minted for
+    /// it. What a hiker would see without this is their own hut with a second,
+    /// provisional pin under it, offering to add the hut again.
+    ///
+    /// The tolerance is a few metres because that is what the two coordinates
+    /// actually differ by: a hiker who marked a spring by tapping the map put
+    /// their pin where OpenStreetMap's node is, give or take a thumb.
+    static func excluding(
+        _ placed: [TrailPlace],
+        from found: [TrailPlace]
+    ) -> [TrailPlace] {
+        guard !placed.isEmpty else { return found }
+        return found.filter { candidate in
+            !placed.contains { marked in
+                RouteGeometry.distanceMeters(
+                    from: marked.clCoordinate,
+                    to: candidate.clCoordinate
+                ) <= alreadyMarkedMeters
+            }
+        }
+    }
+
+    /// How close a candidate has to be to a marked place to be the same place.
+    static let alreadyMarkedMeters: Double = 25
+
     /// The `limit` places of `found` nearest the drawing, or nearest
     /// `centre` where there is no drawing to be near.
     ///
