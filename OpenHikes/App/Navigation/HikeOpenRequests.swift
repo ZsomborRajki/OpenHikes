@@ -65,4 +65,16 @@ final class HikeOpenRequests {
         link = url
         request &+= 1
     }
+
+    /// The link the current token is for, handed over once.
+    ///
+    /// Cleared as it is read because the view tree reads it with
+    /// `initial: true`, and that runs whenever an ``OpenHikesView`` appears —
+    /// not only at the launch a notification tap started, but in every
+    /// window opened after it and every scene the system rebuilds. A link
+    /// left behind would reopen the last hike asked for in each of them.
+    func takeLink() -> URL? {
+        defer { link = nil }
+        return link
+    }
 }

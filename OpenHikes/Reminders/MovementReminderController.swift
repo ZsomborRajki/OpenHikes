@@ -471,9 +471,15 @@ extension MovementReminderController {
     }
 
     /// The app's own answer to ``isAppActive``.
+    ///
+    /// Anything but `.background`, because `.inactive` is still in front: the
+    /// app under a pulled-down Notification Center, or on its way to the Lock
+    /// Screen. A banner posted then goes to ``MovementReminderActions``'
+    /// `willPresent`, which shows the offer nothing — and marks it posted all
+    /// the same, so the pocket it was owed to never gets one.
     static func applicationIsActive() -> Bool {
         #if canImport(UIKit)
-        UIApplication.shared.applicationState == .active
+        UIApplication.shared.applicationState != .background
         #else
         false
         #endif

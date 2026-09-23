@@ -104,6 +104,25 @@ final class TrailWalkActivityTests {
         #expect(stored.statusText.contains("walked"))
     }
 
+    /// Start Hike on the notification runs behind the app, where the next
+    /// fix may be half a kilometre off. The walk reaches the widget on the
+    /// tap, not on that fix.
+    @Test("a Start from the notification reaches the widget at once")
+    func notificationStartReachesTheWidget() async throws {
+        let clock = TestClock()
+        let session = walkSession(clock: clock)
+        let hike = hike()
+        let profile = RouteProfile(route: hike.route)
+        tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
+
+        #expect(session.start(hikeID: hike.id, routeLengthMeters: profile.totalDistanceMeters))
+        await tracker.waitForLiveFixPublish()
+
+        let stored = try #require(SharedStore.load())
+        #expect(stored.walk?.state == .active)
+    }
+
     /// Pausing reaches the panel at once, through the run-state bypass —
     /// not on the next fix, which a paused walk no longer publishes.
     @Test("pausing reaches the Lock Screen through the status bypass")
