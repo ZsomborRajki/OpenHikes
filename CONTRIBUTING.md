@@ -27,7 +27,7 @@ a precedent for the next one.
 ## Setting up
 
 See [Requirements](README.md#requirements) and [Setup](README.md#setup). In
-short: Xcode 26.5 or later, an iOS 26.0 deployment target, and an Apple
+short: Xcode 27 or later, an iOS 27.0 deployment target, and an Apple
 development team that can sign the WeatherKit entitlement, the App Group, the
 iCloud container, push and HealthKit.
 

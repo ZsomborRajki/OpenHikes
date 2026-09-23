@@ -142,6 +142,9 @@ struct TrailDraftView: View {
         // lists. A grouped list otherwise paints its own opaque grey over it;
         // the rows keep their own cards either way.
         .scrollContentBackground(.hidden)
+        // EXPERIMENT: the container the stops' `reorderable()` hands a drop
+        // to. See `TrailStopReordering.swift`.
+        .trailStopReorderContainer { moveStops($0, before: $1) }
         // **The camera goes to the drawing that is already there.** A draft
         // outlives the screen it is drawn on — it is on disk between launches —
         // so a hiker who backs out, looks at another trail and comes back would
@@ -274,7 +277,7 @@ struct TrailDraftView: View {
                 .listRowInsets(TrailStopRowView.rowInsets)
                 .listRowSeparator(.hidden)
             ForEach(stops) { stopRow($0, in: slots) }
-                .onMove(perform: moveStops)
+                .trailStopsReorderable()
                 .listRowInsets(TrailStopRowView.rowInsets)
                 .listRowSeparator(.hidden)
             ForEach(Array(slots.dropFirst(fieldsBefore.count + stops.count))) { openFieldRow($0, in: slots) }
@@ -320,11 +323,14 @@ struct TrailDraftView: View {
         }
     }
 
-    /// A drop from the stops' drag. The stops' `ForEach` holds every waypoint
-    /// in order and nothing else, so its offsets are the draft's.
-    private func moveStops(from offsets: IndexSet, to destination: Int) {
-        HapticMoment.rowMoved.play()
-        maker.reorderWaypoints(fromOffsets: offsets, toOffset: destination)
+    /// A drop from the stops' drag: each dragged row's stop, moved in front of
+    /// the stop `target` names, or to the end for `nil`.
+    private func moveStops(_ sources: [String], before target: String?) {
+        let stop = { (id: String) in draft.slots.first { $0.id == id }?.stopID }
+        let before = target.flatMap(stop)
+        for source in sources.compactMap(stop) {
+            reorderWaypoint(source, before: before)
+        }
     }
 
     /// What a row's search fills: the stop it already holds, or its open field.
@@ -356,7 +362,7 @@ struct TrailDraftView: View {
     }
 
     /// Moves a stop immediately before `targetID`, or to the end for `nil`.
-    /// Where a VoiceOver step lands; a drag is ``moveStops(from:to:)``.
+    /// Where a drag's drop and a VoiceOver step both land.
     private func reorderWaypoint(_ sourceID: UUID, before targetID: UUID?) {
         guard
             let sourceIndex = draft.waypoints.firstIndex(where: { $0.id == sourceID })

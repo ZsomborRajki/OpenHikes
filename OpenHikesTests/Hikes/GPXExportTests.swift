@@ -440,6 +440,11 @@ private extension GPXExportTests {
     /// `URL`, a data-backed one as `Data`, while `loadFileRepresentation`
     /// obligingly spools the latter to a temporary file and hides the
     /// difference.
+    ///
+    /// Deprecated in iOS 27 for `loadObject(ofClass:)`, which answers with an
+    /// object and so cannot tell the two apart either — and telling them apart
+    /// is the test. Ignored here and nowhere else.
+    @diagnose(DeprecatedDeclaration, as: ignored)
     static func receiveFile(
         ofType identifier: String,
         from provider: NSItemProvider

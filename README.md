@@ -27,11 +27,12 @@ That is local-first with one deliberate exception. There is no OpenHikes account
 
 ## Requirements
 
-- Xcode 26.5 or later — development is on Xcode 27, and so is CI, which
-  builds on Xcode 27.0 (`27A266a`). Every target deploys to iOS 26.0, which is
-  also what `OpenHikesShared/Package.swift` declares. The CodeQL workflow is
-  the one exception and still builds on Xcode 26.6, because CodeQL's Swift
-  extractor does not read Swift 6.4 yet.
+- Xcode 27 or later — CI builds on Xcode 27.0 (`27A266a`). The phone targets
+  deploy to iOS 27.0, because the trail maker's stops reorder with iOS 27's
+  `reorderable()`; `OpenHikesShared/Package.swift` still declares iOS 26. The
+  CodeQL workflow is the one exception and still builds on Xcode 26.6, because
+  CodeQL's Swift extractor does not read Swift 6.4 yet — it builds without the
+  maker's drag, which is the one iOS 27 API in the app.
 - An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container, the push and Time Sensitive Notifications entitlements and HealthKit.
 - iPhone, plus an optional Apple Watch app. The phone targets set
   `TARGETED_DEVICE_FAMILY = 1`; `OpenHikesWatch` sets `4` and deploys to
