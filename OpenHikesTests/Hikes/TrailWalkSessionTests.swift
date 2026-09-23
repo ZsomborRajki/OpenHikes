@@ -44,7 +44,7 @@ struct TrailWalkSessionTests {
     ) {
         for index in stride(from: start, through: end, by: start <= end ? 1 : -1) {
             clock.advance(by: 60)
-            session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[index])
+            session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[index])
         }
     }
 
@@ -55,15 +55,17 @@ struct TrailWalkSessionTests {
 
     // MARK: Start
 
-    /// Selection alone starts nothing; the first matched fix does.
-    @Test("a walk starts on the first matched fix with following on")
+    /// Selection alone starts nothing; the hiker's Start does, and the first
+    /// matched fix is the walk's first. The offer that comes before the Start
+    /// is `TrailWalkSessionTests+Offers`' subject.
+    @Test("a started walk is following from its first matched fix")
     func startsOnTheFirstMatch() {
         let session = session()
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
         #expect(session.walkedHikeID == nil, "nothing has matched yet")
 
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
+        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[0])
 
         #expect(session.walkedHikeID == hike.id)
         #expect(session.phase == .following)
@@ -77,7 +79,7 @@ struct TrailWalkSessionTests {
         let hike = hike { $0.autoFollowEnabled = false }
         let profile = RouteProfile(route: hike.route)
 
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
+        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[0])
 
         #expect(session.walkedHikeID == nil)
         #expect(hike.walkInProgress == nil)
@@ -90,18 +92,18 @@ struct TrailWalkSessionTests {
         let draft = hike(title: "Draft") { $0.isRecording = true }
         let profile = RouteProfile(route: draft.route)
         let session = session()
-        session.recordForegroundMatch(hike: draft, profile: profile, distance: profile.distances[0])
+        session.acceptAndMatch(hike: draft, profile: profile, distance: profile.distances[0])
         #expect(session.walkedHikeID == nil)
 
         let bridged = hike(title: "Just saved")
         let bridgedSession = self.session(recordingHikeID: bridged.id)
-        bridgedSession.recordForegroundMatch(hike: bridged, profile: profile, distance: profile.distances[0])
+        bridgedSession.acceptAndMatch(hike: bridged, profile: profile, distance: profile.distances[0])
         #expect(bridgedSession.walkedHikeID == nil, "the recorder still owns it")
 
         // Once released, it is a trail like any other.
         let saved = hike(title: "Saved recording")
         let savedSession = self.session()
-        savedSession.recordForegroundMatch(hike: saved, profile: profile, distance: profile.distances[0])
+        savedSession.acceptAndMatch(hike: saved, profile: profile, distance: profile.distances[0])
         #expect(savedSession.walkedHikeID == saved.id)
     }
 
@@ -111,9 +113,9 @@ struct TrailWalkSessionTests {
         let first = hike(title: "First")
         let second = hike(title: "Second")
         let profile = RouteProfile(route: first.route)
-        session.recordForegroundMatch(hike: first, profile: profile, distance: profile.distances[0])
+        session.acceptAndMatch(hike: first, profile: profile, distance: profile.distances[0])
 
-        session.recordForegroundMatch(hike: second, profile: profile, distance: profile.distances[0])
+        session.acceptAndMatch(hike: second, profile: profile, distance: profile.distances[0])
 
         #expect(session.walkedHikeID == first.id)
         #expect(!session.canStart(second))
@@ -138,7 +140,7 @@ struct TrailWalkSessionTests {
         #expect(session.activeSeconds() == beforePause, "a paused clock does not move")
         // Fixes still arrive while paused and neither extend the union…
         let covered = session.coveredFraction
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[10])
+        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[10])
         #expect(session.coveredFraction == covered)
         // …nor publish.
         #expect(!session.publishes(hikeID: hike.id))
@@ -235,7 +237,7 @@ struct TrailWalkSessionTests {
         #expect(resumedAt - profile.distances[3] <= TrailWalkPolicy.gapBoundMeters, "precondition: bridgeable")
         session.resume()
         clock.advance(by: 60)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: resumedAt)
+        session.acceptAndMatch(hike: hike, profile: profile, distance: resumedAt)
 
         #expect(try #require(session.record).coverage.coveredMeters == covered)
         #expect(
@@ -284,7 +286,7 @@ struct TrailWalkSessionTests {
 
         for _ in 0..<8 {
             clock.advance(by: 3600)
-            session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[3])
+            session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[3])
         }
         session.endIfAbandoned()
 
@@ -297,8 +299,8 @@ struct TrailWalkSessionTests {
         let session = session()
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0] + 30)
+        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[0])
+        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[0] + 30)
 
         #expect(session.end().walk == nil)
 
@@ -317,17 +319,17 @@ struct TrailWalkSessionTests {
         let session = session()
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
+        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[0])
         let written = try #require(hike.walkInProgress)
 
         clock.advance(by: 10)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[1])
+        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[1])
         clock.advance(by: 10)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[2])
+        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[2])
         #expect(hike.walkInProgress == written, "two fixes inside the window wrote nothing")
 
         clock.advance(by: TrailWalkPolicy.persistInterval)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[3])
+        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[3])
         let later = try #require(hike.walkInProgress)
         #expect(later.coverage.coveredMeters > written.coverage.coveredMeters)
     }

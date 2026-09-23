@@ -74,6 +74,15 @@ final class HikeLocalState {
     /// consulted for `isRecording` rows by the abandoned-draft sweep.
     var ownsRecordingDraft: Bool = false
 
+    /// Whether being on this trail asks the hiker to start a hike along it —
+    /// see ``WalkOffer``. Off once they say Don't Ask Again, and back on from
+    /// the switch on the trail's detail.
+    ///
+    /// Device-local because the question is asked by this phone's location
+    /// feed, about this phone's walks: a hiker who silenced it on the trail
+    /// they commute past has said nothing about a second device.
+    var walkOffersEnabled: Bool = true
+
     /// The `HKWorkout` this hike was written to in *this* device's Health
     /// store, or `nil` if it never was.
     ///

@@ -69,6 +69,17 @@ final class MovementReminderController {
     /// covers half a kilometre of the route with the walk paused is the case
     /// this exists for whether they went up it or back down it — which is why
     /// the displacement below is taken as an absolute value.
+    /// An offer to start a walk. One at a time, because only one trail is
+    /// followed at a time.
+    private struct OfferedWalk {
+        let subject: WalkOfferSubject
+        /// The notification has gone out for this offer, and is not owed
+        /// again until a different offer replaces it.
+        var isPosted = false
+        /// Permission has been asked for, with the card on screen.
+        var hasAskedPermission = false
+    }
+
     private struct PausedWalk {
         let trailTitle: String
         let anchorDistance: Double
@@ -111,6 +122,13 @@ final class MovementReminderController {
     /// ``OffTrailWatch``. Not per-subject the way the pauses above are:
     /// exactly one trail is followed at a time.
     private var offTrail = OffTrailWatch()
+    /// The walk being offered, and what has been done about it — see
+    /// ``walkOffered(_:trailTitle:)``.
+    private var offeredWalk: OfferedWalk?
+    /// Whether the app is in front, asked when an offer might be posted. A
+    /// seam for the reason ``lifecycleCenter`` is one: the test host is a
+    /// running app, and its answer is whatever the simulator happens to say.
+    private let isAppActive: @MainActor () -> Bool
 
     /// What to do when a pause stops being watched for a reason the recorder
     /// has not heard about — today, the hiker turning the switch off with a
@@ -136,11 +154,13 @@ final class MovementReminderController {
     init(
         notifier: any MovementReminderNotifying,
         defaults: UserDefaults = .standard,
-        lifecycleCenter: NotificationCenter = .default
+        lifecycleCenter: NotificationCenter = .default,
+        isAppActive: @escaping @MainActor () -> Bool = MovementReminderController.applicationIsActive
     ) {
         self.notifier = notifier
         self.defaults = defaults
         self.lifecycleCenter = lifecycleCenter
+        self.isAppActive = isAppActive
         observePreferences()
     }
 
@@ -391,6 +411,75 @@ extension MovementReminderController {
     }
 }
 
+// MARK: - Offering a walk
+
+extension MovementReminderController {
+    /// A match found the hiker on `subject`'s trail with nothing being
+    /// walked — see ``WalkOffer``. Called on every such match, and posts at
+    /// most once per offer.
+    ///
+    /// Only while the app is *not* in front. With it in front the trail's
+    /// detail is showing the same question as a card, and a banner over the
+    /// screen that already asks it would be the app asking twice. What the
+    /// foreground does get is the permission prompt, once per offer: the
+    /// hiker is looking at the question the notification would carry, which
+    /// is the moment a prompt about notifications is about something.
+    ///
+    /// A recording outranks it, for the reason it outranks every walk
+    /// reminder: a hiker recording their own track has already said what
+    /// they are doing, and a second question about it in a pocket is the
+    /// app arguing with itself. The card is still on the trail's detail.
+    ///
+    /// Not behind ``isEnabled``. That switch is "Remind Me to Pause and
+    /// Resume", and this is neither: it is how a walk starts at all now that
+    /// a match no longer starts one. What governs it is Background Trail
+    /// Tracking, without which nothing matches behind the app, and the
+    /// trail's own switch — see ``WalkOffer``.
+    func walkOffered(_ subject: WalkOfferSubject, trailTitle: String) {
+        var offered = offeredWalk.flatMap { $0.subject.hikeID == subject.hikeID ? $0 : nil }
+            ?? OfferedWalk(subject: subject)
+        defer { offeredWalk = offered }
+        guard !hasActiveRecording() else { return }
+        if isAppActive() {
+            if !offered.hasAskedPermission {
+                offered.hasAskedPermission = true
+                reconcileWithAuthorization(prompting: true)
+            }
+            return
+        }
+        guard !offered.isPosted else { return }
+        offered.isPosted = true
+        let reminder = MovementReminderWording.walkNearby(subject, trailTitle: trailTitle)
+        enqueue { [weak self] in
+            guard let self else { return }
+            // A relaunched process has forgotten posting it; the notification
+            // centre has not.
+            if await notifier.deliveredWalkOffer()?.hikeID == subject.hikeID { return }
+            // Asked without a prompt. This runs behind the app, where a
+            // prompt has nobody to answer it, and an unanswered one reads as
+            // allowed — the post then simply fails, which costs nothing.
+            guard await notifier.canPost() else { return }
+            await notifier.post(reminder)
+        }
+    }
+
+    /// The offer was answered, withdrawn, or overtaken by a walk: take the
+    /// question down wherever it is.
+    func walkOfferSettled() {
+        offeredWalk = nil
+        withdraw(.walkNearby)
+    }
+
+    /// The app's own answer to ``isAppActive``.
+    static func applicationIsActive() -> Bool {
+        #if canImport(UIKit)
+        UIApplication.shared.applicationState == .active
+        #else
+        false
+        #endif
+    }
+}
+
 // MARK: - Talking to the notification centre
 
 extension MovementReminderController {
@@ -422,7 +511,9 @@ extension MovementReminderController {
         pausedRecording = nil
         pausedWalk = nil
         stillness = StillnessWatch()
-        for kind in MovementReminderKind.allCases { withdraw(kind) }
+        // The walk offer is not a reminder this switch governs — see
+        // ``walkOffered(_:trailTitle:)`` — so its banner stays up.
+        for kind in MovementReminderKind.allCases where kind != .walkNearby { withdraw(kind) }
         if wasWatching { watchingDidEnd() }
     }
 

@@ -63,4 +63,14 @@ protocol MovementReminderNotifying: AnyObject {
     /// sitting in Notification Centre asking them to resume is the app
     /// disagreeing with itself about a walk it can see the state of.
     func withdraw(_ kind: MovementReminderKind)
+
+    /// The walk the ``MovementReminderKind/walkNearby`` banner already in
+    /// Notification Centre offers, if one is there.
+    ///
+    /// Asked before the offer is posted, because the process that posted it
+    /// may not be this one: the background feed runs in whatever process the
+    /// system relaunched for the last significant change, and re-posting the
+    /// same question replaces the banner with a fresh one — sound and all —
+    /// every half a kilometre up the trail.
+    func deliveredWalkOffer() async -> WalkOfferSubject?
 }

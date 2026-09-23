@@ -102,7 +102,7 @@ final class TrailWalkEndBoundaryTests {
     /// - Returns: whether this fix completed the walk.
     @discardableResult private func match(_ hike: Hike, profile: RouteProfile, at index: Int) async throws -> Bool {
         clock.advance(by: Self.fixInterval)
-        let completed = session.recordForegroundMatch(
+        let completed = session.acceptAndMatch(
             hike: hike,
             profile: profile,
             distance: profile.distances[index]

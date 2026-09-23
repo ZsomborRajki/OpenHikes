@@ -173,6 +173,7 @@ final class OpenHikesModel {
             context: container.mainContext,
             tracker: backgroundTracker,
             reminders: movementReminders,
+            defaults: defaults,
             activeRecordingHikeID: { [weak hikeRecorder] in hikeRecorder?.currentHike?.id }
         )
         self.communityTransport = communityTransport
@@ -253,11 +254,9 @@ final class OpenHikesModel {
             // `AppDependencyManager` for something a test launch never
             // registers, which traps rather than returning nil.
             reminderActions = MovementReminderActions(
-                recording: HikeIntentCoordinator(
-                    recorder: hikeRecorder,
-                    container: container
-                ),
-                walkSession: self.walkSession
+                recording: HikeIntentCoordinator(recorder: hikeRecorder, container: container),
+                walkSession: self.walkSession,
+                openRequests: hikeOpenRequests
             ).registerAsNotificationDelegate()
         }
     }

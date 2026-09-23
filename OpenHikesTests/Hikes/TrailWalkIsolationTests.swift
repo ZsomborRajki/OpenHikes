@@ -35,7 +35,7 @@ struct TrailWalkIsolationTests {
     }
 
     private func match(at index: Int) {
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[index])
+        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[index])
     }
 
     /// The sheet's row and the walk controls read `walkedHikeID` and `phase`;

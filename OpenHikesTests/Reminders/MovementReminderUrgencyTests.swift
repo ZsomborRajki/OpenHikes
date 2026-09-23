@@ -46,6 +46,7 @@ struct MovementReminderUrgencyTests {
         MovementReminderKind.pauseRecording,
         MovementReminderKind.resumeRecording,
         MovementReminderKind.resumeWalk,
+        MovementReminderKind.walkNearby,
     ])
     func conveniencesStayActive(kind: MovementReminderKind) {
         #expect(kind.interruptionLevel == .active)
