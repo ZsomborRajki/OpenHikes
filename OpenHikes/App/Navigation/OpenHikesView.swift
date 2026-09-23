@@ -243,7 +243,7 @@ struct OpenHikesView: View {
                         // screen's own edge and is what clears the island in
                         // *portrait*, where the island is at the top. Turned
                         // sideways the island is on a side edge, the status bar
-                        // is gone, and 96 points is a quarter of the height the
+                        // is gone, and 98 points is a quarter of the height the
                         // badge is supposed to be at the top of — so the reading
                         // ended up floating in the middle of the map.
                         //

@@ -74,7 +74,7 @@ struct WeatherBadge: View {
     /// is only at the top in portrait; landscape lays the badge out inside the
     /// safe area against ``MapSidePanel``'s margin instead. The placing view
     /// picks between them — see `OpenHikesView`, which reads this one.
-    static let topPadding: CGFloat = 96
+    static let topPadding: CGFloat = 98
     static let leadingPadding: CGFloat = 16
     private static let verticalPadding: CGFloat = 8
 
