@@ -433,6 +433,13 @@ extension Hike {
         set { mutableLocalState?.ownsRecordingDraft = newValue }
     }
 
+    /// Whether being on this trail asks to start a hike along it. On by
+    /// default, which is what a hike with no local record yet reports.
+    var walkOffersEnabled: Bool {
+        get { localState?.walkOffersEnabled ?? true }
+        set { mutableLocalState?.walkOffersEnabled = newValue }
+    }
+
     /// The watch recording this hike was imported from, if it was — see
     /// ``HikeLocalState/watchSessionID`` for why the fact is device-local.
     var watchSessionID: UUID? {

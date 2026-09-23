@@ -24,15 +24,15 @@ extension TrailWalkSessionTests {
         let session = session()
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: 0)
+        session.acceptAndMatch(hike: hike, profile: profile, distance: 0)
         clock.advance(by: 120)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: 200)
+        session.acceptAndMatch(hike: hike, profile: profile, distance: 200)
 
         // Down the road, cutting the loop out.
         session.recordOffRoute(hikeID: hike.id)
         clock.advance(by: 180)
         #expect(450 - 200 <= TrailWalkPolicy.gapBoundMeters, "precondition: bridgeable")
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: 450)
+        session.acceptAndMatch(hike: hike, profile: profile, distance: 450)
 
         #expect(try #require(session.record).coverage.coveredMeters == 200)
         session.end()
@@ -51,9 +51,9 @@ extension TrailWalkSessionTests {
         let session = session()
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: 0)
+        session.acceptAndMatch(hike: hike, profile: profile, distance: 0)
         clock.advance(by: 120)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: 200)
+        session.acceptAndMatch(hike: hike, profile: profile, distance: 200)
 
         // Off the route inside the write window: the break is in memory only.
         clock.advance(by: 10)
@@ -70,7 +70,7 @@ extension TrailWalkSessionTests {
         let relaunched = self.session()
         relaunched.restoreAtLaunch()
         clock.advance(by: 180)
-        relaunched.recordForegroundMatch(hike: hike, profile: profile, distance: 450)
+        relaunched.acceptAndMatch(hike: hike, profile: profile, distance: 450)
         relaunched.end()
 
         let row = try #require(try walks(of: hike).first)
@@ -88,9 +88,9 @@ extension TrailWalkSessionTests {
         })
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: 0)
+        session.acceptAndMatch(hike: hike, profile: profile, distance: 0)
         clock.advance(by: 120)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: 200)
+        session.acceptAndMatch(hike: hike, profile: profile, distance: 200)
 
         refusing = true
         clock.advance(by: TrailWalkPolicy.persistInterval)
@@ -114,9 +114,9 @@ extension TrailWalkSessionTests {
         let session = session()
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: 0)
+        session.acceptAndMatch(hike: hike, profile: profile, distance: 0)
         clock.advance(by: 300)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: 450)
+        session.acceptAndMatch(hike: hike, profile: profile, distance: 450)
 
         #expect(try #require(session.record).coverage.coveredMeters == 450)
     }
@@ -129,13 +129,13 @@ extension TrailWalkSessionTests {
         let hike = hike()
         let other = self.hike(title: "Other")
         let profile = RouteProfile(route: hike.route)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: 0)
+        session.acceptAndMatch(hike: hike, profile: profile, distance: 0)
         clock.advance(by: 120)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: 200)
+        session.acceptAndMatch(hike: hike, profile: profile, distance: 200)
 
         session.recordOffRoute(hikeID: other.id)
         clock.advance(by: 180)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: 450)
+        session.acceptAndMatch(hike: hike, profile: profile, distance: 450)
 
         #expect(try #require(session.record).coverage.coveredMeters == 450)
     }

@@ -568,6 +568,10 @@ final class BackgroundTrailTracker: NSObject {
                 // below would carry no walk and start a plain follow over the
                 // finished panel `walkDidEnd` has just queued.
                 if completedWalk { return }
+                // Nothing being walked: ask. This is the feed that finds the
+                // hiker at the trailhead with the phone in a pocket, which is
+                // the case the notification exists for — see ``WalkOffer``.
+                walkSession?.offerWalk(hikeID: hikeID, routeLengthMeters: matched.routeLengthMeters, distance: distance)
             } else {
                 // Off the trail, and the session has to hear it: leaving the
                 // route is the boundary an End waits for, and until this the
@@ -577,7 +581,7 @@ final class BackgroundTrailTracker: NSObject {
                 // refused — the leave had happened where nothing was looking.
                 // A rejected fix never gets here, so "off route" still means
                 // matched and found off it rather than no usable evidence.
-                walkSession?.recordOffRoute(hikeID: hikeID)
+                walkSession?.recordOffRoute(hikeID: hikeID, offRouteMeters: matched.offRouteMeters)
             }
             // Both branches, because being back on the line is what re-arms
             // the off-trail reminder — see ``OffTrailWatch``. This is the feed

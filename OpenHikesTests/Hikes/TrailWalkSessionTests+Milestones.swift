@@ -112,12 +112,12 @@ extension TrailWalkSessionTests {
 
         refusing = true
         clock.advance(by: TrailWalkPolicy.persistInterval)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[3])
+        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[3])
         #expect(hike.walkInProgress == written, "a refused write is taken back off the column")
 
         refusing = false
         clock.advance(by: 1)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[4])
+        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[4])
 
         let retried = try #require(hike.walkInProgress)
         #expect(
@@ -140,7 +140,7 @@ extension TrailWalkSessionTests {
         let paused = try #require(hike.walkInProgress)
 
         clock.advance(by: 3600)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[10])
+        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[10])
 
         let seen = try #require(hike.walkInProgress)
         #expect(seen.phase == .paused)

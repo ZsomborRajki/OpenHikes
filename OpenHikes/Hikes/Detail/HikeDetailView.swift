@@ -420,7 +420,7 @@ private extension HikeDetailView {
                 // to save from a map that fetches no tiles, and
                 // `OfflineStorageStatus` says so where the note goes.
                 if !activeProvider.usesSystemBaseMap { autoSaveToggle }
-                autoFollowToggle
+                FollowToggles(hike: hike, session: walkSession)
             }
             OfflineStorageStatus(
                 hike: hike,
@@ -462,22 +462,6 @@ private extension HikeDetailView {
         Binding(
             get: { hike.autoSaveTilesEnabled },
             set: { autoSave.setEnabled($0, for: hike) }
-        )
-    }
-
-    /// Shows the live position and allows auto-start on a matched fix.
-    /// The walk's own controls pause or end one already under way.
-    private var autoFollowToggle: some View {
-        Toggle(isOn: autoFollowBinding) {
-            Label("Follow This Trail", systemImage: "location.fill.viewfinder")
-        }
-        .disabled(hike.pointCount < 2)
-    }
-
-    private var autoFollowBinding: Binding<Bool> {
-        Binding(
-            get: { hike.autoFollowEnabled },
-            set: { hike.autoFollowEnabled = $0 }
         )
     }
 
@@ -787,7 +771,7 @@ private extension HikeDetailView {
             )
             // Reads the session the way the bar reads `tracker`: as a
             // reference this body never dereferences.
-            WalkControls(hike: hike, session: walkSession, onOpenWalk: onOpenWalk)
+            WalkControls(hike: hike, session: walkSession, profile: profile, onOpenWalk: onOpenWalk)
         }
     }
 
@@ -859,16 +843,16 @@ private extension HikeDetailView {
             <= RouteProfile.followMatchThresholdMeters
         offRouteSearch.record(matched: onRoute, scope: searchScope)
         guard onRoute, let match else {
-            // Leaving the route is what rearms auto-start after an End: the
-            // hiker is off this trail, so coming back to it is a new walk.
-            walkSession.recordOffRoute(hikeID: hike.id)
+            // Leaving the route is what rearms the offer after an End or an
+            // Ignore: the hiker is off this trail, so coming back is a new walk.
+            walkSession.recordOffRoute(hikeID: hike.id, offRouteMeters: match?.offRouteMeters)
             clearLiveFollow(profile: profile)
             return
         }
         followAnchor = .matched(at: match.distanceAlongRoute, course: fix.course, from: followAnchor)
-        // The walk starts here, on the first matched fix with following on,
-        // and this is where every later match extends it. Selection alone
-        // starts nothing.
+        // The walk is offered here, on the first matched fix with following
+        // on, and this is where every later match extends it once the hiker
+        // has said Start. Selection alone offers nothing.
         let completedWalk = walkSession.recordForegroundMatch(
             hike: hike,
             profile: profile,

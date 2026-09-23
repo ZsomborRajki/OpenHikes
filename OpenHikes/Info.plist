@@ -50,7 +50,7 @@
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>OpenHikes saves your finished hikes to Health as hiking workouts, so they count towards your rings and appear beside your other activity. This is off until you turn it on, and OpenHikes reads nothing from Health on your iPhone.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>OpenHikes uses Always location, only when you turn on Background Trail Tracking in Settings, to keep your Home Screen widget and Live Activity showing your progress along the trail while the app isn't open.</string>
+	<string>OpenHikes uses Always location, only when you turn on Background Trail Tracking in Settings, to keep your Home Screen widget and Live Activity showing your progress along the trail while the app isn't open, and to ask whether to start the hike when you reach it.</string>
 	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
 	<dict>
 		<key>RecordHike</key>

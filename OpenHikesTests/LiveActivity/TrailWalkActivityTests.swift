@@ -71,7 +71,7 @@ final class TrailWalkActivityTests {
     ) async throws {
         for index in 0...2 {
             clock.advance(by: 60)
-            session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[index])
+            session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[index])
         }
         let match = try #require(profile.nearestPoint(to: profile.coordinates[2]))
         tracker.publishLiveFix(hike: hike, profile: profile, match: match, walk: session.payload(for: hike.id))
@@ -278,7 +278,7 @@ final class TrailWalkActivityTests {
         #expect(controller.activeSubject == .recording(sessionID: sessionID))
 
         clock.advance(by: 60)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[4])
+        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[4])
         session.pause()
         await tracker.waitForLiveFixPublish()
         await controller.settle()

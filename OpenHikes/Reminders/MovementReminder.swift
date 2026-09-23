@@ -59,15 +59,23 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
     /// is driven by the weather poll. The policy lives in
     /// ``WeatherAlertWatch``; only the value and the transport are shared.
     case severeWeather = "severeWeather"
+    /// The hiker is on a trail in their library and nothing is being walked:
+    /// start a hike along it? See ``WalkOffer``.
+    ///
+    /// The one kind that asks rather than reminds, and the one with two
+    /// buttons — Start and Ignore — plus a tap that opens the trail, where the
+    /// third answer, Don't Ask Again, lives. Clearing it away counts as
+    /// Ignore, which is what ``reportsDismissal`` is for.
+    case walkNearby = "walkNearby"
 
     var notificationIdentifier: String { "openhikes.reminder.\(rawValue)" }
     var categoryIdentifier: String { "openhikes.category.\(rawValue)" }
 
-    /// The button the banner offers, which is the reason the hiker does not
-    /// have to unlock the phone at all — or `nil` for a reminder that has no
+    /// The buttons the banner offers, which are the reason the hiker does not
+    /// have to unlock the phone at all — or none, for a reminder that has no
     /// verb to offer.
     ///
-    /// **Optional because leaving the trail has no button that would settle
+    /// **Empty for leaving the trail, because no button would settle
     /// anything.** Pause and Resume each end the disagreement they are about,
     /// in the app's own process, without the phone coming out of a pocket.
     /// There is no equivalent for being off the route: the app cannot put the
@@ -76,18 +84,29 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
     /// silenced the banner would be offering to stop saying the one thing
     /// this reminder exists to say. So the banner is the whole of it, and
     /// tapping it opens the app the way any notification does.
-    var action: MovementReminderAction? {
+    var actions: [MovementReminderAction] {
         switch self {
         // Nothing a button could settle, for the same reason leaving the
         // trail has none: the app cannot call off the weather, and a button
         // that only silenced the banner would offer to stop saying the one
         // thing this reminder exists to say. The alert's own link is in the
         // detail sheet, which is where the authority's advice is.
-        case .leftTheTrail, .severeWeather: nil
-        case .pauseRecording: .pause
-        case .resumeRecording, .resumeWalk: .resume
+        case .leftTheTrail, .severeWeather: []
+        case .pauseRecording: [.pause]
+        case .resumeRecording, .resumeWalk: [.resume]
+        case .walkNearby: [.startWalk, .ignoreWalk]
         }
     }
+
+    /// Whether clearing the banner away is itself an answer the app should
+    /// hear — registered as `customDismissAction`, which is the only way the
+    /// delegate is told.
+    ///
+    /// Only for the question. Every other kind describes something the app
+    /// can see for itself, and a hiker clearing it has said nothing about the
+    /// walk; clearing the offer is a hiker saying no, and one that is not
+    /// heard is asked again from the next relaunch.
+    var reportsDismissal: Bool { self == .walkNearby }
 
     #if canImport(UserNotifications)
     /// How hard this reminder may knock, which is the difference between a
@@ -121,7 +140,7 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
     var interruptionLevel: UNNotificationInterruptionLevel {
         switch self {
         case .leftTheTrail, .severeWeather: .timeSensitive
-        case .pauseRecording, .resumeRecording, .resumeWalk: .active
+        case .pauseRecording, .resumeRecording, .resumeWalk, .walkNearby: .active
         }
     }
     #endif
@@ -140,7 +159,7 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
         switch self {
         case .severeWeather: Relevance.weatherWarning
         case .leftTheTrail: Relevance.offTheRoute
-        case .resumeRecording, .resumeWalk: Relevance.walkGoingUnrecorded
+        case .resumeRecording, .resumeWalk, .walkNearby: Relevance.walkGoingUnrecorded
         case .pauseRecording: Relevance.stopCountedAsMoving
         }
     }
@@ -167,18 +186,26 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
 
 /// What a button on a reminder does when it is tapped.
 ///
-/// Both are *background* actions: they run in this app's process without
+/// All are *background* actions: they run in this app's process without
 /// bringing it to the front, which is the point — the hiker's hands are busy
 /// and the phone is in a pocket, the same case
-/// ``RecordingIntents`` declares `IntentModes.background` for.
+/// ``RecordingIntents`` declares `IntentModes.background` for. The raw values
+/// are the action identifiers a delivered banner carries, and are as much a
+/// storage contract as the kinds' — see this file's header.
 nonisolated enum MovementReminderAction: String, CaseIterable, Sendable {
+    case ignoreWalk = "ignoreWalk"
     case pause = "pause"
     case resume = "resume"
+    case startWalk = "startWalk"
 
     var title: String {
         switch self {
+        case .ignoreWalk: "Ignore"
         case .pause: "Pause"
         case .resume: "Resume"
+        // The walk controls' own word, so the button and the card it stands
+        // in for say the same thing.
+        case .startWalk: "Start Hike"
         }
     }
 }
@@ -188,6 +215,10 @@ nonisolated struct MovementReminder: Equatable, Sendable {
     let kind: MovementReminderKind
     let title: String
     let body: String
+    /// The walk a ``MovementReminderKind/walkNearby`` offers, carried in the
+    /// notification so its buttons can start or decline it from a process
+    /// that did not post it. `nil` for every other kind.
+    var walkOffer: WalkOfferSubject?
 
     var notificationIdentifier: String { kind.notificationIdentifier }
     var categoryIdentifier: String { kind.categoryIdentifier }
@@ -273,6 +304,20 @@ nonisolated enum MovementReminderWording {
             kind: .severeWeather,
             title: "Weather warning",
             body: "\(alert.summary) — \(subject). Issued by \(alert.source)."
+        )
+    }
+
+    /// The question, rather than a reminder: the hiker is on a trail they
+    /// have and is not walking it. Named, because the library can hold two
+    /// trails that share a car park, and says what Start will do rather than
+    /// that something went wrong — nothing has.
+    static func walkNearby(_ subject: WalkOfferSubject, trailTitle: String) -> MovementReminder {
+        let place = trailTitle.isEmpty ? "one of your trails" : trailTitle
+        return MovementReminder(
+            kind: .walkNearby,
+            title: "Hike nearby",
+            body: "Looks like you're on \(place). Start the hike to keep track of your progress?",
+            walkOffer: subject
         )
     }
 

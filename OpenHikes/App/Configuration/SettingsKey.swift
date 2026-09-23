@@ -142,6 +142,14 @@ nonisolated enum SettingsKey {
     /// Deliberately not synced through ``SyncedSettings``: it is a convenience
     /// of this device's search field, and it never leaves the phone.
     static let trailStopRecents = "maker.recentStops"
+    /// The trail the hiker last said Ignore about when asked to start a hike
+    /// on it, and when — see ``WalkOfferDecline``, which owns the shape.
+    ///
+    /// Stored rather than held in memory because the question is asked from a
+    /// process the system relaunches on every significant change, and one
+    /// that forgot the answer would ask again half a kilometre up the trail.
+    /// A trail identifier and a time, never a position.
+    static let walkOfferDecline = "walks.offerDecline"
 }
 
 /// Defaults for keys where "absent" and "false" are different answers, so the
