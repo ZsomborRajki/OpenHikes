@@ -23,7 +23,7 @@ import WidgetKit
 struct TrailWidgetLayout: Equatable {
     let routeLineWidth: Double
     let padding: Double
-    /// How many stat chips fit across the top-right corner beside the
+    /// How many stat chips are stacked in the top-right corner beside the
     /// temperature. The chips are ordered most-useful-first, so truncating to
     /// this drops the least useful one — see
     /// ``SharedTrailSnapshot/metrics(limit:locale:)``.
@@ -43,8 +43,13 @@ struct TrailWidgetLayout: Equatable {
     }
 }
 
-/// A single stat chip: a glyph and a number, sized to sit across the widget's
-/// top-right corner without crowding the temperature opposite it.
+/// The stat chips — each a glyph and a number — stacked down the widget's
+/// top-right corner, one per line.
+///
+/// Stacked rather than side by side because side by side did not fit: on a
+/// small widget the climb and the length shared about 131 points with the
+/// temperature, truncated, and drew no figure at all. One per line gives each
+/// number the corner's whole width.
 ///
 /// Both the glyph and the text are hidden from VoiceOver by the
 /// `.accessibilityHidden(true)` below — every widget body that uses this
@@ -57,14 +62,14 @@ struct TrailWidgetMetricRow: View {
     let onMap: Bool
 
     private enum Metrics {
-        static let spacing: Double = 9
+        static let spacing: Double = 2
         static let glyphSpacing: Double = 2.5
         static let mapOpacity: Double = 0.85
     }
 
     var body: some View {
         if !metrics.isEmpty {
-            HStack(spacing: Metrics.spacing) {
+            VStack(alignment: .trailing, spacing: Metrics.spacing) {
                 ForEach(metrics) { metric in
                     HStack(spacing: Metrics.glyphSpacing) {
                         Image(systemName: metric.symbolName)
@@ -93,7 +98,7 @@ struct TrailWidgetMetricRow: View {
 /// recording leads with the glyph that says whether it is still capturing —
 /// and the only thing they genuinely share is this arrangement.
 ///
-/// `firstTextBaseline`, so the temperature and the chips sit on one line
+/// `firstTextBaseline`, so the temperature sits on the first chip's line
 /// however the reader has sized their text. Centre alignment drifts them apart
 /// as soon as the glyphs and the digits disagree about height, which at
 /// caption2 they do.
