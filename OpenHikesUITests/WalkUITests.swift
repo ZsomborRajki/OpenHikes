@@ -65,7 +65,7 @@ nonisolated final class WalkUITests: XCTestCase {
         expectPhase(phase, contains: "Active")
     }
 
-    /// The title row's Start begins a walk off the route, where no fix could,
+    /// The navigation bar's Start begins a walk off the route, where no fix could,
     /// and becomes its Pause — with the controls group under the progress row
     /// appearing beside it, and no pill announcing a start the hiker asked for.
     @MainActor

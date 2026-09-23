@@ -8,7 +8,7 @@
 //
 //  The controls exist only once there is a walk to control: opening a trail
 //  is not walking it, and this draws nothing until the first matched fix or
-//  the title row's Start — ``WalkToggleButton`` — has started one. That
+//  the navigation bar's Start — ``WalkToggleButton`` — has started one. That
 //  button's Pause and Resume carry the same titles as the ones here, so the
 //  two are found by identifier: `walk-toggle` up there, `walk-controls-toggle`
 //  here. On any *other* trail's detail while a walk is under way, it draws
@@ -122,7 +122,7 @@ struct WalkControls: View {
                     refusedPhase = session.togglePhase(from: phase)
                 }
                 .glassButtonStyle()
-                // The header's Start / Pause carries the same title, so the
+                // The bar's Start / Pause carries the same title, so the
                 // two are told apart by identifier — see ``WalkToggleButton``.
                 .accessibilityIdentifier("walk-controls-toggle")
 
@@ -161,7 +161,7 @@ extension TrailWalkPhase {
 
 extension TrailWalkSession {
     /// Pauses a following walk or resumes a paused one — the tap behind both
-    /// ``WalkControls`` and the header's ``WalkToggleButton``.
+    /// ``WalkControls`` and the bar's ``WalkToggleButton``.
     ///
     /// - Returns: the phase the tap asked for when the store refused it, for
     ///   ``WalkPhaseRefusalAlert`` to say so; `nil` when it was written down.

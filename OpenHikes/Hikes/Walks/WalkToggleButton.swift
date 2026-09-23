@@ -2,9 +2,11 @@
 //  WalkToggleButton.swift
 //  OpenHikes
 //
-//  Start, and then Pause, on the trailing edge of a hike's title row — where
-//  the recording screen keeps its own Pause, and where Maps puts a place
-//  card's controls.
+//  Start, and then Pause, on the trailing edge of a hike detail's navigation
+//  bar. In the bar rather than on the title row below it because the bar is
+//  what is still on screen with the sheet squashed to its smallest detent,
+//  which is where a hiker who has put the phone away and wants the map leaves
+//  it — and from there the title row is out of reach.
 //
 //  A walk also starts on its own, on the first fix that matches a trail with
 //  Follow This Trail on. This is the way to start one without waiting for
@@ -16,7 +18,8 @@
 //  Draws nothing while another trail holds the walk — ``WalkControls`` names
 //  that one instead — nor on a recording's own draft, which never gets a
 //  walk. Reads only the session's coarse properties, like ``WalkControls``,
-//  so a fix that extends coverage does not redraw the title row.
+//  and is its own view rather than a `.toolbar` closure's contents, so a
+//  fix that extends coverage redraws neither this nor the detail around it.
 //
 
 import SwiftUI
@@ -37,8 +40,6 @@ struct WalkToggleButton: View {
                 Button(phase.toggleTitle, systemImage: phase.toggleSymbol) {
                     refusedPhase = session.togglePhase(from: phase)
                 }
-                .glassButtonStyle()
-                .placeCardControl()
                 .accessibilityIdentifier("walk-toggle")
             } else if session.walkedHikeID == nil, let profile, profile.totalDistanceMeters > 0,
                       session.canStartByHand(hike) {
@@ -47,8 +48,9 @@ struct WalkToggleButton: View {
                     // ``WalkControls`` for this hike — not played here too.
                     session.start(hike: hike, profile: profile)
                 }
+                // Tinted glass in the bar, as the call to action it is; once
+                // started the bar's own plain glass is enough.
                 .prominentGlassButtonStyle()
-                .placeCardControl()
                 .accessibilityIdentifier("walk-toggle")
             }
         }
