@@ -42,20 +42,8 @@ struct TrailPlaceSheetPresenter: ViewModifier {
             set: { if !$0 { maker.select(nil) } }
         )) {
             TrailPlaceSheet(maker: maker)
-                .presentationDetents([.height(Self.peekHeight), .medium, .large])
-                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-                .presentationContentInteraction(.scrolls)
-                // A sheet stays a sheet in landscape. Left to adapt, a
-                // vertically compact phone presents it as a full-screen cover
-                // — the whole map hidden behind a card about one spot on it,
-                // on the one screen whose job is the map.
-                .presentationCompactAdaptation(.none)
         }
     }
-
-    /// Tall enough for the header and the buttons, and no taller: the rest of
-    /// the screen is the map the hiker is choosing from.
-    private static let peekHeight: CGFloat = 240
 }
 
 /// What the card says about the selection, resolved against the drawing as it
@@ -149,15 +137,35 @@ struct TrailPlaceCard: Equatable {
 struct TrailPlaceSheet: View {
     let maker: TrailDraftController
 
+    /// Where the card rests. It opens at the middle height, where the buttons
+    /// and the address are in view, and a new selection leaves it wherever the
+    /// hiker put it. State of this view rather than of the presenter, so every
+    /// presentation starts from the middle again.
+    @State private var detent: PresentationDetent = .medium
+
     var body: some View {
-        if let selection = maker.selection,
-           let card = TrailPlaceCard(selection, in: maker.draft, droppedPin: maker.droppedPin) {
-            TrailPlaceCardView(maker: maker, card: card)
-        } else {
-            // What the card was about has gone — a stop deleted from the list
-            // under it — so there is nothing left to say about it.
-            Color.clear.onAppear { maker.select(nil) }
+        Group {
+            if let selection = maker.selection,
+               let card = TrailPlaceCard(selection, in: maker.draft, droppedPin: maker.droppedPin) {
+                TrailPlaceCardView(maker: maker, card: card)
+            } else {
+                // What the card was about has gone — a stop deleted from the
+                // list under it — so there is nothing left to say about it.
+                Color.clear.onAppear { maker.select(nil) }
+            }
         }
+        // The smallest detent is the map sheet's own: the title and the ✕, and
+        // the rest of the screen left to the map the hiker is choosing from.
+        .presentationDetents(
+            [SheetPresentation.compactDetent, .medium, .large],
+            selection: $detent
+        )
+        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+        // A sheet stays a sheet in landscape. Left to adapt, a vertically
+        // compact phone presents it as a full-screen cover — the whole map
+        // hidden behind a card about one spot on it, on the one screen whose
+        // job is the map.
+        .presentationCompactAdaptation(.none)
     }
 }
 
@@ -169,36 +177,50 @@ private struct TrailPlaceCardView: View {
     /// cannot place. Asked once per coordinate.
     @State private var address: String?
 
+    /// Room between the grabber and the title, as the map sheet leaves above
+    /// its search field.
+    private static let topPadding: CGFloat = 20
+
+    /// Not in a scroll view: the card is short enough to fit at the tallest
+    /// detent, and a scroll view is what let the smallest one slide its
+    /// contents about under the grabber instead of resizing the sheet.
     var body: some View {
-        List {
-            Section {
-                actions
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-            } header: {
-                header.textCase(nil)
-            }
+        VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
+            header
+            actions
             if !card.facts.isEmpty {
-                Section("Details") {
+                StatList(title: String(localized: "Details")) {
                     ForEach(card.facts, id: \.self, content: TrailPlaceFactRow.init)
                 }
             }
-            Section("Location") {
+            StatList(title: String(localized: "Location")) {
                 if let address {
-                    LabeledContent("Address", value: address)
+                    StatRow(label: String(localized: "Address"), value: address)
                         .accessibilityIdentifier("trail-place-address")
                 }
-                LabeledContent("Coordinates", value: TrailPlaceCoordinates.text(card.coordinate))
-                    .textSelection(.enabled)
-                    .accessibilityIdentifier("trail-place-coordinates")
+                StatRow(
+                    label: String(localized: "Coordinates"),
+                    value: TrailPlaceCoordinates.text(card.coordinate)
+                )
+                .textSelection(.enabled)
+                .accessibilityIdentifier("trail-place-coordinates")
                 if let url = card.openStreetMapURL {
                     Link(destination: url) {
                         Label("View on OpenStreetMap", systemImage: "arrow.up.right.square")
                     }
+                    .trailPlaceRow()
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .padding(.horizontal)
+        .padding(.top, Self.topPadding)
+        // Laid out at its own height and hung from the top of whatever the
+        // detent offers. Without the `minHeight`, a card taller than the
+        // smallest detent sized its frame to itself and the sheet centred it —
+        // the buttons in view and the title above the top edge.
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("trail-place-sheet")
         .task(id: [card.latitude, card.longitude]) {
             address = nil
@@ -207,42 +229,30 @@ private struct TrailPlaceCardView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 12) {
+        PlaceCardHeader {
             Image(systemName: card.systemImage)
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 44, height: 44)
                 .background(card.tint, in: .circle)
                 .accessibilityHidden(true)
-            // `Color.primary` and `Color.secondary` rather than the
-            // hierarchical `.primary` and `.secondary`: this sits in a
-            // section header, whose own foreground is grey, and a hierarchical
-            // level is taken from that — which drew the title in the grey of a
-            // disabled row.
-            VStack(alignment: .leading, spacing: 2) {
-                Text(card.title)
-                    .font(.title2.bold())
-                    .foregroundStyle(Color.primary)
-                    .lineLimit(2)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityIdentifier("trail-place-title")
-                if let subtitle = card.subtitle {
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(Color.secondary)
-                }
+        } title: {
+            Text(card.title)
+                .lineLimit(2)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("trail-place-title")
+        } subtitle: {
+            if let subtitle = card.subtitle {
+                Text(subtitle)
             }
-            Spacer(minLength: 0)
-            Button("Close", systemImage: "xmark.circle.fill") { maker.select(nil) }
-                .labelStyle(.iconOnly)
-                .font(.title2)
-                .foregroundStyle(.secondary)
-                .symbolRenderingMode(.hierarchical)
-                .buttonStyle(.plain)
-                .minimumTapTarget()
+        } trailing: {
+            // Drawn as Maps' own ✕ and as the recording card's controls: a
+            // round glass button, not a bare glyph in a grey circle.
+            Button("Close", systemImage: "xmark") { maker.select(nil) }
+                .glassButtonStyle()
+                .placeCardControl()
                 .accessibilityIdentifier("trail-place-close")
         }
-        .padding(.bottom, 8)
     }
 
     private var actions: some View {
@@ -381,20 +391,46 @@ private struct TrailPlaceFactRow: View {
         switch fact.kind {
         case .website:
             if let url = URL(string: fact.value), url.scheme?.hasPrefix("http") == true {
-                LabeledContent(fact.kind.label) { Link(fact.value, destination: url).lineLimit(1) }
+                TrailPlaceLinkRow(label: fact.kind.label, title: fact.value, destination: url)
             } else {
-                LabeledContent(fact.kind.label, value: fact.value)
+                StatRow(label: fact.kind.label, value: fact.value)
             }
         case .phone:
             let digits = fact.value.filter { $0.isNumber || $0 == "+" }
             if let url = URL(string: "tel:\(digits)"), !digits.isEmpty {
-                LabeledContent(fact.kind.label) { Link(fact.value, destination: url) }
+                TrailPlaceLinkRow(label: fact.kind.label, title: fact.value, destination: url)
             } else {
-                LabeledContent(fact.kind.label, value: fact.value)
+                StatRow(label: fact.kind.label, value: fact.value)
             }
         default:
-            LabeledContent(fact.kind.label, value: fact.displayValue)
+            StatRow(label: fact.kind.label, value: fact.displayValue)
         }
+    }
+}
+
+/// A ``StatRow`` whose value is a link: the website or the phone number.
+private struct TrailPlaceLinkRow: View {
+    let label: String
+    let title: String
+    let destination: URL
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(label)
+            Link(title, destination: destination)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .trailPlaceRow()
+    }
+}
+
+private extension View {
+    /// A ``StatRow``'s height and padding, for the card's rows that are not one.
+    func trailPlaceRow() -> some View {
+        font(.body)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, minHeight: StatCardMetrics.rowMinimumHeight, alignment: .leading)
     }
 }
 
