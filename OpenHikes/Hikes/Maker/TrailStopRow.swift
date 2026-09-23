@@ -17,7 +17,8 @@
 //  line is the row's accessibility value now, because the map draws it. A leg
 //  with something wrong with it keeps a mark at the row's trailing edge, the
 //  notice's own glyph, because the footer can only say what is wrong and not
-//  where; its sentence is in the value too.
+//  where; its sentence is in the value too. Last on the row, as in Maps, is
+//  the three-line grabber that says the row can be dragged.
 //
 //  ## The line is drawn by the rows, not between them
 //
@@ -126,6 +127,7 @@ struct TrailStopRowView: View {
                     .padding(.vertical, Self.rowPadding)
                 Spacer(minLength: 0)
                 legMark(slot)
+                Self.grabber
             }
             .contentShape(.rect)
         }
@@ -193,6 +195,18 @@ struct TrailStopRowView: View {
             let name = draft.name(ofWaypointAt: index)
             Text(name.isEmpty ? draft.role(ofWaypointAt: index).title : name)
         }
+    }
+
+    /// The three lines Apple Maps draws at the trailing edge of every row it
+    /// lets you drag. Here every row drags, the open fields too, so every row
+    /// has one. It is only a sign: a press and hold anywhere on the row lifts
+    /// it — see `TrailStopReordering.swift` — so it is not a control of its
+    /// own, and VoiceOver, which moves a stop with *Move Up* and *Move Down*,
+    /// does not hear it.
+    private static var grabber: some View {
+        Image(systemName: "line.3.horizontal")
+            .foregroundStyle(.tertiary)
+            .accessibilityHidden(true)
     }
 
     /// The glyph of what the leg into this stop has to report, when it is
