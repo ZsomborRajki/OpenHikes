@@ -352,11 +352,11 @@ final class TrailDraftController {
     func appendWaypoint(at coordinate: CLLocationCoordinate2D, named name: String = "") {
         guard isEditing else { return }
         let bounded = Self.bounded(name)
-        if !draft.fillOpenField(with: coordinate, named: bounded) {
-            draft.append(coordinate, named: bounded)
+        editLine {
+            if !draft.fillOpenField(with: coordinate, named: bounded) {
+                draft.append(coordinate, named: bounded)
+            }
         }
-        commitLine()
-        resolveLegs()
     }
 
     /// Puts a named place into the row a hiker opened the search sheet from.
@@ -379,9 +379,7 @@ final class TrailDraftController {
     ) {
         guard isEditing,
               let index = draft.waypoints.firstIndex(where: { $0.id == id }) else { return }
-        draft.place(waypointAt: index, at: coordinate, named: Self.bounded(name))
-        commitLine()
-        resolveLegs()
+        editLine { draft.place(waypointAt: index, at: coordinate, named: Self.bounded(name)) }
     }
 
     /// The place sheet's *Add Stop*: into an open field while there is one, and
@@ -397,17 +395,13 @@ final class TrailDraftController {
     ) {
         guard isEditing else { return }
         let index = leg.flatMap { ends in draft.legs.firstIndex { $0.ends == ends } }
-        draft.addStop(coordinate, named: Self.bounded(name), preferringLeg: index)
-        commitLine()
-        resolveLegs()
+        editLine { draft.addStop(coordinate, named: Self.bounded(name), preferringLeg: index) }
     }
 
     /// Puts a picked place into an open start or destination field.
     func fill(_ role: TrailStopRole, at coordinate: CLLocationCoordinate2D, named name: String) {
         guard isEditing else { return }
-        draft.fill(role, with: coordinate, named: Self.bounded(name))
-        commitLine()
-        resolveLegs()
+        editLine { draft.fill(role, with: coordinate, named: Self.bounded(name)) }
     }
 
     /// Writes what ``TrailStopNamer`` worked out a point is called, and writes
@@ -441,26 +435,20 @@ final class TrailDraftController {
     /// Takes points out of the line. What a swipe on a row does.
     func removeWaypoints(atOffsets offsets: IndexSet) {
         guard isEditing else { return }
-        draft.remove(atOffsets: offsets)
-        commitLine()
-        resolveLegs()
+        editLine { draft.remove(atOffsets: offsets) }
     }
 
     /// Puts the points in the order the route list's rows stand in after a
     /// drag — see ``TrailDraft/arrangeRows(_:)``.
     func arrangeRows(_ order: [String]) {
         guard isEditing else { return }
-        draft.arrangeRows(order)
-        commitLine()
-        resolveLegs()
+        editLine { draft.arrangeRows(order) }
     }
 
     /// Reorders the line. What VoiceOver's *Move Up* and *Move Down* commit.
     func reorderWaypoints(fromOffsets offsets: IndexSet, toOffset destination: Int) {
         guard isEditing else { return }
-        draft.moveWaypoints(fromOffsets: offsets, toOffset: destination)
-        commitLine()
-        resolveLegs()
+        editLine { draft.moveWaypoints(fromOffsets: offsets, toOffset: destination) }
     }
 
     // MARK: - The place sheet
@@ -619,6 +607,9 @@ final class TrailDraftController {
     /// does with what it has just turned into a hike.
     func discard() {
         cancelRouting()
+        // A search still out would land on the emptied drawing and write its
+        // places down as a new one, which the next opening would restore.
+        finder.clear()
         draft.clear()
         store?.clear()
         // The heights go with the line they were read for. Nothing else would
@@ -646,6 +637,22 @@ final class TrailDraftController {
             travelMode: stored.travelMode,
             startIsOpen: stored.startIsOpen
         )
+    }
+
+    /// Runs one edit to the points and, only if it changed them, ends it the
+    /// way every edit to the line ends: written down, measured and named
+    /// again, and its new legs asked about.
+    ///
+    /// An edit can change nothing — a search that picks the place a stop is
+    /// already at, a field that is no longer open — and ending one of those
+    /// like any other threw the climb away and asked a **billed** question to
+    /// be told the same number.
+    private func editLine(_ change: () -> Void) {
+        let before = (draft.waypoints, draft.startIsOpen)
+        change()
+        guard (draft.waypoints, draft.startIsOpen) != before else { return }
+        commitLine()
+        resolveLegs()
     }
 
     /// What every edit to the **line** ends with: everything ``persist()``
@@ -696,14 +703,19 @@ extension TrailDraftController {
     /// header — starting it if none is running.
     private func resolveLegs(retryingRefusals: Bool = false) {
         guard let router = routers[draft.travelMode], isEditing else { return }
-        let pending = draft
-            .legsAwaitingRoutes(retryingRefusals: retryingRefusals)
-            .filter { ends in !legsInFlight.contains(ends) }
+        let pending = draft.legsAwaitingRoutes(retryingRefusals: retryingRefusals)
         guard !pending.isEmpty else { return }
-        legsInFlight.formUnion(pending)
+        // Every one of them is marked, including a leg whose question is
+        // already out: an edit can take a queued leg away and the next one put
+        // it back, and it comes back straight. Left unmarked, the answer
+        // already on its way is refused for a leg that is not waiting, and the
+        // reader skips it for the same reason — a straight line for good.
         draft.beginRouting(pending)
+        let asking = pending.filter { ends in !legsInFlight.contains(ends) }
+        guard !asking.isEmpty else { return }
+        legsInFlight.formUnion(asking)
         let requests = routingRequests ?? startRouting(with: router)
-        for ends in pending { requests.yield(ends) }
+        for ends in asking { requests.yield(ends) }
     }
 
     /// A fresh stream and the one task that reads it with `router`.

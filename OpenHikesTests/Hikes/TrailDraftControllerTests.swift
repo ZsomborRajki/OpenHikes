@@ -21,6 +21,7 @@
 
 import CoreLocation
 import Foundation
+import MapKit
 @testable import OpenHikes
 import SwiftData
 import Testing
@@ -242,6 +243,43 @@ struct TrailDraftControllerTests {
         #expect(maker.draft.isEmpty)
     }
 
+    /// A *Search this area* still out when the drawing is thrown away — by
+    /// Save or by *Discard Trail* — has nothing left to add to. Delivered
+    /// anyway, it wrote its places down as a drawing of their own, and the
+    /// next opening restored them over an empty route.
+    @Test("a place search still out when the drawing is discarded adds nothing")
+    func aSearchOutlivingADiscardAddsNothing() async throws {
+        let (gate, open) = AsyncStream.makeStream(of: Void.self)
+        let spring = TrailPlace(coordinate: Self.coordinate(Line.south), name: "Spring", symbol: .water)
+        let store = TrailDraftStore(context: try Fixture.modelContext())
+        let maker = TrailDraftController(
+            store: store,
+            placeSource: HeldPlaceSource(place: spring, gate: gate)
+        )
+        maker.setEditing(true)
+        maker.appendWaypoint(at: Self.coordinate(Line.south))
+        maker.appendWaypoint(at: Self.coordinate(Line.north))
+        maker.finder.regionDidSettle(
+            MKCoordinateRegion(
+                center: Self.coordinate(Line.south),
+                latitudinalMeters: Self.searchSpanMeters,
+                longitudinalMeters: Self.searchSpanMeters
+            )
+        )
+        maker.searchNearbyPlaces()
+        #expect(maker.finder.isSearching)
+
+        maker.discard()
+        open.finish()
+        await settleDelegateHop()
+
+        #expect(maker.draft.isEmpty)
+        #expect(store.load().isEmpty)
+    }
+
+    /// Small enough to be a searchable area.
+    private static let searchSpanMeters: Double = 2000
+
     // MARK: The dropped pin
 
     /// Apple Maps keeps a dropped pin when its card closes; so does the maker,
@@ -330,5 +368,17 @@ struct TrailDraftControllerTests {
         maker.addStop(at: nearerCD, preferringLeg: leg)
 
         #expect(maker.draft.waypoints.map(\.latitude) == [47.6300, 47.6330, 47.6320, 47.6340])
+    }
+}
+
+/// A place source that answers only once its gate opens, so a search can be
+/// caught while it is still out.
+nonisolated private struct HeldPlaceSource: TrailPointSourcing {
+    let place: TrailPlace
+    let gate: AsyncStream<Void>
+
+    func places(near _: CommunitySearchArea, showing _: Set<TrailPlaceSymbol>) async -> [TrailPlace] {
+        for await _ in gate { break }
+        return [place]
     }
 }
