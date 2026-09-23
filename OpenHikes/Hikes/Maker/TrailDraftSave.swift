@@ -25,6 +25,14 @@
 //  a place is a spot on the ground beside a trail, not part of one, and a
 //  saved hike with no route is not a hike whatever is marked near it.
 //
+//  **Only the places the line passes are kept.** A search puts everything it
+//  found near the drawing onto it, which is the right amount while the route
+//  is still being decided and far too much on a finished trail: the summit
+//  across the valley is not a place on this walk. So a save keeps the places
+//  within ``TrailPlaceAnchor/touchedOffRouteMeters`` of the route and drops
+//  the rest — from the hike, not from the draft, which a refused save leaves
+//  exactly as it was.
+//
 //  **A leg still routing is saved as it stands.** Save does not wait: a hiker
 //  who has finished drawing has finished, and holding the button while a
 //  volunteer-run API is thinking about the last leg would make Overpass's
@@ -162,10 +170,16 @@ enum TrailDraftSave {
         // what was drawn is *kept* — and a place written a moment later would
         // be a second chance to fail after the hiker has been told it worked.
         //
-        // The places are saved whatever the line did. A place marked beside a
-        // leg Overpass refused is still a place; nothing here waits on
+        // Measured against the route being saved rather than the draft's
+        // ranked rows, which land a moment after an edit and may be about the
+        // line before it. A leg Overpass refused, or one still routing, is
+        // measured as the straight line it is saved as — nothing here waits on
         // anything, which is the rule the whole feature is built on.
-        hike.replacePlaces(with: draft.places, in: context, now: date)
+        hike.replacePlaces(
+            with: TrailPlaceOrder.touched(draft.places, along: route),
+            in: context,
+            now: date
+        )
         do {
             try save(context)
         } catch {

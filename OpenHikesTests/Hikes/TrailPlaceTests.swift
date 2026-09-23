@@ -147,6 +147,40 @@ struct TrailPlaceTests {
         #expect(anchor.distanceAlongRouteMeters > total, "the return leg is the nearer crossing")
         #expect(anchor.describesTheRoute)
     }
+
+    // MARK: What a save keeps
+
+    /// A save keeps the places the line passes and nothing a search merely
+    /// found near it — see ``TrailPlaceAnchor/touchedOffRouteMeters``.
+    ///
+    /// At this latitude a thousandth of a degree of longitude is about 75 m,
+    /// so the two are either side of the bound with room to spare.
+    @Test("only the places the line passes are touched")
+    func onlyPlacesOnTheLineAreTouched() {
+        let route = Self.route(from: Line.south, to: Line.north)
+        let onIt = Self.place(Line.south + 0.004, name: "Spring")
+        let byTheDoor = Self.place(Line.south + 0.008, Line.longitude + 0.0004, name: "Hut")
+        let upASidePath = Self.place(Line.south + 0.012, Line.longitude + 0.001, name: "Viewpoint")
+        let acrossTheValley = Self.place(Line.north, Line.longitude + 0.0134, name: "Summit")
+
+        let touched = TrailPlaceOrder.touched(
+            [acrossTheValley, byTheDoor, upASidePath, onIt],
+            along: route
+        )
+
+        // In the order they were given: ordering is ``ordered(_:along:)``'s job,
+        // and a save writes rows that are ranked when they are read.
+        #expect(touched.map(\.name) == ["Hut", "Spring"])
+    }
+
+    /// Nothing is on a line that is not there.
+    @Test("no place is touched by a route of fewer than two points")
+    func nothingIsTouchedWithoutALine() {
+        let spring = Self.place(Line.south)
+
+        #expect(TrailPlaceOrder.touched([spring], along: []).isEmpty)
+        #expect(TrailPlaceOrder.touched([spring], along: [spring.routeCoordinate]).isEmpty)
+    }
 }
 
 private extension RouteCoordinate {

@@ -103,6 +103,27 @@ struct TrailDraftSaveTests {
         #expect(hike.orderedPlaces.map(\.place.name) == ["Spring"])
     }
 
+    /// A search puts everything it found near the line onto the drawing, and
+    /// the saved hike keeps only what the line passes. The drawing keeps the
+    /// lot, because a refused save has to leave it exactly as it was.
+    @Test("a save keeps only the places on the line")
+    func savesOnlyThePlacesOnTheLine() throws {
+        let context = try context()
+        let draft = Self.draft([Line.south, Line.north])
+        draft.addPlaces([
+            TrailPlace(latitude: Line.south + 0.001, longitude: Line.longitude, name: "Spring"),
+            // About 750 m east of the line: found by the search, not walked past.
+            TrailPlace(latitude: Line.north, longitude: Line.longitude + 0.01, name: "Summit"),
+        ])
+
+        let hike = try #require(
+            TrailDraftSave.hike(from: draft, named: "Ridge", into: context).hike
+        )
+
+        #expect(hike.trailPoints?.map(\.name) == ["Spring"])
+        #expect(draft.places.map(\.name) == ["Spring", "Summit"])
+    }
+
     /// A place is a spot beside a trail rather than part of one, so it does
     /// not lengthen the route and is not one of its coordinates.
     @Test("a place is not a point of the saved route")
