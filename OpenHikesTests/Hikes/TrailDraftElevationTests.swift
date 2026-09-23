@@ -321,6 +321,26 @@ struct TrailDraftElevationTests {
         #expect(source.askedCounts == [2])
     }
 
+    /// An edit that changes nothing is not an edit. Picking the place a stop
+    /// is already at — the search opens prefilled with it — used to throw the
+    /// figure away and pay for the same number again.
+    @Test("an edit that changes nothing asks nothing")
+    func anEditThatChangesNothingAsksNothing() async throws {
+        let source = StubHeightSource(heights: Heights.all)
+        let maker = Self.maker(source: source)
+        maker.appendWaypoint(at: Line.at(Line.first), named: "Trailhead")
+        maker.appendWaypoint(at: Line.at(Line.third))
+        await Self.measured(maker.elevation, by: source)
+        let start = try #require(maker.draft.waypoints.first)
+
+        maker.placeWaypoint(start.id, at: Line.at(Line.first), named: "Trailhead")
+        maker.fill(.start, at: Line.at(Line.fifth), named: "No open field")
+        await Self.settle { source.askedCounts.count > 1 }
+
+        #expect(source.askedCounts == [2])
+        #expect(maker.elevation.summary != nil, "the figure is still the line's")
+    }
+
     /// A leg still waiting for its path is a straight placeholder, and
     /// measuring it spends a billed call on a line that is about to change.
     /// Overpass is often slower than the settle, so a long route used to pay

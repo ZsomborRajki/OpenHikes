@@ -150,6 +150,39 @@ extension TrailDraftRoutingTests {
         #expect(maker.draft.legs.allSatisfy { $0.snap == .snapped })
     }
 
+    /// A leg whose question is still out can be taken away by one edit and
+    /// put back by the next — a stop moved and moved back while Overpass is
+    /// slow. It comes back as a straight line, and it must come back
+    /// *waiting*: the answer already on its way is only taken for a leg that
+    /// is, and the reader skips a queued leg that is not. Left straight, it
+    /// stayed straight, with nothing on screen to say so.
+    @Test("a leg taken away and put back while its question is out is still answered")
+    func aLegPutBackWhileInFlightIsAnswered() async {
+        let router = StubTrailLegRouter(answering: .snapped, holding: true)
+        let maker = TrailDraftController(router: router)
+        maker.setEditing(true)
+        for latitude in [Trail.first, Trail.second, Trail.third] {
+            maker.appendWaypoint(at: Self.place(latitude))
+        }
+        // A→B is being asked about and B→C is queued behind it.
+        await router.waitUntilAsked()
+
+        // A, B, C → A, C, B and straight back.
+        maker.reorderWaypoints(fromOffsets: IndexSet([2]), toOffset: 1)
+        maker.reorderWaypoints(fromOffsets: IndexSet([2]), toOffset: 1)
+        #expect(maker.draft.legs.map(\.ends) == [
+            Self.ends(Trail.first, Trail.second),
+            Self.ends(Trail.second, Trail.third),
+        ])
+        #expect(maker.draft.legs.allSatisfy { $0.snap.isRouting }, "both legs are waiting again")
+
+        await router.release()
+        await settleDelegateHop(until: "both legs to be answered") {
+            maker.draft.legs.allSatisfy { $0.snap == .snapped }
+        }
+        #expect(maker.draft.legs.allSatisfy { $0.snap == .snapped })
+    }
+
     // MARK: A point under a finger
 
     /// The rule the untracked channel exists for, stated where it can be
