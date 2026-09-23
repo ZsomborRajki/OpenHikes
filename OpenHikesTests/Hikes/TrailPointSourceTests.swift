@@ -112,6 +112,27 @@ struct TrailPointSourceTests {
         #expect(places[1].displayName == "Water", "and what is read is what it is")
     }
 
+    /// An element carrying two kinds' tags is drawn as the first kind the
+    /// search asked for, so a switch turned off does not take the other kind
+    /// with it — see ``TrailPointQuery/symbol(for:among:)``.
+    @Test("an element is drawn as a kind the search asked for")
+    func anElementIsDrawnAsAnAskedKind() async throws {
+        let peak = """
+        {"elements": [
+        {"type": "node", "id": 1, "lat": 47.60, "lon": 12.95, \
+        "tags": {"natural": "peak", "tourism": "viewpoint"}}
+        ]}
+        """
+        let (everything, _) = Self.makeSource([Self.ok(peak)])
+        let (summitsOff, _) = Self.makeSource([Self.ok(peak)])
+
+        let asSummit = try await everything.places(near: Self.area)
+        let asViewpoint = try await summitsOff.places(near: Self.area, showing: [.viewpoint, .water])
+
+        #expect(asSummit.map(\.symbol) == [.summit])
+        #expect(asViewpoint.map(\.symbol) == [.viewpoint])
+    }
+
     /// A hut is routinely a building rather than a node, which is why the
     /// query asks `nwr` for it — and a way has no `lat`, only the `center`
     /// that `out center` puts on it.

@@ -246,7 +246,17 @@ nonisolated enum TrailPointQuery {
     /// these filters — a relation can arrive with its members' tags, and a
     /// mirror can answer with more than was asked. A place this cannot name is
     /// not offered; see ``TrailPointDecoding``.
-    static func symbol(for tags: [String: String]) -> TrailPlaceSymbol? {
-        kinds.first { kind in tags[kind.key] == kind.value }?.symbol
+    ///
+    /// Only the kinds drawn as one of `symbols` compete, so the tie-break is
+    /// among the maker's switches that are on: with *Summits* off and
+    /// *Viewpoints* on, a peak tagged `tourism=viewpoint` was asked for as a
+    /// viewpoint and comes back as one, rather than as a summit the finder
+    /// would then have to throw away. Still one answer for one choice of
+    /// switches, which is what the order is for.
+    static func symbol(
+        for tags: [String: String],
+        among symbols: Set<TrailPlaceSymbol> = Set(TrailPlaceSymbol.allCases)
+    ) -> TrailPlaceSymbol? {
+        kinds.first { kind in symbols.contains(kind.symbol) && tags[kind.key] == kind.value }?.symbol
     }
 }
