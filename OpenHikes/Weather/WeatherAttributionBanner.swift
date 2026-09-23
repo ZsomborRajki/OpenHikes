@@ -22,6 +22,10 @@ import SwiftUI
 struct WeatherAttributionBanner: View {
     private static let markHeight: CGFloat = 18
     private static let spacing: CGFloat = 12
+    /// Apple's minimum, and the figure `performAccessibilityAudit` checks. The
+    /// mark is 18 points tall and "Legal" in footnote narrower than this, so
+    /// both are framed up to it — see ``MapPaywallView`` for the same move.
+    private static let minimumHitTarget: CGFloat = 44
 
     /// `nil` until WeatherKit answers, and for good if it never does. Handed
     /// in rather than asked for again, since the sheet already holds it.
@@ -40,7 +44,15 @@ struct WeatherAttributionBanner: View {
                     destination: marks?.legalPageURL ?? AppleWeatherAttribution.fallbackLegalPageURL
                 )
                     .font(.footnote)
-                    .accessibilityLabel(marks?.linkTitle ?? WeatherAttributionMarks.defaultLinkTitle)
+                    // The frame on the link rather than padding in its label,
+                    // so "Legal" stays level with the mark; `contentShape` is
+                    // what makes the grown frame take the touch.
+                    .frame(minWidth: Self.minimumHitTarget, minHeight: Self.minimumHitTarget)
+                    .contentShape(.rect)
+                    // No label of Apple's here: `legalAttributionText` is the
+                    // whole data-source list, paragraphs of it, and the bottom
+                    // section is where that is shown. VoiceOver reads "Legal"
+                    // straight after "Apple Weather", which says what it is.
                     .accessibilityIdentifier("weather-legal-link-top")
             }
             // A caption under the title rather than a row among the readings:
@@ -73,6 +85,11 @@ struct WeatherAttributionBanner: View {
                 textMark
             }
         }
+        // The audit sizes this element too, button or not, and a mark shorter
+        // than the minimum fails it. The frame alone is not enough: the
+        // element keeps the image's own bounds until the shape says otherwise.
+        .frame(minHeight: Self.minimumHitTarget)
+        .contentShape(.accessibility, .rect)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(AppleWeatherAttribution.serviceName)
         .accessibilityIdentifier("weather-mark")
