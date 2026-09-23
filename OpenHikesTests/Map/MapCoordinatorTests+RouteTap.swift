@@ -116,6 +116,29 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// A press that dropped a pin is not also the tap that closes its card.
+    ///
+    /// Every recognizer on the map may recognize alongside the others, so
+    /// without this a finger held long enough to drop a pin was a tap as well
+    /// once it lifted, and the card the press opened closed half a second
+    /// later — seen in a UI test's screen recording, and invisible from here
+    /// except as this one answer.
+    @Test("the tap waits for the press that drops a pin")
+    func theTapWaitsForThePinDrop() throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+
+        let tap = try #require(coordinator.routeTapRecognizer)
+        let press = try #require(map.gestureRecognizers?.first { $0 is TrailDraftPinDropRecognizer })
+        #expect(coordinator.gestureRecognizer(tap, shouldRequireFailureOf: press))
+        // Only the tap waits. The press waiting on the tap as well would be a
+        // pair that can never begin.
+        #expect(!coordinator.gestureRecognizer(press, shouldRequireFailureOf: tap))
+        #endif
+    }
+
     // MARK: - The hiker's own line
 
     /// The gesture this file exists for: a thumb on the route drawn for the

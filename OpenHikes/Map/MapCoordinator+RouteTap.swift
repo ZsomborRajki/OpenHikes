@@ -132,7 +132,8 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
     }
 
     /// Whether this map's tap has to wait for another recognizer to give up,
-    /// which for exactly one of them it does: **MapKit's own double tap.**
+    /// which for two of them it does: **MapKit's own double tap**, and the
+    /// maker's press that drops a pin.
     ///
     /// A single tap and the first half of a double tap are the same touch, and
     /// until this existed the two were told apart by nobody. The recognizer
@@ -159,12 +160,21 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
     /// than it used to be. That is what every tap on this map already paid —
     /// MapKit's own handling of it was always behind the same wait — and it is
     /// the price of the two taps meaning different things.
+    ///
+    /// **The press is the same confusion held longer.** Every recognizer here
+    /// may recognize alongside every other, so a finger that pressed long
+    /// enough to drop a pin was also a tap once it lifted — and the tap closed
+    /// the card the press had just opened, leaving the pin behind with no card.
+    /// Seen in a screen recording of a UI test. Waiting on the press costs a
+    /// tap nothing: a press fails the moment a finger lifts before it began,
+    /// which is what makes that finger a tap in the first place.
     func gestureRecognizer(
         _ recognizer: UIGestureRecognizer,
         shouldRequireFailureOf other: UIGestureRecognizer
     ) -> Bool {
-        guard recognizer === routeTapRecognizer,
-              let tap = other as? UITapGestureRecognizer else { return false }
+        guard recognizer === routeTapRecognizer else { return false }
+        if other is TrailDraftPinDropRecognizer { return true }
+        guard let tap = other as? UITapGestureRecognizer else { return false }
         return tap.numberOfTapsRequired > 1
     }
 
