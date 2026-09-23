@@ -28,7 +28,8 @@ struct HapticMomentTests {
     ]
 
     private static let quietMoments: [HapticMoment] = [
-        .outcomeSucceeded, .outcomeFailed, .targetHit, .choiceChanged, .rowMoved,
+        .outcomeSucceeded, .outcomeFailed, .targetHit, .pinDropped, .choiceChanged,
+        .rowMoved,
     ]
 
     @Test("Every moment belongs to exactly one tier")
@@ -87,5 +88,15 @@ struct HapticMomentTests {
     func trackingIsQuieterThanBeginning() {
         #expect(HapticMoment.trackingBegan.feedback != HapticMoment.walkBegan.feedback)
         #expect(HapticMoment.trackingBegan.feedback == .impact(weight: .light))
+    }
+
+    /// A pin dropped by a press is answered while the thumb is still down, so
+    /// it is the one texture moment at full weight. If it went back to sharing
+    /// ``HapticMoment/targetHit``, the press would get the soft knock that
+    /// nobody could feel under a pressing thumb.
+    @Test("A dropped pin is felt through the pressing thumb")
+    func pinDropIsFirmerThanATap() {
+        #expect(HapticMoment.pinDropped.feedback != HapticMoment.targetHit.feedback)
+        #expect(HapticMoment.pinDropped.feedback == .impact(weight: .medium))
     }
 }

@@ -99,7 +99,7 @@ extension MapView.Coordinator {
             coordinate: mapView.convert(point, toCoordinateFrom: mapView),
             leg: leg
         ))
-        HapticMoment.targetHit.play()
+        HapticMoment.pinDropped.play()
         return true
     }
 
