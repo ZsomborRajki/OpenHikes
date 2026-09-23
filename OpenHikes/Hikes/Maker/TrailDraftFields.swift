@@ -284,15 +284,15 @@ struct TrailDraftLineFooter: View {
             if let notice = draft.notice {
                 TrailDraftNoticeLabel(notice: notice)
             }
-            // The gestures on the map that nothing on screen could otherwise
-            // announce: a press that drops a pin, a grey route that looks like
-            // scenery rather than a choice, and a stop that answers a press.
-            // Withheld until there is a line to do any of them to.
+            // The gestures that nothing else on screen explains: a map press
+            // that drops a pin, a grey route that looks like scenery rather
+            // than a choice, and the handle that reorders a stop. Withheld
+            // until there is a line to do any of them to.
             if !draft.legs.isEmpty {
                 Text(
                     """
                     Press and hold the map to add a stop, or tap a grey route to take it \
-                    instead. Press and hold a stop to move it.
+                    instead. Drag a stop's handle to move it.
                     """
                 )
             }

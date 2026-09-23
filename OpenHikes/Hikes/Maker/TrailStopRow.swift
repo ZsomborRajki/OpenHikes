@@ -68,8 +68,16 @@ struct TrailStopRowView: View {
     let draft: TrailDraft
     /// Where in ``TrailDraft/slots`` this row sits.
     let position: Int
+    /// Receives the handle's global drop point. Open fields pass `nil`, because
+    /// there is no waypoint there to move.
+    var onReorder: ((CGPoint) -> Void)?
+    /// VoiceOver's equivalent of moving the same handle up or down.
+    var onReorderAdjustment: ((AccessibilityAdjustmentDirection) -> Void)?
     /// Opens the search sheet on this row.
     var onSearch: () -> Void
+
+    /// Keeps the row under the finger until its drop commits the new order.
+    @GestureState private var reorderOffset: CGFloat = 0
 
     /// Wide enough to centre a dot under a fingertip and narrow enough that the
     /// text column still has a phone's width at an accessibility type size. The
@@ -85,21 +93,55 @@ struct TrailStopRowView: View {
     var body: some View {
         let slots = draft.slots
         let slot = slots.indices.contains(position) ? slots[position] : .open(.end)
-        Button(action: onSearch) {
-            HStack(alignment: .center, spacing: 0) {
-                rail(Self.role(of: slot, in: draft), isOpen: slot.waypointIndex == nil, count: slots.count)
-                text(slot)
-                    .padding(.vertical, Self.rowPadding)
-                Spacer(minLength: 0)
+        HStack(spacing: 0) {
+            Button(action: onSearch) {
+                HStack(alignment: .center, spacing: 0) {
+                    rail(
+                        Self.role(of: slot, in: draft),
+                        isOpen: slot.waypointIndex == nil,
+                        count: slots.count
+                    )
+                    text(slot)
+                        .padding(.vertical, Self.rowPadding)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(.rect)
             }
-            .contentShape(.rect)
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier(Self.identifier(of: slot))
+            .accessibilityHint("Opens a search for somewhere to put this stop")
+
+            if let onReorder {
+                Image(systemName: "line.3.horizontal")
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(.rect)
+                    .gesture(reorderGesture(onDrop: onReorder))
+                    .accessibilityIdentifier("trail-draft-reorder-\(position + 1)")
+                    .accessibilityLabel("Reorder stop")
+                    .accessibilityValue("Position \(position + 1) of \(slots.count)")
+                    .accessibilityHint("Drag to another stop to change its position")
+                    .accessibilityAdjustableAction { direction in
+                        onReorderAdjustment?(direction)
+                    }
+            }
         }
-        .buttonStyle(.plain)
+        .offset(y: reorderOffset)
+        .zIndex(reorderOffset == 0 ? 0 : 1)
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         .listRowSeparator(.hidden)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier(Self.identifier(of: slot))
-        .accessibilityHint("Opens a search for somewhere to put this stop")
+    }
+
+    private func reorderGesture(onDrop: @escaping (CGPoint) -> Void) -> some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .global)
+            .updating($reorderOffset) { value, offset, _ in
+                offset = value.translation.height
+            }
+            .onEnded { value in
+                onDrop(value.location)
+            }
     }
 
     static func role(of slot: TrailStopSlot, in draft: TrailDraft) -> TrailStopRole {

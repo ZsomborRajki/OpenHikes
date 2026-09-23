@@ -22,6 +22,11 @@ extension TrailMakerUITests {
         let app = launchApp()
         openTrailMaker(in: app)
         let hiking = travelMode("Hiking", in: app)
+        XCTAssertEqual(
+            app.segmentedControls["trail-draft-mode"].buttons.element(boundBy: 0).label,
+            "Hiking",
+            "Hiking should be the first travel mode"
+        )
         XCTAssertTrue(hiking.isSelected)
         let map = element("trail-map", in: app)
         drawTrailPoints(Self.travelModePoints, on: map, in: app)

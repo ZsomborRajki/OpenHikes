@@ -7,7 +7,7 @@ nonisolated enum TrailTravelMode: String, CaseIterable, Codable, Sendable {
     case hiking = "hiking"
     case walking = "walking"
 
-    static let allCases: [Self] = [.walking, .hiking, .cycling, .driving]
+    static let allCases: [Self] = [.hiking, .walking, .cycling, .driving]
 
     var label: String {
         switch self {

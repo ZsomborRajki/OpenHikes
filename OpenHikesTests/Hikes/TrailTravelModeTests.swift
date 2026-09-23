@@ -11,6 +11,11 @@ struct TrailTravelModeTests {
         maker.appendWaypoint(at: CLLocationCoordinate2D(latitude: 47.51, longitude: 19.05))
     }
 
+    @Test("Hiking is the first travel mode")
+    func displayOrder() {
+        #expect(Array(TrailTravelMode.allCases.prefix(2)) == [.hiking, .walking])
+    }
+
     @Test("a cancelled provider cannot overwrite a newer mode's answer")
     func lateAnswer() async throws {
         let hiking = StubTrailLegRouter(answering: .snapped, holding: true)

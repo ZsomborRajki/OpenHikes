@@ -16,16 +16,15 @@
 //
 //  It opens with two empty fields, *start* and *destination*, and a start, its
 //  numbered stops and a destination joined by a dotted line once they are
-//  filled, with a grabber on every row and *Add Stop* underneath — see
-//  ``TrailStopRowView`` and ``TrailAddStopRow``. Three things follow from that
-//  and each is load-bearing rather than styling.
+//  filled, with *Add Stop* underneath — see ``TrailStopRowView`` and
+//  ``TrailAddStopRow``. Three things follow from that and each is load-bearing
+//  rather than styling.
 //
-//  **The list is in edit mode permanently**, which is what keeps the grabbers
-//  on screen, and which is only possible because a `Button` row still answers a
-//  tap while it is — the finding the hikes list did *not* make, since what it
-//  found was about a `NavigationLink`. `TrailMakerUITests` presses one, because
-//  nothing below a simulator can. What edit mode does take away is the swipe:
-//  a stop is removed with the red circle on the leading edge now.
+//  **The list rests outside edit mode.** That removes the leading delete
+//  circles and gives filled stops the platform's trailing swipe action. A
+//  filled row also has a trailing handle at all times: drag it between rows,
+//  or onto *Add Stop* to move it to the end. There is no Edit/Done mode to
+//  enter first.
 //
 //  **A row is a field.** Tapping one opens ``TrailStopSearchSheet`` on it, and
 //  the place picked there fills that row and takes the camera to it. Every
@@ -41,18 +40,27 @@
 //  ``TrailDraft`` directly, because the controller is the one that also writes
 //  the draft down — see its header.
 //
-//  No `@Environment(\.dismiss)` here, and none in the toolbar either. Both
-//  ways out are callbacks the sheet supplies, because what has to happen is a
-//  change to the sheet's navigation stack and the selection beside it, which
-//  is ``MapSheet``'s to make — the same arrangement ``RecordingView`` takes
-//  its `onSaved` and `onDiscarded` in. See ``DismissButton`` for what
-//  declaring the environment value here would have cost.
+//  No `@Environment(\.dismiss)` here, and none in the toolbar either. The
+//  native back button changes the sheet's navigation path directly; the
+//  explicit close and save actions are callbacks the sheet supplies because
+//  they also change state beside that path. This is the same arrangement
+//  ``RecordingView`` takes for `onSaved` and `onDiscarded`. See
+//  ``DismissButton`` for what declaring the environment value here would
+//  have cost.
 //
 
 import MapKit
 import OpenHikesShared
 import SwiftData
 import SwiftUI
+
+/// The last known screen frame of each filled route row.
+///
+/// A stable reference rather than value state so layout measurements do not
+/// rebuild the list they measure.
+private final class TrailStopDragSession {
+    var frames: [UUID: CGRect] = [:]
+}
 
 struct TrailDraftView: View {
     let maker: TrailDraftController
@@ -93,6 +101,8 @@ struct TrailDraftView: View {
     /// The stop search, held here rather than in the sheet that runs it — see
     /// ``TrailStopSearchRun``.
     @State private var search = TrailStopSearchRun()
+    /// Geometry shared by the reorder handles and their drop calculation.
+    @State private var stopDrag = TrailStopDragSession()
     /// Whether the search sheet is up.
     ///
     /// A flag beside the run above rather than an `item:` presentation off
@@ -123,18 +133,6 @@ struct TrailDraftView: View {
                 TrailDraftSnapToggle(maker: maker)
             }
         }
-        // **Always on, and that is the redesign rather than an oversight.**
-        // A `List` shows its reorder grabbers and offers its drag only while
-        // edit mode is `.active`, and this screen's rows are now Apple Maps'
-        // directions rows — a start, its stops and its destination, each with a
-        // handle, rearrangeable at any moment without first asking to be. A
-        // mode the hiker had to enter was what Phase 6 had; it was reached from
-        // a menu and from a long press, and both were things to be discovered.
-        //
-        // A constant rather than a `@State` binding, because nothing turns it
-        // off: there is no Done, no *Reorder Points* entry, and no state to
-        // keep.
-        .environment(\.editMode, .constant(.active))
         // The mode bar sits right under the title, as it does in Apple Maps'
         // directions card. A grouped list's own top margin left a blank row's
         // height above it — a row the medium detent, which is where the map
@@ -167,13 +165,10 @@ struct TrailDraftView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        // **One way out**, as Apple Maps' directions card has one ✕. The
-        // system's back button beside it left the drawing where it was, while
-        // the button next to it threw it away — two exits a thumb apart that
-        // did opposite things. Hiding it also takes the edge swipe, which was
-        // the same back. Keeping a drawing for later is now a choice the ✕
-        // offers — see ``close()``.
-        .navigationBarBackButtonHidden(true)
+        // The system back button stays on the leading edge. It pops this
+        // screen immediately and leaves the persisted draft untouched, so it
+        // asks no question. The explicit ✕ on the trailing edge is where a
+        // hiker can choose to discard instead — see ``close()``.
         .toolbar {
             // Save and close share one glass pill on the trailing edge, the ✕
             // outermost, where Apple Maps puts its own.
@@ -198,8 +193,8 @@ struct TrailDraftView: View {
                 maker.discard()
                 onClose()
             }
-            // What the back button used to be: the drawing stays on disk and
-            // comes back the next time the maker opens.
+            // The explicit keep choice mirrors Back: the drawing stays on
+            // disk and comes back the next time the maker opens.
             Button("Keep for Later", action: onClose)
             Button("Keep Drawing", role: .cancel) { /* stays */ }
         } message: {
@@ -265,29 +260,19 @@ struct TrailDraftView: View {
             // why the only thing read here is ``TrailDraft/slots``, which
             // changes when a row comes or goes and at no other time.
             let slots = draft.slots
-            let canReorder = draft.canBeSaved
             ForEach(Array(slots.enumerated()), id: \.element.id) { position, slot in
-                TrailStopRowView(draft: draft, position: position) {
-                    searchForStop(target(for: slot))
+                if case .point(_, let id) = slot {
+                    filledStopRow(slot, id: id, position: position)
+                } else {
+                    TrailStopRowView(
+                        draft: draft,
+                        position: position,
+                        onReorder: nil,
+                        onReorderAdjustment: nil
+                    ) {
+                        searchForStop(target(for: slot))
+                    }
                 }
-                // An open field has no place in the order and nothing to
-                // delete, and a lone stop has nothing to be reordered against.
-                .moveDisabled(!canReorder)
-                .deleteDisabled(slot.waypointIndex == nil)
-            }
-            // The two gestures a list already has a meaning for, and both
-            // of them go through the controller — the drawing has to be
-            // written down and the legs either side of what moved have to
-            // be asked about again. Offsets are rows; with an open field
-            // among them they are not waypoint indices, so deletes are
-            // translated, and moves only happen when there is none.
-            .onMove { offsets, destination in
-                HapticMoment.rowMoved.play()
-                maker.reorderWaypoints(fromOffsets: offsets, toOffset: destination)
-            }
-            .onDelete { offsets in
-                let waypoints = IndexSet(offsets.compactMap { slots[$0].waypointIndex })
-                maker.removeWaypoints(atOffsets: waypoints)
             }
             if draft.canBeSaved {
                 TrailAddStopRow { searchForStop(.newStop) }
@@ -300,12 +285,97 @@ struct TrailDraftView: View {
         }
     }
 
+    /// A tappable search field with its two always-available editing gestures:
+    /// trailing-edge swipe to delete, and a drag from its reorder handle.
+    private func filledStopRow(_ slot: TrailStopSlot, id: UUID, position: Int) -> some View {
+        TrailStopRowView(
+            draft: draft,
+            position: position,
+            onReorder: { reorderWaypoint(id, droppedAt: $0) },
+            onReorderAdjustment: { adjustWaypoint(id, direction: $0) },
+            onSearch: { searchForStop(target(for: slot)) }
+        )
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .global)
+        } action: { frame in
+            stopDrag.frames[id] = frame
+        }
+        .swipeActions(edge: .trailing) {
+            Button("Delete", systemImage: "trash", role: .destructive) {
+                maker.removeStop(id: id)
+            }
+        }
+    }
+
     /// What a row's search fills: the stop it already holds, or its open field.
     private func target(for slot: TrailStopSlot) -> TrailStopSearchTarget {
         switch slot {
         case .open(let role): .open(role)
         case let .point(index, id): .existing(id: id, role: draft.role(ofWaypointAt: index))
         }
+    }
+
+    /// Resolves a screen position to the gap the handle was dropped into.
+    private func reorderWaypoint(_ sourceID: UUID, droppedAt location: CGPoint) {
+        let targetID = draft.waypoints
+            .filter { $0.id != sourceID }
+            .compactMap { waypoint in
+                stopDrag.frames[waypoint.id].map { (id: waypoint.id, frame: $0) }
+            }
+            .sorted { $0.frame.minY < $1.frame.minY }
+            .first { location.y < $0.frame.midY }?
+            .id
+        reorderWaypoint(sourceID, before: targetID)
+    }
+
+    /// VoiceOver's adjustable action moves through the same ordering one row
+    /// at a time: decrement is earlier, increment is later.
+    private func adjustWaypoint(_ sourceID: UUID, direction: AccessibilityAdjustmentDirection) {
+        let waypoints = draft.waypoints
+        guard let sourceIndex = waypoints.firstIndex(where: { $0.id == sourceID }) else { return }
+
+        switch direction {
+        case .decrement:
+            guard sourceIndex > waypoints.startIndex else { return }
+            reorderWaypoint(sourceID, before: waypoints[sourceIndex - 1].id)
+        case .increment:
+            guard sourceIndex < waypoints.index(before: waypoints.endIndex) else { return }
+            let afterNextIndex = sourceIndex + 2
+            let targetID = waypoints.indices.contains(afterNextIndex) ? waypoints[afterNextIndex].id : nil
+            reorderWaypoint(sourceID, before: targetID)
+        @unknown default:
+            return
+        }
+    }
+
+    /// Moves the dragged stop immediately before `targetID`, or to the end
+    /// when the handle is dropped below every filled row.
+    private func reorderWaypoint(_ sourceID: UUID, before targetID: UUID?) {
+        guard
+            let sourceIndex = draft.waypoints.firstIndex(where: { $0.id == sourceID })
+        else { return }
+
+        let destinationIndex: Int
+        if let targetID {
+            guard let index = draft.waypoints.firstIndex(where: { $0.id == targetID }) else {
+                return
+            }
+            destinationIndex = index
+        } else {
+            destinationIndex = draft.waypoints.endIndex
+        }
+
+        // SwiftUI's move offset names the insertion point before the source
+        // is removed. Both of these shapes therefore leave the row in place.
+        guard sourceIndex != destinationIndex, sourceIndex + 1 != destinationIndex else {
+            return
+        }
+
+        HapticMoment.rowMoved.play()
+        maker.reorderWaypoints(
+            fromOffsets: IndexSet(integer: sourceIndex),
+            toOffset: destinationIndex
+        )
     }
 
     private var showingRefusal: Binding<Bool> {

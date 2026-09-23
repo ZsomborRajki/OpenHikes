@@ -120,9 +120,8 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         awaitHikeRow(titled: Self.trailName, in: app)
     }
 
-    /// The ✕ is the one way out, so it asks what becomes of the drawing, and
-    /// *Discard Trail* throws it away. The question is what makes the button
-    /// safe to put next to Save.
+    /// The ✕ is the explicit destructive way out, so it asks what becomes
+    /// of the drawing, and *Discard Trail* throws it away.
     @MainActor
     func testClosingCanDiscardTheDrawing() {
         let app = launchApp()
@@ -144,25 +143,25 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         )
     }
 
-    /// The other answer, which is what the system's back button used to be:
-    /// the drawing stays, and the next visit picks it up where it was left.
+    /// Back is the quiet way out: it keeps the drawing without asking, and the
+    /// next visit picks it up where it was left.
     @MainActor
-    func testClosingCanKeepTheDrawingForLater() {
+    func testBackKeepsTheDrawingForLaterWithoutConfirmation() {
         let app = launchApp()
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
 
         openTrailMaker(in: app)
         drawTrailPoints(Array(Self.drawnPoints.prefix(2)), on: map, in: app)
-        // The bar leads with Save: a back button would come before it, and the
-        // ✕ is meant to be the one way out.
-        XCTAssertEqual(
-            app.navigationBars.buttons.element(boundBy: 0).identifier,
-            "trail-draft-save",
-            "the maker should offer no back button beside the ✕"
+        popScreen(in: app)
+        XCTAssertFalse(
+            app.buttons["Discard Trail"].exists,
+            "back should keep the drawing without opening the close dialog"
         )
-
-        closeTrailMaker(choosing: "Keep for Later", in: app)
+        XCTAssertTrue(
+            waitUntil { element("map-sheet", in: app).exists },
+            "back should return immediately to the map"
+        )
 
         openTrailMaker(in: app)
         XCTAssertTrue(
@@ -342,19 +341,15 @@ nonisolated final class TrailMakerUITests: XCTestCase {
 ///
 /// Every operation's arithmetic is asserted next door, in
 /// `TrailDraftEditingTests` for what each does to the list, and none of that
-/// says whether a hiker can *get* to any of it. A delete circle, an edit-mode
+/// says whether a hiker can *get* to any of it. A swipe action, a direct
 /// drag and a press that lands on a line are three things only a real
 /// simulator does, and the first two were wrong the first time on the hikes
 /// list. This is where they are pressed.
 extension TrailMakerUITests {
     /// Taking a stop out.
     ///
-    /// **Through the red circle rather than a swipe**, and that is the cost of
-    /// the rows carrying their grabbers permanently: a `List` in edit mode
-    /// offers its delete on the leading edge and does not answer a swipe at
-    /// all. The same pairing Apple Maps' own directions rows have — a handle
-    /// trailing, a minus leading — and the swipe that used to do this is gone
-    /// with the mode it belonged to.
+    /// Through the platform's trailing swipe action. The list rests outside
+    /// edit mode, so no delete circle occupies the leading edge.
     @MainActor
     func testRemovingAStop() {
         let app = launchApp()
@@ -365,16 +360,12 @@ extension TrailMakerUITests {
         drawTrailPoints(Self.drawnPoints, on: map, in: app)
 
         let third = element("trail-draft-point-3", in: app)
-        // The circle sits inside the row's leading edge, before the route's own
-        // dot. A coordinate rather than a query, because it is the `List`'s own
-        // view and carries no identifier this app could give it.
-        element("trail-draft-point-2", in: app)
-            .coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: 0.5))
-            .tap()
+        XCTAssertFalse(app.buttons["Delete"].exists, "no leading delete control should be visible")
+        element("trail-draft-point-2", in: app).swipeLeft()
         let delete = app.buttons["Delete"]
         XCTAssertTrue(
             delete.waitForExistence(timeout: UITestTimeout.existence),
-            "the delete circle on a stop should offer to remove it"
+            "swiping a stop should reveal the standard delete action"
         )
         delete.tap()
         XCTAssertTrue(
@@ -427,13 +418,7 @@ extension TrailMakerUITests {
         )
     }
 
-    /// Reordering, which no longer has to be asked for.
-    ///
-    /// **The whole point of the test is that nothing precedes the drag.** Phase
-    /// 6 reached this through a context menu on a row and an edit mode with a
-    /// Done control; the maker's list is Apple Maps' directions list now and is
-    /// in edit mode from the moment it appears, so the grabber is on every row
-    /// and the first gesture is the move itself.
+    /// Reordering directly, without an Edit/Done mode to enter first.
     ///
     /// The drag still has to be slow and held, because a reorder commits on the
     /// *drop*. That was paid for once on `HikeOrderUITests` and is not
@@ -448,14 +433,15 @@ extension TrailMakerUITests {
         drawTrailPoints(Self.drawnPoints, on: map, in: app)
         let length = element("trail-draft-length", in: app).label
 
-        let third = element("trail-draft-point-3", in: app)
         let second = element("trail-draft-point-2", in: app)
+        XCTAssertFalse(app.navigationBars.buttons["Edit"].exists)
 
-        // The trailing edge is where the grabber is; slow, and held at the
-        // end, because the move is committed on the drop.
-        third.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).press(
+        // Slow and held at both ends, because the row's drag starts after the
+        // press and its move is committed on the drop.
+        element("trail-draft-reorder-3", in: app)
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
             forDuration: 0.8,
-            thenDragTo: second.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.0)),
+            thenDragTo: second.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)),
             withVelocity: .slow,
             thenHoldForDuration: 0.8
         )
@@ -468,12 +454,13 @@ extension TrailMakerUITests {
             "reordering the points should change the trail they describe"
         )
 
-        // And the way out was never taken away, because there is no mode to
-        // be in — the Done control that used to replace it is gone.
+        // The explicit close and save controls remain available because there
+        // is no editing mode to take over the toolbar.
         XCTAssertTrue(
             element("trail-draft-close", in: app).exists,
             "the ✕ stays put while rows are being dragged"
         )
+        XCTAssertFalse(app.navigationBars.buttons["Done"].exists)
         XCTAssertTrue(
             element("trail-draft-save", in: app).isEnabled,
             "a reordered trail is still a trail"
@@ -486,12 +473,10 @@ extension TrailMakerUITests {
 /// The Apple Maps arrangement: a start, its stops and its destination, each row
 /// a field that opens a search, with *Add Stop* pinned under them.
 ///
-/// Only a simulator can answer the two questions here. **Does a row still
-/// answer a tap while the list is permanently in edit mode** — which is the one
-/// thing the redesign rests on, and which the hikes list's own finding says is
-/// false for a `NavigationLink` — and does a place picked in the sheet land in
+/// Only a simulator can answer whether a place picked in the sheet lands in
 /// the row the sheet was opened from. `TrailDraftTests` covers what the draft
-/// does with a name once it has one; neither of these is reachable from there.
+/// does with a name once it has one; this presentation path is not reachable
+/// from there.
 extension TrailMakerUITests {
     /// The two empty fields each open the search on themselves, and *Add Stop*
     /// waits until both are filled.
@@ -546,14 +531,8 @@ extension TrailMakerUITests {
         element("trail-stop-search-cancel", in: app).tap()
     }
 
-    /// A stop row answers a tap, with the list in edit mode the whole time.
-    ///
-    /// **This is the assertion the redesign stands on.** A `List` gives a row's
-    /// tap to the list once edit mode is on — that is what the hikes list found
-    /// for its `NavigationLink` rows, and it is why reordering used to be a mode
-    /// with a way out. These rows are `Button`s and are tapped while the
-    /// grabbers are showing; if that ever stops working, this goes red here
-    /// rather than in a hiker's hands.
+    /// A stop remains a tappable search field while it also carries the direct
+    /// drag and trailing swipe gestures.
     @MainActor
     func testTappingAStopOpensTheSearchOnThatRow() {
         let app = launchApp()
@@ -571,7 +550,7 @@ extension TrailMakerUITests {
             element("trail-stop-search-field", in: app).waitForExistence(
                 timeout: UITestTimeout.navigation
             ),
-            "a stop row should open the search even with the list in edit mode"
+            "a stop row should open the search alongside its editing gestures"
         )
         XCTAssertTrue(
             app.navigationBars["Stop 1"].exists,
