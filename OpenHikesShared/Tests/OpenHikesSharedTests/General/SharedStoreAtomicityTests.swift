@@ -58,8 +58,8 @@ struct SharedStoreAtomicityTests {
     @Test("replacing a basemap manifest swaps the file rather than rewriting it in place")
     func basemapSetSaveReplacesTheFile() throws {
         try withSharedStoreSandbox { root in
-            let url = root.appendingPathComponent(SharedStoreSandbox.basemapSetFileName)
             let hike = UUID()
+            let url = try SharedStoreSandbox.basemapSetURL(in: root, for: hike)
             SharedStore.saveBasemapSet(
                 SharedStoreSandbox.basemapSet(hikeID: hike, fileNames: ["a.png", "b.png", "c.png"])
             )
@@ -133,22 +133,31 @@ struct SharedStoreAtomicityTests {
         }
     }
 
-    /// `pruneBasemapImages(keeping:)` sweeps the directory by exclusion, so a
-    /// render writing its own files while another prune runs would lose them.
-    /// `removeBasemapImages(named:)` exists for that case and names what it
-    /// deletes; the two are one line apart and easy to reach for wrongly.
-    @Test("pruning keeps exactly what it was told to keep")
+    /// `pruneBasemapImages(supersededBy:)` sweeps one trail's images by
+    /// exclusion, so a render writing that trail's files while the prune runs
+    /// would lose them. `removeBasemapImages(named:)` exists for that case and
+    /// names what it deletes; the two are one line apart and easy to reach for
+    /// wrongly.
+    @Test("pruning a re-render keeps exactly the set's images, and only its trail's")
     func pruningKeepsNamedImages() throws {
         try withSharedStoreSandbox { _ in
-            for name in ["keep.png", "drop-a.png", "drop-b.png"] {
+            let hike = UUID().uuidString
+            let other = UUID().uuidString
+            let names = ["\(hike)-keep.png", "\(hike)-drop-a.png", "\(hike)-drop-b.png", "\(other)-theirs.png"]
+            for name in names {
                 SharedStore.writeBasemapImage(Data("x".utf8), named: name)
             }
+            let set = SharedStoreSandbox.basemapSet(
+                hikeID: try #require(UUID(uuidString: hike)),
+                fileNames: ["\(hike)-keep.png"]
+            )
 
-            SharedStore.pruneBasemapImages(keeping: ["keep.png"])
+            SharedStore.pruneBasemapImages(supersededBy: set)
 
-            #expect(SharedStore.basemapImageData(named: "keep.png") != nil)
-            #expect(SharedStore.basemapImageData(named: "drop-a.png") == nil)
-            #expect(SharedStore.basemapImageData(named: "drop-b.png") == nil)
+            #expect(SharedStore.basemapImageData(named: "\(hike)-keep.png") != nil)
+            #expect(SharedStore.basemapImageData(named: "\(hike)-drop-a.png") == nil)
+            #expect(SharedStore.basemapImageData(named: "\(hike)-drop-b.png") == nil)
+            #expect(SharedStore.basemapImageData(named: "\(other)-theirs.png") != nil)
         }
     }
 

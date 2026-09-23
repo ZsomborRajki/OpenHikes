@@ -689,9 +689,10 @@ extension TrailBasemapRendererTests {
     /// for a different trail — the realistic case, and the only one where the
     /// prune step has anything to do.
     ///
-    /// Superseding the previous trail is correct: the container holds one
-    /// trail's basemaps at a time, and `pruneBasemapImages(keeping:)` exists
-    /// to make sure the one it holds is the current one. What is asserted is
+    /// Superseding the previous trail is correct when nothing is pinned to
+    /// it: the selection's pass prunes every set but its own and the pinned
+    /// trails', which is what keeps the container from holding every trail
+    /// the hiker has ever looked at. What is asserted is
     /// that the handover is all or nothing — a manifest that survived keeps
     /// its images, and one that was replaced takes its images with it.
     @Test(

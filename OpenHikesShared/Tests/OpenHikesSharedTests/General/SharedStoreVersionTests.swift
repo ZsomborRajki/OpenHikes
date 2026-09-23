@@ -218,7 +218,7 @@ struct SharedStoreVersionTests {
             object["schemaVersion"] = 99
             try SharedStoreSandbox.write(
                 object,
-                to: root.appendingPathComponent(SharedStoreSandbox.basemapSetFileName)
+                to: SharedStoreSandbox.basemapSetURL(in: root, for: set.hikeID)
             )
 
             let (loaded, diagnostics) = withSharedStoreDiagnostics { SharedStore.loadBasemapSet(for: set.hikeID) }
@@ -239,14 +239,14 @@ struct SharedStoreVersionTests {
             object["trailID"] = object.removeValue(forKey: "hikeID")
             try SharedStoreSandbox.write(
                 object,
-                to: root.appendingPathComponent(SharedStoreSandbox.basemapSetFileName)
+                to: SharedStoreSandbox.basemapSetURL(in: root, for: set.hikeID)
             )
 
             let (loaded, diagnostics) = withSharedStoreDiagnostics { SharedStore.loadBasemapSet(for: set.hikeID) }
             #expect(loaded == nil)
             #expect(diagnostics == [
                 .decodeFailed(
-                    file: SharedStoreSandbox.basemapSetFileName,
+                    file: SharedStoreSandbox.basemapSetFileName(for: set.hikeID),
                     detail: "missing key 'hikeID' at root"
                 ),
             ])
