@@ -136,7 +136,7 @@ private extension UIFont {
 
 extension MapView.Coordinator {
     private static let alternativeLineWidth: CGFloat = 6
-    private static let alternativeLineAlpha: CGFloat = 0.4
+    static let alternativeLineAlpha: CGFloat = 0.4
 
     /// Draws every leg's alternatives, and the bubbles: one for the route and
     /// one for each alternative — see the file header.
@@ -221,13 +221,13 @@ extension MapView.Coordinator {
         return trailDraftRouteChoices.choices[ObjectIdentifier(lines[hit])]
     }
 
-    func trailDraftAlternativeRenderer(for polyline: MKPolyline) -> MKPolylineRenderer? {
+    func trailDraftAlternativeRenderer(for polyline: MKPolyline, on mapView: MKMapView) -> MKPolylineRenderer? {
         guard trailDraftRouteChoices.choices[ObjectIdentifier(polyline)] != nil else { return nil }
         let renderer = MKPolylineRenderer(polyline: polyline)
         #if os(macOS)
         renderer.strokeColor = NSColor(Color.accentColor).withAlphaComponent(Self.alternativeLineAlpha)
         #else
-        renderer.strokeColor = UIColor(Color.accentColor).withAlphaComponent(Self.alternativeLineAlpha)
+        renderer.strokeColor = Self.trailDraftTint(on: mapView).withAlphaComponent(Self.alternativeLineAlpha)
         #endif
         renderer.lineWidth = Self.alternativeLineWidth
         renderer.lineJoin = .round

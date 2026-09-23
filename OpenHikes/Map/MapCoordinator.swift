@@ -906,10 +906,10 @@ extension MapView.Coordinator {
             }
             // And the trail being drawn, which is not a hike at all yet, and
             // the routes it could take instead.
-            if let renderer = trailDraftRenderer(for: polyline) {
+            if let renderer = trailDraftRenderer(for: polyline, on: mapView) {
                 return renderer
             }
-            if let renderer = trailDraftAlternativeRenderer(for: polyline) {
+            if let renderer = trailDraftAlternativeRenderer(for: polyline, on: mapView) {
                 return renderer
             }
             if recordingReviewOverlay === polyline {
