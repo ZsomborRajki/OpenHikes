@@ -130,6 +130,8 @@ extension MapView.Coordinator {
             _ = controller.finder.isSearching
             _ = controller.finder.searchableArea
             _ = controller.finder.notice
+            // Every switch off disables the pill — see `canSearch`.
+            _ = controller.finder.filter.hidden
         } onChange: { coordinator, model in
             coordinator.trackTrailPointSearch(model, animated: true)
         }

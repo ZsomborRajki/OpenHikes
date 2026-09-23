@@ -74,6 +74,7 @@
 //  tags and one coordinate rather than as its outline.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 
@@ -173,6 +174,14 @@ nonisolated enum TrailPointQuery {
         Kind("amenity", "parking", .parking),
     ]
 
+    /// The symbols a search can find, in ``kinds`` order: what the maker's
+    /// switches are drawn over, one row each.
+    ///
+    /// Derived rather than written out, so a kind added above is a switch the
+    /// moment it is asked for — and a symbol no kind maps to (*junction*,
+    /// *caution*) is never offered as a switch that could change nothing.
+    static let searchableSymbols = Array(kinds.map(\.symbol).uniqued())
+
     /// The boxes a search of `area` asks about: one, two where the circle
     /// crosses the antimeridian, or none at all.
     ///
@@ -198,10 +207,19 @@ nonisolated enum TrailPointQuery {
     /// antimeridian search be a single request rather than two. `nil` for no
     /// boxes at all — a caller with nothing to ask about should not be making
     /// a request.
-    static func query(in boxes: [CuratedTrailQuery.BoundingBox]) -> String? {
-        guard !boxes.isEmpty else { return nil }
+    ///
+    /// Only the kinds drawn as one of `symbols` are asked for, which is what a
+    /// switch turned off in the maker means: the tag is not in the request, so
+    /// Overpass never sends it. `nil` when that leaves nothing to ask for, for
+    /// the reason it is `nil` for no boxes.
+    static func query(
+        in boxes: [CuratedTrailQuery.BoundingBox],
+        symbols: Set<TrailPlaceSymbol> = Set(TrailPlaceSymbol.allCases)
+    ) -> String? {
+        let asked = kinds.filter { symbols.contains($0.symbol) }
+        guard !boxes.isEmpty, !asked.isEmpty else { return nil }
         let filters = boxes.flatMap { box in
-            kinds.map { kind in
+            asked.map { kind in
                 let element = kind.includesAreas ? "nwr" : "node"
                 return "  \(element)[\"\(kind.key)\"=\"\(kind.value)\"](\(box.overpassLiteral));"
             }

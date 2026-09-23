@@ -387,6 +387,6 @@ struct TrailDraftElevationTests {
     private struct OnePlace: TrailPointSourcing {
         let place: TrailPlace
 
-        func places(near _: CommunitySearchArea) -> [TrailPlace] { [place] }
+        func places(near _: CommunitySearchArea, showing _: Set<TrailPlaceSymbol>) -> [TrailPlace] { [place] }
     }
 }

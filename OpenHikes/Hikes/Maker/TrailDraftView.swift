@@ -132,6 +132,12 @@ struct TrailDraftView: View {
             if maker.canSnapToPaths {
                 TrailDraftSnapToggle(maker: maker)
             }
+
+            // Withheld with the pill it explains — a launch with no place
+            // source, which is a preview or a UI-test run.
+            if maker.finder.isAvailable {
+                TrailPlaceFilterSection(maker: maker)
+            }
         }
         // The mode bar sits right under the title, as it does in Apple Maps'
         // directions card. A grouped list's own top margin left a blank row's

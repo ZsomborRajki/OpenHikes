@@ -126,14 +126,21 @@ final class TrailPointFinder {
     /// network.
     var isAvailable: Bool { source != nil }
 
-    var canSearch: Bool { searchableArea != nil && !isSearching }
+    /// Whether the pill can be tapped. False with every switch off as well as
+    /// while the map is too wide or a search is out: there is nothing left to
+    /// ask for.
+    var canSearch: Bool { searchableArea != nil && !isSearching && !filter.shown.isEmpty }
+
+    /// Which kinds of place a search asks for — the maker's switches.
+    let filter: TrailPlaceFilter
 
     @ObservationIgnored private let source: (any TrailPointSourcing)?
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var deliver: (([TrailPlace]) -> Void)?
 
-    init(source: (any TrailPointSourcing)? = nil) {
+    init(source: (any TrailPointSourcing)? = nil, filter: TrailPlaceFilter = TrailPlaceFilter(defaults: nil)) {
         self.source = source
+        self.filter = filter
     }
 
     nonisolated deinit { /* intentionally empty */ }
@@ -160,11 +167,18 @@ final class TrailPointFinder {
     /// Asks what is in the visible area, ranked against `route` and leaving out
     /// anything already `placed`.
     func search(along route: [RouteCoordinate], avoiding placed: [TrailPlace]) {
-        guard let source, let area = searchableArea, !isSearching else { return }
+        guard let source, let area = searchableArea, canSearch else { return }
+        let symbols = filter.shown
         isSearching = true
         task?.cancel()
         task = Task { [weak self] in
-            let outcome = await Self.answer(from: source, near: area, along: route, avoiding: placed)
+            let outcome = await Self.answer(
+                from: source,
+                near: area,
+                showing: symbols,
+                along: route,
+                avoiding: placed
+            )
             guard let self, !Task.isCancelled else { return }
             receive(outcome)
         }
@@ -192,17 +206,24 @@ final class TrailPointFinder {
     private static func answer(
         from source: any TrailPointSourcing,
         near area: CommunitySearchArea,
+        showing symbols: Set<TrailPlaceSymbol>,
         along route: [RouteCoordinate],
         avoiding placed: [TrailPlace]
     ) async -> Outcome {
+        // Filtered here as well as in the request, before the ranking spends
+        // any of its forty on a kind that is switched off: the store answers
+        // with whatever it kept, and one element can carry two kinds' tags — a
+        // summit asked for as a viewpoint still comes back a summit.
+        let wanted = { (place: TrailPlace) in place.symbol.map(symbols.contains) ?? true }
         do {
-            let found = try await source.places(near: area)
+            let found = try await source.places(near: area, showing: symbols).filter(wanted)
             return .found(
                 await TrailPointRanking.offered(from: found, along: route, in: area, excluding: placed)
             )
         } catch {
             guard let outage = CuratedTrailOutage(error) else { return .cancelled }
             let stored = await source.cachedPlaces(near: area, limit: TrailPointQuery.maximumStoredResults)
+                .filter(wanted)
             return .refused(
                 outage,
                 standingIn: await TrailPointRanking.offered(
@@ -215,12 +236,16 @@ final class TrailPointFinder {
         }
     }
 
+    /// Hands over what landed, less any kind switched off while it was out —
+    /// a switch turned off takes its pins off the map, and a search that
+    /// landed a moment later must not put them back.
     private func receive(_ outcome: Outcome) {
         isSearching = false
         switch outcome {
         case .cancelled:
             return
-        case .found(let places):
+        case .found(let found):
+            let places = found.filter(filter.admits)
             notice = places.isEmpty ? .nothingHere : nil
             deliver?(places)
         case let .refused(outage, standingIn):
@@ -232,7 +257,7 @@ final class TrailPointFinder {
                 """
             )
             notice = .outage(outage)
-            deliver?(standingIn)
+            deliver?(standingIn.filter(filter.admits))
         }
     }
 }
