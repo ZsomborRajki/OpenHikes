@@ -58,8 +58,7 @@ extension TrailWalkSessionTests {
         session.recordForegroundMatch(hike: other, profile: profile, distance: profile.distances[0])
 
         #expect(try walks(of: walked).isEmpty, "a walk with no hike left to hang off keeps no row")
-        #expect(session.walkedHikeID == nil)
-        #expect(session.offer == .asking(hikeID: other.id), "and the trail that is still here can be walked")
+        #expect(session.walkedHikeID == other.id, "and the trail that is still here can be walked")
     }
 
     /// The `.resume` branch's own version of what the `.abandon` branch above

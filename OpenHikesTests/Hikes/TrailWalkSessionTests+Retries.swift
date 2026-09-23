@@ -22,36 +22,36 @@ extension TrailWalkSessionTests {
 
         refusing = true
         clock.advance(by: TrailWalkPolicy.persistInterval)
-        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[2])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[2])
         #expect(attempts == baseline + 1)
         clock.advance(by: 1)
         session.recordBackgroundMatch(hikeID: hike.id, distance: profile.distances[2], at: clock.now)
         #expect(attempts == baseline + 2, "the first retry is prompt")
         for _ in 1..<Int(TrailWalkPolicy.persistInterval) {
             clock.advance(by: 1)
-            session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[2])
+            session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[2])
             session.recordBackgroundMatch(hikeID: hike.id, distance: profile.distances[2], at: clock.now)
         }
         #expect(attempts == baseline + 2, "neither feed retries on every fix")
         #expect(hike.walkInProgress == written)
 
         clock.advance(by: 1)
-        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[2])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[2])
         #expect(attempts == baseline + 3, "another attempt is due at the cadence boundary")
         refusing = false
         clock.advance(by: TrailWalkPolicy.persistInterval)
-        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[3])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[3])
         #expect(attempts == baseline + 4)
         #expect(hike.walkInProgress == session.record, "the latest record becomes durable after recovery")
         clock.advance(by: 1)
-        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[3])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[3])
         #expect(attempts == baseline + 4, "a successful write restores the normal cadence")
 
         refusing = true
         clock.advance(by: TrailWalkPolicy.persistInterval)
-        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[3])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[3])
         clock.advance(by: 1)
-        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[3])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[3])
         #expect(attempts == baseline + 6, "a new failure episode gets its own prompt retry")
     }
 
@@ -66,14 +66,14 @@ extension TrailWalkSessionTests {
         })
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
-        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[0])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
         #expect(attempts == 1, "start and match must not spend the retry on the same fix")
         #expect(hike.walkInProgress == nil)
         clock.advance(by: 1)
-        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[1])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[1])
         #expect(attempts == 2)
         clock.advance(by: 1)
-        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[2])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[2])
         #expect(attempts == 2)
 
         refusing = false

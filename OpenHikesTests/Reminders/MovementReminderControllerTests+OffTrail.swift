@@ -210,7 +210,7 @@ extension MovementReminderControllerTests {
     /// about terrain the app cannot see.
     @Test("the off-trail banner offers no button")
     func offersNoButton() {
-        #expect(MovementReminderKind.leftTheTrail.actions.isEmpty)
-        #expect(MovementReminderKind.resumeWalk.actions == [.resume])
+        #expect(MovementReminderKind.leftTheTrail.action == nil)
+        #expect(MovementReminderKind.resumeWalk.action == .resume)
     }
 }

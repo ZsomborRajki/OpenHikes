@@ -25,10 +25,7 @@ Paste-ready:
 > thing in the app that asks for Always access. What it buys is a widget and a
 > Live Activity that keep showing the hiker's progress along the trail they
 > selected while the app is not open — a hiker who locks the phone and keeps
-> walking sees a panel that is still telling the truth. The same feed notices
-> when the hiker reaches that trail and, if nothing is being walked, posts one
-> notification asking whether to start the hike; it starts nothing on its own.
-> With the toggle off,
+> walking sees a panel that is still telling the truth. With the toggle off,
 > the app never requests Always authorization and does nothing in the
 > background for either surface.
 >
@@ -41,8 +38,7 @@ This is the string a hiker reads in the prompt, and it says the same thing:
 
 > OpenHikes uses Always location, only when you turn on Background Trail
 > Tracking in Settings, to keep your Home Screen widget and Live Activity
-> showing your progress along the trail while the app isn't open, and to ask
-> whether to start the hike when you reach it.
+> showing your progress along the trail while the app isn't open.
 
 ### The `location` background mode — recording a hike
 

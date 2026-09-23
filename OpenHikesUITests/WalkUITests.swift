@@ -2,9 +2,9 @@
 //  WalkUITests.swift
 //  OpenHikesUITests
 //
-//  Walking a followed trail: the offer the first matched fix makes, the walk
-//  its Start begins, its Pause / Resume / End controls, the summary an end
-//  produces, and the History segment that lists it afterwards.
+//  Walking a followed trail: the walk that starts on the first matched fix,
+//  its Pause / Resume / End controls, the summary an end produces, and the
+//  History segment that lists it afterwards.
 //
 //  Kept out of CI alongside `RecordingUITests`, and for the same reason:
 //  every test here drives real simulator Core Location at a pace, and a
@@ -17,13 +17,13 @@ import CoreLocation
 import XCTest
 
 nonisolated final class WalkUITests: XCTestCase {
-    /// The first matched fix offers a walk rather than starting one; Start
-    /// begins it, and it can be paused and resumed without ending. Nothing
-    /// is offered before a fix has matched: opening a trail is not walking
+    /// A walk starts the way auto-follow starts, on the first matched fix,
+    /// and can be paused and resumed without ending. The controls exist
+    /// only once there is a walk to control: opening a trail is not walking
     /// it — so the launch starts a kilometre off the trail, where a fix
     /// matches nothing, and steps onto it afterwards.
     @MainActor
-    func testWalkIsOfferedOnAMatchedFixAndStartsOnStart() {
+    func testWalkStartsOnAMatchedFixAndPauses() {
         let app = makeApp(arguments: [
             "--ui-test-expanded-sheet",
             "--ui-test-enable-location",
@@ -37,17 +37,13 @@ nonisolated final class WalkUITests: XCTestCase {
         launch(app)
         openHikeDetail(in: app)
         XCTAssertFalse(
-            element("walk-offer", in: app).exists,
-            "looking at a trail must not offer a walk before a fix matched it"
+            element("walk-controls", in: app).exists,
+            "looking at a trail must not offer walk controls before a fix matched it"
         )
 
         setSimulatedLocation(UITestFixture.trailPoints[1])
-        XCTAssertTrue(element("walk-offer", in: app).waitForExistence(timeout: UITestTimeout.trace))
         let phase = element("walk-phase", in: app)
-        XCTAssertFalse(phase.exists, "a match offers the walk and starts nothing")
-
-        acceptWalkOffer(in: app)
-        XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.navigation))
+        XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.trace))
         expectPhase(phase, contains: "Active")
 
         scrollToTap(app.buttons["Pause Hike"], in: app)
@@ -77,7 +73,6 @@ nonisolated final class WalkUITests: XCTestCase {
 
         launch(app)
         openHikeDetail(in: app)
-        acceptWalkOffer(in: app)
         let phase = element("walk-phase", in: app)
         XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.trace))
         // Four points span 116 m of trail, past the minimum a walk needs to
@@ -158,7 +153,6 @@ nonisolated final class WalkUITests: XCTestCase {
         launch(app)
         openHikeDetail(in: app)
         setSimulatedLocation(UITestFixture.trailPoints[1])
-        acceptWalkOffer(in: app)
         XCTAssertTrue(element("walk-phase", in: app).waitForExistence(timeout: UITestTimeout.trace))
 
         popScreen(in: app)
@@ -193,7 +187,7 @@ nonisolated final class WalkUITests: XCTestCase {
         )
     }
 
-    /// The switch owns the chart and the offer; the walk controls own phase.
+    /// The switch owns the chart and auto-start; the walk controls own phase.
     /// Advancing coverage while the chart stays parked catches a foreground
     /// feed that still returns early when following is off.
     @MainActor
@@ -209,7 +203,6 @@ nonisolated final class WalkUITests: XCTestCase {
         defer { XCUIDevice.shared.location = nil }
         launch(app)
         openHikeDetail(in: app)
-        acceptWalkOffer(in: app)
         let phase = element("walk-phase", in: app)
         XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.trace))
 
@@ -260,8 +253,7 @@ nonisolated final class WalkUITests: XCTestCase {
     }
 
     /// End under the keep threshold leaves the detail on screen. Enabling
-    /// following must rearm the offer there, through the real binding and
-    /// onChange.
+    /// following must rearm there, through the real binding and onChange.
     @MainActor
     func testFollowingOnRearmsAfterEndingAWalk() {
         let app = makeApp(arguments: [
@@ -275,7 +267,6 @@ nonisolated final class WalkUITests: XCTestCase {
         defer { XCUIDevice.shared.location = nil }
         launch(app)
         openHikeDetail(in: app)
-        acceptWalkOffer(in: app)
         let phase = element("walk-phase", in: app)
         XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.trace))
         scrollToTap(app.buttons["End Hike"], in: app)
@@ -287,12 +278,23 @@ nonisolated final class WalkUITests: XCTestCase {
         XCTAssertEqual(follow.value as? String, "0")
         scrollToTap(follow, in: app)
         XCTAssertEqual(follow.value as? String, "1")
-        acceptWalkOffer(in: app)
         XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.trace))
         expectPhase(phase, contains: "Active")
     }
 
     // MARK: - Helpers
+
+    /// `file` and `line` are forwarded, or every phase that never arrived is
+    /// reported against this line rather than the step that was waiting.
+    @MainActor
+    private func expectPhase(
+        _ phase: XCUIElement,
+        contains text: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        expectLabel(phase, contains: text, file: file, line: line)
+    }
 
     /// Confirms the "End this hike?" dialog, found the way `confirmDiscard`
     /// finds its own: the confirming button shares its title with the one
@@ -312,38 +314,5 @@ nonisolated final class WalkUITests: XCTestCase {
         }
         XCTFail("ending a hike should ask before closing its record")
     }
-}
 
-/// The two steps both halves of the walk suite take, outside the class body so
-/// ``WalkUITests+Offer`` can reach them — a test case's own non-test members
-/// have to be private.
-extension WalkUITests {
-    /// Waits for the walk the first matched fix offers, and starts it.
-    @MainActor
-    func acceptWalkOffer(
-        in app: XCUIApplication,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        let start = element("walk-offer-start", in: app)
-        XCTAssertTrue(
-            start.waitForExistence(timeout: UITestTimeout.trace),
-            "a matched fix should offer the walk",
-            file: file,
-            line: line
-        )
-        scrollToTap(start, in: app)
-    }
-
-    /// `file` and `line` are forwarded, or every phase that never arrived is
-    /// reported against this line rather than the step that was waiting.
-    @MainActor
-    func expectPhase(
-        _ phase: XCUIElement,
-        contains text: String,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        expectLabel(phase, contains: text, file: file, line: line)
-    }
 }

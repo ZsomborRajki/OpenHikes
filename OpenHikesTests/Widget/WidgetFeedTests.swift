@@ -239,7 +239,7 @@ final class WidgetFeedTests {
         tracker.hikeSelectionChanged(to: hike)
         await tracker.waitForSelectionPublish()
         for index in 0...2 {
-            session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[index])
+            session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[index])
         }
 
         let match = try #require(profile.nearestPoint(to: profile.coordinates[2]))

@@ -406,15 +406,11 @@ struct OpenHikesView: View {
                 showSheet = !isPanel
             }
             .onOpenURL { url in openInboundURL(url) }
-            // An intent or a notification asked for a hike, from outside the
-            // view tree. Handed to the same router the widget's taps go
-            // through rather than a second way in — see ``HikeOpenRequests``.
-            // `initial:` because a tap on a notification can launch the app,
-            // and the request then lands before this view exists to see it
-            // change; at an ordinary launch, or in a second window, there is
-            // no link left to take and it is a no-op.
-            .onChange(of: appModel.hikeOpenRequests.request, initial: true) { _, _ in
-                guard let url = appModel.hikeOpenRequests.takeLink() else { return }
+            // An intent asked for a hike, from outside the view tree. Handed
+            // to the same router the widget's taps go through rather than a
+            // second way in — see ``HikeOpenRequests``.
+            .onChange(of: appModel.hikeOpenRequests.request) { _, _ in
+                guard let url = appModel.hikeOpenRequests.link else { return }
                 openInboundURL(url)
             }
             // The pill posts a token; flipping the presentation flags is this

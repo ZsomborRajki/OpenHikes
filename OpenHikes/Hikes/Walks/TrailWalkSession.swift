@@ -7,8 +7,7 @@
 //
 //  Following a trail used to answer one question — *where am I on this trail
 //  right now* — and forget the answer. This is what remembers it. A walk
-//  is offered on the first matched fix with Follow This Trail on and begins
-//  when the hiker says Start — see ``WalkOffer`` — then keeps the
+//  begins on the first matched fix with Follow This Trail on, keeps the
 //  union of along-route intervals its consecutive matches spanned, can be
 //  paused and resumed, and ends into a `HikeWalk` row the History segment
 //  lists. It outlives the screen that started it: popping the detail,
@@ -77,9 +76,6 @@ final class TrailWalkSession {
     /// The walk that just ended with a record to show, for the screen that
     /// pushes its summary. Cleared by the next start.
     private(set) var lastEndedWalk: HikeWalk?
-    /// The walk being offered, for the card on its trail's detail. Changes
-    /// when the hiker reaches a trail, answers, or leaves it — never per fix.
-    private(set) var offer: WalkOffer?
 
     // MARK: Fine — changes per matched fix
 
@@ -121,16 +117,6 @@ final class TrailWalkSession {
     /// and by turning Follow This Trail back on, which are the two ways a
     /// hiker says they mean to walk this trail again.
     @ObservationIgnored private var endedHikeID: UUID?
-    /// The hiker's last Ignore — see ``WalkOfferDecline``. Read from and
-    /// written to `defaults` when there is one; a suite with none keeps it in
-    /// memory.
-    @ObservationIgnored private var decline: WalkOfferDecline?
-    /// Where along the offered trail the last match put the hiker, so the
-    /// walk a Start begins covers the ground it was offered on. Without it
-    /// the fix that found them is spent on the question, and a hiker who
-    /// taps Start and stands still has a walk with nothing in it.
-    @ObservationIgnored private var offeredAt: (hikeID: UUID, distance: Double)?
-    @ObservationIgnored private let defaults: UserDefaults?
 
     /// - Parameters:
     ///   - context: where the sidecar column and the finished rows are
@@ -139,8 +125,6 @@ final class TrailWalkSession {
     ///   - tracker: the widget and Lock Screen feed, pinned to the walked
     ///     hike for the life of a walk. Optional so a suite about the state
     ///     machine alone needs no App Group.
-    ///   - defaults: where an Ignore is remembered across a relaunch — see
-    ///     ``SettingsKey/walkOfferDecline``. `nil` keeps it in memory.
     ///   - save: the seam the commit goes through, so a test can refuse one
     ///     and watch what the session does with a walk it could not write.
     ///     The same seam ``HikeDeletion/delete(_:store:save:)`` takes. Last,
@@ -149,7 +133,6 @@ final class TrailWalkSession {
         context: ModelContext,
         tracker: BackgroundTrailTracker? = nil,
         reminders: MovementReminderController? = nil,
-        defaults: UserDefaults? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
         activeRecordingHikeID: @escaping () -> UUID? = { nil },
         save: @escaping (ModelContext) throws -> Void = { try $0.save() }
@@ -157,8 +140,6 @@ final class TrailWalkSession {
         self.context = context
         self.tracker = tracker
         self.reminders = reminders
-        self.defaults = defaults
-        decline = Self.storedDecline(in: defaults)
         self.clock = clock
         commit = save
         self.activeRecordingHikeID = activeRecordingHikeID
@@ -208,9 +189,8 @@ final class TrailWalkSession {
     // MARK: Feeding
 
     /// A fix matched on-route at `distance` along `hike`, from the foreground
-    /// follow loop. Offers a walk if one may be offered, extends the one under
-    /// way, or does nothing for a hike that is not the walked one. It never
-    /// starts one: that is the hiker's Start — see ``WalkOffer``.
+    /// follow loop. Starts a walk if one may start, extends the one under
+    /// way, or does nothing for a hike that is not the walked one.
     ///
     /// - Returns: whether this fix *ended* the walk. A caller that publishes
     ///   the fix afterwards must not: see ``recordMatch(hikeID:distance:at:)``.
@@ -237,15 +217,14 @@ final class TrailWalkSession {
         // outlive its bound because the fix that closed it was taken early.
         endIfAbandoned(at: now)
         if record == nil {
-            offerIfEligible(hike: hike, routeLengthMeters: profile.totalDistanceMeters, distance: distance, at: now)
+            startIfEligible(hike: hike, profile: profile, at: matchedAt)
         }
         return recordMatch(hikeID: hike.id, distance: distance, at: matchedAt)
     }
 
     /// A fix matched on-route by the background feed. Never starts a walk —
     /// selection alone starts nothing, and neither does a significant
-    /// change — but keeps one accruing while the phone is in a pocket. The
-    /// same fix can *offer* one: see ``offerWalk(hikeID:routeLengthMeters:)``.
+    /// change — but keeps one accruing while the phone is in a pocket.
     ///
     /// - Returns: whether this fix ended the walk, as above.
     @discardableResult func recordBackgroundMatch(hikeID: UUID, distance: Double, at timestamp: Date) -> Bool {
@@ -256,19 +235,11 @@ final class TrailWalkSession {
 
     /// An accepted fix that did not match `hikeID`'s route: the hiker is
     /// off the trail. Breaks the walk under way's coverage continuity, and
-    /// rearms the offer for a hike whose walk was ended here — leaving the
+    /// rearms auto-start for a hike whose walk was ended here — leaving the
     /// route is the boundary an End waits for.
-    ///
-    /// - Parameter offRouteMeters: how far off the line the fix fell, when the
-    ///   caller knows. Only a fix past ``WalkOfferPolicy/leftTrailMeters``
-    ///   withdraws an offer or forgets an Ignore; a nearer one is as likely to
-    ///   be the trail's own switchback as a hiker leaving it.
-    func recordOffRoute(hikeID: UUID, offRouteMeters: Double? = nil) {
+    func recordOffRoute(hikeID: UUID) {
         breakCoverage(hikeID: hikeID)
         rearmStart(hikeID: hikeID)
-        if let offRouteMeters, offRouteMeters >= WalkOfferPolicy.leftTrailMeters {
-            hikerLeft(hikeID: hikeID)
-        }
     }
 
     /// How far an accepted fix fell from the route, whether or not it matched.
@@ -363,27 +334,22 @@ final class TrailWalkSession {
 
     // MARK: Start
 
-    /// Whether a match on `hike` may offer a walk right now: nothing else is
-    /// being walked, the last walk along it has not just been ended,
-    /// following is on, and this is not a recording's own draft.
+    /// Whether `hike` may start a walk right now: nothing else is being
+    /// walked, the last walk along it has not just been ended, following is
+    /// on, and this is not a recording's own draft.
     func canStart(_ hike: Hike) -> Bool {
-        endedHikeID != hike.id
+        record == nil
+            && endedHikeID != hike.id
             && hike.autoFollowEnabled
-            && canHostWalk(hike)
+            && hike.isAttached
+            && !hike.belongsToActiveRecording(currentHikeID: activeRecordingHikeID())
     }
 
-    /// The hiker said Start — on the card, from the notification, or with the
-    /// button that stays while they are on a trail they declined.
-    ///
-    /// - Parameter timestamp: when the walk began, for a caller that knows
-    ///   better than the clock.
-    /// - Returns: whether a walk along `hike` is now under way.
-    @discardableResult func start(hike: Hike, routeLengthMeters: Double, at timestamp: Date? = nil) -> Bool {
-        guard canHostWalk(hike), routeLengthMeters.isFinite, routeLengthMeters > 0 else { return false }
-        let now = timestamp ?? clock()
+    private func startIfEligible(hike: Hike, profile: RouteProfile, at now: Date) {
+        guard canStart(hike), profile.totalDistanceMeters > 0 else { return }
         let started = TrailWalkRecord(
             hikeID: hike.id,
-            routeDistanceMeters: routeLengthMeters,
+            routeDistanceMeters: profile.totalDistanceMeters,
             startedAt: now
         )
         adopt(started, hike: hike)
@@ -392,23 +358,12 @@ final class TrailWalkSession {
         // the next write due at once, so the next matched fix writes it.
         persist(started, at: now)
         tracker?.walkDidStart(hikeID: hike.id)
-        // Stamped with the start rather than the fix's own time: the hiker
-        // was there when it matched and is taken to be there still, and a
-        // match older than the walk would be refused as stale.
-        if let seed = offeredAt, seed.hikeID == hike.id {
-            offeredAt = nil
-            recordMatch(hikeID: hike.id, distance: seed.distance, at: now)
-        }
-        return true
     }
 
     private func adopt(_ walk: TrailWalkRecord, hike: Hike) {
         record = walk
         walkedHike = hike
         endedHikeID = nil
-        // Whatever was being offered has been answered, by this walk or by
-        // one adopted from the sidecar — either way nothing is asking.
-        settleOffer(nil)
         lastEndedWalk = nil
         walkedHikeID = hike.id
         walkedHikeTitle = hike.displayTitle
@@ -463,17 +418,11 @@ final class TrailWalkSession {
         return true
     }
 
-    /// Enabling Follow This Trail rearms the offer after an End or an
-    /// Ignore; disabling it withdraws an offer standing for the trail. Neither
+    /// Enabling Follow This Trail rearms auto-start after an End. Neither
     /// direction changes a walk already under way: its phase belongs to
     /// Pause / Resume / End, independently of the detail's live marker.
     func autoFollowDidChange(hikeID: UUID, enabled: Bool) {
-        if enabled {
-            rearmStart(hikeID: hikeID)
-            forgetDecline(hikeID: hikeID)
-        } else if offer?.hikeID == hikeID {
-            settleOffer(nil)
-        }
+        if enabled { rearmStart(hikeID: hikeID) }
     }
 
     private func publishState() {
@@ -493,7 +442,6 @@ final class TrailWalkSession {
     /// Forgets the walk along a hike that is being deleted. No row: the host
     /// is going, and a walk has to hang off one.
     func discardWalk(forDeletedHike hikeID: UUID) {
-        if offer?.hikeID == hikeID { settleOffer(nil) }
         guard let record, record.hikeID == hikeID else { return }
         clearState()
         tracker?.walkDidEnd(final: nil)
@@ -665,155 +613,6 @@ final class TrailWalkSession {
             activeSeconds: record.activeSeconds(at: now),
             startedAt: record.startedAt
         )
-    }
-}
-
-// MARK: - Offer
-
-extension TrailWalkSession {
-    /// The same, from a notification's Start, which knows the trail only by
-    /// its identifier.
-    ///
-    /// Publishes the walk at once, unlike the card's Start. That one runs
-    /// with the follow loop matching every few seconds, and the next fix
-    /// carries the walk to the widget and the Lock Screen. This one runs
-    /// behind the app, where the next fix is the next significant change —
-    /// half a kilometre away, or never for a hiker who taps Start and waits
-    /// for a friend — and until then the Lock Screen they tapped it on would
-    /// go on saying nothing is being walked.
-    @discardableResult func start(hikeID: UUID, routeLengthMeters: Double) -> Bool {
-        guard let hike = fetchHike(hikeID),
-              start(hike: hike, routeLengthMeters: routeLengthMeters) else { return false }
-        publishState()
-        return true
-    }
-
-    /// The part of ``canStart(_:)`` a hiker's own Start still has to pass.
-    /// Following and a recent End are about whether to *ask*; a Start is the
-    /// answer, and it is given by the one person who knows.
-    private func canHostWalk(_ hike: Hike) -> Bool {
-        record == nil
-            && hike.isAttached
-            && !hike.belongsToActiveRecording(currentHikeID: activeRecordingHikeID())
-    }
-
-    /// A background match on `hikeID` with no walk under way: offers one, the
-    /// way a foreground match does.
-    ///
-    /// Separate from ``recordBackgroundMatch(hikeID:distance:at:)`` because
-    /// that one knows the trail only by identifier and has nothing to offer
-    /// with. The fetch is one row by its indexed identifier, and only while
-    /// nothing is being walked.
-    func offerWalk(hikeID: UUID, routeLengthMeters: Double, distance: Double? = nil) {
-        guard record == nil, let hike = fetchHike(hikeID) else { return }
-        offerIfEligible(hike: hike, routeLengthMeters: routeLengthMeters, distance: distance, at: clock())
-    }
-
-    /// The hiker tapped the notification: puts the card back for the detail
-    /// the tap is about to open, in a process that may have forgotten it.
-    func reoffer(hikeID: UUID) {
-        guard record == nil, let hike = fetchHike(hikeID), canStart(hike) else { return }
-        settleOffer(asks(about: hike, at: clock()) ? .asking(hikeID: hikeID) : .available(hikeID: hikeID))
-    }
-
-    /// The hiker said Ignore — on the card, on the notification, or by
-    /// clearing the notification away. Nothing asks about this trail again
-    /// until they leave it; a walk can still be started by hand meanwhile.
-    func ignoreOffer(hikeID: UUID) {
-        decline = WalkOfferDecline(hikeID: hikeID, declinedAt: clock())
-        storeDecline()
-        if offer?.hikeID == hikeID {
-            settleOffer(.available(hikeID: hikeID))
-        } else {
-            // A relaunched process answering a banner it never posted: there
-            // is no offer here to settle, but there is a banner to take down.
-            reminders?.walkOfferSettled()
-        }
-    }
-
-    /// Don't Ask Again, or the switch on the trail's detail: whether being on
-    /// `hike` asks to start a hike along it.
-    ///
-    /// - Returns: whether the store took it. A refusal puts the flag back, so
-    ///   the switch reads what the disk says.
-    @discardableResult func setOffersWalks(_ enabled: Bool, for hike: Hike) -> Bool {
-        let previous = hike.walkOffersEnabled
-        guard previous != enabled else { return true }
-        hike.walkOffersEnabled = enabled
-        guard save(reason: "changing whether a trail offers walks") else {
-            hike.walkOffersEnabled = previous
-            return false
-        }
-        if !enabled, offer?.hikeID == hike.id {
-            settleOffer(.available(hikeID: hike.id))
-        }
-        return true
-    }
-
-    /// Whether a match on `hike` should ask, rather than only allow a start:
-    /// it may start, the hiker has not silenced this trail, and has not
-    /// ignored it on this visit.
-    func asks(about hike: Hike, at now: Date) -> Bool {
-        canStart(hike)
-            && hike.walkOffersEnabled
-            && decline?.holds(for: hike.id, at: now) != true
-    }
-
-    private func offerIfEligible(hike: Hike, routeLengthMeters: Double, distance: Double?, at now: Date) {
-        guard canStart(hike), routeLengthMeters.isFinite, routeLengthMeters > 0 else {
-            if offer?.hikeID == hike.id { settleOffer(nil) }
-            return
-        }
-        if let distance, distance.isFinite { offeredAt = (hike.id, distance) }
-        guard asks(about: hike, at: now) else {
-            settleOffer(.available(hikeID: hike.id))
-            return
-        }
-        settleOffer(.asking(hikeID: hike.id))
-        // On every eligible match, not only the first: an offer made while
-        // the app was in front posted nothing, and the first match after the
-        // phone goes into a pocket is when the notification is owed. The
-        // controller posts once per offer.
-        reminders?.walkOffered(
-            WalkOfferSubject(hikeID: hike.id, routeLengthMeters: routeLengthMeters),
-            trailTitle: hike.displayTitle
-        )
-    }
-
-    /// Moves the offer, taking the notification down whenever the question
-    /// it asks has stopped being asked.
-    private func settleOffer(_ next: WalkOffer?) {
-        let wasAsking = offer?.isAsking == true
-        if offer != next { offer = next }
-        if wasAsking, next?.isAsking != true { reminders?.walkOfferSettled() }
-    }
-
-    /// The hiker is past ``WalkOfferPolicy/leftTrailMeters`` from `hikeID`'s
-    /// route: the offer is moot and an Ignore has been kept.
-    private func hikerLeft(hikeID: UUID) {
-        if offeredAt?.hikeID == hikeID { offeredAt = nil }
-        if offer?.hikeID == hikeID { settleOffer(nil) }
-        forgetDecline(hikeID: hikeID)
-    }
-
-    private func forgetDecline(hikeID: UUID) {
-        guard decline?.hikeID == hikeID else { return }
-        decline = nil
-        storeDecline()
-    }
-
-    private func storeDecline() {
-        guard let defaults else { return }
-        guard let decline, let data = try? JSONEncoder().encode(decline) else {
-            defaults.removeObject(forKey: SettingsKey.walkOfferDecline)
-            return
-        }
-        defaults.set(data, forKey: SettingsKey.walkOfferDecline)
-    }
-
-    private static func storedDecline(in defaults: UserDefaults?) -> WalkOfferDecline? {
-        guard let data = defaults?.data(forKey: SettingsKey.walkOfferDecline) else { return nil }
-        return try? JSONDecoder().decode(WalkOfferDecline.self, from: data)
     }
 }
 

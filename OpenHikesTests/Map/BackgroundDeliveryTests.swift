@@ -295,7 +295,7 @@ final class BackgroundDeliveryTests {
     /// arms the boundary the next two tests are about.
     private func endedWalk(on hike: Hike, profile: RouteProfile, session: TrailWalkSession) {
         for index in 0...2 {
-            session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[index])
+            session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[index])
         }
         session.end()
     }
@@ -322,7 +322,7 @@ final class BackgroundDeliveryTests {
 
         // Back on the trail, and the detail view opened again: the first
         // foreground match is the one that used to be refused.
-        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[0])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
 
         #expect(session.walkedHikeID == hike.id, "coming back to the trail is a walk of its own")
     }
@@ -348,7 +348,7 @@ final class BackgroundDeliveryTests {
         await deliver(fix(at: offTheRidge, accuracy: RouteProfile.followMatchThresholdMeters + 100))
         #expect(!session.canStart(hike), "nor does one that cannot say which side of the trail it is on")
 
-        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[0])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
         #expect(session.walkedHikeID == nil, "so End still stands, and no second walk starts")
     }
 }
