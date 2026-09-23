@@ -192,6 +192,15 @@ struct HikeDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        // Start / Pause in the bar, which is still showing at the sheet's
+        // smallest detent — see ``WalkToggleButton``. Handed the session as a
+        // reference, like ``WalkControls`` below: this closure is inlined
+        // into the body, and neither dereferences it.
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                WalkToggleButton(hike: hike, profile: profile, session: walkSession)
+            }
+        }
         // On the container rather than on the Details face, so flipping to
         // History neither restarts the profile build nor stops the follow
         // loop: a walk keeps accruing while its hiker reads its history.
@@ -550,10 +559,6 @@ private extension HikeDetailView {
             }
         } subtitle: {
             dateAndActions
-        } trailing: {
-            // Reads the session as a reference, like ``WalkControls`` below:
-            // this body never dereferences it.
-            WalkToggleButton(hike: hike, profile: profile, session: walkSession)
         }
     }
 
