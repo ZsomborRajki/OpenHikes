@@ -132,7 +132,7 @@ struct TrailStopRowView: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityValue(spokenDetail(slot))
-        .accessibilityIdentifier(Self.identifier(of: slot))
+        .accessibilityIdentifier(identifier(of: slot))
         .accessibilityHint("Opens a search for somewhere to put this stop")
         .accessibilityActions {
             if let onStep {
@@ -149,10 +149,11 @@ struct TrailStopRowView: View {
         }
     }
 
-    private static func identifier(of slot: TrailStopSlot) -> String {
+    /// An open field is named by where it stands, not by which field it was
+    /// made as: a drag can put either at the top — see ``TrailDraftView``.
+    private func identifier(of slot: TrailStopSlot) -> String {
         switch slot {
-        case .open(.start): "trail-draft-open-start"
-        case .open: "trail-draft-open-destination"
+        case .open: position == 0 ? "trail-draft-open-start" : "trail-draft-open-destination"
         case .point(let index, _): "trail-draft-point-\(index + 1)"
         }
     }
@@ -184,8 +185,9 @@ struct TrailStopRowView: View {
     @ViewBuilder
     private func text(_ slot: TrailStopSlot) -> some View {
         switch slot {
-        case .open(let role):
-            Text(role == .start ? LocalizedStringKey("Choose Start") : "Choose Destination")
+        case .open:
+            // By place, like the identifier above.
+            Text(position == 0 ? LocalizedStringKey("Choose Start") : "Choose Destination")
                 .foregroundStyle(.secondary)
         case .point(let index, _):
             let name = draft.name(ofWaypointAt: index)

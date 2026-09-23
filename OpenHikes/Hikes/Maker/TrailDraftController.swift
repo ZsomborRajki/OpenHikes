@@ -446,7 +446,16 @@ final class TrailDraftController {
         resolveLegs()
     }
 
-    /// Reorders the line. What a drag in the list's edit mode commits.
+    /// Puts the points in the order the route list's rows stand in after a
+    /// drag — see ``TrailDraft/arrangeRows(_:)``.
+    func arrangeRows(_ order: [String]) {
+        guard isEditing else { return }
+        draft.arrangeRows(order)
+        commitLine()
+        resolveLegs()
+    }
+
+    /// Reorders the line. What VoiceOver's *Move Up* and *Move Down* commit.
     func reorderWaypoints(fromOffsets offsets: IndexSet, toOffset destination: Int) {
         guard isEditing else { return }
         draft.moveWaypoints(fromOffsets: offsets, toOffset: destination)

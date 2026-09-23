@@ -164,6 +164,18 @@ nonisolated enum TrailStopSlot: Hashable, Sendable, Identifiable {
         default: return points
         }
     }
+
+    /// The list's rows after a drag: `sources` taken out of `ids` and put back
+    /// in front of `target`, or at the end for `nil` — what iOS 27's
+    /// `reorderContainer` reports a drop as. A target that is itself being
+    /// moved, or is not there, is the end.
+    static func rearranged(_ ids: [String], moving sources: [String], before target: String?) -> [String] {
+        var rest = ids.filter { !sources.contains($0) }
+        let moving = ids.filter { sources.contains($0) }
+        let index = target.flatMap { rest.firstIndex(of: $0) } ?? rest.endIndex
+        rest.insert(contentsOf: moving, at: index)
+        return rest
+    }
 }
 
 /// A point under a finger: which one, and where it is right now.
