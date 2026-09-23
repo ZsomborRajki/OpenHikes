@@ -540,13 +540,16 @@ extension MapView.Coordinator {
     /// Asked by `rendererFor` before every style that describes the hiker's
     /// own route, for the reason the community one is: a draft is not a hike
     /// and must not be drawn in the colour and width somebody chose for one.
-    func trailDraftRenderer(for polyline: MKPolyline) -> MKPolylineRenderer? {
+    ///
+    /// In the accent colour *as the map shows it* — see
+    /// `MapTrailDraftTint.swift`.
+    func trailDraftRenderer(for polyline: MKPolyline, on mapView: MKMapView) -> MKPolylineRenderer? {
         guard let snap = trailDraftLegStyles[ObjectIdentifier(polyline)] else { return nil }
         let renderer = MKPolylineRenderer(polyline: polyline)
         #if os(macOS)
         renderer.strokeColor = NSColor(Color.accentColor)
         #else
-        renderer.strokeColor = UIColor(Color.accentColor)
+        renderer.strokeColor = Self.trailDraftTint(on: mapView)
         #endif
         renderer.lineWidth = Self.trailDraftLineWidth
         renderer.lineJoin = .round
@@ -600,7 +603,7 @@ extension MapView.Coordinator {
         label.text = Self.trailDraftPinDigit(for: annotation.role)
 
         let layer = view.layer
-        layer.backgroundColor = UIColor(Color.accentColor).cgColor
+        layer.backgroundColor = Self.trailDraftTint(on: mapView).cgColor
         layer.borderColor = UIColor.white.cgColor
         layer.cornerRadius = diameter / 2
         layer.borderWidth = Self.trailDraftPinBorderWidth

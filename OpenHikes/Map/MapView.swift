@@ -168,6 +168,9 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.observeRouteStyle(routeStyle, on: mapView)
         coordinator.observePhotoPins(photoPins, on: mapView)
         coordinator.observeHikePlaces(placePins, on: mapView)
+        #if os(iOS)
+        coordinator.observeTrailDraftTint(on: mapView)
+        #endif
         coordinator.community = community
         coordinator.searchCompleter = searchCompleter
         coordinator.drawnRouteTap = drawnRouteTap

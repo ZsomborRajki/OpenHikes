@@ -89,7 +89,7 @@ extension MapCoordinatorTests {
         #expect(times.map(\.travelTime) == [Valley.drawnTime, Valley.detourTime])
         let line = try #require(coordinator.trailDraftRouteChoices.lines.first)
         #expect(coordinator.mapView(map, rendererFor: line) is MKPolylineRenderer)
-        #expect(coordinator.trailDraftRenderer(for: line) == nil, "an alternative is not the drawn leg")
+        #expect(coordinator.trailDraftRenderer(for: line, on: map) == nil, "an alternative is not the drawn leg")
         #endif
     }
 
