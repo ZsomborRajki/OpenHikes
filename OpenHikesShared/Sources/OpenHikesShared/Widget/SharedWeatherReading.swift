@@ -38,6 +38,17 @@ import Foundation
 public struct SharedWeatherReading: SharedPayload, Equatable {
     public static let currentSchemaVersion = 1
 
+    /// The Apple Weather trademark in text, " Weather", drawn beside the
+    /// temperature wherever Apple's published mark cannot be.
+    ///
+    /// WeatherKit's terms require the mark wherever its data is displayed,
+    /// and this number is its data. The widget cannot fetch the image Apple
+    /// publishes — it renders a snapshot and waits on nothing — and the app
+    /// shows this while that image loads, so both read it from here rather
+    /// than spelling it twice. U+F8FF is the Apple glyph in Apple's system
+    /// fonts, which are the only ones either target draws it in.
+    public static let attributionMark = "\u{F8FF} Weather"
+
     /// How old a reading may get before the widget stops drawing it.
     ///
     /// Deliberately far looser than the half-hour the badge dims at. The badge
