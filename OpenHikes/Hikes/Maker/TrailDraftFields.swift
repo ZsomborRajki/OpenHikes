@@ -279,20 +279,21 @@ struct TrailDraftLineFooter: View {
             }
             // One line for the whole line, saying the worst thing any leg has
             // to report — see ``TrailDraft/notice``. The rows print only a
-            // title, so this is the one place a sighted hiker reads it; the
-            // per-leg sentence is each row's accessibility value.
+            // title and, on a leg with something wrong, its glyph, so this is
+            // where a sighted hiker reads the sentence; each row's
+            // accessibility value carries its own leg's.
             if let notice = draft.notice {
                 TrailDraftNoticeLabel(notice: notice)
             }
             // The gestures that nothing else on screen explains: a map press
             // that drops a pin, a grey route that looks like scenery rather
-            // than a choice, and the handle that reorders a stop. Withheld
-            // until there is a line to do any of them to.
+            // than a choice, and the press and hold that reorders a stop.
+            // Withheld until there is a line to do any of them to.
             if !draft.legs.isEmpty {
                 Text(
                     """
                     Press and hold the map to add a stop, or tap a grey route to take it \
-                    instead. Drag a stop's handle to move it.
+                    instead. Press and hold a stop to drag it somewhere else.
                     """
                 )
             }

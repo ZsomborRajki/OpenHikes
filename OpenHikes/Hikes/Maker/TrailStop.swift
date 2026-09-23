@@ -129,7 +129,7 @@ nonisolated enum TrailStopRole: Hashable, Sendable {
 /// *destination*, and so does the maker — so a list of rows is not the list of
 /// points until there are two of them. Derived, like the role, and stored
 /// nowhere.
-nonisolated enum TrailStopSlot: Hashable, Sendable {
+nonisolated enum TrailStopSlot: Hashable, Sendable, Identifiable {
     /// A field with nothing in it yet. The role is `.start` or `.end`.
     case open(TrailStopRole)
     case point(index: Int, id: UUID)
@@ -145,6 +145,12 @@ nonisolated enum TrailStopSlot: Hashable, Sendable {
     var waypointIndex: Int? {
         guard case .point(let index, _) = self else { return nil }
         return index
+    }
+
+    /// The waypoint's identity, or `nil` for an open field.
+    var stopID: UUID? {
+        guard case .point(_, let id) = self else { return nil }
+        return id
     }
 
     /// The rows for `waypoints`: two open fields over none, one open field

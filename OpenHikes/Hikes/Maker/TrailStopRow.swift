@@ -12,10 +12,12 @@
 //  the list already draws that.
 //
 //  It says that in one line, as Apple Maps' directions list does: the name
-//  when there is one, the role until then. The distance along the line and the
-//  leg's notice that used to sit underneath are the row's accessibility value
-//  now — the map draws the first and the footer sums up the second, so only a
-//  VoiceOver user would have lost them.
+//  when there is one, the role until then — two at an accessibility type size,
+//  where one would leave a long name a few letters wide. The distance along the
+//  line is the row's accessibility value now, because the map draws it. A leg
+//  with something wrong with it keeps a mark at the row's trailing edge, the
+//  notice's own glyph, because the footer can only say what is wrong and not
+//  where; its sentence is in the value too.
 //
 //  ## The line is drawn by the rows, not between them
 //
@@ -31,8 +33,9 @@
 //  - the padding that makes the row a comfortable height is on the *text*
 //    column instead, which is what the stem is then measured against.
 //
-//  The first two are ``TrailStopList``'s, which hosts these rows in UIKit
-//  cells, and ``TrailAddStopRow``'s own, which is still a `List` row.
+//  The first two are ``rowInsets`` and a hidden row separator, which
+//  ``TrailDraftView`` puts on the stops' `ForEach`es and ``TrailAddStopRow`` on
+//  itself.
 //
 //  ## It reads the drawing itself
 //
@@ -41,7 +44,8 @@
 //  ``TrailDraft/legs`` and ``TrailDraft/distancesAlongLine``. A parent body
 //  that read either of those to *build* these rows would be re-evaluated
 //  nineteen times and take everything else on the screen with it. Read here,
-//  the same answer redraws the rows and nothing else.
+//  the same answer redraws the rows and nothing else — and a `List` is lazy, so
+//  it asks only the rows on screen.
 //
 //  Names are the third thing read that way, and the most frequent: a stop named
 //  by ``TrailStopNamer`` lands seconds after a tap, one point at a time.
@@ -77,8 +81,8 @@ struct TrailStopRowView: View {
     /// Where in ``TrailDraft/slots`` this row sits.
     let position: Int
     /// Moves the stop one row earlier or later, for VoiceOver. The drag itself
-    /// is UIKit's — see ``TrailStopList``. Open fields pass `nil`, because
-    /// there is no waypoint there to move.
+    /// is the list's `onMove` — see ``TrailDraftView``. Open fields pass `nil`,
+    /// because there is no waypoint there to move.
     var onStep: ((AccessibilityAdjustmentDirection) -> Void)?
     /// Opens the search sheet on this row.
     var onSearch: () -> Void
@@ -100,6 +104,12 @@ struct TrailStopRowView: View {
     /// drawn at 96% at the medium detent — the same 34-pixel capitals in each
     /// say the scale is shared, so the pixels compare directly.
     static let rowPadding: CGFloat = 16
+    /// No vertical inset, so the stems reach the row's edges, and the 16
+    /// points either side every row in the card has.
+    static let rowInsets = EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
+
+    @Environment(\.dynamicTypeSize)
+    private var dynamicTypeSize
 
     var body: some View {
         let slots = draft.slots
@@ -112,9 +122,10 @@ struct TrailStopRowView: View {
                     count: slots.count
                 )
                 text(slot)
-                    .lineLimit(1)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                     .padding(.vertical, Self.rowPadding)
                 Spacer(minLength: 0)
+                legMark(slot)
             }
             .contentShape(.rect)
         }
@@ -182,10 +193,26 @@ struct TrailStopRowView: View {
         }
     }
 
+    /// The glyph of what the leg into this stop has to report, when it is
+    /// something wrong: which leg failed, where the footer says only that one
+    /// did. Not for a leg that is merely routing — every leg does that for a
+    /// moment, and a row of spinners says nothing. Hidden from VoiceOver,
+    /// which hears the sentence in the value instead.
+    @ViewBuilder
+    private func legMark(_ slot: TrailStopSlot) -> some View {
+        if case .point(let index, _) = slot,
+           let notice = draft.leg(arrivingAtWaypointAt: index)?.snap.notice,
+           notice.isWarning {
+            Image(systemName: notice.symbolName)
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+        }
+    }
+
     /// What the row no longer prints, still said to VoiceOver: the role a
     /// name hides, how far along the stop sits, and what the leg into it has
     /// to report. The eye gets the second from the map and the third from the
-    /// footer; a listener gets neither, so they are here.
+    /// row's mark and the footer's sentence.
     private func spokenDetail(_ slot: TrailStopSlot) -> String {
         guard case .point(let index, _) = slot else { return "" }
         let isNamed = !draft.name(ofWaypointAt: index).isEmpty
@@ -257,11 +284,8 @@ struct TrailAddStopRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .listRowInsets(TrailStopRowView.rowInsets)
         .listRowSeparator(.hidden)
-        // Not a stop, so it has no place in the order and nothing to delete.
-        .moveDisabled(true)
-        .deleteDisabled(true)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("trail-draft-add-stop")
     }

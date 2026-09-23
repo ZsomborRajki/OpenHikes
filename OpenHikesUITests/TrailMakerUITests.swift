@@ -51,10 +51,6 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         CGVector(dx: 0.50, dy: 0.42),
     ]
 
-    /// Points past the trailing edge of a stop row's content to the middle of
-    /// the list's reorder grabber, which the list draws outside that content.
-    private static let grabberOffset: CGFloat = 22
-
     /// The whole feature end to end: open the maker from the map, put three
     /// points down, save, and find the trail in the library.
     @MainActor
@@ -441,16 +437,14 @@ extension TrailMakerUITests {
         let second = element("trail-draft-point-2", in: app)
         XCTAssertFalse(app.navigationBars.buttons["Edit"].exists)
 
-        // The list's own grabber, which sits just past the trailing edge of
-        // the row's content, so it is reached from the row rather than by an
-        // identifier of its own. Slow and held at both ends, as in
-        // `HikeOrderUITests`: a reorder commits on the drop, and a quick flick
-        // is over before the list has decided it was a drag.
-        let grabber = CGVector(dx: Self.grabberOffset, dy: 0)
+        // A press and hold on the row itself lifts it — there is no grabber.
+        // Slow and held at both ends, as in `HikeOrderUITests`: a reorder
+        // commits on the drop, and a quick flick is over before the list has
+        // decided it was a drag.
         element("trail-draft-point-3", in: app)
-            .coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(grabber).press(
-            forDuration: 0.8,
-            thenDragTo: second.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.1)).withOffset(grabber),
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
+            forDuration: 1.2,
+            thenDragTo: second.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)),
             withVelocity: .slow,
             thenHoldForDuration: 0.8
         )
