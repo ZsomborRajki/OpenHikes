@@ -31,8 +31,8 @@
 //  see ``MapCommunityRoutes`` and ``CommunityBrowser/previewLoaded(_:of:)``.
 //  So the sketch is gone, and what replaces it is the thing the sketch could
 //  never show: the hike detail screen's own page, off the same route and out
-//  of the same types. ``ElevationChartView`` at the top, ``StatGrid`` and
-//  ``StatTile`` under it, then the photographs, then ``TrailSurfaceSection``
+//  of the same types. ``ElevationChartView`` at the top, ``StatSummary``
+//  under it, then the photographs, then ``TrailSurfaceSection``
 //  and ``TrailDifficultySection`` — the order ``HikeDetailView`` puts them in,
 //  because what somebody deciding whether to keep a stranger's trail compares
 //  is *their* hike against *this* one, and two layouts would make that
@@ -744,7 +744,7 @@ private extension CommunityHikeView {
     /// the order is stated once here rather than negotiated between them.
     @ViewBuilder
     func loadedState(_ detail: CommunityHikeDetail) -> some View {
-        statsGrid
+        statsSummary
 
         // Asked of the *merged* gallery rather than of the submission's own
         // files, which is the whole difference a contribution makes to this
@@ -852,7 +852,7 @@ private extension CommunityHikeView {
     /// the row a hike in the library gives its own description.
     ///
     /// ``DetailRow`` rather than the bare paragraph this used to be, for the
-    /// reason the numbers above are ``StatTile``s: the label is what makes a
+    /// reason the numbers above are labelled rows: the label is what makes a
     /// stranger's sentence read as the hike's description rather than as a
     /// caption on the photographs it sat under.
     func detailsSection(_ description: String) -> some View {
@@ -865,28 +865,23 @@ private extension CommunityHikeView {
         }
     }
 
-    /// The hike's numbers, in the same grid and the same tiles the hiker's own
-    /// hikes use.
+    /// The hike's numbers, in the same place card the hiker's own hikes use.
     ///
-    /// Literally the same: ``StatGrid`` and ``StatTile`` rather than a pair
-    /// built for this screen, so the two columns, the single column at an
-    /// accessibility text size and the one-label-one-value reading all come
-    /// along without being decided a second time. What is compared when
-    /// somebody is deciding whether to keep a stranger's trail is *their* hike
-    /// against *this* one, and two layouts would make that comparison work.
+    /// Literally the same: ``StatSummary`` rather than a card built for this
+    /// screen, so the strip, the list, the column an accessibility text size
+    /// turns them into and the one-label-one-value reading all come along
+    /// without being decided a second time. What is compared when somebody is
+    /// deciding whether to keep a stranger's trail is *their* hike against
+    /// *this* one, and two layouts would make that comparison work.
     ///
     /// Empty until the walk of the route finishes, which is a beat after the
     /// route lands — see ``prepare(_:)``. Nothing is drawn in the meantime
     /// rather than a row of placeholders: the photographs and the Add button
-    /// are already up, and a grid of dashes that fills itself in is a worse
-    /// thing to look at than a grid that appears.
-    @ViewBuilder var statsGrid: some View {
+    /// are already up, and a card of dashes that fills itself in is a worse
+    /// thing to look at than a card that appears.
+    @ViewBuilder var statsSummary: some View {
         if let stats = prepared?.stats, !stats.isEmpty {
-            StatGrid {
-                ForEach(stats) { stat in
-                    StatTile(label: stat.label, value: stat.value)
-                }
-            }
+            StatSummary(stats: stats)
         }
     }
 

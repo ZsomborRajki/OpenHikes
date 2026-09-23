@@ -31,7 +31,7 @@ nonisolated enum AccessibilityAudit {
     ///   footers — text this app neither styles nor sizes. Every font it does
     ///   set is a semantic one, which scales by definition; the only fixed
     ///   sizes are decorative glyphs inside fixed frames, already hidden from
-    ///   VoiceOver. ``StatGrid`` covers the case that actually mattered.
+    ///   VoiceOver. ``StatStrip`` and ``StatRow`` cover the case that actually mattered.
     static let types: XCUIAccessibilityAuditType = .all
         .subtracting(.contrast)
         .subtracting(.textClipped)

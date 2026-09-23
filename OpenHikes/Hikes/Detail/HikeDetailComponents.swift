@@ -17,7 +17,7 @@ import SwiftUI
 /// buttons beside them do, and `.interactive()` gives them the same press
 /// response, which a filled rectangle behind a `.plain` button never had.
 ///
-/// The read-only ``StatTile`` deliberately did *not* move with them. It is
+/// The read-only ``StatList`` deliberately did *not* move with them. It is
 /// content, not a control, and glass drawn behind content inside a glass sheet
 /// reads as neither.
 struct ActionTile<Content: View>: View {

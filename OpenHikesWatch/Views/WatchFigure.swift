@@ -5,8 +5,8 @@
 //  One labelled number, which is most of what this app draws.
 //
 //  One accessibility element rather than two, which is the rule the app's
-//  `StatTile` follows: a tile read out as a caption and then a value is two
-//  swipes to hear one figure.
+//  `StatFigure` and `StatRow` follow: a figure read out as a caption and then a
+//  value is two swipes to hear one figure.
 //
 
 import SwiftUI

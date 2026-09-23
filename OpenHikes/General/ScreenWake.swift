@@ -32,9 +32,9 @@
 //    before the outgoing one disappears, and a single flag would be cleared by
 //    the screen that was leaving.
 //  * **Foreground only.** `scenePhase` is the third input, so a backgrounded
-//    recording — which goes on recording, and which
-//    ``RecordingHeader``/``MapView`` already stop drawing for — releases the
-//    hold rather than carrying an idle timer nobody can see the effect of.
+//    recording — which goes on recording, and which the recording card's
+//    clock and ``MapView`` already stop drawing for — releases the hold
+//    rather than carrying an idle timer nobody can see the effect of.
 //
 //  The `UIApplication` write goes through one place with a seam in front of
 //  it, for the same reason every other singleton here has one: both unit
