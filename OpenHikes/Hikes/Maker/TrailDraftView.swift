@@ -443,16 +443,21 @@ struct TrailDraftView: View {
     }
 
     /// Puts the place the sheet found into the row it was opened from, and
-    /// takes the camera there.
+    /// takes the camera there — or, when it put down an end of a line, to the
+    /// whole line.
     ///
     /// A hiker who searches for a valley ends up looking at it, with a stop
-    /// already down they can drag, change by searching again, or delete.
+    /// already down they can drag, change by searching again, or delete. A
+    /// hiker who picks the destination is looking at the route it drew, which
+    /// is the thing they picked it to see; see
+    /// ``TrailStopSearchTarget/landsOnAnEnd``.
     ///
     /// The target is read off the run rather than captured when the row was
     /// tapped, so a sheet swiped away and reopened on another row cannot
     /// deliver into the first one.
     private func place(_ pick: TrailStopSearchPick) {
-        switch search.target {
+        let target = search.target
+        switch target {
         case .existing(let id, _):
             maker.placeWaypoint(id, at: pick.clCoordinate, named: pick.name)
         case .newStop:
@@ -469,13 +474,20 @@ struct TrailDraftView: View {
         // pick names nothing and is not kept; see ``TrailStopRecents``.
         maker.recents.record(pick)
         HapticMoment.targetHit.play()
-        mapController.show(
-            MKCoordinateRegion(
-                center: pick.clCoordinate,
-                latitudinalMeters: Self.pickedStopSpanMeters,
-                longitudinalMeters: Self.pickedStopSpanMeters
+        if target?.landsOnAnEnd == true, draft.coordinates.count > 1 {
+            // The waypoints rather than the resolved shape, for the reason
+            // `frameTheDrawing()` gives: the legs are still being routed, and
+            // they bend inside a frame that already holds both of their ends.
+            mapController.showDrawnLine(draft.coordinates)
+        } else {
+            mapController.show(
+                MKCoordinateRegion(
+                    center: pick.clCoordinate,
+                    latitudinalMeters: Self.pickedStopSpanMeters,
+                    longitudinalMeters: Self.pickedStopSpanMeters
+                )
             )
-        )
+        }
         isSearchingStop = false
     }
 
