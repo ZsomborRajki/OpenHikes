@@ -32,7 +32,10 @@
 //
 //  **Texture** answers a gesture that could have missed — a tap on a drawn
 //  line, a swatch, a row being dropped. Lighter again, and never more than one
-//  per gesture.
+//  per gesture. One of them is not light: a press and hold that drops a pin
+//  is answered while the thumb is still resting on the glass, waiting to be
+//  told it can let go, and a soft knock under a pressing thumb is one nobody
+//  feels.
 //
 //  There is no settings switch. iOS already has a system-wide Haptics control
 //  and `SensoryFeedback` and `UIFeedbackGenerator` both honour it; a second
@@ -64,6 +67,13 @@ public enum HapticMoment: String, CaseIterable, Equatable, Sendable {
     /// *An outcome that settled.* Something the hiker asked for and waited on
     /// has finished, and worked.
     case outcomeSucceeded = "outcomeSucceeded"
+    /// *Texture,* at full weight. A press and hold dropped a pin.
+    ///
+    /// Not ``targetHit``, which a tap is answered with once the finger has
+    /// lifted. This one arrives while the finger is still down and is what
+    /// says the press was long enough, so it has to get through a thumb
+    /// pressing on the glass. Apple Maps answers the same press the same way.
+    case pinDropped = "pinDropped"
     /// *Texture.* A dragged row was let go in its new place.
     case rowMoved = "rowMoved"
     /// *Texture.* A tap that could have missed, and did not — a drawn route,
@@ -143,6 +153,10 @@ public extension HapticMoment {
 
         case .targetHit:
             .impact(flexibility: .soft, intensity: Intensity.texture)
+        // Full intensity, so the texture intensity deliberately does not
+        // apply. It is still one impact and not a pattern, so it stays out of
+        // the walk's vocabulary.
+        case .pinDropped: .impact(weight: .medium)
         case .choiceChanged: .selection
         case .rowMoved:
             .impact(flexibility: .solid, intensity: Intensity.texture)
@@ -202,6 +216,8 @@ public extension HapticMoment {
         case .targetHit:
             UIImpactFeedbackGenerator(style: .soft)
                 .impactOccurred(intensity: Intensity.texture)
+        case .pinDropped:
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         case .choiceChanged:
             UISelectionFeedbackGenerator().selectionChanged()
         case .rowMoved:
