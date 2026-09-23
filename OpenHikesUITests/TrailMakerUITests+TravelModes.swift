@@ -40,7 +40,8 @@ extension TrailMakerUITests {
             XCTAssertTrue(element("trail-draft-point-2", in: app).exists)
             XCTAssertTrue(element("trail-draft-save", in: app).isEnabled)
             XCTAssertTrue(waitUntil {
-                element("trail-draft-point-2", in: app).label.contains("No route found for this travel mode")
+                (element("trail-draft-point-2", in: app).value as? String ?? "")
+                    .contains("No route found for this travel mode")
             })
         }
         hiking.tap()
