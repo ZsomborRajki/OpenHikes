@@ -500,7 +500,7 @@ final class TrailDraft {
         for leg in legs { resolved[leg.ends] = leg }
         var rebuilt: [TrailLeg] = []
         rebuilt.reserveCapacity(max(0, waypoints.count - 1))
-        for (previous, next) in zip(waypoints, waypoints.dropFirst()) {
+        for (previous, next) in waypoints.adjacentPairs() {
             let ends = TrailLegEnds(from: previous, to: next)
             if var existing = resolved[ends] {
                 existing.id = next.id
@@ -592,17 +592,11 @@ final class TrailDraft {
         rankings.yield(PlaceRanking(places: places, legs: legs, revision: rankRevision))
     }
 
-    /// One running total per waypoint, in one walk of the legs.
+    /// One running total per waypoint, in one walk of the legs: `0` for the
+    /// first point, then the total after each leg.
     private static func distances(along legs: [TrailLeg], pointCount: Int) -> [Double] {
         guard pointCount > 0 else { return [] }
-        var distances: [Double] = [0]
-        distances.reserveCapacity(pointCount)
-        var total: Double = 0
-        for leg in legs {
-            total += leg.distanceMeters
-            distances.append(total)
-        }
-        return distances
+        return legs.map(\.distanceMeters).reductions(0, +)
     }
 }
 
@@ -851,7 +845,7 @@ extension TrailDraft {
             let shape = leg.coordinates.count > 1
                 ? leg.coordinates
                 : leg.ends.straightCoordinates
-            for (start, end) in zip(shape, shape.dropFirst()) {
+            for (start, end) in shape.adjacentPairs() {
                 let projection = RouteGeometry.project(
                     coordinate,
                     onSegmentFrom: CLLocationCoordinate2D(
@@ -961,13 +955,10 @@ extension TrailDraft {
         from offsets: IndexSet,
         to destination: Int
     ) -> [TrailWaypoint] {
-        let lifted = waypoints.enumerated()
-            .filter { offsets.contains($0.offset) }
-            .map(\.element)
+        let (kept, liftedOffsets) = waypoints.indices.partitioned(by: offsets.contains)
+        let lifted = liftedOffsets.map { waypoints[$0] }
         guard !lifted.isEmpty else { return waypoints }
-        var remaining = waypoints.enumerated()
-            .filter { !offsets.contains($0.offset) }
-            .map(\.element)
+        var remaining = kept.map { waypoints[$0] }
         let landing = destination - offsets.count { $0 < destination }
         remaining.insert(contentsOf: lifted, at: min(max(landing, 0), remaining.count))
         return remaining

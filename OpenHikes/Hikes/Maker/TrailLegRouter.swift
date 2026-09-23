@@ -47,6 +47,7 @@
 //  over a z12 tile is not a thing to keep several of.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import os
@@ -344,21 +345,19 @@ nonisolated private extension OverpassTrailLegRouter {
         banning banned: Set<Int> = []
     ) -> FoundPath? {
         var best: FoundPath?
-        for from in endpoints(of: start, in: index) {
-            for to in endpoints(of: end, in: index) {
-                let available = ceiling - from.cost - to.cost
-                guard available >= 0,
-                      let path = index.shortestPath(
-                          from: from.nodeID,
-                          to: to.nodeID,
-                          maximumDistance: available,
-                          bannedNodes: [],
-                          bannedEdges: banned
-                      ) else { continue }
-                let total = from.cost + path.distance + to.cost
-                if let current = best, current.total <= total { continue }
-                best = FoundPath(path: path, total: total)
-            }
+        for (from, to) in product(endpoints(of: start, in: index), endpoints(of: end, in: index)) {
+            let available = ceiling - from.cost - to.cost
+            guard available >= 0,
+                  let path = index.shortestPath(
+                      from: from.nodeID,
+                      to: to.nodeID,
+                      maximumDistance: available,
+                      bannedNodes: [],
+                      bannedEdges: banned
+                  ) else { continue }
+            let total = from.cost + path.distance + to.cost
+            if let current = best, current.total <= total { continue }
+            best = FoundPath(path: path, total: total)
         }
         return best
     }
@@ -496,7 +495,7 @@ nonisolated private extension OverpassTrailLegRouter {
     /// Measured along the drawn shape rather than reported by the router,
     /// so the number in the header is the length of the line on the screen.
     static func length(of shape: [CLLocationCoordinate2D]) -> Double {
-        zip(shape, shape.dropFirst()).reduce(0) { total, pair in
+        shape.adjacentPairs().reduce(0) { total, pair in
             total + RouteGeometry.distanceMeters(from: pair.0, to: pair.1)
         }
     }
