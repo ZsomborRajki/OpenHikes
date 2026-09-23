@@ -138,6 +138,10 @@ struct TrailDraftView: View {
         // height above it — a row the medium detent, which is where the map
         // and this list share the screen, cannot spare.
         .contentMargins(.top, Self.topMargin, for: .scrollContent)
+        // The sheet's glass shows through, as it does behind the sheet's other
+        // lists. A grouped list otherwise paints its own opaque grey over it;
+        // the rows keep their own cards either way.
+        .scrollContentBackground(.hidden)
         // **The camera goes to the drawing that is already there.** A draft
         // outlives the screen it is drawn on — it is on disk between launches —
         // so a hiker who backs out, looks at another trail and comes back would
