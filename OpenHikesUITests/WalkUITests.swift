@@ -46,6 +46,14 @@ nonisolated final class WalkUITests: XCTestCase {
         XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.trace))
         expectPhase(phase, contains: "Active")
 
+        // The start is said on the map, and putting that away is not an end.
+        let pill = element("walk-started-pill", in: app)
+        XCTAssertTrue(pill.waitForExistence(timeout: UITestTimeout.existence))
+        XCTAssertTrue(pill.label.contains(UITestFixture.importedHikeTitle), "the pill names the trail: \(pill.label)")
+        element("walk-started-pill-dismiss", in: app).tap()
+        XCTAssertTrue(pill.waitForNonExistence(timeout: UITestTimeout.existence))
+        expectPhase(phase, contains: "Active")
+
         scrollToTap(app.buttons["Pause Hike"], in: app)
         expectPhase(phase, contains: "Paused")
         XCTAssertFalse(

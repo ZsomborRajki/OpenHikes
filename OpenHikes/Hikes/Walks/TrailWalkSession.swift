@@ -33,6 +33,16 @@ import OpenHikesShared
 import os
 import SwiftData
 
+/// That a walk started without being asked to, and on which trail.
+///
+/// The title is taken when the walk starts rather than looked up when the pill
+/// draws, so the pill reads nothing of the hike and a rename mid-walk does not
+/// redraw it.
+struct TrailWalkStartNotice: Equatable {
+    let hikeID: UUID
+    let title: String
+}
+
 /// What ending a walk came to.
 ///
 /// Three answers rather than an optional row, because the third one is not a
@@ -76,6 +86,10 @@ final class TrailWalkSession {
     /// The walk that just ended with a record to show, for the screen that
     /// pushes its summary. Cleared by the next start.
     private(set) var lastEndedWalk: HikeWalk?
+    /// A walk a matched fix just started, for the pill on the map that says
+    /// so — see ``WalkStartedPill``. Cleared by its *x* and by the walk
+    /// ending; a walk adopted at launch was already announced and sets none.
+    private(set) var startNotice: TrailWalkStartNotice?
 
     // MARK: Fine — changes per matched fix
 
@@ -353,6 +367,7 @@ final class TrailWalkSession {
             startedAt: now
         )
         adopt(started, hike: hike)
+        startNotice = TrailWalkStartNotice(hikeID: hike.id, title: hike.displayTitle)
         // A refused first write is not a refused start: nothing on disk says
         // otherwise yet, and the walk is under way in memory. `persist` left
         // the next write due at once, so the next matched fix writes it.
@@ -375,6 +390,11 @@ final class TrailWalkSession {
         // relaunch inherits is exactly the one a hiker forgets: the phone has
         // been in a pocket since.
         updateReminder(for: walk)
+    }
+
+    /// The pill's *x*. The walk goes on; only the news of it is put away.
+    func dismissStartNotice() {
+        startNotice = nil
     }
 
     // MARK: Pause and resume
@@ -542,6 +562,7 @@ final class TrailWalkSession {
         persistenceFailures = 0
         walkedHikeID = nil
         walkedHikeTitle = ""
+        startNotice = nil
         phase = nil
         coveredFraction = 0
         furthestDistanceMeters = 0

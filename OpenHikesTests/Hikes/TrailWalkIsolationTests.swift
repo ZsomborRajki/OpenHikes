@@ -47,6 +47,8 @@ struct TrailWalkIsolationTests {
             _ = session.walkedHikeID
             _ = session.phase
             _ = session.walkedHikeTitle
+            // The map's pill, which must not redraw per fix either.
+            _ = session.startNotice
         }
         let fine = ObservationCounter { _ = session.coveredFraction }
         await coarse.settle()

@@ -260,6 +260,10 @@ struct OpenHikesView: View {
                         .ignoresSafeArea(.container, edges: usesSidePanel ? [] : .vertical)
                 }
             }
+            // Handed the session and never reading it — see ``WalkStartedPill``.
+            .overlay {
+                WalkStartedPill(session: appModel.walkSession, usesSidePanel: usesSidePanel) { openHike(id: $0) }
+            }
             // Draws nothing. It is where the vertical size class is read —
             // out of this body, deliberately and at a measured cost if it
             // moves back in. See ``SheetLayoutReader``.
