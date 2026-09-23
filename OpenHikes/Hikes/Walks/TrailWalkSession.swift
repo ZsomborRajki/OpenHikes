@@ -673,9 +673,19 @@ final class TrailWalkSession {
 extension TrailWalkSession {
     /// The same, from a notification's Start, which knows the trail only by
     /// its identifier.
+    ///
+    /// Publishes the walk at once, unlike the card's Start. That one runs
+    /// with the follow loop matching every few seconds, and the next fix
+    /// carries the walk to the widget and the Lock Screen. This one runs
+    /// behind the app, where the next fix is the next significant change —
+    /// half a kilometre away, or never for a hiker who taps Start and waits
+    /// for a friend — and until then the Lock Screen they tapped it on would
+    /// go on saying nothing is being walked.
     @discardableResult func start(hikeID: UUID, routeLengthMeters: Double) -> Bool {
-        guard let hike = fetchHike(hikeID) else { return false }
-        return start(hike: hike, routeLengthMeters: routeLengthMeters)
+        guard let hike = fetchHike(hikeID),
+              start(hike: hike, routeLengthMeters: routeLengthMeters) else { return false }
+        publishState()
+        return true
     }
 
     /// The part of ``canStart(_:)`` a hiker's own Start still has to pass.
