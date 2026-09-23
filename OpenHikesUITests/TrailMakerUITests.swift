@@ -437,7 +437,7 @@ extension TrailMakerUITests {
         let first = element("trail-draft-point-1", in: app)
         XCTAssertFalse(app.navigationBars.buttons["Edit"].exists)
 
-        // A press and hold on the row itself lifts it — there is no grabber.
+        // A press and hold anywhere on the row lifts it; its grabber is only a sign.
         // Slow and held at both ends, as in `HikeOrderUITests`: a reorder
         // commits on the drop, and a quick flick is over before the list has
         // decided it was a drag. The destination goes to the top, turning the
