@@ -88,7 +88,7 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
             // flight for the fragment the user has just erased would arrive
             // through `completerDidUpdateResults` and refill the list under an
             // empty field.
-            completer.cancel()
+            forgetFragment()
             suggestions = []
         case .ignore:
             break
@@ -99,8 +99,22 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
 
     func clear() {
         policy.reset()
-        completer.cancel()
+        forgetFragment()
         suggestions = []
+    }
+
+    /// Stops the completer asking about a fragment nobody is typing any more.
+    ///
+    /// **Cancelling is not enough.** `cancel()` stops the request in flight
+    /// and leaves `queryFragment` set, and MapKit answers a set fragment again
+    /// whenever `region` is assigned — see ``regionDidSettle(_:)`` — so every
+    /// pan after a search asked Apple again for a search that had ended, and
+    /// its answer refilled the list. Seen in the trail maker's stop search,
+    /// whose camera flies to the place picked there: the next time the sheet
+    /// opened, the last search's places were back before anything was typed.
+    private func forgetFragment() {
+        completer.cancel()
+        completer.queryFragment = ""
     }
 
     /// Clears the suggestions and records `query` as already answered, so the
