@@ -60,16 +60,6 @@ nonisolated struct TrailLegEnds: Hashable, Sendable {
         self.end = end
     }
 
-    /// The same two places, the other way round.
-    ///
-    /// A walking path between two points is the same path whichever way it is
-    /// walked, which is what lets ``TrailDraft/reverse()`` turn a whole trail
-    /// round without asking OpenStreetMap anything. The pair is still ordered,
-    /// and deliberately: a leg's stored shape runs from its start to its end,
-    /// so a key that ignored direction would hand a reversed leg a shape drawn
-    /// backwards.
-    var flipped: Self { Self(start: end, end: start) }
-
     var startCoordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: start.latitude, longitude: start.longitude)
     }
@@ -224,10 +214,6 @@ nonisolated struct TrailLegPath: Equatable, Sendable {
     /// trail graph's answers and every straight line. See
     /// ``TrailDraft/travelTime(of:)`` for what stands in.
     var travelTime: TimeInterval?
-
-    func reversed() -> Self {
-        Self(coordinates: coordinates.reversed(), distanceMeters: distanceMeters, travelTime: travelTime)
-    }
 }
 
 /// One stretch of the drawn line, between two consecutive waypoints.
@@ -278,24 +264,14 @@ nonisolated struct TrailLeg: Identifiable, Equatable, Sendable {
         return chosen
     }
 
-    /// The same leg, walked the other way.
-    ///
-    /// The shape reversed and the two ends swapped, so a reversed trail is
-    /// drawn from the geometry it already has rather than asked for again —
-    /// see ``TrailDraft/reverse()``. The length and the state are properties
-    /// of the stretch rather than of the direction, so both survive; the
-    /// identity does not, because a leg is named by the waypoint it arrives at
-    /// and that is the other one now. `rebuildLegs` retargets it.
-    func flipped() -> Self {
-        Self(
-            id: id,
-            ends: ends.flipped,
-            coordinates: coordinates.reversed(),
-            distanceMeters: distanceMeters,
-            snap: snap,
-            travelTime: travelTime,
-            alternatives: alternatives.map { $0.reversed() }
-        )
+    /// Legs end to end, each join once: every leg carries both of its ends, so
+    /// the point where two meet is in the list twice before this runs. The
+    /// shape a whole drawn line is saved, ranked against and labelled in.
+    static func flattened(_ legs: [Self]) -> [RouteCoordinate] {
+        guard let first = legs.first else { return [] }
+        var shape = first.coordinates
+        for leg in legs.dropFirst() { shape.append(contentsOf: leg.coordinates.dropFirst()) }
+        return shape
     }
 
     /// A leg that follows nothing yet.

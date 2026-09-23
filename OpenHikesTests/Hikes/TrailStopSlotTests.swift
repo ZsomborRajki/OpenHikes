@@ -91,10 +91,6 @@ struct TrailStopSlotTests {
 
         #expect(draft.startIsOpen)
         #expect(draft.slots == [.open(.start), .point(index: 0, id: draft.waypoints[0].id)])
-
-        draft.undo()
-        #expect(draft.waypoints.count == 2)
-        #expect(!draft.startIsOpen)
     }
 
     @Test("deleting the destination leaves the start in its field")
@@ -213,10 +209,6 @@ struct TrailStopSlotTests {
         #expect(leg.path == detour)
         #expect(leg.alternatives.first?.distanceMeters == 450)
         #expect(draft.distanceMeters == 900, "the length follows the route drawn")
-        // A choice of route is not a step of undo: the step behind it is the
-        // destination going down.
-        draft.undo()
-        #expect(draft.waypoints.count == 1)
     }
 
     @Test("an alternative that is not there changes nothing")
@@ -258,21 +250,5 @@ struct TrailStopSlotTests {
         draft.addStop(Self.coordinate(Line.middle, Line.aside))
         await rows.settle()
         #expect(rows.count == 1, "a stop coming is a row coming")
-    }
-
-    /// The one edit that changes the open field without adding or removing a
-    /// point, and so the one path to ``TrailDraft/slots`` that does not pass
-    /// through the legs being rebuilt.
-    @Test("reversing a lone point moves it between the two fields")
-    func reversingALonePointSwapsTheFields() throws {
-        let draft = TrailDraft()
-        draft.addStop(Self.coordinate(Line.south))
-        let point = try #require(draft.waypoints.first)
-        #expect(draft.slots == [.point(index: 0, id: point.id), .open(.end)])
-
-        draft.reverse()
-
-        #expect(draft.slots == [.open(.start), .point(index: 0, id: point.id)])
-        #expect(!draft.canBeSaved)
     }
 }

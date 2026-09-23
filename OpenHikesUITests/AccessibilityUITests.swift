@@ -453,13 +453,14 @@ nonisolated final class AccessibilityUITests: XCTestCase {
 extension AccessibilityUITests {
     /// The trail maker, which is the densest screen the app has added since
     /// the community preview: a travel-mode tray, a switch, a list of stops
-    /// with a running length, time and climb on its header, an edit menu and
-    /// two ways out — over a map that is simultaneously a drawing canvas.
+    /// with a running length, time and climb on its header, and Save and the
+    /// ✕ sharing one pill — over a map that is simultaneously a drawing
+    /// canvas.
     ///
     /// It is swept with a line already drawn, because nearly all of it is
-    /// absent from an empty one: the points, the figures, the footer that
-    /// explains the two map gestures and every entry in the edit menu appear
-    /// only once there is something to edit.
+    /// absent from an empty one: the points, the figures and the footer that
+    /// explains the two map gestures appear only once there is something to
+    /// edit.
     @MainActor
     func testTrailMakerPassesAccessibilityAudit() throws {
         let app = launchApp(arguments: ["--ui-test-expanded-sheet"])
@@ -477,7 +478,7 @@ extension AccessibilityUITests {
     }
 
     /// And the place sheet, which is a sheet *over* that canvas — so a sweep of
-    /// the screen behind it never sees the card a tap on the map opens.
+    /// the screen behind it never sees the card a press on the map opens.
     @MainActor
     func testTrailPlaceSheetPassesAccessibilityAudit() throws {
         let app = launchApp(arguments: ["--ui-test-expanded-sheet"])
@@ -486,19 +487,19 @@ extension AccessibilityUITests {
 
         openTrailMaker(in: app)
         drawTrailPoints(Array(Self.drawnPoints.prefix(2)), on: map, in: app)
-        map.coordinate(withNormalizedOffset: Self.drawnPoints[2]).tap()
+        dropPin(at: Self.drawnPoints[2], on: map)
         XCTAssertTrue(
             element("trail-place-sheet", in: app).waitForExistence(
                 timeout: UITestTimeout.navigation
             ),
-            "a tap on the map should open the place sheet"
+            "a press on the map should open the place sheet"
         )
 
         try audit(app)
     }
 
-    /// Three taps well inside the map, spread far enough apart that no two of
-    /// them land on the same coordinate at any plausible zoom, and high enough
+    /// Three presses well inside the map, spread far enough apart that no two
+    /// of them land on the same coordinate at any plausible zoom, and high enough
     /// to stay clear of the sheet at every detent — the same offsets
     /// ``TrailMakerUITests`` draws with.
     private static let drawnPoints: [CGVector] = [

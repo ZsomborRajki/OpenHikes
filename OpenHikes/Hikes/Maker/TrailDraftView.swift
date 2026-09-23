@@ -31,10 +31,11 @@
 //  the place picked there fills that row and takes the camera to it. Every
 //  search moves the map; it just leaves a stop where it arrives.
 //
-//  **The map is the other way in.** A tap opens ``TrailPlaceSheet`` — Apple
-//  Maps' place card — on a dropped pin, a stop or one of the trail's places,
-//  and its *Add Stop* is what puts a point down. The places themselves live on
-//  the map and on their cards, not in this list.
+//  **The map is the other way in.** A press and hold drops a pin and opens
+//  ``TrailPlaceSheet`` — Apple Maps' place card — on it, and a tap opens the
+//  card of a stop, one of the trail's places or one of the map's own labels.
+//  The card's *Add Stop* is what puts a point down. The places themselves live
+//  on the map and on their cards, not in this list.
 //
 //  Every mutation goes through ``TrailDraftController`` rather than through
 //  ``TrailDraft`` directly, because the controller is the one that also writes
@@ -64,7 +65,7 @@ struct TrailDraftView: View {
     /// The hiker's own position, for the search sheet's *My Location* row.
     /// `nil` for a launch with no location, which withholds that one row.
     var locationManager: LocationManager?
-    var onCancel: () -> Void
+    var onClose: () -> Void
     var onSaved: (Hike) -> Void
 
     @Environment(\.modelContext)
@@ -75,10 +76,8 @@ struct TrailDraftView: View {
     /// button is disabled, and it exists because
     /// ``TrailDraftSave`` is asked by more than a button.
     @State private var refusal: TrailDraftRefusal?
-    @State private var isConfirmingCancel = false
-    /// *Clear* is the one edit that asks first — see ``TrailDraftActionsMenu``
-    /// for why it is the only one.
-    @State private var isConfirmingClear = false
+    /// Whether the ✕ is asking what to do with the drawing — see ``close()``.
+    @State private var isConfirmingClose = false
     /// When the hiker asked to save, and `nil` whenever they have not.
     ///
     /// A date rather than a flag because it is also *the* date: the trail is
@@ -134,8 +133,7 @@ struct TrailDraftView: View {
         //
         // A constant rather than a `@State` binding, because nothing turns it
         // off: there is no Done, no *Reorder Points* entry, and no state to
-        // keep. See ``TrailDraftActionsMenu``, which lost that entry, its Done
-        // control and the context menu it carried, all to this one line.
+        // keep.
         .environment(\.editMode, .constant(.active))
         // The mode bar sits right under the title, as it does in Apple Maps'
         // directions card. A grouped list's own top margin left a blank row's
@@ -169,20 +167,22 @@ struct TrailDraftView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        // **One way out**, as Apple Maps' directions card has one ✕. The
+        // system's back button beside it left the drawing where it was, while
+        // the button next to it threw it away — two exits a thumb apart that
+        // did opposite things. Hiding it also takes the edge swipe, which was
+        // the same back. Keeping a drawing for later is now a choice the ✕
+        // offers — see ``close()``.
+        .navigationBarBackButtonHidden(true)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel", role: .cancel, action: cancel)
-                    .accessibilityIdentifier("trail-draft-cancel")
-            }
-            ToolbarItem(placement: .primaryAction) {
-                TrailDraftActionsMenu(maker: maker) {
-                    isConfirmingClear = true
-                }
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Save", action: startNaming)
+            // Save and close share one glass pill on the trailing edge, the ✕
+            // outermost, where Apple Maps puts its own.
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button("Save", systemImage: "checkmark", action: startNaming)
                     .disabled(!draft.canBeSaved)
                     .accessibilityIdentifier("trail-draft-save")
+                Button("Close", systemImage: "xmark", action: close)
+                    .accessibilityIdentifier("trail-draft-close")
             }
         }
         // Inside this screen, which is itself inside the sheet's contents —
@@ -190,30 +190,20 @@ struct TrailDraftView: View {
         // from inside the sheet's contents*, and which ``RecordingView``'s own
         // alerts already follow.
         .confirmationDialog(
-            "Discard this trail?",
-            isPresented: $isConfirmingCancel,
+            "Close this trail?",
+            isPresented: $isConfirmingClose,
             titleVisibility: .visible
         ) {
-            Button("Discard", role: .destructive) {
+            Button("Discard Trail", role: .destructive) {
                 maker.discard()
-                onCancel()
+                onClose()
             }
+            // What the back button used to be: the drawing stays on disk and
+            // comes back the next time the maker opens.
+            Button("Keep for Later", action: onClose)
             Button("Keep Drawing", role: .cancel) { /* stays */ }
         } message: {
-            Text("The points you've put down will be deleted.")
-        }
-        // The one edit that asks. Inside this screen for the same reason the
-        // dialog above is — see ``TrailDraftActionsMenu`` for why *Clear* is
-        // the only one of the seven that gets a question.
-        .confirmationDialog(
-            "Clear this trail?",
-            isPresented: $isConfirmingClear,
-            titleVisibility: .visible
-        ) {
-            Button("Clear", role: .destructive, action: maker.clearDrawing)
-            Button("Keep Drawing", role: .cancel) { /* stays */ }
-        } message: {
-            Text("The points will be removed. You can undo this.")
+            Text("Keep it for later and it will be here the next time you make a trail.")
         }
         .alert(
             "Name Your Trail",
@@ -250,6 +240,7 @@ struct TrailDraftView: View {
                 completer: completer,
                 run: search,
                 locationManager: locationManager,
+                recents: maker.recents,
                 onPick: place(_:),
                 onClose: { isSearchingStop = false }
             )
@@ -358,8 +349,17 @@ struct TrailDraftView: View {
     /// sheets from one screen is a presentation SwiftUI refuses.
     private func searchForStop(_ target: TrailStopSearchTarget) {
         maker.select(nil)
-        search.begin(target)
+        search.begin(target, prefill: prefill(for: target))
         isSearchingStop = true
+    }
+
+    /// What the search field opens holding: the name or address of the stop
+    /// already in the row, and nothing for a row that is waiting to be filled
+    /// or a stop nothing has named — "Stop 2" is not a place to search for.
+    private func prefill(for target: TrailStopSearchTarget) -> String {
+        guard case .existing(let id, _) = target,
+              let index = draft.waypoints.firstIndex(where: { $0.id == id }) else { return "" }
+        return draft.name(ofWaypointAt: index)
     }
 
     /// Puts the place the sheet found into the row it was opened from, and
@@ -384,6 +384,10 @@ struct TrailDraftView: View {
             // row nobody is looking at.
             return
         }
+        // Remembered only once it has been put down — a pick delivered to a
+        // sheet on its way out is not a place the hiker used. A *My Location*
+        // pick names nothing and is not kept; see ``TrailStopRecents``.
+        maker.recents.record(pick)
         HapticMoment.targetHit.play()
         mapController.show(
             MKCoordinateRegion(
@@ -395,16 +399,16 @@ struct TrailDraftView: View {
         isSearchingStop = false
     }
 
-    /// Cancel throws a drawing away, so it asks first — but only when there is
-    /// something to lose. A dialog over an empty draft is a question with one
-    /// answer.
-    private func cancel() {
+    /// The ✕: closes the maker, asking first what to do with the drawing —
+    /// but only when there is one. A dialog over an empty draft is a question
+    /// with one answer.
+    private func close() {
         guard !draft.isEmpty else {
             maker.discard()
-            onCancel()
+            onClose()
             return
         }
-        isConfirmingCancel = true
+        isConfirmingClose = true
     }
 
     /// Asks what to call it, with the field blank.

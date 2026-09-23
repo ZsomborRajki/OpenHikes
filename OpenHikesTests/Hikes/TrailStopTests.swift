@@ -117,20 +117,18 @@ struct TrailStopTests {
         #expect(draft.name(ofWaypointAt: 0) == "Lurdy Ház")
     }
 
-    /// A description is not an edit, so it must not be offered back as one —
-    /// and it must not push the tap that drew the point a step further away.
-    @Test("a description takes no step of undo")
+    /// A description is not a change to the line: nothing geometric moves, so
+    /// no leg has anything to be asked about again.
+    @Test("a description leaves the line alone")
     func aDescriptionIsNotAnEdit() {
         let draft = Self.drawn([Ridge.south, Ridge.north])
         let id = draft.waypoints[1].id
+        let legs = draft.legs
 
         draft.describe(waypointWith: id, as: "Gellért-hegy")
-        draft.undo()
 
-        // One step back is the second *point*, not the name it was given: the
-        // description sat outside the history entirely, so undoing reaches past
-        // it to the tap that drew the point.
-        #expect(draft.waypoints.count == 1)
+        #expect(draft.name(ofWaypointAt: 1) == "Gellért-hegy")
+        #expect(draft.legs == legs)
     }
 
     /// The one thing on a row that could be false: a point called "Lurdy Ház"
@@ -157,38 +155,20 @@ struct TrailStopTests {
 
         #expect(draft.name(ofWaypointAt: 1) == "Kehlsteinhaus")
         #expect(draft.waypoints[1].latitude == Ridge.far)
-        #expect(draft.canUndo, "the hiker chose this, so it is a step")
     }
 
     /// A press held on a pin and released without travelling is not an edit,
     /// and since a move now clears the name, calling it one would also silently
     /// rename the row it was held on.
-    @Test("a press that went nowhere keeps the name and takes no step")
+    @Test("a press that went nowhere keeps the name")
     func aDragThatDidNotMoveChangesNothing() {
         let draft = TrailDraft()
         draft.append(Self.coordinate(Ridge.south), named: "Lurdy Ház")
         draft.append(Self.coordinate(Ridge.north))
-        let stepsBefore = draft.canUndo
 
         #expect(draft.beginDrag(ofWaypointAt: 0))
         #expect(!draft.endDrag(), "nothing moved, so nothing was edited")
 
         #expect(draft.name(ofWaypointAt: 0) == "Lurdy Ház")
-        #expect(draft.canUndo == stepsBefore)
-    }
-
-    /// A loop ends at the place it began at, so the two rows say the same
-    /// thing rather than one of them reading "Destination" beside it.
-    @Test("closing the loop carries the start's name to the end")
-    func closingTheLoopCarriesTheName() {
-        let draft = TrailDraft()
-        draft.append(Self.coordinate(Ridge.south), named: "Lurdy Ház")
-        draft.append(Self.coordinate(Ridge.north))
-
-        draft.closeTheLoop()
-
-        #expect(draft.waypoints.count == 3)
-        #expect(draft.name(ofWaypointAt: 2) == "Lurdy Ház")
-        #expect(draft.role(ofWaypointAt: 2) == .end)
     }
 }

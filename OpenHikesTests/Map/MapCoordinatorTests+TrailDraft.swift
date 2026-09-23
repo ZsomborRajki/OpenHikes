@@ -186,10 +186,10 @@ extension MapCoordinatorTests {
 
     // MARK: The canvas
 
-    /// A tap draws nothing. It drops a pin and opens the place sheet on it, and
-    /// the trail changes when the sheet's *Add Stop* is pressed.
-    @Test("a tap on the map drops a pin and changes nothing")
-    func tapDropsAPin() async {
+    /// A press draws nothing either. It drops a pin and opens the place sheet
+    /// on it, and the trail changes when the sheet's *Add Stop* is pressed.
+    @Test("a press on the map drops a pin and changes nothing")
+    func pressDropsAPin() async {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
@@ -198,25 +198,53 @@ extension MapCoordinatorTests {
         trailMaker.setEditing(true)
 
         let point = CGPoint(x: map.bounds.midX, y: map.bounds.midY)
-        #expect(coordinator.handleTrailDraftTap(at: point, in: map))
+        #expect(coordinator.mayDropTrailDraftPin(at: point, in: map))
+        #expect(coordinator.dropTrailDraftPin(at: point, in: map))
 
-        guard case .droppedPin(let spot) = trailMaker.selection else {
-            Issue.record("a tap should open the place sheet on a dropped pin")
-            return
-        }
+        #expect(trailMaker.selection == .droppedPin)
+        let spot = trailMaker.droppedPin
         let expected = map.convert(point, toCoordinateFrom: map)
-        #expect(abs(spot.latitude - expected.latitude) < Ridge.coordinateTolerance)
-        #expect(abs(spot.longitude - expected.longitude) < Ridge.coordinateTolerance)
+        #expect(abs((spot?.latitude ?? 0) - expected.latitude) < Ridge.coordinateTolerance)
+        #expect(abs((spot?.longitude ?? 0) - expected.longitude) < Ridge.coordinateTolerance)
         await settle(until: "the dropped pin to be drawn") {
             coordinator.trailDraftDroppedPin != nil
         }
         #expect(map.annotations.contains { $0 is TrailDraftDroppedPin })
-        #expect(trailMaker.draft.isEmpty, "a tap alone must not draw")
+        #expect(trailMaker.draft.isEmpty, "a press alone must not draw")
+        #endif
+    }
+
+    /// Apple Maps' tap on open ground: the card closes, and the pin it was
+    /// about stays where it was dropped, a tap away from its card again.
+    @Test("a tap on the map closes the card and keeps the pin")
+    func tapClosesTheCardAndKeepsThePin() async throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        map.setRegion(Self.ridgeRegion(), animated: false)
+        trailMaker.setEditing(true)
+        #expect(coordinator.dropTrailDraftPin(at: CGPoint(x: map.bounds.midX, y: map.bounds.midY), in: map))
+        await settle(until: "the dropped pin to be drawn") { coordinator.trailDraftDroppedPin != nil }
+        let pin = try #require(coordinator.trailDraftDroppedPin)
+
+        #expect(coordinator.handleTrailDraftTap(at: CGPoint(x: map.bounds.midX + 60, y: map.bounds.midY + 60), in: map))
+
+        #expect(trailMaker.selection == nil, "the card closed")
+        #expect(trailMaker.droppedPin != nil, "the pin did not")
+        await settleDelegateHop()
+        #expect(coordinator.trailDraftDroppedPin === pin)
+        #expect(map.annotations.contains { $0 === pin })
+
+        // And a tap on the pin opens its card again, through MapKit's selection.
+        let view = try #require(coordinator.mapView(map, viewFor: pin))
+        #expect(coordinator.selectTrailDraftAnnotation(view, on: map))
+        #expect(trailMaker.selection == .droppedPin)
         #endif
     }
 
     /// The other half of that pair: *Add Stop* is what draws, and the pin it
-    /// came from goes with the sheet.
+    /// came from goes, since it has become the stop.
     @Test("the sheet's Add Stop is what puts a point down")
     func addStopDraws() async throws {
         #if os(iOS)
@@ -225,15 +253,13 @@ extension MapCoordinatorTests {
         defer { detach(map) }
         map.setRegion(Self.ridgeRegion(), animated: false)
         trailMaker.setEditing(true)
-        #expect(coordinator.handleTrailDraftTap(at: CGPoint(x: map.bounds.midX, y: map.bounds.midY), in: map))
-        guard case .droppedPin(let spot) = trailMaker.selection else {
-            Issue.record("a tap should open the place sheet on a dropped pin")
-            return
-        }
+        #expect(coordinator.dropTrailDraftPin(at: CGPoint(x: map.bounds.midX, y: map.bounds.midY), in: map))
+        let spot = try #require(trailMaker.droppedPin)
         await settle(until: "the dropped pin to be drawn") { coordinator.trailDraftDroppedPin != nil }
 
         trailMaker.select(nil)
-        trailMaker.addStop(at: spot.clCoordinate, preferringLeg: spot.legIndex)
+        trailMaker.removeDroppedPin()
+        trailMaker.addStop(at: spot.clCoordinate, preferringLeg: spot.leg)
 
         let waypoint = try #require(trailMaker.draft.waypoints.first)
         #expect(abs(waypoint.latitude - spot.latitude) < Ridge.coordinateTolerance)
@@ -246,10 +272,32 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// *Remove Pin* is the one way a pin goes without becoming a stop, and the
+    /// card goes with it.
+    @Test("removing the pin takes it off the map and closes its card")
+    func removingThePin() async {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        map.setRegion(Self.ridgeRegion(), animated: false)
+        trailMaker.setEditing(true)
+        #expect(coordinator.dropTrailDraftPin(at: CGPoint(x: map.bounds.midX, y: map.bounds.midY), in: map))
+        await settle(until: "the dropped pin to be drawn") { coordinator.trailDraftDroppedPin != nil }
+
+        trailMaker.removeDroppedPin()
+
+        #expect(trailMaker.selection == nil)
+        #expect(trailMaker.droppedPin == nil)
+        await settle(until: "the dropped pin to be taken down") { coordinator.trailDraftDroppedPin == nil }
+        #expect(!map.annotations.contains { $0 is TrailDraftDroppedPin })
+        #endif
+    }
+
     /// There is at most one, so a hiker exploring the map leaves no trail of
     /// discarded markers behind them.
-    @Test("a second tap moves the pin rather than adding another")
-    func aSecondTapReplacesThePin() async throws {
+    @Test("a second press moves the pin rather than adding another")
+    func aSecondPressReplacesThePin() async throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
@@ -257,11 +305,11 @@ extension MapCoordinatorTests {
         map.setRegion(Self.ridgeRegion(), animated: false)
         trailMaker.setEditing(true)
 
-        #expect(coordinator.handleTrailDraftTap(at: CGPoint(x: map.bounds.midX, y: map.bounds.midY), in: map))
+        #expect(coordinator.dropTrailDraftPin(at: CGPoint(x: map.bounds.midX, y: map.bounds.midY), in: map))
         await settle(until: "the first pin to be drawn") { coordinator.trailDraftDroppedPin != nil }
         let first = try #require(coordinator.trailDraftDroppedPin)
         #expect(
-            coordinator.handleTrailDraftTap(
+            coordinator.dropTrailDraftPin(
                 at: CGPoint(x: map.bounds.midX + 40, y: map.bounds.midY + 40),
                 in: map
             )
@@ -272,7 +320,7 @@ extension MapCoordinatorTests {
         #endif
     }
 
-    @Test("a tap on the map drops nothing while the maker is closed")
+    @Test("a tap or a press on the map does nothing while the maker is closed")
     func tapDropsNothingWhenClosed() {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
@@ -282,15 +330,18 @@ extension MapCoordinatorTests {
 
         let point = CGPoint(x: map.bounds.midX, y: map.bounds.midY)
         #expect(!coordinator.handleTrailDraftTap(at: point, in: map))
+        #expect(!coordinator.mayDropTrailDraftPin(at: point, in: map))
+        #expect(!coordinator.dropTrailDraftPin(at: point, in: map))
         #expect(trailMaker.selection == nil)
+        #expect(trailMaker.droppedPin == nil)
         #expect(trailMaker.draft.isEmpty)
         #endif
     }
 
     /// The controls over the map keep their claim on a touch. A thumb on the
     /// tracking button, the credit line or the pill that opened this mode must
-    /// not leave a pin behind it.
-    @Test("a tap on a control over the map drops nothing")
+    /// neither close the card nor leave a pin behind it.
+    @Test("a touch on a control over the map is the control's")
     func tapOnAControlDropsNothing() throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
@@ -303,6 +354,7 @@ extension MapCoordinatorTests {
 
         let onTheButton = CGPoint(x: button.frame.midX, y: button.frame.midY)
         #expect(!coordinator.handleTrailDraftTap(at: onTheButton, in: map))
+        #expect(!coordinator.mayDropTrailDraftPin(at: onTheButton, in: map))
         #expect(trailMaker.selection == nil)
         #endif
     }
@@ -391,8 +443,16 @@ extension MapCoordinatorTests {
         )
 
         trailMaker.setEditing(true)
+        // A card is up, so what the tap did can be seen: it closed the card —
+        // the maker's meaning for a tap on the canvas — and the pin it was
+        // about stays, rather than the hike under the tap opening.
+        let elsewhere = CGPoint(x: map.bounds.midX / 2, y: map.bounds.midY / 2)
+        #expect(coordinator.dropTrailDraftPin(at: elsewhere, in: map))
+        #expect(trailMaker.selection == .droppedPin)
+
         #expect(coordinator.handleTrailDraftTap(at: onTheLine, in: map))
-        #expect(trailMaker.selection != nil)
+        #expect(trailMaker.selection == nil)
+        #expect(trailMaker.droppedPin != nil)
         #endif
     }
 

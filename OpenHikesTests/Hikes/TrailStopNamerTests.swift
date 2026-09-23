@@ -26,7 +26,7 @@ struct TrailStopNamerTests {
     ///
     /// It holds each question open until `answer()` is called, which is what
     /// makes "one at a time" assertable at all: a stub that returned at once
-    /// would drain the queue before anything could look at it.
+    /// would let the reader empty the stream before anything could look at it.
     private final class Stub: TrailStopNaming {
         private(set) var asked: [CLLocationCoordinate2D] = []
         /// What to answer with, in the order the questions arrive. `nil` is a
@@ -73,7 +73,7 @@ struct TrailStopNamerTests {
 
     /// Lets whatever the namer has started reach its first suspension point.
     ///
-    /// Not a sleep: the drain is an unstructured `Task` on this same actor, so
+    /// Not a sleep: the reader is an unstructured `Task` on this same actor, so
     /// yielding is exactly the barrier that lets it run — the shape every other
     /// suite here waits on an effect with.
     private func settle() async {
@@ -229,11 +229,11 @@ struct TrailStopNamerTests {
         #expect(maker.draft.name(ofWaypointAt: 0) == "After")
     }
 
-    /// A drain cancelled by closing the maker can still be finishing its last
-    /// request when the next one starts. It used to hand the handle back on
-    /// the way out, so the next call started a second drain beside the running
-    /// one — two lookups at once.
-    @Test("a drain that was cleared cannot let a second one start beside the next")
+    /// A reader cancelled by closing the maker can still be finishing its last
+    /// request when the next one starts. It must neither answer for the new
+    /// drawing nor leave the next call starting a second reader beside the
+    /// running one — two lookups at once.
+    @Test("a reader that was cleared cannot let a second one start beside the next")
     func aClearedDrainDoesNotDoubleTheNext() async {
         let stub = Stub()
         stub.answers = [nil, nil, nil]
@@ -246,7 +246,7 @@ struct TrailStopNamerTests {
         await settle()
         #expect(stub.asked.count == 2, "the cleared question is still open, and the new one has started")
 
-        // The cleared drain's request comes back and that drain ends.
+        // The cleared reader's request comes back and that reader ends.
         stub.answer()
         await settle()
         namer.nameUnnamed(in: Self.waypoints([Ridge.north]))

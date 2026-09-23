@@ -2,17 +2,15 @@
 //  TrailDraftEditingTests.swift
 //  OpenHikesTests
 //
-//  The six things Phase 3 lets a hiker do to a line that is already drawn.
+//  The things a hiker can do to a line that is already drawn.
 //
 //  Each of them is arithmetic over a list, and every one of them is a gesture
 //  that gets the list wrong in a way nobody sees until they save: a reorder
-//  that lands one row short, a reverse that leaves the legs pointing the way
-//  they were, a *Close the Loop* that stacks a second zero-length leg onto a
-//  loop that was already closed. What is asserted here is the list *and* the
-//  two figures that come out of it, because the header, the rows and the
-//  saved hike all read the second — see ``TrailDraftTests``.
+//  that lands one row short, a delete that does not rejoin what is left. What
+//  is asserted here is the list *and* the two figures that come out of it,
+//  because the header, the rows and the saved hike all read the second — see
+//  ``TrailDraftTests``.
 //
-//  ``TrailDraftHistoryTests`` owns undo and redo, and
 //  ``TrailDraftRoutingTests`` owns which of these operations costs a question.
 //
 
@@ -47,13 +45,7 @@ struct TrailDraftEditingTests {
         return draft
     }
 
-    /// The same line, with nothing behind it to undo.
-    ///
-    /// Drawing a line records a step per point, so a draft built by tapping
-    /// can always be undone — which makes it useless for asserting that an
-    /// operation recorded *no* step. A restored draft has no history by
-    /// design, so ``TrailDraft/canUndo`` on one is exactly the question "did
-    /// what I just did count as an edit".
+    /// The same line, restored rather than tapped in.
     private static func settledDraft(_ latitudes: [Double]) -> TrailDraft {
         let draft = TrailDraft()
         draft.replace(
@@ -103,7 +95,6 @@ struct TrailDraftEditingTests {
         draft.move(waypointAt: 7, to: Self.coordinate(Line.fourth))
 
         #expect(Self.latitudes(of: draft) == [Line.first, Line.second])
-        #expect(!draft.canUndo, "a move that moved nothing is not a step")
     }
 
     // MARK: Inserting into a leg
@@ -162,14 +153,13 @@ struct TrailDraftEditingTests {
 
     /// The list can hand over offsets for rows that have already gone, and a
     /// delete that matched none of them is not an edit.
-    @Test("deleting nothing is not a step")
+    @Test("deleting nothing changes nothing")
     func deletingNothing() {
         let draft = Self.settledDraft(Line.all)
 
         draft.remove(atOffsets: IndexSet([9]))
 
         #expect(draft.waypoints.count == 4)
-        #expect(!draft.canUndo)
     }
 
     // MARK: Reordering
@@ -196,14 +186,13 @@ struct TrailDraftEditingTests {
         #expect(Self.latitudes(of: draft) == [Line.first, Line.fourth, Line.second, Line.third])
     }
 
-    @Test("a reorder that changes nothing is not a step")
+    @Test("a reorder that goes nowhere changes nothing")
     func reorderingNowhere() {
         let draft = Self.settledDraft(Line.all)
 
         draft.moveWaypoints(fromOffsets: IndexSet([1]), toOffset: 1)
 
         #expect(Self.latitudes(of: draft) == Line.all)
-        #expect(!draft.canUndo)
     }
 
     /// The length is read off the legs, and a reorder changes which legs there
@@ -220,123 +209,16 @@ struct TrailDraftEditingTests {
         #expect(draft.distanceAlongLine(toWaypointAt: 2) == draft.distanceMeters)
     }
 
-    // MARK: Reversing
+    // MARK: Throwing it away
 
-    @Test("reversing turns the points round")
-    func reversing() {
-        let draft = Self.draft(Line.all)
-
-        draft.reverse()
-
-        #expect(Self.latitudes(of: draft) == Line.all.reversed())
-    }
-
-    /// The claim that makes reversing free: every leg already has its shape,
-    /// and a walking path between two places is the same path either way — so
-    /// the legs are turned round rather than thrown away and asked for again.
-    @Test("reversing keeps every leg's shape, turned round")
-    func reversingKeepsTheShapes() throws {
-        let draft = Self.draft([Line.first, Line.second])
-        let ends = try #require(draft.legs.first).ends
-        // A leg that has been given a shape, as the router would have —
-        // marked as asked about first, because an answer is only taken by a
-        // leg that is waiting for one.
-        draft.beginRouting([ends])
-        draft.apply(
-            TrailLegRoute(
-                coordinates: [
-                    ends.start,
-                    RouteCoordinate(latitude: Line.elsewhere, longitude: Line.longitude),
-                    ends.end,
-                ],
-                distanceMeters: 1234,
-                snap: .snapped
-            ),
-            to: ends
-        )
-
-        draft.reverse()
-
-        let reversed = try #require(draft.legs.first)
-        #expect(reversed.snap == .snapped, "the answer survives the reversal")
-        #expect(reversed.ends == ends.flipped)
-        let detour = RouteCoordinate(latitude: Line.elsewhere, longitude: Line.longitude)
-        #expect(reversed.coordinates == [ends.end, detour, ends.start])
-        #expect(reversed.distanceMeters == 1234)
-    }
-
-    /// Apple Maps' swap button: a lone start becomes a lone destination with
-    /// the start field open, and one undo puts it back.
-    @Test("reversing one point swaps which field it is in")
-    func reversingOnePoint() {
-        let draft = Self.settledDraft([Line.first])
-
-        draft.reverse()
-
-        #expect(draft.startIsOpen)
-        #expect(draft.role(ofWaypointAt: 0) == .end)
-        draft.undo()
-        #expect(!draft.startIsOpen)
-    }
-
-    // MARK: Closing the loop
-
-    @Test("closing the loop adds a point back at the start")
-    func closingTheLoop() {
-        let draft = Self.draft([Line.first, Line.second, Line.third])
-
-        draft.closeTheLoop()
-
-        #expect(Self.latitudes(of: draft) == [Line.first, Line.second, Line.third, Line.first])
-        #expect(draft.legs.count == 3)
-    }
-
-    /// Two points at the same place are still two points — see
-    /// ``TrailDraftTests`` — so a loop closed twice would be a trail with a
-    /// zero-length leg on the end and a row nobody can tell from the first.
-    @Test("a loop that is already closed cannot be closed again")
-    func closingAClosedLoop() {
-        let draft = Self.draft([Line.first, Line.second, Line.third])
-        draft.closeTheLoop()
-
-        #expect(!draft.canCloseTheLoop)
-        draft.closeTheLoop()
-        #expect(draft.waypoints.count == 4)
-    }
-
-    @Test("a single point is not a loop")
-    func onePointIsNotALoop() {
-        let draft = Self.draft([Line.first])
-
-        #expect(!draft.canCloseTheLoop)
-        draft.closeTheLoop()
-        #expect(draft.waypoints.count == 1)
-    }
-
-    // MARK: Clearing
-
-    /// *Clear* empties the drawing and leaves the maker open, which is what
-    /// makes it undoable — unlike ``TrailDraft/clear()``, which is the drawing
-    /// ending.
-    @Test("clearing the drawing empties it and can be undone")
-    func clearingTheDrawing() {
-        let draft = Self.draft(Line.all)
-
-        draft.clearDrawing()
-
-        #expect(draft.isEmpty)
-        #expect(draft.canUndo)
-        draft.undo()
-        #expect(Self.latitudes(of: draft) == Line.all)
-    }
-
-    @Test("throwing the draft away leaves nothing to undo")
+    @Test("throwing the draft away empties it")
     func clearingTheDraft() {
         let draft = Self.draft(Line.all)
 
         draft.clear()
 
         #expect(draft.isEmpty)
-        #expect(!draft.canUndo, "the drawing ended; there is nothing to come back to")
+        #expect(draft.legs.isEmpty)
+        #expect(draft.slots == [.open(.start), .open(.end)])
     }
 }

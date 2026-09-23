@@ -175,7 +175,8 @@ extension OpenHikesModel {
     /// honour in Hiking mode. Other modes use Apple Maps directions.
     static func makeTrailMaker(
         container: ModelContainer,
-        trailGraphProvider: (any TrailGraphProviding)?
+        graph trailGraphProvider: (any TrailGraphProviding)?,
+        defaults: UserDefaults
     ) -> TrailDraftController {
         TrailDraftController(
             store: TrailDraftStore(context: container.mainContext),
@@ -185,7 +186,10 @@ extension OpenHikesModel {
             placeSource: Self.makeTrailPointSource(),
             elevationSource: Self.makeTrailElevationSource(),
             naming: Self.makeTrailStopNaming(),
-            travelRouters: Self.makeDirectionsRouters()
+            travelRouters: Self.makeDirectionsRouters(),
+            // The model's own defaults, so a UI-testing launch keeps its
+            // recents in the scratch domain rather than the developer's.
+            recents: TrailStopRecents(defaults: defaults)
         )
     }
 

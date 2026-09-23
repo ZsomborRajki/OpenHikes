@@ -5,12 +5,12 @@
 //  What editing a drawn line costs on the wire.
 //
 //  Phase 2's rule was *one question per leg, once*, and it was easy to keep
-//  while a line could only grow. Phase 3 rearranges the list underneath the
-//  legs, and every one of the six operations could plausibly re-ask for all of
-//  them: a reorder that keyed legs on their position rather than on their two
-//  ends would ask about every leg after the one that moved, a drag that asked
-//  per frame would spend a request a sixtieth of a second, and an undo that
-//  rebuilt from points alone would ask for the whole trail again.
+//  while a line could only grow. Editing rearranges the list underneath the
+//  legs, and every operation could plausibly re-ask for all of them: a reorder
+//  that keyed legs on their position rather than on their two ends would ask
+//  about every leg after the one that moved, a drag that asked per frame would
+//  spend a request a sixtieth of a second, and putting a deleted stop back
+//  would ask for its legs again if nothing remembered them.
 //
 //  None of those is visible on screen — the line ends up right either way —
 //  and all of them are visible to a volunteer-run API that has already
@@ -18,7 +18,7 @@
 //  legs were asked about rather than only by how many.
 //
 //  ``TrailDraftEditingTests`` owns what each operation does to the list, and
-//  ``TrailDraftHistoryTests`` owns the memo these claims rest on.
+//  ``TrailLegMemoTests`` owns the memo these claims rest on.
 //
 
 import CoreLocation
@@ -92,22 +92,6 @@ extension TrailDraftRoutingTests {
         )
     }
 
-    /// Reversing a trail changes every leg's direction and therefore every
-    /// leg's key — and asks for none of them, because a walking path between
-    /// two places is the same path either way and the shapes are simply turned
-    /// round. See ``TrailDraft/reverse()``.
-    @Test("reversing the line asks for nothing")
-    func reversingAsksNothing() async {
-        let router = StubTrailLegRouter(answering: .snapped)
-        let maker = await Self.drawn(Trail.all, over: router)
-
-        maker.reverse()
-
-        await settleDelegateHop()
-        #expect(await router.askedCount() == 3)
-        #expect(maker.draft.legs.allSatisfy { $0.snap == .snapped })
-    }
-
     @Test("deleting a point asks only about the leg that replaces two")
     func deletingAsksOnce() async {
         let router = StubTrailLegRouter(answering: .snapped)
@@ -128,7 +112,7 @@ extension TrailDraftRoutingTests {
         let router = StubTrailLegRouter(answering: .snapped)
         let maker = await Self.drawn([Trail.first, Trail.fourth], over: router)
 
-        maker.addStop(at: Self.place(Trail.second), preferringLeg: 0)
+        maker.addStop(at: Self.place(Trail.second), preferringLeg: Self.ends(Trail.first, Trail.fourth))
 
         await settleDelegateHop(until: "the two new legs to settle") {
             maker.draft.legs.count == 2
@@ -144,24 +128,24 @@ extension TrailDraftRoutingTests {
         )
     }
 
-    /// Undo puts the shapes back from the drawing's own memory, so a hiker who
-    /// undoes a delete does not pay for the whole trail again — which on a
-    /// server that has just started refusing is the difference between a line
-    /// that comes back and one that comes back straight.
-    @Test("undoing an edit asks for nothing")
-    func undoAsksNothing() async {
+    /// The shapes come back from the drawing's own memory, so a hiker who puts
+    /// a deleted stop back where it was does not pay for those legs again —
+    /// which on a server that has just started refusing is the difference
+    /// between a line that comes back and one that comes back straight.
+    @Test("putting a deleted stop back where it was asks for nothing")
+    func puttingAStopBackAsksNothing() async {
         let router = StubTrailLegRouter(answering: .snapped)
         let maker = await Self.drawn([Trail.first, Trail.second, Trail.third], over: router)
         maker.removeWaypoints(atOffsets: IndexSet([1]))
         await settleDelegateHop(until: "the rejoined leg to settle") {
             maker.draft.legs.allSatisfy { $0.snap == .snapped }
         }
-        let beforeUndo = await router.askedCount()
+        let beforeRestoring = await router.askedCount()
 
-        maker.undo()
+        maker.addStop(at: Self.place(Trail.second))
 
         await settleDelegateHop()
-        #expect(await router.askedCount() == beforeUndo)
+        #expect(await router.askedCount() == beforeRestoring)
         #expect(maker.draft.legs.count == 2)
         #expect(maker.draft.legs.allSatisfy { $0.snap == .snapped })
     }
@@ -212,7 +196,7 @@ extension TrailDraftRoutingTests {
     }
 
     /// A press held on a pin and released without travelling is not an edit,
-    /// so it costs no request, no store write and no step of undo.
+    /// so it costs no request and no store write.
     @Test("a drag that went nowhere is not an edit")
     func aDragThatWentNowhere() async {
         let router = StubTrailLegRouter(answering: .snapped)
@@ -223,10 +207,7 @@ extension TrailDraftRoutingTests {
 
         await settleDelegateHop()
         #expect(await router.askedCount() == 1)
-        // No step was taken either, which is what undoing once shows: the
-        // thing it comes back from is the second point going down.
-        maker.draft.undo()
-        #expect(maker.draft.waypoints.count == 1)
+        #expect(maker.draft.waypoints.map(\.latitude) == [Trail.first, Trail.second])
     }
 
     @Test("a cancelled drag puts the point back and asks nothing")

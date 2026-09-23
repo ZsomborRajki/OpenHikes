@@ -14,6 +14,11 @@
 import XCTest
 
 extension XCTestCase {
+    /// How long ``dropPin(at:on:)`` holds: longer than the half second the
+    /// app waits before a press drops a pin, so a loaded runner's late touch
+    /// still counts.
+    private static let pinDropPressDuration: TimeInterval = 0.8
+
     /// Opens the trail maker from the map's own pill, which is the only way
     /// in.
     @MainActor
@@ -32,22 +37,22 @@ extension XCTestCase {
         )
     }
 
-    /// Puts a stop down at each offset, through the place sheet a tap on the
-    /// map opens. The first two fill the start and the destination; every
+    /// Puts a stop down at each offset, through the place sheet a press on
+    /// the map opens. The first two fill the start and the destination; every
     /// later one goes into the leg nearest to it, as *Add Stop* does.
     ///
     /// **Two gestures per point**, and that is the canvas rather than the
-    /// helper: a tap drops a pin and asks, and the sheet's *Add Stop* is what
+    /// helper: a press drops a pin and asks, and the sheet's *Add Stop* is what
     /// draws — see ``TrailPlaceSheet``.
     ///
-    /// Waiting on the row rather than tapping three times and asserting once:
-    /// a tap that missed is indistinguishable from one the app has not
+    /// Waiting on the row rather than pressing three times and asserting once:
+    /// a press that missed is indistinguishable from one the app has not
     /// processed yet, and only the wait tells them apart. No fixed sleep —
     /// each point is its own effect to wait on.
     @MainActor
     func drawTrailPoints(_ offsets: [CGVector], on map: XCUIElement, in app: XCUIApplication) {
         for (index, offset) in offsets.enumerated() {
-            map.coordinate(withNormalizedOffset: offset).tap()
+            dropPin(at: offset, on: map)
             tapInPlaceSheet("trail-place-add-stop", in: app)
             let row = element("trail-draft-point-\(index + 1)", in: app)
             XCTAssertTrue(
@@ -57,15 +62,22 @@ extension XCTestCase {
         }
     }
 
-    /// Presses a button on the place sheet a tap on the map opened, and waits
-    /// for the sheet to go if the button closes it — so the next tap lands on
-    /// the map rather than on a sheet on its way out.
+    /// Drops a pin on the map, which is a press and hold rather than a tap —
+    /// a tap only ever closes the card that is up.
+    @MainActor
+    func dropPin(at offset: CGVector, on map: XCUIElement) {
+        map.coordinate(withNormalizedOffset: offset).press(forDuration: Self.pinDropPressDuration)
+    }
+
+    /// Presses a button on the place sheet a press on the map opened, and
+    /// waits for the sheet to go if the button closes it — so the next press
+    /// lands on the map rather than on a sheet on its way out.
     @MainActor
     func tapInPlaceSheet(_ identifier: String, in app: XCUIApplication) {
         let button = element(identifier, in: app)
         XCTAssertTrue(
             button.waitForExistence(timeout: UITestTimeout.navigation),
-            "a tap on the map should open the place sheet offering \(identifier)"
+            "a press on the map should open the place sheet offering \(identifier)"
         )
         button.tap()
         XCTAssertTrue(

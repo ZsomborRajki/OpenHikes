@@ -18,7 +18,7 @@ struct TrailTravelModeTests {
         let maker = TrailDraftController(router: hiking, travelRouters: [.walking: walking])
         maker.setEditing(true)
         Self.draw(on: maker)
-        let previous = try #require(maker.routingTask)
+        let previous = try #require(maker.routingReader)
         await hiking.waitUntilAsked()
         maker.setTravelMode(.walking)
         await settleDelegateHop(until: "the newer walking answer") {
@@ -36,18 +36,20 @@ struct TrailTravelModeTests {
         let maker = TrailDraftController(router: router)
         maker.setEditing(true)
         Self.draw(on: maker)
-        let pass = try #require(maker.routingTask)
+        let reader = try #require(maker.routingReader)
         await router.waitUntilAsked()
         maker.appendWaypoint(at: CLLocationCoordinate2D(latitude: 47.52, longitude: 19.06))
-        #expect(maker.routingTask == pass)
+        #expect(maker.routingReader == reader, "the same reader, not a second beside it")
         #expect(await router.askedCount() == 1)
         await router.release()
-        await pass.value
+        await settleDelegateHop(until: "both legs to be answered, one after the other") {
+            maker.draft.legs.count == 2 && maker.draft.legs.allSatisfy { $0.snap == .snapped }
+        }
         #expect(await router.askedCount() == 2)
         #expect(maker.draft.legs.allSatisfy { $0.snap == .snapped })
     }
 
-    @Test("changing mode replaces the line without changing its stops or undo history")
+    @Test("changing mode replaces the line without changing its stops")
     func changesMode() async {
         let hike = StubTrailLegRouter(answering: .snapped)
         let city = StubTrailLegRouter(answering: .unmapped(.noDirections))
@@ -55,59 +57,15 @@ struct TrailTravelModeTests {
         maker.setEditing(true)
         Self.draw(on: maker)
         await settleDelegateHop(until: "the hiking route") { maker.draft.legs.first?.snap == .snapped }
-        let before = maker.draft.contents
+        let stops = maker.draft.waypoints
         #expect(maker.draft.travelMode == .hiking)
         maker.setTravelMode(.walking)
         await settleDelegateHop(until: "the walking answer") {
             maker.draft.legs.first?.snap == .unmapped(.noDirections)
         }
-        #expect(maker.draft.contents == before)
-        maker.undo()
-        #expect(maker.draft.waypoints.count == 1)
-        #expect(maker.draft.travelMode == .walking)
-        maker.redo()
-        #expect(maker.draft.legs.first?.snap == .unmapped(.noDirections))
+        #expect(maker.draft.waypoints == stops)
         maker.setTravelMode(.hiking)
         await settleDelegateHop(until: "hiking again") { maker.draft.legs.first?.snap == .snapped }
-    }
-
-    @Test("reversing city routes asks about the reverse journey", arguments: [
-        TrailTravelMode.walking, .cycling, .driving,
-    ])
-    func reverse(_ mode: TrailTravelMode) async throws {
-        let router = StubTrailLegRouter(answering: .snapped)
-        let maker = TrailDraftController(travelRouters: [mode: router])
-        maker.setEditing(true)
-        maker.setTravelMode(mode)
-        Self.draw(on: maker)
-        await settleDelegateHop(until: "the forward route") { maker.draft.legs.first?.snap == .snapped }
-        let forward = try #require(maker.draft.legs.first?.ends)
-        maker.reverse()
-        await settleDelegateHop(until: "the reverse route") { maker.draft.legs.first?.snap == .snapped }
-        #expect(await router.askedEnds() == [forward, forward.flipped])
-    }
-
-    @Test("reversing while city directions are in flight starts the reverse journey")
-    func reverseInFlight() async throws {
-        let router = StubTrailLegRouter(answering: .snapped, holding: true)
-        let maker = TrailDraftController(travelRouters: [.walking: router])
-        maker.setEditing(true)
-        maker.setTravelMode(.walking)
-        Self.draw(on: maker)
-        let forwardPass = try #require(maker.routingTask)
-        await router.waitUntilAsked()
-        let forward = try #require(await router.askedEnds().first)
-
-        maker.reverse()
-        let reversePass = try #require(maker.routingTask)
-        await router.waitUntilAsked(2)
-        await router.release()
-        await forwardPass.value
-        await reversePass.value
-
-        #expect(await router.askedEnds() == [forward, forward.flipped])
-        #expect(maker.draft.legs.first?.ends == forward.flipped)
-        #expect(maker.draft.legs.first?.snap == .snapped)
     }
 
     @Test("the mode resumes with the draft", arguments: TrailTravelMode.allCases)

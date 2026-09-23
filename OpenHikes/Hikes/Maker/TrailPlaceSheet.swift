@@ -62,7 +62,7 @@ struct TrailPlaceSheetPresenter: ViewModifier {
 /// is now — `nil` for something that has gone, which closes the card.
 struct TrailPlaceCard: Equatable {
     enum Primary: Equatable {
-        case addStop(name: String, preferredLeg: Int?)
+        case addStop(name: String, preferredLeg: TrailLegEnds?)
         case removeStop(UUID)
     }
 
@@ -75,18 +75,23 @@ struct TrailPlaceCard: Equatable {
     var facts: [TrailPlaceFact] = []
     var openStreetMapURL: URL?
     var primary: Primary
-    /// The place's id when *Remove* takes it off the trail; `nil` for a dropped
-    /// pin, where *Remove Pin* only closes the card.
+    /// The place's id when *Remove* takes it off the trail; `nil` for the
+    /// dropped pin, whose *Remove Pin* takes the pin off the map.
     var removablePlace: UUID?
+    /// Whether this is the dropped pin's card — the one whose *Add Stop* also
+    /// takes the pin away, since it has become the stop.
+    var isDroppedPin = false
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
     @MainActor
-    init?(_ selection: TrailDraftSelection, in draft: TrailDraft) {
+    init?(_ selection: TrailDraftSelection, in draft: TrailDraft, droppedPin: TrailDraftDroppedPinSpot?) {
         switch selection {
-        case .droppedPin(let spot):
+        case .droppedPin:
+            guard let spot = droppedPin else { return nil }
+            isDroppedPin = true
             // A label's own name when the pin went down on one — see
             // `MapTrailDraftFeatures.swift` — and Apple Maps' heading otherwise.
             title = spot.name.isEmpty ? String(localized: "Dropped Pin") : spot.name
@@ -96,7 +101,7 @@ struct TrailPlaceCard: Equatable {
             longitude = spot.longitude
             // A named pin's stop keeps that name. An unnamed one is named by
             // its address when it becomes a stop, as a tapped stop is.
-            primary = .addStop(name: spot.name, preferredLeg: spot.legIndex)
+            primary = .addStop(name: spot.name, preferredLeg: spot.leg)
         case .place(let id):
             guard let row = draft.placeRows.first(where: { $0.id == id }) else { return nil }
             let place = row.place
@@ -146,11 +151,11 @@ struct TrailPlaceSheet: View {
 
     var body: some View {
         if let selection = maker.selection,
-           let card = TrailPlaceCard(selection, in: maker.draft) {
+           let card = TrailPlaceCard(selection, in: maker.draft, droppedPin: maker.droppedPin) {
             TrailPlaceCardView(maker: maker, card: card)
         } else {
-            // What the card was about has gone — an undo, a delete from the
-            // list — so there is nothing left to say about it.
+            // What the card was about has gone — a stop deleted from the list
+            // under it — so there is nothing left to say about it.
             Color.clear.onAppear { maker.select(nil) }
         }
     }
@@ -252,6 +257,9 @@ private struct TrailPlaceCardView: View {
                     identifier: "trail-place-add-stop"
                 ) {
                     maker.select(nil)
+                    // The pin has become the stop; two markers on one spot
+                    // would be the map saying it twice.
+                    if card.isDroppedPin { maker.removeDroppedPin() }
                     maker.addStop(at: card.coordinate, named: name, preferringLeg: leg)
                     HapticMoment.targetHit.play()
                 }
@@ -270,22 +278,30 @@ private struct TrailPlaceCardView: View {
                 }
             }
             shareButton
-            if case .addStop = card.primary {
-                action(
-                    card.removablePlace == nil ? "Remove Pin" : "Remove",
-                    systemImage: card.removablePlace == nil ? "mappin.slash" : "trash",
-                    prominent: false,
-                    role: card.removablePlace == nil ? nil : .destructive,
-                    identifier: "trail-place-remove"
-                ) {
-                    maker.select(nil)
-                    if let place = card.removablePlace { maker.removePlace(id: place) }
-                }
-            }
+            if case .addStop = card.primary { removeButton }
         }
         // One height for the row, whichever button's word needs the most room
         // at the hiker's type size.
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// *Remove Pin* for the dropped pin, which takes it off the map, and
+    /// *Remove* for one of the trail's places, which takes it off the trail.
+    private var removeButton: some View {
+        action(
+            card.removablePlace == nil ? "Remove Pin" : "Remove",
+            systemImage: card.removablePlace == nil ? "mappin.slash" : "trash",
+            prominent: false,
+            role: card.removablePlace == nil ? nil : .destructive,
+            identifier: "trail-place-remove"
+        ) {
+            if let place = card.removablePlace {
+                maker.select(nil)
+                maker.removePlace(id: place)
+            } else {
+                maker.removeDroppedPin()
+            }
+        }
     }
 
     private var shareButton: some View {

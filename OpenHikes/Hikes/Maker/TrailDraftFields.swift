@@ -274,7 +274,7 @@ struct TrailDraftLineFooter: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if !draft.canBeSaved {
-                Text("Choose a start and a destination above, or tap the map.")
+                Text("Choose a start and a destination above, or press and hold the map.")
                     .accessibilityIdentifier("trail-draft-empty")
             }
             // One line for the whole line, saying the worst thing any leg has
@@ -285,14 +285,14 @@ struct TrailDraftLineFooter: View {
                 TrailDraftNoticeLabel(notice: notice)
             }
             // The gestures on the map that nothing on screen could otherwise
-            // announce: a grey route looks like scenery rather than a choice,
-            // and a pin that answers a press advertises nothing. Withheld until
-            // there is a line to do either to.
+            // announce: a press that drops a pin, a grey route that looks like
+            // scenery rather than a choice, and a stop that answers a press.
+            // Withheld until there is a line to do any of them to.
             if !draft.legs.isEmpty {
                 Text(
                     """
-                    Tap the map to add a stop, or a grey route to take it instead. \
-                    Press and hold a stop to move it.
+                    Press and hold the map to add a stop, or tap a grey route to take it \
+                    instead. Press and hold a stop to move it.
                     """
                 )
             }

@@ -145,7 +145,7 @@ struct DirectionsTrailLegRouterTests {
         #expect(await router.route(Self.ends)?.snap.isRetryable == true)
         #expect(await router.route(Self.ends)?.snap == .snapped)
         _ = await router.route(Self.ends)
-        _ = await router.route(Self.ends.flipped)
+        _ = await router.route(TrailLegEnds(start: Self.ends.end, end: Self.ends.start))
         #expect(await calls.count == 3)
     }
 

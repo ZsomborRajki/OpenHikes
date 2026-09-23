@@ -8,16 +8,16 @@
 //  Phase 2 could get away without this. A line that only ever grows keeps
 //  every leg it has resolved, because ``TrailDraft``'s `rebuildLegs` matches
 //  the legs it already holds against the new list by ``TrailLegEnds`` and a
-//  new point at the end changes none of them. Phase 3 breaks that in the
-//  ordinary case: deleting a point drops two legs and makes one, undoing the
-//  delete asks for the two back, and neither of them is in the list any more
+//  new point at the end changes none of them. Editing breaks that in the
+//  ordinary case: deleting a point drops two legs and makes one, putting it
+//  back asks for the two again, and neither of them is in the list any more
 //  to be matched against.
 //
 //  So the settled answers are remembered separately from the list they are
-//  currently arranged into. The effect a hiker sees is that **undo restores
-//  the line rather than redrawing it straight and fetching it again** — and
-//  the same is true of a reorder that puts an adjacency back, of dragging a
-//  point away and back, and of deleting a detour and undoing it.
+//  currently arranged into. The effect a hiker sees is that **a stop put back
+//  where it was restores the line rather than redrawing it straight and
+//  fetching it again** — and the same is true of a reorder that puts an
+//  adjacency back and of dragging a point away and back.
 //
 //  ## What is remembered, and what deliberately is not
 //

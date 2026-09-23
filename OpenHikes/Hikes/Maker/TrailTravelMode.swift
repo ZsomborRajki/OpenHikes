@@ -1,6 +1,6 @@
 import Foundation
 
-/// A property of this draft, independent of the freehand switch and undo history.
+/// A property of this draft, independent of the freehand switch.
 nonisolated enum TrailTravelMode: String, CaseIterable, Codable, Sendable {
     case cycling = "cycling"
     case driving = "driving"

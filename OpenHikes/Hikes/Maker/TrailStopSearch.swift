@@ -78,6 +78,9 @@ nonisolated enum TrailStopSearchTarget: Equatable, Sendable {
 /// *My Location* row hands back, for the reason it gives.
 nonisolated struct TrailStopSearchPick: Equatable, Sendable {
     var name: String
+    /// The address line the suggestion carried — what a recent entry shows
+    /// under the name. Empty where there was none.
+    var subtitle: String = ""
     var latitude: Double
     var longitude: Double
 
@@ -91,7 +94,7 @@ nonisolated struct TrailStopSearchPick: Equatable, Sendable {
     /// The *first*: it is the one the request was about, and offering a second
     /// answer to a row the hiker has already chosen would be the sheet arguing
     /// with them.
-    init?(firstOf items: [MKMapItem], fallbackName: String) {
+    init?(firstOf items: [MKMapItem], fallbackName: String, subtitle: String = "") {
         guard let item = items.first else { return nil }
         let coordinate = item.location.coordinate
         guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
@@ -101,12 +104,14 @@ nonisolated struct TrailStopSearchPick: Equatable, Sendable {
         // rather than nothing, because a search that resolved to a coordinate
         // has found the place whatever it declines to call it.
         name = TrailStopName.chosen(item) ?? fallbackName
+        self.subtitle = subtitle
         latitude = coordinate.latitude
         longitude = coordinate.longitude
     }
 
-    init(name: String, coordinate: CLLocationCoordinate2D) {
+    init(name: String, coordinate: CLLocationCoordinate2D, subtitle: String = "") {
         self.name = name
+        self.subtitle = subtitle
         latitude = coordinate.latitude
         longitude = coordinate.longitude
     }
@@ -125,6 +130,11 @@ final class TrailStopSearchRun {
     /// Which row this is about, or `nil` when the sheet is not up.
     private(set) var target: TrailStopSearchTarget?
 
+    /// What the field opens holding: the name or address of the stop already
+    /// in the row — see ``TrailStopSearchSheet``. Empty for an open field and
+    /// for *Add Stop*.
+    private(set) var prefill = ""
+
     /// The completion currently being resolved, so its row can say so.
     private(set) var resolving: MKLocalSearchCompletion?
 
@@ -135,10 +145,11 @@ final class TrailStopSearchRun {
 
     @ObservationIgnored private var task: Task<Void, Never>?
 
-    /// Points the sheet at a row.
-    func begin(_ target: TrailStopSearchTarget) {
+    /// Points the sheet at a row, with what its field opens holding.
+    func begin(_ target: TrailStopSearchTarget, prefill: String = "") {
         cancel()
         self.target = target
+        self.prefill = prefill
     }
 
     /// The sheet has gone. Whatever it had in flight goes with it.
@@ -179,7 +190,8 @@ final class TrailStopSearchRun {
             guard let response,
                   let pick = TrailStopSearchPick(
                       firstOf: response.mapItems,
-                      fallbackName: completion.title
+                      fallbackName: completion.title,
+                      subtitle: completion.subtitle
                   )
             else {
                 // Said rather than swallowed, unlike the field this replaced.
@@ -202,21 +214,34 @@ struct TrailStopSearchSheet: View {
     let completer: SearchCompleter
     /// Held by the screen, for the reason ``TrailStopSearchRun`` gives.
     let run: TrailStopSearchRun
-    /// The hiker's own position, or `nil` for a launch with no location or one
-    /// that has not had a fix yet. Withholds the *My Location* row.
+    /// The hiker's own position, or `nil` for a launch with no location — the
+    /// *My Location* row then waits, disabled, as it does before a first fix.
     var locationManager: LocationManager?
+    /// The places picked here before — shown while nothing has been typed, as
+    /// Apple Maps' *Recents* are. See ``TrailStopRecents``.
+    let recents: TrailStopRecents
     var onPick: (TrailStopSearchPick) -> Void
     var onClose: () -> Void
 
     @State private var query = ""
+    /// The field's selection — the whole of what it opened holding, so a
+    /// keystroke replaces it. See `onAppear` below.
+    @State private var selection: TextSelection?
+    /// Whether that first selection has been made; once per presentation, so
+    /// focusing the field again later does not select over the hiker's typing.
+    @State private var hasSelectedPrefill = false
     @FocusState private var isFocused: Bool
 
     var body: some View {
         NavigationStack {
             List {
                 queryField
-                if locationManager?.hasFix == true, query.isEmpty {
-                    myLocationRow
+                // Recents while nothing has been typed, *My Location* always
+                // first among them — see ``TrailStopRecentsSection``. The
+                // text a row opens holding counts as nothing typed: it is a
+                // place already chosen, and the hiker has not searched yet.
+                if query.isEmpty || query == run.prefill {
+                    TrailStopRecentsSection(recents: recents, locationManager: locationManager, onPick: onPick)
                 }
                 suggestions
                 if run.didFail { failureRow }
@@ -235,7 +260,17 @@ struct TrailStopSearchSheet: View {
             // field is a sheet that should be ready to type into. `onAppear`
             // rather than at declaration: a `@FocusState` set before the field
             // is in the hierarchy is set on nothing.
-            .onAppear { isFocused = true }
+            //
+            // **A row that already holds a place opens with it in the field**,
+            // as Apple Maps' own fields do — its address, street and number
+            // and all — and selected whole, so one keystroke replaces it and
+            // one delete clears it. Until then the list under it is the one an
+            // empty field shows, *My Location* first, rather than places
+            // matching a name the hiker did not type.
+            .onAppear {
+                query = run.prefill
+                isFocused = true
+            }
             // The completer is shared with the sheet underneath, so what this
             // asked it has to be given back — the same hand-back the field this
             // replaced made, and for the same reason. On the `NavigationStack`
@@ -253,48 +288,27 @@ struct TrailStopSearchSheet: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                TextField("Search for a place", text: $query)
+                TextField("Search for a place", text: $query, selection: $selection)
                     .accessibilityIdentifier("trail-stop-search-field")
                     .focused($isFocused)
+                    // Selected once the field has the keyboard, which is when
+                    // a selection is something it can hold — see `onAppear`.
+                    .onChange(of: isFocused) { _, focused in
+                        guard focused, !hasSelectedPrefill, !query.isEmpty else { return }
+                        hasSelectedPrefill = true
+                        selection = TextSelection(range: query.startIndex..<query.endIndex)
+                    }
                     .autocorrectionDisabled()
                     .submitLabel(.search)
                     .onChange(of: query) { _, value in
                         run.cancel()
-                        completer.update(query: value)
+                        // The opening text is not a search — see `onAppear`.
+                        completer.update(query: value == run.prefill ? "" : value)
                     }
                     #if os(iOS)
                     .textInputAutocapitalization(.words)
                     #endif
             }
-        }
-    }
-
-    /// Where the hiker is, offered only while nothing has been typed.
-    ///
-    /// Apple Maps' own first row, and it earns its place on the one row that
-    /// wants it most: a walk starts where you are standing, and the alternative
-    /// is searching for the name of a car park you are looking at.
-    ///
-    /// **The stop it puts down is not called "My Location".** Apple Maps' row
-    /// means the hiker, and follows them; this one puts a point where they are
-    /// standing *now*, which stays there. A row reading "My Location" would be
-    /// true until they took a step, and the draft is kept across launches, so
-    /// tomorrow it would name yesterday's car park after wherever the phone
-    /// happens to be. The stop goes down unnamed instead and
-    /// ``TrailStopNamer`` gives it the address of the spot it stands on — the
-    /// one description of it that stays true, and the one a tapped stop gets.
-    ///
-    /// Offered on ``LocationManager/hasFix`` and resolved on the tap, so the
-    /// sheet is not rebuilt once a second while the hiker is typing.
-    @ViewBuilder private var myLocationRow: some View {
-        Section {
-            Button {
-                guard let here = locationManager?.coordinate else { return }
-                onPick(TrailStopSearchPick(name: "", coordinate: here))
-            } label: {
-                Label("My Location", systemImage: "location.fill")
-            }
-            .accessibilityIdentifier("trail-stop-search-here")
         }
     }
 
@@ -363,5 +377,108 @@ struct TrailStopSearchSheet: View {
     private func pick(_ suggestion: MKLocalSearchCompletion) {
         isFocused = false
         run.resolve(suggestion, near: completer.region, deliver: onPick)
+    }
+}
+
+/// *Recents*: where the hiker is, and then the places picked here before,
+/// newest first, each one a tap from being put down again with no search at
+/// all. Swiping one away forgets it.
+///
+/// Its own `View`, so a recent being recorded or forgotten re-renders this
+/// section and not the field above it.
+private struct TrailStopRecentsSection: View {
+    let recents: TrailStopRecents
+    /// The hiker's own position, or `nil` for a launch with no location.
+    var locationManager: LocationManager?
+    var onPick: (TrailStopSearchPick) -> Void
+
+    var body: some View {
+        Section("Recents") {
+            myLocationRow
+            ForEach(recents.entries) { recent in
+                Button { onPick(recent.pick) } label: {
+                    row(for: recent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("trail-stop-search-recent")
+            }
+            .onDelete { offsets in recents.remove(atOffsets: offsets) }
+        }
+    }
+
+    /// Where the hiker is — **always the first row**, as Apple Maps' own list
+    /// starts, because a walk usually starts where you are standing and the
+    /// alternative is searching for the name of a car park you can see.
+    ///
+    /// Always there, rather than appearing with the first fix: a row that is
+    /// sometimes missing is a row a hiker learns not to look for. Until there
+    /// is a fix it says so and waits, disabled, instead of doing nothing when
+    /// pressed. Offered on ``LocationManager/hasFix``, which changes once, and
+    /// resolved on the tap, so the sheet is not rebuilt once a second while
+    /// the hiker is typing.
+    ///
+    /// **The stop it puts down is not called "My Location".** Apple Maps' row
+    /// means the hiker, and follows them; this one puts a point where they are
+    /// standing *now*, which stays there. A row reading "My Location" would be
+    /// true until they took a step, and the draft is kept across launches, so
+    /// tomorrow it would name yesterday's car park after wherever the phone
+    /// happens to be. The stop goes down unnamed instead and
+    /// ``TrailStopNamer`` gives it the address of the spot it stands on — the
+    /// one description of it that stays true, and the one a tapped stop gets.
+    /// For the same reason it is never kept as a recent.
+    private var myLocationRow: some View {
+        let hasFix = locationManager?.hasFix == true
+        // Said, rather than waited on for ever: a refusal is the one state
+        // no fix is coming from — see ``LocationManager/isAccessDenied``.
+        let isDenied = locationManager?.isAccessDenied == true
+        return Button {
+            guard let here = locationManager?.coordinate else { return }
+            onPick(TrailStopSearchPick(name: "", coordinate: here))
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "location.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(hasFix ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("My Location").foregroundStyle(hasFix ? .primary : .secondary)
+                    if !hasFix {
+                        Text(isDenied ? "Location access is off" : "Waiting for your location")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .contentShape(.rect)
+            .accessibilityElement(children: .combine)
+        }
+        .buttonStyle(.plain)
+        .disabled(!hasFix)
+        // Not a recent, so a swipe cannot take it away.
+        .deleteDisabled(true)
+        .accessibilityIdentifier("trail-stop-search-here")
+    }
+
+    private func row(for recent: TrailStopRecent) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "clock.fill")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(recent.name).foregroundStyle(.primary)
+                if !recent.subtitle.isEmpty {
+                    Text(recent.subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .contentShape(.rect)
+        // One element rather than three, the rule every composite row here
+        // follows — see ``HikeRow``.
+        .accessibilityElement(children: .combine)
     }
 }

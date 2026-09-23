@@ -558,7 +558,7 @@ private extension MapSheet {
             completer: completer,
             mapController: mapController,
             locationManager: appModel.locationManager,
-            onCancel: closeTrailDraft,
+            onClose: closeTrailDraft,
             // A drawn trail lands exactly where a saved recording lands:
             // selected, drawn, and open at its own screen.
             onSaved: showSavedHike

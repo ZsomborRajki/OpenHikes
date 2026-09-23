@@ -7,9 +7,15 @@
 //
 //  A leg's router can answer with more than one way between its two stops —
 //  see ``TrailLeg/alternatives``. The one drawn is the accent line; the others
-//  are wider, paler lines under it, and a tap on one draws that instead. Every
-//  leg carries a bubble with its time, and every alternative one with its own,
-//  so the choice is made on what it costs rather than on how it looks.
+//  are wider, paler lines under it, and a tap on one draws that instead.
+//
+//  **One bubble per route, as Apple Maps draws them.** The route drawn carries
+//  one, halfway along its longest leg, with the whole trip's time — see
+//  ``MapView/Coordinator/routeTimeAnchor(for:)`` — not one per leg, which
+//  on a twenty-stop trail was twenty bubbles saying what the header already
+//  adds up. Each alternative carries one too, and it says the whole trip's
+//  time *with that way taken*, so the choice is made on what the trip costs
+//  rather than on what one stretch of it does.
 //
 //  **Hidden while a stop is dragged.** The two legs either side of a moving
 //  point are rubber bands until it lands; their alternatives and times are
@@ -40,35 +46,31 @@ struct TrailDraftRouteChoiceLayer {
     var times: [TrailDraftTravelTimeAnnotation] = []
 }
 
-/// How long a leg, or one of its alternatives, takes — the bubble on the line.
+/// How long the trip takes, by the route drawn or by one on offer — the bubble
+/// on the line.
 final class TrailDraftTravelTimeAnnotation: NSObject, MKAnnotation {
     static let reuseIdentifier = "trailDraftTravelTime"
 
     @objc dynamic let coordinate: CLLocationCoordinate2D
-    let legIndex: Int
-    /// `nil` for the route drawn; an index into the leg's alternatives for one
-    /// on offer, which a tap chooses.
-    let alternativeIndex: Int?
+    /// `nil` for the route drawn; the leg and alternative a tap chooses for one
+    /// on offer.
+    let choice: TrailDraftRouteChoice?
+    /// The whole trip's time: by the route drawn, or with this alternative in
+    /// place of its leg.
     let travelTime: TimeInterval
 
     @objc var title: String? { HikeFormat.travelTime(travelTime) }
     @objc let subtitle: String? = nil
 
-    init(
-        coordinate: CLLocationCoordinate2D,
-        legIndex: Int,
-        alternativeIndex: Int?,
-        travelTime: TimeInterval
-    ) {
+    init(coordinate: CLLocationCoordinate2D, choice: TrailDraftRouteChoice?, travelTime: TimeInterval) {
         self.coordinate = coordinate
-        self.legIndex = legIndex
-        self.alternativeIndex = alternativeIndex
+        self.choice = choice
         self.travelTime = travelTime
     }
 
     var spokenDescription: String {
         let time = HikeFormat.spokenTravelTime(travelTime)
-        return alternativeIndex == nil
+        return choice == nil
             ? time
             : String(localized: "Alternative route, \(time)")
     }
@@ -105,14 +107,14 @@ final class TrailDraftTravelTimeView: MKAnnotationView {
 
     func show(_ annotation: TrailDraftTravelTimeAnnotation) {
         self.annotation = annotation
-        let isChosen = annotation.alternativeIndex == nil
+        let isChosen = annotation.choice == nil
         label.text = annotation.title
         label.textColor = isChosen ? .white : .label
         backgroundColor = isChosen ? UIColor(Color.accentColor) : .systemBackground
         displayPriority = isChosen ? .defaultHigh : .defaultLow
         accessibilityLabel = annotation.spokenDescription
         accessibilityTraits = isChosen ? .staticText : .button
-        accessibilityIdentifier = isChosen ? "trail-draft-leg-time" : "trail-draft-alternative-time"
+        accessibilityIdentifier = isChosen ? "trail-draft-route-time" : "trail-draft-alternative-time"
         let size = label.intrinsicContentSize
         bounds = CGRect(
             x: 0,
@@ -136,7 +138,12 @@ extension MapView.Coordinator {
     private static let alternativeLineWidth: CGFloat = 6
     private static let alternativeLineAlpha: CGFloat = 0.4
 
-    /// Draws every leg's alternatives and every time bubble.
+    /// Draws every leg's alternatives, and the bubbles: one for the route and
+    /// one for each alternative — see the file header.
+    ///
+    /// The route's bubble waits until no leg is still being routed: until then
+    /// its figure is a straight line's estimate that is about to change, and
+    /// the header already carries it.
     ///
     /// The alternatives go **under** the drawn line, which is already on the
     /// map and stays there across a commit — see `MapTrailDraftOverlay.swift`
@@ -145,28 +152,30 @@ extension MapView.Coordinator {
     func addTrailDraftRouteChoices(for legs: [TrailLeg], of draft: TrailDraft, to mapView: MKMapView) {
         removeTrailDraftRouteChoices(from: mapView)
         var layer = TrailDraftRouteChoiceLayer()
-        for (legIndex, leg) in legs.enumerated() where !leg.snap.isRouting {
+        let legTimes = legs.map { draft.travelTime(of: $0.path) }
+        let tripTime = legTimes.reduce(0, +)
+        if !legs.isEmpty, !legs.contains(where: \.snap.isRouting) {
             layer.times.append(TrailDraftTravelTimeAnnotation(
-                coordinate: Self.midpoint(of: leg.coordinates),
-                legIndex: legIndex,
-                alternativeIndex: nil,
-                travelTime: draft.travelTime(of: leg.path)
+                coordinate: Self.routeTimeAnchor(for: legs),
+                choice: nil,
+                travelTime: tripTime
             ))
+        }
+        for (legIndex, leg) in legs.enumerated() where !leg.snap.isRouting {
             for (index, path) in leg.alternatives.enumerated() {
                 let coordinates = path.coordinates.map { point in
                     CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
                 }
                 let line = MKPolyline(coordinates: coordinates, count: coordinates.count)
+                let choice = TrailDraftRouteChoice(legIndex: legIndex, alternativeIndex: index)
                 layer.lines.append(line)
-                layer.choices[ObjectIdentifier(line)] = TrailDraftRouteChoice(
-                    legIndex: legIndex,
-                    alternativeIndex: index
-                )
+                layer.choices[ObjectIdentifier(line)] = choice
                 layer.times.append(TrailDraftTravelTimeAnnotation(
                     coordinate: Self.midpoint(of: path.coordinates),
-                    legIndex: legIndex,
-                    alternativeIndex: index,
-                    travelTime: draft.travelTime(of: path)
+                    choice: choice,
+                    // What the route's own bubble would read with this way
+                    // taken: the trip, less this leg's time, plus this one's.
+                    travelTime: tripTime - legTimes[legIndex] + draft.travelTime(of: path)
                 ))
             }
         }
@@ -240,6 +249,19 @@ extension MapView.Coordinator {
         #else
         MKAnnotationView(annotation: annotation, reuseIdentifier: nil)
         #endif
+    }
+
+    /// Where the route's own bubble sits: halfway along its longest leg.
+    ///
+    /// **Not halfway along the whole route**, which is where a stop so often
+    /// is — the middle of three evenly spaced stops *is* the middle stop — and
+    /// a bubble on a stop collides with the stop's pin, which MapKit settles by
+    /// hiding the bubble. Seen in a probe screenshot: the route's time was in
+    /// the hierarchy and nowhere on screen. The middle of a leg is as far from
+    /// a stop as that leg allows, and the longest leg's is the furthest.
+    static func routeTimeAnchor(for legs: [TrailLeg]) -> CLLocationCoordinate2D {
+        let longest = legs.max { $0.distanceMeters < $1.distanceMeters }
+        return midpoint(of: longest?.coordinates ?? [])
     }
 
     /// Halfway along a shape by distance, which is where a bubble sits: on the

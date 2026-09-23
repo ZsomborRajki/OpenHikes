@@ -223,7 +223,7 @@ extension MapView.Coordinator {
         applyTrailDraft(controller, on: mapView)
         reobserving(self, mapView, controller) {
             _ = controller.isEditing
-            _ = controller.selection
+            _ = controller.droppedPin
             _ = controller.draft.waypoints
             _ = controller.draft.startIsOpen
             _ = controller.draft.travelMode
@@ -260,7 +260,7 @@ extension MapView.Coordinator {
         // only when the *line* changed, and places and the sheet's pin change
         // without a leg moving. Each has a guard of its own.
         applyTrailDraftPlaces(isDrawing ? draft.placeRows : [], on: mapView)
-        applyTrailDraftSelection(isDrawing ? controller.selection : nil, on: mapView)
+        applyTrailDraftDroppedPin(isDrawing ? controller.droppedPin : nil, on: mapView)
         // And the strip at the top of the map, which the maker takes from the
         // *Community* tab for as long as it is up — the one exclusion in this
         // feature that does not fall out of an existing definition. See

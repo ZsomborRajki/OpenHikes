@@ -26,11 +26,12 @@
 //  ## The map's own tap sees the same touch
 //
 //  The maker's tap recognizer answers every tap on the canvas, labels
-//  included, and nothing orders it against MapKit's selection — so the one
-//  touch can drop an unnamed pin *and* select the label, in either order. The
-//  label wins both ways round: a selection replaces whatever pin is down, and
-//  a tap that lands beside a named pin already dropped there keeps it — see
-//  ``MapView/Coordinator/handleTrailDraftTap(at:in:)``.
+//  included — on open ground it closes the card that is up — and nothing
+//  orders it against MapKit's selection. So one touch on a label can open the
+//  label's card *and* close it again, in either order. The label wins both
+//  ways round: a close that lands first is undone by the selection, and a tap
+//  that lands beside a named pin whose card has just opened leaves it open —
+//  see ``MapView/Coordinator/handleTrailDraftTap(at:in:)``.
 //
 //  ## Only while drawing, and only on Apple's own map
 //
@@ -44,6 +45,7 @@
 //
 
 import MapKit
+import OpenHikesShared
 
 extension MapView.Coordinator {
     /// The labels a tap may select while drawing: the places on the map and
@@ -66,10 +68,8 @@ extension MapView.Coordinator {
     }
 
     /// Turns a selected label into the maker's dropped pin, named after it,
-    /// and opens the place sheet on it.
-    ///
-    /// No haptic here: the maker's own tap recognizer saw the same touch and
-    /// answers it — see the file header.
+    /// and opens the place sheet on it — what a press and hold does on open
+    /// ground, with a name.
     ///
     /// - Returns: whether the selection was the maker's to answer, which is
     ///   what tells the delegate to stop there.
@@ -81,18 +81,24 @@ extension MapView.Coordinator {
         mapView.deselectAnnotation(feature, animated: false)
         guard let controller = trailDraftController, controller.isEditing else { return true }
         let point = mapView.convert(feature.coordinate, toPointTo: mapView)
-        controller.select(.droppedPin(TrailDraftDroppedPinSpot(
+        let leg = trailDraftLegIndex(at: point, in: mapView).flatMap { index in
+            trailDraftLegs.indices.contains(index) ? trailDraftLegs[index].ends : nil
+        }
+        controller.dropPin(TrailDraftDroppedPinSpot(
             coordinate: feature.coordinate,
-            legIndex: trailDraftLegIndex(at: point, in: mapView),
+            leg: leg,
             name: BoundedText.boundedOrEmpty(feature.title ?? "", to: .title)
-        )))
+        ))
+        HapticMoment.targetHit.play()
         return true
     }
 
-    /// Whether a named pin is already down within a thumb of `point` — the
-    /// label this same touch selected, when MapKit's selection got there first.
+    /// Whether the card that is up is a named pin's, dropped within a thumb of
+    /// `point` — the label this same touch selected, when MapKit's selection
+    /// got there before the maker's own tap.
     func isNamedTrailDraftPin(near point: CGPoint, in mapView: MKMapView) -> Bool {
-        guard case .droppedPin(let spot) = trailDraftController?.selection, !spot.name.isEmpty else {
+        guard let controller = trailDraftController, controller.selection == .droppedPin,
+              let spot = controller.droppedPin, !spot.name.isEmpty else {
             return false
         }
         let pin = mapView.convert(spot.clCoordinate, toPointTo: mapView)

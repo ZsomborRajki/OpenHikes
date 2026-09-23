@@ -16,9 +16,8 @@
 //  ## What is found goes on the trail
 //
 //  A search's answer is handed to the controller, which adds it to the draft
-//  as its places — one step of undo for the whole search, pins on the map, and
-//  a place sheet on each where a hiker reads what OpenStreetMap says about it
-//  and removes what they do not want. There is no provisional tier: an offer
+//  as its places — pins on the map, and a place sheet on each where a hiker
+//  reads what OpenStreetMap says about it and removes what they do not want. There is no provisional tier: an offer
 //  the hiker had to tap to accept was a second kind of pin meaning *not yet*,
 //  and the place sheet already has *Remove*.
 //

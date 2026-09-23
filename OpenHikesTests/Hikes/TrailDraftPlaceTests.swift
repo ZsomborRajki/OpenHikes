@@ -6,9 +6,9 @@
 //
 //  What is worth pinning here is the part that is invisible on screen: that a
 //  place is not a waypoint. It does not lengthen the trail, it does not appear
-//  in the route a save writes, it has no rank in the list, and a search's worth
-//  of them is one step of undo. None of that is something a picture of the map
-//  could tell apart from its opposite.
+//  in the route a save writes, and it has no rank in the list — where it sits
+//  is worked out from the line, off the main actor. None of that is something
+//  a picture of the map could tell apart from its opposite.
 //
 
 import CoreLocation
@@ -68,23 +68,6 @@ struct TrailDraftPlaceTests {
 
     // MARK: The operations
 
-    /// A search is one decision, so taking it back is one *Undo* rather than
-    /// forty deletes.
-    @Test("a search's places are one step of undo")
-    func aSearchIsOneStep() {
-        let draft = Self.drawn()
-        draft.addPlaces([
-            TrailPlace(coordinate: Self.coordinate(Line.middle), name: "Spring"),
-            TrailPlace(coordinate: Self.coordinate(Line.north - 0.001), name: "Hut"),
-        ])
-        #expect(draft.places.count == 2)
-
-        draft.undo()
-
-        #expect(draft.places.isEmpty)
-        #expect(draft.waypoints.count == 2, "the line is the step before")
-    }
-
     /// A second search over the same valley answers with the same spring, and
     /// a trail carrying it twice would draw two pins on one spot.
     @Test("a place already on the trail is not added twice")
@@ -99,85 +82,85 @@ struct TrailDraftPlaceTests {
         #expect(draft.places.map(\.name) == ["Spring", "Hut"])
     }
 
-    @Test("a search that finds nothing new is not an edit")
-    func nothingNewIsNotAnEdit() {
+    @Test("a search that finds nothing new adds nothing")
+    func nothingNewAddsNothing() {
         let draft = Self.drawn()
         let spring = TrailPlace(coordinate: Self.coordinate(Line.middle), name: "Spring")
         draft.addPlaces([spring])
         draft.addPlaces([spring])
 
-        draft.undo()
-        #expect(draft.places.isEmpty, "one undo should reach back past the only search that added anything")
+        #expect(draft.places.map(\.name) == ["Spring"])
     }
 
+    /// Ranked off the main actor, so the rows land a moment after the edit —
+    /// and they follow the line: put the stops the other way round and the
+    /// two places are met the other way about, with nothing having been added,
+    /// moved or reordered among them.
     @Test("the ranked list follows the line rather than the order places were found in")
-    func theRankedListFollowsTheLine() {
+    func theRankedListFollowsTheLine() async {
         let draft = Self.drawn()
         draft.addPlaces([
             TrailPlace(coordinate: Self.coordinate(Line.north - 0.001), name: "Far"),
             TrailPlace(coordinate: Self.coordinate(Line.south + 0.001), name: "Near"),
         ])
+        await settleDelegateHop(until: "the places to be ranked along the line") {
+            draft.placeRows.map(\.place.name) == ["Near", "Far"]
+        }
         #expect(draft.placeRows.map(\.place.name) == ["Near", "Far"])
 
-        // Turn the trail round and the two are met the other way about, with
-        // nothing having been added, moved or reordered.
-        draft.reverse()
-
+        draft.moveWaypoints(fromOffsets: IndexSet(integer: 1), toOffset: 0)
+        await settleDelegateHop(until: "the places to be ranked the other way round") {
+            draft.placeRows.map(\.place.name) == ["Far", "Near"]
+        }
         #expect(draft.placeRows.map(\.place.name) == ["Far", "Near"])
     }
 
-    // MARK: Undo
+    /// Ranking runs on its own, off the main actor, and an edit can land while
+    /// it does. What was being ranked then is no longer the drawing, and its
+    /// answer must not be what the rows end up saying.
+    @Test("a ranking overtaken by an edit does not land over it")
+    func anOvertakenRankingIsDropped() async {
+        let draft = Self.drawn()
+        let spring = TrailPlace(coordinate: Self.coordinate(Line.middle), name: "Spring")
+        draft.addPlaces([spring])
+        draft.removePlace(id: spring.id)
+        #expect(draft.placeRows.isEmpty, "the removal is said at once")
 
-    @Test("removing a place is a step of undo")
-    func removingIsUndoable() {
+        draft.addPlaces([TrailPlace(coordinate: Self.coordinate(Line.north - 0.001), name: "Hut")])
+        await settleDelegateHop(until: "the newest ranking to land") {
+            draft.placeRows.map(\.place.name) == ["Hut"]
+        }
+        #expect(draft.placeRows.map(\.place.name) == ["Hut"])
+    }
+
+    /// With no line there is nothing to measure against, and the rows are the
+    /// places in the order they were found — at once, with no ranking asked.
+    @Test("with no line the rows are the places as found, straight away")
+    func withNoLineTheRowsAreImmediate() {
+        let draft = TrailDraft()
+        draft.addPlaces([
+            TrailPlace(coordinate: Self.coordinate(Line.north), name: "Far"),
+            TrailPlace(coordinate: Self.coordinate(Line.south), name: "Near"),
+        ])
+
+        #expect(draft.placeRows.map(\.place.name) == ["Far", "Near"])
+        #expect(draft.placeRows.allSatisfy { $0.anchor == nil })
+    }
+
+    // MARK: Removing
+
+    @Test("removing a place takes it off the trail")
+    func removingTakesItOff() {
         let draft = Self.drawn()
         let place = TrailPlace(coordinate: Self.coordinate(Line.middle), name: "Spring")
         draft.addPlaces([place])
         draft.removePlace(id: place.id)
+
         #expect(draft.places.isEmpty)
-
-        draft.undo()
-        #expect(draft.place(id: place.id)?.name == "Spring")
+        #expect(draft.place(id: place.id) == nil)
     }
 
-    /// One history for both lists, because they are edited against each other —
-    /// see ``TrailDraftContents``. A hiker who adds a spring, deletes a
-    /// waypoint and undoes twice expects to walk back through what they did.
-    @Test("undo walks back through points and places in the order they happened")
-    func undoInterleavesPointsAndPlaces() {
-        let draft = Self.drawn()
-        draft.addPlaces([TrailPlace(coordinate: Self.coordinate(Line.middle))])
-        draft.remove(atOffsets: IndexSet(integer: 1))
-        #expect(draft.waypoints.count == 1)
-        #expect(draft.places.count == 1)
-
-        draft.undo()
-        #expect(draft.waypoints.count == 2, "the deletion goes first")
-        #expect(draft.places.count == 1)
-
-        draft.undo()
-        #expect(draft.places.isEmpty, "and the search second")
-        #expect(draft.waypoints.count == 2)
-    }
-
-    /// *Clear* is the hiker starting this trail again, and a hut found along a
-    /// route that no longer exists is not the start of anything.
-    @Test("clearing takes the places with the line, and one undo brings both back")
-    func clearingTakesThePlaces() {
-        let draft = Self.drawn()
-        draft.addPlaces([TrailPlace(coordinate: Self.coordinate(Line.middle))])
-
-        draft.clearDrawing()
-        #expect(draft.waypoints.isEmpty)
-        #expect(draft.places.isEmpty)
-
-        draft.undo()
-        #expect(draft.waypoints.count == 2)
-        #expect(draft.places.count == 1)
-    }
-
-    /// The drawing *ending* is the other verb, and it forgets rather than
-    /// recording — see ``TrailDraft/clear()``.
+    /// The drawing ending takes its places with it — see ``TrailDraft/clear()``.
     @Test("a drawing that ended leaves no places behind")
     func endingADrawingForgetsThePlaces() {
         let draft = Self.drawn()
@@ -187,7 +170,7 @@ struct TrailDraftPlaceTests {
 
         #expect(draft.isEmpty)
         #expect(draft.places.isEmpty)
-        #expect(!draft.canUndo, "a drawing that ended has no steps behind it")
+        #expect(draft.placeRows.isEmpty)
     }
 
     // MARK: Which leg a stop lands in

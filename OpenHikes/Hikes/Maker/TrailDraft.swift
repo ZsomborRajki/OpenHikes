@@ -63,15 +63,16 @@
 //  snaps through a valley moves every place's distance without a hiker having
 //  touched one. See ``TrailPlace``.
 //
-//  ## Undo, and the one thing that is not snapshotted
+//  ## The shapes an edit takes away are kept
 //
-//  Every operation below records the drawing — the points *and* the places —
-//  before it changes it, into ``TrailDraftHistory``. What is *not* in a snapshot is the resolved leg
-//  shapes: they are far larger than the points and they are re-derivable, so
+//  The resolved leg shapes are far larger than the points and re-derivable, so
 //  they are remembered once, by their two ends, in ``TrailLegMemo`` — which
-//  `rebuildLegs` consults. That is what makes undo restore the line rather
-//  than redraw it straight and ask for it again, and it does the same for a
-//  reorder, a delete and a point dragged away and back.
+//  `rebuildLegs` consults. That is what makes a reorder that puts an
+//  adjacency back, a delete, and a point dragged away and back restore the
+//  line rather than redraw it straight and ask for it again.
+//
+//  There is no undo. Apple Maps' directions have none, and the menu that
+//  offered it went with the rest of the maker's ⋯ menu.
 //
 
 import CoreLocation
@@ -80,9 +81,33 @@ import Observation
 
 @Observable
 final class TrailDraft {
+    /// Starts the one task that ranks the places off the main actor — see
+    /// ``rankPlaces()``.
+    init() {
+        let (requests, continuation) = AsyncStream.makeStream(
+            of: PlaceRanking.self,
+            // Only the newest matters: a leg landing while the last ranking is
+            // still running makes that ranking's line out of date, and a burst
+            // of answers is ranked once, for the line they add up to.
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        rankings = continuation
+        Task { [weak self] in
+            for await request in requests {
+                let rows = await TrailPlaceOrder.rows(request.places, along: request.legs)
+                guard let self else { return }
+                // A ranking asked for since — or a draft with nothing to rank
+                // any more — has the last word.
+                guard request.revision == rankRevision else { continue }
+                if placeRows != rows { placeRows = rows }
+            }
+        }
+    }
+
     /// Non-isolated so releasing the last reference never requires proving
     /// we're on the main actor — see ``LocationManager``'s deinit for why.
-    nonisolated deinit { /* intentionally empty */ }
+    /// Finishing the rankings ends the task that reads them.
+    nonisolated deinit { rankings.finish() }
 
     /// The points, in the order they were put down. See the file header for
     /// why this is published and what the drag phase has to do instead.
@@ -143,10 +168,17 @@ final class TrailDraft {
     ///
     /// Stored rather than computed on read, for the reason
     /// ``distancesAlongLine`` is: a snapped trail is thousands of coordinates
-    /// and this projects every place onto every segment of it, which is fine
-    /// once per edit and is not fine once per body pass. Recomputed by
-    /// ``remeasure()``, so it moves when either the line or the places do.
+    /// and this projects every place onto every segment of it. Recomputed
+    /// **off the main actor** by ``rankPlaces()`` whenever the line or the
+    /// places change, so it lands a moment after the edit that asked for it.
     private(set) var placeRows: [TrailPlaceRow] = []
+
+    /// Where rankings are asked for — see ``init()``.
+    private let rankings: AsyncStream<PlaceRanking>.Continuation
+
+    /// Which ranking is the latest asked for. An older one that finishes after
+    /// it is not published.
+    @ObservationIgnored private var rankRevision = 0
 
     /// The point currently under a finger, or `nil` when none is.
     ///
@@ -161,10 +193,6 @@ final class TrailDraft {
     /// `withObservationTracking` has one cheap thing to watch and nothing that
     /// reads a coordinate is tracked. Nothing in a SwiftUI body may read this.
     private(set) var dragRevision = 0
-
-    /// The steps back. Observed, so the two controls that offer them appear
-    /// and go with the line.
-    private var history = TrailDraftHistory()
 
     /// The settled leg shapes this drawing has been given, by their two ends.
     ///
@@ -196,12 +224,6 @@ final class TrailDraft {
     /// threw it away without asking would be the same loss a cleared line is.
     var isEmpty: Bool { waypoints.isEmpty && places.isEmpty }
 
-    /// The drawing as one value: what a step of undo remembers, and what a
-    /// restore puts back. See ``TrailDraftContents``.
-    var contents: TrailDraftContents {
-        TrailDraftContents(waypoints: waypoints, places: places, startIsOpen: startIsOpen)
-    }
-
     /// The route list's rows: two open fields over an empty draft, one open
     /// field beside a lone point, and the points themselves from two on.
     ///
@@ -232,11 +254,7 @@ final class TrailDraft {
     /// which ``TrailDraftSave`` refuses before it can be written.
     var routeCoordinates: [RouteCoordinate] {
         guard !legs.isEmpty else { return waypoints.map(\.routeCoordinate) }
-        var flattened = legs[0].coordinates
-        for leg in legs.dropFirst() {
-            flattened.append(contentsOf: leg.coordinates.dropFirst())
-        }
-        return flattened
+        return TrailLeg.flattened(legs)
     }
 
     /// Whether any leg is waiting for an answer — what the header says while
@@ -267,20 +285,6 @@ final class TrailDraft {
         legs.contains(where: \.snap.isRetryable)
     }
 
-    var canUndo: Bool { history.canUndo }
-    var canRedo: Bool { history.canRedo }
-
-    /// Whether joining the end back to the start would change anything.
-    ///
-    /// False for a line that already ends where it began, which is what stops
-    /// *Close the Loop* from stacking a second zero-length leg on a loop that
-    /// is already closed.
-    var canCloseTheLoop: Bool {
-        guard let first = waypoints.first, let last = waypoints.last,
-              waypoints.count > 1 else { return false }
-        return first.latitude != last.latitude || first.longitude != last.longitude
-    }
-
     /// Appends a point at the end of the line.
     ///
     /// - Parameter name: what it is called, for a point that arrives already
@@ -288,7 +292,6 @@ final class TrailDraft {
     ///   map, which is named afterwards or not at all; see
     ///   ``TrailWaypoint/name``.
     func append(_ coordinate: CLLocationCoordinate2D, named name: String = "") {
-        history.record(contents)
         waypoints.append(TrailWaypoint(coordinate: coordinate, name: name))
         startIsOpen = false
         rebuildLegs()
@@ -304,9 +307,6 @@ final class TrailDraft {
     /// storing a few hundred coordinates per leg to save a cache lookup would
     /// be writing down the answer to a question the disk already answers. See
     /// ``TrailDraftView``.
-    /// A different drawing, so the steps behind the last one go with it — an
-    /// undo that reached back past a restore would offer a line from a
-    /// session that has ended.
     func replace(
         with waypoints: [TrailWaypoint],
         places: [TrailPlace],
@@ -315,7 +315,6 @@ final class TrailDraft {
         startIsOpen: Bool = false
     ) {
         cancelDrag()
-        history.forget()
         self.waypoints = waypoints
         self.places = places
         self.travelMode = travelMode
@@ -326,18 +325,12 @@ final class TrailDraft {
         rebuildLegs()
     }
 
-    /// Empties the draft, which is what Cancel and a completed Save both leave
-    /// behind. The toggle is a setting rather than part of the drawing, so it
-    /// stays where the hiker left it.
-    ///
-    /// **Not undoable, and that is the difference from ``clearDrawing()``.**
-    /// This is the drawing ending — the hiker cancelled, or it has become a
-    /// hike — so the steps behind it and the shapes remembered for it go too.
-    /// *Clear* on the maker's own menu is a thing done *to* a drawing that is
-    /// still open, and takes a step like every other edit.
+    /// Empties the draft, which is what discarding it and a completed Save both
+    /// leave behind. The toggle is a setting rather than part of the drawing,
+    /// so it stays where the hiker left it; the shapes remembered for the
+    /// drawing go with it.
     func clear() {
         cancelDrag()
-        history.forget()
         memo = TrailLegMemo()
         guard !isEmpty else { return }
         waypoints = []
@@ -360,7 +353,8 @@ final class TrailDraft {
         if !snapping { straightenLegs() }
     }
 
-    /// A mode owns its shapes. Undo keeps the current mode and resolves its legs anew.
+    /// A mode owns its shapes: changing it straightens the legs and forgets
+    /// every shape remembered for the old one, so they are asked for anew.
     func setTravelMode(_ mode: TrailTravelMode) {
         guard travelMode != mode else { return }
         cancelDrag()
@@ -495,23 +489,14 @@ final class TrailDraft {
     ///
     /// Two places are looked in, in this order: the legs currently drawn, and
     /// then ``memo`` for the ones an edit has already taken out of that list.
-    /// The second is the whole of what an undo, a reorder and a delete need —
-    /// see ``TrailLegMemo`` — and it is consulted **only while the toggle is
-    /// on**, because a remembered leg is a snapped one and handing it back to
-    /// a hiker who has turned path-following off would put a path on a line
-    /// they asked to be straight.
-    ///
+    /// The second is the whole of what a reorder, a delete and a point dragged
+    /// back need — see ``TrailLegMemo`` — and it is consulted **only while the
+    /// toggle is on**, because a remembered leg is a snapped one and handing
+    /// it back to a hiker who has turned path-following off would put a path
+    /// on a line they asked to be straight.
     private func rebuildLegs() {
-        rebuildLegs(reusing: legs)
-    }
-
-    /// - Parameter reusable: the legs to match against. The legs as they stand
-    ///   for every caller but one: ``reverse()`` has already turned each of
-    ///   them round, and matching against the published list would find none
-    ///   of them.
-    private func rebuildLegs(reusing reusable: [TrailLeg]) {
         var resolved: [TrailLegEnds: TrailLeg] = [:]
-        for leg in reusable { resolved[leg.ends] = leg }
+        for leg in legs { resolved[leg.ends] = leg }
         var rebuilt: [TrailLeg] = []
         rebuilt.reserveCapacity(max(0, waypoints.count - 1))
         for (previous, next) in zip(waypoints, waypoints.dropFirst()) {
@@ -530,26 +515,11 @@ final class TrailDraft {
     }
 
     /// Brings ``slots`` up to the points and the open field. Every edit that
-    /// can add, remove or reorder a point ends in `rebuildLegs`, which is
-    /// where this is called; the one that changes only the open field —
-    /// reversing a lone point — calls it itself.
+    /// can add, remove or reorder a point, or move the open field, ends in
+    /// `rebuildLegs`, which is where this is called.
     private func refreshSlots() {
         let rows = TrailStopSlot.rows(for: waypoints, startIsOpen: startIsOpen)
         if slots != rows { slots = rows }
-    }
-
-    /// Puts the waypoint list back to something the history handed over.
-    ///
-    /// The legs are rebuilt rather than restored, because the memo above holds
-    /// every shape this drawing has settled and the list is what says which of
-    /// them apply. See ``TrailDraftHistory`` for why a step is a list of points
-    /// and not a list of shapes.
-    private func restore(_ restored: TrailDraftContents) {
-        cancelDrag()
-        waypoints = restored.waypoints
-        places = restored.places
-        startIsOpen = restored.waypoints.count == 1 && restored.startIsOpen
-        rebuildLegs()
     }
 
     /// Drops every leg back to the straight line between its ends. What
@@ -600,25 +570,25 @@ final class TrailDraft {
     /// through a valley moves every place's distance along the line without
     /// anything having been marked or moved.
     ///
-    /// Measured against the resolved line — ``routeCoordinates`` — rather than
-    /// against the waypoints, so the figure beside a place is the same one the
-    /// header and the saved hike carry.
+    /// Measured against the resolved legs rather than against the waypoints,
+    /// so the figure beside a place is the same one the header and the saved
+    /// hike carry.
+    ///
+    /// **Off the main actor**, because it projects every place onto every
+    /// segment of the line: forty places from one *Search this area* against a
+    /// snapped trail of a few thousand points is over a hundred thousand
+    /// projections, asked again for every leg that lands. The request goes to
+    /// the task ``init()`` starts, which keeps only the newest; nothing is
+    /// sent at all while there are no places, and with no line the order is
+    /// the order they were added in and costs nothing to work out here.
     private func rankPlaces() {
-        // Guarded rather than left to ``TrailPlaceOrder/ordered(_:along:)``'s
-        // own empty case, because what is avoided is *building the argument*:
-        // ``routeCoordinates`` flattens every leg into a fresh array, which on
-        // a snapped trail is thousands of coordinates, and a hiker who has
-        // marked nothing — most of them, most of the time — would pay for it
-        // on every tap and on every leg that lands. The same guard
-        // ``TrailDraftController/commit()`` makes in front of the finder's
-        // re-rank, for the same reason.
-        guard !places.isEmpty else {
-            if !placeRows.isEmpty { placeRows = [] }
+        rankRevision &+= 1
+        guard !places.isEmpty, !legs.isEmpty else {
+            let rows = places.map { TrailPlaceRow(place: $0, anchor: nil) }
+            if placeRows != rows { placeRows = rows }
             return
         }
-        let ranked = TrailPlaceOrder.ordered(places, along: routeCoordinates)
-        guard placeRows != ranked else { return }
-        placeRows = ranked
+        rankings.yield(PlaceRanking(places: places, legs: legs, revision: rankRevision))
     }
 
     /// One running total per waypoint, in one walk of the legs.
@@ -637,18 +607,12 @@ final class TrailDraft {
 
 // MARK: - Editing
 
-/// The six things a hiker can do to a line that is already drawn, and the two
-/// ways back.
+/// The things a hiker can do to a line that is already drawn.
 ///
 /// A same-file extension rather than more of the class body, for the reason
 /// `OpenHikesView` took the same way out: `type_body_length` is a limit on a
 /// body and an extension is not one. Same file, because every one of these
 /// ends in `rebuildLegs()`, which is `private` — and `private` is file-scoped.
-///
-/// **Every one of them records a step first**, with the list as it stands,
-/// which is what makes undo a property of the type rather than something each
-/// caller has to remember. The ones that would change nothing return before
-/// recording, so *Undo* never offers to put a line back the way it already is.
 extension TrailDraft {
     /// Moves one point to a new place. What a drag commits.
     ///
@@ -671,8 +635,8 @@ extension TrailDraft {
     /// that already has a point commits.
     ///
     /// The one verb that writes a coordinate and a name together, and both
-    /// halves are the hiker's choice — so unlike ``describe(waypointAt:as:)``
-    /// this takes a step of undo like every other edit here.
+    /// halves are the hiker's choice — unlike ``describe(waypointWith:as:)``,
+    /// which is a lookup's answer.
     func place(
         waypointAt index: Int,
         at coordinate: CLLocationCoordinate2D,
@@ -685,19 +649,16 @@ extension TrailDraft {
             name: name
         )
         guard moved != waypoints[index] else { return }
-        history.record(contents)
         waypoints[index] = moved
         rebuildLegs()
     }
 
     /// Writes what something else worked out a point is called.
     ///
-    /// **Not a step of undo, and not a change to the line.** This is
-    /// ``TrailStopNaming``'s answer landing a second after a tap — a
-    /// description of a point the hiker has already put down, not an edit they
-    /// made — so offering to undo it would put *Undo* on the menu for something
-    /// nobody did, and would put the tap that drew the point one step further
-    /// away. Nothing geometric moves, so no leg is asked about again.
+    /// **Not a change to the line.** This is ``TrailStopNaming``'s answer
+    /// landing a second after a tap — a description of a point the hiker has
+    /// already put down, not an edit they made. Nothing geometric moves, so no
+    /// leg is asked about again.
     ///
     /// **By identity rather than by place in the list**, for the reason
     /// ``apply(_:to:)`` matches a leg by its two ends: this answer was asked
@@ -726,7 +687,6 @@ extension TrailDraft {
         named name: String = ""
     ) {
         guard legs.indices.contains(index) else { return }
-        history.record(contents)
         waypoints.insert(
             TrailWaypoint(coordinate: coordinate, name: name),
             at: index + 1
@@ -742,7 +702,6 @@ extension TrailDraft {
     func remove(atOffsets offsets: IndexSet) {
         let kept = waypoints.enumerated().filter { !offsets.contains($0.offset) }
         guard kept.count != waypoints.count else { return }
-        history.record(contents)
         let wasDestination = kept.count == 1 && role(ofWaypointAt: kept[0].offset) == .end
         waypoints = kept.map(\.element)
         startIsOpen = wasDestination
@@ -788,7 +747,6 @@ extension TrailDraft {
         named name: String = ""
     ) {
         guard slots.contains(.open(role)) else { return }
-        history.record(contents)
         let point = TrailWaypoint(coordinate: coordinate, name: name)
         if role == .start {
             waypoints.insert(point, at: 0)
@@ -807,115 +765,28 @@ extension TrailDraft {
     func moveWaypoints(fromOffsets offsets: IndexSet, toOffset destination: Int) {
         let reordered = Self.moving(waypoints, from: offsets, to: destination)
         guard reordered != waypoints else { return }
-        history.record(contents)
         waypoints = reordered
         rebuildLegs()
     }
 
-    /// Walks the line the other way.
-    ///
-    /// Hiking reuses its undirected graph shapes. Other modes must route the
-    /// ordered endpoints again, because access can depend on direction.
-    /// Every hiking leg already has its shape; reversing
-    /// the trail turns each of them round, which is the array reversed and
-    /// each leg's own coordinates reversed with its two ends swapped. A route
-    /// between two places is the same path walked either way, so this is exact
-    /// rather than an approximation of a fresh answer — see
-    /// ``TrailLeg/flipped()``.
-    ///
-    /// The flipped legs are handed to `rebuildLegs` rather than published
-    /// directly, because their identities are still the old list's: a leg is
-    /// named by the waypoint it arrives at, and every one of those has changed.
-    func reverse() {
-        guard !waypoints.isEmpty else { return }
-        history.record(contents)
-        // One point swaps fields, the way Apple Maps' swap button moves a lone
-        // destination up into the start.
-        if waypoints.count == 1 {
-            startIsOpen.toggle()
-            refreshSlots()
-            return
-        }
-        let flipped = travelMode == .hiking ? legs.reversed().map { $0.flipped() } : []
-        waypoints.reverse()
-        rebuildLegs(reusing: flipped)
-    }
-
-    /// Joins the end back to the start.
-    ///
-    /// A new point at the first one's place rather than a leg that closes
-    /// without one, because the list, the numbering and the save all count
-    /// points: a loop that ended in a leg arriving nowhere would be a trail
-    /// whose last row does not exist.
-    func closeTheLoop() {
-        guard canCloseTheLoop, let first = waypoints.first else { return }
-        history.record(contents)
-        waypoints.append(
-            // The first point's name travels with it, because this *is* the
-            // first point: a loop that ends where it began ends at the place it
-            // began at, and a destination row reading "Destination" beside a
-            // start row reading "Lurdy Ház" would be two words for one spot.
-            TrailWaypoint(
-                latitude: first.latitude,
-                longitude: first.longitude,
-                name: first.name
-            )
-        )
-        rebuildLegs()
-    }
-
-    /// Throws the points away but keeps the drawing open — the hiker starting
-    /// this trail again rather than abandoning it, which is why it is a step
-    /// like any other and ``clear()`` is not.
-    func clearDrawing() {
-        guard !isEmpty else { return }
-        history.record(contents)
-        cancelDrag()
-        waypoints = []
-        startIsOpen = false
-        // The places go with the line, because *Clear* is the hiker starting
-        // this trail again and a hut marked against a route that no longer
-        // exists is not the start of anything. One step of undo brings back
-        // both, which is the whole reason a step is the drawing rather than
-        // the waypoint list — see ``TrailDraftContents``.
-        places = []
-        rebuildLegs()
-    }
-
-    func undo() {
-        var restored = contents
-        guard history.undo(&restored) else { return }
-        restore(restored)
-    }
-
-    func redo() {
-        var restored = contents
-        guard history.redo(&restored) else { return }
-        restore(restored)
-    }
-
     // MARK: Places
 
-    /// Adds what a place search found, as one step of undo.
+    /// Adds what a place search found.
     ///
-    /// Places come from OpenStreetMap now, not from a hand-marked pin, so a
-    /// search is the one way in and a hiker who regrets it takes it back with
-    /// one *Undo* rather than forty deletes. Nothing within
+    /// Places come from OpenStreetMap, not from a hand-marked pin, so a search
+    /// is the one way in. Nothing within
     /// ``TrailPointRanking/alreadyMarkedMeters`` of a place already here is
     /// added twice.
     func addPlaces(_ found: [TrailPlace]) {
         let fresh = TrailPointRanking.excluding(places, from: found)
         guard !fresh.isEmpty else { return }
-        history.record(contents)
         places.append(contentsOf: fresh)
         rankPlaces()
     }
 
-    /// Takes one place off this trail — the place sheet's *Remove*. A step of
-    /// undo, like every other edit here.
+    /// Takes one place off this trail — the place sheet's *Remove*.
     func removePlace(id: UUID) {
         guard let index = places.firstIndex(where: { $0.id == id }) else { return }
-        history.record(contents)
         places.remove(at: index)
         rankPlaces()
     }
@@ -967,11 +838,9 @@ extension TrailDraft {
     /// Draws alternative `index` for the leg at `legIndex`, offering the shape
     /// it replaces in its place — a tap on a grey route on the map.
     ///
-    /// **Not a step of undo**, for the reason a stop's name is not: it changes
-    /// which way the line goes between two points the hiker already chose, not
-    /// the points, and undo is a history of the points. The memo remembers the
-    /// choice, so a reorder or an undo that brings these ends back brings the
-    /// chosen shape with them.
+    /// It changes which way the line goes between two points the hiker already
+    /// chose, not the points. The memo remembers the choice, so a reorder that
+    /// brings these ends back brings the chosen shape with them.
     func chooseAlternative(_ index: Int, forLegAt legIndex: Int) {
         guard legs.indices.contains(legIndex),
               let chosen = legs[legIndex].choosing(alternative: index) else { return }
@@ -1017,9 +886,8 @@ extension TrailDraft {
     /// **Whether it moved is asked of the coordinate, not of the whole point.**
     /// Since a point carries a name and ``move(waypointAt:to:)`` throws that
     /// name away, comparing the values either side would call a press that went
-    /// nowhere an edit — for a named point it would find the name gone, record
-    /// a step of undo for it, and leave the row reading "Stop 2" because a
-    /// thumb rested on it.
+    /// nowhere an edit — for a named point it would find the name gone and
+    /// leave the row reading "Stop 2" because a thumb rested on it.
     @discardableResult func endDrag() -> Bool {
         guard let finished = drag else { return false }
         cancelDrag()
@@ -1067,5 +935,22 @@ extension TrailDraft {
         let landing = destination - offsets.count { $0 < destination }
         remaining.insert(contentsOf: lifted, at: min(max(landing, 0), remaining.count))
         return remaining
+    }
+}
+
+/// One ranking asked of the task in ``TrailDraft/init()``: the places, the
+/// legs to measure them along, and which request this is.
+nonisolated struct PlaceRanking: Sendable {
+    let places: [TrailPlace]
+    let legs: [TrailLeg]
+    let revision: Int
+}
+
+nonisolated extension TrailPlaceOrder {
+    /// ``ordered(_:along:)`` against the legs end to end, off the main actor —
+    /// see ``TrailDraft/rankPlaces()``.
+    @concurrent
+    static func rows(_ places: [TrailPlace], along legs: [TrailLeg]) async -> [TrailPlaceRow] {
+        ordered(places, along: TrailLeg.flattened(legs))
     }
 }

@@ -28,6 +28,7 @@ extension MapCoordinatorTests {
         /// What the router is made to answer with, in seconds and metres.
         static let drawnTime: TimeInterval = 600
         static let detourTime: TimeInterval = 900
+        static let secondTime: TimeInterval = 300
         static let detourMeters: Double = 1900
     }
 
@@ -84,7 +85,7 @@ extension MapCoordinatorTests {
         defer { detach(map) }
 
         let times = coordinator.trailDraftRouteChoices.times
-        #expect(times.map(\.alternativeIndex) == [nil, 0])
+        #expect(times.map { $0.choice?.alternativeIndex } == [nil, 0])
         #expect(times.map(\.travelTime) == [Valley.drawnTime, Valley.detourTime])
         let line = try #require(coordinator.trailDraftRouteChoices.lines.first)
         #expect(coordinator.mapView(map, rendererFor: line) is MKPolylineRenderer)
@@ -126,6 +127,47 @@ extension MapCoordinatorTests {
         #expect(view?.accessibilityLabel?.contains("Alternative") == true)
         #expect(coordinator.selectTrailDraftAnnotation(try #require(view), on: map))
         #expect(trailMaker.draft.legs.first?.travelTime == Valley.detourTime)
+        #endif
+    }
+
+    /// Apple Maps draws one bubble per route, not per leg — and an
+    /// alternative's bubble says what the whole trip takes with it taken, so
+    /// it reads against the route's own bubble rather than against one leg.
+    @Test("a route of several legs has one bubble, and an alternative's is the whole trip with it")
+    func oneBubblePerRoute() async throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = await routedWithAnAlternative(coordinator)
+        defer { detach(map) }
+        // A second leg, north again, answered with a time of its own.
+        let north = Self.valley(Valley.north)
+        let further = Self.valley(Valley.north + 0.005)
+        trailMaker.appendWaypoint(at: CLLocationCoordinate2D(latitude: further.latitude, longitude: further.longitude))
+        let second = TrailLegEnds(start: north, end: further)
+        trailMaker.draft.beginRouting([second])
+        trailMaker.draft.apply(
+            TrailLegRoute(
+                coordinates: [north, further],
+                distanceMeters: second.straightDistanceMeters,
+                snap: .snapped,
+                travelTime: Valley.secondTime
+            ),
+            to: second
+        )
+        await settle(until: "the second leg's route to reach the map") {
+            coordinator.trailDraftRouteChoices.times.first?.travelTime == Valley.drawnTime + Valley.secondTime
+        }
+
+        let times = coordinator.trailDraftRouteChoices.times
+        #expect(times.count(where: { $0.choice == nil }) == 1, "one bubble for the route drawn")
+        #expect(times.first?.travelTime == Valley.drawnTime + Valley.secondTime)
+        // Halfway along the longer leg, the first — not halfway along the
+        // route, three quarters of the way up it, where the bubble is that much
+        // nearer the middle stop's pin and loses the collision with it.
+        let route = try #require(times.first { $0.choice == nil })
+        #expect(abs(route.coordinate.latitude - Valley.latitude) < 1e-6)
+        let alternative = try #require(times.first { $0.choice != nil })
+        #expect(alternative.travelTime == Valley.detourTime + Valley.secondTime)
         #endif
     }
 

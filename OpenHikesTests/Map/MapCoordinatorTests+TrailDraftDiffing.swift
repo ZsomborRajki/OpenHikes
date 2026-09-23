@@ -149,14 +149,16 @@ extension MapCoordinatorTests {
         let map = makeMap(mapView(tileSource: nil, trailMaker: maker), coordinator)
         defer { detach(map) }
 
-        let spot = TrailDraftDroppedPinSpot(coordinate: Line.at(Line.first), legIndex: nil, name: "Watzmann")
-        maker.select(.droppedPin(spot))
+        let spot = TrailDraftDroppedPinSpot(coordinate: Line.at(Line.first), leg: nil, name: "Watzmann")
+        maker.dropPin(spot)
+        #expect(maker.selection == .droppedPin)
         await settle(until: "the named pin to be drawn") { coordinator.trailDraftDroppedPin != nil }
         let pin = try #require(coordinator.trailDraftDroppedPin)
         #expect(pin.title == "Watzmann")
 
-        let card = try #require(TrailPlaceCard(.droppedPin(spot), in: maker.draft))
+        let card = try #require(TrailPlaceCard(.droppedPin, in: maker.draft, droppedPin: maker.droppedPin))
         #expect(card.title == "Watzmann")
+        #expect(card.isDroppedPin)
         guard case let .addStop(name, leg) = card.primary else {
             Issue.record("a dropped pin's card offers Add Stop")
             return
@@ -167,10 +169,10 @@ extension MapCoordinatorTests {
     }
 
     /// The map's own tap sees the touch that selected a label, in either order
-    /// against MapKit's selection. When the label got there first, the tap must
-    /// not drop an unnamed pin over the named one — see
-    /// `MapTrailDraftFeatures.swift`.
-    @Test("a tap beside a named pin just dropped keeps it, and one elsewhere replaces it")
+    /// against MapKit's selection, and on open ground a tap closes the card.
+    /// When the label got there first, the tap must not close the card it
+    /// has just opened — see `MapTrailDraftFeatures.swift`.
+    @Test("a tap beside a named pin just dropped leaves its card open, and one elsewhere closes it")
     func aTapBesideANamedPinKeepsIt() {
         #if os(iOS)
         let maker = TrailDraftController()
@@ -186,23 +188,22 @@ extension MapCoordinatorTests {
         let centre = CGPoint(x: map.bounds.midX, y: map.bounds.midY)
         let named = TrailDraftDroppedPinSpot(
             coordinate: map.convert(centre, toCoordinateFrom: map),
-            legIndex: nil,
+            leg: nil,
             name: "Watzmann"
         )
-        maker.select(.droppedPin(named))
+        maker.dropPin(named)
 
         // Whether the tap is answered here or claimed by the pin's own view is
-        // a matter of whether MapKit has drawn it yet; either way the name stays.
+        // a matter of whether MapKit has drawn it yet; either way the card
+        // stays open.
         coordinator.handleTrailDraftTap(at: centre, in: map)
-        #expect(maker.selection == .droppedPin(named), "the label's pin keeps its name")
+        #expect(maker.selection == .droppedPin, "the label's card stays open")
+        #expect(maker.droppedPin == named)
 
         let elsewhere = CGPoint(x: map.bounds.midX, y: map.bounds.midY + 120)
         #expect(coordinator.handleTrailDraftTap(at: elsewhere, in: map))
-        guard case .droppedPin(let spot) = maker.selection else {
-            Issue.record("a tap on open map drops a pin")
-            return
-        }
-        #expect(spot.name.isEmpty, "a tap away from the label is a tap on open map")
+        #expect(maker.selection == nil, "a tap away from the label is a tap on open map")
+        #expect(maker.droppedPin == named, "and it leaves the pin where it was")
         #endif
     }
 }

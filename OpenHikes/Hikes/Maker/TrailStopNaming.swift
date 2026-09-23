@@ -15,10 +15,10 @@
 //  ## It is a description, never a choice
 //
 //  Everything else in this feature that writes to ``TrailDraft`` is a hiker
-//  doing something, and takes a step of undo. This is not: the answer arrives a
-//  second after a tap, from a request nobody is watching, about a point that is
-//  already down. So it goes in through ``TrailDraft/describe(waypointWith:as:)``,
-//  which records no step, moves no leg and refuses a point that has since been
+//  doing something. This is not: the answer arrives a second after a stop goes
+//  down, from a request nobody is watching, about a point that is already
+//  there. So it goes in through ``TrailDraft/describe(waypointWith:as:)``,
+//  which moves no leg and refuses a point that has since been
 //  named — and ``TrailDraft/move(waypointAt:to:)`` throws the name away again,
 //  because a description of where a point *was* is the one thing on that row
 //  that could be false.
@@ -28,10 +28,16 @@
 //  The same shape ``TrailDraftController`` routes legs in, and for the same
 //  reason: a hiker putting down five points in five seconds is five questions,
 //  and five at once from one phone is the burst that earns a rate limit. They
-//  are queued and drained one at a time instead, newest last, and a point that
-//  has been answered — or refused — is not asked about again. A refusal is not
-//  retried by itself, exactly as a refused leg is not: asking again on the next
-//  tap would spend a request per point to be told the same thing.
+//  go into an `AsyncStream` that one task reads, one question at a time,
+//  oldest first, and a point that has been answered — or refused — is not
+//  asked about again. A refusal is not retried by itself, exactly as a refused
+//  leg is not: asking again on the next tap would spend a request per point to
+//  be told the same thing.
+//
+//  Closing the maker finishes the stream and cancels its reader, and the next
+//  question starts a fresh pair. There is no handle for a finished reader to
+//  hand back and no generation to compare: a cancelled reader's late answer is
+//  dropped by its own `Task.isCancelled`, and it touches nothing else.
 //
 //  **A point is its id *and* where it stands.** A stop that is dragged keeps its
 //  id and loses its name, so a record kept by id alone would call the dragged
@@ -183,6 +189,10 @@ nonisolated struct TrailStopQuestion: Hashable, Sendable {
 final class TrailStopNamer {
     private static let logger = Logger(subsystem: "OpenHikes", category: "TrailDraft")
 
+    /// Finishing the questions ends the task that reads them, which would
+    /// otherwise wait for a question that can no longer come.
+    nonisolated deinit { questions?.finish() }
+
     private let source: (any TrailStopNaming)?
 
     /// Every point this namer is finished with, where it stood: answered, or
@@ -191,18 +201,15 @@ final class TrailStopNamer {
     /// stop that moves is asked about again.
     private var settled: Set<TrailStopQuestion> = []
 
-    /// What is waiting to be asked, oldest first.
-    private var queue: [TrailStopQuestion] = []
+    /// What has been handed to the reader and not yet asked, so a second call
+    /// before it gets there does not queue the same point twice.
+    private var waiting: Set<TrailStopQuestion> = []
 
-    /// The one drain in progress, or `nil` when the queue is empty.
-    private var drain: Task<Void, Never>?
+    /// Where questions go, or `nil` when no reader is running.
+    private var questions: AsyncStream<TrailStopQuestion>.Continuation?
 
-    /// Which drain is the current one. A drain cancelled by ``clear()`` can
-    /// still be finishing its last request when the next one starts, and it
-    /// must not hand the handle back on the way out — that would leave the new
-    /// drain running unrecorded, and the next call would start a second beside
-    /// it: two lookups at once, the burst this queue exists to prevent.
-    private var drainGeneration = 0
+    /// The one reader, asking the questions in order.
+    private var reader: Task<Void, Never>?
 
     /// How a name reaches the drawing. Set by the controller, because writing
     /// one also means writing the draft down.
@@ -228,8 +235,7 @@ final class TrailStopNamer {
     /// It costs nothing at all once every point is settled, which is the state
     /// a drawing spends nearly all of its life in.
     func nameUnnamed(in waypoints: [TrailWaypoint]) {
-        guard source != nil else { return }
-        let waiting = Set(queue)
+        guard let source else { return }
         let wanted = waypoints
             .filter(\.name.isEmpty)
             .map(TrailStopQuestion.init)
@@ -237,8 +243,11 @@ final class TrailStopNamer {
                 !settled.contains(question) && !waiting.contains(question)
             }
         guard !wanted.isEmpty else { return }
-        queue.append(contentsOf: wanted)
-        startDraining()
+        let stream = questions ?? startReading(from: source)
+        for question in wanted {
+            waiting.insert(question)
+            stream.yield(question)
+        }
     }
 
     /// Forgets everything in flight and everything asked. What the maker
@@ -249,41 +258,39 @@ final class TrailStopNamer {
     /// who has plausibly moved, and one more attempt per point per opening is a
     /// bound a hiker sets with their thumb.
     func clear() {
-        drainGeneration &+= 1
-        drain?.cancel()
-        drain = nil
-        queue = []
+        questions?.finish()
+        questions = nil
+        reader?.cancel()
+        reader = nil
+        waiting = []
         settled = []
     }
 
-    private func startDraining() {
-        guard drain == nil else { return }
-        let generation = drainGeneration
-        drain = Task { [weak self] in
-            await self?.drainQueue()
-            guard let self, drainGeneration == generation else { return }
-            drain = nil
+    /// A fresh stream and the one task that reads it.
+    private func startReading(from source: any TrailStopNaming) -> AsyncStream<TrailStopQuestion>.Continuation {
+        let (stream, continuation) = AsyncStream.makeStream(of: TrailStopQuestion.self)
+        questions = continuation
+        reader = Task { [weak self] in
+            for await question in stream {
+                guard !Task.isCancelled else { return }
+                // Settled *before* the answer, not after: a refusal must leave
+                // the point as finished-with as an answer does, and a call
+                // arriving mid-request must not queue the same point again.
+                self?.startAsking(question)
+                let name = TrailStopName.here(await source.mapItem(at: question.clCoordinate))
+                guard !Task.isCancelled, let self else { return }
+                guard let name else {
+                    Self.logger.info("No name found for a drawn point")
+                    continue
+                }
+                apply?(question, name)
+            }
         }
+        return continuation
     }
 
-    /// Takes the queue one at a time, re-reading it between answers so a point
-    /// added while this was waiting is picked up by the same pass.
-    private func drainQueue() async {
-        guard let source else { return }
-        while !queue.isEmpty {
-            guard !Task.isCancelled else { return }
-            let question = queue.removeFirst()
-            // Marked settled *before* the answer, not after: a refusal must
-            // leave the point as finished-with as an answer does, and a second
-            // call arriving mid-request must not queue the same point again.
-            settled.insert(question)
-            let name = TrailStopName.here(await source.mapItem(at: question.clCoordinate))
-            guard !Task.isCancelled else { return }
-            guard let name else {
-                Self.logger.info("No name found for a drawn point")
-                continue
-            }
-            apply?(question, name)
-        }
+    private func startAsking(_ question: TrailStopQuestion) {
+        waiting.remove(question)
+        settled.insert(question)
     }
 }

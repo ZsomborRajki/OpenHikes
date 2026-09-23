@@ -2,13 +2,17 @@
 //  MapTrailDraftSelection.swift
 //  OpenHikes
 //
-//  What a tap on the maker's map opens.
+//  What a touch on the maker's map opens.
 //
-//  Every tap opens the place sheet, as it does in Apple Maps: open ground drops
-//  a pin, a stop or a place opens its own card, and a grey route is chosen
-//  outright. The sheet is a SwiftUI presentation inside the maker's screen, so
-//  the map raises ``TrailDraftController/selection`` and the screen presents
-//  it — see ``TrailPlaceSheet``.
+//  As in Apple Maps: **a press and hold drops a pin** and opens its card; a
+//  *tap* opens the card of whatever it lands on — a stop, one of the trail's
+//  places, one of the map's own labels — chooses a grey route, and on open
+//  ground closes the card that is up. The dropped pin stays on the map when its
+//  card closes, until *Remove Pin*, *Add Stop* or another press — see
+//  ``TrailDraftController/droppedPin``. The card is a SwiftUI presentation
+//  inside the maker's screen, so the map raises
+//  ``TrailDraftController/selection`` and the screen presents it — see
+//  ``TrailPlaceSheet``.
 //
 //  ## No callouts, and so no callout race
 //
@@ -28,8 +32,9 @@ import SwiftUI
 import UIKit
 #endif
 
-/// The pin a tap on open ground drops. There is at most one, and it belongs to
-/// the selection rather than to the draft: it goes when the sheet does.
+/// The pin a press and hold drops. There is at most one, and it belongs to the
+/// controller rather than to the draft — see
+/// ``TrailDraftController/droppedPin``.
 final class TrailDraftDroppedPin: NSObject, MKAnnotation {
     static let reuseIdentifier = "trailDraftDroppedPin"
 
@@ -55,8 +60,9 @@ final class TrailDraftDroppedPin: NSObject, MKAnnotation {
 }
 
 extension MapView.Coordinator {
-    /// A tap on the maker's canvas: a grey route is chosen, anything else drops
-    /// a pin and opens the sheet on it. Answers whether the maker took the tap.
+    /// A tap on the maker's canvas: a grey route is chosen, and anything else
+    /// closes the card that is up — the dropped pin, if there is one, stays.
+    /// Answers whether the maker took the tap.
     ///
     /// A tap that landed on a view is left alone — the map's own controls keep
     /// their claim, and an annotation's tap reaches
@@ -66,18 +72,33 @@ extension MapView.Coordinator {
         guard !isTapClaimed(at: point, in: mapView) else { return false }
         if let alternative = trailDraftAlternative(at: point, in: mapView) {
             controller.chooseRoute(alternative.alternativeIndex, forLegAt: alternative.legIndex)
+            HapticMoment.targetHit.play()
         } else if isNamedTrailDraftPin(near: point, in: mapView) {
-            // The label under this touch was selected first, and named the pin
-            // — see `MapTrailDraftFeatures.swift`. An unnamed pin dropped over
-            // it would throw the name away.
+            // The label under this touch was selected first and opened its
+            // card — see `MapTrailDraftFeatures.swift`. Closing it again would
+            // answer one tap twice.
         } else {
-            // The leg is asked on the glass, while the tap is still a tap —
-            // see ``TrailDraftDroppedPinSpot``.
-            controller.select(.droppedPin(TrailDraftDroppedPinSpot(
-                coordinate: mapView.convert(point, toCoordinateFrom: mapView),
-                legIndex: trailDraftLegIndex(at: point, in: mapView)
-            )))
+            controller.select(nil)
         }
+        return true
+    }
+
+    /// A press and hold on the maker's canvas: drops the pin there and opens
+    /// its card. Answers whether it did.
+    ///
+    /// Split from the recognizer for the reason the drag is: a recognizer's
+    /// state cannot be driven by a suite, and this is the half worth asserting
+    /// on. The leg under the press is asked on the glass, while the press is
+    /// still where the thumb is — see ``TrailDraftDroppedPinSpot``.
+    @discardableResult func dropTrailDraftPin(at point: CGPoint, in mapView: MKMapView) -> Bool {
+        guard let controller = trailDraftController, controller.isEditing else { return false }
+        let leg = trailDraftLegIndex(at: point, in: mapView).flatMap { index in
+            trailDraftLegs.indices.contains(index) ? trailDraftLegs[index].ends : nil
+        }
+        controller.dropPin(TrailDraftDroppedPinSpot(
+            coordinate: mapView.convert(point, toCoordinateFrom: mapView),
+            leg: leg
+        ))
         HapticMoment.targetHit.play()
         return true
     }
@@ -96,10 +117,11 @@ extension MapView.Coordinator {
         case let place as TrailPlaceAnnotation where place.belongsToDraft:
             controller.select(.place(place.place.id))
         case let time as TrailDraftTravelTimeAnnotation:
-            guard let alternative = time.alternativeIndex else { break }
-            controller.chooseRoute(alternative, forLegAt: time.legIndex)
+            guard let choice = time.choice else { break }
+            controller.chooseRoute(choice.alternativeIndex, forLegAt: choice.legIndex)
         case is TrailDraftDroppedPin:
-            break
+            // Its card again, which closing left the pin standing without.
+            controller.select(.droppedPin)
         default:
             return false
         }
@@ -108,9 +130,8 @@ extension MapView.Coordinator {
         return true
     }
 
-    /// Puts the dropped pin where the selection says, or takes it away.
-    func applyTrailDraftSelection(_ selection: TrailDraftSelection?, on mapView: MKMapView) {
-        let spot: TrailDraftDroppedPinSpot? = if case .droppedPin(let spot) = selection { spot } else { nil }
+    /// Puts the dropped pin where the controller says, or takes it away.
+    func applyTrailDraftDroppedPin(_ spot: TrailDraftDroppedPinSpot?, on mapView: MKMapView) {
         if let pin = trailDraftDroppedPin, let spot,
            pin.coordinate.latitude == spot.latitude, pin.coordinate.longitude == spot.longitude,
            pin.placeName == spot.name {
@@ -169,3 +190,50 @@ extension MapView.Coordinator {
         return view
     }
 }
+
+#if canImport(UIKit)
+/// The press that drops a pin. Its own class so the map's delegate can tell it
+/// from the press that drags a stop — and so the map can tell it has one —
+/// with no stored property on the coordinator to hold it by.
+final class TrailDraftPinDropRecognizer: UILongPressGestureRecognizer {}
+
+extension MapView.Coordinator {
+    /// How long a finger has to rest on open map before it drops a pin — the
+    /// system's own long press, which is also what Apple Maps waits for.
+    ///
+    /// Longer than ``waypointGrabPressDuration`` on purpose: that one takes
+    /// hold of a pin already there, and begins only over one; this begins only
+    /// where there is none. The two never compete for the same touch.
+    static let pinDropPressDuration: TimeInterval = 0.5
+
+    /// Adds the press that drops a pin. Idempotent, like the other recognizers
+    /// here: a second would drop two pins for one press.
+    func installTrailDraftPinDrop(on mapView: MKMapView) {
+        let installed = mapView.gestureRecognizers ?? []
+        guard !installed.contains(where: { $0 is TrailDraftPinDropRecognizer }) else { return }
+        let recognizer = TrailDraftPinDropRecognizer(
+            target: self,
+            action: #selector(handleTrailDraftPinDrop(_:))
+        )
+        recognizer.minimumPressDuration = Self.pinDropPressDuration
+        // The same delegate the tap and the drag use, which is what decides
+        // where each may begin — see `gestureRecognizerShouldBegin(_:)`.
+        recognizer.delegate = self
+        mapView.addGestureRecognizer(recognizer)
+    }
+
+    @objc func handleTrailDraftPinDrop(_ recognizer: UILongPressGestureRecognizer) {
+        guard recognizer.state == .began, let mapView = recognizer.view as? MKMapView else { return }
+        dropTrailDraftPin(at: recognizer.location(in: mapView), in: mapView)
+    }
+
+    /// Whether a press at `point` may drop a pin: only while drawing, never on
+    /// one of the maker's stops — that press moves the stop — and never on a
+    /// view that has its own claim, a control or another pin.
+    func mayDropTrailDraftPin(at point: CGPoint, in mapView: MKMapView) -> Bool {
+        guard trailDraftController?.isEditing == true else { return false }
+        return trailDraftWaypointIndex(at: point, in: mapView) == nil
+            && !isTapClaimed(at: point, in: mapView)
+    }
+}
+#endif

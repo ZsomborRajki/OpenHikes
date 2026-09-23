@@ -176,7 +176,7 @@ final class OpenHikesModel {
             activeRecordingHikeID: { [weak hikeRecorder] in hikeRecorder?.currentHike?.id }
         )
         self.communityTransport = communityTransport
-        trailMaker = Self.makeTrailMaker(container: container, trailGraphProvider: trailGraphProvider)
+        trailMaker = Self.makeTrailMaker(container: container, graph: trailGraphProvider, defaults: defaults)
         watchLink = Self.makeWatchLink(container: container)
         communityBlocks = CommunityBlockList(defaults: defaults)
         community = Self.makeCommunityBrowser(transport: communityTransport, blocks: communityBlocks)

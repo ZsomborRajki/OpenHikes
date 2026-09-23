@@ -38,7 +38,7 @@ nonisolated struct TrailWaypoint: Identifiable, Hashable, Sendable {
     /// arrives named by MapKit and the hiker chose it. A point put down by a
     /// tap on the map arrives with nothing, and ``TrailStopNaming`` asks what
     /// is there a moment later; that answer is a *description* rather than a
-    /// choice, which is why it is never recorded as a step of undo and why
+    /// choice, which is why a later answer never overwrites a choice and why
     /// moving the point throws it away again. Empty is a state and not a
     /// missing value: ``TrailStopRole/title`` is what a nameless stop reads as.
     var name: String = ""

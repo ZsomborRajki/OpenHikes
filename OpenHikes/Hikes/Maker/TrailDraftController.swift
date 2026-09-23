@@ -35,11 +35,18 @@
 //  ## Legs are routed one at a time, and a failure is not retried by itself
 //
 //  Every pass takes the legs that want an answer and do not have one, marks
-//  them, and asks about them **in order, one at a time**. Concurrently would
-//  be nineteen simultaneous requests from one phone for a twenty-point trail,
-//  which is the shape that earns the `429` this app has already met in the
-//  field; sequentially, the second leg usually joins the download the first
-//  one started — see ``OverpassTrailLegRouter``.
+//  them, and hands them to **one reader of an `AsyncStream`**, which asks
+//  about them in order, one at a time. Concurrently would be nineteen
+//  simultaneous requests from one phone for a twenty-point trail, which is the
+//  shape that earns the `429` this app has already met in the field;
+//  sequentially, the second leg usually joins the download the first one
+//  started — see ``OverpassTrailLegRouter``.
+//
+//  Anything that changes what the legs should be asked — the travel mode, the
+//  switch, the maker closing — finishes the stream and cancels its reader, and
+//  the next pass starts a fresh pair with the router it wants. A cancelled
+//  reader's late answer is dropped by its own `Task.isCancelled` after the
+//  await, which is what a generation counter used to be kept for.
 //
 //  A leg whose provider failed stays failed until the hiker taps *Retry*. Asking
 //  again on the next tap would mean one extra request per point put down,
@@ -51,34 +58,40 @@ import CoreLocation
 import Foundation
 import Observation
 
-/// What the place sheet is about: a spot the hiker tapped, one of the
-/// trail's places, or one of its stops.
+/// What the place sheet is about: the dropped pin, one of the trail's places,
+/// or one of its stops.
 ///
 /// Held by the controller because the map raises it and the sheet — a screen
 /// inside the map's sheet — presents it, and neither can see the other.
 nonisolated enum TrailDraftSelection: Equatable, Sendable {
-    /// A tap on open map. Not part of the trail until *Add Stop*.
-    case droppedPin(TrailDraftDroppedPinSpot)
+    /// The pin a press and hold dropped — see
+    /// ``TrailDraftController/droppedPin``, which is where it is. Not part of
+    /// the trail until *Add Stop*.
+    case droppedPin
     case place(UUID)
     case stop(UUID)
 }
 
-/// Where a dropped pin is, and the leg the tap landed on, if any — carried
+/// Where a dropped pin is, and the leg the press landed on, if any — carried
 /// rather than re-derived, because *the leg you aimed at* and *the leg nearest
 /// now* differ where a trail doubles back.
 nonisolated struct TrailDraftDroppedPinSpot: Equatable, Sendable {
     let latitude: Double
     let longitude: Double
-    let legIndex: Int?
+    /// The leg under the press, by its two ends rather than by its place in
+    /// the list: the pin stays on the map after its card closes, and legs are
+    /// added, removed and re-routed around it in the meantime. An index would
+    /// quietly come to name a different leg; ends name this one or none.
+    let leg: TrailLegEnds?
     /// What the place is called, for a pin dropped on one of the map's own
     /// labels, or empty for open map — which ``TrailStopNamer`` names once it
     /// is a stop. See `MapTrailDraftFeatures.swift`.
     let name: String
 
-    init(coordinate: CLLocationCoordinate2D, legIndex: Int?, name: String = "") {
+    init(coordinate: CLLocationCoordinate2D, leg: TrailLegEnds?, name: String = "") {
         latitude = coordinate.latitude
         longitude = coordinate.longitude
-        self.legIndex = legIndex
+        self.leg = leg
         self.name = name
     }
 
@@ -91,7 +104,9 @@ nonisolated struct TrailDraftDroppedPinSpot: Equatable, Sendable {
 final class TrailDraftController {
     /// Non-isolated so releasing the last reference never requires proving
     /// we're on the main actor — see ``LocationManager``'s deinit for why.
-    nonisolated deinit { /* intentionally empty */ }
+    /// Finishing the routing stream ends the task that reads it, which would
+    /// otherwise wait for a leg that can no longer come.
+    nonisolated deinit { routingRequests?.finish() }
 
     /// The line being drawn. Handed to the map, which observes it directly, so
     /// a tap that adds a point re-renders no SwiftUI view.
@@ -122,6 +137,11 @@ final class TrailDraftController {
     /// ``TrailStopNamer``.
     let namer: TrailStopNamer
 
+    /// The places the stop search was used to pick before, offered again
+    /// before anything is typed. Kept across maker sessions and launches —
+    /// see ``TrailStopRecents``.
+    let recents: TrailStopRecents
+
     /// Whether the map should be offering to make a trail. Observed directly
     /// by ``MapView/Coordinator``, so showing or hiding the pill never
     /// re-renders a view.
@@ -143,6 +163,15 @@ final class TrailDraftController {
     /// ``TrailDraftSelection``.
     private(set) var selection: TrailDraftSelection?
 
+    /// The pin a press and hold dropped, or `nil`.
+    ///
+    /// **Apart from the card**, as Apple Maps keeps it: closing the card
+    /// leaves the pin on the map, and a tap on it opens the card again. It
+    /// goes when *Remove Pin* is pressed, when *Add Stop* turns it into a
+    /// stop, when another press drops one somewhere else, and when the maker
+    /// closes.
+    private(set) var droppedPin: TrailDraftDroppedPinSpot?
+
     /// Whether this maker can make a leg follow a path at all.
     ///
     /// False when this launch has no provider for the selected mode. A
@@ -155,11 +184,13 @@ final class TrailDraftController {
 
     /// Each mode has its own provider and therefore its own geometry cache.
     @ObservationIgnored private let routers: [TrailTravelMode: any TrailLegRouting]
-    /// Readable by tests so a superseded pass can be joined before asserting
-    /// that its late answer left the current line untouched.
-    @ObservationIgnored private(set) var routingTask: Task<Void, Never>?
-    @ObservationIgnored private var routingQueue: [TrailLegEnds] = []
-    @ObservationIgnored private var routingGeneration = 0
+    /// Where legs waiting for an answer go, or `nil` when no reader is running.
+    @ObservationIgnored private var routingRequests: AsyncStream<TrailLegEnds>.Continuation?
+    /// The one reader asking about them, in order. Readable by tests, so a
+    /// reader that has been cancelled can be joined before asserting that its
+    /// late answer left the current line untouched — a cancelled reader ends,
+    /// where a running one waits for the next leg.
+    @ObservationIgnored private(set) var routingReader: Task<Void, Never>?
 
     /// The legs a question is currently out about, so a second pass started by
     /// the next tap does not ask about them again beside the first.
@@ -200,7 +231,8 @@ final class TrailDraftController {
         elevationSource: (any CuratedElevationSourcing)? = nil,
         elevationPause: (@Sendable (TimeInterval) async throws -> Void)? = nil,
         naming: (any TrailStopNaming)? = nil,
-        travelRouters: [TrailTravelMode: any TrailLegRouting] = [:]
+        travelRouters: [TrailTravelMode: any TrailLegRouting] = [:],
+        recents: TrailStopRecents? = nil
     ) {
         self.store = store
         var providers = travelRouters
@@ -214,6 +246,7 @@ final class TrailDraftController {
         } ?? TrailDraftElevation(draft: drawing, source: elevationSource)
         geocoder = naming
         namer = TrailStopNamer(source: naming)
+        self.recents = recents ?? TrailStopRecents(defaults: nil)
         namer.onNamed { [weak self] question, name in
             self?.receiveName(name, for: question)
         }
@@ -271,7 +304,8 @@ final class TrailDraftController {
         } else {
             // Stop this editor's requests. The graph provider retains any
             // download another caller still owns through its waiter count.
-            // The generation check also rejects a provider's late answer.
+            // The reader's own cancellation check rejects a provider's late
+            // answer.
             // A finger cannot survive the screen it was on. A drag left held
             // would put the pin back where it was on the next open, which is
             // right, but the map would have been taken down mid-gesture and
@@ -282,6 +316,7 @@ final class TrailDraftController {
             // it would be read on is gone. See ``TrailPointFinder/clear()``.
             finder.clear()
             selection = nil
+            droppedPin = nil
             // A height question is cancelled on the way out too:
             // there is no shared download behind it and nothing else is
             // waiting for it, so a request nobody will read is a request worth
@@ -333,7 +368,7 @@ final class TrailDraftController {
     ///
     /// By identity rather than by row, because a sheet is a presentation the
     /// drawing can change underneath: a leg landing while the hiker is typing
-    /// does not move any point, but an undo reached from the edit menu
+    /// does not move any point, but a stop removed from its card on the map
     /// can, and a row index captured when the sheet opened would then name the
     /// wrong stop.
     func placeWaypoint(
@@ -351,13 +386,17 @@ final class TrailDraftController {
     /// The place sheet's *Add Stop*: into an open field while there is one, and
     /// otherwise into the leg the pin was dropped on or the nearest — see
     /// ``TrailDraft/addStop(_:named:preferringLeg:)``.
+    ///
+    /// - Parameter leg: the leg a press landed on, by its ends. Found in the
+    ///   line as it is now; a leg that has since gone falls back to the nearest.
     func addStop(
         at coordinate: CLLocationCoordinate2D,
         named name: String = "",
-        preferringLeg leg: Int? = nil
+        preferringLeg leg: TrailLegEnds? = nil
     ) {
         guard isEditing else { return }
-        draft.addStop(coordinate, named: Self.bounded(name), preferringLeg: leg)
+        let index = leg.flatMap { ends in draft.legs.firstIndex { $0.ends == ends } }
+        draft.addStop(coordinate, named: Self.bounded(name), preferringLeg: index)
         commitLine()
         resolveLegs()
     }
@@ -414,39 +453,30 @@ final class TrailDraftController {
         resolveLegs()
     }
 
-    /// Walks the line the other way. Hiking turns settled shapes around;
-    /// direction-dependent modes ask their provider about the reverse trip.
-    func reverse() {
-        guard isEditing else { return }
-        cancelRouting()
-        draft.reverse()
-        commitLine()
-        resolveLegs()
-    }
-
-    /// Joins the end back to the start.
-    func closeTheLoop() {
-        guard isEditing else { return }
-        draft.closeTheLoop()
-        commitLine()
-        resolveLegs()
-    }
-
-    /// Throws the points away and leaves the maker open, which is the
-    /// undoable half of the pair ``discard()`` is the other end of.
-    func clearDrawing() {
-        guard isEditing else { return }
-        cancelRouting()
-        draft.clearDrawing()
-        commitLine()
-    }
-
     // MARK: - The place sheet
 
-    /// Opens the place sheet on something, or closes it with `nil`.
+    /// Opens the place sheet on something, or closes it with `nil`. Closing it
+    /// leaves the dropped pin where it is — see ``droppedPin``.
     func select(_ selection: TrailDraftSelection?) {
         guard isEditing || selection == nil, self.selection != selection else { return }
+        if selection == .droppedPin, droppedPin == nil { return }
         self.selection = selection
+    }
+
+    /// Drops the pin at a spot and opens its card, replacing any pin already
+    /// down — there is one at a time, as in Apple Maps.
+    func dropPin(_ spot: TrailDraftDroppedPinSpot) {
+        guard isEditing else { return }
+        if droppedPin != spot { droppedPin = spot }
+        select(.droppedPin)
+    }
+
+    /// Takes the dropped pin off the map — the card's *Remove Pin*, and what
+    /// *Add Stop* does once the pin has become a stop.
+    func removeDroppedPin() {
+        if selection == .droppedPin { selection = nil }
+        guard droppedPin != nil else { return }
+        droppedPin = nil
     }
 
     /// Takes a stop off the line — the place sheet's *Remove Stop*.
@@ -496,22 +526,6 @@ final class TrailDraftController {
         guard isEditing else { return }
         draft.addPlaces(places)
         persist()
-    }
-
-    // MARK: - History
-
-    func undo() {
-        guard isEditing else { return }
-        draft.undo()
-        commitLine()
-        resolveLegs()
-    }
-
-    func redo() {
-        guard isEditing else { return }
-        draft.redo()
-        commitLine()
-        resolveLegs()
     }
 
     // MARK: - A point under a finger
@@ -589,6 +603,7 @@ final class TrailDraftController {
         // answer.
         namer.clear()
         selection = nil
+        droppedPin = nil
     }
 
     private func restoreIfNeeded() {
@@ -649,9 +664,8 @@ final class TrailDraftController {
 }
 
 extension TrailDraftController {
-    /// One queue across taps, so newly appended stops cannot start another
-    /// network request beside the current one. A generation also rejects an
-    /// old answer if a provider ignores cancellation while the mode changes.
+    /// Hands the legs that want an answer to the one reader — see the file
+    /// header — starting it if none is running.
     private func resolveLegs(retryingRefusals: Bool = false) {
         guard let router = routers[draft.travelMode], isEditing else { return }
         let pending = draft
@@ -659,38 +673,37 @@ extension TrailDraftController {
             .filter { ends in !legsInFlight.contains(ends) }
         guard !pending.isEmpty else { return }
         legsInFlight.formUnion(pending)
-        routingQueue.append(contentsOf: pending)
         draft.beginRouting(pending)
-        guard routingTask == nil else { return }
-        let generation = routingGeneration
-        routingTask = Task { [weak self] in
-            while let ends = self?.nextRoutingLeg(generation: generation) {
+        let requests = routingRequests ?? startRouting(with: router)
+        for ends in pending { requests.yield(ends) }
+    }
+
+    /// A fresh stream and the one task that reads it with `router`.
+    private func startRouting(with router: any TrailLegRouting) -> AsyncStream<TrailLegEnds>.Continuation {
+        let (stream, continuation) = AsyncStream.makeStream(of: TrailLegEnds.self)
+        routingRequests = continuation
+        routingReader = Task { [weak self] in
+            for await ends in stream {
+                guard !Task.isCancelled, let self else { return }
+                // Asked only while it is still waiting: a leg an edit has
+                // taken away, or one the switch straightened, is not.
+                guard draft.legs.contains(where: { $0.ends == ends && $0.snap.isRouting }) else {
+                    legsInFlight.remove(ends)
+                    continue
+                }
                 let route = await router.route(ends)
-                guard !Task.isCancelled, let self,
-                      routingGeneration == generation else { return }
+                guard !Task.isCancelled else { return }
                 receive(route, for: ends)
             }
         }
-    }
-
-    private func nextRoutingLeg(generation: Int) -> TrailLegEnds? {
-        guard generation == routingGeneration else { return nil }
-        while !routingQueue.isEmpty {
-            let ends = routingQueue.removeFirst()
-            if draft.legs.contains(where: { $0.ends == ends && $0.snap.isRouting }) {
-                return ends
-            }
-            legsInFlight.remove(ends)
-        }
-        routingTask = nil
-        return nil
+        return continuation
     }
 
     private func cancelRouting() {
-        routingGeneration &+= 1
-        routingTask?.cancel()
-        routingTask = nil
-        routingQueue = []
+        routingRequests?.finish()
+        routingRequests = nil
+        routingReader?.cancel()
+        routingReader = nil
         legsInFlight.removeAll()
         draft.stopRouting()
     }
@@ -715,8 +728,8 @@ extension TrailDraftController {
     /// Cancellation is not a failure and is not drawn as one, but a leg left
     /// marked as waiting is never asked about again — ``TrailDraft/legsAwaitingRoutes(retryingRefusals:)``
     /// skips it — so it would stay dashed for the rest of the drawing.
-    /// A routing edit can also cancel the pass. Its generation check prevents
-    /// this receiver from publishing a provider answer that arrives anyway.
+    /// A routing edit can also cancel the reader, whose own cancellation check
+    /// keeps a provider answer that arrives anyway from reaching here.
     private func receive(_ route: TrailLegRoute?, for ends: TrailLegEnds) {
         legsInFlight.remove(ends)
         // Either way the line has stopped waiting on this leg, and the climb

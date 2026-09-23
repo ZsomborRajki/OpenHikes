@@ -22,11 +22,11 @@
 //
 //  ## While the trail maker is up
 //
-//  A tap on the map means one thing: it opens the maker's place sheet on a
-//  dropped pin, or chooses one of the grey alternative routes. That is
-//  answered before the two kinds above, by
-//  ``handleTrailDraftTap(at:in:)`` — see `MapTrailDraftSelection.swift`, and
-//  `MapTrailDraftDrag.swift` for the press that moves a stop.
+//  A tap on the map chooses one of the grey alternative routes or closes the
+//  maker's place card; it opens no hike. That is answered before the two kinds
+//  above, by ``handleTrailDraftTap(at:in:)``. A press and hold is what drops a
+//  pin — see `MapTrailDraftSelection.swift`, and `MapTrailDraftDrag.swift` for
+//  the press that moves a stop.
 //
 //  ## The hiker's own line wins
 //
@@ -170,18 +170,25 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
 
     /// Whether a recognizer on this map may start.
     ///
-    /// Only one of the two this delegate answers for is ever refused, and it
-    /// is refused for nearly every press: the drag begins only when one of the
-    /// maker's own pins is under the finger. Everything else — a press on open
-    /// map, on a line, on a control — is left to mean exactly what it meant
-    /// before, which is what keeps a gesture nobody is using from costing a
-    /// quarter of a second of every long press on the map. See
-    /// `MapTrailDraftDrag.swift`.
+    /// The maker's two presses split the map between them and are refused
+    /// everywhere else: the drag begins only when one of the maker's own stops
+    /// is under the finger (see `MapTrailDraftDrag.swift`), and the press that
+    /// drops a pin only while drawing, on open map or a line — never on a stop
+    /// or on a view with its own claim (see `MapTrailDraftSelection.swift`).
+    /// Outside the maker neither begins at all, which is what keeps a gesture
+    /// nobody is using from costing a moment of every long press on the map.
     func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
-        guard recognizer === trailDraftDragRecognizer,
-              let mapView = recognizer.view as? MKMapView else { return true }
+        guard let mapView = recognizer.view as? MKMapView else { return true }
         let point = recognizer.location(in: mapView)
-        return trailDraftWaypointIndex(at: point, in: mapView) != nil
+        if recognizer === trailDraftDragRecognizer {
+            return trailDraftWaypointIndex(at: point, in: mapView) != nil
+        }
+        // The press that drops a pin begins everywhere the drag does not —
+        // see `MapTrailDraftSelection.swift`.
+        if recognizer is TrailDraftPinDropRecognizer {
+            return mayDropTrailDraftPin(at: point, in: mapView)
+        }
+        return true
     }
 
     @objc func handleRouteTap(_ recognizer: UITapGestureRecognizer) {
@@ -195,10 +202,11 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         // opened somebody's trail would be a tap that did two things, and the
         // one thing it is for is the one the hiker came here to do.
         //
-        // That one thing is to ask: the tap drops a pin and opens the place
-        // sheet on it, and the trail changes only when the sheet's *Add Stop*
-        // is pressed. See `MapTrailDraftSelection.swift`. The controls above
-        // the map keep their claim: the maker asks the same question
+        // What a tap does there is choose a grey route or close the card that
+        // is up; a pin is dropped by a press and hold, and the trail changes
+        // only when the card's *Add Stop* is pressed. See
+        // `MapTrailDraftSelection.swift`. The controls above the map keep
+        // their claim: the maker asks the same question
         // `routeTapTarget(at:in:)` asks first.
         if handleTrailDraftTap(at: point, in: mapView) { return }
         let target = routeTapTarget(at: point, in: mapView)
@@ -213,16 +221,17 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         }
     }
 
-    // MARK: - What a tap means while the maker is up
+    // MARK: - What a touch means while the maker is up
     //
     // The canvas rules, kept beside the handler above that applies them. What
-    // a tap opens is in `MapTrailDraftSelection.swift`;
-    // ``handleTrailDraftTap(at:in:)`` is the call.
+    // a tap and a press open is in `MapTrailDraftSelection.swift`;
+    // ``handleTrailDraftTap(at:in:)`` and
+    // ``dropTrailDraftPin(at:in:)`` are the calls.
     //
-    // **A tap that landed on something over the map is not a drop.** The
-    // tracking button, the credit line and the pill that opened this mode all
-    // sit on the canvas, and a thumb on one of them must not leave a pin
-    // behind it.
+    // **A touch that landed on something over the map is not the canvas's.**
+    // The tracking button, the credit line and the pill that opened this mode
+    // all sit on the canvas, and a thumb on one of them must neither close the
+    // card nor leave a pin behind it.
     //
     // **Markers are among those things, deliberately.** What the maker
     // suspends is the *canvas* — the lines, which are drawn pixels with no
@@ -241,13 +250,13 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
     // The maker's *own* pins are among them: a stop, a place or a time bubble
     // opens the place sheet or chooses a route through MapKit's selection.
     //
-    // **The leg a tap landed on is carried, not re-derived.** A tap on a leg
-    // that is already drawn is still different from a tap on open map — it is
-    // how a route that cuts a corner is made to bend round it — but the
-    // difference is no longer in what the tap *does*. Both drop a pin; the leg
-    // is remembered on it, so *Add Stop* puts the point into the leg the thumb
-    // was on rather than into whichever leg is nearest by the time the button
-    // is pressed. See ``TrailDraftDroppedPinSpot/legIndex``.
+    // **The leg a press landed on is carried, not re-derived.** A press on a
+    // leg that is already drawn is still different from a press on open map —
+    // it is how a route that cuts a corner is made to bend round it — but the
+    // difference is not in what the press *does*. Both drop a pin; the leg is
+    // remembered on it by its ends, so *Add Stop* puts the point into the leg
+    // the thumb was on rather than into whichever leg is nearest by the time
+    // the button is pressed. See ``TrailDraftDroppedPinSpot/leg``.
 
     /// Which leg of the drawn line a tap landed on, if any.
     ///

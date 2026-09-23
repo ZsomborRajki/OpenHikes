@@ -411,7 +411,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     ///
     /// **The legs are straight and that is honest here.** A drawn leg follows
     /// mapped paths by asking Overpass, and no launch running tests may reach
-    /// a volunteer-run API — see ``OpenHikesModel/makeTrailMaker(container:trailGraphProvider:)``.
+    /// a volunteer-run API — see ``OpenHikesModel/makeTrailMaker(container:graph:defaults:)``.
     /// A launch with no graph hides the *Follow Paths* switch rather than
     /// offering one it could not honour, so what this shoots is exactly what a
     /// hiker drawing freehand sees, and nothing in the frame claims otherwise.
