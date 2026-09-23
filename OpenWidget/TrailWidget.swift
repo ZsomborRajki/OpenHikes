@@ -509,15 +509,29 @@ struct TrailWidgetEntryView: View {
     }
 
     /// The Lock Screen families are branched on first because they share none
-    /// of the Home Screen drawing — no map, no chips, no container background.
-    /// Each of them applies the same recording-outranks-trail precedence the
-    /// branches below do; see `TrailWidgetAccessorySubject`.
+    /// of the Home Screen drawing — no map, no chips, nothing to put behind
+    /// them. Each of them applies the same recording-outranks-trail precedence
+    /// the branches below do; see `TrailWidgetAccessorySubject`.
+    ///
+    /// **Every branch declares a container background, even an empty one.**
+    /// WidgetKit checks for one per rendered view, not per widget, and a view
+    /// without it is replaced by the system's "Please adopt containerBackground
+    /// API" card — so one branch that forgets is a widget that is broken in
+    /// exactly that state.
     @ViewBuilder private var content: some View {
+        switch family {
+        case .accessoryCircular, .accessoryRectangular, .accessoryInline:
+            accessoryContent
+                .containerBackground(for: .widget) { Color.clear }
+        default: systemContent
+        }
+    }
+
+    @ViewBuilder private var accessoryContent: some View {
         switch family {
         case .accessoryCircular: AccessoryCircularContent(entry: entry)
         case .accessoryRectangular: AccessoryRectangularContent(entry: entry)
-        case .accessoryInline: AccessoryInlineContent(entry: entry)
-        default: systemContent
+        default: AccessoryInlineContent(entry: entry)
         }
     }
 
@@ -645,6 +659,8 @@ struct TrailWidgetEntryView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // The plain fill the other two states stand on, without a map on it.
+        .containerBackground(.fill.tertiary, for: .widget)
     }
 }
 
