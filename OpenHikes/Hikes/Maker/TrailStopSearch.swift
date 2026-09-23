@@ -70,6 +70,24 @@ nonisolated enum TrailStopSearchTarget: Equatable, Sendable {
         case .newStop: String(localized: "Add Stop")
         }
     }
+
+    /// Whether the place picked here ends up as the start or the destination.
+    ///
+    /// What decides where the camera goes afterwards. An end is what gives the
+    /// line its extent, so a pick that puts one down frames the whole line —
+    /// the destination is where the route appears, and zooming to its pin
+    /// would leave most of it off the screen. A stop in the middle is a detail
+    /// of a line already in view, and the camera goes to it.
+    ///
+    /// *Add Stop* is an end too: it fills an open start or destination while
+    /// there is one, and otherwise appends a new destination — see
+    /// ``TrailDraftController/appendWaypoint(at:named:)``.
+    var landsOnAnEnd: Bool {
+        switch self {
+        case .existing(_, .stop): false
+        case .existing, .open, .newStop: true
+        }
+    }
 }
 
 /// A place the sheet is about to hand back: what it is called, and where.
