@@ -761,7 +761,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: xcode-27
-    timeout-minutes: 45
+    timeout-minutes: 60
     # Gating. The trial this job was admitted on ran from 2026-08-15 to
     # 2026-09-06 and produced 192 completed runs with zero failures, at the
     # job level and at the step level both — the `if: failure()` upload below
@@ -778,17 +778,35 @@ jobs:
     # upload the bundle unconditionally for a while and read the reruns out of
     # it — do not infer it from a green job.
     #
-    # This is also the slowest job in the workflow, and it has got slower.
-    # The numbers it was admitted on were 18m0s median, 21m34s p90 and 24m51s
-    # p99; over the 26 runs of it that completed up to 2026-09-18 they are
-    # 25m24s median, 28m12s p90 and 29m54s longest — that longest one is a
-    # *green* run that finished six seconds inside a 30-minute gate, and five
-    # of the 26 came within two minutes of it. Nothing had timed out yet, which
-    # is the point: the gate was about to start failing runs for the runner's
-    # mood rather than for the VoiceOver contract, which is exactly what the
-    # note here said to raise it rather than wait for. So 45, chosen to sit
-    # clear of the drift and not against it. Re-measure before trusting these
-    # figures; they are a reading of one fortnight, not a property of the job.
+    # This is also the slowest job in the workflow, and it has got slower
+    # twice. The numbers it was admitted on were 18m0s median, 21m34s p90 and
+    # 24m51s p99. Over the 26 runs that completed up to 2026-09-18 they were
+    # 25m24s median, 28m12s p90 and 29m54s longest — that longest one a *green*
+    # run finishing six seconds inside a 30-minute gate, with five of the 26
+    # within two minutes of it — and the gate went to 45.
+    #
+    # Over the 58 successful runs from 2026-09-17 to 2026-09-22 they are
+    # **27m26s median, 38m24s p90 and 43m56s longest**, and that longest is
+    # again a green run finishing 64 seconds inside its gate, with five of the
+    # 58 within five minutes of it. The five slowest are all from the last two
+    # days of that span, which is the shape to read rather than the median:
+    # this is drift and it is still going. So 60, chosen to sit clear of it for
+    # the same reason 45 was.
+    #
+    # The run that raised it is not the evidence for it; the next one is. **The
+    # first run after this change took 45m24s**, which the gate it replaced
+    # would have failed — on a green job, for a comment-only commit. Read that
+    # as the reason the note above says to raise a gate on the drift rather
+    # than on the first timeout.
+    #
+    # **Almost none of it is the tests.** Measured on the longest run: booting
+    # the simulator 157s, granting location 222s, the audits 2031s of which 675
+    # is the twenty tests, and the label assertions 204s of which 174 is the
+    # ten. The other ~22 minutes is one cold build of the app, the widget, the
+    # watch app and the UI bundle inside the first `run-ui-tests.sh` — so the
+    # thing that moves this number is the size of the project, and adding a
+    # test to it costs about thirty seconds. Re-measure before trusting any of
+    # this; it is a reading of five days, not a property of the job.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
