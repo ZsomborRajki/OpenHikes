@@ -174,7 +174,8 @@ extension TrailDraftRoutingTests {
             Self.ends(Trail.first, Trail.second),
             Self.ends(Trail.second, Trail.third),
         ])
-        #expect(maker.draft.legs.allSatisfy { $0.snap.isRouting }, "both legs are waiting again")
+        let everyLegIsRouting = maker.draft.legs.allSatisfy(\.snap.isRouting)
+        #expect(everyLegIsRouting, "both legs are waiting again")
 
         await router.release()
         await settleDelegateHop(until: "both legs to be answered") {
