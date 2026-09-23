@@ -7,10 +7,9 @@
 //  route's own tint rather than recording red.
 //
 //  The controls exist only once there is a walk to control: opening a trail
-//  is not walking it. Until then this draws the offer, if a matched fix has
-//  made one — ``WalkOfferPrompt`` — and nothing otherwise. On any *other*
-//  trail's detail while a walk is under way, it draws the one-line notice
-//  naming the walk in progress instead.
+//  is not walking it, and this draws nothing until the first matched fix
+//  has started one. On any *other* trail's detail while a walk is under
+//  way, it draws the one-line notice naming the walk in progress instead.
 //
 //  Reads the session's coarse properties — which hike, which phase — and
 //  nothing that moves per fix, so a fix that extends coverage redraws the
@@ -29,8 +28,6 @@ struct WalkControls: View {
 
     let hike: Hike
     let session: TrailWalkSession
-    /// The route the offer's Start measures a walk against.
-    let profile: RouteProfile
     let onOpenWalk: (HikeWalk) -> Void
 
     @State private var showEndConfirmation = false
@@ -58,8 +55,6 @@ struct WalkControls: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier("walk-notice")
-            } else {
-                WalkOfferPrompt(hike: hike, session: session, routeLengthMeters: profile.totalDistanceMeters)
             }
         }
         .confirmationDialog(

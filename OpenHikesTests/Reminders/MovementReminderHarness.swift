@@ -48,10 +48,6 @@ final class StubMovementReminderNotifier: MovementReminderNotifying {
     private(set) var silentChecks = 0
     private(set) var posted: [MovementReminder] = []
     private(set) var withdrawn: [MovementReminderKind] = []
-    /// The walk offer sitting in Notification Centre: put there by a post,
-    /// taken away by a withdrawal, and settable so a suite can hand the
-    /// controller a banner an earlier process posted.
-    var deliveredOffer: WalkOfferSubject?
 
     var postedKinds: [MovementReminderKind] { posted.map(\.kind) }
 
@@ -105,16 +101,10 @@ final class StubMovementReminderNotifier: MovementReminderNotifying {
 
     func post(_ reminder: MovementReminder) {
         posted.append(reminder)
-        if let walkOffer = reminder.walkOffer { deliveredOffer = walkOffer }
     }
 
     func withdraw(_ kind: MovementReminderKind) {
         withdrawn.append(kind)
-        if kind == .walkNearby { deliveredOffer = nil }
-    }
-
-    func deliveredWalkOffer() -> WalkOfferSubject? {
-        deliveredOffer
     }
 }
 
@@ -175,10 +165,6 @@ enum MovementReminderHarness {
         /// is what the app uses, but posting it here would reach every other
         /// controller alive in the test host — and the host is a running app.
         let lifecycleCenter: NotificationCenter
-        /// Whether the controller believes the app is in front. Behind it by
-        /// default, which is where every reminder but the walk offer's
-        /// foreground half is decided.
-        let activity: AppActivity
 
         /// Posts the app-lifecycle notification the controller's typed
         /// observer is built on.
@@ -200,29 +186,21 @@ enum MovementReminderHarness {
     /// A defaults suite of its own, never the developer's: the controller
     /// reads its switch on every decision, so a test writing to `.standard`
     /// would change the host app's behaviour for every suite after it.
-    /// The answer the controller's `isAppActive` reads, moved by hand.
-    final class AppActivity {
-        var isActive = false
-    }
-
     static func harness(remindersEnabled: Bool = true) -> Harness {
         let notifier = StubMovementReminderNotifier()
         let suite = UserDefaults(suiteName: "movement-reminders-\(UUID().uuidString)")
             ?? .standard
         suite.set(remindersEnabled, forKey: SettingsKey.movementRemindersEnabled)
         let center = NotificationCenter()
-        let activity = AppActivity()
         return Harness(
             controller: MovementReminderController(
                 notifier: notifier,
                 defaults: suite,
-                lifecycleCenter: center,
-                isAppActive: { activity.isActive }
+                lifecycleCenter: center
             ),
             notifier: notifier,
             defaults: suite,
-            lifecycleCenter: center,
-            activity: activity
+            lifecycleCenter: center
         )
     }
 }

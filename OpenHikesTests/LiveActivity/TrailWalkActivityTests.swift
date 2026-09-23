@@ -71,7 +71,7 @@ final class TrailWalkActivityTests {
     ) async throws {
         for index in 0...2 {
             clock.advance(by: 60)
-            session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[index])
+            session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[index])
         }
         let match = try #require(profile.nearestPoint(to: profile.coordinates[2]))
         tracker.publishLiveFix(hike: hike, profile: profile, match: match, walk: session.payload(for: hike.id))
@@ -102,25 +102,6 @@ final class TrailWalkActivityTests {
         let stored = try #require(SharedStore.load())
         #expect(stored.walk?.coveredFraction == session.coveredFraction)
         #expect(stored.statusText.contains("walked"))
-    }
-
-    /// Start Hike on the notification runs behind the app, where the next
-    /// fix may be half a kilometre off. The walk reaches the widget on the
-    /// tap, not on that fix.
-    @Test("a Start from the notification reaches the widget at once")
-    func notificationStartReachesTheWidget() async throws {
-        let clock = TestClock()
-        let session = walkSession(clock: clock)
-        let hike = hike()
-        let profile = RouteProfile(route: hike.route)
-        tracker.hikeSelectionChanged(to: hike)
-        await tracker.waitForSelectionPublish()
-
-        #expect(session.start(hikeID: hike.id, routeLengthMeters: profile.totalDistanceMeters))
-        await tracker.waitForLiveFixPublish()
-
-        let stored = try #require(SharedStore.load())
-        #expect(stored.walk?.state == .active)
     }
 
     /// Pausing reaches the panel at once, through the run-state bypass —
@@ -297,7 +278,7 @@ final class TrailWalkActivityTests {
         #expect(controller.activeSubject == .recording(sessionID: sessionID))
 
         clock.advance(by: 60)
-        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[4])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[4])
         session.pause()
         await tracker.waitForLiveFixPublish()
         await controller.settle()

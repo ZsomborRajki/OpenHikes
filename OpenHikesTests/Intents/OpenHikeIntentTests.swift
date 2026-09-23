@@ -70,21 +70,6 @@ struct OpenHikeIntentTests {
         #expect(TrailWidgetDeepLink.hikeID(from: url) == second)
     }
 
-    /// The view tree reads the link with `initial: true`, which runs again in
-    /// every window opened later. Taken once, it cannot reopen the same hike
-    /// in each of them.
-    @Test("a link is handed over once")
-    func theLinkIsTakenOnce() throws {
-        let requests = HikeOpenRequests()
-        let id = UUID()
-
-        requests.open(hikeID: id)
-
-        let url = try #require(requests.takeLink())
-        #expect(TrailWidgetDeepLink.hikeID(from: url) == id)
-        #expect(requests.takeLink() == nil)
-    }
-
     /// A launch that was not started by an intent has nothing pending, so the
     /// view tree's `onChange` cannot fire on a stale link at startup.
     @Test("a fresh channel has nothing pending")

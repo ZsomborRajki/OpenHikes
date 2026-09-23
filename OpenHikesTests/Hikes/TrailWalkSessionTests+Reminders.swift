@@ -65,7 +65,7 @@ extension TrailWalkSessionTests {
 
         // Standing still: the same position, matched again.
         clock.advance(by: 60)
-        session.acceptAndMatch(
+        session.recordForegroundMatch(
             hike: walked,
             profile: profile,
             distance: profile.distances[6]
@@ -131,7 +131,7 @@ extension TrailWalkSessionTests {
         // A newer foreground match, back down the trail, and the Pause taken
         // there — the hiker is standing where this leaves them.
         clock.advance(by: 60)
-        session.acceptAndMatch(hike: walked, profile: profile, distance: profile.distances[4])
+        session.recordForegroundMatch(hike: walked, profile: profile, distance: profile.distances[4])
         #expect(session.pause())
 
         // The background feed finally delivers the older fix.
@@ -170,7 +170,7 @@ extension TrailWalkSessionTests {
         // Taken half a minute before the Pause, half a kilometre up the
         // trail, and read by the follow loop twenty seconds after it.
         clock.advance(by: 20)
-        session.acceptAndMatch(
+        session.recordForegroundMatch(
             hike: walked,
             profile: profile,
             distance: profile.distances[14],

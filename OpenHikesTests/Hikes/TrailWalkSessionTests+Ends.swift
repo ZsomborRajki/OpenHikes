@@ -32,7 +32,7 @@ extension TrailWalkSessionTests {
         #expect(session.walkedHikeID == nil)
 
         clock.advance(by: 60)
-        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[6])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[6])
         #expect(session.walkedHikeID == nil, "standing on the route it just ended on is not a new walk")
         #expect(!session.canStart(hike))
 
@@ -41,7 +41,7 @@ extension TrailWalkSessionTests {
         session.recordOffRoute(hikeID: hike.id)
         #expect(session.canStart(hike))
         clock.advance(by: 60)
-        session.acceptAndMatch(hike: hike, profile: profile, distance: profile.distances[7])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[7])
         #expect(session.walkedHikeID == hike.id)
     }
 
@@ -133,7 +133,7 @@ extension TrailWalkSessionTests {
         walk(session, hike: hike, profile: profile, from: 0, through: last - 1)
         clock.advance(by: 60)
 
-        let completed = session.acceptAndMatch(
+        let completed = session.recordForegroundMatch(
             hike: hike,
             profile: profile,
             distance: profile.distances[last]

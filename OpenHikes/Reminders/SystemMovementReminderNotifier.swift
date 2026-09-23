@@ -83,19 +83,10 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
 
     func post(_ reminder: MovementReminder) async {
         #if canImport(UserNotifications)
-        let center = UNUserNotificationCenter.current()
-        // Here as well as in `authorize()`: the walk offer is posted after
-        // ``canPost()``, which registers nothing, from a process the system
-        // may have relaunched in the background — and a banner whose category
-        // is unknown to the centre arrives with no buttons on it.
-        registerCategoriesIfNeeded(with: center)
         let content = UNMutableNotificationContent()
         content.title = reminder.title
         content.body = reminder.body
         content.categoryIdentifier = reminder.categoryIdentifier
-        if let walkOffer = reminder.walkOffer {
-            content.userInfo = walkOffer.userInfo
-        }
         content.sound = .default
         // Both from the kind, for the reason the category is: what a given
         // reminder is worth is policy, and none of it is decided here.
@@ -110,7 +101,7 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
             trigger: nil
         )
         do {
-            try await center.add(request)
+            try await UNUserNotificationCenter.current().add(request)
         } catch {
             let kind = reminder.kind.rawValue
             Self.logger.error(
@@ -129,17 +120,6 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
         #endif
     }
 
-    func deliveredWalkOffer() async -> WalkOfferSubject? {
-        #if canImport(UserNotifications)
-        let identifier = MovementReminderKind.walkNearby.notificationIdentifier
-        let delivered = await UNUserNotificationCenter.current().deliveredNotifications()
-        guard let banner = delivered.first(where: { $0.request.identifier == identifier }) else { return nil }
-        return WalkOfferSubject(userInfo: banner.request.content.userInfo)
-        #else
-        return nil
-        #endif
-    }
-
     #if canImport(UserNotifications)
     private func registerCategoriesIfNeeded(with center: UNUserNotificationCenter) {
         guard !hasRegisteredCategories else { return }
@@ -149,24 +129,26 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
                 identifier: kind.categoryIdentifier,
                 // A kind with no verb registers a category with no actions,
                 // which is a banner and nothing else — see
-                // ``MovementReminderKind/actions``. Still a category of its
+                // ``MovementReminderKind/action``. Still a category of its
                 // own rather than none, because the identifier is what
                 // ``withdraw(_:)`` takes a delivered banner back down by.
-                actions: kind.actions.map { action in
-                    UNNotificationAction(
-                        identifier: action.rawValue,
-                        title: action.title,
-                        // No `.foreground`, deliberately. The system runs
-                        // the action in this process without bringing the
-                        // app to the front, which is the difference
-                        // between a hiker tapping Resume with gloves on
-                        // and one unlocking a phone to find the recording
-                        // screen.
-                        options: []
-                    )
-                },
+                actions: kind.action.map { action in
+                    [
+                        UNNotificationAction(
+                            identifier: action.rawValue,
+                            title: action.title,
+                            // No `.foreground`, deliberately. The system runs
+                            // the action in this process without bringing the
+                            // app to the front, which is the difference
+                            // between a hiker tapping Resume with gloves on
+                            // and one unlocking a phone to find the recording
+                            // screen.
+                            options: []
+                        ),
+                    ]
+                } ?? [],
                 intentIdentifiers: [],
-                options: kind.reportsDismissal ? [.customDismissAction] : []
+                options: []
             )
         }
         center.setNotificationCategories(Set(categories))

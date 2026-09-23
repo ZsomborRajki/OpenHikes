@@ -75,11 +75,6 @@ extension BackgroundTrailTracker {
         /// route with nothing to measure against rather than a hiker who has
         /// left it.
         let offRouteMeters: Double?
-        /// The route's length on ``RouteProfile``'s scale, which is the only
-        /// scale a walk's coverage may be written on — carried so a walk
-        /// offered from this fix can be started without building the profile
-        /// a second time. See ``WalkOfferSubject``.
-        let routeLengthMeters: Double
     }
 
     /// The one hop this type makes off the main actor, and the only place its
@@ -151,8 +146,7 @@ extension BackgroundTrailTracker {
                 fix: nil,
                 matchedDistance: nil,
                 // The one thing this branch does know, and now says.
-                offRouteMeters: nearest?.offRouteMeters,
-                routeLengthMeters: profile.totalDistanceMeters
+                offRouteMeters: nearest?.offRouteMeters
             )
         }
         return BackgroundMatch(
@@ -166,8 +160,7 @@ extension BackgroundTrailTracker {
                 elevationMeters: profile.sample(atDistance: match.distanceAlongRoute)?.elevation
             ),
             matchedDistance: match.distanceAlongRoute,
-            offRouteMeters: match.offRouteMeters,
-            routeLengthMeters: profile.totalDistanceMeters
+            offRouteMeters: match.offRouteMeters
         )
     }
 
