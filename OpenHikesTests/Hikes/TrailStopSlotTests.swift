@@ -224,6 +224,74 @@ struct TrailStopSlotTests {
         #expect(draft.legs == before)
     }
 
+    // MARK: A drag
+
+    /// What iOS 27's list reports — these rows, in front of that one — as the
+    /// order the list now stands in. The drag itself is
+    /// `TrailMakerUITests.testReorderingThePoints`; only a simulator can press.
+    @Test("a drop puts the dragged rows in front of the target, or last")
+    func aDropRearrangesTheRows() {
+        let rows = ["a", "b", "c", "d"]
+
+        #expect(TrailStopSlot.rearranged(rows, moving: ["c"], before: "b") == ["a", "c", "b", "d"])
+        #expect(TrailStopSlot.rearranged(rows, moving: ["a"], before: "c") == ["b", "a", "c", "d"])
+        #expect(TrailStopSlot.rearranged(rows, moving: ["b"], before: nil) == ["a", "c", "d", "b"])
+        #expect(
+            TrailStopSlot.rearranged(rows, moving: ["b"], before: "b") == ["a", "c", "d", "b"],
+            "a moving target is the end"
+        )
+    }
+
+    @Test("the points take the order the rows were dragged into")
+    func arrangingTheRowsReordersThePoints() {
+        let draft = TrailDraft()
+        draft.addStop(Self.coordinate(Line.south))
+        draft.addStop(Self.coordinate(Line.north))
+        draft.append(Self.coordinate(Line.middle, Line.aside))
+        let ids = draft.waypoints.map(\.id)
+
+        draft.arrangeRows([ids[2], ids[0], ids[1]].map(\.uuidString))
+
+        #expect(draft.waypoints.map(\.id) == [ids[2], ids[0], ids[1]])
+        #expect(draft.legs.map(\.id) == [ids[0], ids[1]], "the line is rebuilt in the new order")
+        #expect(draft.role(ofWaypointAt: 0) == .start)
+    }
+
+    /// The fields are named by where they stand: a lone start dragged under
+    /// the open destination field becomes the destination, with the start
+    /// open above it — and dragged back over it, the start again.
+    @Test("a lone point dragged past its open field swaps ends")
+    func aLonePointSwapsEndsWithItsField() {
+        let draft = TrailDraft()
+        draft.addStop(Self.coordinate(Line.south))
+        let point = draft.waypoints[0].id
+        #expect(draft.slots == [.point(index: 0, id: point), .open(.end)])
+
+        draft.arrangeRows([TrailStopSlot.open(.end).id, point.uuidString])
+
+        #expect(draft.startIsOpen)
+        #expect(draft.role(ofWaypointAt: 0) == .end)
+        #expect(draft.slots == [.open(.start), .point(index: 0, id: point)])
+
+        draft.arrangeRows([point.uuidString, TrailStopSlot.open(.start).id])
+
+        #expect(!draft.startIsOpen)
+        #expect(draft.slots == [.point(index: 0, id: point), .open(.end)])
+    }
+
+    @Test("an order that does not name every point once changes nothing")
+    func aPartialOrderChangesNothing() {
+        let draft = TrailDraft()
+        draft.addStop(Self.coordinate(Line.south))
+        draft.addStop(Self.coordinate(Line.north))
+        let before = draft.waypoints
+
+        draft.arrangeRows([before[1].id.uuidString])
+        draft.arrangeRows([before[1].id.uuidString, before[1].id.uuidString])
+
+        #expect(draft.waypoints == before)
+    }
+
     // MARK: What wakes the list
 
     /// The maker's screen builds its list from ``TrailDraft/slots`` and nothing

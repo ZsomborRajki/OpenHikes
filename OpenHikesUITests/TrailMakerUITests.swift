@@ -434,17 +434,19 @@ extension TrailMakerUITests {
         drawTrailPoints(Self.drawnPoints, on: map, in: app)
         let length = element("trail-draft-length", in: app).label
 
-        let second = element("trail-draft-point-2", in: app)
+        let first = element("trail-draft-point-1", in: app)
         XCTAssertFalse(app.navigationBars.buttons["Edit"].exists)
 
         // A press and hold on the row itself lifts it — there is no grabber.
         // Slow and held at both ends, as in `HikeOrderUITests`: a reorder
         // commits on the drop, and a quick flick is over before the list has
-        // decided it was a drag.
+        // decided it was a drag. The destination goes to the top, turning the
+        // route round: a one-place move is the drop iOS 27.0's
+        // `reorderable()` sometimes misplaces — see `TrailStopReordering.swift`.
         element("trail-draft-point-3", in: app)
             .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
             forDuration: 1.2,
-            thenDragTo: second.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)),
+            thenDragTo: first.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)),
             withVelocity: .slow,
             thenHoldForDuration: 0.8
         )

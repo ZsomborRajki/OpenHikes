@@ -20,15 +20,13 @@
 //  ``TrailAddStopRow``. Three things follow from that and each is load-bearing
 //  rather than styling.
 //
-//  **Every stop can be moved and deleted at any time, as in Apple Maps.** A
-//  press and hold lifts a filled row to drag it, and a trailing swipe deletes
-//  it; there is no Edit/Done mode to enter first and no leading delete
-//  circles. That is `onMove` on the stops' `ForEach` outside edit mode, which
-//  on iOS 27 drags on a press and hold and keeps the swipe. iOS 27's own
-//  `reorderable()` was tried first and measured in a standalone prototype: it
-//  dropped a stop moved one row up at the *end* of the list and ignored one
-//  moved one row down, in a sheet or out of one, where `onMove` placed all
-//  three test drags correctly.
+//  **Every row can be moved at any time, and every stop deleted, as in Apple
+//  Maps.** A press and hold lifts a row to drag it — iOS 27's `reorderable()`,
+//  see `TrailStopReordering.swift` — and a trailing swipe deletes a stop;
+//  there is no Edit/Done mode to enter first and no leading delete circles.
+//  The open fields drag too, and a field is named by where it lands: the top
+//  row is the start and the bottom one the destination, so a lone point
+//  dragged under its open field becomes the destination.
 //
 //  **A row is a field.** Tapping one opens ``TrailStopSearchSheet`` on it, and
 //  the place picked there fills that row and takes the camera to it. Every
@@ -113,6 +111,9 @@ struct TrailDraftView: View {
     /// closes it again keeps the camera the sheet moved. `@State` is what
     /// counts pushes here — a new one is a new screen and a fresh `false`.
     @State private var hasFramedTheDrawing = false
+    /// Whether an empty draft's two open fields have been dragged past each
+    /// other — see ``shownRows``.
+    @State private var openFieldsSwapped = false
 
     private var draft: TrailDraft { maker.draft }
 
@@ -142,9 +143,9 @@ struct TrailDraftView: View {
         // lists. A grouped list otherwise paints its own opaque grey over it;
         // the rows keep their own cards either way.
         .scrollContentBackground(.hidden)
-        // EXPERIMENT: the container the stops' `reorderable()` hands a drop
-        // to. See `TrailStopReordering.swift`.
-        .trailStopReorderContainer { moveStops($0, before: $1) }
+        // The container the rows' `reorderable()` hands a drop to. See
+        // `TrailStopReordering.swift`.
+        .trailStopReorderContainer { moveRows($0, before: $1) }
         // **The camera goes to the drawing that is already there.** A draft
         // outlives the screen it is drawn on — it is on disk between launches —
         // so a hiker who backs out, looks at another trail and comes back would
@@ -267,22 +268,18 @@ struct TrailDraftView: View {
             // why the only thing read here is ``TrailDraft/slots``, which
             // changes when a row comes or goes and at no other time.
             //
-            // Three `ForEach`es so that only the stops can be picked up: an
-            // open field sits before them or after them and has no place in
-            // their order, and the stops' offsets are then the waypoints' own.
-            let slots = draft.slots
-            let fieldsBefore = Array(slots.prefix { $0.waypointIndex == nil })
-            let stops = slots.filter { $0.waypointIndex != nil }
-            ForEach(fieldsBefore) { openFieldRow($0, in: slots) }
-                .listRowInsets(TrailStopRowView.rowInsets)
-                .listRowSeparator(.hidden)
-            ForEach(stops) { stopRow($0, in: slots) }
-                .trailStopsReorderable()
-                .listRowInsets(TrailStopRowView.rowInsets)
-                .listRowSeparator(.hidden)
-            ForEach(Array(slots.dropFirst(fieldsBefore.count + stops.count))) { openFieldRow($0, in: slots) }
-                .listRowInsets(TrailStopRowView.rowInsets)
-                .listRowSeparator(.hidden)
+            //
+            // One `ForEach` for every row, open fields included, and nothing
+            // beside it but the rows after: a second `ForEach` in the same
+            // section — even an empty one — is what made a short drag land in
+            // the wrong place. See `TrailStopReordering.swift`.
+            let rows = shownRows
+            ForEach(rows) { slot in
+                row(slot, at: rows.firstIndex(of: slot) ?? 0)
+            }
+            .trailStopsReorderable()
+            .listRowInsets(TrailStopRowView.rowInsets)
+            .listRowSeparator(.hidden)
             if draft.canBeSaved {
                 TrailAddStopRow { searchForStop(.newStop) }
             }
@@ -294,49 +291,61 @@ struct TrailDraftView: View {
         }
     }
 
-    /// A start or destination field still waiting for a place.
-    private func openFieldRow(_ slot: TrailStopSlot, in slots: [TrailStopSlot]) -> some View {
-        TrailStopRowView(draft: draft, position: slots.firstIndex(of: slot) ?? 0) {
-            searchForStop(target(for: slot))
-        }
+    /// ``TrailDraft/slots``, and the one order the draft cannot hold: its two
+    /// open fields dragged past each other. Both are empty and each is named
+    /// by where it stands, so the draft has nothing to record — but the list
+    /// has to be told, or it would go on drawing the rows where the finger
+    /// left them while its data said otherwise.
+    private var shownRows: [TrailStopSlot] {
+        let slots = draft.slots
+        let isEmpty = slots.allSatisfy { $0.waypointIndex == nil }
+        return openFieldsSwapped && isEmpty ? slots.reversed() : slots
     }
 
-    /// A filled stop, with the two gestures it has at all times: the press and
-    /// hold that drags it and a trailing swipe that deletes it.
+    /// One row of the route, with the two gestures every row has at all times:
+    /// a press and hold that drags it, and — on a stop — a trailing swipe that
+    /// deletes it.
     ///
-    /// One view whatever the slot, with no `if` around it. Every slot here is a
-    /// stop, so the optional identity is only ever there to unwrap — and a
-    /// `ForEach` of conditional rows is where iOS 27's list reordering was
-    /// seen to move a row on screen and never report the move.
-    private func stopRow(_ slot: TrailStopSlot, in slots: [TrailStopSlot]) -> some View {
+    /// One view whatever the slot, with no `if` around it: a `ForEach` of
+    /// conditional rows moves a row on screen and never reports the move. See
+    /// `TrailStopReordering.swift`.
+    private func row(_ slot: TrailStopSlot, at position: Int) -> some View {
         let id = slot.stopID
         return TrailStopRowView(
             draft: draft,
-            position: slots.firstIndex(of: slot) ?? 0,
+            position: position,
             onStep: id.map { id in { adjustWaypoint(id, direction: $0) } },
-            onSearch: { searchForStop(target(for: slot)) }
+            onSearch: { searchForStop(target(for: slot, at: position)) }
         )
         .swipeActions(edge: .trailing) {
-            Button("Delete", systemImage: "trash", role: .destructive) {
-                if let id { maker.removeStop(id: id) }
+            if let id {
+                Button("Delete", systemImage: "trash", role: .destructive) {
+                    maker.removeStop(id: id)
+                }
             }
         }
     }
 
-    /// A drop from the stops' drag: each dragged row's stop, moved in front of
-    /// the stop `target` names, or to the end for `nil`.
-    private func moveStops(_ sources: [String], before target: String?) {
-        let stop = { (id: String) in draft.slots.first { $0.id == id }?.stopID }
-        let before = target.flatMap(stop)
-        for source in sources.compactMap(stop) {
-            reorderWaypoint(source, before: before)
+    /// A drop: the rows as the list now stands, handed to the draft — see
+    /// ``TrailDraft/arrangeRows(_:)``. Two open fields and no point are the
+    /// list's own to reorder.
+    private func moveRows(_ sources: [String], before target: String?) {
+        let shown = shownRows.map(\.id)
+        let order = TrailStopSlot.rearranged(shown, moving: sources, before: target)
+        guard order != shown else { return }
+        HapticMoment.rowMoved.play()
+        if draft.waypoints.isEmpty {
+            openFieldsSwapped.toggle()
+        } else {
+            maker.arrangeRows(order)
         }
     }
 
-    /// What a row's search fills: the stop it already holds, or its open field.
-    private func target(for slot: TrailStopSlot) -> TrailStopSearchTarget {
+    /// What a row's search fills: the stop it already holds, or the open field
+    /// at that place in the list — the start at the top, the destination below.
+    private func target(for slot: TrailStopSlot, at position: Int) -> TrailStopSearchTarget {
         switch slot {
-        case .open(let role): .open(role)
+        case .open: .open(position == 0 ? .start : .end)
         case let .point(index, id): .existing(id: id, role: draft.role(ofWaypointAt: index))
         }
     }
@@ -362,7 +371,7 @@ struct TrailDraftView: View {
     }
 
     /// Moves a stop immediately before `targetID`, or to the end for `nil`.
-    /// Where a drag's drop and a VoiceOver step both land.
+    /// Where a VoiceOver step lands; a drag is ``moveRows(_:before:)``.
     private func reorderWaypoint(_ sourceID: UUID, before targetID: UUID?) {
         guard
             let sourceIndex = draft.waypoints.firstIndex(where: { $0.id == sourceID })

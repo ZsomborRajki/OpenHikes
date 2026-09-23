@@ -757,7 +757,29 @@ extension TrailDraft {
         rebuildLegs()
     }
 
-    /// Reorders the line. What a drag in the list's edit mode commits.
+    /// Puts the points in the order the route list's rows now stand in, by
+    /// row identifier — what a drag in the list commits.
+    ///
+    /// Every row can be dragged, the open fields too, and a field takes its
+    /// role from where it lands: the top row is the start and the bottom one
+    /// the destination. So a lone point dragged under its open field becomes
+    /// the destination, with the start open above it, and one dragged over it
+    /// the start again. Two open fields and no point have nothing to say about
+    /// the draft; the list keeps that order itself. A list that does not name
+    /// every point exactly once changes nothing.
+    func arrangeRows(_ order: [String]) {
+        let byRow = Dictionary(uniqueKeysWithValues: waypoints.map { ($0.id.uuidString, $0) })
+        let points = order.compactMap { byRow[$0] }
+        guard points.count == waypoints.count, Set(points.map(\.id)).count == points.count else { return }
+        let loneIsDestination = points.count == 1 && order.first != points[0].id.uuidString
+        guard points != waypoints || loneIsDestination != startIsOpen else { return }
+        waypoints = points
+        startIsOpen = loneIsDestination
+        rebuildLegs()
+    }
+
+    /// Reorders the line by offsets. What VoiceOver's *Move Up* and *Move
+    /// Down* commit.
     ///
     /// This is the operation the list earns its place with: it is how a hiker
     /// fixes a route built in the wrong direction, and how a point is pulled
