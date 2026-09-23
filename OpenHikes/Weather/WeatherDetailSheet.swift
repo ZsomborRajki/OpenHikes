@@ -134,6 +134,11 @@ struct WeatherDetailView: View {
         NavigationStack {
             List {
                 if let snapshot = weather.current {
+                    // First of all, above even an alert: the credits Apple
+                    // requires beside its data, where a hiker — and App
+                    // Review — sees them the moment the sheet opens. See
+                    // ``WeatherAttributionBanner``.
+                    WeatherAttributionBanner(marks: marks)
                     // **Above the reading, which is the one section that
                     // earns it.** Everything below this is what the weather
                     // is doing; this is a meteorological agency telling the

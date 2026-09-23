@@ -27,6 +27,15 @@ struct SharedWeatherReadingTests {
         )
     }
 
+    // MARK: Attribution
+
+    /// The glyph first and the word after, as Apple writes the mark — the
+    /// one spelling of it both the widget and the sheet draw.
+    @Test("the attribution mark is the Apple glyph and Weather")
+    func attributionMark() {
+        #expect(SharedWeatherReading.attributionMark == "\u{F8FF} Weather")
+    }
+
     // MARK: Refusing what cannot be drawn
 
     /// `JSONEncoder` refuses a non-finite `Double`, so a reading built from

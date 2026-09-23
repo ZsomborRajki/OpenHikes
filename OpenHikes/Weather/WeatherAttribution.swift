@@ -19,6 +19,7 @@
 //
 
 import Foundation
+import OpenHikesShared
 import os
 import WeatherKit
 
@@ -85,6 +86,10 @@ nonisolated enum AppleWeatherAttribution {
     /// The wording the terms require beside the data, and the one thing that
     /// is drawn whether or not the marks ever arrive.
     static let serviceName = "Apple Weather"
+
+    /// The trademark in text, for wherever the published mark is not drawn —
+    /// see ``SharedWeatherReading/attributionMark``.
+    static let textMark = SharedWeatherReading.attributionMark
 
     // Force-unwrapped deliberately, matching `MapPurchaseLinks`: this is a
     // compile-time constant, and a typo should fail a test here rather than

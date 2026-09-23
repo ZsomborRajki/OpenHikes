@@ -133,6 +133,20 @@ private enum HeaderMetrics {
 /// the corner is four characters wide over a map, and a second glyph would
 /// cost more legibility than a sun tells anyone who can see out of a window.
 /// The number is the part that cannot be guessed.
+///
+/// **With the Apple Weather mark under it.** The number is WeatherKit's data,
+/// and WeatherKit's terms require the mark wherever that data is displayed —
+/// App Review holds the app to it under guideline 5.2.5.
+///
+/// Hung below the number in an overlay rather than stacked with it, because
+/// layout never sees an overlay: the corner keeps the width of `-12°C`, and
+/// the chips beside it keep every point they had. Stacked, " Weather" is the
+/// wider of the two lines, and on a small widget it truncated both chips. The
+/// row below the header is map, so the mark lands on the scrim rather than on
+/// anything it could collide with.
+///
+/// Text, not Apple's published image: a widget renders a snapshot and cannot
+/// wait on a download. See ``SharedWeatherReading/attributionMark``.
 struct TrailWidgetTemperature: View {
     let text: String
     let onMap: Bool
@@ -140,8 +154,21 @@ struct TrailWidgetTemperature: View {
     var body: some View {
         Text(text)
             .font(.caption2.weight(.semibold))
+            .overlay(alignment: .bottomLeading) {
+                Text(verbatim: SharedWeatherReading.attributionMark)
+                    .font(.system(size: Metrics.markSize, weight: .medium))
+                    .fixedSize()
+                    // Its top on the number's bottom: directly underneath.
+                    .alignmentGuide(.bottom) { $0[.top] }
+            }
             .foregroundStyle(onMap ? AnyShapeStyle(Color.white) : AnyShapeStyle(.secondary))
             .accessibilityHidden(true)
+    }
+
+    private enum Metrics {
+        /// Smaller than the number it credits, and no smaller than the
+        /// smallest text the system draws on a Home Screen widget.
+        static let markSize: CGFloat = 9
     }
 }
 
