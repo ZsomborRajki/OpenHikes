@@ -7,8 +7,8 @@
 //
 //  Following a trail used to answer one question — *where am I on this trail
 //  right now* — and forget the answer. This is what remembers it. A walk
-//  begins on the first matched fix with Follow This Trail on, keeps the
-//  union of along-route intervals its consecutive matches spanned, can be
+//  begins on the first matched fix with Follow This Trail on, or on the
+//  detail's Start — ``start(hike:profile:)`` — and keeps the union of along-route intervals its consecutive matches spanned, can be
 //  paused and resumed, and ends into a `HikeWalk` row the History segment
 //  lists. It outlives the screen that started it: popping the detail,
 //  opening another trail, or starting a recording changes nothing here.
@@ -634,6 +634,54 @@ final class TrailWalkSession {
             activeSeconds: record.activeSeconds(at: now),
             startedAt: record.startedAt
         )
+    }
+}
+
+// MARK: - Start by hand
+
+extension TrailWalkSession {
+    /// Whether the detail's Start may begin a walk on `hike` right now:
+    /// nothing else is being walked, and this is not a recording's own draft.
+    ///
+    /// Looser than ``canStart(_:)`` on purpose. Following off and an End just
+    /// taken both hold the *automatic* start back, because neither a fix nor a
+    /// selection says the hiker means to walk this trail. A tap on Start says
+    /// exactly that.
+    func canStartByHand(_ hike: Hike) -> Bool {
+        record == nil
+            && hike.isAttached
+            && !hike.belongsToActiveRecording(currentHikeID: activeRecordingHikeID())
+    }
+
+    /// The hiker tapped Start on the hike's detail.
+    ///
+    /// Begins the walk now, from wherever the hiker is. Nothing is covered
+    /// until a fix matches the route: the follow loop feeds a walk under way
+    /// whether or not following is on, so from here on this is the same walk
+    /// a matched fix would have started. No ``startNotice`` either — the pill
+    /// is news of a start nobody asked for, and this one was asked for.
+    ///
+    /// - Returns: whether a walk started. A refused first write is not a
+    ///   refused start, for the reason ``startIfEligible(hike:profile:at:)``
+    ///   gives: the walk is under way in memory, and the next fix writes it.
+    @discardableResult func start(hike: Hike, profile: RouteProfile) -> Bool {
+        let now = clock()
+        discardWalkIfHikeGone()
+        endIfAbandoned(at: now)
+        guard canStartByHand(hike), profile.totalDistanceMeters > 0 else { return false }
+        let started = TrailWalkRecord(
+            hikeID: hike.id,
+            routeDistanceMeters: profile.totalDistanceMeters,
+            startedAt: now
+        )
+        adopt(started, hike: hike)
+        persist(started, at: now)
+        tracker?.walkDidStart(hikeID: hike.id)
+        // Now rather than on the first match: a hiker standing at the
+        // trailhead produces no fix until they move, and the widget and the
+        // Lock Screen should say the walk is on from the tap.
+        publishState()
+        return true
     }
 }
 

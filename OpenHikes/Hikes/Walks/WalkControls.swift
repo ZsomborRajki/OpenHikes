@@ -7,9 +7,12 @@
 //  controls, with the route's own tint rather than recording red.
 //
 //  The controls exist only once there is a walk to control: opening a trail
-//  is not walking it, and this draws nothing until the first matched fix
-//  has started one. On any *other* trail's detail while a walk is under
-//  way, it draws the one-line notice naming the walk in progress instead.
+//  is not walking it, and this draws nothing until the first matched fix or
+//  the title row's Start — ``WalkToggleButton`` — has started one. That
+//  button's Pause and Resume carry the same titles as the ones here, so the
+//  two are found by identifier: `walk-toggle` up there, `walk-controls-toggle`
+//  here. On any *other* trail's detail while a walk is under way, it draws
+//  the one-line notice naming the walk in progress instead.
 //
 //  Reads the session's coarse properties — which hike, which phase — and
 //  nothing that moves per fix, so a fix that extends coverage redraws the
@@ -35,12 +38,9 @@ struct WalkControls: View {
     /// controls are still on screen — this is what says so, rather than
     /// letting a refusal read as a walk too short to keep.
     @State private var showEndRefusal = false
-    /// The same for a phase the store refused, and the phase that tap asked
-    /// for. Without it a refused Pause is a button that does nothing: the
-    /// walk is deliberately left following, because that is what the sidecar
-    /// still says, and the row above goes on reading Walk Active.
-    @State private var showPhaseRefusal = false
-    @State private var refusedPhase: TrailWalkPhase = .paused
+    /// The phase a tap asked for and the store refused — see
+    /// ``WalkPhaseRefusalAlert``.
+    @State private var refusedPhase: TrailWalkPhase?
 
     var body: some View {
         Group {
@@ -83,15 +83,7 @@ struct WalkControls: View {
         } message: {
             Text("Its record could not be saved, so the hike is still under way. Try ending it again.")
         }
-        .alert("Could not change this hike", isPresented: $showPhaseRefusal) {
-            Button("OK", role: .cancel) { /* no-op */ }
-        } message: {
-            Text(
-                refusedPhase == .paused
-                    ? "Pausing it could not be saved, so the hike is still under way. Try pausing it again."
-                    : "Resuming it could not be saved, so the hike is still paused. Try resuming it again."
-            )
-        }
+        .walkPhaseRefusalAlert($refusedPhase)
         // A walk that reached the end on its own has no tap to push its
         // summary from; this is what does it. A tapped End pushed from its
         // own action above, so only the automatic case is answered here.
@@ -126,18 +118,13 @@ struct WalkControls: View {
         // as they meet — the recording's pair, in the route's tint.
         GlassStack(spacing: Self.controlGlassSpacing) {
             HStack {
-                switch phase {
-                case .following:
-                    Button("Pause Hike", systemImage: "pause.fill") {
-                        refuse(.paused, unless: session.pause())
-                    }
-                    .glassButtonStyle()
-                case .paused:
-                    Button("Resume Hike", systemImage: "play.fill") {
-                        refuse(.following, unless: session.resume())
-                    }
-                    .glassButtonStyle()
+                Button(phase.toggleTitle, systemImage: phase.toggleSymbol) {
+                    refusedPhase = session.togglePhase(from: phase)
                 }
+                .glassButtonStyle()
+                // The header's Start / Pause carries the same title, so the
+                // two are told apart by identifier — see ``WalkToggleButton``.
+                .accessibilityIdentifier("walk-controls-toggle")
 
                 Button("End Hike", systemImage: "stop.fill") {
                     showEndConfirmation = true
@@ -153,15 +140,71 @@ struct WalkControls: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// Says so when a tap asking for `attempted` was not written down.
+}
+
+extension TrailWalkPhase {
+    /// The Pause or Resume a walk in this phase offers.
+    var toggleTitle: LocalizedStringKey {
+        switch self {
+        case .following: "Pause Hike"
+        case .paused: "Resume Hike"
+        }
+    }
+
+    var toggleSymbol: String {
+        switch self {
+        case .following: "pause.fill"
+        case .paused: "play.fill"
+        }
+    }
+}
+
+extension TrailWalkSession {
+    /// Pauses a following walk or resumes a paused one — the tap behind both
+    /// ``WalkControls`` and the header's ``WalkToggleButton``.
     ///
-    /// A change that *was* written down says nothing here: the phase moved,
-    /// and the `sensoryFeedback` above has already answered it.
-    private func refuse(_ attempted: TrailWalkPhase, unless changed: Bool) {
-        guard !changed else { return }
+    /// - Returns: the phase the tap asked for when the store refused it, for
+    ///   ``WalkPhaseRefusalAlert`` to say so; `nil` when it was written down.
+    ///   A change that *was* written down says nothing here: the phase moved,
+    ///   and ``WalkControls``' `sensoryFeedback` has already answered it.
+    func togglePhase(from phase: TrailWalkPhase) -> TrailWalkPhase? {
+        let changed = switch phase {
+        case .following: pause()
+        case .paused: resume()
+        }
+        guard !changed else { return nil }
         HapticMoment.walkFailed.play()
-        refusedPhase = attempted
-        showPhaseRefusal = true
+        return phase == .following ? .paused : .following
+    }
+}
+
+/// Says so when a Pause or Resume was not written down.
+///
+/// Without it a refused Pause is a button that does nothing: the walk is
+/// deliberately left following, because that is what the sidecar still says,
+/// and the row above goes on reading Hike Active.
+private struct WalkPhaseRefusalAlert: ViewModifier {
+    @Binding var refused: TrailWalkPhase?
+
+    func body(content: Content) -> some View {
+        content.alert(
+            "Could not change this hike",
+            isPresented: Binding(get: { refused != nil }, set: { if !$0 { refused = nil } })
+        ) {
+            Button("OK", role: .cancel) { /* no-op */ }
+        } message: {
+            Text(
+                refused == .paused
+                    ? "Pausing it could not be saved, so the hike is still under way. Try pausing it again."
+                    : "Resuming it could not be saved, so the hike is still paused. Try resuming it again."
+            )
+        }
+    }
+}
+
+extension View {
+    func walkPhaseRefusalAlert(_ refused: Binding<TrailWalkPhase?>) -> some View {
+        modifier(WalkPhaseRefusalAlert(refused: refused))
     }
 }
 
