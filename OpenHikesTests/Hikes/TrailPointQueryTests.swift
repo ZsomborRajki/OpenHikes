@@ -48,6 +48,46 @@ struct TrailPointQueryTests {
         #expect(text.contains("[out:json][timeout:\(TrailPointQuery.timeoutSeconds)];"))
     }
 
+    /// **A switch turned off in the maker leaves its tags out of the request**,
+    /// which is the half of that switch no result can show: an app that asked
+    /// for shelters and dropped them afterwards would draw the same map while
+    /// downloading every hut in the valley.
+    @Test("a kind switched off is not in the request")
+    func aSwitchedOffKindIsNotAsked() throws {
+        let boxes = TrailPointQuery.searchBoxes(for: Self.area(radiusMeters: 8000))
+        let shown = Set(TrailPointQuery.searchableSymbols).subtracting([.shelter])
+        let text = try #require(TrailPointQuery.query(in: boxes, symbols: shown))
+
+        for kind in TrailPointQuery.kinds {
+            let filter = "[\"\(kind.key)\"=\"\(kind.value)\"]"
+            if kind.symbol == .shelter {
+                #expect(!text.contains(filter), "\(kind.key)=\(kind.value) is switched off")
+            } else {
+                #expect(text.contains(filter), "\(kind.key)=\(kind.value) is still asked for")
+            }
+        }
+    }
+
+    /// Every switch off is nothing to ask about, and asking Overpass for an
+    /// empty union would spend a slot to be told nothing.
+    @Test("with every kind switched off there is no request to make")
+    func everyKindOffAsksNothing() {
+        let boxes = TrailPointQuery.searchBoxes(for: Self.area(radiusMeters: 8000))
+
+        #expect(TrailPointQuery.query(in: boxes, symbols: []) == nil)
+        #expect(
+            TrailPointQuery.query(in: boxes, symbols: [.junction, .caution]) == nil,
+            "symbols no kind is drawn as ask for nothing either"
+        )
+    }
+
+    /// The maker draws one switch per entry, so this is the list of rows: every
+    /// symbol a kind is drawn as, once each, in the tie-break order.
+    @Test("the switchable symbols are the ones a search can find")
+    func theSwitchableSymbols() {
+        #expect(TrailPointQuery.searchableSymbols == [.summit, .water, .shelter, .viewpoint, .camp, .parking])
+    }
+
     /// **The exclusion that is 57% of the bytes.** `tourism=information` is
     /// 579 of the 1,206 elements every candidate tag returns over the measured
     /// box and 6% of them carry a name: they are the boards and the guideposts,

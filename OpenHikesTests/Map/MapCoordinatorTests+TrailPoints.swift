@@ -31,7 +31,7 @@ extension MapCoordinatorTests {
     private struct StubPlaceSource: TrailPointSourcing {
         let answers: [TrailPlace]
 
-        func places(near _: CommunitySearchArea) -> [TrailPlace] {
+        func places(near _: CommunitySearchArea, showing _: Set<TrailPlaceSymbol>) -> [TrailPlace] {
             answers
         }
     }

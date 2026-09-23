@@ -29,7 +29,7 @@ struct TrailPointFinderTests {
     private struct StubPointSource: TrailPointSourcing {
         let answer: @Sendable () async throws -> [TrailPlace]
 
-        func places(near _: CommunitySearchArea) async throws -> [TrailPlace] {
+        func places(near _: CommunitySearchArea, showing _: Set<TrailPlaceSymbol>) async throws -> [TrailPlace] {
             try await answer()
         }
     }
@@ -185,6 +185,89 @@ struct TrailPointFinderTests {
         #expect(delivered.names == ["Elsewhere"])
     }
 
+    // MARK: - The maker's switches
+
+    /// The switches reach the request: a source is told which kinds to ask
+    /// for, and a kind switched off is not among them.
+    @Test("a search asks only for the kinds switched on")
+    func aSearchAsksForTheKindsSwitchedOn() async {
+        let source = StubRecordingSource()
+        let filter = TrailPlaceFilter(defaults: nil)
+        filter.setShows(false, .shelter)
+        filter.setShows(false, .parking)
+        let finder = TrailPointFinder(source: source, filter: filter)
+
+        Self.settled(finder)
+        await Self.search(finder, along: Self.line)
+
+        #expect(source.askedFor == [[.summit, .water, .viewpoint, .camp]])
+    }
+
+    /// **The pin never goes on the map**, whichever way it arrives: from an
+    /// answer that carried it anyway — a summit asked for as a viewpoint is
+    /// still a summit — or from what the disk kept from before the switch.
+    @Test("a kind switched off is never added, from an answer or from the disk")
+    func aSwitchedOffKindIsNeverAdded() async {
+        let hut = Self.place(47.6005, 12.92, name: "Hut", symbol: .shelter)
+        let spring = Self.place(47.6005, 12.93, name: "Spring", symbol: .water)
+
+        let answering = TrailPointFinder(source: StubPointSource { [hut, spring] })
+        answering.filter.setShows(false, .shelter)
+        let fromAnswer = Self.delivering(answering)
+        Self.settled(answering)
+        await Self.search(answering, along: Self.line)
+
+        let refusing = TrailPointFinder(source: StubStoringSource(stored: [hut, spring]))
+        refusing.filter.setShows(false, .shelter)
+        let fromDisk = Self.delivering(refusing)
+        Self.settled(refusing)
+        await Self.search(refusing, along: Self.line)
+
+        #expect(fromAnswer.names == ["Spring"])
+        #expect(fromDisk.names == ["Spring"])
+    }
+
+    /// A switch turned off takes its pins off the map at once; a search that
+    /// was already out and lands a moment later must not put them back.
+    @Test("a kind switched off while a search is out is not added when it lands")
+    func aKindSwitchedOffMidSearchIsNotAdded() async {
+        let (gate, open) = AsyncStream<Void>.makeStream()
+        let hut = Self.place(47.6005, 12.92, name: "Hut", symbol: .shelter)
+        let spring = Self.place(47.6005, 12.93, name: "Spring", symbol: .water)
+        let finder = TrailPointFinder(source: StubPointSource {
+            for await _ in gate { break }
+            return [hut, spring]
+        })
+        let delivered = Self.delivering(finder)
+        Self.settled(finder)
+
+        finder.search(along: Self.line, avoiding: [])
+        #expect(finder.isSearching)
+        finder.filter.setShows(false, .shelter)
+        open.yield()
+        while finder.isSearching {
+            await Task.yield()
+        }
+
+        #expect(delivered.names == ["Spring"])
+    }
+
+    /// Every switch off leaves nothing to ask for, so the pill cannot be tapped
+    /// — the state it already takes for a map zoomed out too far.
+    @Test("with every kind switched off the pill cannot be tapped")
+    func everyKindOffDisablesThePill() {
+        let finder = Self.finder(answering: [])
+        Self.settled(finder)
+
+        for symbol in TrailPointQuery.searchableSymbols {
+            finder.filter.setShows(false, symbol)
+        }
+        #expect(!finder.canSearch)
+
+        finder.filter.setShows(true, .water)
+        #expect(finder.canSearch)
+    }
+
     // MARK: - What it says for itself
 
     /// An area with nothing in it is an *answer* and must not wear the warning
@@ -332,7 +415,7 @@ private struct StubStoringSource: TrailPointSourcing {
         func read() { lock.withLock { reads += 1 } }
     }
 
-    func places(near _: CommunitySearchArea) throws -> [TrailPlace] {
+    func places(near _: CommunitySearchArea, showing _: Set<TrailPlaceSymbol>) throws -> [TrailPlace] {
         let call = calls.search()
         guard alwaysAnswers || (call == 1 && !answeringFirst.isEmpty) else {
             throw TrailGraphProviderError.server(statusCode: Self.gatewayTimeout)
@@ -371,10 +454,37 @@ private struct StubRefusingAfterOneAnswer: TrailPointSourcing {
     /// What a gateway in front of a busy Overpass answers with, measured.
     private static let gatewayTimeout = 504
 
-    func places(near _: CommunitySearchArea) throws -> [TrailPlace] {
+    func places(near _: CommunitySearchArea, showing _: Set<TrailPlaceSymbol>) throws -> [TrailPlace] {
         guard answered.takeFirst() else {
             throw TrailGraphProviderError.server(statusCode: Self.gatewayTimeout)
         }
         return [place]
+    }
+}
+
+/// Answers nothing and remembers which kinds each search asked for.
+private struct StubRecordingSource: TrailPointSourcing {
+    private let calls = Calls()
+
+    var askedFor: [[TrailPlaceSymbol]] { calls.asked }
+
+    /// A reference box, because the conformance is `Sendable` and the record
+    /// is the point of the stub.
+    private final class Calls: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: [[TrailPlaceSymbol]] = []
+
+        var asked: [[TrailPlaceSymbol]] { lock.withLock { value } }
+
+        func record(_ symbols: Set<TrailPlaceSymbol>) {
+            // In the order the switches are drawn, so the assertion can be a
+            // literal rather than a set.
+            lock.withLock { value.append(TrailPointQuery.searchableSymbols.filter(symbols.contains)) }
+        }
+    }
+
+    func places(near _: CommunitySearchArea, showing symbols: Set<TrailPlaceSymbol>) -> [TrailPlace] {
+        calls.record(symbols)
+        return []
     }
 }

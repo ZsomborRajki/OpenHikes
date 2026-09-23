@@ -43,7 +43,13 @@ import Foundation
 /// ``TrailPointFinder/isAvailable``, which withdraws the pill rather than
 /// offering a button that cannot answer.
 nonisolated protocol TrailPointSourcing: Sendable {
-    /// Every place worth offering within `area`, in no particular order.
+    /// Every place worth offering within `area` that is drawn as one of
+    /// `symbols`, in no particular order.
+    ///
+    /// The symbols are the maker's switches — see ``TrailPlaceFilter`` — and a
+    /// conformance that reaches a server leaves the others out of the request
+    /// rather than out of the answer. The finder filters what comes back as
+    /// well, so a stand-in that ignores them is still correct.
     ///
     /// Unordered by contract, because the order that matters is against the
     /// line the hiker is drawing and that is not a thing a source knows — see
@@ -56,7 +62,7 @@ nonisolated protocol TrailPointSourcing: Sendable {
     /// Throws what Overpass said, which the caller draws as a caption rather
     /// than as a broken editor: **nothing here may ever block drawing.**
     @concurrent
-    func places(near area: CommunitySearchArea) async throws -> [TrailPlace]
+    func places(near area: CommunitySearchArea, showing symbols: Set<TrailPlaceSymbol>) async throws -> [TrailPlace]
 
     /// Places already on this device standing within `area`, nearest its
     /// centre first, asking nothing of Overpass.
@@ -121,9 +127,14 @@ nonisolated struct TrailPointSource: TrailPointSourcing {
         store = directory.map { TrailPointStore(directory: $0, clock: clock) }
     }
 
-    func places(near area: CommunitySearchArea) async throws -> [TrailPlace] {
+    /// `symbols` defaults to every one, which is a search with no switch
+    /// turned off.
+    func places(
+        near area: CommunitySearchArea,
+        showing symbols: Set<TrailPlaceSymbol> = Set(TrailPlaceSymbol.allCases)
+    ) async throws -> [TrailPlace] {
         let boxes = TrailPointQuery.searchBoxes(for: area)
-        guard let query = TrailPointQuery.query(in: boxes) else { return [] }
+        guard let query = TrailPointQuery.query(in: boxes, symbols: symbols) else { return [] }
         let found = try await conversation.fetch(
             query,
             awaiting: TrailPointQuery.timeoutSeconds

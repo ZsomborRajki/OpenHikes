@@ -232,7 +232,8 @@ final class TrailDraftController {
         elevationPause: (@Sendable (TimeInterval) async throws -> Void)? = nil,
         naming: (any TrailStopNaming)? = nil,
         travelRouters: [TrailTravelMode: any TrailLegRouting] = [:],
-        recents: TrailStopRecents? = nil
+        recents: TrailStopRecents? = nil,
+        placeFilter: TrailPlaceFilter? = nil
     ) {
         self.store = store
         var providers = travelRouters
@@ -240,7 +241,7 @@ final class TrailDraftController {
         routers = providers
         let drawing = TrailDraft()
         draft = drawing
-        finder = TrailPointFinder(source: placeSource)
+        finder = TrailPointFinder(source: placeSource, filter: placeFilter ?? TrailPlaceFilter(defaults: nil))
         elevation = elevationPause.map { pause in
             TrailDraftElevation(draft: drawing, source: elevationSource, pause: pause)
         } ?? TrailDraftElevation(draft: drawing, source: elevationSource)
@@ -520,6 +521,24 @@ final class TrailDraftController {
     func searchNearbyPlaces() {
         guard isEditing else { return }
         finder.search(along: draft.routeCoordinates, avoiding: draft.places)
+    }
+
+    /// Turns one of *Search this area*'s kinds on or off — a switch on the
+    /// maker's screen.
+    ///
+    /// Off also takes every place of that kind off the trail, so the map
+    /// matches the switch at once rather than at the next search; on brings
+    /// nothing back, and the next search is what does. The choice itself is
+    /// kept whether or not the maker is up — it is about every trail, not this
+    /// one — but the drawing is only touched while it is, like every other
+    /// mutation here.
+    func setShowsPlaces(_ shows: Bool, of symbol: TrailPlaceSymbol) {
+        finder.filter.setShows(shows, symbol)
+        guard !shows, isEditing else { return }
+        let removed = draft.removePlaces(drawnAs: symbol)
+        guard !removed.isEmpty else { return }
+        if case .place(let id) = selection, removed.contains(id) { selection = nil }
+        persist()
     }
 
     private func addPlaces(_ places: [TrailPlace]) {

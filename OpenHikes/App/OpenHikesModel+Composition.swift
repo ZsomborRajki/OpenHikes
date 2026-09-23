@@ -189,7 +189,8 @@ extension OpenHikesModel {
             travelRouters: Self.makeDirectionsRouters(),
             // The model's own defaults, so a UI-testing launch keeps its
             // recents in the scratch domain rather than the developer's.
-            recents: TrailStopRecents(defaults: defaults)
+            recents: TrailStopRecents(defaults: defaults),
+            placeFilter: TrailPlaceFilter(defaults: defaults)
         )
     }
 

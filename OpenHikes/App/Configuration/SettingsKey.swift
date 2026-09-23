@@ -142,6 +142,14 @@ nonisolated enum SettingsKey {
     /// Deliberately not synced through ``SyncedSettings``: it is a convenience
     /// of this device's search field, and it never leaves the phone.
     static let trailStopRecents = "maker.recentStops"
+    /// The kinds of place the trail maker's *Search this area* has been told
+    /// to leave out, as ``TrailPlaceSymbol`` raw values — see
+    /// ``TrailPlaceFilter``, which owns why it is the switched-off ones that
+    /// are stored.
+    ///
+    /// Deliberately not synced through ``SyncedSettings``, for the reason
+    /// ``trailStopRecents`` is not: it is about this device's map.
+    static let trailPlaceHiddenSymbols = "maker.hiddenPlaceSymbols"
     /// The trail the hiker last said Ignore about when asked to start a hike
     /// on it, and when — see ``WalkOfferDecline``, which owns the shape.
     ///

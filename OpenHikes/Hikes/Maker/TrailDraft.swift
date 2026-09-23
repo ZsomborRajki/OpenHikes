@@ -791,6 +791,17 @@ extension TrailDraft {
         rankPlaces()
     }
 
+    /// Takes every place drawn as `symbol` off this trail — a switch turned off
+    /// under *Search this area*. Answers what went, so the caller can tell
+    /// whether anything changed and close a sheet about one of them.
+    @discardableResult func removePlaces(drawnAs symbol: TrailPlaceSymbol) -> Set<UUID> {
+        let removed = Set(places.filter { $0.symbol == symbol }.map(\.id))
+        guard !removed.isEmpty else { return [] }
+        places.removeAll { removed.contains($0.id) }
+        rankPlaces()
+        return removed
+    }
+
     /// The place with this identity, or `nil` for one that has gone.
     func place(id: UUID) -> TrailPlace? {
         places.first { $0.id == id }
