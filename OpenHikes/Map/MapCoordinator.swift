@@ -224,18 +224,17 @@ extension MapView {
         /// the points, because an answer landing changes a leg's shape and
         /// state without any point moving.
         var trailDraftLegs: [TrailLeg] = []
-        /// And where the pins currently are. Also what a press is measured
-        /// against to find the waypoint under it — see `MapTrailDraftDrag.swift`.
-        var trailDraftCoordinates: [CLLocationCoordinate2D] = []
-        /// The provisional pin a tap left behind, waiting for one of its
-        /// callout's buttons — or `nil`, which is nearly always.
-        ///
-        /// Held by the map rather than by the draft, because nothing about it
-        /// is part of the trail: it is a question, and the map is what puts it
-        /// away. See `MapTrailDraftCallout.swift`.
+        /// And the rest of what the pins and bubbles were drawn from —
+        /// including where the pins are, which is what a press is measured
+        /// against to find the waypoint under it. See `MapTrailDraftDrag.swift`.
+        var trailDraftDrawn = TrailDraftDrawnState()
+        /// The other routes each leg could take, and the time bubbles — see
+        /// `MapTrailDraftRouteChoices.swift`.
+        var trailDraftRouteChoices = TrailDraftRouteChoiceLayer()
+        /// The pin a tap on open ground dropped while the place sheet is up on
+        /// it, or `nil`. See `MapTrailDraftSelection.swift`.
         var trailDraftDroppedPin: TrailDraftDroppedPin?
-        /// The places marked along the drawing, as the map has drawn them.
-        /// Editable: the maker is up.
+        /// The trail's places, as the map has drawn them.
         var trailDraftPlaceAnnotations: [TrailPlaceAnnotation] = []
         /// The places of the hike whose screen is pushed, as the map has drawn
         /// them. Read-only, and never on screen at the same time as the pair
@@ -245,10 +244,6 @@ extension MapView {
         var hikePlaceAnnotations: [TrailPlaceAnnotation] = []
         var isObservingHikePlaces = false
         weak var hikePlaceController: TrailPlacePinController?
-        /// What OpenStreetMap last offered near the drawing, as the map has
-        /// drawn it. Nothing here is in the draft — see
-        /// `MapTrailPointCandidates.swift`.
-        var trailPointCandidateAnnotations: [TrailPointCandidateAnnotation] = []
 
         #if canImport(UIKit)
         /// The maker's own *Search this area*. A second instance of the
@@ -278,13 +273,6 @@ extension MapView {
         /// Whether this drag is the reason the map is not scrolling, so a map
         /// that was already still is handed back the way it was found.
         var trailDraftDragPausedScrolling = false
-        /// The place pin currently under a finger, or `nil`.
-        ///
-        /// The annotation itself rather than an index or a coordinate, because
-        /// moving a place *is* writing this object's coordinate — nothing is
-        /// published and nothing is redrawn until the finger lifts. See
-        /// `MapTrailPlaceDrag.swift`.
-        var trailPlaceDrag: TrailPlaceAnnotation?
 
         // MARK: Photo pins
         // Stored state for `MapPhotoAnnotations.swift`, which owns everything
@@ -780,7 +768,9 @@ private extension MapView.Coordinator {
 
 extension MapView.Coordinator {
     func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
-        guard !(annotation is MKUserLocation) else { return nil }
+        // MapKit's own, for a label a tap selected while drawing — it is
+        // deselected at once. See `MapTrailDraftFeatures.swift`.
+        guard !(annotation is MKUserLocation), !(annotation is MKMapFeatureAnnotation) else { return nil }
         if let photoAnnotation = annotation as? PhotoMapAnnotation {
             return photoAnnotationView(for: photoAnnotation, on: mapView)
         }
@@ -790,7 +780,7 @@ extension MapView.Coordinator {
         if let communityPhoto = annotation as? CommunityPhotoMapAnnotation {
             return communityPhotoAnnotationView(for: communityPhoto, on: mapView)
         }
-        // The maker's three kinds in one question — see
+        // The maker's kinds in one question — see
         // ``makerAnnotationView(for:on:)``.
         if let maker = makerAnnotationView(for: annotation, on: mapView) { return maker }
 
@@ -836,6 +826,9 @@ extension MapView.Coordinator {
         // `canShowCallout = false` doesn't reliably suppress MapKit's own
         // callout for the blue dot, so deselect immediately to dismiss it.
         guard view.annotation is MKUserLocation else {
+            // The maker's own pins open its place sheet rather than a callout —
+            // see `MapTrailDraftSelection.swift`.
+            if selectTrailDraftAnnotation(view, on: mapView) { return }
             // `canShowCallout` because a selection is not a callout: the route
             // highlight's own dots are selectable and draw nothing, and a tap
             // on one that took *Search this area* away would be the pill
@@ -855,9 +848,6 @@ extension MapView.Coordinator {
     func mapView(_ mapView: MKMapView, didDeselect view: MKAnnotationView) {
         guard !(view.annotation is MKUserLocation) else { return }
         withdrawAreaSearchForCallout(open: false)
-        // A dismissed callout is the hiker saying *never mind*, so the
-        // provisional pin it belonged to goes with it.
-        dismissTrailDraftPin(for: view.annotation, on: mapView)
     }
 
     #if canImport(UIKit)
@@ -914,8 +904,12 @@ extension MapView.Coordinator {
             if let renderer = communityRouteRenderer(for: polyline) {
                 return renderer
             }
-            // And the trail being drawn, which is not a hike at all yet.
+            // And the trail being drawn, which is not a hike at all yet, and
+            // the routes it could take instead.
             if let renderer = trailDraftRenderer(for: polyline) {
+                return renderer
+            }
+            if let renderer = trailDraftAlternativeRenderer(for: polyline) {
                 return renderer
             }
             if recordingReviewOverlay === polyline {

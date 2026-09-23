@@ -241,4 +241,94 @@ struct TrailDraftControllerTests {
 
         #expect(maker.draft.isEmpty)
     }
+
+    // MARK: The dropped pin
+
+    /// Apple Maps keeps a dropped pin when its card closes; so does the maker,
+    /// until *Remove Pin*, *Add Stop* or another press.
+    @Test("closing the card leaves the dropped pin where it was")
+    func closingTheCardKeepsThePin() {
+        let maker = TrailDraftController()
+        maker.setEditing(true)
+        let spot = TrailDraftDroppedPinSpot(coordinate: Self.coordinate(Line.south), leg: nil)
+
+        maker.dropPin(spot)
+        #expect(maker.selection == .droppedPin)
+        maker.select(nil)
+
+        #expect(maker.selection == nil)
+        #expect(maker.droppedPin == spot)
+        maker.select(.droppedPin)
+        #expect(maker.selection == .droppedPin, "and its card opens again")
+    }
+
+    @Test("removing the pin takes it and its card away")
+    func removingThePin() {
+        let maker = TrailDraftController()
+        maker.setEditing(true)
+        maker.dropPin(TrailDraftDroppedPinSpot(coordinate: Self.coordinate(Line.south), leg: nil))
+
+        maker.removeDroppedPin()
+
+        #expect(maker.droppedPin == nil)
+        #expect(maker.selection == nil)
+        maker.select(.droppedPin)
+        #expect(maker.selection == nil, "there is no pin to open a card on")
+    }
+
+    @Test("a second pin replaces the first")
+    func aSecondPinReplacesTheFirst() {
+        let maker = TrailDraftController()
+        maker.setEditing(true)
+        let second = TrailDraftDroppedPinSpot(coordinate: Self.coordinate(Line.north), leg: nil)
+
+        maker.dropPin(TrailDraftDroppedPinSpot(coordinate: Self.coordinate(Line.south), leg: nil))
+        maker.dropPin(second)
+
+        #expect(maker.droppedPin == second)
+    }
+
+    @Test("closing the maker takes the pin with it")
+    func closingTheMakerTakesThePin() {
+        let maker = TrailDraftController()
+        maker.setEditing(true)
+        maker.dropPin(TrailDraftDroppedPinSpot(coordinate: Self.coordinate(Line.south), leg: nil))
+
+        maker.setEditing(false)
+
+        #expect(maker.droppedPin == nil)
+        #expect(maker.selection == nil)
+    }
+
+    @Test("no pin is dropped while the maker is closed")
+    func noPinWhileClosed() {
+        let maker = TrailDraftController()
+
+        maker.dropPin(TrailDraftDroppedPinSpot(coordinate: Self.coordinate(Line.south), leg: nil))
+
+        #expect(maker.droppedPin == nil)
+    }
+
+    /// The pin remembers the leg it was dropped on by that leg's ends, so the
+    /// stop goes into it even after the line has changed around it — where a
+    /// remembered position in the list would now name a different leg.
+    @Test("a pin's leg is found by its ends after the line has changed")
+    func aPinsLegSurvivesAnEdit() throws {
+        let maker = TrailDraftController()
+        maker.setEditing(true)
+        let latitudes = [47.6280, 47.6300, 47.6320, 47.6340]
+        for latitude in latitudes { maker.appendWaypoint(at: Self.coordinate(latitude)) }
+        // The pin went down on the second leg, B to C.
+        let leg = try #require(maker.draft.legs.dropFirst().first?.ends)
+        // The first stop goes, so B to C is the first leg now, and what was
+        // second in the list is C to D.
+        maker.removeWaypoints(atOffsets: IndexSet(integer: 0))
+        // Nearer C to D than B to C, so only the remembered leg puts it
+        // between B and C.
+        let nearerCD = CLLocationCoordinate2D(latitude: 47.6330, longitude: Line.longitude + 0.0005)
+
+        maker.addStop(at: nearerCD, preferringLeg: leg)
+
+        #expect(maker.draft.waypoints.map(\.latitude) == [47.6300, 47.6330, 47.6320, 47.6340])
+    }
 }

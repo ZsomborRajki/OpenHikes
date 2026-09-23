@@ -3,7 +3,7 @@
 //  OpenHikesTests
 //
 //  The map's half of *Search this area* in the maker: one pill in a strip that
-//  already had one, and the provisional pins its answers arrive as.
+//  already had one, and the pins its answers arrive as.
 //
 //  **The exclusion is the reason this file exists.** Everywhere else in the
 //  maker two controls keep out of each other's way by falling out of their own
@@ -15,9 +15,9 @@
 //  thing that can be deleted by somebody who does not know why it is there.
 //  What is asserted here is that the two are never both on screen.
 //
-//  The candidates are asserted on a real `MKMapView` for the reason the
-//  maker's own pins are: whether an answer reaches the map at all is not
-//  visible from the finder, which will happily publish forty rows to nobody.
+//  The places are asserted on a real `MKMapView` for the reason the maker's own
+//  pins are: whether an answer reaches the map at all is not visible from the
+//  finder.
 //
 
 import CoreLocation
@@ -189,12 +189,12 @@ extension MapCoordinatorTests {
         #endif
     }
 
-    // MARK: The candidates
+    // MARK: The places
 
-    /// Whether an answer reaches the map at all is not visible from the
-    /// finder, which will publish forty rows to nobody just as happily.
-    @Test("what a search answers is drawn on the map")
-    func aSearchDrawsItsCandidates() async {
+    /// A search's answer goes onto the trail as its places, and so onto the
+    /// map as their pins.
+    @Test("what a search answers is added to the trail and drawn on the map")
+    func aSearchDrawsItsPlaces() async {
         let maker = Self.drawingMaker(offering: [
             Self.place(47.601, 12.901),
             Self.place(47.602, 12.902),
@@ -205,29 +205,19 @@ extension MapCoordinatorTests {
 
         maker.finder.regionDidSettle(Self.searchableRegion())
         maker.searchNearbyPlaces()
-        await settle(until: "the candidates to reach the map") {
-            coordinator.trailPointCandidateAnnotations.count == 2
+        await settle(until: "the places to reach the map") {
+            coordinator.trailDraftPlaceAnnotations.count == 2
         }
 
-        #expect(
-            map.annotations.contains { $0 is TrailPointCandidateAnnotation },
-            "and they are on the map rather than only in the coordinator"
-        )
+        #expect(maker.draft.places.count == 2)
+        #expect(map.annotations.contains { $0 is TrailPlaceAnnotation })
     }
 
-    /// **A grey pin is a thing to look at.** A candidate and a place the hiker
-    /// marked carry the same title and the same subtitle, and everything that
-    /// separates them on screen — the colour, the thinning, the verbs in the
-    /// callout — is invisible to a screen reader. Without the sentence below,
-    /// a hiker swiping through the map's elements hears forty pins and cannot
-    /// tell which three are theirs.
-    ///
-    /// Asserted here rather than in the accessibility sweep because there is
-    /// no launch that can reach one: ``OpenHikesModel/makeTrailPointSource()``
-    /// answers `nil` for every test, deliberately, so no candidate pin exists
-    /// under automation.
-    @Test("a candidate pin says out loud that it is only an offer")
-    func aCandidatePinSaysItIsAnOffer() async throws {
+    /// A drawing's places are the hiker's, so unlike an offer they stay with
+    /// the draft when the maker closes — and come off the map with the rest of
+    /// the drawing.
+    @Test("closing the maker takes the places off the map and keeps them on the trail")
+    func closingTheMakerKeepsThePlaces() async {
         let maker = Self.drawingMaker(offering: [Self.place(47.601, 12.901)])
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(trailMaker: maker), coordinator)
@@ -235,72 +225,16 @@ extension MapCoordinatorTests {
 
         maker.finder.regionDidSettle(Self.searchableRegion())
         maker.searchNearbyPlaces()
-        await settle(until: "the candidate to reach the map") {
-            coordinator.trailPointCandidateAnnotations.count == 1
-        }
-        let annotation = try #require(coordinator.trailPointCandidateAnnotations.first)
-        let view = coordinator.trailPointCandidateView(for: annotation, on: map)
-
-        let spoken = try #require(view.accessibilityLabel)
-        #expect(spoken.contains("Water"), "it still says what the place is")
-        #expect(
-            spoken != annotation.title,
-            "and it says more than the title a marked place would read with"
-        )
-        #expect(spoken.contains("not on your trail yet"))
-    }
-
-    /// Taking one is the only thing in this phase that writes anything down.
-    /// The provisional pin goes because the candidate does, and a marked
-    /// place's own pin arrives in its place — two pins on one spot is what
-    /// this asserts against.
-    @Test("marking a candidate replaces its pin with a place's")
-    func markingACandidateReplacesItsPin() async throws {
-        let maker = Self.drawingMaker(offering: [Self.place(47.601, 12.901)])
-        let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(trailMaker: maker), coordinator)
-        defer { detach(map) }
-
-        maker.finder.regionDidSettle(Self.searchableRegion())
-        maker.searchNearbyPlaces()
-        await settle(until: "the candidate to reach the map") {
-            coordinator.trailPointCandidateAnnotations.count == 1
-        }
-        let candidate = try #require(coordinator.trailPointCandidateAnnotations.first)
-
-        coordinator.markTrailPointCandidate(candidate, on: map)
-        await settle(until: "the provisional pin to be replaced") {
-            coordinator.trailPointCandidateAnnotations.isEmpty
-        }
-
-        #expect(maker.draft.places.count == 1)
-        #expect(
-            maker.draft.places.first?.name == TrailPlaceSymbol.water.label,
-            "an unnamed place is named after what it is"
-        )
-        #expect(coordinator.trailDraftPlaceAnnotations.count == 1, "and its own pin is there")
-    }
-
-    /// Nothing on offer is the hiker's, so nothing survives the screen it was
-    /// offered on — including on the map.
-    @Test("closing the maker takes the candidates off the map")
-    func closingTheMakerTakesTheCandidatesOff() async {
-        let maker = Self.drawingMaker(offering: [Self.place(47.601, 12.901)])
-        let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(trailMaker: maker), coordinator)
-        defer { detach(map) }
-
-        maker.finder.regionDidSettle(Self.searchableRegion())
-        maker.searchNearbyPlaces()
-        await settle(until: "the candidate to reach the map") {
-            coordinator.trailPointCandidateAnnotations.count == 1
+        await settle(until: "the place to reach the map") {
+            coordinator.trailDraftPlaceAnnotations.count == 1
         }
 
         maker.setEditing(false)
         await settle(until: "the map to be cleared") {
-            coordinator.trailPointCandidateAnnotations.isEmpty
+            coordinator.trailDraftPlaceAnnotations.isEmpty
         }
 
-        #expect(!map.annotations.contains { $0 is TrailPointCandidateAnnotation })
+        #expect(!map.annotations.contains { $0 is TrailPlaceAnnotation })
+        #expect(maker.draft.places.count == 1)
     }
 }

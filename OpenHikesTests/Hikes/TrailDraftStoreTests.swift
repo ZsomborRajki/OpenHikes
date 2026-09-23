@@ -79,6 +79,46 @@ struct TrailDraftStoreTests {
         #expect(!TrailDraftStore(context: context).load().snapsToPaths)
     }
 
+    /// A lone destination resumes as a destination, with its start field
+    /// still open, rather than turning into a start overnight.
+    @Test("a lone destination comes back as one")
+    func aLoneDestinationSurvives() throws {
+        let context = try context()
+        TrailDraftStore(context: context).save(
+            waypoints: Self.waypoints([Line.north]),
+            places: [],
+            snapsToPaths: true,
+            startIsOpen: true
+        )
+
+        #expect(TrailDraftStore(context: context).load().startIsOpen)
+    }
+
+    /// And a place keeps what OpenStreetMap said about it, which is what its
+    /// sheet reads after a relaunch.
+    @Test("a place's OpenStreetMap details survive a launch")
+    func placeDetailsSurvive() throws {
+        let context = try context()
+        let spring = TrailPlace(
+            latitude: Line.south,
+            longitude: Line.longitude,
+            name: "Spring",
+            symbol: .water,
+            osm: TrailPlaceOSM(
+                elementType: "node",
+                elementID: 42,
+                facts: [TrailPlaceFact(kind: .drinkingWater, value: "yes")]
+            )
+        )
+        TrailDraftStore(context: context).save(
+            waypoints: Self.waypoints([Line.south]),
+            places: [spring],
+            snapsToPaths: true
+        )
+
+        #expect(TrailDraftStore(context: context).load().places.first?.osm == spring.osm)
+    }
+
     /// And a store with nothing in it answers the way a new draft starts,
     /// which is what makes ``StoredTrailDraft/nothing`` the right empty
     /// answer rather than a second kind of default.
@@ -98,6 +138,73 @@ struct TrailDraftStoreTests {
         let restored = TrailDraftStore(context: context).load()
 
         #expect(restored.waypoints.map(\.latitude) == latitudes)
+    }
+
+    /// A stop's name is part of the drawing, so it comes back with the points.
+    /// Without this a hiker who searched out four stops, closed the app and
+    /// came back would find a route reading Start / Stop 1 / Stop 2 /
+    /// Destination — the line intact and everything that made it legible gone.
+    @Test("the names come back with the points they belong to")
+    func namesSurvive() throws {
+        let context = try context()
+        var waypoints = Self.waypoints([Line.south, Line.north])
+        waypoints[0].name = "Lurdy Ház"
+        waypoints[1].name = "Gellért-hegy"
+
+        TrailDraftStore(context: context).save(
+            waypoints: waypoints,
+            places: [],
+            snapsToPaths: true
+        )
+
+        let restored = TrailDraftStore(context: context).load()
+
+        #expect(restored.waypoints.map(\.name) == ["Lurdy Ház", "Gellért-hegy"])
+    }
+
+    /// A row written before names existed, which is every draft left behind by
+    /// a build before this one — see ``TrailDraftRecord/waypointNames``, which
+    /// is a second column rather than a richer point precisely so that this
+    /// case is a resume rather than a migration.
+    @Test("a draft written before names existed comes back unnamed")
+    func namelessRowsStillResume() throws {
+        let context = try context()
+        let record = TrailDraftRecord(
+            waypoints: Self.waypoints([Line.south, Line.north]).map(\.routeCoordinate),
+            waypointNames: [],
+            places: [],
+            snapsToPaths: true,
+            updatedAt: .now
+        )
+        context.insert(record)
+        try context.save()
+
+        let restored = TrailDraftStore(context: context).load()
+
+        #expect(restored.waypoints.count == 2)
+        #expect(restored.waypoints.map(\.name) == ["", ""])
+    }
+
+    /// The pairing is an invariant rather than a type, so the honest answer to
+    /// a row whose two columns have come apart is the line with nothing written
+    /// beside it — never a name matched to whichever point shares its index.
+    @Test("names that do not pair with the points are dropped, not guessed at")
+    func mismatchedNamesAreDropped() throws {
+        let context = try context()
+        let record = TrailDraftRecord(
+            waypoints: Self.waypoints([Line.south, Line.north]).map(\.routeCoordinate),
+            waypointNames: ["Lurdy Ház"],
+            places: [],
+            snapsToPaths: true,
+            updatedAt: .now
+        )
+        context.insert(record)
+        try context.save()
+
+        let restored = TrailDraftStore(context: context).load()
+
+        #expect(restored.waypoints.count == 2)
+        #expect(restored.waypoints.map(\.name) == ["", ""])
     }
 
     @Test("saving twice rewrites the one row rather than adding another")

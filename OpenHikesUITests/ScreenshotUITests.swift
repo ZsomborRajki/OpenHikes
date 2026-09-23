@@ -411,7 +411,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     ///
     /// **The legs are straight and that is honest here.** A drawn leg follows
     /// mapped paths by asking Overpass, and no launch running tests may reach
-    /// a volunteer-run API — see ``OpenHikesModel/makeTrailMaker(container:trailGraphProvider:)``.
+    /// a volunteer-run API — see ``OpenHikesModel/makeTrailMaker(container:graph:defaults:)``.
     /// A launch with no graph hides the *Follow Paths* switch rather than
     /// offering one it could not honour, so what this shoots is exactly what a
     /// hiker drawing freehand sees, and nothing in the frame claims otherwise.
@@ -442,8 +442,11 @@ nonisolated final class ScreenshotUITests: XCTestCase {
 
         liftDrawnTrailClearOfTheSheet(in: app)
         // The header is the sentence this frame is of — how long the line is
-        // so far — and it sits under the search field, which is the section a
-        // middle detent opens on.
+        // so far — and it is now the first thing in the list rather than the
+        // second: the *Find a Place* field that used to sit above it went with
+        // the search that moved into a sheet of its own. The scroll stays,
+        // because what a middle detent opens on is a question about the
+        // device's height rather than about this screen.
         XCTAssertTrue(
             scrollIntoView(element("trail-draft-length", in: app), in: app),
             "the maker should show the line's length beside its points"
@@ -467,11 +470,15 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// ``liftDrawnTrailClearOfTheSheet(in:)`` pans afterwards, which is the
     /// same answer `liftRecordedLineClearOfTheSheet(in:)` gives to the same
     /// problem on the recording frame.
+    ///
+    /// **Tapped ends first.** The first two fill the start and the destination
+    /// and every later one goes into the nearest leg, so the west-to-east
+    /// zigzag is tapped as its two ends and then its two middle stops.
     private static let drawnTrail: [CGVector] = [
         CGVector(dx: 0.26, dy: 0.30),
+        CGVector(dx: 0.80, dy: 0.15),
         CGVector(dx: 0.43, dy: 0.16),
         CGVector(dx: 0.64, dy: 0.25),
-        CGVector(dx: 0.80, dy: 0.15),
     ]
 
     /// How far the drawn line is panned up afterwards, in fractions of the

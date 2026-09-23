@@ -194,6 +194,9 @@ struct MapView: MapViewRepresentable, Equatable {
         // different gesture and begins only over one of the maker's own pins —
         // see `MapTrailDraftDrag.swift`.
         coordinator.installTrailDraftDrag(on: mapView)
+        // And the press that drops a pin, which begins everywhere the one
+        // above does not — see `MapTrailDraftSelection.swift`.
+        coordinator.installTrailDraftPinDrop(on: mapView)
         #endif
 
         // Raster tiles from the selected provider, replacing Apple's base map.
@@ -245,6 +248,8 @@ struct MapView: MapViewRepresentable, Equatable {
         } ?? Self.systemBaseMapKey
         guard coordinator.tileSourceKey != key else { return }
         coordinator.tileSourceKey = key
+        // Apple's labels are only tappable where they are drawn.
+        defer { coordinator.refreshTrailDraftFeatureSelection(on: mapView) }
 
         #if os(iOS)
         // The chrome on this map follows the *map*, not the interface.

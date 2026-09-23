@@ -136,6 +136,12 @@ nonisolated enum SettingsKey {
     /// is the smaller half — they can block again, and the alternative is a
     /// block that does not work at all where there is nothing to sync with.
     static let communityBlockedAuthors = "community.blockedAuthors"
+    /// The places the trail maker's stop search was used to pick, newest
+    /// first, JSON-encoded — see ``TrailStopRecents``, which owns the shape.
+    ///
+    /// Deliberately not synced through ``SyncedSettings``: it is a convenience
+    /// of this device's search field, and it never leaves the phone.
+    static let trailStopRecents = "maker.recentStops"
 }
 
 /// Defaults for keys where "absent" and "false" are different answers, so the

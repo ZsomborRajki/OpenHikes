@@ -51,16 +51,13 @@ struct TrailPointStoreTests {
         type: String = "node",
         symbol: TrailPlaceSymbol = .water,
         name: String = ""
-    ) -> FoundTrailPlace {
-        FoundTrailPlace(
-            elementType: type,
-            elementID: id,
-            place: TrailPlace(
-                latitude: centre.latitude + metresNorth / metresPerDegreeLatitude,
-                longitude: centre.longitude,
-                name: name,
-                symbol: symbol
-            )
+    ) -> TrailPlace {
+        TrailPlace(
+            latitude: centre.latitude + metresNorth / metresPerDegreeLatitude,
+            longitude: centre.longitude,
+            name: name,
+            symbol: symbol,
+            osm: TrailPlaceOSM(elementType: type, elementID: id)
         )
     }
 
@@ -95,6 +92,22 @@ extension TrailPointStoreTests {
         let nearby = store.places(near: Self.area(radiusMeters: Self.kilometre), limit: 10)
         #expect(nearby.map(\.name) == ["Kalte Quelle"])
         #expect(nearby.first?.symbol == .water)
+    }
+
+    /// The details the place sheet reads come back with the place, or a
+    /// refused search would stand in with pins that have nothing to say.
+    @Test("a stored place keeps what OpenStreetMap said about it")
+    func aStoredPlaceKeepsItsFacts() {
+        let directory = Self.scratch()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = TrailPointStore(directory: directory, clock: { .now })
+        var spring = Self.found(1, name: "Kalte Quelle")
+        spring.osm?.facts = [TrailPlaceFact(kind: .drinkingWater, value: "yes")]
+
+        store.save([spring, TrailPlace(latitude: Self.centre.latitude, longitude: Self.centre.longitude)])
+
+        let nearby = store.places(near: Self.area(radiusMeters: Self.kilometre), limit: 10)
+        #expect(nearby.map(\.osm) == [spring.osm], "and a place with no element is not filed at all")
     }
 
     /// And a place in the next valley is not offered for this one. The store

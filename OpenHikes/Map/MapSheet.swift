@@ -164,7 +164,7 @@ struct MapSheet: View {
                     // screens away redraw every row on the map screen.
                     .equatable()
             }
-            .navigationDestination(for: SheetRoute.self, destination: navigationDestinationView)
+            .navigationDestination(for: SheetRoute.self, destination: pushedScreen)
             #if os(iOS)
             // The sheet's own screen has no navigation bar: the search field
             // and the settings button are its chrome, and they are drawn at
@@ -460,6 +460,18 @@ struct MapSheet: View {
         )
     }
 
+    /// A destination on the sheet's own glass.
+    ///
+    /// A pushed screen otherwise gets the stack's opaque system background,
+    /// which the root never has: the sheet was clear glass on the search screen
+    /// and a white slab on every screen pushed over it, plainest at the compact
+    /// detent where only the bar shows. Cleared here, once, so every
+    /// destination shares the root's glass rather than each opting in.
+    private func pushedScreen(for route: SheetRoute) -> some View {
+        navigationDestinationView(for: route)
+            .containerBackground(.clear, for: .navigation)
+    }
+
     @ViewBuilder
     private func navigationDestinationView(for route: SheetRoute) -> some View {
         switch route {
@@ -558,7 +570,7 @@ private extension MapSheet {
             completer: completer,
             mapController: mapController,
             locationManager: appModel.locationManager,
-            onCancel: closeTrailDraft,
+            onClose: closeTrailDraft,
             // A drawn trail lands exactly where a saved recording lands:
             // selected, drawn, and open at its own screen.
             onSaved: showSavedHike
@@ -722,6 +734,9 @@ private func performSearch() {
     searchFocused = false
     let request = MKLocalSearch.Request()
     request.naturalLanguageQuery = query
+    // The three the suggestions are drawn from — see ``SearchCompleter`` for
+    // why a summit or a lake is one of them.
+    request.resultTypes = [.address, .pointOfInterest, .physicalFeature]
     // The same bias the completer's suggestions already carry. Without it a
     // typed Return is answered globally while the suggestions above it are
     // answered locally, so the two halves of one search field disagree.

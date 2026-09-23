@@ -2,20 +2,16 @@
 //  MapTrailPlaceAnnotations.swift
 //  OpenHikes
 //
-//  The marked places on the map, and what their callouts say.
+//  A trail's places on the map.
 //
 //  Two sources, one pin. While the maker is up they come from
-//  ``TrailDraft/places`` and can be edited, moved and removed; on a hike that
-//  has been saved they come from its ``TrailPoint`` rows through
-//  ``TrailPlacePinController`` and can only be read. That is one annotation
-//  class carrying an ``isEditable`` flag rather than two nearly identical
-//  ones: the pin, the glyph, the callout's heading and the note inside it are
-//  the same thing said about the same place, and the only difference is
-//  whether there are buttons under it.
-//
-//  Editing a *saved* hike's places is deliberately not offered — the plan
-//  issue puts editing an existing hike out of scope, and nothing here makes it
-//  harder later: it is the flag, and the two buttons that are already written.
+//  ``TrailDraft/places``, and a tap opens the maker's place sheet — see
+//  `MapTrailDraftSelection.swift`. On a hike that has been saved they come
+//  from its ``TrailPoint`` rows through ``TrailPlacePinController`` and show
+//  MapKit's own callout with the note, read-only. One annotation class
+//  carrying ``TrailPlaceAnnotation/belongsToDraft`` rather than two nearly
+//  identical ones: the pin, the glyph and the colour are the same thing said
+//  about the same place.
 //
 //  ## A place is a marker, a waypoint is a dot
 //
@@ -24,13 +20,12 @@
 //  `MapTrailDraftOverlay.swift`, where the argument for the plain circle is
 //  that what a hiker reads is where the *centre* of each point sits. A place
 //  is not on the line at all, so it is a balloon whose tip points at the
-//  ground it is about, in the symbol's own colour rather than the accent the
-//  drawing wears.
+//  ground it is about, in its kind's own colour — blue water, a brown summit —
+//  so a map of forty of them reads at a glance.
 //
 //  Built out of `MKMarkerAnnotationView` for the reason
-//  ``MapPhotoAnnotations`` gives: the balloon, the drop, the shadow, the
-//  decluttering and the callout card are already drawn, and what is
-//  app-specific is the glyph and a stack of buttons.
+//  ``MapPhotoAnnotations`` gives: the balloon, the drop, the shadow and the
+//  decluttering are already drawn, and what is app-specific is the glyph.
 //
 
 import MapKit
@@ -43,162 +38,67 @@ import UIKit
 final class TrailPlaceAnnotation: NSObject, MKAnnotation {
     static let reuseIdentifier = "trailPlace"
 
-    /// `var` for the drag, exactly as ``TrailDraftWaypointAnnotation``'s is:
-    /// MapKit moves the view when this changes, so a pin under a finger
-    /// follows it without being removed and added again per frame.
-    @objc dynamic var coordinate: CLLocationCoordinate2D
-    private(set) var place: TrailPlace
+    @objc dynamic let coordinate: CLLocationCoordinate2D
+    let place: TrailPlace
     /// How far along the trail it sits, or `nil` where that cannot be said —
     /// no line yet, or too far off it to describe. See ``TrailPlaceAnchor``.
     let anchor: TrailPlaceAnchor?
-    /// Whether this pin answers *Edit* and *Remove*. False on a saved hike.
-    let isEditable: Bool
+    /// Whether this is the drawing's place, which opens the place sheet, rather
+    /// than a saved hike's, which opens a read-only callout.
+    let belongsToDraft: Bool
 
     @objc var title: String? { place.displayName }
 
     /// What it is and where, on one line — and the whole of what identifies an
     /// unnamed place, which is the normal case.
+    ///
+    /// The kind is left out when it is already the title, so an unnamed spring
+    /// does not read "Water · Water".
     @objc var subtitle: String? {
-        let kind = place.symbol?.label
+        let kind = place.name.isEmpty ? nil : place.symbol?.label
         let distance = anchor.map { measured in
             Measurement(value: measured.distanceAlongRouteMeters, unit: UnitLength.meters)
                 .formatted(.measurement(width: .abbreviated, usage: .road))
         }
-        // Only the parts there are. A named summit on a drawn line reads
-        // "Summit · 2.3 km"; an unnamed one marked before anything was drawn
-        // is titled "Place" and has nothing to add, so it says nothing rather
-        // than drawing an empty second line.
         let parts = [kind, distance].compactMap(\.self)
-        // A place whose name *is* its kind would otherwise say the same word
-        // twice, once in each line of its own callout.
-        let useful = place.name.isEmpty ? parts.filter { $0 != kind } : parts
-        guard !useful.isEmpty else { return nil }
-        return useful.joined(separator: " · ")
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: " · ")
     }
 
-    init(row: TrailPlaceRow, isEditable: Bool) {
+    init(row: TrailPlaceRow, belongsToDraft: Bool) {
         place = row.place
         coordinate = row.place.clCoordinate
         anchor = row.anchor
-        self.isEditable = isEditable
+        self.belongsToDraft = belongsToDraft
     }
 
-    /// Whether this pin would draw and read identically to `row`.
-    ///
-    /// What the rebuild compares, so a republish of the same places removes
-    /// and re-adds no markers — the same guard ``MapView/Coordinator``'s photo
-    /// pins make, for the same reason.
-    func matches(_ row: TrailPlaceRow, isEditable: Bool) -> Bool {
-        place.id == row.place.id
-            && place.matches(row.place)
-            && anchor == row.anchor
-            && self.isEditable == isEditable
+    func matches(_ row: TrailPlaceRow, belongsToDraft: Bool) -> Bool {
+        place == row.place && anchor == row.anchor && self.belongsToDraft == belongsToDraft
     }
 }
 
-#if os(iOS)
-/// What sits inside a place's callout: its note, and the two verbs — either,
-/// both or neither.
-///
-/// `nil` rather than an empty view when there is nothing to put in it, which
-/// is the common case for a saved hike's unannotated place: MapKit draws the
-/// callout around the heading alone, and an empty accessory would be a band of
-/// blank card under it.
-final class TrailPlaceCalloutView: UIStackView {
-    static let editIdentifier = "trail-place-edit"
-    static let removeIdentifier = "trail-place-remove"
-
-    private static let width: CGFloat = 220
-    private static let rowSpacing: CGFloat = 8
-
-    private let noteLabel = UILabel()
-    private let buttons = UIStackView()
-    private var onEdit: (() -> Void)?
-    private var onRemove: (() -> Void)?
-
-    init() {
-        super.init(frame: .zero)
-        axis = .vertical
-        spacing = Self.rowSpacing
-        alignment = .fill
-        translatesAutoresizingMaskIntoConstraints = false
-        widthAnchor.constraint(equalToConstant: Self.width).isActive = true
-
-        noteLabel.numberOfLines = 0
-        noteLabel.font = .preferredFont(forTextStyle: .footnote)
-        noteLabel.adjustsFontForContentSizeCategory = true
-        noteLabel.textColor = .secondaryLabel
-        addArrangedSubview(noteLabel)
-
-        buttons.axis = .horizontal
-        buttons.spacing = Self.rowSpacing
-        buttons.distribution = .fillEqually
-        buttons.addArrangedSubview(
-            button(
-                title: String(localized: "Edit"),
-                symbol: "square.and.pencil",
-                identifier: Self.editIdentifier
-            ) { [weak self] in self?.onEdit?() }
-        )
-        buttons.addArrangedSubview(
-            button(
-                title: String(localized: "Remove"),
-                symbol: "trash",
-                identifier: Self.removeIdentifier,
-                tint: .systemRed
-            ) { [weak self] in self?.onRemove?() }
-        )
-        addArrangedSubview(buttons)
-    }
-
-    @available(*, unavailable)
-    required init(coder: NSCoder) {
-        fatalError("A trail place callout is created in code only")
-    }
-
-    /// Points the view at a place. Answers whether it has anything to draw, so
-    /// the caller can leave the accessory off entirely.
-    @discardableResult func show(
-        _ place: TrailPlace,
-        isEditable: Bool,
-        onEdit: @escaping () -> Void,
-        onRemove: @escaping () -> Void
-    ) -> Bool {
-        self.onEdit = onEdit
-        self.onRemove = onRemove
-        noteLabel.text = place.note
-        noteLabel.isHidden = place.note.isEmpty
-        buttons.isHidden = !isEditable
-        return isEditable || !place.note.isEmpty
-    }
-
-    private func button(
-        title: String,
-        symbol: String,
-        identifier: String,
-        tint: UIColor? = nil,
-        perform: @escaping () -> Void
-    ) -> UIButton {
-        var configuration: UIButton.Configuration = .bordered()
-        configuration.title = title
-        configuration.image = UIImage(systemName: symbol)
-        configuration.imagePadding = 6
-        configuration.buttonSize = .small
-        configuration.titleLineBreakMode = .byWordWrapping
-        if let tint { configuration.baseForegroundColor = tint }
-        let button = UIButton(configuration: configuration)
-        button.accessibilityIdentifier = identifier
-        button.addAction(UIAction { _ in perform() }, for: .touchUpInside)
-        return button
+extension TrailPlaceSymbol {
+    /// The pin's colour — the kind at a glance, as Apple Maps colours its own.
+    var tint: Color {
+        switch self {
+        case .camp: .green
+        case .caution: .red
+        case .junction: .gray
+        case .parking: .blue
+        case .shelter: .orange
+        case .summit: .brown
+        case .viewpoint: .teal
+        case .water: .cyan
+        }
     }
 }
-#endif
 
-// MARK: - Drawing them
+extension TrailPlace {
+    /// A place that claims no kind is the app's own indigo.
+    var tint: Color { symbol?.tint ?? .indigo }
+}
 
 extension MapView.Coordinator {
-    /// A balloon with the place's own glyph, and its note and verbs inside the
-    /// callout.
     func trailPlaceAnnotationView(
         for annotation: TrailPlaceAnnotation,
         on mapView: MKMapView
@@ -210,66 +110,30 @@ extension MapView.Coordinator {
         view.annotation = annotation
         #if os(iOS)
         view.glyphImage = UIImage(systemName: annotation.place.systemImageName)
-        // A place the hiker marked themselves, or one this trail carries.
-        // Either way it is not scenery, so MapKit may not declutter it away.
         view.displayPriority = .required
-        view.markerTintColor = UIColor(Self.trailPlaceTint(for: annotation.place))
-        view.accessibilityIdentifier = annotation.isEditable
-            ? "trail-draft-place"
-            : "hike-place"
-        attachTrailPlaceCallout(for: annotation, to: view, on: mapView)
+        view.markerTintColor = UIColor(annotation.place.tint)
+        view.accessibilityIdentifier = annotation.belongsToDraft ? "trail-draft-place" : "hike-place"
+        // A saved hike's place says its note in MapKit's own callout; the
+        // drawing's opens the place sheet instead.
+        view.detailCalloutAccessoryView = annotation.belongsToDraft ? nil : Self.noteLabel(annotation.place.note)
         #endif
-        // Last rather than beside the annotation, on the principle that the
-        // last write wins: everything above it hands the view to MapKit — a
-        // glyph, a tint, an accessory — and a recycled view is MapKit's own
-        // object with its own history.
-        view.canShowCallout = true
+        view.canShowCallout = !annotation.belongsToDraft
         return view
     }
 
-    /// The marker's colour.
-    ///
-    /// One hue for every place but ``TrailPlaceSymbol/caution``, which is the
-    /// only one of the eight that is a *warning* rather than a description —
-    /// the same distinction ``TrailLegNotice`` draws between the orange glyph
-    /// and the grey one, and the reason a leg with nothing mapped under it
-    /// does not wear a triangle.
-    ///
-    /// Deliberately not the drawn line's accent and not the hike's own tint:
-    /// a place is neither the trail nor part of it, and a pin in the line's
-    /// colour would read as a point of it.
-    private static func trailPlaceTint(for place: TrailPlace) -> Color {
-        place.symbol == .caution ? .orange : .indigo
-    }
-
     #if os(iOS)
-    private func attachTrailPlaceCallout(
-        for annotation: TrailPlaceAnnotation,
-        to view: MKAnnotationView,
-        on mapView: MKMapView
-    ) {
-        let callout = view.detailCalloutAccessoryView as? TrailPlaceCalloutView
-            ?? TrailPlaceCalloutView()
-        let hasContents = callout.show(
-            annotation.place,
-            isEditable: annotation.isEditable,
-            onEdit: { [weak self, weak mapView] in
-                // Closed before the sheet opens, for the reason a photo pin's
-                // is: the callout belongs to a map the sheet is about to
-                // cover, and one left standing is what the hiker comes back
-                // to when the sheet goes.
-                mapView?.deselectAnnotation(annotation, animated: true)
-                self?.trailDraftController?.requestPlaceEditor(for: annotation.place.id)
-            },
-            onRemove: { [weak self, weak mapView] in
-                mapView?.deselectAnnotation(annotation, animated: true)
-                self?.trailDraftController?.removePlace(id: annotation.place.id)
-            }
-        )
-        // Cleared rather than hidden when there is nothing in it: a hidden
-        // accessory still occupies the callout, which is the band of empty
-        // card this is avoiding.
-        view.detailCalloutAccessoryView = hasContents ? callout : nil
+    private static let noteWidth: CGFloat = 220
+
+    private static func noteLabel(_ note: String) -> UILabel? {
+        guard !note.isEmpty else { return nil }
+        let label = UILabel()
+        label.text = note
+        label.numberOfLines = 0
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = .secondaryLabel
+        label.preferredMaxLayoutWidth = noteWidth
+        return label
     }
     #endif
 }

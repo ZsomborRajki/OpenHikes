@@ -5,8 +5,8 @@
 //  Putting the places on the map, from whichever of the two sources is live.
 //
 //  While a trail is being drawn they come off ``TrailDraft/placeRows`` through
-//  the maker's own observation — see `MapTrailDraftOverlay.swift` — and they
-//  can be edited, dragged and removed. While a saved hike's screen is pushed
+//  the maker's own observation — see `MapTrailDraftOverlay.swift` — and a tap
+//  opens the maker's place sheet. While a saved hike's screen is pushed
 //  they come off its ``TrailPoint`` rows through ``TrailPlacePinController``
 //  and can only be read.
 //
@@ -160,7 +160,7 @@ extension MapView.Coordinator {
         hikePlaceController = controller
         applyPlaceAnnotations(
             controller.rows,
-            isEditable: false,
+            belongsToDraft: false,
             to: \.hikePlaceAnnotations,
             on: mapView
         )
@@ -178,7 +178,7 @@ extension MapView.Coordinator {
     func applyTrailDraftPlaces(_ rows: [TrailPlaceRow], on mapView: MKMapView) {
         applyPlaceAnnotations(
             rows,
-            isEditable: true,
+            belongsToDraft: true,
             to: \.trailDraftPlaceAnnotations,
             on: mapView
         )
@@ -186,23 +186,20 @@ extension MapView.Coordinator {
 
     /// Rebuilds one source's pins wholesale rather than diffing them.
     ///
-    /// A hiker marks a handful of places, and this runs when one is marked,
-    /// edited, moved or removed — never at drag frequency, because a place
-    /// under a finger moves its annotation's `coordinate` directly and this
-    /// does not run at all. See `MapTrailPlaceDrag.swift`.
+    /// This runs when a search adds places or one is removed — a few dozen
+    /// pins, a few times a session.
     ///
     /// The guard compares every drawn pin against every wanted row, because a
-    /// place changes its glyph, its heading and its callout without moving:
-    /// renaming one is exactly that.
+    /// place can change its glyph, its heading and its callout without moving.
     private func applyPlaceAnnotations(
         _ rows: [TrailPlaceRow],
-        isEditable: Bool,
+        belongsToDraft: Bool,
         to storage: ReferenceWritableKeyPath<MapView.Coordinator, [TrailPlaceAnnotation]>,
         on mapView: MKMapView
     ) {
         let drawn = self[keyPath: storage]
         guard drawn.count != rows.count
-            || !zip(drawn, rows).allSatisfy({ $0.matches($1, isEditable: isEditable) })
+            || !zip(drawn, rows).allSatisfy({ $0.matches($1, belongsToDraft: belongsToDraft) })
         else { return }
 
         if !drawn.isEmpty {
@@ -214,7 +211,7 @@ extension MapView.Coordinator {
         }
         guard !rows.isEmpty else { return }
         let annotations = rows.map { row in
-            TrailPlaceAnnotation(row: row, isEditable: isEditable)
+            TrailPlaceAnnotation(row: row, belongsToDraft: belongsToDraft)
         }
         self[keyPath: storage] = annotations
         mapView.addAnnotations(annotations)

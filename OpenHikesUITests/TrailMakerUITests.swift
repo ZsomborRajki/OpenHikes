@@ -6,13 +6,12 @@
 //
 //  Nothing below this can reach it. The map is a `UIViewRepresentable` around
 //  `MKMapView`, the pill is a UIKit subview positioned by a constraint the
-//  sheet drives, and a tap that becomes a waypoint is resolved by a gesture
+//  sheet drives, and a press that becomes a waypoint is resolved by a gesture
 //  recognizer whose state and location the touch system sets — so the one
-//  question this feature exists to answer, *does tapping the map put a point
-//  down*, has no unit test and cannot have one. Since Phase 4 that question
-//  has a second half: a tap opens a callout, and whether its buttons can be
-//  *reached* is a fact about MapKit's own view hierarchy that only a real
-//  simulator knows.
+//  question this feature exists to answer, *does pressing the map put a point
+//  down*, has no unit test and cannot have one. A press opens the place sheet,
+//  and whether its *Add Stop* is reachable over the map sheet is a fact about
+//  presentation that only a real simulator knows.
 //
 //  What the suites next door cover instead: `TrailDraftTests` the arithmetic,
 //  `TrailDraftLegTests` the legs and the toggle, `TrailLegRouterTests` the
@@ -20,15 +19,17 @@
 //  asked and how often, `TrailDraftSaveTests` the row that comes out,
 //  `TrailDraftControllerTests` the two pills' exclusion and the guards, and
 //  `MapCoordinatorTests+TrailDraft` the map's half with a real `MKMapView` and
-//  a synthesised point. Phase 3's editing adds four more — `TrailDraftEditingTests`
-//  for what each operation does to the list, `TrailDraftHistoryTests` for undo,
+//  a synthesised point. Phase 3's editing adds three more —
+//  `TrailDraftEditingTests` for what each operation does to the list,
 //  `TrailLegMemoTests` for the shapes it restores, and
-//  `MapCoordinatorTests+TrailDraftEditing` for the leg tap and the drag against
-//  a real map. Phase 4 adds `TrailPlaceTests` for the value and its ordering,
-//  `TrailDraftPlaceTests` for what marking one does to the draft,
-//  `TrailDraftPinActionTests` for which verbs a callout offers, and
-//  `GPXPlaceRoundTripTests` for the `<wpt>` either way. This is the one that
-//  presses the buttons.
+//  `MapCoordinatorTests+TrailDraftEditing` for the leg press and the drag
+//  against a real map. `TrailPlaceTests` covers a place's value and its
+//  ordering, `TrailDraftPlaceTests` what adding one does to the draft,
+//  `TrailStopSlotTests` the open fields and where *Add Stop* puts a point,
+//  `TrailStopRecentsTests` what the search remembers,
+//  `MapCoordinatorTests+TrailDraftRouteChoices` the alternatives and the time
+//  bubble, and `GPXPlaceRoundTripTests` the `<wpt>` either way. This is the
+//  one that presses the buttons.
 //
 
 import XCTest
@@ -37,8 +38,8 @@ nonisolated final class TrailMakerUITests: XCTestCase {
     /// What the drawn trail is named, and what the library row is found by.
     private static let trailName = "Saturday Ridge"
 
-    /// Three taps well inside the map, spread far enough apart that no two of
-    /// them land on the same coordinate at any plausible zoom.
+    /// Three presses well inside the map, spread far enough apart that no two
+    /// of them land on the same coordinate at any plausible zoom.
     ///
     /// Normalized rather than absolute: the map fills the window, and the
     /// window is whatever device the runner resolved. The vertical range stays
@@ -48,16 +49,6 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         CGVector(dx: 0.45, dy: 0.20),
         CGVector(dx: 0.65, dy: 0.30),
         CGVector(dx: 0.50, dy: 0.42),
-    ]
-
-    /// Three taps whose two legs are very different lengths, so how far the
-    /// middle point sits along the line is a different number each way round —
-    /// which is the only thing on screen a reversal changes. Evenly spaced
-    /// points would reverse into the same three figures and prove nothing.
-    private static let lopsidedPoints: [CGVector] = [
-        CGVector(dx: 0.30, dy: 0.18),
-        CGVector(dx: 0.34, dy: 0.22),
-        CGVector(dx: 0.85, dy: 0.42),
     ]
 
     /// The whole feature end to end: open the maker from the map, put three
@@ -73,7 +64,17 @@ nonisolated final class TrailMakerUITests: XCTestCase {
 
         openTrailMaker(in: app)
 
-        // Nothing is down yet, and the screen says what to do about it.
+        // Nothing is down yet: two empty fields, as Apple Maps opens its
+        // directions, and a sentence saying what to do about them.
+        XCTAssertTrue(
+            element("trail-draft-open-start", in: app).exists
+                && element("trail-draft-open-destination", in: app).exists,
+            "an empty maker should open with a start and a destination to fill"
+        )
+        XCTAssertFalse(
+            element("trail-draft-point-1", in: app).exists,
+            "and neither field is filled in for the hiker"
+        )
         XCTAssertTrue(
             element("trail-draft-empty", in: app).exists,
             "an empty maker should say how to start"
@@ -119,10 +120,10 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         awaitHikeRow(titled: Self.trailName, in: app)
     }
 
-    /// Cancel throws the drawing away and says so first. The confirmation is
-    /// what makes the button safe to put next to Save.
+    /// The ✕ is the explicit destructive way out, so it asks what becomes
+    /// of the drawing, and *Discard Trail* throws it away.
     @MainActor
-    func testCancellingDiscardsTheDrawing() {
+    func testClosingCanDiscardTheDrawing() {
         let app = launchApp()
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
@@ -130,18 +131,7 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         openTrailMaker(in: app)
         drawTrailPoints(Array(Self.drawnPoints.prefix(2)), on: map, in: app)
 
-        element("trail-draft-cancel", in: app).tap()
-        let discard = app.buttons["Discard"]
-        XCTAssertTrue(
-            discard.waitForExistence(timeout: UITestTimeout.navigation),
-            "cancelling a drawing should ask before throwing it away"
-        )
-        discard.tap()
-
-        XCTAssertTrue(
-            waitUntil { element("map-sheet", in: app).exists },
-            "cancelling should land back on the map"
-        )
+        closeTrailMaker(choosing: "Discard Trail", in: app)
 
         // And nothing was kept: reopening the maker starts from nothing.
         openTrailMaker(in: app)
@@ -150,6 +140,35 @@ nonisolated final class TrailMakerUITests: XCTestCase {
                 timeout: UITestTimeout.navigation
             ),
             "a discarded drawing should not come back"
+        )
+    }
+
+    /// Back is the quiet way out: it keeps the drawing without asking, and the
+    /// next visit picks it up where it was left.
+    @MainActor
+    func testBackKeepsTheDrawingForLaterWithoutConfirmation() {
+        let app = launchApp()
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
+
+        openTrailMaker(in: app)
+        drawTrailPoints(Array(Self.drawnPoints.prefix(2)), on: map, in: app)
+        popScreen(in: app)
+        XCTAssertFalse(
+            app.buttons["Discard Trail"].exists,
+            "back should keep the drawing without opening the close dialog"
+        )
+        XCTAssertTrue(
+            waitUntil { element("map-sheet", in: app).exists },
+            "back should return immediately to the map"
+        )
+
+        openTrailMaker(in: app)
+        XCTAssertTrue(
+            element("trail-draft-point-2", in: app).waitForExistence(
+                timeout: UITestTimeout.navigation
+            ),
+            "a drawing kept for later should be there the next time"
         )
     }
 
@@ -247,7 +266,10 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         drawTrailPoints(Self.drawnPoints, on: map, in: app)
 
         let snap = element("trail-draft-snap", in: app)
-        XCTAssertTrue(snap.waitForExistence(timeout: UITestTimeout.navigation))
+        XCTAssertTrue(
+            scrollIntoView(snap, in: app),
+            "the Follow Paths switch should remain reachable below the stops"
+        )
         snap.tap()
 
         XCTAssertTrue(
@@ -261,6 +283,22 @@ nonisolated final class TrailMakerUITests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// Presses the ✕ and answers the question it asks about the drawing.
+    @MainActor
+    private func closeTrailMaker(choosing answer: String, in app: XCUIApplication) {
+        element("trail-draft-close", in: app).tap()
+        let button = app.buttons[answer]
+        XCTAssertTrue(
+            button.waitForExistence(timeout: UITestTimeout.navigation),
+            "closing a drawing should ask what becomes of it"
+        )
+        button.tap()
+        XCTAssertTrue(
+            waitUntil { element("map-sheet", in: app).exists },
+            "\(answer) should land back on the map"
+        )
+    }
 
     /// Answers the alert Save opens, which is the only place the maker asks
     /// what the trail is called.
@@ -277,11 +315,23 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         )
         let field = prompt.textFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: UITestTimeout.navigation))
-        field.tap()
+        // Typed into the field the alert focused on the way in, rather than
+        // tapped first: a tap on a field that already has the keyboard opens
+        // the edit menu over it — AutoFill, Paste.
         field.typeText(name)
-        prompt.buttons["Save"].tap()
+        // **The alert can move under the press.** On a freshly created
+        // simulator the software keyboard hides while a name is typed and
+        // comes back a moment later, carrying the alert up with it, and a
+        // press aimed at where Save was lands on the dimmed screen behind it —
+        // the alert stays up with the name typed in, and the save never
+        // happens. Seen in a screen recording of exactly that. Pressed again
+        // only if it happened: a press that landed has taken the alert down.
+        let save = prompt.buttons["Save"]
+        save.tap()
+        if !waitUntil(timeout: UITestTimeout.existence, { !prompt.exists }) {
+            save.tap()
+        }
     }
-
 }
 
 // MARK: - Editing what is already drawn
@@ -289,20 +339,19 @@ nonisolated final class TrailMakerUITests: XCTestCase {
 /// The Phase 3 gestures, which are the ones a suite below this cannot reach at
 /// all.
 ///
-/// Every operation's arithmetic is asserted next door — `TrailDraftEditingTests`
-/// for what each does to the list, `TrailDraftHistoryTests` for undo — and none
-/// of that says whether a hiker can *get* to any of it. A swipe, a context
-/// menu, an edit-mode drag and a tap that lands on a line are four things only
-/// a real simulator does, and three of them were wrong the first time on the
-/// hikes list. This is where they are pressed.
+/// Every operation's arithmetic is asserted next door, in
+/// `TrailDraftEditingTests` for what each does to the list, and none of that
+/// says whether a hiker can *get* to any of it. A swipe action, a direct
+/// drag and a press that lands on a line are three things only a real
+/// simulator does, and the first two were wrong the first time on the hikes
+/// list. This is where they are pressed.
 extension TrailMakerUITests {
-    /// A swipe takes a point out, and the menu puts it back.
+    /// Taking a stop out.
     ///
-    /// The pair rather than either alone: delete is the destructive half of
-    /// this phase and undo is what makes it safe, so a suite that covered only
-    /// the first would be green on a build where the second never appeared.
+    /// Through the platform's trailing swipe action. The list rests outside
+    /// edit mode, so no delete circle occupies the leading edge.
     @MainActor
-    func testSwipingAPointAwayAndUndoingIt() {
+    func testRemovingAStop() {
         let app = launchApp()
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
@@ -311,32 +360,28 @@ extension TrailMakerUITests {
         drawTrailPoints(Self.drawnPoints, on: map, in: app)
 
         let third = element("trail-draft-point-3", in: app)
+        XCTAssertFalse(app.buttons["Delete"].exists, "no leading delete control should be visible")
         element("trail-draft-point-2", in: app).swipeLeft()
         let delete = app.buttons["Delete"]
         XCTAssertTrue(
             delete.waitForExistence(timeout: UITestTimeout.existence),
-            "a swipe on a point should offer to delete it"
+            "swiping a stop should reveal the standard delete action"
         )
         delete.tap()
         XCTAssertTrue(
             waitUntil { !third.exists },
             "deleting should leave two points"
         )
-
-        chooseAction("Undo", in: app)
-
         XCTAssertTrue(
-            third.waitForExistence(timeout: UITestTimeout.navigation),
-            "undo should bring the deleted point back"
+            element("trail-draft-point-2", in: app).label.contains("Destination"),
+            "the stop after the deleted one should close the gap"
         )
     }
 
-    /// A tap on a leg puts a point **into** it, which is the half of the
-    /// canvas that cannot be told apart from an append without a real map: both
-    /// are one tap, and which one happens is decided by whether a line was
-    /// under the thumb.
+    /// *Add Stop* on a pin dropped on a leg puts the point **into** it, which
+    /// cannot be told apart from an append without a real map.
     @MainActor
-    func testTappingALegAddsAPointInTheMiddle() {
+    func testPressingALegAddsAPointInTheMiddle() {
         let app = launchApp()
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
@@ -346,33 +391,23 @@ extension TrailMakerUITests {
         drawTrailPoints(ends, on: map, in: app)
         let length = element("trail-draft-length", in: app).label
 
-        // Halfway between the two taps, which on a launch with no trail graph
-        // is exactly where the straight leg between them is drawn.
-        let middle = CGVector(
-            dx: (ends[0].dx + ends[1].dx) / 2,
-            dy: (ends[0].dy + ends[1].dy) / 2
+        // A third of the way along the straight leg between the two presses —
+        // not halfway, where the route's time bubble sits and takes the press.
+        let onTheLeg = CGVector(
+            dx: ends[0].dx + (ends[1].dx - ends[0].dx) / 3,
+            dy: ends[0].dy + (ends[1].dy - ends[0].dy) / 3
         )
-        map.coordinate(withNormalizedOffset: middle).tap()
-        // *Add Stop* rather than *Make Destination*: the pin remembers the leg
-        // the thumb landed on, and this is the verb that uses it.
-        confirmDroppedPin("trail-draft-pin-add-stop", in: app)
+        dropPin(at: onTheLeg, on: map)
+        tapInPlaceSheet("trail-place-add-stop", in: app)
 
         let third = element("trail-draft-point-3", in: app)
         XCTAssertTrue(
             third.waitForExistence(timeout: UITestTimeout.navigation),
-            "the leg's callout should put a third point down"
+            "Add Stop should put a third point down"
         )
         // **It went in at row two, which is the whole of what *into* means.**
-        //
-        // Not "the trail did not get longer", which is what this asserted
-        // through Phase 3 and is no longer safe: selecting a callout lets
-        // MapKit scroll the map to make room for it, so the screen point
-        // halfway between two taps is no longer exactly on the line by the
-        // time the third tap lands, and an inserted point a little off the
-        // line lengthens the trail exactly as an appended one would. What
-        // still tells the two apart is *where the new point landed in the
-        // list*: an append leaves row two sitting at the trail's old length,
-        // and an insert moves it somewhere short of it.
+        // An append would leave row two sitting at the trail's old length; an
+        // insert moves it somewhere short of it.
         XCTAssertFalse(
             element("trail-draft-point-2", in: app).label.contains(length),
             "a point appended to the end would have left row two at \(length)"
@@ -383,13 +418,11 @@ extension TrailMakerUITests {
         )
     }
 
-    /// Reordering, reached the way the hikes list taught: a context menu, then
-    /// edit mode, then the list's own drag, then the way out.
+    /// Reordering directly, without an Edit/Done mode to enter first.
     ///
-    /// A long press straight onto a drag does nothing — `List` reorders only in
-    /// edit mode — and the drag itself has to be slow and held, because a
-    /// reorder commits on the drop. Both were paid for once on `HikeOrderUITests`
-    /// and neither is rediscovered here.
+    /// The drag still has to be slow and held, because a reorder commits on the
+    /// *drop*. That was paid for once on `HikeOrderUITests` and is not
+    /// rediscovered here.
     @MainActor
     func testReorderingThePoints() {
         let app = launchApp()
@@ -400,26 +433,15 @@ extension TrailMakerUITests {
         drawTrailPoints(Self.drawnPoints, on: map, in: app)
         let length = element("trail-draft-length", in: app).label
 
-        let third = element("trail-draft-point-3", in: app)
         let second = element("trail-draft-point-2", in: app)
-        third.press(forDuration: 1.0)
-        let reorder = app.buttons["Reorder Points"]
-        XCTAssertTrue(
-            reorder.waitForExistence(timeout: UITestTimeout.existence),
-            "a long press on a point should offer to rearrange the line"
-        )
-        reorder.tap()
-        let done = element("trail-draft-reorder-done", in: app)
-        XCTAssertTrue(
-            done.waitForExistence(timeout: UITestTimeout.existence),
-            "taking the offer should put the list into reorder mode"
-        )
+        XCTAssertFalse(app.navigationBars.buttons["Edit"].exists)
 
-        // The trailing edge is where the grabber is; slow, and held at the
-        // end, because the move is committed on the drop.
-        third.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).press(
+        // Slow and held at both ends, because the row's drag starts after the
+        // press and its move is committed on the drop.
+        element("trail-draft-reorder-3", in: app)
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
             forDuration: 0.8,
-            thenDragTo: second.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.0)),
+            thenDragTo: second.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)),
             withVelocity: .slow,
             thenHoldForDuration: 0.8
         )
@@ -432,51 +454,87 @@ extension TrailMakerUITests {
             "reordering the points should change the trail they describe"
         )
 
-        done.tap()
+        // The explicit close and save controls remain available because there
+        // is no editing mode to take over the toolbar.
         XCTAssertTrue(
-            waitUntil { element("trail-draft-actions", in: app).exists },
-            "leaving reorder mode should hand the menu back"
+            element("trail-draft-close", in: app).exists,
+            "the ✕ stays put while rows are being dragged"
         )
+        XCTAssertFalse(app.navigationBars.buttons["Done"].exists)
         XCTAssertTrue(
             element("trail-draft-save", in: app).isEnabled,
             "a reordered trail is still a trail"
         )
     }
+}
 
-    /// The two shape verbs, which have no gesture and exist only in the menu.
+// MARK: - The route list, and the search behind it
+
+/// The Apple Maps arrangement: a start, its stops and its destination, each row
+/// a field that opens a search, with *Add Stop* pinned under them.
+///
+/// Only a simulator can answer whether a place picked in the sheet lands in
+/// the row the sheet was opened from. `TrailDraftTests` covers what the draft
+/// does with a name once it has one; this presentation path is not reachable
+/// from there.
+extension TrailMakerUITests {
+    /// The two empty fields each open the search on themselves, and *Add Stop*
+    /// waits until both are filled.
     @MainActor
-    func testReversingAndClosingTheLoop() {
+    func testTheOpenFieldsOpenTheSearch() {
         let app = launchApp()
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
 
         openTrailMaker(in: app)
-        drawTrailPoints(Self.lopsidedPoints, on: map, in: app)
-        let second = element("trail-draft-point-2", in: app).label
-
-        chooseAction("Reverse", in: app)
-
-        // Same three places, same total length, walked the other way — so what
-        // changes is how far along the middle one sits.
-        XCTAssertTrue(
-            waitUntil { element("trail-draft-point-2", in: app).label != second },
-            "reversing should walk the line the other way"
+        XCTAssertFalse(
+            element("trail-draft-add-stop", in: app).exists,
+            "the open fields are the way in, and Add Stop would be a second answer to one question"
         )
 
-        chooseAction("Close the Loop", in: app)
-
+        element("trail-draft-open-destination", in: app).tap()
         XCTAssertTrue(
-            element("trail-draft-point-4", in: app).waitForExistence(
+            element("trail-stop-search-field", in: app).waitForExistence(
                 timeout: UITestTimeout.navigation
             ),
-            "closing the loop should bring the line back to where it started"
+            "an open field should open the search sheet"
         )
+        XCTAssertTrue(
+            app.navigationBars["Destination"].exists,
+            "the sheet should say which field it was opened from"
+        )
+        // Offered with no fix and no recents at all, which is this launch: the
+        // row waits for a position rather than being missing until one comes.
+        XCTAssertTrue(
+            element("trail-stop-search-here", in: app).exists,
+            "My Location should head the list before anything is typed"
+        )
+        element("trail-stop-search-cancel", in: app).tap()
+        XCTAssertTrue(
+            waitUntil { !element("trail-stop-search-field", in: app).exists },
+            "cancelling should put the search away"
+        )
+
+        drawTrailPoints(Array(Self.drawnPoints.prefix(2)), on: map, in: app)
+        let add = element("trail-draft-add-stop", in: app)
+        XCTAssertTrue(
+            add.waitForExistence(timeout: UITestTimeout.navigation),
+            "a route with both ends should offer to add a stop"
+        )
+        add.tap()
+        XCTAssertTrue(
+            element("trail-stop-search-field", in: app).waitForExistence(
+                timeout: UITestTimeout.navigation
+            ),
+            "Add Stop should open the search sheet"
+        )
+        element("trail-stop-search-cancel", in: app).tap()
     }
 
-    /// *Clear* is the one edit that asks first, and the question is what makes
-    /// it safe to put in a menu beside Undo.
+    /// A stop remains a tappable search field while it also carries the direct
+    /// drag and trailing swipe gestures.
     @MainActor
-    func testClearingAsksFirstAndCanBeUndone() {
+    func testTappingAStopOpensTheSearchOnThatRow() {
         let app = launchApp()
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
@@ -484,159 +542,121 @@ extension TrailMakerUITests {
         openTrailMaker(in: app)
         drawTrailPoints(Self.drawnPoints, on: map, in: app)
 
-        chooseAction("Clear", in: app)
-        let confirm = app.buttons["Clear"]
-        XCTAssertTrue(
-            confirm.waitForExistence(timeout: UITestTimeout.existence),
-            "clearing should ask before removing the points"
-        )
-        confirm.tap()
+        // The middle of three, so the sheet has a role to name that is neither
+        // of the two ends — which is what says it opened on *this* row.
+        element("trail-draft-point-2", in: app).tap()
 
         XCTAssertTrue(
-            element("trail-draft-empty", in: app).waitForExistence(
+            element("trail-stop-search-field", in: app).waitForExistence(
                 timeout: UITestTimeout.navigation
             ),
-            "clearing should leave an empty maker"
+            "a stop row should open the search alongside its editing gestures"
         )
-
-        chooseAction("Undo", in: app)
-
         XCTAssertTrue(
-            element("trail-draft-point-3", in: app).waitForExistence(
-                timeout: UITestTimeout.navigation
-            ),
-            "the drawing should come back, because clearing is an edit like any other"
+            app.navigationBars["Stop 1"].exists,
+            "the sheet should say which row it was opened from"
+        )
+        element("trail-stop-search-cancel", in: app).tap()
+
+        // And the drawing is untouched: opening a search places nothing.
+        XCTAssertTrue(
+            waitUntil { element("trail-draft-point-3", in: app).exists },
+            "cancelling the search should leave the route as it was"
         )
     }
 
-    /// Opens the edit menu and takes one of the things in it.
+    /// Every row says what it is to the route, and the words are the ones a
+    /// hiker reads rather than a number.
     ///
-    /// By title rather than by identifier, and that is a finding rather than a
-    /// preference: a `Menu`'s contents are rebuilt by the system when it opens,
-    /// and the `accessibilityIdentifier` on a button inside one does not come
-    /// through — the first version of these tests looked for them and found
-    /// nothing. The context menu on a row behaves the same way, which is why
-    /// `testReorderingThePoints` asks for *Reorder Points* by name too.
+    /// Under automation nothing reverse-geocodes — `makeTrailStopNaming()` is
+    /// `nil` when tests are running — so these are exactly the fallbacks, which
+    /// is what makes them assertable at all.
     @MainActor
-    private func chooseAction(_ title: String, in app: XCUIApplication) {
-        let menu = element("trail-draft-actions", in: app)
-        XCTAssertTrue(
-            menu.waitForExistence(timeout: UITestTimeout.existence),
-            "the maker should offer its edit menu"
-        )
-        menu.tap()
-        let action = app.buttons[title]
-        XCTAssertTrue(
-            action.waitForExistence(timeout: UITestTimeout.existence),
-            "\(title) should be in the edit menu"
-        )
-        action.tap()
-    }
-}
-
-// MARK: - Marking places
-
-/// The other half of Phase 4, and the half that cannot be reached without a
-/// simulator: a callout button opens a sheet, and the sheet writes back when
-/// it is dismissed.
-///
-/// Everything about *what* a place is is asserted next door — `TrailPlaceTests`
-/// for the value and its ordering, `TrailDraftPlaceTests` for what marking one
-/// does to the draft, `GPXPlaceRoundTripTests` for the `<wpt>` either way, and
-/// `MapCoordinatorTests+TrailPlaces` for the pins against a real map. None of
-/// that says whether a hiker can get from a tap on the map to a named spring.
-extension TrailMakerUITests {
-    /// The whole place flow: tap the map, mark a place, name it, and find it
-    /// listed under the points with the symbol it was given.
-    @MainActor
-    func testMarkingAPlaceFromTheMap() {
+    func testTheRouteReadsAsStartStopsAndDestination() {
         let app = launchApp()
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
 
         openTrailMaker(in: app)
+        drawTrailPoints(Self.drawnPoints, on: map, in: app)
 
-        // Nothing marked yet, and the screen says both ways to start.
         XCTAssertTrue(
-            element("trail-draft-places-empty", in: app).exists,
-            "an empty maker should say how to mark a place"
+            element("trail-draft-point-1", in: app).label.contains("Start"),
+            "the first row is where the route starts"
         )
-
-        map.coordinate(withNormalizedOffset: Self.drawnPoints[0]).tap()
-        confirmDroppedPin("trail-draft-pin-mark-a-place", in: app)
-
-        // Marking and naming are one gesture: the editor comes up on the place
-        // that was just put down.
-        let name = element("trail-place-name", in: app)
         XCTAssertTrue(
-            name.waitForExistence(timeout: UITestTimeout.navigation),
-            "marking a place should open the editor on it"
+            element("trail-draft-point-2", in: app).label.contains("Stop 1"),
+            "the middle row is a stop, counted from one"
         )
-        name.tap()
-        name.typeText("Kühroint")
-        element("trail-place-symbol-\(TrailPlaceSymbolIdentifier.shelter)", in: app).tap()
-        element("trail-place-done", in: app).tap()
-
-        // Written back on the way out, and listed under the points.
         XCTAssertTrue(
-            waitUntil { app.staticTexts["Kühroint"].exists },
-            "the named place should be listed"
+            element("trail-draft-point-3", in: app).label.contains("Destination"),
+            "the last row is where the route ends"
         )
-        XCTAssertFalse(
-            element("trail-draft-places-empty", in: app).exists,
-            "a marked place should replace the empty caption"
+    }
+}
+
+// MARK: - The place sheet
+
+/// What a press on the map opens: Apple Maps' place card, and the one way a
+/// point goes down from the map.
+///
+/// What the sheet does to the draft is asserted next door —
+/// `TrailStopSlotTests` for where *Add Stop* puts a point,
+/// `TrailDraftPlaceTests` for removing a place, and
+/// `MapCoordinatorTests+TrailDraft` for the pin a press drops and the
+/// selection a tap raises. None of that says whether the sheet comes up over
+/// the map's own sheet and can be used there.
+extension TrailMakerUITests {
+    /// A dropped pin's card says where it is. Closing the card leaves the pin
+    /// standing, as Apple Maps does, and a tap on the pin opens the card
+    /// again; *Remove Pin* is what takes it away, and it puts nothing on the
+    /// trail.
+    @MainActor
+    func testTheDroppedPinStaysUntilItIsRemoved() {
+        let app = launchApp()
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
+
+        openTrailMaker(in: app)
+        dropPin(at: Self.drawnPoints[0], on: map)
+
+        let sheet = element("trail-place-sheet", in: app)
+        XCTAssertTrue(
+            sheet.waitForExistence(timeout: UITestTimeout.navigation),
+            "a press on the map should open the place sheet"
         )
-        // And the line is untouched: a place is a spot beside a trail rather
-        // than a point of one.
+        XCTAssertEqual(element("trail-place-title", in: app).label, "Dropped Pin")
+        XCTAssertTrue(
+            element("trail-place-coordinates", in: app).exists,
+            "the sheet should say where the pin is"
+        )
+        XCTAssertTrue(element("trail-place-share", in: app).exists, "and offer to share it")
+
+        tapInPlaceSheet("trail-place-close", in: app)
+        let pin = element("trail-draft-dropped-pin", in: app)
+        XCTAssertTrue(
+            pin.waitForExistence(timeout: UITestTimeout.navigation),
+            "closing the card should leave the pin on the map"
+        )
+        pin.tap()
+        XCTAssertTrue(
+            sheet.waitForExistence(timeout: UITestTimeout.navigation),
+            "a tap on the pin should open its card again"
+        )
+
+        tapInPlaceSheet("trail-place-remove", in: app)
+
+        XCTAssertTrue(
+            waitUntil { !pin.exists },
+            "Remove Pin should take the pin off the map"
+        )
         XCTAssertFalse(
             element("trail-draft-point-1", in: app).exists,
-            "marking a place should not put a waypoint down"
+            "removing the pin should put nothing on the trail"
+        )
+        XCTAssertTrue(
+            element("trail-draft-open-start", in: app).exists,
+            "and the start field should still be open"
         )
     }
-
-    /// Removing is the destructive half, and the editor is one of the two
-    /// places it is offered from — the other is the pin's own callout, which
-    /// needs a press on a marker MapKit has drawn.
-    @MainActor
-    func testRemovingAPlaceFromTheEditor() {
-        let app = launchApp()
-        let map = element("trail-map", in: app)
-        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
-
-        openTrailMaker(in: app)
-        map.coordinate(withNormalizedOffset: Self.drawnPoints[0]).tap()
-        confirmDroppedPin("trail-draft-pin-mark-a-place", in: app)
-        let name = element("trail-place-name", in: app)
-        XCTAssertTrue(name.waitForExistence(timeout: UITestTimeout.navigation))
-        name.tap()
-        name.typeText("Spring")
-        element("trail-place-done", in: app).tap()
-        XCTAssertTrue(waitUntil { app.staticTexts["Spring"].exists })
-
-        // Back into the editor from the row, and out through Remove.
-        app.staticTexts["Spring"].tap()
-        let delete = element("trail-place-delete", in: app)
-        XCTAssertTrue(
-            delete.waitForExistence(timeout: UITestTimeout.navigation),
-            "the editor should offer to remove the place"
-        )
-        delete.tap()
-
-        XCTAssertTrue(
-            element("trail-draft-places-empty", in: app).waitForExistence(
-                timeout: UITestTimeout.navigation
-            ),
-            "removing the last place should bring the empty caption back"
-        )
-    }
-}
-
-/// The raw values the symbol picker's identifiers are spelled from.
-///
-/// Written out rather than read off `TrailPlaceSymbol`, which is in the app
-/// target and not visible here. Spelling them again is what makes a rename of
-/// one of those raw values fail this suite — which it should, because the raw
-/// value is also the stored id and the GPX `<sym>`.
-private enum TrailPlaceSymbolIdentifier {
-    static let shelter = "Shelter"
 }

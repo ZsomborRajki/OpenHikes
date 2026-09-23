@@ -14,24 +14,10 @@
 //  no line yet falls back to distance from the middle of the map, which is the
 //  only thing that can stand in for it.
 //
-//  ## Choosing is done once; placing is done again
-//
-//  ``chosen(from:along:around:limit:)`` runs when a search lands and decides
-//  *which* forty. ``rows(of:along:)`` runs whenever the drawing changes and
-//  decides where each of those forty sits along the line — because a leg that
-//  snaps through a valley moves every distance without the hiker having
-//  touched anything.
-//
-//  Split that way for a measured reason rather than a tidy one. Choosing runs
-//  over everything the box held — 578 elements in the densest Alpine mapping
-//  there is, see ``TrailPointQuery`` — against a snapped line that is
-//  thousands of coordinates, which is fine once per Overpass round trip and is
-//  not fine once per tap while a hiker is putting points down. Re-placing runs
-//  over the forty that were kept.
-//
-//  Both are ``TrailPlaceOrder``'s arithmetic rather than a second copy of it:
-//  a candidate is an unmarked ``TrailPlace``, so *where does this sit along
-//  the line* is already answered, once per route rather than once per place.
+//  Choosing runs over everything the box held — 578 elements in the densest
+//  Alpine mapping there is, see ``TrailPointQuery`` — against a snapped line
+//  that is thousands of coordinates, once per Overpass round trip. It is
+//  ``TrailPlaceOrder``'s arithmetic rather than a second copy of it.
 //
 //  ## And the choosing is done off the main actor
 //
@@ -41,8 +27,7 @@
 //  run on is the one drawing the map the hiker is looking at. So
 //  ``offered(from:along:in:excluding:limit:)`` is `@concurrent` and is the
 //  whole of what a search does between the answer landing and the pins going
-//  down; the re-placing that follows every tap stays where it is, because
-//  forty places is a fortieth of the work.
+//  down.
 //
 
 import Algorithms
@@ -146,19 +131,6 @@ nonisolated enum TrailPointRanking {
             }
             .min(count: limit) { $0.distance < $1.distance }
             .map(\.place)
-    }
-
-    /// `places` in the order they are met walking `route`, each with where it
-    /// sits.
-    ///
-    /// ``TrailPlaceOrder/ordered(_:along:)`` exactly, and it is worth saying
-    /// why this wrapper exists rather than the call site using that directly:
-    /// the candidates are drawn *beside* the marked places, in the same list
-    /// and in the same kind of row, and having one function name for "put
-    /// these in along-route order" is what keeps the two halves of that screen
-    /// from drifting into two different ideas of what an order is.
-    static func rows(of places: [TrailPlace], along route: [RouteCoordinate]) -> [TrailPlaceRow] {
-        TrailPlaceOrder.ordered(places, along: route)
     }
 
     /// The `limit` places nearest one coordinate.

@@ -166,16 +166,17 @@ extension OpenHikesModel {
     /// automation needs the maker to work for the same reason it needs the
     /// recorder to.
     ///
-    /// The router is the recorder's own trail-graph provider wrapped in
+    /// The hiking router is the recorder's own trail-graph provider wrapped in
     /// ``OverpassTrailLegRouter``, so a drawn leg reads the z12 tiles a
     /// recording has already downloaded and a recording reads the ones a
     /// drawing downloaded. `nil` when there is no provider — a launch under
     /// UI automation with no `--ui-test-trail-graph=` fixture — and the maker
     /// then draws straight lines and does not offer a switch it could not
-    /// honour.
+    /// honour in Hiking mode. Other modes use Apple Maps directions.
     static func makeTrailMaker(
         container: ModelContainer,
-        trailGraphProvider: (any TrailGraphProviding)?
+        graph trailGraphProvider: (any TrailGraphProviding)?,
+        defaults: UserDefaults
     ) -> TrailDraftController {
         TrailDraftController(
             store: TrailDraftStore(context: container.mainContext),
@@ -183,8 +184,46 @@ extension OpenHikesModel {
                 OverpassTrailLegRouter(provider: provider)
             },
             placeSource: Self.makeTrailPointSource(),
-            elevationSource: Self.makeTrailElevationSource()
+            elevationSource: Self.makeTrailElevationSource(),
+            naming: Self.makeTrailStopNaming(),
+            travelRouters: Self.makeDirectionsRouters(),
+            // The model's own defaults, so a UI-testing launch keeps its
+            // recents in the scratch domain rather than the developer's.
+            recents: TrailStopRecents(defaults: defaults)
         )
+    }
+
+    /// Tests exercise the selector without asking Apple's live service. Unit
+    /// suites inject geometry at the router seam; UI launches get a no-route answer.
+    static func makeDirectionsRouters() -> [TrailTravelMode: any TrailLegRouting] {
+        var routers: [TrailTravelMode: any TrailLegRouting] = [:]
+        for mode in TrailTravelMode.allCases where mode != .hiking {
+            if AppLaunchEnvironment.isRunningTests {
+                routers[mode] = DirectionsTrailLegRouter(mode: mode, calculate: { _, _ in [] })
+            } else {
+                routers[mode] = DirectionsTrailLegRouter(mode: mode)
+            }
+        }
+        return routers
+    }
+
+    /// What a point put down by a tap on the map is called, or `nil` for a
+    /// launch that must not ask.
+    ///
+    /// The same guard the two sources above make, and here it is about
+    /// determinism rather than money: MapKit's reverse geocoding costs nothing
+    /// but it answers with whatever is on the ground under the runner's
+    /// simulated coordinate, so a suite that fell into it would assert on a row
+    /// whose text is a fact about Apple's map data and the network the machine
+    /// was on. Under tests every stop reads its role — *Start*, *Stop 2*,
+    /// *Destination* — which is what ``TrailMakerUITests`` finds rows by.
+    ///
+    /// `nil` rather than a stub, so nothing is queued at all — see
+    /// ``TrailStopNamer/canAsk``, the same shape
+    /// ``TrailDraftElevation/isAvailable`` takes.
+    static func makeTrailStopNaming() -> (any TrailStopNaming)? {
+        guard !AppLaunchEnvironment.isRunningTests else { return nil }
+        return MapKitTrailStopNaming()
     }
 
     /// Where the maker's climb and descent come from, or `nil` for a launch

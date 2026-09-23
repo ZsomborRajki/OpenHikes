@@ -25,7 +25,7 @@ in, because App Store Connect orders screenshots by the order they arrive.
 | 5 | `05-recording-a-hike` | It records, with live figures and the line so far |
 | 6 | `06-offline-maps` | It works with no signal |
 | 7 | `07-walk-summary` | A trail walked end to end |
-| 8 | `08-draw-your-own-trail` | Plan Saturday: tap the map and make the trail |
+| 8 | `08-draw-your-own-trail` | Plan Saturday: press the map and make the trail |
 
 Frame 8 is eighth deliberately rather than by arriving last. It is the only one
 that shows the app *making* something rather than showing something, which is an

@@ -11,13 +11,12 @@
 //  endpoints, a length that is not necessarily the distance between them, and
 //  a state that says which of those it is and why.
 //
-//  ## Why the state is five cases and not a Boolean
+//  ## Why the state is not a Boolean
 //
 //  *Snapped or not* is the question the toggle asks, and it is the wrong
-//  question to store. A straight leg can be straight for four different
-//  reasons — the hiker turned snapping off, the answer has not come back yet,
-//  OpenStreetMap has nothing mapped between these two points, or Overpass
-//  refused to answer — and only the last is a failure. Flattening them would
+//  question to store. A straight leg can mean the hiker turned snapping off,
+//  an answer has not come back, no route exists, or a provider failed. Only
+//  the last can benefit from retrying. Flattening those states would
 //  put the warning glyph on a hiker's own deliberate choice and put nothing at
 //  all on a leg that is silently waiting. That is the same flattening
 //  ``CuratedTrailNotice`` exists to undo one feature over, which is why the
@@ -61,16 +60,6 @@ nonisolated struct TrailLegEnds: Hashable, Sendable {
         self.end = end
     }
 
-    /// The same two places, the other way round.
-    ///
-    /// A walking path between two points is the same path whichever way it is
-    /// walked, which is what lets ``TrailDraft/reverse()`` turn a whole trail
-    /// round without asking OpenStreetMap anything. The pair is still ordered,
-    /// and deliberately: a leg's stored shape runs from its start to its end,
-    /// so a key that ignored direction would hand a reversed leg a shape drawn
-    /// backwards.
-    var flipped: Self { Self(start: end, end: start) }
-
     var startCoordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: start.latitude, longitude: start.longitude)
     }
@@ -87,20 +76,14 @@ nonisolated struct TrailLegEnds: Hashable, Sendable {
     }
 }
 
-/// Why a leg that was asked to follow a path is not following one.
-///
-/// Both of these are *answers* rather than failures, which is why they are
-/// separated from ``TrailLegSnap/refused(_:)``: OpenStreetMap was reached and
-/// there is nothing here to follow. Nothing is broken and waiting will not
-/// help, so neither wears the warning glyph — the same distinction
-/// ``CuratedTrailNotice`` draws between an empty area and a busy server.
+/// A usable route was not established for the whole leg. The geometry stays
+/// visible and saveable, with the reason shown beside its destination.
 nonisolated enum TrailLegGap: Equatable, Sendable {
-    /// Neither end is near anything mapped, or nothing mapped joins them.
-    ///
-    /// One case for both because a hiker cannot act on the difference: a leg
-    /// across a trackless corrie and a leg between two paths that do not meet
-    /// are the same line on the same screen, and naming which would be a
-    /// sentence about the graph rather than about the walk.
+    /// Apple Maps ended away from a stop; the connector needs checking.
+    case endpointOffNetwork
+    /// No Apple Maps route exists for the chosen travel mode.
+    case noDirections
+    /// Neither end is near a trail, or the trail graph does not connect them.
     case noPathBetween
     /// The two points are further apart than one leg may ask about — see
     /// ``OverpassTrailLegRouter/maximumLegMeters``.
@@ -109,6 +92,7 @@ nonisolated enum TrailLegGap: Equatable, Sendable {
 
 /// What one leg of the drawn line currently is.
 nonisolated enum TrailLegSnap: Equatable, Sendable {
+    case directionsUnavailable(TrailDirectionsFailure)
     /// A straight line, because the hiker asked for one. The toggle is off.
     case freehand
     /// Overpass could not be asked. Carries the same three answers the
@@ -118,7 +102,7 @@ nonisolated enum TrailLegSnap: Equatable, Sendable {
     case routing
     /// It follows mapped paths.
     case snapped
-    /// It was asked, and there is nothing to follow.
+    /// A route was not established for the whole leg.
     case unmapped(TrailLegGap)
 
     /// Whether this leg is still waiting for an answer, which is what the map
@@ -126,11 +110,13 @@ nonisolated enum TrailLegSnap: Equatable, Sendable {
     /// leg from being started beside the first.
     var isRouting: Bool { self == .routing }
 
-    /// Whether asking again could change this. Only a refusal could: the
-    /// other four are either the hiker's own choice or an answer.
+    /// Whether asking again could change this. Provider failures can; the
+    /// other states are either the hiker's own choice, pending, or an answer.
     var isRetryable: Bool {
-        if case .refused = self { return true }
-        return false
+        switch self {
+        case .refused, .directionsUnavailable: true
+        case .freehand, .routing, .snapped, .unmapped: false
+        }
     }
 
     /// Whether the line is drawn as a settled straight line rather than as a
@@ -140,7 +126,7 @@ nonisolated enum TrailLegSnap: Equatable, Sendable {
     var isDegraded: Bool {
         switch self {
         case .freehand, .routing, .snapped: false
-        case .refused, .unmapped: true
+        case .refused, .directionsUnavailable, .unmapped: true
         }
     }
 
@@ -158,6 +144,24 @@ nonisolated enum TrailLegSnap: Equatable, Sendable {
         case .refused(let outage):
             TrailLegNotice(
                 text: outage.text,
+                symbolName: "exclamationmark.triangle.fill",
+                isWarning: true
+            )
+        case .directionsUnavailable(let failure):
+            TrailLegNotice(
+                text: failure.text,
+                symbolName: "exclamationmark.triangle.fill",
+                isWarning: true
+            )
+        case .unmapped(.noDirections):
+            TrailLegNotice(
+                text: String(localized: "No route found for this travel mode"),
+                symbolName: "mappin.slash",
+                isWarning: false
+            )
+        case .unmapped(.endpointOffNetwork):
+            TrailLegNotice(
+                text: String(localized: "Check access between the stops and the route"),
                 symbolName: "exclamationmark.triangle.fill",
                 isWarning: true
             )
@@ -197,6 +201,21 @@ nonisolated struct TrailLegNotice: Equatable, Sendable {
     let isWarning: Bool
 }
 
+/// One way of getting from a leg's start to its end: the shape, how long it
+/// is, and how long it takes when a router said.
+///
+/// A leg holds one of these as its drawn line and any others the router found
+/// as ``TrailLeg/alternatives`` — the grey lines a hiker taps to choose between,
+/// as in Apple Maps.
+nonisolated struct TrailLegPath: Equatable, Sendable {
+    var coordinates: [RouteCoordinate]
+    var distanceMeters: Double
+    /// Apple Maps' own estimate, or `nil` where only a distance is known — the
+    /// trail graph's answers and every straight line. See
+    /// ``TrailDraft/travelTime(of:)`` for what stands in.
+    var travelTime: TimeInterval?
+}
+
 /// One stretch of the drawn line, between two consecutive waypoints.
 nonisolated struct TrailLeg: Identifiable, Equatable, Sendable {
     /// The waypoint this leg **arrives at**.
@@ -222,23 +241,37 @@ nonisolated struct TrailLeg: Identifiable, Equatable, Sendable {
     /// hiker is looking at.
     var distanceMeters: Double
     var snap: TrailLegSnap
+    /// See ``TrailLegPath/travelTime``.
+    var travelTime: TimeInterval?
+    /// The other ways the router found, each a choice the map offers. Empty for
+    /// anything but a routed leg.
+    var alternatives: [TrailLegPath] = []
 
-    /// The same leg, walked the other way.
-    ///
-    /// The shape reversed and the two ends swapped, so a reversed trail is
-    /// drawn from the geometry it already has rather than asked for again —
-    /// see ``TrailDraft/reverse()``. The length and the state are properties
-    /// of the stretch rather than of the direction, so both survive; the
-    /// identity does not, because a leg is named by the waypoint it arrives at
-    /// and that is the other one now. `rebuildLegs` retargets it.
-    func flipped() -> Self {
-        Self(
-            id: id,
-            ends: ends.flipped,
-            coordinates: coordinates.reversed(),
-            distanceMeters: distanceMeters,
-            snap: snap
-        )
+    var path: TrailLegPath {
+        TrailLegPath(coordinates: coordinates, distanceMeters: distanceMeters, travelTime: travelTime)
+    }
+
+    /// The same leg with alternative `index` drawn and the current shape offered
+    /// in its place, or `nil` for an index that is not there.
+    func choosing(alternative index: Int) -> Self? {
+        guard alternatives.indices.contains(index) else { return nil }
+        var chosen = self
+        let taken = alternatives[index]
+        chosen.alternatives[index] = path
+        chosen.coordinates = taken.coordinates
+        chosen.distanceMeters = taken.distanceMeters
+        chosen.travelTime = taken.travelTime
+        return chosen
+    }
+
+    /// Legs end to end, each join once: every leg carries both of its ends, so
+    /// the point where two meet is in the list twice before this runs. The
+    /// shape a whole drawn line is saved, ranked against and labelled in.
+    static func flattened(_ legs: [Self]) -> [RouteCoordinate] {
+        guard let first = legs.first else { return [] }
+        var shape = first.coordinates
+        for leg in legs.dropFirst() { shape.append(contentsOf: leg.coordinates.dropFirst()) }
+        return shape
     }
 
     /// A leg that follows nothing yet.
@@ -270,6 +303,9 @@ nonisolated struct TrailLegRoute: Equatable, Sendable {
     var coordinates: [RouteCoordinate]
     var distanceMeters: Double
     var snap: TrailLegSnap
+    var travelTime: TimeInterval?
+    /// Other paths between the same ends, best first. See ``TrailLeg/alternatives``.
+    var alternatives: [TrailLegPath] = []
 
     /// The straight line between `ends`, in `snap`. What every refusal and
     /// every gap answers with, because a leg always draws something.

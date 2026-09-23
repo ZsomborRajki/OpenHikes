@@ -14,6 +14,11 @@
 import XCTest
 
 extension XCTestCase {
+    /// How long ``dropPin(at:on:)`` holds: longer than the half second the
+    /// app waits before a press drops a pin, so a loaded runner's late touch
+    /// still counts.
+    private static let pinDropPressDuration: TimeInterval = 0.8
+
     /// Opens the trail maker from the map's own pill, which is the only way
     /// in.
     @MainActor
@@ -32,60 +37,52 @@ extension XCTestCase {
         )
     }
 
-    /// Taps the map at each offset, answers the callout, and waits for the
-    /// point to be listed.
+    /// Puts a stop down at each offset, through the place sheet a press on
+    /// the map opens. The first two fill the start and the destination; every
+    /// later one goes into the leg nearest to it, as *Add Stop* does.
     ///
     /// **Two gestures per point**, and that is the canvas rather than the
-    /// helper: a tap drops a provisional pin and asks, and the button in its
-    /// callout is what draws — see ``TrailDraftPinAction``. Which verb is
-    /// offered follows from how much line there is, which is why the name is
-    /// computed from the index rather than passed in: a helper that had to be
-    /// told would hide the rule it is exercising.
+    /// helper: a press drops a pin and asks, and the sheet's *Add Stop* is what
+    /// draws — see ``TrailPlaceSheet``.
     ///
-    /// Waiting on the row rather than tapping three times and asserting once:
-    /// a tap that missed is indistinguishable from one the app has not
+    /// Waiting on the row rather than pressing three times and asserting once:
+    /// a press that missed is indistinguishable from one the app has not
     /// processed yet, and only the wait tells them apart. No fixed sleep —
     /// each point is its own effect to wait on.
     @MainActor
     func drawTrailPoints(_ offsets: [CGVector], on map: XCUIElement, in app: XCUIApplication) {
         for (index, offset) in offsets.enumerated() {
-            map.coordinate(withNormalizedOffset: offset).tap()
-            confirmDroppedPin(trailDraftPinVerb(forPointAt: index), in: app)
+            dropPin(at: offset, on: map)
+            tapInPlaceSheet("trail-place-add-stop", in: app)
             let row = element("trail-draft-point-\(index + 1)", in: app)
             XCTAssertTrue(
                 row.waitForExistence(timeout: UITestTimeout.navigation),
-                "the callout should put point \(index + 1) down"
+                "Add Stop should put point \(index + 1) down"
             )
         }
     }
 
-    /// The identifier of the verb a callout offers for the *n*th point.
-    ///
-    /// Mirrors ``TrailDraftPinAction/offered(forWaypointCount:)``, spelled out
-    /// rather than read from it: these suites are the ones that press buttons,
-    /// and a helper that computed the identifier from the same source as the
-    /// app would be green on a build where the button never appeared.
+    /// Drops a pin on the map, which is a press and hold rather than a tap —
+    /// a tap only ever closes the card that is up.
     @MainActor
-    func trailDraftPinVerb(forPointAt index: Int) -> String {
-        switch index {
-        case 0: "trail-draft-pin-start-here"
-        case 1: "trail-draft-pin-set-as-destination"
-        default: "trail-draft-pin-make-destination"
-        }
+    func dropPin(at offset: CGVector, on map: XCUIElement) {
+        map.coordinate(withNormalizedOffset: offset).press(forDuration: Self.pinDropPressDuration)
     }
 
-    /// Presses one of the buttons inside the pin's callout.
-    ///
-    /// The buttons are a `UIStackView` this app owns inside MapKit's own
-    /// callout, so unlike a `Menu`'s contents they keep their identifiers —
-    /// see ``TrailDraftPinAction/accessibilityIdentifier``.
+    /// Presses a button on the place sheet a press on the map opened, and
+    /// waits for the sheet to go if the button closes it — so the next press
+    /// lands on the map rather than on a sheet on its way out.
     @MainActor
-    func confirmDroppedPin(_ identifier: String, in app: XCUIApplication) {
+    func tapInPlaceSheet(_ identifier: String, in app: XCUIApplication) {
         let button = element(identifier, in: app)
         XCTAssertTrue(
             button.waitForExistence(timeout: UITestTimeout.navigation),
-            "a tap on the map should open a callout offering \(identifier)"
+            "a press on the map should open the place sheet offering \(identifier)"
         )
         button.tap()
+        XCTAssertTrue(
+            waitUntil { !element("trail-place-sheet", in: app).exists },
+            "\(identifier) should close the place sheet"
+        )
     }
 }

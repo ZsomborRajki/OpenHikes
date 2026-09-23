@@ -11,11 +11,9 @@
 //
 //  ## Read-only, and it says so by having no controls rather than by refusing
 //
-//  Editing the route or the places of an existing hike is out of scope for
-//  this phase — the plan issue draws that line, and nothing here makes
-//  crossing it later harder: the callout's two verbs are already written and
-//  gated on ``TrailPlaceAnnotation/isEditable``. What this screen has instead
-//  is the one thing a reader wants, which is to find the place on the map.
+//  Editing the route or the places of an existing hike is out of scope — the
+//  plan issue draws that line. What this screen has instead is the one thing a
+//  reader wants, which is to find the place on the map.
 //
 //  ## Absent rather than empty
 //

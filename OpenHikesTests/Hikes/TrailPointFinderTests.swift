@@ -2,19 +2,18 @@
 //  TrailPointFinderTests.swift
 //  OpenHikesTests
 //
-//  What is offered, in what order, and what a refusal does to what was already
-//  on offer.
+//  What a search hands the trail, and what a refusal does.
 //
-//  The ranking is the half of this phase that nothing on screen explains. A
+//  The ranking is the half of this feature that nothing on screen explains. A
 //  search over one Alpine box answers with hundreds of places and forty are
-//  drawn, so *which* forty is the whole of what the feature is worth — and it
+//  added, so *which* forty is the whole of what the feature is worth — and it
 //  is decided against the line the hiker is drawing rather than against the
 //  middle of the screen, which is the reason this lives in the maker at all.
 //
 //  The other half is what happens when the answer does not arrive. Overpass
-//  refuses ordinarily, so the rule is stated here rather than discovered: the
-//  candidates already on offer stay, because they are still true, and the
-//  refusal is a sentence beside them.
+//  refuses ordinarily, so the rule is stated here rather than discovered: what
+//  this device already knows about the area stands in, and the refusal is a
+//  sentence beside it.
 //
 
 import CoreLocation
@@ -75,6 +74,18 @@ struct TrailPointFinderTests {
         RouteCoordinate(latitude: 47.60, longitude: 12.94),
     ]
 
+    /// What the finder handed over, one batch per answer.
+    private final class Delivered {
+        var batches: [[TrailPlace]] = []
+        var names: [String] { batches.last?.map(\.name) ?? [] }
+    }
+
+    private static func delivering(_ finder: TrailPointFinder) -> Delivered {
+        let delivered = Delivered()
+        finder.onFound { delivered.batches.append($0) }
+        return delivered
+    }
+
     private static func search(
         _ finder: TrailPointFinder,
         along route: [RouteCoordinate] = [],
@@ -109,15 +120,16 @@ struct TrailPointFinderTests {
     @Test("a launch with no source is not available")
     func aLaunchWithNoSourceIsNotAvailable() async {
         let finder = TrailPointFinder()
+        let delivered = Self.delivering(finder)
 
         Self.settled(finder)
         await Self.search(finder)
 
         #expect(!finder.isAvailable)
-        #expect(finder.rows.isEmpty, "and nothing was asked")
+        #expect(delivered.batches.isEmpty, "and nothing was asked")
     }
 
-    // MARK: - Which ones are offered
+    // MARK: - Which ones are added
 
     /// **The claim the feature rests on**, asserted on the ranking itself
     /// because it is only visible where there is more to offer than room: the
@@ -125,8 +137,8 @@ struct TrailPointFinderTests {
     /// and the far one is two kilometres north — but the *map's centre* is
     /// nearer the far one, so a ranking against the screen would keep exactly
     /// the wrong one.
-    @Test("what is offered is what is nearest the line, not nearest the map")
-    func candidatesAreRankedAgainstTheLine() {
+    @Test("what is added is what is nearest the line, not nearest the map")
+    func placesAreRankedAgainstTheLine() {
         let near = Self.place(47.6005, 12.92, name: "Near the path")
         let far = Self.place(47.62, 12.90, name: "Off in the woods")
 
@@ -140,76 +152,37 @@ struct TrailPointFinderTests {
         #expect(chosen.map(\.name) == ["Near the path"])
     }
 
-    /// What is *offered* is ranked against the line; what is **listed** is in
-    /// the order the line meets it, which is ``TrailPlaceOrder``'s rule and
-    /// the same one the marked places follow. A place too far off the line to
-    /// be described by it still sorts by where it passes, and simply carries
-    /// no figure.
-    @Test("what is offered is listed in the order the line meets it")
-    func candidatesAreListedAlongTheLine() async {
-        let early = Self.place(47.6005, 12.905, name: "Early")
-        let late = Self.place(47.6005, 12.935, name: "Late")
-        let aside = Self.place(47.62, 12.92, name: "Two kilometres north")
-        let finder = Self.finder(answering: [late, aside, early])
-
-        Self.settled(finder)
-        await Self.search(finder, along: Self.line)
-
-        #expect(finder.rows.map(\.place.name) == ["Early", "Two kilometres north", "Late"])
-        #expect(finder.rows.first?.anchor != nil, "it is on the walk and says where")
-        #expect(
-            finder.rows[1].anchor == nil,
-            "and this one is not, so it says nothing rather than something wrong"
-        )
-    }
-
-    /// A perfectly ordinary thing to do: marking the hut before drawing the
-    /// walk to it is the most useful order to work in, and there is no line to
-    /// rank against then.
-    @Test("with nothing drawn, what is offered is what is nearest the map")
-    func candidatesFallBackToTheMapCentre() async {
-        let close = Self.place(47.601, 12.901, name: "Close")
-        let distant = Self.place(47.65, 12.95, name: "Distant")
-        let finder = Self.finder(answering: [distant, close])
-
-        Self.settled(finder)
-        await Self.search(finder)
-
-        #expect(finder.rows.map(\.place.name) == ["Distant", "Close"], "unordered without a line")
-        #expect(finder.rows.allSatisfy { $0.anchor == nil }, "and nothing can be placed along one")
-    }
-
     /// 578 pins is not a map. What is kept is chosen once, when the answer
     /// lands — see ``TrailPointRanking``.
-    @Test("no more than the ceiling of results is ever offered")
-    func onlyTheNearestFewAreOffered() async {
+    @Test("no more than the ceiling of results is ever added")
+    func onlyTheNearestFewAreAdded() async {
         let many = (0..<(TrailPointQuery.maximumResults + 20)).map { index in
             Self.place(47.60 + Double(index) / 10_000, 12.92)
         }
         let finder = Self.finder(answering: many)
+        let delivered = Self.delivering(finder)
 
         Self.settled(finder)
         await Self.search(finder, along: Self.line)
 
-        #expect(finder.rows.count == TrailPointQuery.maximumResults)
+        #expect(delivered.batches.last?.count == TrailPointQuery.maximumResults)
     }
 
-    /// Without this a hiker sees their own hut with a second, provisional pin
-    /// under it, offering to add the hut again.
-    @Test("a place the hiker has already marked is not offered again")
-    func anAlreadyMarkedPlaceIsNotOffered() async {
-        let marked = Self.place(47.6005, 12.92, name: "The spring")
-        // The same spring as OpenStreetMap has it: a few metres off, because
-        // the hiker marked it by tapping the map.
+    /// Without this a second search over the same valley would put a second
+    /// pin on the spring the first one found.
+    @Test("a place already on the trail is not added again")
+    func aPlaceAlreadyOnTheTrailIsNotAdded() async {
+        let placed = Self.place(47.6005, 12.92, name: "The spring")
+        // The same spring a few metres off, as a second mapping has it.
         let same = Self.place(47.6006, 12.9201)
-        let elsewhere = Self.place(47.6005, 12.93)
+        let elsewhere = Self.place(47.6005, 12.93, name: "Elsewhere")
         let finder = Self.finder(answering: [same, elsewhere])
+        let delivered = Self.delivering(finder)
 
         Self.settled(finder)
-        await Self.search(finder, along: Self.line, avoiding: [marked])
+        await Self.search(finder, along: Self.line, avoiding: [placed])
 
-        #expect(finder.rows.count == 1)
-        #expect(finder.rows.first?.place.longitude == 12.93)
+        #expect(delivered.names == ["Elsewhere"])
     }
 
     // MARK: - What it says for itself
@@ -232,118 +205,85 @@ struct TrailPointFinderTests {
     @Test("places arriving say nothing at all")
     func placesArrivingSayNothing() async {
         let finder = Self.finder(answering: [Self.place(47.6005, 12.92)])
+        let delivered = Self.delivering(finder)
 
         Self.settled(finder)
         await Self.search(finder, along: Self.line)
 
         #expect(finder.notice == nil)
+        #expect(delivered.batches.count == 1)
     }
 
-    /// **Nothing here may ever block drawing**, and this is the sharpest form
-    /// of it: a refusal about the request that was going to replace the
-    /// candidates must not take the candidates away.
-    @Test("a refusal is reported beside what was already offered")
-    func aRefusalKeepsWhatWasOffered() async {
-        let stub = StubRefusingAfterOneAnswer(place: Self.place(47.6005, 12.92, name: "Spring"))
-        let finder = TrailPointFinder(source: stub)
-
-        Self.settled(finder)
-        await Self.search(finder, along: Self.line)
-        #expect(finder.rows.count == 1)
-
-        await Self.search(finder, along: Self.line)
-
-        #expect(finder.rows.count == 1, "the spring is still there and still true")
-        #expect(finder.notice == .outage(.busy))
-        #expect(finder.notice?.caption.isWarning == true, "and this one *is* a failure")
-    }
-
-    /// **What a refusal draws instead of an empty map.** Three of five first
+    /// **What a refusal adds instead of nothing.** Three of five first
     /// attempts came back `504` the day this was measured, and the valley may
     /// well have answered an hour ago — so the places already on this device
-    /// go down as candidates, and the caption still says the search failed.
-    @Test("a refused search draws what is already on this device, and still says it failed")
-    func aRefusalDrawsWhatIsStored() async {
+    /// are added, and the caption still says the search failed.
+    @Test("a refused search adds what is already on this device, and still says it failed")
+    func aRefusalAddsWhatIsStored() async {
         let stored = Self.place(47.6005, 12.92, name: "Kalte Quelle")
         let finder = TrailPointFinder(source: StubStoringSource(stored: [stored]))
+        let delivered = Self.delivering(finder)
 
         Self.settled(finder)
         await Self.search(finder, along: Self.line)
 
-        #expect(finder.rows.map(\.place.name) == ["Kalte Quelle"])
+        #expect(delivered.names == ["Kalte Quelle"])
         #expect(finder.notice == .outage(.busy), "it is still a refusal and still says so")
         #expect(finder.notice?.caption.isWarning == true)
     }
 
-    /// And the disk is not touched at all when there is already something on
-    /// offer, because a refusal never replaces candidates that are still true
-    /// — so reading every file in the cache directory would buy nothing.
-    @Test("a refusal with candidates already offered does not read the disk")
-    func aRefusalKeepsTheOfferAndReadsNothing() async {
-        let offered = Self.place(47.6005, 12.92, name: "Spring")
-        let stored = Self.place(47.6005, 12.93, name: "From the disk")
-        let source = StubStoringSource(stored: [stored], answeringFirst: [offered])
-        let finder = TrailPointFinder(source: source)
+    /// **Nothing here may ever block drawing**: a refusal after an answer adds
+    /// nothing new and takes nothing away — what the first search added is on
+    /// the trail, not in the finder.
+    @Test("a refusal after an answer only reports")
+    func aRefusalAfterAnAnswerOnlyReports() async {
+        let stub = StubRefusingAfterOneAnswer(place: Self.place(47.6005, 12.92, name: "Spring"))
+        let finder = TrailPointFinder(source: stub)
+        let delivered = Self.delivering(finder)
 
         Self.settled(finder)
         await Self.search(finder, along: Self.line)
+        #expect(delivered.names == ["Spring"])
+
         await Self.search(finder, along: Self.line)
 
-        #expect(finder.rows.map(\.place.name) == ["Spring"])
-        #expect(source.diskReads == 0, "nothing on the disk could have improved on this")
+        #expect(delivered.batches.last?.isEmpty == true, "nothing on this device to add")
+        #expect(finder.notice == .outage(.busy))
     }
 
-    /// A search that answered draws its answer and nothing else: the store is
+    /// A search that answered adds its answer and nothing else: the store is
     /// the failure path and only the failure path.
-    @Test("a search that answered never draws from the disk")
+    @Test("a search that answered never reads the disk")
     func anAnsweredSearchIgnoresTheDisk() async {
         let stored = Self.place(47.6005, 12.93, name: "From the disk")
         let found = Self.place(47.6005, 12.92, name: "From Overpass")
         let source = StubStoringSource(stored: [stored], answeringFirst: [found], alwaysAnswers: true)
         let finder = TrailPointFinder(source: source)
+        let delivered = Self.delivering(finder)
 
         Self.settled(finder)
         await Self.search(finder, along: Self.line)
 
-        #expect(finder.rows.map(\.place.name) == ["From Overpass"])
+        #expect(delivered.names == ["From Overpass"])
         #expect(source.diskReads == 0)
     }
 
     /// A superseded search is not a refusal. Reporting one would put a warning
     /// under the pill because the hiker closed the maker.
-    @Test("a cancelled search reports nothing")
+    @Test("a cancelled search reports and adds nothing")
     func aCancelledSearchReportsNothing() async {
         let finder = Self.finder(refusing: CancellationError())
+        let delivered = Self.delivering(finder)
 
         Self.settled(finder)
         await Self.search(finder)
 
         #expect(finder.notice == nil)
+        #expect(delivered.batches.isEmpty)
     }
 
-    // MARK: - Taking one
-
-    /// Taking a candidate takes its pin: a marked place's own pin arrives in
-    /// its place, and two pins on one spot is what this stops.
-    @Test("a candidate that is taken stops being offered")
-    func takingACandidateRemovesIt() async throws {
-        let finder = Self.finder(answering: [
-            Self.place(47.6005, 12.92, name: "One"),
-            Self.place(47.6005, 12.93, name: "Two"),
-        ])
-
-        Self.settled(finder)
-        await Self.search(finder, along: Self.line)
-
-        finder.take(try #require(finder.rows.first?.id))
-
-        #expect(finder.rows.map(\.place.name) == ["Two"])
-    }
-
-    /// Nothing on offer is the hiker's, so nothing survives the screen it was
-    /// offered on.
-    @Test("closing the maker forgets everything")
-    func clearingForgetsEverything() async {
+    @Test("closing the maker forgets the caption")
+    func clearingForgetsTheCaption() async {
         let finder = Self.finder(answering: [])
 
         Self.settled(finder)
@@ -352,30 +292,8 @@ struct TrailPointFinderTests {
 
         finder.clear()
 
-        #expect(finder.rows.isEmpty)
         #expect(finder.notice == nil)
-    }
-
-    /// A leg that finds a path moves every distance without the hiker having
-    /// touched anything, so the labels have to follow the line rather than the
-    /// search that found them.
-    @Test("a line that changes shape re-places what is on offer")
-    func aChangedLineRePlacesTheOffer() async throws {
-        let finder = Self.finder(answering: [Self.place(47.6005, 12.93, name: "Spring")])
-
-        Self.settled(finder)
-        await Self.search(finder, along: Self.line)
-        let before = finder.rows.first?.anchor?.distanceAlongRouteMeters
-
-        // The same walk, started a kilometre further west: everything on it is
-        // now further along.
-        finder.rerank(along: [
-            RouteCoordinate(latitude: 47.60, longitude: 12.88),
-            RouteCoordinate(latitude: 47.60, longitude: 12.94),
-        ])
-
-        let after = try #require(finder.rows.first?.anchor?.distanceAlongRouteMeters)
-        #expect(after > (try #require(before)))
+        #expect(!finder.isSearching)
     }
 }
 

@@ -5,8 +5,8 @@
 //  The two edits that can only be made on the map, against a real `MKMapView`.
 //
 //  Both are arithmetic in screen space and neither is reachable from the
-//  maker's screen: a tap on a leg *inserts* rather than appends, and a press
-//  on a pin takes hold of it. What decides either is where a thumb landed
+//  maker's screen: a stop added from a pin dropped on a leg goes *into* that
+//  leg, and a press on a pin takes hold of it. What decides either is where a thumb landed
 //  relative to something MapKit is drawing, so the only way to ask is to put a
 //  map on screen, aim it at a fixture and convert a point through it.
 //
@@ -71,13 +71,13 @@ extension MapCoordinatorTests {
         return map
     }
 
-    // MARK: Tapping a leg
+    // MARK: Pressing on a leg
 
-    /// The tap that makes a drawn trail editable rather than merely
+    /// The press that makes a drawn trail editable rather than merely
     /// extendable: the point lands *in* the leg, between its two ends, rather
     /// than on the end of the line.
-    @Test("a tap on a drawn leg puts a point into it")
-    func tapOnALegInserts() async throws {
+    @Test("a press on a drawn leg puts a point into it")
+    func pressOnALegInserts() async throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = await drawnLine(coordinator)
@@ -87,17 +87,13 @@ extension MapCoordinatorTests {
         let onTheLeg = CGPoint(x: map.bounds.midX, y: map.bounds.midY)
         #expect(coordinator.trailDraftLegIndex(at: onTheLeg, in: map) == 0)
 
-        // The tap drops a pin that *remembers* the leg, and *Add Stop* is what
-        // puts the point into it — see ``TrailDraftDroppedPin/legIndex``.
+        // The press drops a pin that *remembers* the leg, by its ends, and
+        // *Add Stop* is what puts the point into it — see
+        // ``TrailDraftDroppedPinSpot/leg``.
         #expect(coordinator.dropTrailDraftPin(at: onTheLeg, in: map))
-        let pin = try #require(coordinator.trailDraftDroppedPin)
-        #expect(pin.legIndex == 0, "the tap did not remember the leg it landed on")
-        coordinator.applyTrailDraftPin(
-            .addStop,
-            at: pin.coordinate,
-            legIndex: pin.legIndex,
-            in: map
-        )
+        let spot = try #require(trailMaker.droppedPin)
+        #expect(spot.leg == trailMaker.draft.legs.first?.ends, "the press did not remember the leg it landed on")
+        trailMaker.addStop(at: spot.clCoordinate, preferringLeg: spot.leg)
 
         #expect(trailMaker.draft.waypoints.count == 3)
         let inserted = try #require(trailMaker.draft.waypoints.dropFirst().first)
@@ -106,10 +102,10 @@ extension MapCoordinatorTests {
         #endif
     }
 
-    /// And a tap anywhere else remembers no leg, so its pin offers the verbs
-    /// of an empty drawing rather than an *Add Stop* with nowhere to go.
-    @Test("a tap away from every leg carries no leg")
-    func tapAwayFromALegCarriesNoLeg() throws {
+    /// And a press anywhere else remembers no leg, so *Add Stop* fills an open
+    /// field or finds the nearest leg itself.
+    @Test("a press away from every leg carries no leg")
+    func pressAwayFromALegCarriesNoLeg() throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
@@ -117,13 +113,12 @@ extension MapCoordinatorTests {
         map.setRegion(Self.drawnRegion(), animated: false)
         trailMaker.setEditing(true)
 
-        // No line drawn at all, so nothing can be tapped on.
+        // No line drawn at all, so nothing can be pressed on.
         let anywhere = CGPoint(x: map.bounds.midX, y: map.bounds.midY)
         #expect(coordinator.trailDraftLegIndex(at: anywhere, in: map) == nil)
         #expect(coordinator.dropTrailDraftPin(at: anywhere, in: map))
-        let pin = try #require(coordinator.trailDraftDroppedPin)
-        #expect(pin.legIndex == nil)
-        #expect(pin.actions == [.startHere, .markAPlace])
+        let spot = try #require(trailMaker.droppedPin)
+        #expect(spot.leg == nil)
         #endif
     }
 
