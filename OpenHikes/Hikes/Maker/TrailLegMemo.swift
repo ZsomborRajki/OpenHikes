@@ -44,6 +44,7 @@
 //
 
 import Foundation
+import OrderedCollections
 
 /// The settled leg shapes a drawing has been given, bounded.
 nonisolated struct TrailLegMemo: Equatable, Sendable {
@@ -56,10 +57,10 @@ nonisolated struct TrailLegMemo: Equatable, Sendable {
     /// growing.
     static let capacity = 256
 
-    private var shapes: [TrailLegEnds: TrailLeg] = [:]
-    /// The keys in the order they were first written, which is what an
-    /// eviction takes from the front of.
-    private var order: [TrailLegEnds] = []
+    /// In the order each pair of ends was first written, which is what an
+    /// eviction takes from the front of. Writing a pair again replaces its
+    /// shape where it stands.
+    private var shapes: OrderedDictionary<TrailLegEnds, TrailLeg> = [:]
 
     var isEmpty: Bool { shapes.isEmpty }
     var count: Int { shapes.count }
@@ -71,10 +72,8 @@ nonisolated struct TrailLegMemo: Equatable, Sendable {
     /// about the leg rather than about the caller.
     mutating func remember(_ leg: TrailLeg) {
         guard Self.isWorthRemembering(leg.snap) else { return }
-        if shapes.updateValue(leg, forKey: leg.ends) == nil {
-            order.append(leg.ends)
-            evictIfNeeded()
-        }
+        shapes.updateValue(leg, forKey: leg.ends)
+        shapes.evictOldest(beyond: Self.capacity)
     }
 
     mutating func remember(_ legs: [TrailLeg]) {
@@ -102,12 +101,6 @@ nonisolated struct TrailLegMemo: Equatable, Sendable {
         case .freehand, .refused, .directionsUnavailable, .routing: false
         }
     }
-
-    private mutating func evictIfNeeded() {
-        while order.count > Self.capacity {
-            shapes.removeValue(forKey: order.removeFirst())
-        }
-    }
 }
 
 /// A router's settled answers by their two ends, bounded the way the memo is.
@@ -119,9 +112,8 @@ nonisolated struct TrailLegMemo: Equatable, Sendable {
 /// a question, which for the trail graph is usually answered from the tiles
 /// on disk.
 nonisolated struct TrailLegAnswerCache: Sendable {
-    private var answers: [TrailLegEnds: TrailLegRoute] = [:]
-    /// The keys in the order they were first answered.
-    private var order: [TrailLegEnds] = []
+    /// In the order each pair of ends was first answered.
+    private var answers: OrderedDictionary<TrailLegEnds, TrailLegRoute> = [:]
 
     var count: Int { answers.count }
 
@@ -130,9 +122,15 @@ nonisolated struct TrailLegAnswerCache: Sendable {
     /// Keeps `route` as the answer for `ends`. Only a settled answer belongs
     /// here — a refusal is never cached, so *Try Again* can ask again.
     mutating func store(_ route: TrailLegRoute, for ends: TrailLegEnds) {
-        if answers.updateValue(route, forKey: ends) == nil { order.append(ends) }
-        while order.count > TrailLegMemo.capacity {
-            answers.removeValue(forKey: order.removeFirst())
-        }
+        answers.updateValue(route, forKey: ends)
+        answers.evictOldest(beyond: TrailLegMemo.capacity)
+    }
+}
+
+nonisolated private extension OrderedDictionary {
+    /// Drops the entries written first until at most `capacity` are left.
+    mutating func evictOldest(beyond capacity: Int) {
+        guard count > capacity else { return }
+        removeFirst(count - capacity)
     }
 }

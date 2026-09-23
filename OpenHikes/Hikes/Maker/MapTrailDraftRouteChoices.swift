@@ -24,6 +24,7 @@
 //  the point went nowhere.
 //
 
+import Algorithms
 import MapKit
 import SwiftUI
 #if canImport(UIKit)
@@ -269,7 +270,7 @@ extension MapView.Coordinator {
     static func midpoint(of shape: [RouteCoordinate]) -> CLLocationCoordinate2D {
         let points = shape.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
         guard let first = points.first else { return kCLLocationCoordinate2DInvalid }
-        let lengths = zip(points, points.dropFirst()).map { RouteGeometry.distanceMeters(from: $0, to: $1) }
+        let lengths = points.adjacentPairs().map { RouteGeometry.distanceMeters(from: $0, to: $1) }
         var remaining = lengths.reduce(0, +) / 2
         for (index, length) in lengths.enumerated() {
             guard remaining > length else {

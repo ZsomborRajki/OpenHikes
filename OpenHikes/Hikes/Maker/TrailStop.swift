@@ -8,6 +8,7 @@
 //  keeps them.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 
@@ -170,8 +171,8 @@ nonisolated enum TrailStopSlot: Hashable, Sendable, Identifiable {
     /// `reorderContainer` reports a drop as. A target that is itself being
     /// moved, or is not there, is the end.
     static func rearranged(_ ids: [String], moving sources: [String], before target: String?) -> [String] {
-        var rest = ids.filter { !sources.contains($0) }
-        let moving = ids.filter { sources.contains($0) }
+        let (staying, moving) = ids.partitioned { sources.contains($0) }
+        var rest = staying
         let index = target.flatMap { rest.firstIndex(of: $0) } ?? rest.endIndex
         rest.insert(contentsOf: moving, at: index)
         return rest
