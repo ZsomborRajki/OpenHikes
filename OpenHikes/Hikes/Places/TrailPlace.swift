@@ -293,6 +293,19 @@ nonisolated struct TrailPlaceAnchor: Equatable, Sendable {
     var describesTheRoute: Bool {
         offRouteMeters <= Self.describableOffRouteMeters
     }
+
+    /// How far off the line a place may sit and still be one a hiker walking
+    /// it passes — what a save keeps. See ``TrailPlaceOrder/touched(_:along:)``.
+    ///
+    /// Much tighter than ``describableOffRouteMeters``, because this is a
+    /// claim about walking to it rather than a label. A spring or a junction
+    /// on a snapped leg is a node of the way the leg follows and sits at
+    /// nothing; what needs the slack is a hut, which Overpass answers as the
+    /// centre of its building rather than the door the path reaches, and a
+    /// summit whose path stops a few metres short of the survey point. The
+    /// same figure as ``TrailWalkPolicy/reachedEndProximityMeters``, the
+    /// radius at which a walk counts as having got somewhere.
+    static let touchedOffRouteMeters: Double = 50
 }
 
 /// One place with where it sits, which is what a list row and a callout are
@@ -362,6 +375,26 @@ nonisolated enum TrailPlaceOrder {
             travelled += length
         }
         return best
+    }
+
+    /// The places of `places` a hiker walking `route` passes, in the order
+    /// they were given — what a save keeps of a drawing's places.
+    ///
+    /// A search puts everything it found near the line onto the drawing, so
+    /// the drawing holds the viewpoint two hundred metres up a side path and
+    /// the summit across the valley alongside the spring on the climb. Those
+    /// are worth seeing while the route is still being decided, and noise on
+    /// a trail that is finished. Empty for a route with fewer than two points,
+    /// which nothing can be on.
+    static func touched(
+        _ places: [TrailPlace],
+        along route: [RouteCoordinate]
+    ) -> [TrailPlace] {
+        let anchors = anchors(of: places, along: route)
+        return places.filter { place in
+            guard let anchor = anchors[place.id] else { return false }
+            return anchor.offRouteMeters <= TrailPlaceAnchor.touchedOffRouteMeters
+        }
     }
 
     /// `places` in the order they are met walking the line, with where each
