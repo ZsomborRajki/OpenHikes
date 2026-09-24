@@ -146,8 +146,8 @@ final class RouteStyle {
     static let defaultTint: Color = .green
     static let defaultWidth: Double = 3
     static let defaultPattern: RouteLinePattern = .default
-    /// No border — the transparent ``Hike/routeBorderHex`` every hike starts
-    /// with, so a hike that never picked one draws as it always did.
+    /// No border — what the empty ``Hike/routeBorderHex`` every hike starts
+    /// with resolves to, so a hike that never picked one draws as it always did.
     static let defaultBorder: Color = .clear
 
     /// Written only through ``apply(tint:width:pattern:border:)``, which restates the

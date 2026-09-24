@@ -59,9 +59,10 @@ final class Hike {
     /// unrecognised value degrades to the default instead of failing to decode.
     var routeLinePatternID: String = RouteLinePattern.default.rawValue
     /// The colour of the outline drawn around the map polyline — see
-    /// ``RouteBorder``. Stored like ``tintHex``, and fully transparent until
-    /// the hiker picks one, which is what "no border" is.
-    var routeBorderHex: String = "#00000000"
+    /// ``RouteBorder``. Stored like ``tintHex``, and empty until the hiker
+    /// picks one, which draws as clear. After that, "no border" is a colour
+    /// faded to zero opacity.
+    var routeBorderHex: String = ""
     /// SF Symbol shown in the row's colored circle.
     var symbol: String = "figure.hiking"
     /// Ordered track points making up the route.

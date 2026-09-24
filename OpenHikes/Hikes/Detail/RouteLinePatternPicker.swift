@@ -164,15 +164,29 @@ struct RouteLinePatternSwatch: View {
         let chevrons = metrics.map { chevronPath(for: $0, width: size.width, midY: midY) }
         let borderWidth = RouteBorder.width(forLineWidth: lineWidth)
 
-        // Underneath everything, as on the map: a ring round the line's own
-        // stroke, and the chevrons again, widened, so the outline is the
-        // silhouette of both.
+        // Underneath everything, as on the map: the line again, wider, with
+        // the line cleared back out of it, and the chevrons again, widened,
+        // so the outline is the silhouette of both.
         if pattern.drawsLine {
-            context.stroke(
-                line.strokedPath(lineStyle),
-                with: .color(border),
-                style: StrokeStyle(lineWidth: borderWidth * 2, lineJoin: .round)
+            let dashes = RouteBorder.dashes(
+                outlining: pattern.dashLengths(forWidth: lineWidth),
+                cap: pattern.lineCap,
+                borderWidth: borderWidth
             )
+            context.stroke(
+                line,
+                with: .color(border),
+                style: StrokeStyle(
+                    lineWidth: lineWidth + borderWidth * 2,
+                    lineCap: pattern.lineCap,
+                    lineJoin: .round,
+                    dash: dashes.lengths.map { CGFloat($0) },
+                    dashPhase: dashes.phase
+                )
+            )
+            var knockout = context
+            knockout.blendMode = .clear
+            knockout.stroke(line, with: .color(.black), style: lineStyle)
         }
         if let metrics, let chevrons {
             context.stroke(
