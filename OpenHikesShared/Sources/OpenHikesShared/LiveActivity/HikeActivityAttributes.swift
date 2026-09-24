@@ -133,6 +133,13 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
         /// from the turn, and a panel that could not tell them apart would
         /// say 100% to a hiker who had done half.
         public var coveredFractionComplete: Double?
+        /// Following only: how long the rest of the trail takes at the walk's
+        /// own pace — see ``SharedTrailSnapshot/Walk/secondsLeft``. `nil` for
+        /// a recording, a plain follow, and a walk with nothing to say yet.
+        ///
+        /// Not part of what makes an update worth sending: it moves with the
+        /// figures that are, and rides along on their updates.
+        public var secondsLeft: TimeInterval?
         /// Whether fixes are being taken, deliberately not, or done with.
         ///
         /// Three cases rather than a paused flag because the third one is
@@ -179,6 +186,7 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
             pointCount: Int? = nil,
             offRouteMeters: Double? = nil,
             coveredFractionComplete: Double? = nil,
+            secondsLeft: TimeInterval? = nil,
             runState: RunState = .running,
             elapsedSeconds: TimeInterval = 0,
             updatedAt: Date = .now,
@@ -191,6 +199,7 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
             self.pointCount = pointCount
             self.offRouteMeters = offRouteMeters
             self.coveredFractionComplete = coveredFractionComplete
+            self.secondsLeft = secondsLeft
             self.runState = runState
             self.elapsedSeconds = elapsedSeconds
             self.updatedAt = updatedAt

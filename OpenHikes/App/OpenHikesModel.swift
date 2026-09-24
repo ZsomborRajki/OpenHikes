@@ -198,12 +198,8 @@ final class OpenHikesModel {
         self.hikeRecorder = hikeRecorder
         // The recorder stays the single authority on which hike is a draft;
         // the session only asks.
-        self.walkSession = walkSession ?? TrailWalkSession(
-            context: container.mainContext,
-            tracker: backgroundTracker,
-            reminders: movementReminders,
-            activeRecordingHikeID: { [weak hikeRecorder] in hikeRecorder?.currentHike?.id }
-        )
+        self.walkSession = walkSession
+            ?? Self.makeWalkSession(container, backgroundTracker, movementReminders, hikeRecorder, weatherManager)
         self.communityTransport = communityTransport
         trailMaker = Self.makeTrailMaker(container: container, graph: trailGraphProvider, defaults: defaults)
         placePins = TrailPlacePinController(defaults: defaults)

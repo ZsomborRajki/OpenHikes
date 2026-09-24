@@ -71,7 +71,7 @@ final class MovementReminderActions: NSObject {
         // defaulted so that a later kind gaining a verb fails the build here
         // instead of silently doing nothing — which is what it did when
         // `.severeWeather` was added.
-        case .leftTheTrail, .severeWeather: break
+        case .afterDark, .leftTheTrail, .severeWeather: break
         case .pauseRecording: await pauseRecording()
         case .resumeRecording: await resumeRecording()
         case .resumeWalk: walkSession?.resume()

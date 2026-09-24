@@ -89,6 +89,12 @@ struct TrailProgressView: View {
         let fraction = walked ?? profile.fractionComplete(atDistance: distance) ?? 0
         let percent = Int((fraction * 100).rounded())
         let caption = walked == nil ? "\(percent)%" : "\(percent)% walked"
+        // How long that is, while a walk is under way — the rest of the route
+        // at this walk's own pace. Read here, per matched fix, for the reason
+        // the coverage is: this row and nothing above it redraws.
+        let timeLeft = walked == nil ? nil : walk?.secondsLeft()
+        let left = timeLeft.map { "\(Self.length(remaining)) · \(HikeFormat.travelTime($0)) left" }
+            ?? "\(Self.length(remaining)) left"
 
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
@@ -101,7 +107,7 @@ struct TrailProgressView: View {
 
                 Spacer()
 
-                Text("\(caption) · \(Self.length(remaining)) left")
+                Text("\(caption) · \(left)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -125,6 +131,7 @@ struct TrailProgressView: View {
                 "\(percent) percent walked, "
                     + "\(Self.length(fraction * profile.totalDistanceMeters)) covered, "
                     + "\(Self.length(remaining)) remaining"
+                    + (timeLeft.map { ", about \(HikeFormat.spokenTravelTime($0)) to go" } ?? "")
             } ?? "\(percent) percent, \(Self.length(remaining)) remaining"
         )
         .accessibilityIdentifier("trail-progress")
