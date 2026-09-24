@@ -86,6 +86,31 @@ struct TrailPlaceCorridorSearchTests {
         #expect(areas.allSatisfy { $0.radiusMeters <= TrailPointQuery.maximumRadiusMeters })
     }
 
+    @Test("a line with a segment longer than a stretch is still asked about all along it")
+    func sparseLineIsCovered() {
+        // Two points 30 km apart: a gap no stretch can hold whole, which used
+        // to become one circle wider than the query answers.
+        let far = RouteCoordinate(
+            latitude: Line.south + 30_000 / RouteGeometry.metersPerDegreeLatitude,
+            longitude: Line.longitude
+        )
+        let route = [Line.short[0], far]
+        let areas = TrailPlaceCorridorSearch.areas(along: route)
+
+        #expect(areas.count > 1)
+        #expect(areas.allSatisfy { $0.radiusMeters <= TrailPlaceCorridorSearch.stretchRadiusMeters })
+        for kilometre in 0...30 {
+            let point = CLLocationCoordinate2D(
+                latitude: Line.south + Double(kilometre) * 1000 / RouteGeometry.metersPerDegreeLatitude,
+                longitude: Line.longitude
+            )
+            let covered = areas.contains { area in
+                RouteGeometry.distanceMeters(from: area.coordinate, to: point) <= area.radiusMeters
+            }
+            #expect(covered, "kilometre \(kilometre) is in no circle")
+        }
+    }
+
     @Test("a single point is nothing to ask about")
     func singlePointIsNothing() {
         #expect(TrailPlaceCorridorSearch.areas(along: [Line.short[0]]).isEmpty)
@@ -101,7 +126,7 @@ struct TrailPlaceCorridorSearchTests {
 
         let kept = TrailPlaceCorridorSearch.kept([near, far, first, near], along: Line.short, excluding: [])
 
-        #expect(kept.map(\.osm?.elementID) == [2, 1])
+        #expect(kept.map(\.place.osm?.elementID) == [2, 1])
     }
 
     @Test("what the hike already holds is left out, by element and by place")
@@ -117,7 +142,7 @@ struct TrailPlaceCorridorSearchTests {
             excluding: [held]
         )
 
-        #expect(kept.map(\.osm?.elementID) == [4])
+        #expect(kept.map(\.place.osm?.elementID) == [4])
     }
 
     // MARK: Asking
@@ -163,10 +188,11 @@ struct TrailPlaceCorridorSearchTests {
         let car = Self.place(2, latitude: 47.61, symbol: .parking)
         let search = HikePlaceSearch()
 
-        search.start(for: hike, source: AnsweringSource(answer: [spring, car]), showing: Set(TrailPlaceSymbol.allCases))
-        for _ in 0..<10_000 where search.phase == .searching {
-            await Task.yield()
-        }
+        await search.start(
+            for: hike,
+            source: AnsweringSource(answer: [spring, car]),
+            showing: Set(TrailPlaceSymbol.allCases)
+        ).value
         search.toggle(car.id)
         let added = search.add(to: hike, in: context)
 
@@ -179,14 +205,14 @@ struct TrailPlaceCorridorSearchTests {
         let search = HikePlaceSearch()
         let spring = Self.place(1, latitude: 47.605)
 
-        search.receive(.init(places: [spring], outage: nil), along: Line.short)
+        search.receive(.init(rows: [TrailPlaceRow(place: spring, anchor: nil)], outage: nil))
         #expect(search.chosen == [spring.id])
         #expect(search.canAdd)
 
         search.toggle(spring.id)
         #expect(search.canAdd == false)
 
-        search.receive(.init(places: [], outage: .busy), along: Line.short)
+        search.receive(.init(rows: [], outage: .busy))
         #expect(search.phase == .failed(.busy))
     }
 }

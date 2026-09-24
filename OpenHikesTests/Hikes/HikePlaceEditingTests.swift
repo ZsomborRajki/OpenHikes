@@ -102,12 +102,30 @@ struct HikePlaceEditingTests {
                 // place by the rule the maker's search uses.
                 Self.hut(7, latitude: 47.61009),
                 Self.own(),
-                Self.own(),
+                // One answer naming one element twice.
+                Self.hut(8, latitude: 47.615),
+                Self.hut(8, latitude: 47.615),
             ],
             in: context
         )
 
-        #expect(added.count == 1)
+        #expect(added.count == 2)
+        #expect(hike.places.count == 3)
+    }
+
+    @Test("two found places a few metres apart both go in, as the list offered them")
+    func addingKeepsFoundNeighbours() throws {
+        let (hike, context) = try hike()
+        let spring = TrailPlace(
+            latitude: 47.61005,
+            longitude: Line.longitude,
+            symbol: .water,
+            osm: TrailPlaceOSM(elementType: "node", elementID: 9)
+        )
+
+        let added = hike.addPlaces([Self.hut(), spring], in: context)
+
+        #expect(added.count == 2)
         #expect(hike.places.count == 2)
     }
 

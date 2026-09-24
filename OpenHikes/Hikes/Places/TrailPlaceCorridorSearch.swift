@@ -52,17 +52,23 @@ nonisolated enum TrailPlaceCorridorSearch {
 
     /// The most stretches one search makes: a trail of a couple of hundred
     /// kilometres. Past that, the stretches grow rather than multiply — see
-    /// ``areas(along:)``.
+    /// ``areas(along:)`` — until they reach the query's own ceiling, and a
+    /// line longer than twelve of those (235 km if it were straight, less as
+    /// it winds) is searched only as far as the twelfth. Picked by reasoning,
+    /// not measured against Overpass.
     static let maximumAreas = 12
 
     /// What a search found, and whether any stretch of it was refused.
     struct Outcome: Equatable, Sendable {
         /// The places the line passes, in the order they are met walking it,
-        /// less any the hike already holds.
-        var places: [TrailPlace]
+        /// less any the hike already holds — with where each sits, worked out
+        /// here off the main actor rather than again by the sheet.
+        var rows: [TrailPlaceRow]
         /// The first refusal, if any stretch was refused. What was found
         /// elsewhere on the line is in ``places`` either way.
         var outage: CuratedTrailOutage?
+
+        var places: [TrailPlace] { rows.map(\.place) }
     }
 
     /// The circles a search asks about, in order along the line.
@@ -71,7 +77,8 @@ nonisolated enum TrailPlaceCorridorSearch {
     /// pass `radius`, and the next begins at the point that did not fit — so
     /// consecutive stretches share that point and no piece of line is left
     /// between them. A line that needs more than ``maximumAreas`` stretches is
-    /// cut again with a wider radius, up to the query's own ceiling.
+    /// cut again with a wider radius, up to the query's own ceiling; one that
+    /// still needs more at the ceiling keeps the first ``maximumAreas``.
     static func areas(along route: [RouteCoordinate]) -> [CommunitySearchArea] {
         guard route.count > 1 else { return [] }
         var radius = stretchRadiusMeters
@@ -88,7 +95,7 @@ nonisolated enum TrailPlaceCorridorSearch {
     private static func areas(along route: [RouteCoordinate], radius: Double) -> [CommunitySearchArea] {
         var result: [CommunitySearchArea] = []
         var box = Box(route[0])
-        for point in route.dropFirst() {
+        for point in densified(route, step: radius - marginMeters).dropFirst() {
             var grown = box
             grown.include(point)
             if grown.radiusMeters + marginMeters <= radius {
@@ -101,6 +108,37 @@ nonisolated enum TrailPlaceCorridorSearch {
             }
         }
         result.append(box.area(margin: marginMeters))
+        return result
+    }
+
+    /// `route` with points added along any segment longer than `step`, so no
+    /// two neighbours are further apart than that.
+    ///
+    /// The cut above only ever checks a stretch as it grows, and a stretch
+    /// that starts afresh holds two points whatever their distance. A sparse
+    /// imported file — a gap in a recording, a planner that wrote a point
+    /// every twenty kilometres — would make that one segment a circle wider
+    /// than ``TrailPointQuery/maximumRadiusMeters``, which the query answers
+    /// with nothing rather than an error, so the stretch would be skipped
+    /// without a word. Straight lines between the two ends are enough: the
+    /// circle only has to hold the segment, not follow the ground.
+    private static func densified(_ route: [RouteCoordinate], step: Double) -> [RouteCoordinate] {
+        guard step > 0 else { return route }
+        var result: [RouteCoordinate] = [route[0]]
+        for (from, to) in zip(route, route.dropFirst()) {
+            let length = RouteGeometry.distanceMeters(from: from.clCoordinate, to: to.clCoordinate)
+            let pieces = Int((length / step).rounded(.up))
+            if pieces > 1 {
+                for index in 1..<pieces {
+                    let fraction = Double(index) / Double(pieces)
+                    result.append(RouteCoordinate(
+                        latitude: from.latitude + (to.latitude - from.latitude) * fraction,
+                        longitude: from.longitude + (to.longitude - from.longitude) * fraction
+                    ))
+                }
+            }
+            result.append(to)
+        }
         return result
     }
 
@@ -129,7 +167,7 @@ nonisolated enum TrailPlaceCorridorSearch {
             }
         }
         let wanted = found.filter { place in place.symbol.map(symbols.contains) ?? true }
-        return Outcome(places: kept(wanted, along: route, excluding: held), outage: outage)
+        return Outcome(rows: kept(wanted, along: route, excluding: held), outage: outage)
     }
 
     /// Of `found`, one of each element, the ones the line passes and the hike
@@ -141,7 +179,7 @@ nonisolated enum TrailPlaceCorridorSearch {
         _ found: [TrailPlace],
         along route: [RouteCoordinate],
         excluding held: [TrailPlace]
-    ) -> [TrailPlace] {
+    ) -> [TrailPlaceRow] {
         var seen: Set<String> = []
         let unique = found.filter { place in
             guard let osm = place.osm else { return true }
@@ -153,7 +191,7 @@ nonisolated enum TrailPlaceCorridorSearch {
             guard let osm = place.osm else { return true }
             return !heldElements.contains("\(osm.elementType)/\(osm.elementID)")
         }
-        return TrailPlaceOrder.ordered(fresh, along: route).map(\.place)
+        return TrailPlaceOrder.ordered(fresh, along: route)
     }
 
     /// A stretch's bounding box, in degrees.
@@ -234,17 +272,18 @@ final class HikePlaceSearch {
         return rows.contains { chosen.contains($0.id) }
     }
 
-    /// Asks about `hike`'s line.
-    func start(
+    /// Asks about `hike`'s line. Answers the search, which a test awaits
+    /// rather than yielding until the phase moves.
+    @discardableResult func start(
         for hike: Hike,
         source: any TrailPointSourcing,
         showing symbols: Set<TrailPlaceSymbol>
-    ) {
+    ) -> Task<Void, Never> {
         task?.cancel()
         phase = .searching
         let route = hike.route
         let held = hike.places
-        task = Task { [weak self] in
+        let search = Task { [weak self] in
             let outcome: TrailPlaceCorridorSearch.Outcome
             do {
                 outcome = try await TrailPlaceCorridorSearch.search(
@@ -257,19 +296,20 @@ final class HikePlaceSearch {
                 return
             }
             guard let self, !Task.isCancelled else { return }
-            receive(outcome, along: route)
+            receive(outcome)
         }
+        task = search
+        return search
     }
 
-    func receive(_ outcome: TrailPlaceCorridorSearch.Outcome, along route: [RouteCoordinate]) {
-        if outcome.places.isEmpty, let outage = outcome.outage {
+    func receive(_ outcome: TrailPlaceCorridorSearch.Outcome) {
+        if outcome.rows.isEmpty, let outage = outcome.outage {
             Self.logger.info("A search along a trail was refused: \(String(describing: outage), privacy: .public)")
             phase = .failed(outage)
             return
         }
-        let rows = TrailPlaceOrder.ordered(outcome.places, along: route)
-        chosen = Set(rows.map(\.id))
-        phase = .found(rows, outage: outcome.outage)
+        chosen = Set(outcome.rows.map(\.id))
+        phase = .found(outcome.rows, outage: outcome.outage)
     }
 
     func toggle(_ id: UUID) {

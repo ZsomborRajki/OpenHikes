@@ -89,18 +89,20 @@ final class NearbyPlaceFinder {
 
     nonisolated deinit { /* intentionally empty */ }
 
-    func start(
+    /// Asks what is around `coordinate`. Answers the search, which a test
+    /// awaits rather than yielding until ``isSearching`` moves.
+    @discardableResult func start(
         around coordinate: CLLocationCoordinate2D,
         excluding held: [TrailPlace],
         from source: any TrailPointSourcing
-    ) {
+    ) -> Task<Void, Never> {
         task?.cancel()
         isSearching = true
         outage = nil
         let area = NearbyPlaceSuggestions.area(around: coordinate)
         let latitude = coordinate.latitude
         let longitude = coordinate.longitude
-        task = Task { [weak self] in
+        let search = Task { [weak self] in
             let here = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
             let stored = await source.cachedPlaces(near: area, limit: TrailPointQuery.maximumStoredResults)
             guard let self, !Task.isCancelled else { return }
@@ -115,6 +117,8 @@ final class NearbyPlaceFinder {
             }
             isSearching = false
         }
+        task = search
+        return search
     }
 
     func cancel() {
