@@ -79,6 +79,7 @@ import Algorithms
 import CoreLocation
 import Foundation
 import Observation
+import OpenHikesShared
 
 @Observable
 final class TrailDraft {
@@ -240,6 +241,40 @@ final class TrailDraft {
     /// The whole line's time at this mode's pace, or Apple Maps' where it said.
     var travelTime: TimeInterval {
         legs.reduce(0) { $0 + travelTime(of: $1.path) }
+    }
+
+    /// The whole line's time once its climb is counted — what the header and
+    /// the route's bubble say.
+    ///
+    /// Hiking only, and only once ``TrailDraftElevation`` has measured the
+    /// line: DIN 33466 over the whole route (``WalkingTimeEstimate``), which
+    /// is the flat pace plus what the ascent and descent add. Every other
+    /// mode, and a hiking line with no heights yet, is ``travelTime`` as it
+    /// was — Apple Maps' own estimate already knows its roads, and a flat
+    /// pace is the honest fallback while the climb is settling.
+    func travelTime(climb: RouteElevationSummary?) -> TimeInterval {
+        travelTime * climbFactor(climb)
+    }
+
+    /// How much longer than ``travelTime`` the line takes on foot once its
+    /// climb is counted: 1 outside hiking, or without heights.
+    ///
+    /// A factor rather than a replacement so the alternatives on the map can
+    /// be scaled by it too. A way on offer has not been measured — only the
+    /// line drawn has — so it is assumed to climb like the route it would
+    /// join, which is closer than assuming it is flat.
+    func climbFactor(_ climb: RouteElevationSummary?) -> Double {
+        guard travelMode == .hiking,
+              let gain = climb?.gainMeters,
+              let loss = climb?.lossMeters else { return 1 }
+        let flat = travelTime
+        guard flat > 0 else { return 1 }
+        let climbed = WalkingTimeEstimate.seconds(
+            distanceMeters: distanceMeters,
+            ascentMeters: gain,
+            descentMeters: loss
+        )
+        return max(1, climbed / flat)
     }
 
     /// Where the pins go. The points themselves, never the resolved shape.

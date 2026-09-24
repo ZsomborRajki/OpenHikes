@@ -150,10 +150,20 @@ extension MapView.Coordinator {
     /// map and stays there across a commit — see `MapTrailDraftOverlay.swift`
     /// — so they are inserted below the lowest of its legs rather than added
     /// on top of them.
-    func addTrailDraftRouteChoices(for legs: [TrailLeg], of draft: TrailDraft, to mapView: MKMapView) {
+    ///
+    /// Every time is scaled by the route's climb factor in hiking mode — see
+    /// ``TrailDraft/climbFactor(_:)`` — so the route's bubble says what the
+    /// header says.
+    func addTrailDraftRouteChoices(
+        for legs: [TrailLeg],
+        of draft: TrailDraft,
+        climb: RouteElevationSummary?,
+        to mapView: MKMapView
+    ) {
         removeTrailDraftRouteChoices(from: mapView)
         var layer = TrailDraftRouteChoiceLayer()
-        let legTimes = legs.map { draft.travelTime(of: $0.path) }
+        let factor = draft.climbFactor(climb)
+        let legTimes = legs.map { draft.travelTime(of: $0.path) * factor }
         let tripTime = legTimes.reduce(0, +)
         if !legs.isEmpty, !legs.contains(where: \.snap.isRouting) {
             layer.times.append(TrailDraftTravelTimeAnnotation(
@@ -176,7 +186,7 @@ extension MapView.Coordinator {
                     choice: choice,
                     // What the route's own bubble would read with this way
                     // taken: the trip, less this leg's time, plus this one's.
-                    travelTime: tripTime - legTimes[legIndex] + draft.travelTime(of: path)
+                    travelTime: tripTime - legTimes[legIndex] + draft.travelTime(of: path) * factor
                 ))
             }
         }
