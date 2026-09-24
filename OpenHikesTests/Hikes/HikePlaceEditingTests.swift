@@ -224,6 +224,17 @@ struct HikePlaceEditingTests {
         #expect(ownCard.provenance != hutCard.provenance)
     }
 
+    @Test("a place's card reads its glyph, colour and note off the place")
+    func cardPassesThePlaceThrough() {
+        let place = TrailPlace(latitude: 47.61, longitude: Line.longitude, symbol: .water, note: "Cold")
+        let card = HikePlaceCard(row: TrailPlaceRow(place: place, anchor: nil))
+        #expect(card.systemImage == TrailPlaceSymbol.water.systemImageName)
+        #expect(card.tint == TrailPlaceSymbol.water.tint)
+        #expect(card.coordinate.latitude == 47.61)
+        #expect(card.note == "Cold")
+        #expect(card.subtitle == nil, "an unnamed spring is titled by its kind, and a subtitle would repeat it")
+    }
+
     @Test("a removed place has no card")
     func removedPlaceHasNoCard() throws {
         let (hike, context) = try hike()
