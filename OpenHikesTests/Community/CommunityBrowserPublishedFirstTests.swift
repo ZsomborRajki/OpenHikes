@@ -140,4 +140,58 @@ struct CommunityBrowserPublishedFirstTests {
         #expect(transport.recording.nearbyScopes == [.withCuratedTrails, .withCuratedTrails])
         #expect(browser.nearbyListings.map(\.id) == ["somebody-else", "trail"])
     }
+
+    /// A published half whose lines failed is not a published half with
+    /// lines. Before the early rows, one outline request followed the whole
+    /// answer; the whole answer still has to ask again for any the first
+    /// request did not bring, or a blip leaves the hiker's own hikes lineless.
+    @Test("lines the published half failed to get are asked for again")
+    func failedEarlyLinesAreAskedAgain() async {
+        let transport = StubCommunityTransport()
+        let gate = AsyncGate()
+        transport.listingsResult = .success([.stub(id: "published")])
+        transport.curatedHalf = (rows: [Self.trail], gate: gate)
+        transport.outlinesResult = .failure(.unreachable)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        // The nearby request is held at the gate, so one in flight is it.
+        while transport.recording.outlineRequests.isEmpty || browser.requestsInFlight > 1 {
+            await Task.yield()
+        }
+
+        transport.outlinesResult = .success(["published": Self.outline, "trail": Self.outline])
+        await gate.open()
+        await settle(browser)
+
+        #expect(transport.recording.outlineRequests == [["published"], ["published", "trail"]])
+        #expect(browser.routeLines.map(\.id) == ["published", "trail"])
+    }
+
+    /// A failure brings no rows, so it cannot turn the published half on
+    /// screen into a whole answer — and a return visit that believed it had
+    /// would never ask for the trails.
+    @Test("a failed refill over the published half still asks again on return")
+    func failedRefillStillAsksAgain() async {
+        let blocks = CommunityBlockList.scratch()
+        let (browser, transport, gate) = await publishedHalfDrawn(
+            [.stub(id: "theirs", authorID: "author-1")],
+            blockList: blocks
+        )
+
+        transport.listingsResult = .failure(.unreachable)
+        blocks.block(.stub(authorID: "author-1"))
+        browser.refreshAfterBlock()
+        await gate.open()
+        await settle(browser)
+        #expect(browser.state == .failed(.unreachable))
+
+        browser.stopBrowsing()
+        transport.listingsResult = .success([.stub(id: "somebody-else", authorID: "author-2")])
+        browser.startBrowsing()
+        await settle(browser)
+
+        #expect(transport.recording.nearbyScopes == [.withCuratedTrails, .withCuratedTrails, .withCuratedTrails])
+        #expect(browser.nearbyListings.map(\.id) == ["somebody-else", "trail"])
+    }
 }
