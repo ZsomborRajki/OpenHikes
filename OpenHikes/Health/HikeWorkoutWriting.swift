@@ -68,6 +68,13 @@ nonisolated struct HikeWorkoutRequest: Equatable, Sendable {
     /// points carried a trusted altitude, which is a fact about the walk
     /// rather than a zero.
     let elevationGainMeters: Double?
+    /// The descent, off the same accumulator and by the same rule —
+    /// ``RecordingDistanceAccumulator/elevationLossMeters``. `nil` exactly
+    /// when ``elevationGainMeters`` is.
+    let elevationLossMeters: Double?
+    /// The weather the walk was taken in, or `nil` when the app holds no
+    /// reading that is about this walk — see ``HikeWorkoutWeather``.
+    let weather: HikeWorkoutWeather?
     /// The saved line, for the map on the workout itself.
     let route: [RouteCoordinate]
 }

@@ -254,6 +254,20 @@ struct RecordingDistanceTests {
         #expect(try #require(accumulator.elevationGainMeters) == 80)
     }
 
+    /// The descent Health is handed beside the climb comes off the same
+    /// accumulator, by the same rule — so it is cumulative too, and the
+    /// last drop counts before the walk climbs again.
+    @Test("descent is summed over every drop, the run in progress included")
+    func descentIsCumulative() throws {
+        var accumulator = RecordingDistanceAccumulator()
+        for (step, elevation) in [540.0, 500, 540, 490].enumerated() {
+            accumulator.append(walkingPoint(step: step, elevation: elevation))
+        }
+
+        #expect(try #require(accumulator.elevationLossMeters) == 90)
+        #expect(try #require(accumulator.elevationGainMeters) == 40)
+    }
+
     /// One height is a position, not a change. Claiming "0 m climbed" from a
     /// single fix would put a chip on the widget the data can't support.
     @Test("a single altitude is not yet a climb")
@@ -262,6 +276,7 @@ struct RecordingDistanceTests {
         accumulator.append(walkingPoint(step: 0, elevation: 500))
 
         #expect(accumulator.elevationGainMeters == nil)
+        #expect(accumulator.elevationLossMeters == nil)
     }
 
     /// A recording indoors, or on a phone whose altitude never passes the

@@ -120,6 +120,14 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
         elevation.hasChange ? elevation.gainMeters : nil
     }
 
+    /// Metres descended so far, by the same rule as
+    /// ``elevationGainMeters`` — the same accumulator, the same deadband and
+    /// the same barometric fusion upstream of it — and `nil` in the same
+    /// case. Never retracted, for the same reason the climb is not.
+    var elevationLossMeters: Double? {
+        elevation.hasChange ? elevation.lossMeters : nil
+    }
+
     /// Feeds one accepted fix in and reports the distance total after it.
     ///
     /// The three measures are updated in one place because this is the one

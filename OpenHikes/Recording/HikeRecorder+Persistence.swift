@@ -227,18 +227,27 @@ extension HikeRecorder {
     /// route and no half-finished builder behind, so unlike a file written
     /// outside SwiftData this needs no owner and no sweep.
     ///
-    /// The ascent comes off the accumulator rather than from the saved line:
-    /// it is barometrically fused where the device had a barometer, and
-    /// re-deriving it from route altitudes would be a second opinion that
-    /// could only disagree with the figure the hike itself shows.
+    /// The ascent and descent come off the accumulator rather than from the
+    /// saved line: they are barometrically fused where the device had a
+    /// barometer, and re-deriving them from route altitudes would be a second
+    /// opinion that could only disagree with the figures the hike itself
+    /// shows. The weather is read here, at save, and only kept if it is
+    /// about this walk — see ``HikeWorkoutWeather``.
     private func exportToHealth(_ hike: Hike, prepared: PreparedRecording) {
         guard let workoutWriter, savesHikesToHealth else { return }
+        let endedAt = prepared.startedAt.addingTimeInterval(prepared.recordedSeconds)
         let request = HikeWorkoutRequest(
             hikeID: hike.id,
             startedAt: prepared.startedAt,
-            endedAt: prepared.startedAt.addingTimeInterval(prepared.recordedSeconds),
+            endedAt: endedAt,
             distanceMeters: prepared.distanceMeters,
             elevationGainMeters: accumulator.elevationGainMeters,
+            elevationLossMeters: accumulator.elevationLossMeters,
+            weather: HikeWorkoutWeather(
+                state: weatherState(),
+                walkFrom: prepared.startedAt,
+                to: endedAt
+            ),
             route: prepared.route
         )
         Task { [container] in

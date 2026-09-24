@@ -17,6 +17,7 @@
 //  before the hike itself is safely saved, and not twice.
 //
 
+import CoreLocation
 import Foundation
 @testable import OpenHikes
 import SwiftData
@@ -97,6 +98,63 @@ struct HikeHealthExportTests {
         #expect(request.route.count == Harness.routePointCount)
     }
 
+    /// Descent beside ascent, off the recording's own accumulator rather
+    /// than re-derived from the saved line — the figures the hike shows.
+    @Test("the request carries the descent as well as the climb")
+    func theRequestCarriesTheDescent() async throws {
+        let harness = try harness(savesToHealth: .on)
+        for (step, elevation) in [600.0, 700, 640].enumerated() {
+            harness.recorder.accumulator.append(
+                RecordingPoint(
+                    latitude: 47.63 + Double(step) * 0.001,
+                    longitude: 12.86,
+                    timestamp: Self.startedAt.addingTimeInterval(Double(step) * 60),
+                    horizontalAccuracy: 8,
+                    elevation: elevation
+                )
+            )
+        }
+        _ = try harness.persist()
+        await harness.settle()
+
+        let request = try #require(harness.writer.written.first)
+        #expect(request.elevationGainMeters == 100)
+        #expect(request.elevationLossMeters == 60)
+    }
+
+    /// The badge's reading is attached when it is about the hiker and was
+    /// taken during the walk — the rule itself is `HikeWorkoutWeatherTests`'.
+    @Test("a reading taken during the walk goes with it")
+    func aReadingFromTheWalkIsAttached() async throws {
+        let reading = WeatherSnapshot(
+            symbolName: "cloud.sun.fill",
+            temperature: Measurement(value: 14, unit: UnitTemperature.celsius),
+            conditionDescription: "Partly Cloudy",
+            capturedAt: Self.startedAt.addingTimeInterval(600),
+            conditions: .preview
+        )
+        let harness = try harness(
+            savesToHealth: .on,
+            weather: .reading(reading, subject: .me(.init(latitude: 47.63, longitude: 12.86)))
+        )
+        _ = try harness.persist()
+        await harness.settle()
+
+        let request = try #require(harness.writer.written.first)
+        #expect(request.weather?.temperature == reading.temperature)
+        #expect(request.weather?.humidity == reading.conditions.humidity)
+    }
+
+    @Test("with no reading, the workout carries no weather")
+    func noReadingMeansNoWeather() async throws {
+        let harness = try harness(savesToHealth: .on)
+        _ = try harness.persist()
+        await harness.settle()
+
+        let request = try #require(harness.writer.written.first)
+        #expect(request.weather == nil)
+    }
+
     /// The identifier names a record in *this* device's Health store, which is
     /// why it belongs on `HikeLocalState` rather than on the mirrored row.
     @Test("the workout identifier is filed against the hike once the write lands")
@@ -142,8 +200,11 @@ struct HikeHealthExportTests {
 
     // MARK: - Harness
 
-    private func harness(savesToHealth: Harness.Switch) throws -> Harness {
-        try Harness(savesToHealth: savesToHealth, startedAt: Self.startedAt)
+    private func harness(
+        savesToHealth: Harness.Switch,
+        weather: WeatherBadgeState = .idle
+    ) throws -> Harness {
+        try Harness(savesToHealth: savesToHealth, startedAt: Self.startedAt, weather: weather)
     }
 
     @MainActor
@@ -166,7 +227,7 @@ struct HikeHealthExportTests {
             case on
         }
 
-        init(savesToHealth: Switch, startedAt: Date) throws {
+        init(savesToHealth: Switch, startedAt: Date, weather: WeatherBadgeState) throws {
             self.startedAt = startedAt
             let container = try Fixture.modelContainer()
             context = container.mainContext
@@ -188,6 +249,7 @@ struct HikeHealthExportTests {
                     observesNotifications: false
                 ),
                 workoutWriter: stub,
+                weatherState: { weather },
                 journalDirectory: nil,
                 automaticallyRecovers: false
             )
