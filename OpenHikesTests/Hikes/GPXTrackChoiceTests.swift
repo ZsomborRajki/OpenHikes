@@ -64,18 +64,49 @@ struct GPXTrackChoiceTests {
         #expect(await answer.isEmpty)
     }
 
-    /// Two sheets cannot be up at once, and the first question would otherwise
-    /// wait for an answer nobody can give.
-    @Test("a second question answers the first with none")
-    func aSecondQuestionEndsTheFirst() async {
+    /// Two files opened together ask together, and "none" deletes an inbox
+    /// copy — so the second must wait rather than answer the first for it.
+    @Test("a second question waits for the first to be answered")
+    func aSecondQuestionWaits() async {
         let choice = GPXTrackChoice()
         async let first = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A", "B"]), unplacedWaypoints: 0)
         await asked(choice)
         async let second = choice.ask(fileName: "b.gpx", tracks: Self.tracks(["C", "D"]), unplacedWaypoints: 0)
+        // A third, so the turn is seen to be handed down a queue rather than
+        // to whoever asked last. The two start concurrently, so which of them
+        // is second is not the test's to fix — only that each gets its turn.
+        async let third = choice.ask(fileName: "c.gpx", tracks: Self.tracks(["E"]), unplacedWaypoints: 0)
 
-        #expect(await first.isEmpty)
-        await settleDelegateHop(until: "the second question") { choice.question?.fileName == "b.gpx" }
+        await settleDelegateHop(until: "both to queue behind the first") { choice.waitingCount == 2 }
+
+        #expect(choice.question?.fileName == "a.gpx", "the first stays up")
+        choice.toggle(0)
         choice.confirm()
+        #expect(await first == [1])
+
+        var answered: Set<String> = []
+        for _ in 0..<2 {
+            await settleDelegateHop(until: "the next question") {
+                choice.question.map { !answered.contains($0.fileName) } ?? false
+            }
+            answered.insert(choice.question?.fileName ?? "")
+            choice.confirm()
+        }
+        #expect(answered == ["b.gpx", "c.gpx"])
         #expect(await second == [0, 1])
+        #expect(await third == [0])
+        #expect(choice.question == nil)
+    }
+
+    /// The sheet's binding writes `nil` back as it closes after Import; that
+    /// must not count as an answer to whatever is asked next.
+    @Test("a cancel with nothing up answers nothing")
+    func aStrayCancelAnswersNothing() async {
+        let choice = GPXTrackChoice()
+        choice.cancel()
+        async let answer = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A", "B"]), unplacedWaypoints: 0)
+        await asked(choice)
+        choice.confirm()
+        #expect(await answer == [0, 1])
     }
 }

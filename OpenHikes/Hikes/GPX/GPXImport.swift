@@ -208,41 +208,6 @@ nonisolated enum GPXImport {
         var unplacedWaypoints = 0
     }
 
-    /// ``loadAll(from:limits:)`` without occupying the main actor — see
-    /// ``loadOffMain(from:limits:)`` for what that does and does not buy.
-    @concurrent
-    static func loadAllOffMain(
-        from url: URL,
-        limits: Limits = .standard
-    ) async throws(ImportFailure) -> Contents {
-        assertOffMainThread(
-            "GPX parsing and route preparation must stay off the main thread"
-        )
-        return try loadAll(from: url, limits: limits)
-    }
-
-    /// Parses and prepares a picked file without occupying the main actor.
-    ///
-    /// `@concurrent` rather than a detached task: the parse stays inside the
-    /// importing task's tree, and the caller's priority carries through
-    /// instead of being pinned here.
-    ///
-    /// What that does not buy is cancellation. `XMLParser.parse()` is
-    /// synchronous and checks nothing, so abandoning the import abandons the
-    /// *result* — the parse runs to completion regardless. What bounds it is
-    /// ``Limits``: the file-size check before this, and the point ceiling the
-    /// delegate aborts on.
-    @concurrent
-    static func loadOffMain(
-        from url: URL,
-        limits: Limits = .standard
-    ) async throws(ImportFailure) -> Track {
-        assertOffMainThread(
-            "GPX parsing and route preparation must stay off the main thread"
-        )
-        return try load(from: url, limits: limits)
-    }
-
     private static func contents(of document: ParsedDocument, limits: Limits) throws(ImportFailure) -> Contents {
         // Chosen on what the file *contains*, not on what survives validation,
         // which is what keeps a file full of unprojectable `<trkpt>` reporting
@@ -250,14 +215,18 @@ nonisolated enum GPXImport {
         // handful of turn markers in its place.
         let hasGeometryOfItsOwn = document.trackSegments.contains { !$0.points.isEmpty }
             || document.routeSegments.contains { !$0.points.isEmpty }
-        let source = if document.trackSegments.contains(where: { !$0.points.isEmpty }) {
-            document.trackSegments
+        // The words go with the flavour the points came from: a segment's
+        // container index counts `<rte>`s when the line is routes, so reading
+        // it against the `<trk>` table would name a route after an empty
+        // track that happened to share its number.
+        let (source, words) = if document.trackSegments.contains(where: { !$0.points.isEmpty }) {
+            (document.trackSegments, document.trackWords)
         } else if document.routeSegments.contains(where: { !$0.points.isEmpty }) {
-            document.routeSegments
+            (document.routeSegments, document.routeWords)
         } else {
             // Waypoints have no container to belong to — they are loose
             // children of `<gpx>` — so the whole file is the one container.
-            [ParsedSegment(containerIndex: 0, points: document.waypoints)]
+            ([ParsedSegment(containerIndex: 0, points: document.waypoints)], document.trackWords)
         }
 
         let usable: [(container: Int, points: [Point])] = source.compactMap { segment in
@@ -272,11 +241,17 @@ nonisolated enum GPXImport {
         guard containers.count <= limits.maximumTrackCount else { throw .tooLarge }
         guard containers.count > 1 else {
             let segments = usable.map(\.points)
-            let track = singleTrack(from: document, segments: segments, hasGeometryOfItsOwn: hasGeometryOfItsOwn)
+            let track = singleTrack(
+                from: document,
+                words: words.of(usable[0].container),
+                segments: segments,
+                hasGeometryOfItsOwn: hasGeometryOfItsOwn
+            )
             return Contents(tracks: [track])
         }
         return splitTracks(
             from: document,
+            words: words,
             containers: containers.map { container, segments in (container, segments.map(\.points)) }
         )
     }
@@ -285,11 +260,12 @@ nonisolated enum GPXImport {
     /// and waypoints all belong to it.
     private static func singleTrack(
         from document: ParsedDocument,
+        words: ContainerWords.Entry,
         segments: [[Point]],
         hasGeometryOfItsOwn: Bool
     ) -> Track {
         Track(
-            name: nonEmpty(document.trackNames[0])
+            name: nonEmpty(words.name)
                 ?? nonEmpty(document.metadataName),
             // Bounded here, where the file enters, for the reason
             // ``HikeTitle`` bounds the name two lines up — see
@@ -301,8 +277,8 @@ nonisolated enum GPXImport {
             // because a description that is present is the one the hiker
             // meant even when it is too long.
             trackDescription: BoundedText.bounded(
-                nonEmpty(document.trackDescriptions[0])
-                    ?? nonEmpty(document.trackComments[0])
+                nonEmpty(words.description)
+                    ?? nonEmpty(words.comment)
                     ?? nonEmpty(document.metadataDescription),
                 to: .notes
             ),
@@ -341,6 +317,7 @@ nonisolated enum GPXImport {
     /// on, and one that lies on none of them is dropped rather than guessed.
     private static func splitTracks(
         from document: ParsedDocument,
+        words: ContainerWords,
         containers: [(container: Int, segments: [[Point]])]
     ) -> Contents {
         let routes = containers.map { container in
@@ -354,11 +331,11 @@ nonisolated enum GPXImport {
         let photographsByTrack = GPXTrackSplit.assign(photographs, at: \.coordinate, to: routes)
         let placed = placesByTrack.joined().count + photographsByTrack.joined().count
         let tracks = containers.enumerated().map { offset, container in
-            Track(
-                name: nonEmpty(document.trackNames[container.container]),
+            let own = words.of(container.container)
+            return Track(
+                name: nonEmpty(own.name),
                 trackDescription: BoundedText.bounded(
-                    nonEmpty(document.trackDescriptions[container.container])
-                        ?? nonEmpty(document.trackComments[container.container]),
+                    nonEmpty(own.description) ?? nonEmpty(own.comment),
                     to: .notes
                 ),
                 author: BoundedText.bounded(document.metadataAuthor, to: .credit),
@@ -541,18 +518,30 @@ nonisolated private extension GPXImport {
         var points: [ParsedPoint] = []
     }
 
+    /// The `<name>`, `<desc>` and `<cmt>` of each `<trk>`, or of each `<rte>`,
+    /// by container index.
+    private struct ContainerWords {
+        struct Entry {
+            var name, description, comment: String?
+        }
+
+        var entries: [Int: Entry] = [:]
+
+        func of(_ container: Int) -> Entry { entries[container] ?? Entry() }
+    }
+
     private struct ParsedDocument {
         var metadataName: String?
         var metadataDescription: String?
         var metadataAuthor: String?
         var metadataKeywords: String?
         var metadataTime: Date?
-        /// Each `<trk>`'s own `<name>`, `<desc>` and `<cmt>`, by its index in
-        /// the file — the same index a segment's ``ParsedSegment/containerIndex``
-        /// carries, so a track's words and its points meet by number.
-        var trackNames: [Int: String] = [:]
-        var trackDescriptions: [Int: String] = [:]
-        var trackComments: [Int: String] = [:]
+        /// Each `<trk>`'s own `<name>`, `<desc>` and `<cmt>`, and each
+        /// `<rte>`'s, by its index among its own kind — the same index a
+        /// segment's ``ParsedSegment/containerIndex`` carries, so a track's
+        /// words and its points meet by number.
+        var trackWords = ContainerWords()
+        var routeWords = ContainerWords()
         var trackSegments: [ParsedSegment] = []
         var routeSegments: [ParsedSegment] = []
         var waypoints: [ParsedPoint] = []
@@ -754,11 +743,25 @@ nonisolated private extension GPXImport {
             case Element.name where isMetadataAuthorChild: document.metadataAuthor = value
             case Element.keywords where isDirectChild(of: Element.metadata): document.metadataKeywords = value
             case Element.time where isDirectChild(of: Element.metadata): document.metadataTime = date(from: value)
-            case Element.name where isTrackChild: document.trackNames[currentTrackIndex] = value
-            case Element.description where isTrackChild: document.trackDescriptions[currentTrackIndex] = value
-            case Element.comment where isTrackChild: document.trackComments[currentTrackIndex] = value
             case Element.trackPoint, Element.routePoint, Element.waypoint: finishPoint(element)
-            default: break
+            default: applyContainerWord(value, for: element)
+            }
+        }
+
+        /// A `<trk>`'s or `<rte>`'s own `<name>`, `<desc>` or `<cmt>`, filed
+        /// under its container's index.
+        private func applyContainerWord(_ value: String, for element: String) {
+            let field: WritableKeyPath<ContainerWords.Entry, String?>
+            switch element {
+            case Element.name: field = \.name
+            case Element.description: field = \.description
+            case Element.comment: field = \.comment
+            default: return
+            }
+            if isTrackChild {
+                document.trackWords.entries[currentTrackIndex, default: .init()][keyPath: field] = value
+            } else if isRouteChild {
+                document.routeWords.entries[currentRouteIndex, default: .init()][keyPath: field] = value
             }
         }
 
@@ -771,6 +774,10 @@ nonisolated private extension GPXImport {
 
         private var isTrackChild: Bool {
             currentTrackIndex >= 0 && isDirectChild(of: Element.track)
+        }
+
+        private var isRouteChild: Bool {
+            currentRouteIndex >= 0 && isDirectChild(of: Element.route)
         }
 
         private var isMetadataAuthorChild: Bool {

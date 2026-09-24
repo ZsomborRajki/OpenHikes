@@ -120,11 +120,10 @@ nonisolated extension GPXImport {
 
         var recoverySuggestion: String? {
             switch self {
-            // Says what the app would otherwise have had to invent, because
-            // that is the part the hiker can't see for themselves: the file
-            // opens fine everywhere else, and the damage would only show up
-            // later as a straight line across the map and a length nobody
-            // walked.
+            // Never raised by the screen — cancelling the choice is the
+            // hiker's own answer — so this is read only where a caller cannot
+            // ask, ``HikeImport/hike(from:into:save:)``, and says what the
+            // asking path would have done.
             case .multipleTracks: "Each track imports as a hike of its own. Choose at least one to import the file."
             // Deliberately covers "it isn't GPX at all" as well — see the case's
             // own note for why that lands here.

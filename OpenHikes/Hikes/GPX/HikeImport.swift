@@ -61,6 +61,9 @@ nonisolated enum HikeImportFailure: LocalizedError, Equatable, Sendable {
     var errorDescription: String? {
         switch self {
         case .file(let failure): failure.errorDescription
+        // One of several picked is the common case — a folder of walks with
+        // one bad file in it — so the count is said in the singular too.
+        case .several(let failures) where failures.count == 1: "1 file couldn't be imported."
         case .several(let failures): "\(failures.count) files couldn't be imported."
         case .notSaved: "This hike couldn't be saved."
         }
