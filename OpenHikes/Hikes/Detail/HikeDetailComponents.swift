@@ -128,10 +128,13 @@ struct TrailProgressView: View {
         // heard a distance in metres followed by one in miles.
         .accessibilityValue(
             walked.map { fraction in
+                // The time before the distance left rather than after it, so
+                // "remaining" stays the last thing said — and the last field,
+                // which is what the walk suite reads the distance off.
                 "\(percent) percent walked, "
                     + "\(Self.length(fraction * profile.totalDistanceMeters)) covered, "
+                    + (timeLeft.map { "about \(HikeFormat.spokenTravelTime($0)) to go, " } ?? "")
                     + "\(Self.length(remaining)) remaining"
-                    + (timeLeft.map { ", about \(HikeFormat.spokenTravelTime($0)) to go" } ?? "")
             } ?? "\(percent) percent, \(Self.length(remaining)) remaining"
         )
         .accessibilityIdentifier("trail-progress")
