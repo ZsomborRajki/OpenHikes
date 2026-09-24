@@ -7,8 +7,8 @@
 //  Two sources, one pin. While the maker is up they come from
 //  ``TrailDraft/places``, and a tap opens the maker's place sheet — see
 //  `MapTrailDraftSelection.swift`. On a hike that has been saved they come
-//  from its ``TrailPoint`` rows through ``TrailPlacePinController`` and show
-//  MapKit's own callout with the note, read-only. One annotation class
+//  from its ``TrailPoint`` rows through ``TrailPlacePinController`` and a tap
+//  opens the place's own screen — see ``HikePlaceView``. One annotation class
 //  carrying ``TrailPlaceAnnotation/belongsToDraft`` rather than two nearly
 //  identical ones: the pin, the glyph and the colour are the same thing said
 //  about the same place.
@@ -29,6 +29,7 @@
 //
 
 import MapKit
+import OpenHikesShared
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -44,7 +45,7 @@ final class TrailPlaceAnnotation: NSObject, MKAnnotation {
     /// no line yet, or too far off it to describe. See ``TrailPlaceAnchor``.
     let anchor: TrailPlaceAnchor?
     /// Whether this is the drawing's place, which opens the place sheet, rather
-    /// than a saved hike's, which opens a read-only callout.
+    /// than a saved hike's, which opens the place's screen.
     let belongsToDraft: Bool
 
     @objc var title: String? { place.displayName }
@@ -113,27 +114,24 @@ extension MapView.Coordinator {
         view.displayPriority = .required
         view.markerTintColor = UIColor(annotation.place.tint)
         view.accessibilityIdentifier = annotation.belongsToDraft ? "trail-draft-place" : "hike-place"
-        // A saved hike's place says its note in MapKit's own callout; the
-        // drawing's opens the place sheet instead.
-        view.detailCalloutAccessoryView = annotation.belongsToDraft ? nil : Self.noteLabel(annotation.place.note)
         #endif
-        view.canShowCallout = !annotation.belongsToDraft
+        // Neither kind shows a callout: the drawing's opens the place sheet
+        // and a saved hike's opens the place's screen — see
+        // ``selectHikePlaceAnnotation(_:on:)``.
+        view.canShowCallout = false
         return view
     }
 
-    #if os(iOS)
-    private static let noteWidth: CGFloat = 220
-
-    private static func noteLabel(_ note: String) -> UILabel? {
-        guard !note.isEmpty else { return nil }
-        let label = UILabel()
-        label.text = note
-        label.numberOfLines = 0
-        label.font = .preferredFont(forTextStyle: .footnote)
-        label.adjustsFontForContentSizeCategory = true
-        label.textColor = .secondaryLabel
-        label.preferredMaxLayoutWidth = noteWidth
-        return label
+    /// A tap on one of a saved hike's place pins, which opens that place's
+    /// screen. Answers whether it was one.
+    func selectHikePlaceAnnotation(_ view: MKAnnotationView, on mapView: MKMapView) -> Bool {
+        guard let place = view.annotation as? TrailPlaceAnnotation, !place.belongsToDraft else { return false }
+        // Deselected at once, as the maker's pins are: an annotation left
+        // selected swallows the next tap on it.
+        mapView.deselectAnnotation(place, animated: false)
+        if hikePlaceController?.open(place.place.id) == true {
+            HapticMoment.targetHit.play()
+        }
+        return true
     }
-    #endif
 }

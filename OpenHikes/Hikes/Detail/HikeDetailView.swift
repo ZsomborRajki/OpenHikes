@@ -48,6 +48,9 @@ struct HikeDetailView: View {
     /// Draws this hike's marked places on the map while this screen is up.
     /// See ``TrailPlacePinController``.
     var placePins: TrailPlacePinController?
+    /// Where *Find Places Along Trail* asks, and which kinds it asks for. See
+    /// ``HikePlaceSection``.
+    var placeSearch: TrailPlaceSearchScope?
     /// How this hike is offered to the community, or `nil` for a launch that
     /// must not reach CloudKit — see
     /// ``OpenHikesModel/makeCommunityTransport()``. Taken as a dependency
@@ -56,6 +59,8 @@ struct HikeDetailView: View {
     var communityTransport: (any CommunityTransporting)?
     /// Pushes the full-space viewer for a tapped thumbnail.
     var onOpenPhoto: (HikePhoto) -> Void = { _ in /* no-op default */ }
+    /// Pushes one of this hike's places. See ``HikePlaceView``.
+    var onOpenPlace: (UUID) -> Void = { _ in /* no-op default */ }
     /// Pushes a finished walk's summary — from the History segment's rows,
     /// and from End.
     var onOpenWalk: (HikeWalk) -> Void = { _ in /* no-op default */ }
@@ -646,15 +651,9 @@ private extension HikeDetailView {
     /// The places marked along this trail, and the pins that draw them.
     ///
     /// Its own view for the reason every other section here is one — see
-    /// ``HikePlaceSection``, which also carries why this screen only *reads*
-    /// them.
+    /// ``HikePlaceSection``.
     private var placeSection: some View {
-        HikePlaceSection(hike: hike, mapPins: placePins) { place in
-            // The same span a photograph's *Show on map* frames, because it is
-            // the same question — see ``MapController/showPhotoSpot(_:)``.
-            mapController.showPhotoSpot(place.clCoordinate)
-            onZoomToRoute()
-        }
+        HikePlaceSection(hike: hike, mapPins: placePins, search: placeSearch, onOpen: onOpenPlace)
     }
 
     // MARK: Trail data

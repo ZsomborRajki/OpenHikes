@@ -140,11 +140,16 @@ nonisolated enum CommunityStaging {
     ///
     /// The file names are positional, so a caller must not reorder afterwards.
     ///
+    /// - Parameter places: The ids of the places going with this upload. A
+    ///   photograph filed under one of them says so in its pin; any other
+    ///   ``HikePhoto/placeID`` is left behind. Empty for a contribution to
+    ///   somebody else's trail, whose places are not the contributor's.
     /// - Returns: The pins, the files and the ids, in upload order.
     static func stagePhotos(
         _ photos: [HikePhoto],
         into directory: URL,
-        store: HikePhotoStore
+        store: HikePhotoStore,
+        places: Set<UUID> = []
     ) -> StagedPhotos {
         try? FileManager.default.createDirectory(
             at: directory,
@@ -162,7 +167,11 @@ nonisolated enum CommunityStaging {
             ) else { continue }
             staged.fileURLs.append(url)
             staged.pins.append(
-                CommunityPhotoPin(capturedAt: photo.capturedAt, coordinate: photo.coordinate)
+                CommunityPhotoPin(
+                    capturedAt: photo.capturedAt,
+                    coordinate: photo.coordinate,
+                    placeID: photo.placeID.flatMap { places.contains($0) ? $0 : nil }
+                )
             )
             staged.photoIDs.append(photo.id)
         }
@@ -197,7 +206,7 @@ nonisolated enum CommunityStaging {
     }
 }
 
-/// What one pass of ``CommunityStaging/stagePhotos(_:into:store:)`` wrote.
+/// What one pass of ``CommunityStaging/stagePhotos(_:into:store:places:)`` wrote.
 ///
 /// Three arrays that describe each other index for index — a pin, a file and
 /// the row it came from — and never the photographs that were asked for. See

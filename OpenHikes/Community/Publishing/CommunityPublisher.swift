@@ -45,6 +45,9 @@ nonisolated struct SharedHikeDetails: Sendable {
     var hikeDate: Date
     var distanceMeters: Double
     var route: [RouteCoordinate]
+    /// Every place marked along the route, in walking order. Always all of
+    /// them: a place is part of the trail, as its name is.
+    var places: [CommunityPlace] = []
 }
 
 /// A draft, and which of the hike's photographs actually went into it.
@@ -156,7 +159,8 @@ nonisolated enum CommunityPublisher {
             trackDescription: hike.trackDescription,
             hikeDate: hike.date,
             distanceMeters: hike.distanceMeters,
-            route: hike.route
+            route: hike.route,
+            places: hike.orderedPlaces.map { CommunityPlace($0.place) }
         )
         let photos = selectedPhotos(of: hike, excluding: excluded)
 
@@ -398,7 +402,15 @@ nonisolated enum CommunityPublisher {
         in directory: URL,
         store: HikePhotoStore
     ) async -> StagedSubmission {
-        let staged = CommunityStaging.stagePhotos(photos, into: directory, store: store)
+        // A photograph says which place it is of only when that place is in
+        // this share — a link to one removed on another device would name
+        // nothing at the other end.
+        let staged = CommunityStaging.stagePhotos(
+            photos,
+            into: directory,
+            store: store,
+            places: Set(details.places.map(\.id))
+        )
         let draft = CommunitySubmissionDraft(
             hikeID: details.hikeID,
             title: details.title,
@@ -407,6 +419,7 @@ nonisolated enum CommunityPublisher {
             hikeDate: details.hikeDate,
             distanceMeters: details.distanceMeters,
             route: details.route,
+            places: details.places,
             photoPins: staged.pins,
             photoFileURLs: staged.fileURLs,
             stagingDirectory: directory

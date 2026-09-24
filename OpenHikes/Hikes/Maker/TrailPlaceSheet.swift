@@ -100,29 +100,12 @@ private struct TrailPlaceCardView: View {
         VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
             header
             actions
-            if !card.facts.isEmpty {
-                StatList(title: String(localized: "Details")) {
-                    ForEach(card.facts, id: \.self, content: TrailPlaceFactRow.init)
-                }
-            }
-            StatList(title: String(localized: "Location")) {
-                if let address {
-                    StatRow(label: String(localized: "Address"), value: address)
-                        .accessibilityIdentifier("trail-place-address")
-                }
-                StatRow(
-                    label: String(localized: "Coordinates"),
-                    value: TrailPlaceCoordinates.text(card.coordinate)
-                )
-                .textSelection(.enabled)
-                .accessibilityIdentifier("trail-place-coordinates")
-                if let url = card.openStreetMapURL {
-                    Link(destination: url) {
-                        Label("View on OpenStreetMap", systemImage: "arrow.up.right.square")
-                    }
-                    .trailPlaceRow()
-                }
-            }
+            TrailPlaceFactsAndLocation(
+                facts: card.facts,
+                address: address,
+                coordinate: card.coordinate,
+                openStreetMapURL: card.openStreetMapURL
+            )
         }
         .padding(.horizontal)
         .padding(.top, Self.topPadding)
@@ -142,12 +125,7 @@ private struct TrailPlaceCardView: View {
 
     private var header: some View {
         PlaceCardHeader {
-            Image(systemName: card.systemImage)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(card.tint, in: .circle)
-                .accessibilityHidden(true)
+            TrailPlaceBadge(systemImage: card.systemImage, tint: card.tint)
         } title: {
             Text(card.title)
                 .lineLimit(2)
@@ -268,80 +246,5 @@ private struct TrailPlaceCardView: View {
         }
         .buttonBorderShape(.roundedRectangle(radius: TrailPlaceActionLabelStyle.cornerRadius))
         .accessibilityIdentifier(identifier)
-    }
-}
-
-/// Apple Maps' action buttons: the glyph over one short word.
-///
-/// Three of them share the card's width, which at the default type size is a
-/// little over a hundred points each — too narrow for a glyph *beside* "Remove
-/// Pin", which is how they wrapped onto two lines when they were drawn that
-/// way. Stacked, each word has its button's whole width to itself.
-private struct TrailPlaceActionLabelStyle: LabelStyle {
-    static let cornerRadius: CGFloat = 14
-
-    func makeBody(configuration: Configuration) -> some View {
-        VStack(spacing: 4) {
-            configuration.icon
-                .font(.body.weight(.semibold))
-                .imageScale(.medium)
-            configuration.title
-                .font(.caption.weight(.semibold))
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.vertical, 6)
-    }
-}
-
-/// One thing OpenStreetMap says about a place, in words.
-private struct TrailPlaceFactRow: View {
-    let fact: TrailPlaceFact
-
-    var body: some View {
-        switch fact.kind {
-        case .website:
-            if let url = URL(string: fact.value), url.scheme?.hasPrefix("http") == true {
-                TrailPlaceLinkRow(label: fact.kind.label, title: fact.value, destination: url)
-            } else {
-                StatRow(label: fact.kind.label, value: fact.value)
-            }
-        case .phone:
-            let digits = fact.value.filter { $0.isNumber || $0 == "+" }
-            if let url = URL(string: "tel:\(digits)"), !digits.isEmpty {
-                TrailPlaceLinkRow(label: fact.kind.label, title: fact.value, destination: url)
-            } else {
-                StatRow(label: fact.kind.label, value: fact.value)
-            }
-        default:
-            StatRow(label: fact.kind.label, value: fact.displayValue)
-        }
-    }
-}
-
-/// A ``StatRow`` whose value is a link: the website or the phone number.
-private struct TrailPlaceLinkRow: View {
-    let label: String
-    let title: String
-    let destination: URL
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(label)
-            Link(title, destination: destination)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-        .trailPlaceRow()
-    }
-}
-
-private extension View {
-    /// A ``StatRow``'s height and padding, for the card's rows that are not one.
-    func trailPlaceRow() -> some View {
-        font(.body)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, minHeight: StatCardMetrics.rowMinimumHeight, alignment: .leading)
     }
 }

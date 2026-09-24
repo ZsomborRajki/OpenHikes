@@ -75,6 +75,37 @@ struct GPXPlaceRoundTripTests {
         #expect(abs(restored.longitude - place.longitude) < 0.000001)
     }
 
+    /// A place from OpenStreetMap keeps its element through a file, as the
+    /// page link GPX has room for, so it comes back OpenStreetMap's rather
+    /// than the hiker's own to rename.
+    @Test("a place from OpenStreetMap round-trips its element")
+    func openStreetMapElementRoundTrips() throws {
+        let place = TrailPlace(
+            latitude: Line.south + 0.005,
+            longitude: Line.longitude,
+            name: "Kärlingerhaus",
+            symbol: .shelter,
+            osm: TrailPlaceOSM(elementType: "way", elementID: 42)
+        )
+
+        let restored = try #require(try Self.reimported(Self.track(places: [place])).places.first)
+
+        #expect(restored.osm?.elementType == "way")
+        #expect(restored.osm?.elementID == 42)
+        #expect(restored.isHikersOwn == false)
+    }
+
+    @Test("a link to anywhere but an OpenStreetMap element is not an element")
+    func otherLinksAreIgnored() throws {
+        func element(_ link: String) throws -> TrailPlaceOSM? {
+            TrailPlaceOSM(url: try #require(URL(string: link)))
+        }
+        #expect(try element("https://example.com/node/1") == nil)
+        #expect(try element("https://www.openstreetmap.org/area/1") == nil)
+        #expect(try element("https://www.openstreetmap.org/node/0") == nil)
+        #expect(try element("https://www.openstreetmap.org/node/7")?.elementID == 7)
+    }
+
     /// Unnamed is the normal case, and a file full of blank `<name>`s would
     /// lose the only thing those places had — so the symbol's own word is
     /// written out and read back as the name.

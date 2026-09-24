@@ -281,6 +281,14 @@ nonisolated private extension GPXExport {
             if !place.note.isEmpty {
                 xml += "    <desc>\(escaped(place.note))</desc>\n"
             }
+            // The OpenStreetMap element a place came from, as its page — the
+            // one field GPX has for *more about this is over there*, and what
+            // lets a round trip through a file keep the place OpenStreetMap's
+            // rather than turning it into the hiker's own. After `<desc>` and
+            // before `<sym>`, which is the schema's order for `wpt`.
+            if let url = place.osm?.url {
+                xml += "    <link href=\"\(escaped(url.absoluteString))\"/>\n"
+            }
             // Only a place that claims to be something. An unstated symbol is
             // a real answer — see ``TrailPlace`` — and `<sym></sym>` would be
             // a claim that it is a symbol nobody has.

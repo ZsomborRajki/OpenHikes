@@ -89,6 +89,21 @@ final class OpenHikesModel {
     /// writing it down. See ``TrailDraftController``.
     let trailMaker: TrailDraftController
 
+    /// Where the app asks OpenStreetMap what is on a trail — the maker's
+    /// *Search this area*, a saved hike's *Find Places Along Trail* and the
+    /// recording screen's *Add Place*. One source for all three, so they share
+    /// one ``OverpassConversation`` and its rate-limit gate. `nil` for a
+    /// launch that must not ask — see ``makeTrailPointSource()``. The
+    /// maker's, read through its finder, because the maker is built first and
+    /// holds it.
+    var placeSource: (any TrailPointSourcing)? { trailMaker.finder.source }
+
+    /// A saved hike's *Find Places Along Trail*: the source above, asking for
+    /// the kinds the maker's switches leave on, which are app-wide.
+    var placeSearchScope: TrailPlaceSearchScope? {
+        placeSource.map { TrailPlaceSearchScope(source: $0, symbols: trailMaker.finder.filter.shown) }
+    }
+
     /// Autocomplete for the map sheet's search field.
     ///
     /// Owned here for the same reason ``community`` is, and it is the same two

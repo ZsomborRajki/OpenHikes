@@ -756,6 +756,10 @@ private extension CommunityHikeView {
             photoStrip(detail)
         }
 
+        // Where the hike's own screen puts them: under the photographs. What
+        // saving the hike copies into the library — see ``CommunityImport``.
+        SharedTrailPlaceSection(places: detail.places, route: detail.route)
+
         trailFactsSection
         surfaceSection
         difficultySection

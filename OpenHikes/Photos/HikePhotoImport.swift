@@ -78,6 +78,7 @@ nonisolated enum HikePhotoImport {
         matchEvidence: PhotoMatchEvidence? = nil,
         importedFromListingID: String? = nil,
         importedAuthorName: String? = nil,
+        placeID: UUID? = nil,
         store: HikePhotoStore = .shared,
         libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter(),
         save: (ModelContext) throws -> Void = { try $0.save() }
@@ -90,9 +91,9 @@ nonisolated enum HikePhotoImport {
         // already has.
         if let assetLocalIdentifier,
            let existing = hike.importedPhoto(forAsset: assetLocalIdentifier) {
-            return existing
+            return refiled(existing, under: placeID, in: hike, save)
         }
-        guard let photo = await stored(
+        guard var photo = await stored(
             data,
             capturedAt: capturedAt,
             coordinate: coordinate,
@@ -120,8 +121,12 @@ nonisolated enum HikePhotoImport {
         if let assetLocalIdentifier,
            let existing = hike.importedPhoto(forAsset: assetLocalIdentifier) {
             discardFiles([photo], from: store)
-            return existing
+            return refiled(existing, under: placeID, in: hike, save)
         }
+        // Filed under its place only if the place is still there: it can be
+        // removed while the bytes are being written, and a link to a place
+        // that has gone would file the photograph nowhere anybody can see.
+        photo.placeID = placeID.flatMap { id in hike.trailPoints?.contains { $0.id == id } == true ? id : nil }
         hike.addPhoto(photo)
         // The attach is committed here rather than left to the next autosave,
         // and everything after this line depends on it having landed. A save
@@ -154,6 +159,25 @@ nonisolated enum HikePhotoImport {
         return photo
     }
 
+    /// A photograph the hike already holds, picked again from a place's
+    /// screen: the asset is in the walk, so what the hiker is asking for is
+    /// that it be filed under the place. Picked again from anywhere else, it
+    /// is left where it is.
+    @MainActor
+    private static func refiled(
+        _ existing: HikePhoto,
+        under placeID: UUID?,
+        in hike: Hike,
+        _ save: (ModelContext) throws -> Void
+    ) -> HikePhoto {
+        guard let placeID, existing.placeID != placeID,
+              hike.trailPoints?.contains(where: { $0.id == placeID }) == true,
+              let refiled = hike.filePhoto(id: existing.id, underPlace: placeID)
+        else { return existing }
+        _ = persisted(hike, save, refusal: "Could not save a photo filed under a place")
+        return refiled
+    }
+
     /// Encodes a frame straight off the camera, then stores it as above.
     ///
     /// - Parameter capturedAt: Only the fallback. The frame's own shutter time
@@ -170,6 +194,7 @@ nonisolated enum HikePhotoImport {
         coordinate: CLLocationCoordinate2D?,
         savesToPhotoLibrary: Bool,
         capturedAt: Date = .now,
+        placeID: UUID? = nil,
         store: HikePhotoStore = .shared,
         libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter(),
         save: (ModelContext) throws -> Void = { try $0.save() }
@@ -181,6 +206,7 @@ nonisolated enum HikePhotoImport {
             coordinate: coordinate,
             savesToPhotoLibrary: savesToPhotoLibrary,
             capturedAt: frame.capturedAt ?? capturedAt,
+            placeID: placeID,
             store: store,
             libraryWriter: libraryWriter,
             save: save

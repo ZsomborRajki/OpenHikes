@@ -19,6 +19,7 @@ suites=(
   TrailMakerUITests
   WalkUITests
   PhotoUITests
+  PlaceUITests
   SettingsUITests
   CommunityUITests
   CommunityCuratedUITests

@@ -85,11 +85,12 @@ extension MapCoordinatorTests {
         #endif
     }
 
-    /// The other source, and the one a saved hike uses. A read-only pin opens
-    /// MapKit's callout with its note rather than the maker's sheet — editing
-    /// an existing hike is out of scope, and the flag is what says so.
-    @Test("a saved hike's places are drawn read-only")
-    func savedPlacesAreReadOnly() async throws {
+    /// The other source, and the one a saved hike uses. A tap opens the
+    /// place's own screen, through whichever screen drew the pin — there is
+    /// no callout, whose MapKit-driven close is the race the maker's pins were
+    /// taken off callouts for.
+    @Test("a saved hike's place pin opens the place, with no callout")
+    func savedPlacesOpenTheirScreen() async throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
@@ -98,8 +99,9 @@ extension MapCoordinatorTests {
             place: TrailPlace(coordinate: Self.placeCoordinate(Place.middle), name: "Saddle"),
             anchor: TrailPlaceAnchor(distanceAlongRouteMeters: 1200, offRouteMeters: 4)
         )
+        var opened: [UUID] = []
 
-        placePins.attach([row])
+        placePins.attach([row]) { opened.append($0) }
 
         await settle(until: "the hike's place to be pinned") {
             !coordinator.hikePlaceAnnotations.isEmpty
@@ -108,18 +110,24 @@ extension MapCoordinatorTests {
         #expect(!annotation.belongsToDraft)
         #expect(annotation.title == "Saddle")
         #expect(annotation.subtitle?.isEmpty == false, "a saved place says how far along it sits")
-        // A saved place with no note has nothing to put in its callout beyond
-        // the title, so the accessory is cleared rather than left as an empty
-        // band of card.
-        //
-        // Deliberately not asserted here: `canShowCallout`. It is set on every
-        // one of these views, but it is a property of a view MapKit recycles
-        // and a full run reads it back `false` off a view a previous test
-        // returned to the pool — which says something about MapKit's reuse
-        // rather than about this code.
         let view = try #require(coordinator.mapView(map, viewFor: annotation))
-        #expect(view.detailCalloutAccessoryView == nil, "a place with no note has nothing more to say")
+        #expect(view.detailCalloutAccessoryView == nil)
+
+        #expect(coordinator.selectHikePlaceAnnotation(view, on: map))
+        #expect(opened == [row.id])
         #endif
+    }
+
+    @Test("a pin whose screen has gone opens nothing")
+    func detachedPinOpensNothing() {
+        let row = TrailPlaceRow(place: Self.spring, anchor: nil)
+        var opened = 0
+        let token = placePins.attach([row]) { _ in opened += 1 }
+
+        placePins.detach(token: token)
+
+        #expect(placePins.open(row.id) == false)
+        #expect(opened == 0)
     }
 
     /// And the maker's half of that pair: no callout, a colour for its kind,

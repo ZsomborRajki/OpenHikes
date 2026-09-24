@@ -299,6 +299,19 @@ private extension CommunityReviewView {
             }
         }
 
+        // Every place's name and note is text the author wrote, and it is
+        // shown to everybody who opens the hike once it is published — so it
+        // is read here, like the description above, or it is the one
+        // published field nobody checked.
+        if !detail.places.isEmpty {
+            Section("Places") {
+                ForEach(TrailPlaceOrder.ordered(detail.places, along: detail.route)) { row in
+                    TrailPlaceRowView(row: row, noteLineLimit: nil)
+                }
+            }
+            .accessibilityIdentifier("review-places")
+        }
+
         if detail.photoFileURLs.isEmpty {
             Section("Photos") {
                 Text("None.")

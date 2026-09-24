@@ -827,8 +827,9 @@ extension MapView.Coordinator {
         // callout for the blue dot, so deselect immediately to dismiss it.
         guard view.annotation is MKUserLocation else {
             // The maker's own pins open its place sheet rather than a callout —
-            // see `MapTrailDraftSelection.swift`.
-            if selectTrailDraftAnnotation(view, on: mapView) { return }
+            // see `MapTrailDraftSelection.swift` — and a saved hike's places
+            // open the place's screen.
+            if selectTrailDraftAnnotation(view, on: mapView) || selectHikePlaceAnnotation(view, on: mapView) { return }
             // `canShowCallout` because a selection is not a callout: the route
             // highlight's own dots are selectable and draw nothing, and a tap
             // on one that took *Search this area* away would be the pill

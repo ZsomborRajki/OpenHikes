@@ -43,7 +43,8 @@ extension OpenHikesView {
                 captured: frame,
                 to: subject.hike,
                 coordinate: subject.coordinate,
-                savesToPhotoLibrary: savePhotosToLibrary
+                savesToPhotoLibrary: savePhotosToLibrary,
+                placeID: subject.placeID
             )
             // A photo that cannot be encoded or written is gone the moment the
             // camera closes — there is no copy anywhere else, and the frame
@@ -94,7 +95,8 @@ extension OpenHikesView {
                     to: subject.hike,
                     coordinate: subject.coordinate,
                     savesToPhotoLibrary: false,
-                    assetLocalIdentifier: item.itemIdentifier
+                    assetLocalIdentifier: item.itemIdentifier,
+                    placeID: subject.placeID
                 )
                 if stored == nil, subject.hike.isAttached {
                     photoPresentation.failure = .importFailed

@@ -27,6 +27,13 @@ struct RecordingView: View {
     /// with it because the caller builds a route out of the pair, and the
     /// recorder's hike is this screen's to know, not the sheet's.
     var onOpenPhoto: (Hike, HikePhoto) -> Void = { _, _ in /* no-op default */ }
+    /// Draws the places added on this walk. See ``RecordingPlaceSheet``.
+    var placePins: TrailPlacePinController?
+    /// Where *Add Place* asks OpenStreetMap what is here, or `nil` for a
+    /// launch that must not ask.
+    var placeSource: (any TrailPointSourcing)?
+    /// Pushes one of the walk's places, where its photographs are taken.
+    var onOpenPlace: (Hike, UUID) -> Void = { _, _ in /* no-op default */ }
 
     private var recordingFailure: RecordingFailure? {
         if case let .failed(failure) = recorder.phase {
@@ -60,6 +67,14 @@ struct RecordingView: View {
                 )
                 .padding()
                 .id(Self.cardID)
+                // The places added so far on this walk, each opening its own
+                // screen. Nothing at all until the first one.
+                if let hike = recorder.currentHike {
+                    HikePlaceSection(hike: hike, mapPins: placePins) { placeID in
+                        onOpenPlace(hike, placeID)
+                    }
+                    .padding(.horizontal)
+                }
             }
             // The review is drawn at the top of the card, which is only where
             // the hiker is looking if the card is scrolled to its top: one who
@@ -76,6 +91,9 @@ struct RecordingView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .softScrollEdgeEffect(for: .top)
+        // *Add Place*, in the bar while a walk is under way — see
+        // ``RecordingPlaceSheet``.
+        .recordingAddPlace(recorder: recorder, source: placeSource, onAdded: onOpenPlace)
         .onAppear {
             mapController.followUser()
         }

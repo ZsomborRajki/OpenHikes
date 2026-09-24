@@ -123,10 +123,77 @@ nonisolated enum CommunityRoutePayload {
     /// into CloudKit's own cache, which is exactly the kind of URL that may
     /// not.
     static func route(atAssetURL url: URL, limits: Limits = .standard) -> [RouteCoordinate] {
+        contents(atAssetURL: url, limits: limits).route
+    }
+
+    /// The route and the places along it, read out of one asset.
+    struct Contents: Equatable, Sendable {
+        var route: [RouteCoordinate]
+        var places: [TrailPlace]
+
+        static let empty = Self(route: [], places: [])
+    }
+
+    /// The route in the asset at `url` and the places marked along it, or
+    /// ``Contents/empty`` for a route this app will not draw or save — a
+    /// refused route carries no places, because there is no trail for them to
+    /// be on.
+    static func contents(atAssetURL url: URL, limits: Limits = .standard) -> Contents {
         if let reportedSize = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-           reportedSize > limits.maximumAssetBytes { return [] }
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        return route(from: data, limits: limits)
+           reportedSize > limits.maximumAssetBytes { return .empty }
+        guard let data = try? Data(contentsOf: url) else { return .empty }
+        return contents(from: data, limits: limits)
+    }
+
+    /// The same, from bytes already in hand.
+    static func contents(from data: Data, limits: Limits = .standard) -> Contents {
+        guard data.count <= limits.maximumAssetBytes,
+              let document = try? JSONDecoder().decode(CommunityRouteDocument.self, from: data)
+        else { return .empty }
+        let route = usable(document.route, limits: limits)
+        guard !route.isEmpty else { return .empty }
+        return Contents(route: route, places: places(document.places))
+    }
+
+    /// The places a stranger's file lists, as this app will keep them.
+    ///
+    /// The route's own rules, applied to a second list from the same author:
+    /// a place off the map is dropped rather than costing the others; the
+    /// list is capped at ``GPXImport/maximumPlaces`` for the reason an
+    /// imported file's is (every place becomes a record in the saving hiker's
+    /// private database); names and notes are bounded as an imported `<wpt>`'s
+    /// are; a symbol this build does not know is *no symbol*; and an
+    /// OpenStreetMap element is kept only if it names one Overpass could
+    /// have answered with, its facts re-read through ``TrailPlaceFact`` so
+    /// they are bounded and limited to the tags this app shows.
+    ///
+    /// Duplicate ids keep the first: a photograph names its place by id, and
+    /// two places answering to one id would be a photograph on both.
+    static func places(_ raw: [CommunityPlace]) -> [TrailPlace] {
+        var seen: Set<UUID> = []
+        return raw.prefix(GPXImport.maximumPlaces).compactMap { place in
+            guard Mercator.isRepresentable(latitude: place.latitude, longitude: place.longitude),
+                  seen.insert(place.id).inserted
+            else { return nil }
+            let osm: TrailPlaceOSM? = {
+                guard let type = place.osmElementType, TrailPlaceOSM.elementTypes.contains(type),
+                      let id = place.osmElementID, id > 0 else { return nil }
+                return TrailPlaceOSM(
+                    elementType: type,
+                    elementID: id,
+                    facts: TrailPlaceFact.facts(in: place.osmTags ?? [:])
+                )
+            }()
+            return TrailPlace(
+                latitude: place.latitude,
+                longitude: place.longitude,
+                name: BoundedText.boundedOrEmpty(place.name, to: .title),
+                symbol: place.symbol.flatMap(TrailPlaceSymbol.named),
+                note: BoundedText.boundedOrEmpty(place.note, to: .notes),
+                osm: osm,
+                id: place.id
+            )
+        }
     }
 
     /// The same, from bytes already in hand.
@@ -136,10 +203,7 @@ nonisolated enum CommunityRoutePayload {
     /// the caller: this is the seam, and a seam that only checks what it is
     /// told to check is one more thing to get wrong at the next call site.
     static func route(from data: Data, limits: Limits = .standard) -> [RouteCoordinate] {
-        guard data.count <= limits.maximumAssetBytes else { return [] }
-        guard let document = try? JSONDecoder().decode(CommunityRouteDocument.self, from: data)
-        else { return [] }
-        return usable(document.route, limits: limits)
+        contents(from: data, limits: limits).route
     }
 
     /// `route` with the points this app cannot use taken out, or an empty

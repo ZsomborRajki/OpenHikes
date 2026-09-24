@@ -134,7 +134,10 @@ final class TrailPointFinder {
     /// Which kinds of place a search asks for — the maker's switches.
     let filter: TrailPlaceFilter
 
-    @ObservationIgnored private let source: (any TrailPointSourcing)?
+    /// Where a search asks. Read by the app model too — see
+    /// ``OpenHikesModel/placeSource`` — so every place search in the app goes
+    /// through one ``OverpassConversation`` and its rate-limit gate.
+    @ObservationIgnored let source: (any TrailPointSourcing)?
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var deliver: (([TrailPlace]) -> Void)?
 

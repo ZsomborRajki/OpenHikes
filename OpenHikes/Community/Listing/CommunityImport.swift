@@ -150,6 +150,27 @@ nonisolated enum CommunityImport {
         // ``CommunityPublishingEligibility/Reason/savedFromOpenStreetMap``.
         hike.importedAuthorName = listing.authorName.isEmpty ? nil : listing.authorName
         context.insert(hike)
+        // The places the author marked, each under a new id of this device's
+        // own. The author's ids are theirs — the same trail saved twice, or
+        // an author saving their own listing back, would otherwise put two
+        // rows under one id — and they are remembered only long enough to
+        // file the author's photographs under the right copies below.
+        let placeIDs = Dictionary(detail.places.map { ($0.id, UUID()) }) { first, _ in first }
+        hike.replacePlaces(
+            with: detail.places.map { place in
+                TrailPlace(
+                    latitude: place.latitude,
+                    longitude: place.longitude,
+                    name: place.name,
+                    symbol: place.symbol,
+                    note: place.note,
+                    osm: place.osm,
+                    id: placeIDs[place.id] ?? UUID()
+                )
+            },
+            in: context,
+            now: saveDate
+        )
 
         do {
             try save(context)
@@ -164,7 +185,14 @@ nonisolated enum CommunityImport {
             return .refused(.unavailable(error.localizedDescription))
         }
 
-        await attachPhotos(of: detail, to: hike, store: store, libraryWriter: libraryWriter, save: save)
+        await attachPhotos(
+            of: detail,
+            to: hike,
+            places: placeIDs,
+            store: store,
+            libraryWriter: libraryWriter,
+            save: save
+        )
         return .imported(hike)
     }
 
@@ -236,6 +264,7 @@ nonisolated enum CommunityImport {
     private static func attachPhotos(
         of detail: CommunityHikeDetail,
         to hike: Hike,
+        places: [UUID: UUID],
         store: HikePhotoStore,
         libraryWriter: any PhotoLibraryWriting,
         save: (ModelContext) throws -> Void
@@ -243,6 +272,7 @@ nonisolated enum CommunityImport {
         await attachOwnPhotos(
             of: detail,
             to: hike,
+            places: places,
             store: store,
             libraryWriter: libraryWriter,
             save: save
@@ -297,6 +327,7 @@ nonisolated enum CommunityImport {
     private static func attachOwnPhotos(
         of detail: CommunityHikeDetail,
         to hike: Hike,
+        places: [UUID: UUID],
         store: HikePhotoStore,
         libraryWriter: any PhotoLibraryWriting,
         save: (ModelContext) throws -> Void
@@ -313,7 +344,7 @@ nonisolated enum CommunityImport {
         await attachSet(
             zip(detail.photoPins, detail.photoFileURLs),
             // No per-photograph credit, for the reason above.
-            stampedAs: Stamp(listingID: detail.listing.id, authorName: nil),
+            stampedAs: Stamp(listingID: detail.listing.id, authorName: nil, places: places),
             to: hike,
             store: store,
             libraryWriter: libraryWriter,
@@ -381,9 +412,12 @@ nonisolated enum CommunityImport {
             }
             await attachSet(
                 zip(contribution.photoPins, contribution.photoFileURLs),
+                // No places: a contributor's pictures are not theirs to file
+                // under the author's places, whatever their pins claim.
                 stampedAs: Stamp(
                     listingID: detail.listing.id,
-                    authorName: contribution.credit
+                    authorName: contribution.credit,
+                    places: [:]
                 ),
                 to: hike,
                 store: store,
@@ -401,6 +435,10 @@ nonisolated enum CommunityImport {
         /// ``Hike/importedAuthorName``, and for a contributor who asked for
         /// none — which is the honest answer rather than a lost one.
         let authorName: String?
+        /// The author's place ids, to the ids this hike's copies were given.
+        /// A photograph whose pin names a place not in here is filed under
+        /// none.
+        let places: [UUID: UUID]
     }
 
     /// Copies one paired set of pins and files onto the hike, whoever took
@@ -449,6 +487,7 @@ nonisolated enum CommunityImport {
                 // author's own pictures. See ``HikePhoto/importedFromListingID``.
                 importedFromListingID: stamp.listingID,
                 importedAuthorName: stamp.authorName,
+                placeID: pin.placeID.flatMap { stamp.places[$0] },
                 store: store,
                 libraryWriter: libraryWriter,
                 save: save

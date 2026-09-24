@@ -489,8 +489,10 @@ struct MapSheet: View {
                 photoCapture: photoCapture,
                 photoPins: photoPins,
                 placePins: placePins,
+                placeSearch: appModel.placeSearchScope,
                 communityTransport: appModel.communityTransport,
                 onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
+                onOpenPlace: { placeID in openPlace(placeID, of: hike) },
                 onOpenWalk: { walk in presentation.path.append(.walk(walk)) },
                 onZoomToRoute: presentation.makeRoomForTheMap,
                 isSheetCompact: presentation.isCompact,
@@ -504,6 +506,8 @@ struct MapSheet: View {
             pendingSubmissionDestination(pending)
         case let .pendingPhotos(pending):
             pendingPhotosDestination(pending)
+        case let .place(hike, placeID):
+            placeDestination(placeID, of: hike)
         case .trailDraft:
             trailDraftDestination
         case .recording:
@@ -548,7 +552,10 @@ private extension MapSheet {
             onDiscarded: closeDiscardedRecording,
             onOpenPhoto: { hike, photo in
                 presentation.path.append(.photo(hike, photo.id))
-            }
+            },
+            placePins: placePins,
+            placeSource: appModel.placeSource,
+            onOpenPlace: { hike, placeID in openPlace(placeID, of: hike) }
         )
     }
 }

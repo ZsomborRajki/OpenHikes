@@ -923,6 +923,9 @@ struct ImportSelectionGate {
         // import that arrives while it is open is still landing on the hike
         // the user is looking at.
         case .some(.photo(let hike, _)): .hike(hike.id)
+        // A place's screen is its hike's, one push further in, on the photo
+        // viewer's terms.
+        case .some(.place(let hike, _)): .hike(hike.id)
         // A walk's summary is its hike's screen two pushes in, on the same
         // terms as the photo viewer.
         case .some(.walk(let walk)): .hike(walk.hikeID)
