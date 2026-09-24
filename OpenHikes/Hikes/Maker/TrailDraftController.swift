@@ -510,6 +510,8 @@ final class TrailDraftController {
     func select(_ selection: TrailDraftSelection?) {
         guard isEditing || selection == nil, self.selection != selection else { return }
         if selection == .droppedPin, droppedPin == nil { return }
+        // A place whose pin is hidden has nothing on the map to be about.
+        if case .place = selection, !finder.filter.placesShown { return }
         self.selection = selection
     }
 
@@ -568,7 +570,7 @@ final class TrailDraftController {
     /// of a pop animation, and a search that landed after the maker closed
     /// would be places added to a drawing nobody is looking at.
     func searchNearbyPlaces() {
-        guard isEditing else { return }
+        guard isEditing, finder.filter.placesShown else { return }
         finder.search(along: draft.routeCoordinates, avoiding: draft.places)
     }
 
@@ -588,6 +590,22 @@ final class TrailDraftController {
         guard !removed.isEmpty else { return }
         if case .place(let id) = selection, removed.contains(id) { selection = nil }
         persist()
+    }
+
+    /// Shows the trail's places or hides them — the switch beside *Search
+    /// This Area*.
+    ///
+    /// Off hides rather than removes: the places stay on the drawing and on
+    /// disk, so on brings every one of them back. What off does take away is
+    /// everything that would act on them — a search still out, whose answer
+    /// would land on pins nobody can see, and a place card about one of them.
+    /// A save made while it is off attaches none of them; see
+    /// ``TrailDraftSave``.
+    func setPlacesShown(_ shown: Bool) {
+        finder.filter.setPlacesShown(shown)
+        guard !shown else { return }
+        finder.clear()
+        if case .place = selection { selection = nil }
     }
 
     private func addPlaces(_ places: [TrailPlace]) {

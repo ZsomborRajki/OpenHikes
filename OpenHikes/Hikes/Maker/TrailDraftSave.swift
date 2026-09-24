@@ -33,6 +33,13 @@
 //  the rest — from the hike, not from the draft, which a refused save leaves
 //  exactly as it was.
 //
+//  **And none of them while the switch beside *Search This Area* is off.**
+//  That switch hides the drawing's places rather than removing them — see
+//  ``TrailPlaceFilter/placesShown`` — so the save is where it takes effect: a
+//  new trail is saved with no places, and an edit leaves the hike's own places
+//  exactly as they were, since the maker had them out of sight and a save that
+//  dropped them would be deleting what the hiker could not see.
+//
 //  **A leg still routing is saved as it stands.** Save does not wait: a hiker
 //  who has finished drawing has finished, and holding the button while a
 //  volunteer-run API is thinking about the last leg would make Overpass's
@@ -118,6 +125,8 @@ enum TrailDraftSave {
     ///   are still about *this* line; see ``RouteHeightSamples/describes(_:)``,
     ///   which is what keeps a leg that snapped while the alert was open from
     ///   putting a summit's height on a point in a valley.
+    /// - Parameter keepingPlaces: the switch beside *Search This Area*; off
+    ///   saves the trail with none of the drawing's places.
     /// - Parameter save: The seam the commit goes through, so a suite can
     ///   refuse it — the same shape ``HikeImport`` and
     ///   ``HikePhotoImport/remove(_:from:store:save:)`` take theirs in. There
@@ -129,6 +138,7 @@ enum TrailDraftSave {
         into context: ModelContext,
         madeOn date: Date = .now,
         heights: RouteHeightSamples? = nil,
+        keepingPlaces: Bool = true,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) -> TrailDraftSaveOutcome {
         let waypoints = draft.waypoints
@@ -178,11 +188,13 @@ enum TrailDraftSave {
         // line before it. A leg Overpass refused, or one still routing, is
         // measured as the straight line it is saved as — nothing here waits on
         // anything, which is the rule the whole feature is built on.
-        hike.replacePlaces(
-            with: TrailPlaceOrder.touched(draft.places, along: route),
-            in: context,
-            now: date
-        )
+        if keepingPlaces {
+            hike.replacePlaces(
+                with: TrailPlaceOrder.touched(draft.places, along: route),
+                in: context,
+                now: date
+            )
+        }
         do {
             try save(context)
         } catch {
@@ -222,6 +234,8 @@ enum TrailDraftSave {
     ///
     /// - Parameter placesAtOpen: the hike's places when the edit opened — see
     ///   ``places(of:drawn:atOpen:)``, which is what it tells apart.
+    /// - Parameter keepingPlaces: the switch beside *Search This Area*; off
+    ///   leaves the hike's places as they are — see the file header.
     ///
     /// A refused save puts everything back: the rows through the context's
     /// rollback, and the hike's own columns by hand, because a rolled-back
@@ -233,6 +247,7 @@ enum TrailDraftSave {
         openedWith placesAtOpen: Set<UUID>,
         into context: ModelContext,
         heights: RouteHeightSamples? = nil,
+        keepingPlaces: Bool = true,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) -> TrailDraftSaveOutcome {
         guard draft.waypoints.count > 1 else { return .refused(.tooShort) }
@@ -247,13 +262,14 @@ enum TrailDraftSave {
             climb: hike.climbMeters,
             descent: hike.descentMeters
         )
-        let kept = TrailPlaceOrder.touched(
-            places(of: hike, drawn: draft.places, atOpen: placesAtOpen),
-            along: route
-        )
-        let keptIDs = Set(kept.map(\.id))
-        for place in hike.places where !keptIDs.contains(place.id) {
-            hike.unfilePhotos(fromPlace: place.id)
+        let kept = keepingPlaces
+            ? TrailPlaceOrder.touched(places(of: hike, drawn: draft.places, atOpen: placesAtOpen), along: route)
+            : nil
+        if let kept {
+            let keptIDs = Set(kept.map(\.id))
+            for place in hike.places where !keptIDs.contains(place.id) {
+                hike.unfilePhotos(fromPlace: place.id)
+            }
         }
         hike.route = heights?.filling(route) ?? route
         hike.distanceMeters = draft.distanceMeters
@@ -267,7 +283,7 @@ enum TrailDraftSave {
             hike.descentMeters = nil
         }
         hike.drawnRoute = DrawnRoute(draft, editedUnderSubmissionID: hike.communitySubmissionID)
-        hike.replacePlaces(with: kept, in: context)
+        if let kept { hike.replacePlaces(with: kept, in: context) }
         do {
             try save(context)
         } catch {

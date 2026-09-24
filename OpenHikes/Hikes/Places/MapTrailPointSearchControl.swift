@@ -132,6 +132,8 @@ extension MapView.Coordinator {
             _ = controller.finder.notice
             // Every switch off disables the pill — see `canSearch`.
             _ = controller.finder.filter.hidden
+            // And the one above them withdraws it.
+            _ = controller.finder.filter.placesShown
         } onChange: { coordinator, model in
             coordinator.trackTrailPointSearch(model, animated: true)
         }
@@ -153,8 +155,11 @@ extension MapView.Coordinator {
         // Withheld entirely on a launch with no source — a preview, or a UI
         // run that was never given one. A pill that spun and then said
         // *unavailable* would be worse than no pill: the honest statement is
-        // that this launch cannot ask.
-        let visible = controller.isEditing && finder.isAvailable && !hasOpenCallout
+        // that this launch cannot ask. Withdrawn too while the switch beside
+        // *Search This Area* has hidden the trail's places: a search would add
+        // pins nobody can see.
+        let visible = controller.isEditing && finder.isAvailable && finder.filter.placesShown
+            && !hasOpenCallout
         trailPointSearchControl.isSearching = finder.isSearching
         // Busy and out of range are different states and only one of them is a
         // policy — see ``MapCommunitySearchControl``, where the same pair of
@@ -181,8 +186,12 @@ extension MapView.Coordinator {
             // Re-read rather than trusting the value this animation started
             // with: opening and closing the maker quickly overlaps two fades,
             // and a completion that hid the pill the next one had just brought
-            // back would leave a visible control answering no taps.
-            guard let self, trailDraftController?.isEditing != true else { return }
+            // back would leave a visible control answering no taps. The switch
+            // is re-read for the same reason: it withdraws the pill with the
+            // maker still up.
+            guard let self,
+                  trailDraftController.map({ $0.isEditing && $0.finder.filter.placesShown }) != true
+            else { return }
             trailPointSearchControl.isHidden = true
         }
         #endif

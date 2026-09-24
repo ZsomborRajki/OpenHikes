@@ -123,6 +123,40 @@ struct TrailDraftEditTests {
         #expect(saved.photos.first?.placeID == nil)
     }
 
+    /// With the places switched off the maker had them out of sight, so its
+    /// save leaves the hike's own exactly as they were — even one the new
+    /// line no longer passes, which a save with them shown would drop.
+    @Test("an edit saved with the places switched off leaves the hike's places alone")
+    func anEditWithPlacesOffKeepsThem() throws {
+        let context = try Fixture.modelContext()
+        let draft = Self.draft([Line.south, Line.north])
+        let spring = TrailPlace(latitude: Line.middle, longitude: Line.longitude, name: "Spring")
+        draft.addPlaces([spring])
+        let hike = try #require(TrailDraftSave.hike(from: draft, named: "Ridge", into: context).hike)
+        var photo = HikePhoto()
+        photo.placeID = spring.id
+        hike.addPhoto(photo)
+
+        // Redrawn along a line the spring is nowhere near, with a place the
+        // maker found that the hike never had.
+        let away = TrailDraft()
+        away.append(CLLocationCoordinate2D(latitude: Line.south, longitude: Line.longitude + 0.02))
+        away.append(CLLocationCoordinate2D(latitude: Line.north, longitude: Line.longitude + 0.02))
+        away.addPlaces([TrailPlace(latitude: Line.middle, longitude: Line.longitude + 0.02, name: "Hut")])
+        let saved = try #require(
+            TrailDraftSave.update(
+                hike,
+                from: away,
+                openedWith: [spring.id],
+                into: context,
+                keepingPlaces: false
+            ).hike
+        )
+
+        #expect(saved.places.map(\.name) == ["Spring"])
+        #expect(saved.photos.first?.placeID == spring.id)
+    }
+
     /// Share Again is gone, so an edit changes the hike and not the listing —
     /// and the hike says so. A fresh share is a new submission, and the note
     /// goes by itself.
