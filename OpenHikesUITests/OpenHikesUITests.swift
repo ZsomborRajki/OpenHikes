@@ -81,7 +81,7 @@ nonisolated final class OpenHikesUITests: XCTestCase {
             "dismissing the importer must leave the app's sheet standing"
         )
         XCTAssertTrue(
-            element("record-hike-button", in: app).exists,
+            element("import-gpx-button", in: app).exists,
             "and the sheet must still be the one that offers its own controls"
         )
     }

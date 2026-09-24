@@ -290,6 +290,7 @@ struct OpenHikesView: View {
             photoPins: photoPins,
             placePins: appModel.placePins,
             trailMaker: appModel.trailMaker,
+            recordingEntry: appModel.recordingEntry,
             community: appModel.community,
             searchCompleter: appModel.searchCompleter,
             // Keeps the credit line and the camera pill beside the landscape

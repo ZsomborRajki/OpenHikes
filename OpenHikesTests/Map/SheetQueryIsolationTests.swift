@@ -196,7 +196,6 @@ struct SheetQueryIsolationTests {
             onSubmitQuery: { /* unused */ },
             onSelectListing: { _, _ in /* unused */ },
             onDelete: { _, _ in /* unused */ },
-            onRecord: { /* unused */ },
             onImport: { /* unused */ }
         )
         #expect(declaresQuery(leaf), "and it is the leaf that pays for it")

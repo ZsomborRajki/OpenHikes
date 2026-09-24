@@ -88,6 +88,13 @@ final class OpenHikesModel {
     /// has to survive being navigated away from, which is the whole point of
     /// writing it down. See ``TrailDraftController``.
     let trailMaker: TrailDraftController
+    /// The record button under the maker's on the map. Built on first use
+    /// rather than in `init`, which is at its length limit; nothing about it
+    /// needs to exist before the map does. See ``RecordingEntry``.
+    @ObservationIgnored private(set) lazy var recordingEntry = RecordingEntry(
+        recorder: hikeRecorder,
+        openRequests: hikeOpenRequests
+    )
 
     /// The open hike's marked places, observed directly by the map. Owned
     /// here rather than as a `@State` of the root view because it keeps the
