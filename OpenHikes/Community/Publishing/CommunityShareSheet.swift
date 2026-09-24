@@ -330,7 +330,8 @@ private extension CommunityShareSheet {
             Text(
                 CommunityShareDisclosure.text(
                     hasNotes: sharedDescription != nil,
-                    photoCount: photos.count
+                    photoCount: photos.count,
+                    placeCount: hike.trailPoints?.count ?? 0
                 )
             )
         }
@@ -678,7 +679,9 @@ nonisolated enum CommunityShareDisclosure {
     ///     shown publicly — see ``CommunityShareSheet``'s `sharedDescription`.
     ///   - photoCount: How many photographs this share would carry, already
     ///     capped at ``CommunityPublisher/maximumPhotos``.
-    static func text(hasNotes: Bool, photoCount: Int) -> String {
+    ///   - placeCount: How many places are marked along the route. All of
+    ///     them go — see ``SharedHikeDetails/places``.
+    static func text(hasNotes: Bool, photoCount: Int, placeCount: Int = 0) -> String {
         // Assembled rather than written out four times: notes and photographs
         // are each present or not, and four separate spellings is how one of
         // them ends up describing an upload that has moved on.
@@ -690,6 +693,15 @@ nonisolated enum CommunityShareDisclosure {
         ]
         if hasNotes {
             sentences.append("The notes above go with it.")
+        }
+        if placeCount > 0 {
+            // Names and notes as well as positions, because a place the hiker
+            // added and named is text they wrote, shown to strangers.
+            sentences.append(
+                placeCount == 1
+                    ? "The place marked along it goes too, with its name, kind and note."
+                    : "The \(placeCount) places marked along it go too, each with its name, kind and note."
+            )
         }
         if photoCount > 0 {
             // The time as well as the place, because a pin is both. The

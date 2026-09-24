@@ -7,8 +7,8 @@
 //  While a trail is being drawn they come off ``TrailDraft/placeRows`` through
 //  the maker's own observation — see `MapTrailDraftOverlay.swift` — and a tap
 //  opens the maker's place sheet. While a saved hike's screen is pushed
-//  they come off its ``TrailPoint`` rows through ``TrailPlacePinController``
-//  and can only be read.
+//  they come off its ``TrailPoint`` rows through ``TrailPlacePinController``,
+//  and a tap opens that place's own screen — see ``HikePlaceView``.
 //
 //  **The two are never on screen together**, and nothing here enforces it —
 //  the same arrangement the camera pill and the maker's pill fall out of. The
@@ -36,9 +36,12 @@ import SwiftUI
 /// observes this object directly rather than being handed a list through a
 /// SwiftUI body.
 ///
-/// Read-only, deliberately: there is no `open` here and no selection request,
-/// because a place's callout says everything a place has to say. That is what
-/// makes this the small half of the type it is modelled on.
+/// A tap on a pin opens that place's screen through ``open(_:)``, which asks
+/// whichever screen holds the claim — the claim carries the opener, for the
+/// reason it carries the rows: a pin belongs to the screen that put it there.
+/// There is no callout. A place's screen says more than a callout can, and a
+/// callout MapKit opened is one MapKit closes again a moment later — the race
+/// the maker's own pins were taken off callouts for.
 @MainActor
 @Observable
 final class TrailPlacePinController {
@@ -53,16 +56,28 @@ final class TrailPlacePinController {
     /// screen being navigated away from can have its pins taken off the map
     /// and put back without re-deriving them.
     @ObservationIgnored private var claimed: [TrailPlaceRow] = []
+    /// What a tap on one of the claimed pins does. See ``open(_:)``.
+    @ObservationIgnored private var opener: ((UUID) -> Void)?
     /// See ``setHostScreenPresent(_:)``.
     @ObservationIgnored private var hasHostScreen = true
 
     /// Claims the map's place pins for a screen, returning the token that has
     /// to be handed back to withdraw them.
-    @discardableResult func attach(_ rows: [TrailPlaceRow]) -> Int {
+    @discardableResult func attach(_ rows: [TrailPlaceRow], onOpen: ((UUID) -> Void)? = nil) -> Int {
         nextToken += 1
         activeToken = nextToken
+        opener = onOpen
         apply(rows)
         return nextToken
+    }
+
+    /// Opens the place a pin stands for, on the screen that drew it. Answers
+    /// whether anything could — a pin whose screen has gone opens nothing.
+    @discardableResult func open(_ placeID: UUID) -> Bool {
+        guard activeToken != nil, hasHostScreen, let opener,
+              rows.contains(where: { $0.id == placeID }) else { return false }
+        opener(placeID)
+        return true
     }
 
     /// Redraws the pins of a screen that already holds the claim — a place
@@ -76,6 +91,7 @@ final class TrailPlacePinController {
     func detach(token: Int) {
         guard activeToken == token else { return }
         activeToken = nil
+        opener = nil
         apply([])
     }
 
@@ -110,8 +126,13 @@ extension View {
     ///     with no map passes.
     ///   - rows: The hike's places in along-route order — see
     ///     ``Hike/orderedPlaces``.
-    func trailPlacePins(_ controller: TrailPlacePinController?, rows: [TrailPlaceRow]) -> some View {
-        modifier(TrailPlacePinsModifier(controller: controller, rows: rows))
+    ///   - onOpen: What a tap on one of the pins does.
+    func trailPlacePins(
+        _ controller: TrailPlacePinController?,
+        rows: [TrailPlaceRow],
+        onOpen: ((UUID) -> Void)? = nil
+    ) -> some View {
+        modifier(TrailPlacePinsModifier(controller: controller, rows: rows, onOpen: onOpen))
     }
 }
 
@@ -124,12 +145,13 @@ extension View {
 private struct TrailPlacePinsModifier: ViewModifier {
     let controller: TrailPlacePinController?
     let rows: [TrailPlaceRow]
+    let onOpen: ((UUID) -> Void)?
 
     @State private var token: Int?
 
     func body(content: Content) -> some View {
         content
-            .onAppear { token = controller?.attach(rows) }
+            .onAppear { token = controller?.attach(rows, onOpen: onOpen) }
             .onChange(of: rows) { _, updated in
                 guard let token else { return }
                 controller?.update(updated, token: token)

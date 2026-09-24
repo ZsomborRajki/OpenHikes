@@ -24,11 +24,16 @@ nonisolated struct CommunityPhotoPin: Codable, Hashable, Sendable {
     var capturedAt: Date
     var latitude: Double?
     var longitude: Double?
+    /// The shared hike's place this is a photograph of — a
+    /// ``CommunityPlace/id`` — or `nil`. Always `nil` on a contribution to
+    /// somebody else's trail, whose places are not the contributor's to name.
+    var placeID: UUID?
 
-    init(capturedAt: Date, coordinate: CLLocationCoordinate2D?) {
+    init(capturedAt: Date, coordinate: CLLocationCoordinate2D?, placeID: UUID? = nil) {
         self.capturedAt = capturedAt
         latitude = coordinate?.latitude
         longitude = coordinate?.longitude
+        self.placeID = placeID
     }
 
     var coordinate: CLLocationCoordinate2D? {
@@ -147,6 +152,72 @@ nonisolated struct CommunityGalleryPhoto: Identifiable, Hashable, Sendable {
 /// ``CommunityHikeDetail/isConsistent``.
 nonisolated struct CommunityRouteDocument: Codable, Hashable, Sendable {
     var route: [RouteCoordinate]
+    /// The places marked along the route — none, in a document written
+    /// before places were published.
+    ///
+    /// In the route's own asset rather than a field of the record, which is
+    /// what lets them ship with **no CloudKit schema change**: the asset is a
+    /// file, a file can carry a new key, and a version that does not know the
+    /// key decodes the route and ignores it. Decoded apart from the route —
+    /// see ``init(from:)`` — so a malformed list costs the places and never
+    /// the walk.
+    var places: [CommunityPlace]
+
+    init(route: [RouteCoordinate], places: [CommunityPlace] = []) {
+        self.route = route
+        self.places = places
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        route = try container.decode([RouteCoordinate].self, forKey: .route)
+        places = (try? container.decodeIfPresent([CommunityPlace].self, forKey: .places)) ?? []
+    }
+}
+
+/// One place along a shared hike, as it is written into the route's asset.
+///
+/// Its own shape rather than ``TrailPlace`` itself, and every field that names
+/// something is a string: this is read on devices running other versions, and
+/// a ``TrailPlaceSymbol`` or ``TrailPlaceFact/Kind`` a reader does not know
+/// would fail the whole decode if it were an enumeration here. A string it
+/// does not know is answered as *no symbol*, or as a fact it does not show —
+/// see ``CommunityRoutePayload/places(_:)``, which is also where everything
+/// here is bounded, because a stranger wrote it.
+nonisolated struct CommunityPlace: Codable, Hashable, Sendable {
+    /// The author's own id for the place, which is what a photograph's
+    /// ``CommunityPhotoPin/placeID`` names. Never kept on import — see
+    /// ``CommunityImport``.
+    var id: UUID
+    var latitude: Double
+    var longitude: Double
+    var name: String
+    var symbol: String?
+    var note: String
+    var osmElementType: String?
+    var osmElementID: Int64?
+    /// OpenStreetMap's tags as they were read, by tag — the shape
+    /// ``TrailPlaceFact/facts(in:)`` reads them back out of.
+    ///
+    /// Optional because it is a wire field: a place the hiker made has no
+    /// tags, and the key is then absent rather than an empty object, which a
+    /// synthesized decode of a non-optional would refuse — losing every place
+    /// in the file over one.
+    var osmTags: [String: String]? // swiftlint:disable:this discouraged_optional_collection
+
+    init(_ place: TrailPlace) {
+        id = place.id
+        latitude = place.latitude
+        longitude = place.longitude
+        name = place.name
+        symbol = place.symbol?.rawValue
+        note = place.note
+        osmElementType = place.osm?.elementType
+        osmElementID = place.osm?.elementID
+        osmTags = place.osm.map { osm in
+            Dictionary(osm.facts.map { ($0.kind.rawValue, $0.value) }) { first, _ in first }
+        }
+    }
 }
 
 /// Everything about a hike that is offered for publication, ready to upload.
@@ -165,6 +236,9 @@ nonisolated struct CommunitySubmissionDraft: Sendable {
     var hikeDate: Date
     var distanceMeters: Double
     var route: [RouteCoordinate]
+    /// The places marked along the route. Every one of them goes: a place is
+    /// part of the trail being shared, as its name is.
+    var places: [CommunityPlace] = []
     var photoPins: [CommunityPhotoPin]
     /// Re-encoded copies, in ``photoPins`` order, inside ``stagingDirectory``.
     var photoFileURLs: [URL]
@@ -393,6 +467,10 @@ nonisolated struct CommunityRouteLine: Identifiable, Hashable, Sendable {
 nonisolated struct CommunityHikeDetail: Sendable, CommunityReviewSubject {
     var listing: CommunityListing
     var route: [RouteCoordinate]
+    /// The places the author marked along the route, checked and bounded —
+    /// see ``CommunityRoutePayload/places(_:)``. Their ids are the author's,
+    /// which is what the photographs' ``CommunityPhotoPin/placeID``s name.
+    var places: [TrailPlace] = []
     var trackDescription: String?
     var photoPins: [CommunityPhotoPin]
     /// Downloaded photographs, in ``photoPins`` order.

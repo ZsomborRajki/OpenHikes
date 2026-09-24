@@ -113,6 +113,16 @@
 # measured and have `TrailPlaceFilterTests`. No UI suite reaches it either — it
 # is withheld with the pill on a launch that has no place source.
 #
+# Six arrived with the place overhaul on 2026-09-24, and they are the
+# ordinary case: `HikePlaceView` (a saved hike's place screen),
+# `HikePlaceEditor`, `HikePlaceSearchSheet` and `RecordingPlaceSheet` are
+# screens; `TrailPlaceCardParts` is the rows both place cards are built from,
+# folded out of `TrailPlaceSheet`; `MapSheet+Places` is the sheet's
+# destination for the new route. What they decide stays measured, in files
+# of its own with suites of their own: `HikePlaceCard`,
+# `TrailPlaceCorridorSearch` (with `HikePlaceSearch`),
+# `NearbyPlaceSuggestions`, and the editing rules on `Hike` in `TrailPoint`.
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -181,3 +191,9 @@ OpenHikes/Tiles/TileAttributionView.swift
 OpenHikes/Weather/WeatherAttributionBanner.swift
 OpenHikes/Weather/WeatherBadge.swift
 OpenHikes/Weather/WeatherDetailSheet.swift
+OpenHikes/Hikes/Places/HikePlaceView.swift
+OpenHikes/Hikes/Places/HikePlaceEditor.swift
+OpenHikes/Hikes/Places/HikePlaceSearchSheet.swift
+OpenHikes/Hikes/Places/TrailPlaceCardParts.swift
+OpenHikes/Recording/RecordingPlaceSheet.swift
+OpenHikes/Map/MapSheet+Places.swift

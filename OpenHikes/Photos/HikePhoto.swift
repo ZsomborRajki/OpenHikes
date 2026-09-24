@@ -209,6 +209,23 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// three-way optional itself.
     var isPlaceOnly: Bool? // swiftlint:disable:this discouraged_optional_boolean
 
+    /// The place on the trail this is a photograph *of* — the ``TrailPoint``
+    /// whose card shows it — or `nil` for one that belongs to the walk as a
+    /// whole, which is most of them.
+    ///
+    /// A link rather than a second gallery. A place's pictures are this hike's
+    /// pictures, stored, synced, shown, published and imported by exactly the
+    /// machinery every other photograph goes through; the only thing a place
+    /// adds is which of them to show on its card. A new key in the `CD_photos`
+    /// blob, so no mirrored column — the shape ``importedAuthorName`` took —
+    /// and optional for the reason ``sentToCommunityAt`` is.
+    ///
+    /// Not cleared when the place goes by anything but
+    /// ``Hike/removePlace(id:in:)``, which does it. A place deleted on another
+    /// device leaves a link to nothing here, which reads as *no place* —
+    /// ``Hike/photos(ofPlace:)`` is only ever asked about places that exist.
+    var placeID: UUID?
+
     init(
         id: UUID = UUID(),
         capturedAt: Date = .now,
@@ -325,6 +342,34 @@ extension Hike {
     func addPhoto(_ photo: HikePhoto) {
         guard !photos.contains(where: { $0.id == photo.id }) else { return }
         photos.append(photo)
+    }
+
+    /// The photographs filed under one place, in gallery order.
+    func photos(ofPlace placeID: UUID) -> [HikePhoto] {
+        orderedPhotos.filter { $0.placeID == placeID }
+    }
+
+    /// Files one photograph under a place, answering it as filed.
+    @discardableResult func filePhoto(id: UUID, underPlace placeID: UUID?) -> HikePhoto? {
+        guard let index = photos.firstIndex(where: { $0.id == id }) else { return nil }
+        guard photos[index].placeID != placeID else { return photos[index] }
+        photos[index].placeID = placeID
+        return photos[index]
+    }
+
+    /// Returns every photograph filed under a place to the hike's own
+    /// gallery — what taking the place away does to them.
+    func unfilePhotos(fromPlace placeID: UUID) {
+        guard photos.contains(where: { $0.placeID == placeID }) else { return }
+        // One assignment of the whole array rather than a write per element,
+        // for the reason ``CommunityPublisher`` gives: every element write to
+        // a `@Model` array property is a separate change notification.
+        photos = photos.map { photo in
+            guard photo.placeID == placeID else { return photo }
+            var unfiled = photo
+            unfiled.placeID = nil
+            return unfiled
+        }
     }
 
     /// Forgets a photo. The file itself is removed by the caller through

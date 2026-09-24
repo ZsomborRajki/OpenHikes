@@ -52,7 +52,7 @@ struct SheetRouteTests {
         #expect(path == [.recording])
     }
 
-    @Test("deleting a hike takes its pushed photo viewer with it")
+    @Test("deleting a hike takes its pushed photo viewer and place screens with it")
     func photoRouteBelongsToItsHike() throws {
         let context = try Fixture.modelContext()
         let deleted = Fixture.hike(in: context, title: "Ridge Loop")
@@ -60,6 +60,7 @@ struct SheetRouteTests {
         let path: [SheetRoute] = [
             .hike(deleted),
             .photo(deleted, UUID()),
+            .place(deleted, UUID()),
             .hike(survivor),
         ]
 
@@ -171,5 +172,26 @@ struct SheetRouteTests {
             pin: CommunityPhotoPin(capturedAt: .now, coordinate: nil),
             fileURL: URL(fileURLWithPath: "/tmp/community-preview/photo-\(index).jpeg")
         )
+    }
+
+    /// Hashing agrees with equality, which is what `NavigationStack` keys a
+    /// pushed screen by: two pushes of one place are one screen, and a place
+    /// is not its hike's photo just because they share a hike and an id.
+    @Test("a route hashes the way it compares")
+    func routesHashAsTheyCompare() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let id = UUID()
+        let routes: Set<SheetRoute> = [
+            .place(hike, id),
+            .place(hike, id),
+            .photo(hike, id),
+            .hike(hike),
+            .recording,
+            .trailDraft,
+        ]
+        #expect(routes.count == 5)
+        #expect(routes.contains(.place(hike, id)))
+        #expect(!routes.contains(.place(hike, UUID())))
     }
 }

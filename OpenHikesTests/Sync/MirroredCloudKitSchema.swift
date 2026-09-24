@@ -87,6 +87,9 @@ enum MirroredCloudKitSchema {
                 "longitude",
                 "name",
                 "note",
+                "osmElementID",
+                "osmElementType",
+                "osmFacts",
                 "symbolID",
             ],
             relationships: ["hike"]

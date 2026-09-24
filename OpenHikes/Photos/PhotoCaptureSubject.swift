@@ -31,13 +31,16 @@ extension View {
     ///     has no draft until it starts.
     ///   - anchor: Evaluated at the shutter, never before. See
     ///     ``PhotoCaptureController`` for why this is a closure.
+    ///   - place: The place on the trail this screen is about, which files
+    ///     a photo under it — see ``HikePhoto/placeID``.
     func photoCaptureSubject(
         _ controller: PhotoCaptureController?,
         for hike: Hike?,
+        place: UUID? = nil,
         anchor: @escaping () -> CLLocationCoordinate2D?
     ) -> some View {
         modifier(
-            PhotoCaptureSubject(controller: controller, hike: hike, anchor: anchor)
+            PhotoCaptureSubject(controller: controller, hike: hike, place: place, anchor: anchor)
         )
     }
 }
@@ -45,6 +48,7 @@ extension View {
 private struct PhotoCaptureSubject: ViewModifier {
     let controller: PhotoCaptureController?
     let hike: Hike?
+    let place: UUID?
     let anchor: () -> CLLocationCoordinate2D?
 
     @State private var token: Int?
@@ -56,6 +60,12 @@ private struct PhotoCaptureSubject: ViewModifier {
             // and the pill has to be there again when it does.
             .onAppear { claim() }
             .onDisappear { release() }
+            // A place's screen replaced by another place's, on the same hike,
+            // files photographs somewhere else from here on.
+            .onChange(of: place) { _, _ in
+                release()
+                claim()
+            }
             .onChange(of: hike?.id) { _, _ in
                 release()
                 claim()
@@ -64,7 +74,7 @@ private struct PhotoCaptureSubject: ViewModifier {
 
     private func claim() {
         guard let controller, let hike else { return }
-        token = controller.attach(to: hike, anchor: anchor)
+        token = controller.attach(to: hike, place: place, anchor: anchor)
     }
 
     private func release() {

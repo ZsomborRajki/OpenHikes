@@ -37,9 +37,21 @@ final class PhotoCaptureController {
         /// replacement has already arrived doesn't detach the replacement.
         let token: Int
         let hike: Hike
+        /// The place on the trail a photo taken now is *of*, while that
+        /// place's own screen is the one offering the pill — see
+        /// ``HikePhoto/placeID``. `nil` files it under the walk as a whole.
+        let placeID: UUID?
         /// Resolved at capture time — see the note above. `nil` means the
         /// photo joins the gallery without a place on the map.
         let anchor: () -> CLLocationCoordinate2D?
+    }
+
+    /// Where a photo taken now goes, resolved at the shutter — see
+    /// ``currentSubject()``.
+    struct Filing {
+        let hike: Hike
+        let coordinate: CLLocationCoordinate2D?
+        let placeID: UUID?
     }
 
     /// Whether the camera pill belongs on the map. Observed directly by
@@ -72,10 +84,11 @@ final class PhotoCaptureController {
     /// stopping a recording lands on that recording's detail screen.
     @discardableResult func attach(
         to hike: Hike,
+        place placeID: UUID? = nil,
         anchor: @escaping () -> CLLocationCoordinate2D?
     ) -> Int {
         nextToken += 1
-        subject = Subject(token: nextToken, hike: hike, anchor: anchor)
+        subject = Subject(token: nextToken, hike: hike, placeID: placeID, anchor: anchor)
         refreshAvailability()
         return nextToken
     }
@@ -173,8 +186,8 @@ final class PhotoCaptureController {
     /// Resolved together so the two can't come from different moments — the
     /// hiker moves between the tap and the shutter, and a coordinate taken
     /// after the subject changed would pin a photo to a trail it isn't of.
-    func currentSubject() -> (hike: Hike, coordinate: CLLocationCoordinate2D?)? {
+    func currentSubject() -> Filing? {
         guard let subject else { return nil }
-        return (subject.hike, subject.anchor())
+        return Filing(hike: subject.hike, coordinate: subject.anchor(), placeID: subject.placeID)
     }
 }

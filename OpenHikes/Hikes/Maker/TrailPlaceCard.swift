@@ -94,7 +94,7 @@ struct TrailPlaceCard: Equatable {
         }
     }
 
-    private static func subtitle(kind: String?, distance: Double?) -> String? {
+    static func subtitle(kind: String?, distance: Double?) -> String? {
         let along = distance.map { meters in
             let length = Measurement(value: meters, unit: UnitLength.meters)
                 .formatted(.measurement(width: .abbreviated, usage: .road))

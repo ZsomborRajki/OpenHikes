@@ -399,7 +399,8 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
         guard let routeAsset = record[CommunitySchema.Submission.route] as? CKAsset,
               let routeURL = routeAsset.fileURL
         else { throw CommunityFailure.noLongerAvailable }
-        let route = CommunityRoutePayload.route(atAssetURL: routeURL)
+        let contents = CommunityRoutePayload.contents(atAssetURL: routeURL)
+        let route = contents.route
         // Empty is every way the file can fail to be a route worth opening —
         // absent, unreadable, over either budget, or nothing but positions
         // that are not on earth — and they reach the hiker as one sentence
@@ -433,6 +434,7 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
         return CommunityHikeDetail(
             listing: listing,
             route: route,
+            places: contents.places,
             // Bounded for the reason ``CommunityListing/init(record:)`` bounds
             // the title: a submission is written by any client with an Apple
             // Account, and this string is rendered on the preview and copied
@@ -666,7 +668,7 @@ nonisolated extension CloudKitCommunityTransport {
     /// creating that directory if the caller has not already.
     static func stage(_ draft: CommunitySubmissionDraft) throws -> StagedAssets {
         let route = try writeJSON(
-            CommunityRouteDocument(route: draft.route),
+            CommunityRouteDocument(route: draft.route, places: draft.places),
             named: "route.json",
             in: draft.stagingDirectory
         )

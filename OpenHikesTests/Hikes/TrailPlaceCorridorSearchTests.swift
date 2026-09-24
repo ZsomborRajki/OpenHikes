@@ -1,0 +1,215 @@
+//
+//  TrailPlaceCorridorSearchTests.swift
+//  OpenHikesTests
+//
+//  *Find Places Along Trail*: how a finished line is cut into questions, and
+//  what is kept of the answers.
+//
+//  The two halves are separate on purpose. The cutting is geometry, and its
+//  promise is that no piece of the line goes unasked about while no one
+//  question is wider than the query's measured box. The keeping is the
+//  maker's own save rule — the places the line passes — applied to a trail
+//  that never went through the maker.
+//
+
+import CoreLocation
+import Foundation
+@testable import OpenHikes
+import Testing
+
+@MainActor
+@Suite("Places along a trail")
+struct TrailPlaceCorridorSearchTests {
+    private enum Line {
+        static let longitude = 12.98
+        static let south = 47.60
+        /// About 2.2 km of latitude.
+        static let north = 47.62
+        static let short = [
+            RouteCoordinate(latitude: south, longitude: longitude),
+            RouteCoordinate(latitude: north, longitude: longitude),
+        ]
+    }
+
+    /// A straight line north, `kilometres` long, one point every 100 m.
+    private static func line(kilometres: Double) -> [RouteCoordinate] {
+        let step = 100 / RouteGeometry.metersPerDegreeLatitude
+        let count = Int(kilometres * 10)
+        return (0...count).map { index in
+            RouteCoordinate(latitude: Line.south + Double(index) * step, longitude: Line.longitude)
+        }
+    }
+
+    private static func place(
+        _ id: Int64,
+        latitude: Double,
+        offEast metres: Double = 0,
+        symbol: TrailPlaceSymbol = .water
+    ) -> TrailPlace {
+        let degrees = metres / (RouteGeometry.metersPerDegreeLatitude * cos(latitude * .pi / 180))
+        return TrailPlace(
+            latitude: latitude,
+            longitude: Line.longitude + degrees,
+            symbol: symbol,
+            osm: TrailPlaceOSM(elementType: "node", elementID: id)
+        )
+    }
+
+    // MARK: Cutting the line
+
+    @Test("a short line is one question")
+    func shortLineIsOneArea() {
+        let areas = TrailPlaceCorridorSearch.areas(along: Line.short)
+        #expect(areas.count == 1)
+        #expect(areas[0].radiusMeters <= TrailPlaceCorridorSearch.stretchRadiusMeters)
+    }
+
+    @Test("a long line is cut into circles no wider than a stretch, covering every point")
+    func longLineIsCovered() {
+        let route = Self.line(kilometres: 40)
+        let areas = TrailPlaceCorridorSearch.areas(along: route)
+
+        #expect(areas.count > 1)
+        #expect(areas.allSatisfy { $0.radiusMeters <= TrailPlaceCorridorSearch.stretchRadiusMeters })
+        for point in route {
+            let covered = areas.contains { area in
+                RouteGeometry.distanceMeters(from: area.coordinate, to: point.clCoordinate) <= area.radiusMeters
+            }
+            #expect(covered)
+        }
+    }
+
+    @Test("a very long line widens its stretches rather than asking without end")
+    func veryLongLineIsCapped() {
+        let areas = TrailPlaceCorridorSearch.areas(along: Self.line(kilometres: 300))
+        #expect(areas.count <= TrailPlaceCorridorSearch.maximumAreas)
+        #expect(areas.allSatisfy { $0.radiusMeters <= TrailPointQuery.maximumRadiusMeters })
+    }
+
+    @Test("a single point is nothing to ask about")
+    func singlePointIsNothing() {
+        #expect(TrailPlaceCorridorSearch.areas(along: [Line.short[0]]).isEmpty)
+    }
+
+    // MARK: Keeping the answers
+
+    @Test("only what the line passes is kept, once each, in walking order")
+    func keepsWhatTheLinePasses() {
+        let near = Self.place(1, latitude: 47.615)
+        let first = Self.place(2, latitude: 47.605, offEast: 20)
+        let far = Self.place(3, latitude: 47.61, offEast: 400)
+
+        let kept = TrailPlaceCorridorSearch.kept([near, far, first, near], along: Line.short, excluding: [])
+
+        #expect(kept.map(\.osm?.elementID) == [2, 1])
+    }
+
+    @Test("what the hike already holds is left out, by element and by place")
+    func leavesOutWhatIsHeld() {
+        let held = Self.place(1, latitude: 47.615)
+        let sameElement = Self.place(1, latitude: 47.605)
+        let samePlace = Self.place(9, latitude: 47.61501)
+        let fresh = Self.place(4, latitude: 47.608)
+
+        let kept = TrailPlaceCorridorSearch.kept(
+            [sameElement, samePlace, fresh],
+            along: Line.short,
+            excluding: [held]
+        )
+
+        #expect(kept.map(\.osm?.elementID) == [4])
+    }
+
+    // MARK: Asking
+
+    @Test("a refused stretch is answered from the device and the refusal is reported")
+    func refusalFallsBackToStore() async throws {
+        let stored = Self.place(5, latitude: 47.61)
+        let source = RefusingSource(stored: [stored])
+
+        let outcome = try await TrailPlaceCorridorSearch.search(
+            along: Line.short,
+            excluding: [],
+            from: source,
+            showing: Set(TrailPlaceSymbol.allCases)
+        )
+
+        #expect(outcome.places.map(\.osm?.elementID) == [5])
+        #expect(outcome.outage != nil)
+    }
+
+    @Test("kinds switched off are left out of what is kept")
+    func switchedOffKindsAreLeftOut() async throws {
+        let spring = Self.place(1, latitude: 47.605)
+        let car = Self.place(2, latitude: 47.61, symbol: .parking)
+        let source = AnsweringSource(answer: [spring, car])
+
+        let outcome = try await TrailPlaceCorridorSearch.search(
+            along: Line.short,
+            excluding: [],
+            from: source,
+            showing: [.water]
+        )
+
+        #expect(outcome.places.map(\.osm?.elementID) == [1])
+        #expect(outcome.outage == nil)
+    }
+
+    @Test("a search along a saved hike adds only the places left chosen")
+    func searchAddsChosenPlaces() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: Line.short)
+        let spring = Self.place(1, latitude: 47.605)
+        let car = Self.place(2, latitude: 47.61, symbol: .parking)
+        let search = HikePlaceSearch()
+
+        search.start(for: hike, source: AnsweringSource(answer: [spring, car]), showing: Set(TrailPlaceSymbol.allCases))
+        for _ in 0..<10_000 where search.phase == .searching {
+            await Task.yield()
+        }
+        search.toggle(car.id)
+        let added = search.add(to: hike, in: context)
+
+        #expect(added == 1)
+        #expect(hike.places.map(\.osm?.elementID) == [1])
+    }
+
+    @Test("the sheet starts with everything found chosen, and a refusal with nothing is a failure")
+    func searchPhases() {
+        let search = HikePlaceSearch()
+        let spring = Self.place(1, latitude: 47.605)
+
+        search.receive(.init(places: [spring], outage: nil), along: Line.short)
+        #expect(search.chosen == [spring.id])
+        #expect(search.canAdd)
+
+        search.toggle(spring.id)
+        #expect(search.canAdd == false)
+
+        search.receive(.init(places: [], outage: .busy), along: Line.short)
+        #expect(search.phase == .failed(.busy))
+    }
+}
+
+private struct AnsweringSource: TrailPointSourcing {
+    let answer: [TrailPlace]
+
+    func places(near _: CommunitySearchArea, showing _: Set<TrailPlaceSymbol>) -> [TrailPlace] {
+        answer
+    }
+}
+
+private struct RefusingSource: TrailPointSourcing {
+    let stored: [TrailPlace]
+
+    /// What a gateway in front of a busy Overpass answers with.
+    private static let gatewayTimeout = 504
+
+    func places(near _: CommunitySearchArea, showing _: Set<TrailPlaceSymbol>) throws -> [TrailPlace] {
+        throw TrailGraphProviderError.server(statusCode: Self.gatewayTimeout)
+    }
+
+    func cachedPlaces(near _: CommunitySearchArea, limit _: Int) -> [TrailPlace] {
+        stored
+    }
+}

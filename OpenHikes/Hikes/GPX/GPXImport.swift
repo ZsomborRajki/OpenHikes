@@ -431,7 +431,8 @@ nonisolated enum GPXImport {
             coordinate: point.coordinate,
             name: BoundedText.boundedOrEmpty(waypoint.name, to: .title),
             symbol: waypoint.symbol.flatMap(symbol(named:)),
-            note: BoundedText.boundedOrEmpty(waypoint.note, to: .notes)
+            note: BoundedText.boundedOrEmpty(waypoint.note, to: .notes),
+            osm: waypoint.osm
         )
     }
 
@@ -538,6 +539,10 @@ nonisolated private extension GPXImport {
         var name: String?
         var symbol: String?
         var note: String?
+        /// The OpenStreetMap element a `<link href>` names — what
+        /// ``GPXExport`` writes for a place that came from there. `nil` for
+        /// any other link.
+        var osm: TrailPlaceOSM?
     }
 
     /// One run of points that the file itself kept together: a `<trkseg>`, or
@@ -590,6 +595,7 @@ nonisolated private extension GPXImport {
             static let elevation = "ele"
             static let time = "time"
             static let symbol = "sym"
+            static let link = "link"
         }
 
         private enum PointKind {
@@ -689,6 +695,16 @@ nonisolated private extension GPXImport {
                 element: elementName,
                 value: point(from: attributeDict)
             )
+            // A waypoint's own `<link>`, read off its attribute at the start
+            // tag because that is where `href` is. The element is already on
+            // `path`, so its parent is one further back.
+            case Element.link:
+                guard var point = pendingPoint, point.kind == .waypoint,
+                      path.dropLast().last == point.element,
+                      let href = attributeDict["href"], let url = URL(string: href),
+                      let osm = TrailPlaceOSM(url: url) else { break }
+                point.value.osm = osm
+                pendingPoint = point
             default: break
             }
         }

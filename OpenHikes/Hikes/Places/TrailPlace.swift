@@ -133,8 +133,12 @@ nonisolated struct TrailPlace: Codable, Hashable, Identifiable, Sendable {
     var note: String
     /// Where OpenStreetMap keeps this place and what else it says about it —
     /// `nil` for a place that did not come from there, such as an imported
-    /// `<wpt>`. Kept in the draft for the place sheet, and not written to a
-    /// saved hike's ``TrailPoint``.
+    /// `<wpt>` or one a hiker added while recording. Kept in the draft for the
+    /// place sheet and written to a saved hike's ``TrailPoint``, so a saved
+    /// trail's place card says what the maker's said.
+    ///
+    /// Also the line between the two kinds of place a saved hike holds: see
+    /// ``isHikersOwn``.
     var osm: TrailPlaceOSM?
 
     init(
@@ -200,6 +204,15 @@ nonisolated struct TrailPlace: Codable, Hashable, Identifiable, Sendable {
         symbol?.systemImageName ?? "mappin"
     }
 
+    /// Whether this place is the hiker's own to describe.
+    ///
+    /// **A place from OpenStreetMap is OpenStreetMap's**: its name and kind
+    /// are what the map says, and the place to correct them is
+    /// openstreetmap.org, which its card links to. So on a saved hike such a
+    /// place takes photographs and nothing else, while one the hiker made —
+    /// added while recording, or read out of a `.gpx` — can be renamed,
+    /// re-kinded and annotated. Both kinds can be removed.
+    var isHikersOwn: Bool { osm == nil }
 }
 
 /// An OpenStreetMap element, and the tags on it a hiker would want to read.
@@ -208,6 +221,31 @@ nonisolated struct TrailPlaceOSM: Codable, Hashable, Sendable {
     let elementType: String
     let elementID: Int64
     var facts: [TrailPlaceFact] = []
+
+    /// The three element types Overpass answers with. Anything else read back
+    /// off a stored row or a shared file is no element at all.
+    static let elementTypes: Set<String> = ["node", "way", "relation"]
+
+    /// The element a place-page link names, read back — what a GPX `<link>`
+    /// written by ``url`` carries. `nil` for any other URL.
+    init?(url: URL) {
+        guard url.host() == "www.openstreetmap.org" || url.host() == "openstreetmap.org" else { return nil }
+        let parts = url.pathComponents.filter { $0 != "/" }
+        guard parts.count == 2, Self.elementTypes.contains(parts[0]),
+              let id = Int64(parts[1]), id > 0 else { return nil }
+        self.init(elementType: parts[0], elementID: id)
+    }
+
+    init(elementType: String, elementID: Int64, facts: [TrailPlaceFact] = []) {
+        self.elementType = elementType
+        self.elementID = elementID
+        self.facts = facts
+    }
+
+    /// Whether two places are the same OpenStreetMap element.
+    func isSameElement(as other: Self) -> Bool {
+        elementType == other.elementType && elementID == other.elementID
+    }
 
     /// The element's page on openstreetmap.org — where to read everything else
     /// and where to correct it.

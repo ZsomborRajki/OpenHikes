@@ -9,20 +9,24 @@
 //  own schedule, and that write should redraw a short list rather than the
 //  elevation chart, the stats grid and the whole action bar with it.
 //
-//  ## Read-only, and it says so by having no controls rather than by refusing
+//  ## A row opens the place, and the section can find more
 //
-//  Editing the route or the places of an existing hike is out of scope — the
-//  plan issue draws that line. What this screen has instead is the one thing a
-//  reader wants, which is to find the place on the map.
+//  Each row opens the place's own screen — ``HikePlaceView`` — where its
+//  photographs are added and, for a place the hiker made, its name and kind
+//  changed. The route itself is still not editable here; the places along it
+//  are the part of a finished trail a hiker adds to.
 //
-//  ## Absent rather than empty
+//  *Find Places Along Trail* asks OpenStreetMap what the line passes, for a
+//  trail that never went through the maker's *Search this area* — a recorded
+//  walk, an imported file, a hike saved from somebody else. See
+//  ``TrailPlaceCorridorSearch``.
 //
-//  Unlike ``HikePhotoSection``, which is unconditional because it carries an
-//  offer — *go and find some* — this draws nothing for a hike with no places.
-//  There is nothing to offer: the only way to mark one is in the maker, this
-//  screen is not the maker, and a section that said "no places" on every
-//  recorded walk and every imported file would be a permanent empty shelf on
-//  the commonest screen in the app.
+//  ## Absent only when there is nothing to show and nothing to offer
+//
+//  A hike with no places draws the section when it can offer the search —
+//  a line to search along, and a launch that may ask OpenStreetMap — and
+//  nothing otherwise, which is every hike under a test launch and a hike with
+//  no route.
 //
 
 import SwiftUI
@@ -32,9 +36,18 @@ struct HikePlaceSection: View {
     /// Draws these places on the map for as long as this section is on screen.
     /// `nil` in a preview, and in a test that has no map.
     var mapPins: TrailPlacePinController?
-    /// Frames one on the map. The same span a photograph's *Show on map* uses,
-    /// because the question is the same one: where on the trail is this?
-    var onShow: (TrailPlace) -> Void = { _ in /* no-op default */ }
+    /// Where *Find Places Along Trail* asks, or `nil` for a launch that must
+    /// not ask anything — see ``OpenHikesModel/makeTrailPointSource()``.
+    var search: TrailPlaceSearchScope?
+    /// Opens one place's screen.
+    var onOpen: (UUID) -> Void = { _ in /* no-op default */ }
+
+    @State private var isSearching = false
+
+    private var canSearch: Bool {
+        guard let search, hike.isAttached else { return false }
+        return hike.pointCount > 1 && !hike.isRecording && !search.symbols.isEmpty
+    }
 
     @ViewBuilder var body: some View {
         // Ordered once and handed down, the way ``HikePhotoSection`` orders
@@ -42,6 +55,67 @@ struct HikePlaceSection: View {
         // sorts them against the route, and asking twice in one pass would do
         // all of it twice.
         let rows = hike.orderedPlaces
+        if !rows.isEmpty || canSearch {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Places")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+                if !rows.isEmpty {
+                    let photoCounts = Self.photoCounts(hike.photos)
+                    VStack(spacing: 0) {
+                        ForEach(rows) { row in
+                            Button { onOpen(row.id) } label: {
+                                HStack(spacing: 8) {
+                                    TrailPlaceRowView(row: row, photoCount: photoCounts[row.id] ?? 0)
+                                    Image(systemName: "chevron.forward")
+                                        .font(.footnote.weight(.semibold))
+                                        .foregroundStyle(.tertiary)
+                                        .accessibilityHidden(true)
+                                }
+                                .contentShape(.rect)
+                            }
+                            .buttonStyle(.plain)
+                            if row.id != rows.last?.id { Divider() }
+                        }
+                    }
+                    .accessibilityIdentifier("hike-places")
+                }
+                if let search, canSearch {
+                    Button("Find Places Along Trail", systemImage: "magnifyingglass") {
+                        isSearching = true
+                    }
+                    .accessibilityIdentifier("hike-place-search")
+                    .sheet(isPresented: $isSearching) {
+                        HikePlaceSearchSheet(hike: hike, source: search.source, symbols: search.symbols)
+                    }
+                }
+            }
+            // The claim is on the section rather than on the screen, so the
+            // pins go on the map when there are places to draw and come off
+            // when the hiker leaves — see ``TrailPlacePinController``.
+            .trailPlacePins(mapPins, rows: rows, onOpen: onOpen)
+        }
+    }
+
+    /// How many photographs each place has, counted once for every row.
+    private static func photoCounts(_ photos: [HikePhoto]) -> [UUID: Int] {
+        photos.reduce(into: [:]) { counts, photo in
+            guard let placeID = photo.placeID else { return }
+            counts[placeID, default: 0] += 1
+        }
+    }
+}
+
+/// A shared hike's places, on its preview: the same rows as a saved hike's
+/// section, and nothing to tap — the places are the author's until the hike
+/// is saved, and saving is what copies them. See ``CommunityImport``.
+struct SharedTrailPlaceSection: View {
+    let places: [TrailPlace]
+    let route: [RouteCoordinate]
+
+    @ViewBuilder var body: some View {
+        let rows = TrailPlaceOrder.ordered(places, along: route)
         if !rows.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Places")
@@ -50,19 +124,12 @@ struct HikePlaceSection: View {
                     .accessibilityAddTraits(.isHeader)
                 VStack(spacing: 0) {
                     ForEach(rows) { row in
-                        Button { onShow(row.place) } label: {
-                            TrailPlaceRowView(row: row)
-                        }
-                        .buttonStyle(.plain)
+                        TrailPlaceRowView(row: row)
                         if row.id != rows.last?.id { Divider() }
                     }
                 }
             }
-            .accessibilityIdentifier("hike-places")
-            // The claim is on the section rather than on the screen, so the
-            // pins go on the map when there are places to draw and come off
-            // when the hiker leaves — see ``TrailPlacePinController``.
-            .trailPlacePins(mapPins, rows: rows)
+            .accessibilityIdentifier("community-hike-places")
         }
     }
 }
@@ -76,6 +143,11 @@ struct HikePlaceSection: View {
 /// the normal case; see ``TrailPlace/displayName``.
 struct TrailPlaceRowView: View {
     let row: TrailPlaceRow
+    /// How many photographs are filed under it, drawn when there are any.
+    var photoCount = 0
+    /// How much of the note to draw. Two lines in a list; all of it where a
+    /// reviewer has to read every word — see ``CommunityReviewView``.
+    var noteLineLimit: Int? = 2
 
     private var place: TrailPlace { row.place }
 
@@ -92,10 +164,16 @@ struct TrailPlaceRowView: View {
                     Text(place.note)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .lineLimit(noteLineLimit)
                 }
             }
             Spacer(minLength: 12)
+            if photoCount > 0 {
+                Label("\(photoCount)", systemImage: "photo")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(Text("\(photoCount) photos"))
+            }
             if let anchor = row.anchor {
                 Text(Self.length(anchor.distanceAlongRouteMeters))
                     .foregroundStyle(.secondary)
