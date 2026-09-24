@@ -74,5 +74,29 @@ extension MapCoordinatorTests {
         #expect(renderer.strokeColor?.cgColor.components == expected)
         #expect(pin.layer.backgroundColor?.components == expected)
     }
+
+    /// A stop picked in the search sheet is put down while that sheet is over
+    /// the map, and UIKit dims every tint behind a presented sheet. A pin
+    /// resolved then kept the grey for good — its layer holds a `CGColor`,
+    /// which nothing un-dims when the sheet goes.
+    @Test("a pin made while a sheet dims the map is still the accent colour")
+    func draftTintIgnoresADimmedMap() async throws {
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        map.overrideUserInterfaceStyle = .light
+        map.tintAdjustmentMode = .dimmed
+        defer { detach(map) }
+        trailMaker.setEditing(true)
+        for latitude in [Slope.south, Slope.north] {
+            trailMaker.appendWaypoint(at: CLLocationCoordinate2D(latitude: latitude, longitude: Slope.longitude))
+        }
+        await settle(until: "the draft's line to be drawn") {
+            !coordinator.trailDraftOverlays.isEmpty
+        }
+        let pin = try #require(coordinator.trailDraftAnnotations.first)
+        let view = try #require(coordinator.mapView(map, viewFor: pin))
+
+        #expect(view.layer.backgroundColor?.components == Self.accent(.light))
+    }
     #endif
 }

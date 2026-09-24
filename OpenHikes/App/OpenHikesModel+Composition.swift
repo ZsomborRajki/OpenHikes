@@ -199,11 +199,15 @@ extension OpenHikesModel {
     }
 
     /// Tests exercise the selector without asking Apple's live service. Unit
-    /// suites inject geometry at the router seam; UI launches get a no-route answer.
+    /// suites inject geometry at the router seam; UI launches get a no-route
+    /// answer unless they asked for the live one by name — see
+    /// ``AppLaunchEnvironment/asksLiveMakerServices``.
     static func makeDirectionsRouters() -> [TrailTravelMode: any TrailLegRouting] {
         var routers: [TrailTravelMode: any TrailLegRouting] = [:]
+        let isStubbed = AppLaunchEnvironment.isRunningTests
+            && !AppLaunchEnvironment.asksLiveMakerServices
         for mode in TrailTravelMode.allCases where mode != .hiking {
-            if AppLaunchEnvironment.isRunningTests {
+            if isStubbed {
                 routers[mode] = DirectionsTrailLegRouter(mode: mode, calculate: { _, _ in [] })
             } else {
                 routers[mode] = DirectionsTrailLegRouter(mode: mode)
@@ -248,8 +252,14 @@ extension OpenHikesModel {
     /// `nil` rather than ``DormantElevationSource`` so nothing is even
     /// scheduled: see ``TrailDraftElevation/isAvailable``, which is what keeps
     /// a suite from holding a debounce it will never spend.
+    ///
+    /// The one launch under automation that asks is the one that said so by
+    /// name — ``AppLaunchEnvironment/asksLiveMakerServices``, which only the
+    /// App Store frame of a drawn trail passes, and which spends one call.
     static func makeTrailElevationSource() -> (any CuratedElevationSourcing)? {
-        guard !AppLaunchEnvironment.isRunningTests else { return nil }
+        let isStubbed = AppLaunchEnvironment.isRunningTests
+            && !AppLaunchEnvironment.asksLiveMakerServices
+        guard !isStubbed else { return nil }
         return StadiaElevationSource()
     }
 
