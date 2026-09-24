@@ -152,6 +152,7 @@ struct MapSheet: View {
                     onSelectListing: select,
                     onSelectPending: { presentation.path.append(.pendingSubmission($0)) },
                     onSelectPendingPhotos: { presentation.path.append(.pendingPhotos($0)) },
+                    onOpenTotals: { presentation.path.append(.totals) },
                     onDelete: delete,
                     onWithdraw: { withdrawingHike = $0 },
                     onImport: presentImporter
@@ -501,10 +502,9 @@ struct MapSheet: View {
             placeDestination(placeID, of: hike)
         case let .newPlace(hike, spot):
             placeAdderDestination(at: spot, on: hike)
-        case .trailDraft:
-            trailDraftDestination
-        case .recording:
-            recordingDestination
+        case .trailDraft: trailDraftDestination
+        case .recording: recordingDestination
+        case .totals: LibraryTotalsView(onOpenHike: openRecord)
         case let .photo(hike, photoID):
             HikePhotoViewer(
                 hike: hike,

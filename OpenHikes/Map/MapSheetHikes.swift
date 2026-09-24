@@ -118,6 +118,8 @@ struct MapSheetHikes: View, Equatable {
     /// type, because the two destinations are different screens and the sum
     /// would be unwrapped at the only place it was ever built.
     var onSelectPendingPhotos: (CommunityPendingPhotos) -> Void = { _ in /* no-op default */ }
+    /// *Totals* tapped: the caller pushes ``LibraryTotalsView``.
+    var onOpenTotals: () -> Void = { /* no-op default */ }
     /// The surviving hikes are handed over with the doomed one because freeing
     /// its tiles means asking which of them are still claimed elsewhere.
     let onDelete: (Hike, [Hike]) -> Void
@@ -338,6 +340,16 @@ private extension MapSheetHikes {
                 sortMenu
             }
             Spacer(minLength: 0)
+            if editMode != .active {
+                Button(action: onOpenTotals) {
+                    Label("Totals", systemImage: "chart.bar.xaxis")
+                        .font(.footnote.weight(.semibold))
+                        .minimumTapTarget()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+                .accessibilityIdentifier("library-totals-button")
+            }
         }
         .padding(.horizontal)
     }
