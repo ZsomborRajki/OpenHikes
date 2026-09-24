@@ -611,7 +611,9 @@ private extension MapSheetHikes {
     }
 
     var makerIcon: Text {
-        Text(Image(systemName: MapTrailDraftControlsView.symbolName)).foregroundStyle(.tint)
+        // Primary, as the map's own button draws it, so the sentence shows the
+        // glyph the hiker is looking for.
+        Text(Image(systemName: MapTrailDraftControlsView.symbolName)).foregroundStyle(.primary)
     }
     #endif
 }

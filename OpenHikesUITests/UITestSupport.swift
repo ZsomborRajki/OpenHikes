@@ -503,6 +503,10 @@ extension XCTestCase {
     /// Far enough to cross a hike's detail screen, short enough that a section
     /// arriving late is not missed by a search stuck at the far end of it.
     private static let swipesPerSweep = 4
+    /// A spot nothing in the app answers: the status bar, left of the
+    /// Dynamic Island. See ``startRecording(in:)``.
+    private static let inertStatusBarX: CGFloat = 0.2
+    private static let inertStatusBarY: CGFloat = 0.03
 
     /// Polls a selection trait rather than sleeping on it: the write goes
     /// through SwiftData and back out through SwiftUI, so "tapped" and
@@ -625,12 +629,16 @@ extension XCTestCase {
         return false
     }
 
-    /// Starts a recording from the sheet and waits for the recording screen.
-    /// The app is tapped first because a launch that has just asked for
-    /// location leaves the interruption monitor waiting for one event.
+    /// Starts a recording from the map's record button and waits for the
+    /// recording screen. The app is tapped first because a launch that has
+    /// just asked for location leaves the interruption monitor waiting for one
+    /// event — and tapped in the status bar, left of the Dynamic Island,
+    /// because the middle of the screen is the sheet's grabber, which expands
+    /// the sheet and fades out the button this is about to tap.
     @MainActor
     func startRecording(in app: XCUIApplication) {
-        app.tap()
+        let statusBar = CGVector(dx: Self.inertStatusBarX, dy: Self.inertStatusBarY)
+        app.coordinate(withNormalizedOffset: statusBar).tap()
         let recordButton = element("record-hike-button", in: app)
         XCTAssertTrue(
             recordButton.waitForExistence(timeout: UITestTimeout.navigation)

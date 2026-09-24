@@ -83,10 +83,12 @@ final class MapTrailDraftControlsView: UIView {
 
     private func applyRecordingAppearance() {
         guard let recordButton, let recordGlass else { return }
+        // The configuration's colour rather than the button's tint, which a
+        // plain button on glass does not carry to its glyph.
         recordButton.configuration?.image = Self.symbol(
             isRecording ? Self.recordingSymbolName : Self.recordSymbolName
         )
-        recordButton.tintColor = isRecording ? .white : .systemRed
+        recordButton.configuration?.baseForegroundColor = isRecording ? .white : .systemRed
         let glass = UIGlassEffect(style: .regular)
         if isRecording { glass.tintColor = .systemRed }
         recordGlass.effect = glass
