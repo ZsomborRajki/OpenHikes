@@ -180,7 +180,21 @@ extension XCTestCase {
             community.waitForExistence(timeout: UITestTimeout.trace),
             "a launch with a community transport should offer the Community segment"
         )
-        community.tap()
+        // Tapped until it is selected rather than once. The launch's location
+        // prompt comes up over this first tap, the interruption monitor
+        // answers it and XCTest replays the tap — and in dark appearance the
+        // replay lands while the alert is still leaving and is lost, every
+        // time: the sheet stayed on My Hikes and screenshot frame 03 failed
+        // both dark attempts. The same *trust the effect, not the gesture*
+        // rule as ``replaceText(of:with:timeout:)``.
+        XCTAssertTrue(
+            waitUntil {
+                if community.isSelected { return true }
+                community.tap()
+                return community.isSelected
+            },
+            "tapping Community should select it"
+        )
         searchThisAreaIfOffered(in: app)
     }
 
