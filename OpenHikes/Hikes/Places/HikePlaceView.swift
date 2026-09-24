@@ -29,6 +29,7 @@
 //  There is no second importer to drift from the first.
 //
 
+import OpenHikesData
 import SwiftData
 import SwiftUI
 

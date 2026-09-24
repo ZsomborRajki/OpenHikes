@@ -10,6 +10,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// A stand-in for the picker's per-asset loop: it yields between items, so a

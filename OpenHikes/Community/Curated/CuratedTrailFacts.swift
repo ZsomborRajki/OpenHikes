@@ -25,6 +25,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// The colours OpenStreetMap's `osmc:symbol` draws a waymark in.
 ///

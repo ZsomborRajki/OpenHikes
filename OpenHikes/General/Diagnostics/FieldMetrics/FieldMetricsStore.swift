@@ -27,6 +27,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import os
 
 /// One stored report — either a metric payload's digest or the diagnostics

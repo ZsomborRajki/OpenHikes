@@ -15,6 +15,7 @@
 //  header row is: the dialog's state belongs here and nowhere above.
 //
 
+import OpenHikesData
 import SwiftUI
 
 struct HikeRouteEditButton: View {

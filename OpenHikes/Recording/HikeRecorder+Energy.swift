@@ -23,6 +23,7 @@
 
 import Foundation
 import Observation
+import OpenHikesData
 
 extension HikeRecorder {
     /// What the GPS should be configured as, given everything currently known.

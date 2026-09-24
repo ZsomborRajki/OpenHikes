@@ -22,6 +22,7 @@
 import CoreLocation
 import MapKit
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 @Suite("Trail stop names")

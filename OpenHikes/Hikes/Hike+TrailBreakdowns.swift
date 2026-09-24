@@ -11,6 +11,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 extension Hike {
     /// The stored breakdown, rebuilt from ``surfaceMetersByCategory``.

@@ -10,6 +10,7 @@
 //  more of the sheet.
 //
 
+import OpenHikesData
 import SwiftUI
 
 extension MapSheet {

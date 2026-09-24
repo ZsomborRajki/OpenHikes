@@ -1,0 +1,320 @@
+//
+//  HikeSupportingTypes.swift
+//  OpenHikes
+//
+//  Value types stored inline by SwiftData as part of a Hike, the
+//  elevation-profile sample type derived from a route, and the coordinate
+//  geometry every route-matching path shares.
+//
+
+import CoreLocation
+import Foundation
+
+/// A record of one offline tile download for a hike. Stored inline by SwiftData
+/// as part of ``Hike/offlineDownloads``. Complete downloads stay compact by
+/// recomputing their tile grid; partial downloads record only the keys that
+/// actually reached durable storage.
+nonisolated public struct OfflineDownloadRecord: Codable, Hashable, Sendable {
+    /// Tile provider the download used (namespaces the cache keys).
+    public var providerID: String
+    /// Deepest zoom level saved.
+    public var maxZoom: Int
+    /// Exact durable keys for a partial download. An empty array indicates
+    /// that every tile in the deterministic grid was saved (complete download).
+    public var savedTileKeys: [String]
+
+    public init(providerID: String, maxZoom: Int, savedTileKeys: [String] = []) {
+        self.providerID = providerID
+        self.maxZoom = maxZoom
+        self.savedTileKeys = savedTileKeys
+    }
+}
+
+/// One point on the elevation profile: metres from start vs. elevation in metres.
+///
+/// Identified by its own distance rather than a per-instance `UUID`: the chart's
+/// `ForEach` diffs the plotted samples by `id`, so a fresh identity per instance
+/// made every rebuild of the same route diff as a wholesale replacement. Distance
+/// along the route is unique within a profile (``RouteProfile`` keeps the plotted
+/// samples strictly ascending) and identical across rebuilds — and costs nothing
+/// to derive, where `UUID()` is allocated per sample.
+nonisolated public struct ElevationSample: Identifiable, Equatable, Sendable {
+    public var id: Double { distanceMeters }
+    public let distanceMeters: Double
+    public let elevation: Double
+
+    public init(distanceMeters: Double, elevation: Double) {
+        self.distanceMeters = distanceMeters
+        self.elevation = elevation
+    }
+}
+
+/// How a fix was moving, where Core Motion judged it was not on foot.
+///
+/// **Collected but not yet read.** ``RecordingPoint/routeCoordinate`` tags a
+/// fix `.nonPedestrian` when Core Motion reports automotive, cycling or an
+/// otherwise non-walking activity, and it is persisted with the route — but no
+/// statistic, chart, breakdown or export consults it today.
+///
+/// That is deliberate rather than an oversight. The intended use is flagging
+/// or excluding vehicle-assisted segments (a chairlift, a shuttle bus, the
+/// drive to a second trailhead), which distorts distance, pace and ascent
+/// figures for anyone whose walk included one. Recording it now means the
+/// feature can be built against hikes people have *already* recorded, where
+/// dropping the field would make every existing route permanently unusable
+/// for it — Core Motion's judgement cannot be reconstructed after the fact.
+///
+/// One `String?` per track point is a cheap option to hold open. Do not remove
+/// it as unused: an unused-symbol sweep is right about the reads and wrong
+/// about the reason.
+nonisolated public enum RouteMotion: String, Codable, Hashable, Sendable {
+    case nonPedestrian = "nonPedestrian"
+}
+
+/// Where a track point's position came from, where it was not a measurement.
+///
+/// A recording that loses its fixes — a phone in a pack, a wooded valley, a
+/// suspended app — comes back with stretches nothing was observed across. The
+/// route still has to be drawn through them, either along the mapped trail
+/// ``TrailMatcher`` bridged the gap with or, failing that, as a straight line.
+/// Both are inferences, and a route that does not say so reports a guess with
+/// the same authority as a measurement.
+///
+/// Like ``RecordingPointFlags/inferred``, which is what writes it, this
+/// describes the stretch *leading to* the point that carries it rather than
+/// the point itself — the segment property has to live on one of its two ends,
+/// and the end is the one that survives joining consecutive legs.
+///
+/// `nil` means measured.
+nonisolated public enum RouteProvenance: String, Codable, Hashable, Sendable {
+    case inferred = "inferred"
+}
+
+/// Why a track point does not continue the stretch before it.
+///
+/// A pause is the hiker's own decision to stop recording, so the ground
+/// between the last fix before it and the first fix after it is not a lost
+/// signal — nothing was *meant* to be observed there. That is why it is not
+/// ``RouteProvenance/inferred``: the app has not reasoned about where the
+/// hiker went, it has been told not to ask. ``TrailMatcher/isGap(from:to:)``
+/// has always drawn that distinction live, refusing to bridge across a
+/// resume; this is the same fact surviving into the saved route, where the
+/// map, the elevation profile and the GPX export can each say it.
+///
+/// Like ``RouteProvenance``, it describes the stretch *leading to* the point
+/// that carries it — the pause ended when this fix arrived — which is what
+/// lets a boundary survive the join between two matched legs.
+///
+/// `nil` means the point continues the preceding segment.
+nonisolated public enum RouteBoundary: String, Codable, Hashable, Sendable {
+    case paused = "paused"
+}
+
+/// A single Codable track point. Stored inline by SwiftData as part of ``Hike/route``.
+nonisolated public struct RouteCoordinate: Codable, Hashable, Sendable {
+    public var latitude: Double
+    public var longitude: Double
+    public var elevation: Double?
+    public var timestamp: Date?
+    /// Recorded for a future feature, read by nothing today — see
+    /// ``RouteMotion``.
+    public var motion: RouteMotion?
+    /// `nil` for a measured point — see ``RouteProvenance``.
+    public var provenance: RouteProvenance?
+    /// `nil` for a point that simply continues the one before it — see
+    /// ``RouteBoundary``.
+    public var boundary: RouteBoundary?
+
+    public init(
+        latitude: Double,
+        longitude: Double,
+        elevation: Double? = nil,
+        timestamp: Date? = nil,
+        motion: RouteMotion? = nil,
+        provenance: RouteProvenance? = nil,
+        boundary: RouteBoundary? = nil
+    ) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.elevation = elevation
+        self.timestamp = timestamp
+        self.motion = motion
+        self.provenance = provenance
+        self.boundary = boundary
+    }
+
+    public init(_ coordinate: CLLocationCoordinate2D) {
+        latitude = coordinate.latitude
+        longitude = coordinate.longitude
+        motion = nil
+        provenance = nil
+        boundary = nil
+    }
+
+    public var clCoordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    /// Whether this point's position was reasoned about rather than measured.
+    public var isInferred: Bool { provenance == .inferred }
+
+    /// Whether the recording was paused over the stretch arriving at this
+    /// point.
+    public var isPauseBoundary: Bool { boundary == .paused }
+}
+
+nonisolated public enum RouteGeometry {
+    /// Mean earth radius, for the great-circle work below. Deliberately not
+    /// the figure ``metersPerDegreeLatitude`` is rounded from: a distance
+    /// between two fixes wants the mean radius, a padding buffer wants the
+    /// equatorial one, and the two differ by about 125 metres a degree.
+    private static let earthRadiusMeters = 6_371_008.8
+
+    /// Ground metres in one degree of latitude — and, scaled by the cosine of
+    /// the latitude, in one degree of longitude.
+    ///
+    /// ``Mercator/equatorialCircumferenceMeters`` over 360, rounded, which is
+    /// strictly a degree of *longitude* at the equator. A degree of latitude
+    /// isn't constant on an oblate earth — roughly 110_570 m at the equator
+    /// against 111_690 m at the poles — and this one figure stands in for
+    /// both. So it is only for sizing a buffer already an order of magnitude
+    /// larger than that spread: ``TileBoundingBox/padded(byMeters:)``, the
+    /// radius ``TrailRegion`` registers, the one ``CommunityQueryPolicy``
+    /// reads off the visible span, the box ``CuratedTrailQuery`` circumscribes
+    /// a search area with, and the tolerance ``CommunityRouteOverlap``
+    /// pads a route's box by. Anything that has to be right on the ground goes
+    /// through ``distanceMeters(from:to:)`` instead.
+    public static let metersPerDegreeLatitude: Double = 111_320
+
+    /// Great-circle distance without allocating Core Location objects per leg.
+    public static func distanceMeters(
+        from start: CLLocationCoordinate2D,
+        to end: CLLocationCoordinate2D
+    ) -> Double {
+        let startLatitude = start.latitude * .pi / 180
+        let endLatitude = end.latitude * .pi / 180
+        let latitudeDelta = (end.latitude - start.latitude) * .pi / 180
+        let longitudeDelta = normalizedLongitudeDelta(end.longitude - start.longitude) * .pi / 180
+        let latitudeTerm = sin(latitudeDelta / 2)
+        let longitudeTerm = sin(longitudeDelta / 2)
+        let haversine = latitudeTerm * latitudeTerm
+            + cos(startLatitude) * cos(endLatitude) * longitudeTerm * longitudeTerm
+        let bounded = min(max(haversine, 0), 1)
+        return 2 * earthRadiusMeters * atan2(sqrt(bounded), sqrt(1 - bounded))
+    }
+
+    /// Local tangent-plane offset in metres. Accurate enough for projecting a
+    /// fix onto nearby trail segments, while preserving the short direction
+    /// across the antimeridian.
+    public static func localOffset(
+        from origin: CLLocationCoordinate2D,
+        to coordinate: CLLocationCoordinate2D
+    ) -> (x: Double, y: Double) {
+        let latitudeRadians = origin.latitude * .pi / 180
+        let longitudeDelta = normalizedLongitudeDelta(
+            coordinate.longitude - origin.longitude
+        )
+        return (
+            x: longitudeDelta * .pi / 180
+                * earthRadiusMeters * cos(latitudeRadians),
+            y: (coordinate.latitude - origin.latitude) * .pi / 180
+                * earthRadiusMeters
+        )
+    }
+
+    /// Where a fix falls on one segment, measured in the fix's own tangent
+    /// plane so the projection is exact at the point that matters.
+    public struct SegmentProjection {
+        /// How far along the segment the closest point sits, clamped to
+        /// `0...1` so a fix beyond either end projects onto that end rather
+        /// than onto the segment's infinite extension.
+        public let fraction: Double
+        /// Distance from the fix to that closest point, in metres.
+        public let offRouteMeters: Double
+        /// The segment's local east/north components, pointing the way the
+        /// segment runs. Kept as components rather than a bearing so the
+        /// `atan2` is paid only by the callers that need a direction, not by
+        /// every segment scanned on every published fix.
+        public let dx: Double
+        public let dy: Double
+
+        public init(fraction: Double, offRouteMeters: Double, dx: Double, dy: Double) {
+            self.fraction = fraction
+            self.offRouteMeters = offRouteMeters
+            self.dx = dx
+            self.dy = dy
+        }
+    }
+
+    /// Projects `coordinate` onto the segment between `start` and `end`.
+    ///
+    /// Live auto-follow (``RouteProfile``), trail matching, and surface and
+    /// difficulty attribution all need the same answer. One implementation
+    /// means a fix can't be judged on-route by one of them and off-route by
+    /// another.
+    public static func project(
+        _ coordinate: CLLocationCoordinate2D,
+        onSegmentFrom start: CLLocationCoordinate2D,
+        to end: CLLocationCoordinate2D
+    ) -> SegmentProjection {
+        let startOffset = localOffset(from: coordinate, to: start)
+        let endOffset = localOffset(from: coordinate, to: end)
+        let dx = endOffset.x - startOffset.x
+        let dy = endOffset.y - startOffset.y
+        let lengthSquared = dx * dx + dy * dy
+        let fraction = lengthSquared > 0
+            ? min(
+                max(
+                    -(startOffset.x * dx + startOffset.y * dy) / lengthSquared,
+                    0
+                ),
+                1
+            )
+            : 0
+        return SegmentProjection(
+            fraction: fraction,
+            offRouteMeters: hypot(
+                startOffset.x + fraction * dx,
+                startOffset.y + fraction * dy
+            ),
+            dx: dx,
+            dy: dy
+        )
+    }
+
+    public static func interpolate(
+        from start: CLLocationCoordinate2D,
+        to end: CLLocationCoordinate2D,
+        fraction: Double
+    ) -> CLLocationCoordinate2D {
+        let bounded = min(max(fraction, 0), 1)
+        let longitude = start.longitude
+            + normalizedLongitudeDelta(end.longitude - start.longitude)
+                * bounded
+        return CLLocationCoordinate2D(
+            latitude: start.latitude
+                + (end.latitude - start.latitude) * bounded,
+            longitude: normalizedLongitude(longitude)
+        )
+    }
+
+    public static func normalizedLongitudeDelta(_ delta: Double) -> Double {
+        var normalized = delta.truncatingRemainder(dividingBy: 360)
+        if normalized > 180 { normalized -= 360 }
+        if normalized < -180 { normalized += 360 }
+        return normalized
+    }
+
+    /// Longitude brought back into `[-180, 180)`.
+    ///
+    /// The one copy. ``TileBoundingBox`` and ``TrailRegion`` each grew their
+    /// own, and one of those had drifted into a different arrangement of the
+    /// same arithmetic — agreeing with this one everywhere either is called,
+    /// which is exactly the kind of agreement that holds until it doesn't.
+    public static func normalizedLongitude(_ longitude: Double) -> Double {
+        var normalized = longitude.truncatingRemainder(dividingBy: 360)
+        if normalized >= 180 { normalized -= 360 }
+        if normalized < -180 { normalized += 360 }
+        return normalized
+    }
+}

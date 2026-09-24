@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 nonisolated extension GPXImport {
     /// What one picked file is allowed to cost.

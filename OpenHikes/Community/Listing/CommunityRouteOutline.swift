@@ -41,6 +41,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// The compact form of a published route: what the map draws before a hike is
 /// opened, and what the submission carries so it can.

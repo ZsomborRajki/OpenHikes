@@ -19,6 +19,7 @@
 //  pass over the whole route.
 //
 
+import OpenHikesData
 import SwiftUI
 
 struct TrailPlaceFilterSection: View {

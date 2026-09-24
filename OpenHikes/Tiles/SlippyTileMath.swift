@@ -13,6 +13,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 import OpenHikesShared
 
 /// `nonisolated`: used from both main-actor UI code and off-main tile-loading

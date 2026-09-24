@@ -11,6 +11,7 @@
 //
 
 import Charts
+import OpenHikesData
 import SwiftData
 import SwiftUI
 

@@ -55,6 +55,7 @@
 import CoreLocation
 import CoreTransferable
 import Foundation
+import OpenHikesData
 import UniformTypeIdentifiers
 
 /// One hike's worth of files, ready to be written and zipped.

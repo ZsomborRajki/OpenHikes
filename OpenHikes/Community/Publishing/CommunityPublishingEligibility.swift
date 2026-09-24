@@ -62,6 +62,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import SwiftData
 
 /// Whether this hike may be offered to the community, and why not.

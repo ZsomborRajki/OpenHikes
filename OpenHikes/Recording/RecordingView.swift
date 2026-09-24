@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import SwiftUI
 #if os(iOS)
 import UIKit

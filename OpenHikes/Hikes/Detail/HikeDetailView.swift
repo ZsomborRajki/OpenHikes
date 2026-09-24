@@ -7,6 +7,7 @@
 //
 
 import AsyncAlgorithms
+import OpenHikesData
 import SwiftData
 import SwiftUI
 

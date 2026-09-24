@@ -13,6 +13,7 @@
 import CoreTransferable
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 import UniformTypeIdentifiers
 

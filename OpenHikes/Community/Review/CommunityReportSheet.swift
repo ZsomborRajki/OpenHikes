@@ -37,6 +37,7 @@
 //  the person who typed it.
 //
 
+import OpenHikesData
 import SwiftUI
 
 struct CommunityReportSheet: View {

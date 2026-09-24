@@ -52,6 +52,7 @@
 //
 
 import MapKit
+import OpenHikesData
 import OpenHikesShared
 import SwiftData
 import SwiftUI

@@ -9,6 +9,7 @@
 //
 
 import CoreLocation
+import OpenHikesData
 import SwiftUI
 
 struct DisplayedRoute: Equatable {

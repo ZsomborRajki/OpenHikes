@@ -56,6 +56,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 import Synchronization
 
 #if DEBUG

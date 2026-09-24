@@ -43,6 +43,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// The hike a photo contribution would be attached to.
 ///

@@ -5,6 +5,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated extension OfflineTileDownloader {
     nonisolated struct Tile: Sendable {

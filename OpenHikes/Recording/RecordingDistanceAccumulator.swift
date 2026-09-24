@@ -6,6 +6,7 @@
 import CoreLocation
 import DequeModule
 import Foundation
+import OpenHikesData
 
 /// Distance accumulation that can retract a short window of GPS wander when
 /// the hiker has remained within one small area for long enough.
@@ -60,8 +61,8 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
     /// still" has to mean one thing in both. A second copy of these two
     /// numbers would be free to drift, and neither reading would be wrong
     /// enough to notice.
-    static let stationaryInterval: TimeInterval = 30
-    static let stationaryNetDisplacement: CLLocationDistance = 15
+    static let stationaryInterval = MovementThresholds.stationaryInterval
+    static let stationaryNetDisplacement = MovementThresholds.stationaryNetDisplacement
     private static let resumeDisplacement: CLLocationDistance = 20
 
     /// How far back ``recentSpeedMetersPerSecond`` looks.

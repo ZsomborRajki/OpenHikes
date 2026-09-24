@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// A raster tile source the map can render. Add new sources to ``all``.
 ///

@@ -20,6 +20,7 @@
 //  same shape ``HikeElevationChart`` has around ``ElevationChartView``.
 //
 
+import OpenHikesData
 import SwiftUI
 
 nonisolated extension TrailSurface: TrailCategoryPresentation {

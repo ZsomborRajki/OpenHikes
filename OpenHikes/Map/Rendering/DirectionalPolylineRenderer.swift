@@ -23,6 +23,7 @@
 //
 
 import MapKit
+import OpenHikesData
 import os
 #if canImport(UIKit)
 import UIKit

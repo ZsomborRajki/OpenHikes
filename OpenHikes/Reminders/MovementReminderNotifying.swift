@@ -16,6 +16,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// What the controller needs from the notification centre, and nothing more.
 ///

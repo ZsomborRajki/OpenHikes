@@ -10,6 +10,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// The latch that keeps live follow from rescanning the whole route on every

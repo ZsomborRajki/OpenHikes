@@ -29,6 +29,7 @@
 //  previously enforced by two private constants only one of them could reach.
 //
 
+import OpenHikesData
 import SwiftUI
 
 /// Where a route's colour comes from.

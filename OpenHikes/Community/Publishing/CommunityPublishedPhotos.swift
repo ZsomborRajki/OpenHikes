@@ -29,6 +29,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 nonisolated struct CommunityPublishedPhotos: Equatable, Sendable {
     /// What publishing does to the assets already on the record.

@@ -5,6 +5,7 @@
 //  Hex string <-> Color conversions, used to persist a Hike's tint.
 //
 
+import OpenHikesData
 import SwiftUI
 #if canImport(UIKit)
 import UIKit

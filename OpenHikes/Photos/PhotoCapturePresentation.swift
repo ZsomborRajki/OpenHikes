@@ -21,6 +21,7 @@
 //  places without widening every call site.
 //
 
+import OpenHikesData
 import OpenHikesShared
 import PhotosUI
 import SwiftUI

@@ -17,6 +17,7 @@
 //
 
 import CoreLocation
+import OpenHikesData
 import SwiftData
 import SwiftUI
 

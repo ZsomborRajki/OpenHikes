@@ -19,6 +19,7 @@
 
 import Foundation
 #if canImport(UserNotifications)
+import OpenHikesData
 import UserNotifications
 #endif
 

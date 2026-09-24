@@ -16,6 +16,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// The thinned, encoded form of a published route.

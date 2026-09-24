@@ -12,6 +12,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 nonisolated enum GPXInbox {
     /// The system's drop-off directory for copied documents.

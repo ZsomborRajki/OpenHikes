@@ -18,6 +18,7 @@
 
 import CoreLocation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 @Suite("Recording elevation")

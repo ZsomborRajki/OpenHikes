@@ -25,6 +25,7 @@
 import CoreLocation
 import Foundation
 import Observation
+import OpenHikesData
 import OrderedCollections
 import SwiftUI
 

@@ -48,6 +48,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import SwiftData
 
 /// What a send would carry, and what it would leave behind.

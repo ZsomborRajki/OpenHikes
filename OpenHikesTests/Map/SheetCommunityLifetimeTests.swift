@@ -9,6 +9,7 @@
 
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// The other half of the same question: not *who may navigate* but *who may

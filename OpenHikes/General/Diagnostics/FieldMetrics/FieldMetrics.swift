@@ -36,6 +36,7 @@
 
 import Foundation
 import MetricKit
+import OpenHikesData
 import os
 import Synchronization
 

@@ -23,6 +23,7 @@
 import CoreLocation
 import Foundation
 import Observation
+import OpenHikesData
 
 @Observable
 final class PhotoCaptureController {

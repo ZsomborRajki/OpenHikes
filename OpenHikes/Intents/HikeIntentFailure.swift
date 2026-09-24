@@ -13,6 +13,7 @@
 
 import AppIntents
 import Foundation
+import OpenHikesData
 
 nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     /// Asked to start a recording while one is already running.

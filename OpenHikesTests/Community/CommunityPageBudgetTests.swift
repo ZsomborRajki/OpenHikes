@@ -4,6 +4,7 @@
 //
 
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// How many pages a browse request spends, and the one case that made it spend

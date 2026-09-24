@@ -10,6 +10,7 @@
 
 import Algorithms
 import Foundation
+import OpenHikesData
 
 nonisolated struct RouteReviewSection: Identifiable, Sendable {
     enum Kind: Equatable, Sendable {

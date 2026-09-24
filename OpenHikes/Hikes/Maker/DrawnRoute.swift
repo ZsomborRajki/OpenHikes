@@ -35,6 +35,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 nonisolated struct DrawnRoute: Codable, Equatable, Sendable {
     /// The stops, in order, with the names they carried.

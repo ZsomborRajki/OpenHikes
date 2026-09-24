@@ -50,6 +50,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import SwiftData
 
 /// One walk the hiker actually made: a clocked hike, or one walk along a

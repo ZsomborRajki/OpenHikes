@@ -43,6 +43,7 @@
 //  yes is asked later and elsewhere — see ``CommunityContributionCheck``.
 //
 
+import OpenHikesData
 import SwiftData
 import SwiftUI
 

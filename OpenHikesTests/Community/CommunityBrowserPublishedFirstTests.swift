@@ -15,6 +15,7 @@ import CoreLocation
 import Foundation
 import MapKit
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// What a *Search this area* tap draws while Overpass is still thinking.

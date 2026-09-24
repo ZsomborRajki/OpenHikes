@@ -27,6 +27,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import OpenHikesShared
 
 nonisolated enum WatchTrailPackaging {

@@ -7,6 +7,7 @@
 //  track out without stopping it.
 //
 
+import OpenHikesData
 import SwiftUI
 #if os(iOS)
 import UIKit

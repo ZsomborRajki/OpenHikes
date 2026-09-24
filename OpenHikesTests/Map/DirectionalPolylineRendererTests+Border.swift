@@ -22,6 +22,7 @@
 import CoreGraphics
 import MapKit
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 extension DirectionalPolylineRendererTests {

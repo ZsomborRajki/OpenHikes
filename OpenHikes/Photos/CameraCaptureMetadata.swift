@@ -28,6 +28,7 @@
 
 import Foundation
 import ImageIO
+import OpenHikesData
 
 /// The one fact worth keeping out of the camera's metadata dictionary.
 nonisolated enum CameraCaptureMetadata {

@@ -31,6 +31,7 @@
 //  picker would read as a bar to clear.
 //
 
+import OpenHikesData
 import SwiftUI
 
 struct CommunityWithdrawalSheet: View {

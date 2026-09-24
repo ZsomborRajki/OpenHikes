@@ -11,6 +11,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import SwiftData
 #if canImport(UIKit)
 import UIKit

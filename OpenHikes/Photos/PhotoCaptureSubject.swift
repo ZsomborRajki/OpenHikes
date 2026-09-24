@@ -19,6 +19,7 @@
 //
 
 import CoreLocation
+import OpenHikesData
 import SwiftUI
 
 extension View {

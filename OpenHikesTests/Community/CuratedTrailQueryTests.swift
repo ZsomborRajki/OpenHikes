@@ -6,6 +6,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// The arithmetic a curated search does before it asks OpenStreetMap anything.

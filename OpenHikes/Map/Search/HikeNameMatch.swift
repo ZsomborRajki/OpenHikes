@@ -28,6 +28,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// The folding and ordering both name searches share.
 nonisolated enum HikeNameMatch {

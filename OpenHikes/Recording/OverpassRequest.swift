@@ -20,6 +20,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// The shape of every Overpass request this app makes, and the reading of
 /// every response.

@@ -11,6 +11,7 @@
 //  want the car park at the trailhead, not to make them choose each spring.
 //
 
+import OpenHikesData
 import SwiftData
 import SwiftUI
 

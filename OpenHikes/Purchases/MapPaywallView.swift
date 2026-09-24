@@ -53,6 +53,7 @@
 //  opposite things said to a customer who may already be paying.
 //
 
+import OpenHikesData
 import OpenHikesShared
 import StoreKit
 import SwiftUI

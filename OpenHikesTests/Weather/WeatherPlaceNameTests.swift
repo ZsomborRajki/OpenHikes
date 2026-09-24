@@ -19,6 +19,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// Answers a fixed city, and records how often it was asked.

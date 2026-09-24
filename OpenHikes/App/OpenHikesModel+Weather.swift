@@ -30,6 +30,7 @@
 import AsyncAlgorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// Why the loop woke. Mapped onto ``WeatherRequestReason`` below; kept
 /// separate because "the hiker moved" also has to be *applied* to the focus

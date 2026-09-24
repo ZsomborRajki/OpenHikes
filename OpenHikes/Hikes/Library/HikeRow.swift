@@ -5,6 +5,7 @@
 //  A single hike row, used both in the Hikes list and in search suggestions.
 //
 
+import OpenHikesData
 import SwiftUI
 
 struct HikeRow: View {

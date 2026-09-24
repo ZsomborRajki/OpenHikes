@@ -9,6 +9,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 import os
 #if canImport(CoreMotion)
 import CoreMotion

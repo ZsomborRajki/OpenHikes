@@ -22,6 +22,7 @@
 //  walk's, and vice versa.
 //
 
+import OpenHikesData
 import OpenHikesShared
 import SwiftUI
 

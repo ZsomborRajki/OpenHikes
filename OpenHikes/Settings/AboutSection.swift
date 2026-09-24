@@ -13,6 +13,7 @@
 //  ``MapPurchaseLinks`` makes for keeping those URLs out of a view body.
 //
 
+import OpenHikesData
 import SwiftUI
 
 struct AboutSection: View {

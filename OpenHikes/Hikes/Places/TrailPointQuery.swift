@@ -77,6 +77,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// The Overpass request a *Search this area* in the trail maker makes, and
 /// the table of what counts as a place worth offering.

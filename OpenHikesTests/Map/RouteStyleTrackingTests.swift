@@ -9,6 +9,7 @@
 //
 
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 @MainActor

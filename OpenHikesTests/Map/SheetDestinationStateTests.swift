@@ -1,5 +1,6 @@
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 @Suite("Sheet destination state")

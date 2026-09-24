@@ -28,6 +28,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// One chevron's centre and heading, in map points.
 nonisolated struct RouteChevron: Equatable, Sendable {

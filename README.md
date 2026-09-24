@@ -99,6 +99,9 @@ xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
 # The standalone shared-package suite
 swift test --package-path OpenHikesShared
 
+# The data package's suite: the models and their logic, on the macOS host
+swift test --package-path OpenHikesData
+
 # Simulator UI automation, across three simulator clones; --serial for one,
 # and --list shows the available tests. A second run on the same machine needs
 # its own of both: --device <name|udid> and --derived-data <path>
@@ -156,6 +159,7 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | `OpenHikes/SimulatedLocations/` | The bundled GPX routes the simulated hike and the screenshot capture play back. |
 | `OpenHikes/Watch/` | The phone's half of the watch link: sending the hiker's trails and one trail's geometry, and keeping the walks the watch recorded. |
 | `OpenHikesShared/` | Domain-foldered local Swift package shared by the app, the widget and the watch. |
+| `OpenHikesData/` | What a hike is: the SwiftData models, the schema, the route index and the logic over them, as a local package the app builds on. |
 | `OpenWidget/` | iOS Home Screen widget and the Live Activity's Lock Screen and Dynamic Island views. |
 | `OpenHikesWatch/` | The watchOS app: the link to the phone, the trail being followed, and recording a hike on the watch alone. |
 | `OpenHikesWatchWidgets/` | The watch's complication and Smart Stack widget, drawn from the glance the watch's recorder writes. |

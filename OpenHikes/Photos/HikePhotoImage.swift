@@ -17,6 +17,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// A decoded image on its way back to the main actor.
 ///

@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 extension ImportSelectionGate {
     func destination(for path: [SheetRoute]) -> Destination {

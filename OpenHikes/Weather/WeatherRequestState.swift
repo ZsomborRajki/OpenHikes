@@ -21,6 +21,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import OrderedCollections
 
 nonisolated struct WeatherPollingPolicy: Sendable {

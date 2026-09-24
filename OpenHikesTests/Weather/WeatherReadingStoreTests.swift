@@ -1,6 +1,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// The other half of "I rarely see the badge": a cold launch used to draw

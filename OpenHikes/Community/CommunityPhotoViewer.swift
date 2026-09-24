@@ -51,6 +51,7 @@
 
 import CoreLocation
 import MapKit
+import OpenHikesData
 import SwiftUI
 
 /// The page a shared hike's gallery is resting on, retained while its route is

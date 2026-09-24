@@ -7,6 +7,7 @@
 //
 
 import MapKit
+import OpenHikesData
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers

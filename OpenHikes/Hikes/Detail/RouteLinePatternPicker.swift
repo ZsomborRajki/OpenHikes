@@ -14,6 +14,7 @@
 //  than the detail screen around them.
 //
 
+import OpenHikesData
 import OpenHikesShared
 import SwiftUI
 

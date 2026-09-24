@@ -5,6 +5,7 @@
 //  Helper views used only by HikeDetailView.
 //
 
+import OpenHikesData
 import OpenHikesShared
 import SwiftUI
 

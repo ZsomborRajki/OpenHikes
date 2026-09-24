@@ -29,6 +29,7 @@
 
 import Foundation
 import Observation
+import OpenHikesData
 import OpenHikesShared
 import os
 import SwiftData

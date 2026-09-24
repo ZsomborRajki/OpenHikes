@@ -11,6 +11,7 @@
 //  ``TrailPlaceKindPicker``.
 //
 
+import OpenHikesData
 import SwiftUI
 
 struct HikePlaceEditor: View {

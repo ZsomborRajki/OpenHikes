@@ -33,6 +33,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// Where the trail maker's *Search this area* gets its answers.
 ///

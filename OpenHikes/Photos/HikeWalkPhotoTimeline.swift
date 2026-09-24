@@ -40,6 +40,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 nonisolated struct HikeWalkPhotoTimeline: Equatable, Sendable {
     /// How far off the covered union a photograph's own position may be and

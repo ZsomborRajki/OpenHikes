@@ -34,6 +34,7 @@
 //  no route.
 //
 
+import OpenHikesData
 import SwiftUI
 
 struct HikePlaceSection: View {

@@ -8,6 +8,7 @@
 //  all open with one, over the stats ``StatSummary`` draws.
 //
 
+import OpenHikesData
 import SwiftUI
 
 struct PlaceCardHeader<Leading: View, Title: View, Subtitle: View, Trailing: View>: View {

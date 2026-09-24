@@ -27,6 +27,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// Why a community request did not do what was asked.
 ///

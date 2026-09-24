@@ -32,6 +32,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import SwiftData
 
 /// How far along a hike's photographs are towards being on somebody else's

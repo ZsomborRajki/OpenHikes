@@ -70,6 +70,7 @@
 //  unanswerable at a glance.
 //
 
+import OpenHikesData
 import SwiftUI
 
 extension HikeDetailView {

@@ -12,6 +12,7 @@
 //  through the relationship, so the query never touches the host row.
 //
 
+import OpenHikesData
 import SwiftData
 import SwiftUI
 

@@ -19,6 +19,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import OpenHikesShared
 
 /// Which walks a takedown applies to.

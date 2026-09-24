@@ -15,6 +15,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated enum GPXTrackSplit {
     /// `items`, shared out among `routes`: one list per route, in the order

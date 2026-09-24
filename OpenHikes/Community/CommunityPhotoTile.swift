@@ -17,6 +17,7 @@
 //  dropped frame per picture, and the strip draws several at once.
 //
 
+import OpenHikesData
 import SwiftUI
 #if canImport(UIKit)
 import UIKit

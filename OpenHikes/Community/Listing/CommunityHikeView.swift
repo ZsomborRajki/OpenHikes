@@ -133,6 +133,7 @@
 //  without. See ``actionsToolbarItem``.
 //
 
+import OpenHikesData
 import OpenHikesShared
 import os
 import SwiftData

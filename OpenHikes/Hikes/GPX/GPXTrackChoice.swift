@@ -24,6 +24,7 @@
 
 import Foundation
 import Observation
+import OpenHikesData
 import SwiftUI
 
 /// One track of the file, as the list shows it.

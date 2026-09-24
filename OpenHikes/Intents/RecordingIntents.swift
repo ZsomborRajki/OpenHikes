@@ -13,6 +13,7 @@
 //
 
 import AppIntents
+import OpenHikesData
 
 struct StartHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Start Hike Recording"

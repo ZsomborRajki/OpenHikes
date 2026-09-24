@@ -36,6 +36,7 @@
 
 import Foundation
 import Observation
+import OpenHikesData
 import SwiftUI
 
 @Observable

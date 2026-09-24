@@ -45,6 +45,7 @@
 //
 
 import MapKit
+import OpenHikesData
 import OpenHikesShared
 
 extension MapView.Coordinator {

@@ -27,6 +27,7 @@
 
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// The four fact types a curated route's detail rows are built from.

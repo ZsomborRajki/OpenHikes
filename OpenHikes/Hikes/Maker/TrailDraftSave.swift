@@ -56,6 +56,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import os
 import SwiftData
 

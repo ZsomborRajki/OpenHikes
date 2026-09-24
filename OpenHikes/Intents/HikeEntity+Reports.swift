@@ -15,6 +15,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import OpenHikesShared
 
 /// `nonisolated` spelled on the extension rather than inherited, because an

@@ -7,6 +7,7 @@ import CoreLocation
 import Foundation
 import MapKit
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// What a takedown does to the lists the hike was on.

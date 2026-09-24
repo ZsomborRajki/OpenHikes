@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import OpenHikesShared
 
 nonisolated struct HikeDetailPreparedContent: Sendable {

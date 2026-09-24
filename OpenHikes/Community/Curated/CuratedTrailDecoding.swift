@@ -47,6 +47,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 import OpenHikesShared
 
 /// One hiking route as OpenStreetMap holds it, before it is a listing.

@@ -20,6 +20,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 // The body holds only fixtures; every test is in one of the extensions below.

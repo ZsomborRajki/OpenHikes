@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 nonisolated struct TrailMatchAlternative: Equatable, Sendable {
     let id: Int

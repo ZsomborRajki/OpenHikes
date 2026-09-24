@@ -19,6 +19,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// Short for ``SeededCommunityFixture``. Not `Fixture`, which this bundle

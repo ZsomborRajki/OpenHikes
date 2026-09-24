@@ -76,6 +76,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import SwiftUI
 
 /// One submission, and the decision about it.

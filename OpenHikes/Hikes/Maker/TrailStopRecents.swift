@@ -26,6 +26,7 @@
 import CoreLocation
 import Foundation
 import Observation
+import OpenHikesData
 import os
 
 /// One place the stop search found and the hiker picked.

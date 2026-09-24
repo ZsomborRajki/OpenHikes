@@ -6,6 +6,7 @@
 //  provider Settings selected otherwise — that zooms to the user's first fix.
 //
 
+import OpenHikesData
 import OpenHikesShared
 import PhotosUI
 import SwiftData

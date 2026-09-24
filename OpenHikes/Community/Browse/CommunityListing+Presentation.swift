@@ -10,6 +10,7 @@
 //  is not part of what a listing *is*.
 //
 
+import OpenHikesData
 import SwiftUI
 
 nonisolated extension CommunityListing {

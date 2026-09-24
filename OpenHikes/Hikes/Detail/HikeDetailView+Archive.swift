@@ -20,6 +20,7 @@
 //  what is in the archive and why the originals travel.
 //
 
+import OpenHikesData
 import SwiftUI
 
 extension HikeDetailView {

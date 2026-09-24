@@ -23,6 +23,8 @@
 		F9B04465302DA28800E03D91 /* AsyncAlgorithms in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04221302D981D00E03D91 /* AsyncAlgorithms */; };
 		B1000000000000000000000D /* OpenHikesShared in Frameworks */ = {isa = PBXBuildFile; productRef = B1000000000000000000000C /* OpenHikesShared */; };
 		B10000000000000000000010 /* OpenHikesWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* OpenHikesWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B20000000000000000000003 /* OpenHikesData in Frameworks */ = {isa = PBXBuildFile; productRef = B20000000000000000000002 /* OpenHikesData */; };
+		B20000000000000000000005 /* OpenHikesData in Frameworks */ = {isa = PBXBuildFile; productRef = B20000000000000000000004 /* OpenHikesData */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -222,6 +224,7 @@
 				F9B04203302D981D00E03D91 /* HeapModule in Frameworks */,
 				F9B04205302D981D00E03D91 /* OrderedCollections in Frameworks */,
 				A8838B92302A302500FAEEEE /* OpenHikesShared in Frameworks */,
+				B20000000000000000000003 /* OpenHikesData in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -240,6 +243,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AB000000000000000000000D /* OpenHikesShared in Frameworks */,
+				B20000000000000000000005 /* OpenHikesData in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -344,6 +348,7 @@
 			name = OpenHikes;
 			packageProductDependencies = (
 				A8838B91302A302500FAEEEE /* OpenHikesShared */,
+				B20000000000000000000002 /* OpenHikesData */,
 				F9B04211302D981D00E03D91 /* Algorithms */,
 				F9B04221302D981D00E03D91 /* AsyncAlgorithms */,
 				F9B04200302D981D00E03D91 /* DequeModule */,
@@ -398,6 +403,7 @@
 			name = OpenHikesTests;
 			packageProductDependencies = (
 				AB000000000000000000000C /* OpenHikesShared */,
+				B20000000000000000000004 /* OpenHikesData */,
 			);
 			productName = OpenHikesTests;
 			productReference = AB0000000000000000000008 /* OpenHikesTests.xctest */;
@@ -553,6 +559,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenHikesShared" */,
+				B20000000000000000000001 /* XCLocalSwiftPackageReference "OpenHikesData" */,
 				F9B04193302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-collections" */,
 				F9B04210302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-algorithms" */,
 				F9B04220302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */,
@@ -1429,6 +1436,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = OpenHikesShared;
 		};
+		B20000000000000000000001 /* XCLocalSwiftPackageReference "OpenHikesData" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = OpenHikesData;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -1545,6 +1556,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenHikesShared" */;
 			productName = OpenHikesShared;
+		};
+		B20000000000000000000002 /* OpenHikesData */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B20000000000000000000001 /* XCLocalSwiftPackageReference "OpenHikesData" */;
+			productName = OpenHikesData;
+		};
+		B20000000000000000000004 /* OpenHikesData */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B20000000000000000000001 /* XCLocalSwiftPackageReference "OpenHikesData" */;
+			productName = OpenHikesData;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -14,6 +14,7 @@
 import CoreLocation
 import Foundation
 import Observation
+import OpenHikesData
 
 /// A fix accepted for route matching: where the hiker is, and — when they're
 /// moving fast enough for it to mean anything — which way they're going.

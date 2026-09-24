@@ -42,6 +42,7 @@ nonisolated enum PhotoLibrarySource {
 
 #if DEBUG
 #if os(iOS)
+import OpenHikesData
 import UIKit
 #endif
 

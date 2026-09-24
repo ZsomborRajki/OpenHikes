@@ -19,6 +19,7 @@
 //  modal at a time, so a `.sheet` attached beside it is simply never shown.
 //
 
+import OpenHikesData
 import SwiftUI
 
 struct PhotoDiscoverySheet: View {

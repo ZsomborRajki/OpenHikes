@@ -35,6 +35,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import OpenHikesShared
 import os
 

@@ -29,6 +29,7 @@
 import CloudKit
 import CoreLocation
 import Foundation
+import OpenHikesData
 import os
 
 nonisolated struct CloudKitCommunityTransport: CommunityTransporting {

@@ -5,6 +5,7 @@
 //  One walk in a trail's History: when, how much, and how it ended.
 //
 
+import OpenHikesData
 import SwiftUI
 
 struct WalkRow: View {

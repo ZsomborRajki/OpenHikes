@@ -45,6 +45,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// Everything a workout carries, lifted off the recording that produced it.
 ///

@@ -25,6 +25,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// Where a hike in the community list came from.
 nonisolated enum CommunityOrigin: Hashable, Sendable {

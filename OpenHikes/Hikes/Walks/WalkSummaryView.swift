@@ -12,6 +12,7 @@
 //
 
 import CoreLocation
+import OpenHikesData
 import SwiftUI
 
 struct WalkSummaryView: View {

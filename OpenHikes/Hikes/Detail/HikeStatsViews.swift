@@ -7,6 +7,7 @@
 //  hike detail's metadata rows.
 //
 
+import OpenHikesData
 import SwiftUI
 
 nonisolated struct Stat: Identifiable, Sendable {

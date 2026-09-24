@@ -86,6 +86,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 import os
 
 /// The published hikes and the curated routes, as one list.

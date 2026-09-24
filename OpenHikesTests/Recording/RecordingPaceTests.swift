@@ -15,6 +15,7 @@
 
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 @Suite("Recording pace and moving time")

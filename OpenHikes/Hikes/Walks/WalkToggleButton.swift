@@ -22,6 +22,7 @@
 //  fix that extends coverage redraws neither this nor the detail around it.
 //
 
+import OpenHikesData
 import SwiftUI
 
 struct WalkToggleButton: View {

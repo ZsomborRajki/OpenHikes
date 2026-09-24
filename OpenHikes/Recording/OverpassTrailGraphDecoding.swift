@@ -11,6 +11,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 import OpenHikesShared
 
 // MARK: - Static helpers

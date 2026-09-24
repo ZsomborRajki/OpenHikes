@@ -69,6 +69,7 @@ import CoreLocation
 import Foundation
 import MapKit
 import Observation
+import OpenHikesData
 import os
 
 /// What the community section is currently able to say.
