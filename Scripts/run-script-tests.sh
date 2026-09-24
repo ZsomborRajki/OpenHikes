@@ -25,6 +25,8 @@
 # the mistake it catches is the silent one: a template copied into place and
 # not filled in parses, resolves to nothing, and reads exactly like a working
 # file. They run against fixtures written here rather than against a stub.
+# So does Scripts/lib/sort-string-catalogs.swift, which rewrites every String
+# Catalog in the repository on each sync and must only ever reorder one.
 #
 # `xcrun`, `xcodebuild`, `swiftlint` and `periphery` are replaced with
 # recording stubs on PATH and the scripts are run for real against them.
@@ -1530,6 +1532,124 @@ if expect_status 0 \
     && expect_contains "$output" "Usage: Scripts/simulate-hike.sh" "the help" \
     && expect_absent "$calls" "xcrun simctl location" "the recorded calls"; then
     pass
+fi
+
+echo "String catalog order"
+
+# Scripts/lib/sort-string-catalogs.swift rewrites every catalog in the
+# repository on each sync, so what it must never do is change one: only whole
+# entries move, and each keeps its own text — the IDE's blank line inside an
+# empty entry, and the one comma that marks every entry but the last.
+catalog_sorter="$repository_root/Scripts/lib/sort-string-catalogs.swift"
+catalog_work="$work/catalogs"
+mkdir -p "$catalog_work"
+
+# The order `xcstringstool sync` writes: bytes, so both capitals come first
+# and the straight apostrophe sorts away from the curly one.
+cat > "$catalog_work/byte-order.xcstrings" <<'CATALOG'
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Add More Photos" : {
+
+    },
+    "Add a photo" : {
+
+    },
+    "Couldn't finish" : {
+
+    },
+    "Couldn’t Add Photo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn’t Add Photo"
+          }
+        }
+      }
+    },
+    "Delete Photo" : {
+      "comment" : "A button"
+    },
+    "Delete photo" : {
+
+    }
+  },
+  "version" : "1.1"
+}
+CATALOG
+# The order Xcode's IDE saves the same catalog in.
+cat > "$catalog_work/ide-order.xcstrings" <<'CATALOG'
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Add a photo" : {
+
+    },
+    "Add More Photos" : {
+
+    },
+    "Couldn’t Add Photo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn’t Add Photo"
+          }
+        }
+      }
+    },
+    "Couldn't finish" : {
+
+    },
+    "Delete photo" : {
+
+    },
+    "Delete Photo" : {
+      "comment" : "A button"
+    }
+  },
+  "version" : "1.1"
+}
+CATALOG
+
+cp "$catalog_work/byte-order.xcstrings" "$catalog_work/sorted.xcstrings"
+run_script "sort-string-catalogs writes the IDE's order and nothing else" \
+    swift "$catalog_sorter" "$catalog_work/sorted.xcstrings"
+if expect_status 0; then
+    if cmp -s "$catalog_work/sorted.xcstrings" "$catalog_work/ide-order.xcstrings"; then
+        pass
+    else
+        fail "the sorted catalog is not the IDE's" \
+            "$(diff "$catalog_work/ide-order.xcstrings" "$catalog_work/sorted.xcstrings" || true)"
+    fi
+fi
+
+cp "$catalog_work/ide-order.xcstrings" "$catalog_work/already.xcstrings"
+run_script "sort-string-catalogs leaves a catalog in the IDE's order as it was" \
+    swift "$catalog_sorter" "$catalog_work/already.xcstrings"
+if expect_status 0; then
+    if cmp -s "$catalog_work/already.xcstrings" "$catalog_work/ide-order.xcstrings"; then
+        pass
+    else
+        fail "a sorted catalog was rewritten" \
+            "$(diff "$catalog_work/ide-order.xcstrings" "$catalog_work/already.xcstrings" || true)"
+    fi
+fi
+
+# Two spaces short on its entries, as a hand edit or another tool might leave
+# it: not the layout this reads, so it must be refused rather than reshuffled.
+sed 's/^    /  /' "$catalog_work/byte-order.xcstrings" > "$catalog_work/unexpected.xcstrings"
+cp "$catalog_work/unexpected.xcstrings" "$catalog_work/unexpected-before.xcstrings"
+run_script "sort-string-catalogs refuses a layout it does not read and writes nothing" \
+    swift "$catalog_sorter" "$catalog_work/unexpected.xcstrings"
+if expect_status 1 && expect_contains "$output" "error:" "the output"; then
+    if cmp -s "$catalog_work/unexpected.xcstrings" "$catalog_work/unexpected-before.xcstrings"; then
+        pass
+    else
+        fail "the refused catalog was rewritten anyway"
+    fi
 fi
 
 echo
