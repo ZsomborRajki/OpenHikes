@@ -711,7 +711,7 @@ private extension OpenHikesView {
         guard let destination = TrailWidgetDeepLink.destination(from: url) else { return }
         switch destination {
         case .recording:
-            guard appModel.hikeRecorder.isActive else { return }
+            guard appModel.hikeRecorder.hasScreenToShow else { return }
             sheet.searchText = ""
             SheetRoute.openRecording(
                 hike: appModel.hikeRecorder.currentHike,

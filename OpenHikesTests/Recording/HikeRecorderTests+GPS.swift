@@ -340,6 +340,28 @@ extension HikeRecorderTests {
         #expect(source.startCount == 0)
     }
 
+    /// The map's record button reaches the recording screen through the
+    /// widget's link, whose handler asks ``HikeRecorder/hasScreenToShow``. A
+    /// start refused before any session is not `isActive`, and gated on that
+    /// the tap opened nothing — where the sheet's button used to open the
+    /// screen that explains the refusal and offers Settings.
+    @Test("a start refused before any session still has a screen to show", arguments: [false, true])
+    func refusedStartHasAScreen(deniedOutright: Bool) async {
+        if deniedOutright {
+            source.authorization = .denied
+        } else {
+            source.hasFullAccuracy = false
+        }
+        let hikeRecorder = makeRecorder()
+
+        await hikeRecorder.start()
+
+        #expect(!hikeRecorder.isActive, "precondition: the refusal leaves no session")
+        #expect(hikeRecorder.hasScreenToShow)
+        hikeRecorder.dismissFailure()
+        #expect(!hikeRecorder.hasScreenToShow, "a dismissed refusal is nothing to open")
+    }
+
     @Test("losing precise location pauses an active recording with an error")
     func preciseLocationRevokedMidRecording() async {
         let hikeRecorder = makeRecorder()
