@@ -60,6 +60,23 @@ final class TrailPlacePinController {
     @ObservationIgnored private var opener: ((UUID) -> Void)?
     /// See ``setHostScreenPresent(_:)``.
     @ObservationIgnored private var hasHostScreen = true
+    /// Whether the hiker wants saved hikes' places on the map at all.
+    /// Observed, so the switch drawing it follows a change made from another
+    /// screen. See ``setShowsPins(_:)``.
+    private(set) var showsPins: Bool
+    /// Where ``showsPins`` is kept, or `nil` for a choice that lives only as
+    /// long as this object — a preview, and every suite that does not ask for
+    /// one.
+    @ObservationIgnored private let defaults: UserDefaults?
+
+    init(defaults: UserDefaults? = nil) {
+        self.defaults = defaults
+        // What is stored is the switch turned *off*, so an empty store is the
+        // default: places are drawn.
+        showsPins = !(defaults?.bool(forKey: SettingsKey.trailPlacePinsHidden) ?? false)
+    }
+
+    nonisolated deinit { /* intentionally empty */ }
 
     /// Claims the map's place pins for a screen, returning the token that has
     /// to be handed back to withdraw them.
@@ -74,7 +91,7 @@ final class TrailPlacePinController {
     /// Opens the place a pin stands for, on the screen that drew it. Answers
     /// whether anything could — a pin whose screen has gone opens nothing.
     @discardableResult func open(_ placeID: UUID) -> Bool {
-        guard activeToken != nil, hasHostScreen, let opener,
+        guard activeToken != nil, hasHostScreen, showsPins, let opener,
               rows.contains(where: { $0.id == placeID }) else { return false }
         opener(placeID)
         return true
@@ -105,13 +122,22 @@ final class TrailPlacePinController {
         publish()
     }
 
+    /// Puts every saved hike's places on the map, or takes them off. Hiding
+    /// removes pins, not places.
+    func setShowsPins(_ shows: Bool) {
+        guard showsPins != shows else { return }
+        showsPins = shows
+        defaults?.set(!shows, forKey: SettingsKey.trailPlacePinsHidden)
+        publish()
+    }
+
     private func apply(_ updated: [TrailPlaceRow]) {
         claimed = updated
         publish()
     }
 
     private func publish() {
-        let visible = hasHostScreen ? claimed : []
+        let visible = hasHostScreen && showsPins ? claimed : []
         guard visible != rows else { return }
         rows = visible
     }
@@ -161,6 +187,30 @@ private struct TrailPlacePinsModifier: ViewModifier {
                 controller?.detach(token: token)
                 self.token = nil
             }
+    }
+}
+
+/// A hike's places on the map, claimed by a whole screen rather than by the
+/// section that lists them.
+///
+/// The detail screen's *Places* section is only drawn on its *Details* face,
+/// and a claim made from there was withdrawn by flipping to *History* — the
+/// pins went with the list. Hung off the screen's container instead, where the
+/// segment switch never reaches, so the pins stay for as long as the hike's
+/// screen does.
+///
+/// A view of its own, and reading ``Hike/orderedPlaces`` in its own body, so
+/// a place arriving from CloudKit redraws this and not the screen that hosts
+/// it.
+struct HikePlacePinClaim: View {
+    let hike: Hike
+    let controller: TrailPlacePinController?
+    var onOpen: ((UUID) -> Void)?
+
+    var body: some View {
+        Color.clear
+            .accessibilityHidden(true)
+            .trailPlacePins(controller, rows: hike.orderedPlaces, onOpen: onOpen)
     }
 }
 

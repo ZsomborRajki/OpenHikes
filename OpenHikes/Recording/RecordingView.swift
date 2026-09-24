@@ -74,6 +74,11 @@ struct RecordingView: View {
                         onOpenPlace(hike, placeID)
                     }
                     .padding(.horizontal)
+                    .background {
+                        HikePlacePinClaim(hike: hike, controller: placePins) { placeID in
+                            onOpenPlace(hike, placeID)
+                        }
+                    }
                 }
             }
             // The review is drawn at the top of the card, which is only where

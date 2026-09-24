@@ -10,6 +10,9 @@
 //  down, so a pin must open through the newest claim, and never through a
 //  screen that has gone or while no screen is up at all.
 //
+//  And the hiker's switch beside the *Places* heading: off takes the pins away
+//  without touching the claim underneath, and is remembered.
+//
 
 import Foundation
 @testable import OpenHikes
@@ -76,5 +79,38 @@ struct TrailPlacePinControllerTests {
         controller.attach([Self.spring]) { _ in Issue.record("nothing should open") }
 
         #expect(controller.open(Self.hut.id) == false)
+    }
+
+    // MARK: - The show-places switch
+
+    @Test("switching places off hides the pins and keeps the claim, so on redraws them")
+    func switchHidesWithoutWithdrawing() {
+        let controller = TrailPlacePinController()
+        var opened = 0
+        let token = controller.attach([Self.spring]) { _ in opened += 1 }
+
+        controller.setShowsPins(false)
+        #expect(controller.rows.isEmpty)
+        #expect(controller.open(Self.spring.id) == false)
+
+        // A place arriving while hidden is still taken, and drawn on the way back.
+        controller.update([Self.spring, Self.hut], token: token)
+        #expect(controller.rows.isEmpty)
+        controller.setShowsPins(true)
+        #expect(controller.rows.count == 2)
+        #expect(controller.open(Self.spring.id))
+        #expect(opened == 1)
+    }
+
+    @Test("the switch starts on and is remembered off")
+    func switchIsRemembered() throws {
+        let defaults = try #require(UserDefaults(suiteName: "TrailPlacePinControllerTests-\(UUID().uuidString)"))
+        #expect(TrailPlacePinController(defaults: defaults).showsPins)
+
+        TrailPlacePinController(defaults: defaults).setShowsPins(false)
+        let next = TrailPlacePinController(defaults: defaults)
+        #expect(next.showsPins == false)
+        next.attach([Self.spring])
+        #expect(next.rows.isEmpty)
     }
 }

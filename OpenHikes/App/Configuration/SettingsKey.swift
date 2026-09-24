@@ -150,6 +150,13 @@ nonisolated enum SettingsKey {
     /// Deliberately not synced through ``SyncedSettings``, for the reason
     /// ``trailStopRecents`` is not: it is about this device's map.
     static let trailPlaceHiddenSymbols = "maker.hiddenPlaceSymbols"
+    /// Whether the switch beside a saved hike's *Places* heading has taken
+    /// its places off the map — see ``TrailPlacePinController/showsPins``.
+    /// The *off* position is stored, so a missing key draws them.
+    ///
+    /// Deliberately not synced through ``SyncedSettings``, for the reason
+    /// ``trailStopRecents`` is not: it is about this device's map.
+    static let trailPlacePinsHidden = "places.pinsHidden"
 }
 
 /// Defaults for keys where "absent" and "false" are different answers, so the
