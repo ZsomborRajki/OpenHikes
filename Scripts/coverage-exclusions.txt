@@ -92,9 +92,20 @@
 #
 # The maker's own place editor, place list and nearby section went when the
 # maker moved to Apple Maps' place sheet, and their entries went with them.
-# `TrailPlaceSheet`, which replaced them, stays measured: it carries
-# `TrailPlaceCard` and `TrailPlaceCoordinates` alongside its views, and the
-# rule at the top of this file is about what the lines are.
+# `TrailPlaceSheet`, which replaced them, stayed measured at first because it
+# carried `TrailPlaceCard` and `TrailPlaceCoordinates` alongside its views.
+#
+# On 2026-09-24 the gate had been red on every pull request for days — 75.2% to
+# 75.45% against 76 — and this was the same case as 2026-09-20 and 2026-09-21:
+# maker screens written after this list, all body code. The two mixed files
+# were split the way `CommunitySharePhotoTally` was, rather than listed whole:
+# `TrailPlaceCard.swift` now holds the card's model, the fact wording and the
+# coordinate text, and `TrailStopSearchRun.swift` holds the search's target,
+# its pick and the one `MKLocalSearch` a tap runs. Both stay measured. What is
+# listed below is what was left: `TrailPlaceSheet` and `TrailStopSearch` (the
+# two sheets), `TrailStopRow` (the route list's rows and their dotted rail),
+# and `WeatherAttributionBanner` (Apple Weather's mark atop the weather sheet,
+# added for App Review). All four were 0-4% covered.
 #
 # `TrailPlaceFilterSection` arrived on 2026-09-23 and is the same case again:
 # the maker's switches under *Search this area*, entirely body code. What they
@@ -144,6 +155,9 @@ OpenHikes/Hikes/Trail/TrailBreakdownSection.swift
 OpenHikes/Hikes/Maker/TrailDraftFields.swift
 OpenHikes/Hikes/Maker/TrailDraftView.swift
 OpenHikes/Hikes/Maker/TrailPlaceFilterSection.swift
+OpenHikes/Hikes/Maker/TrailPlaceSheet.swift
+OpenHikes/Hikes/Maker/TrailStopRow.swift
+OpenHikes/Hikes/Maker/TrailStopSearch.swift
 OpenHikes/Hikes/Walks/WalkControls.swift
 OpenHikes/Hikes/Walks/WalkRow.swift
 OpenHikes/Hikes/Walks/WalkSummaryView.swift
@@ -164,5 +178,6 @@ OpenHikes/Settings/FieldMetricsSection.swift
 OpenHikes/Settings/SettingsView.swift
 OpenHikes/Tiles/Offline/OfflineStorageAlerts.swift
 OpenHikes/Tiles/TileAttributionView.swift
+OpenHikes/Weather/WeatherAttributionBanner.swift
 OpenHikes/Weather/WeatherBadge.swift
 OpenHikes/Weather/WeatherDetailSheet.swift
