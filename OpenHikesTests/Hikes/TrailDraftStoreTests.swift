@@ -10,9 +10,10 @@
 //  maker that drew one trail and found two on the next launch would have to
 //  choose between them, and there is no rule that could.
 //
-//  Where it is kept is asserted next door in `MirroredCloudKitSchemaTests`,
-//  which is what says ``TrailDraftRecord`` is not mirrored. That matters as
-//  much as anything here: a draft is one device's unfinished work.
+//  Where it is kept is asserted by `MirroredCloudKitSchemaTests`, in
+//  `OpenHikesData`'s suite, which is what says ``TrailDraftRecord`` is not
+//  mirrored. That matters as much as anything here: a draft is one device's
+//  unfinished work.
 //
 
 import CoreLocation

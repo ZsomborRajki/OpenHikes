@@ -18,7 +18,6 @@
 //
 
 @testable import OpenHikes
-import OpenHikesData
 import Testing
 
 @Suite("Route chevron field")

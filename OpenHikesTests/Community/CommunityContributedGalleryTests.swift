@@ -32,7 +32,6 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
-import OpenHikesData
 import Testing
 
 @Suite("Community contributed gallery")

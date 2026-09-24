@@ -30,7 +30,6 @@
 
 import CoreLocation
 import Foundation
-import OpenHikesData
 
 /// A restored reading and the subject it was for.
 nonisolated struct StoredWeatherReading: Sendable {

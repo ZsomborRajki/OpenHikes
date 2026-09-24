@@ -6,7 +6,6 @@
 //
 
 import AppIntents
-import OpenHikesData
 import OpenHikesShared
 import SwiftData
 import SwiftUI

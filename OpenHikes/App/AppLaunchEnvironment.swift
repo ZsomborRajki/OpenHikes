@@ -8,7 +8,6 @@
 //
 
 import Foundation
-import OpenHikesData
 
 nonisolated enum AppLaunchEnvironment {
     /// Everything a `--ui-test-*` argument can say about a launch.

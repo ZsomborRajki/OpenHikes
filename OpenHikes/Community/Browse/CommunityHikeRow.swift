@@ -15,7 +15,6 @@
 //  taps it.
 //
 
-import OpenHikesData
 import SwiftUI
 
 struct CommunityHikeRow: View {

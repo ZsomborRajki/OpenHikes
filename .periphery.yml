@@ -89,7 +89,10 @@ retain_hashable_properties: true
 # own suite exercises is therefore reported as unused when it is not —
 # `decimate(_:maxPoints:)` and `PendingRecordingFixStore.append(_:)` both are.
 # Check a shared-package finding against `OpenHikesShared/Tests` before acting
-# on it. `redundantPublicAccessibility` is unaffected: those tests use
+# on it. `OpenHikesData` is the same: the scheme builds its library into the
+# app, so its sources are scanned, but `OpenHikesData/Tests` is SwiftPM's and
+# never indexed, so check a finding there against that suite too.
+# `redundantPublicAccessibility` is unaffected: both packages' tests use
 # `@testable import`, which reaches internal declarations anyway.
 
 # Writing a `// periphery:ignore`, two rules that are easy to get wrong and

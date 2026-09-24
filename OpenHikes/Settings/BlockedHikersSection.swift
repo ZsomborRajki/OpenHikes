@@ -25,7 +25,6 @@
 //  for why a block is keyed on something the hiker did not type.
 //
 
-import OpenHikesData
 import SwiftUI
 
 struct BlockedHikersSection: View {

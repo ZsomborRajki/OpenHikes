@@ -42,7 +42,6 @@
 //  would flip it for the whole process and for every test after it.
 //
 
-import OpenHikesData
 import SwiftUI
 #if os(iOS)
 import UIKit

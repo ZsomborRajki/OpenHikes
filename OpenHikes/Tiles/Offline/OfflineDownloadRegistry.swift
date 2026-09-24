@@ -28,7 +28,6 @@
 //
 
 import Foundation
-import OpenHikesData
 
 final class OfflineDownloadRegistry {
     /// The app's registry. Injected like ``TileCache/shared`` is, so a suite

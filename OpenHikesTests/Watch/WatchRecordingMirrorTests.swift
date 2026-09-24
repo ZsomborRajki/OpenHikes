@@ -20,7 +20,6 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
-import OpenHikesData
 import OpenHikesShared
 import SwiftData
 import Testing

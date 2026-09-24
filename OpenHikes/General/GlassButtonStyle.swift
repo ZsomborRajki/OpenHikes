@@ -15,7 +15,6 @@
 //  callout, a tile — see `LiquidGlass.swift`.
 //
 
-import OpenHikesData
 import SwiftUI
 
 extension View {

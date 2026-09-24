@@ -35,7 +35,6 @@
 
 import CoreLocation
 import Foundation
-import OpenHikesData
 import os
 import Photos
 // `presentLimitedLibraryPicker` is declared on `PHPhotoLibrary` but vends UI,

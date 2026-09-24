@@ -15,7 +15,6 @@
 //
 
 import Foundation
-import OpenHikesData
 
 @MainActor
 extension OfflineTileDownloader {

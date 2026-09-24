@@ -29,7 +29,6 @@
 //
 
 import Foundation
-import OpenHikesData
 
 // MARK: - Histogram
 

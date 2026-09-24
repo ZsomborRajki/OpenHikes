@@ -19,7 +19,6 @@
 
 import CoreLocation
 import Foundation
-@testable import OpenHikes
 import OpenHikesData
 
 // MARK: - The simulated walk

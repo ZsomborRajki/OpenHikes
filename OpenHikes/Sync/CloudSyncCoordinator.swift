@@ -30,7 +30,6 @@ import CloudKit
 import CoreData
 import Foundation
 import Observation
-import OpenHikesData
 import os
 import SwiftData
 

@@ -14,7 +14,6 @@
 
 import Foundation
 @testable import OpenHikes
-import OpenHikesData
 import Testing
 
 @Suite("Tile network policy")

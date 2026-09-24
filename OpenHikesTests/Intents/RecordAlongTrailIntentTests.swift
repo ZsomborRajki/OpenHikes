@@ -18,7 +18,6 @@
 
 import Foundation
 @testable import OpenHikes
-import OpenHikesData
 import Testing
 
 @Suite("Recording along a named trail")

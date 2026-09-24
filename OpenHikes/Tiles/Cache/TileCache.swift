@@ -9,7 +9,6 @@
 import Foundation
 import MapKit
 import Network
-import OpenHikesData
 import os
 import Synchronization
 

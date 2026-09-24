@@ -56,7 +56,6 @@
 //  make one.
 //
 
-import OpenHikesData
 import OpenHikesShared
 import SwiftUI
 

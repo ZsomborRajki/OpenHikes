@@ -23,7 +23,6 @@
 //    number, and a dash would erase it.
 //
 
-import OpenHikesData
 import SwiftUI
 
 struct FieldMetricsSection: View {

@@ -27,7 +27,6 @@
 
 import Foundation
 import MapKit
-import OpenHikesData
 import OpenHikesShared
 
 #if canImport(UIKit)

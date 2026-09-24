@@ -33,7 +33,6 @@
 
 import Foundation
 import Observation
-import OpenHikesData
 import OpenHikesShared
 
 /// One request to open a hike, from outside the view tree.

@@ -44,7 +44,6 @@
 //
 
 import Foundation
-import OpenHikesData
 
 /// Why a hiker is reporting a published hike.
 ///

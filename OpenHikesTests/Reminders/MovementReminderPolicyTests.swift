@@ -17,7 +17,6 @@
 
 import Foundation
 @testable import OpenHikes
-import OpenHikesData
 import Testing
 
 @Suite("Movement reminder policy")
