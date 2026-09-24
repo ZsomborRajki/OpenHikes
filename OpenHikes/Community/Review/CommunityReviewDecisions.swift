@@ -36,7 +36,6 @@
 
 import CoreLocation
 import Foundation
-import OpenHikesData
 import OpenHikesShared
 import SwiftUI
 

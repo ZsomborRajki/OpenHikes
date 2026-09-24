@@ -20,7 +20,6 @@
 //
 
 @testable import OpenHikes
-import OpenHikesData
 import SwiftUI
 import Testing
 

@@ -9,7 +9,6 @@
 
 import Foundation
 @testable import OpenHikes
-import OpenHikesData
 import SwiftData
 import SwiftUI
 import Testing

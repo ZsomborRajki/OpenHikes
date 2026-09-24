@@ -13,7 +13,6 @@
 
 import AppIntents
 import Foundation
-import OpenHikesData
 import OpenHikesShared
 
 struct CurrentHikeProgressIntent: AppIntent, HikeCoordinatingIntent {

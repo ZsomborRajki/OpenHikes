@@ -33,7 +33,6 @@
 //
 
 import Foundation
-import OpenHikesData
 import WeatherKit
 
 /// The day's light and its temperature range, from `.daily`.

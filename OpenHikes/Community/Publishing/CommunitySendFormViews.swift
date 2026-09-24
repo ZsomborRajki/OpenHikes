@@ -31,7 +31,6 @@
 //  is called, and when it is allowed to be pressed.
 //
 
-import OpenHikesData
 import SwiftUI
 
 /// The display name a send is published under.

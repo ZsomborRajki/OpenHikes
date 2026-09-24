@@ -21,7 +21,6 @@
 import Foundation
 import MapKit
 @testable import OpenHikes
-import OpenHikesData
 import Testing
 
 @Suite("Tile transport", .serialized)

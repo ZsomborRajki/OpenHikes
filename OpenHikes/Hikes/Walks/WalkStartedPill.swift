@@ -22,7 +22,6 @@
 //  when a walk starts, when it ends and when the *x* is tapped.
 //
 
-import OpenHikesData
 import SwiftUI
 
 struct WalkStartedPill: View {

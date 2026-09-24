@@ -18,7 +18,6 @@
 //
 
 import Foundation
-import OpenHikesData
 
 #if DEBUG
 

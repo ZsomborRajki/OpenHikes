@@ -15,8 +15,7 @@
 //
 
 import Foundation
-@testable import OpenHikes
-import OpenHikesData
+@testable import OpenHikesData
 import Testing
 
 @Suite("Route profile elevation range")

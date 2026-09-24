@@ -24,7 +24,6 @@
 //
 
 import CoreGraphics
-import OpenHikesData
 
 /// The figures the photo strips and the discovery grid share.
 enum PhotoTileMetrics {

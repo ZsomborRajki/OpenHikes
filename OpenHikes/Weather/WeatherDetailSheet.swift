@@ -27,7 +27,6 @@
 //  without either becoming an input of the root view's body.
 //
 
-import OpenHikesData
 import SwiftUI
 
 /// Whether the weather detail sheet is up.

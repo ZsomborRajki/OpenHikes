@@ -3,7 +3,6 @@
 //  OpenHikes
 //
 
-import OpenHikesData
 import SwiftUI
 
 /// One sentence with a tinted symbol beside it, at footnote size.

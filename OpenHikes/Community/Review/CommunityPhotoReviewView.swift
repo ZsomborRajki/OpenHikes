@@ -41,7 +41,6 @@
 //
 
 import Foundation
-import OpenHikesData
 import SwiftUI
 
 /// One contributed set, and the decision about it.

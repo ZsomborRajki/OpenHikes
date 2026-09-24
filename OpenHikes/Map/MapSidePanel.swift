@@ -22,7 +22,6 @@
 //  behind it.
 //
 
-import OpenHikesData
 import SwiftUI
 
 /// The panel's fixed geometry.

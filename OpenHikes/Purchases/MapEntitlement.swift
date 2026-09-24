@@ -14,7 +14,6 @@
 //
 
 import Foundation
-import OpenHikesData
 import Synchronization
 
 /// What is known about the Pro unlock right now.

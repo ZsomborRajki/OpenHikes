@@ -13,7 +13,6 @@
 //
 
 import Foundation
-import OpenHikesData
 import OpenHikesShared
 
 extension BackgroundTrailTracker {

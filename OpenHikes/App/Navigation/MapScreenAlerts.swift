@@ -38,7 +38,6 @@
 //  sheet, so a rebuild mid-alert loses the box and not the reason for it.
 //
 
-import OpenHikesData
 import SwiftUI
 
 extension View {

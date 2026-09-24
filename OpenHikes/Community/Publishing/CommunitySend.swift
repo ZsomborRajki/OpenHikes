@@ -23,7 +23,6 @@
 //
 
 import Foundation
-import OpenHikesData
 
 /// What one attempt to send something to the public database did.
 enum CommunitySendOutcome: Equatable {

@@ -233,7 +233,6 @@
 //
 
 import Foundation
-import OpenHikesData
 
 /// Record type and field names for the public-database types: the two pairs
 /// — a hike and its submission, a contributed photo set and its submission —

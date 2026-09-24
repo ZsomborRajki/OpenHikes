@@ -56,7 +56,6 @@
 
 import Foundation
 import MetricKit
-import OpenHikesData
 import os
 
 nonisolated enum FieldSignpost {

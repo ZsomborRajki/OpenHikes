@@ -14,7 +14,6 @@
 //  exactly as it was.
 //
 
-import OpenHikesData
 import SwiftUI
 
 private struct OfflineStorageAlerts: ViewModifier {

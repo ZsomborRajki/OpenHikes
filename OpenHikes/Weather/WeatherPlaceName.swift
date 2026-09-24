@@ -40,7 +40,6 @@
 import CoreLocation
 import Foundation
 import MapKit
-import OpenHikesData
 import os
 
 /// Turns the coordinate a forecast was fetched for into somewhere to call it.

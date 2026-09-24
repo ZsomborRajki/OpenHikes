@@ -8,7 +8,6 @@
 //
 
 import MapKit
-import OpenHikesData
 import os
 import SwiftUI
 

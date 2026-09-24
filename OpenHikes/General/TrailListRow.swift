@@ -33,7 +33,6 @@
 //  a new leading view cannot forget to be.
 //
 
-import OpenHikesData
 import SwiftUI
 
 /// The two figures a row and its leading view have to agree about.

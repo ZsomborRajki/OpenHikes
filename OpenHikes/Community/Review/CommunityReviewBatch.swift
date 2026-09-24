@@ -35,7 +35,6 @@
 //
 
 import Foundation
-import OpenHikesData
 
 /// Everything waiting for a reviewer, in the order the server queued it.
 nonisolated struct CommunityReviewBatch: Equatable, Sendable {

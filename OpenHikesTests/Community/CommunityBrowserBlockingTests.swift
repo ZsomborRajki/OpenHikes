@@ -7,7 +7,6 @@ import CoreLocation
 import Foundation
 import MapKit
 @testable import OpenHikes
-import OpenHikesData
 import Testing
 
 /// What a blocked author does to the two lists the browser keeps, and what a

@@ -16,7 +16,6 @@ import Foundation
 import MapKit
 import Observation
 @testable import OpenHikes
-import OpenHikesData
 import OpenHikesShared
 import Testing
 

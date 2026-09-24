@@ -36,7 +36,6 @@
 //
 
 import Foundation
-import OpenHikesData
 
 /// The community button's glyph and what VoiceOver says about it.
 struct CommunityShareButtonAppearance {

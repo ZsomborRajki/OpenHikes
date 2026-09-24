@@ -28,7 +28,6 @@
 
 import CoreLocation
 import Foundation
-import OpenHikesData
 
 /// The place the badge's reading belongs to.
 ///

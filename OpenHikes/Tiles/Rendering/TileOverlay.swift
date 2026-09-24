@@ -7,7 +7,6 @@
 
 import Foundation
 import MapKit
-import OpenHikesData
 
 /// Raster tile overlay for the selected provider, served through ``TileCache``.
 ///

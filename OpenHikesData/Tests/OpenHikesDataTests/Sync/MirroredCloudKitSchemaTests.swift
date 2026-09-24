@@ -7,8 +7,7 @@
 //
 
 import Foundation
-@testable import OpenHikes
-import OpenHikesData
+@testable import OpenHikesData
 import SwiftData
 import Testing
 

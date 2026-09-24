@@ -9,7 +9,6 @@
 import Algorithms
 import CoreLocation
 import Foundation
-import OpenHikesData
 import OpenHikesShared
 
 nonisolated struct TrailGraphRegion: Codable, Hashable, Sendable {
