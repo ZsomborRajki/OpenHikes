@@ -14,8 +14,9 @@ import SwiftUI
 /// file for length — see the internal `@State` block in `OpenHikesView.swift`
 /// for why what this reaches is internal rather than private.
 extension OpenHikesView {
-    /// Parses the picked .gpx files, persists them as hikes, and shows the
-    /// first on the map. A file that can't become a hike raises
+    /// Parses the picked .gpx files one after another, persists them as
+    /// hikes, and leaves the last of them on the map — each file's import
+    /// takes the selection in turn, as a lone file's does. A file that can't become a hike raises
     /// ``importFailure`` rather than leaving the user looking at an unchanged
     /// screen — once for the lot when several were picked, naming each file
     /// that failed, rather than one alert per file.

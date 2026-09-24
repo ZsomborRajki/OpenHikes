@@ -88,6 +88,45 @@ struct GPXMultiTrackTests {
         #expect(contents.unplacedWaypoints == 1)
     }
 
+    /// A route's number counts `<rte>`s, so its words are read from them —
+    /// not from an empty `<trk>` that shares the number.
+    @Test("a file of routes names each from its own <rte>")
+    func routesAreNamedByTheirOwnWords() throws {
+        let routes = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+            <trk><name>An empty track</name></trk>
+            <rte><name>North loop</name><desc>The long one</desc>
+                <rtept lat="47.6300" lon="12.8600"><name>Turn</name></rtept>
+                <rtept lat="47.6320" lon="12.8600"/>
+            </rte>
+            <rte><name>South loop</name>
+                <rtept lat="47.5300" lon="12.8600"/><rtept lat="47.5320" lon="12.8600"/>
+            </rte>
+        </gpx>
+        """
+        let contents = try GPXImport.loadAll(from: try write(routes))
+        #expect(contents.tracks.map(\.name) == ["North loop", "South loop"])
+        #expect(contents.tracks.first?.trackDescription == "The long one")
+    }
+
+    /// Each route's box is checked before the route is measured. A waypoint
+    /// just inside the touching distance must still be kept, including
+    /// east-west, where a degree is shortest.
+    @Test("the box a route is checked against first keeps every waypoint the line would")
+    func boxKeepsWhatTheLineWould() {
+        let route = [
+            RouteCoordinate(latitude: 60, longitude: 10),
+            RouteCoordinate(latitude: 60.01, longitude: 10),
+        ]
+        // 45 m and 80 m east of the line at 60°N, where a degree of longitude
+        // is about 55.8 km.
+        let near = CLLocationCoordinate2D(latitude: 60.005, longitude: 10 + 45 / 55_800)
+        let far = CLLocationCoordinate2D(latitude: 60.005, longitude: 10 + 80 / 55_800)
+        let assigned = GPXTrackSplit.assign([near, far], at: { $0 }, to: [route])
+        #expect(assigned[0].map(\.longitude) == [near.longitude])
+    }
+
     /// The one-track answer is unchanged, `load` included.
     @Test("a one-track file is exactly what it always was")
     func oneTrackIsUnchanged() throws {
@@ -186,5 +225,7 @@ struct GPXMultiTrackTests {
         #expect(failure.errorDescription == "2 files couldn't be imported.")
         #expect(failure.recoverySuggestion?.contains("a.gpx: This file couldn't be read.") == true)
         #expect(failure.recoverySuggestion?.contains("b.gpx") == true)
+        let one = HikeImportFailure.several([.init(fileName: "a.gpx", reason: "This file couldn't be read.")])
+        #expect(one.errorDescription == "1 file couldn't be imported.")
     }
 }

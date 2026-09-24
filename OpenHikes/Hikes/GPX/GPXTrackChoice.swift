@@ -15,9 +15,11 @@
 //  The import awaits the answer: ``ask(fileName:tracks:unplacedWaypoints:)``
 //  suspends until the sheet's Import or Cancel resumes it, so the import path
 //  reads top to bottom rather than being split across a callback. A second
-//  question arriving while one is up answers the first with nothing — two
-//  sheets cannot be up at once, and a question nobody can see is a question
-//  nobody will answer.
+//  question arriving while one is up waits its turn rather than replacing
+//  it: two files opened together from AirDrop or Files import concurrently,
+//  and an answer of "none" is what deletes an inbox copy (see
+//  ``HikeImportOutcome/discardsSourceCopy``), so ending the first question
+//  on the second's arrival would throw away a file the hiker never saw.
 //
 
 import Foundation
@@ -51,15 +53,32 @@ final class GPXTrackChoice {
 
     private(set) var question: Question?
     @ObservationIgnored private var answer: CheckedContinuation<[Int], Never>?
+    /// Whether a caller holds the turn — from the moment it asks until the
+    /// hiker answers. Separate from ``question`` because the turn is handed
+    /// straight to the next in ``waiting``, and a question is `nil` for the
+    /// moment in between; a newcomer that saw only that would jump the queue.
+    @ObservationIgnored private var isAsking = false
+    /// The callers queued behind the one on screen, first come first asked.
+    @ObservationIgnored private var waiting: [CheckedContinuation<Void, Never>] = []
+
+    /// How many questions are queued behind the one on screen — for the suite,
+    /// which has no other way to know a concurrent ask has reached the queue.
+    var waitingCount: Int { waiting.count }
 
     /// Non-isolated so releasing the last reference never requires proving
     /// we're on the main actor — see ``LocationManager``'s deinit for why.
     nonisolated deinit { /* intentionally empty */ }
 
     /// Puts the tracks up and waits for the hiker: the indices to import, or
-    /// empty for none.
+    /// empty for none. Behind any question already up, which keeps the turn
+    /// until it is answered.
     func ask(fileName: String, tracks: [GPXImport.Track], unplacedWaypoints: Int) async -> [Int] {
-        answer(with: [])
+        if isAsking {
+            // Resumed by ``answer(with:)`` with the turn already handed over.
+            await withCheckedContinuation { waiting.append($0) }
+        } else {
+            isAsking = true
+        }
         let options = tracks.enumerated().map { index, track in
             GPXTrackOption(
                 id: index,
@@ -89,11 +108,19 @@ final class GPXTrackChoice {
         answer(with: [])
     }
 
+    /// Answers the question on screen and passes the turn on. Nothing to do
+    /// with none up — a sheet's dismissal writing `nil` back after Import is
+    /// not a second answer, and must not hand the turn on twice.
     private func answer(with chosen: [Int]) {
+        guard let pending = answer else { return }
         question = nil
-        let pending = answer
         answer = nil
-        pending?.resume(returning: chosen)
+        pending.resume(returning: chosen)
+        if waiting.isEmpty {
+            isAsking = false
+        } else {
+            waiting.removeFirst().resume()
+        }
     }
 }
 
