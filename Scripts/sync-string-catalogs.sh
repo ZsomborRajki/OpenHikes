@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Brings the three String Catalogs up to date with the strings the last build
+# Brings the four String Catalogs up to date with the strings the last build
 # extracted from the source.
 #
 # The targets build with SWIFT_EMIT_LOC_STRINGS = YES, so every compile writes
@@ -12,7 +12,7 @@
 # never sees it. Strings that left the source are marked stale rather than
 # deleted, which is what the IDE does too.
 #
-# Build first (any build of the OpenHikes scheme compiles all three targets),
+# Build first (any build of the OpenHikes scheme compiles all four targets),
 # then point this at the same derived data:
 #
 #   Scripts/sync-string-catalogs.sh ~/Library/Developer/Xcode/DerivedData/OpenHikes-…
@@ -36,8 +36,9 @@ usage() {
     cat <<'USAGE'
 Usage: Scripts/sync-string-catalogs.sh [--check] <derived-data-path>
 
-Syncs OpenHikes/, OpenWidget/ and OpenHikesWatch/Localizable.xcstrings with the
-.stringsdata the last build of those targets wrote under <derived-data-path>.
+Syncs the Localizable.xcstrings in OpenHikes/, OpenWidget/, OpenHikesWatch/ and
+OpenHikesWatchWidgets/ with the .stringsdata the last build of those targets
+wrote under <derived-data-path>.
 
 Options:
   --check         Change nothing; exit 2 if any catalog is out of date
@@ -66,13 +67,17 @@ if [[ ! -d "$intermediates" ]]; then
 fi
 
 # Catalog folder, then the target whose compile extracts its strings.
-for pair in OpenHikes:OpenHikes OpenWidget:OpenWidgetExtension OpenHikesWatch:OpenHikesWatch; do
+for pair in OpenHikes:OpenHikes OpenWidget:OpenWidgetExtension OpenHikesWatch:OpenHikesWatch \
+    OpenHikesWatchWidgets:OpenHikesWatchWidgets; do
     folder="${pair%%:*}"
     target="${pair##*:}"
     args=()
     while IFS= read -r file; do
         args+=(--stringsdata "$file")
-    done < <(find "$intermediates" -path "*/$target.build/*" -name '*.stringsdata')
+    # The project's own folder is OpenHikes.build too, and every target's
+    # intermediates sit inside it, so the target's folder is matched one
+    # level below the configuration folder rather than anywhere in the path.
+    done < <(find "$intermediates" -path "*/OpenHikes.build/*/$target.build/*" -name '*.stringsdata')
     if [[ ${#args[@]} -eq 0 ]]; then
         echo "error: $target has no extracted strings under $1 — was it built?" >&2
         exit 1

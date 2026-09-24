@@ -15,31 +15,11 @@
         }
       }
     },
-    "%@ %@   %@ %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ %2$@   %3$@ %4$@"
-          }
-        }
-      }
-    },
     "%@ along the route" : {
 
     },
     "%@ of climb" : {
 
-    },
-    "%@ of climb, %@ of descent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ of climb, %2$@ of descent"
-          }
-        }
-      }
     },
     "%@ of descent" : {
 
@@ -198,9 +178,6 @@
     "%lld of this submission's photos didn't download, so none can be left out here — leaving one out rewrites the whole set from the copies on this device. Publish it as it is, decline it, or open it again." : {
 
     },
-    "%lld percent" : {
-
-    },
     "%lld percent complete, %@ remaining" : {
       "localizations" : {
         "en" : {
@@ -265,9 +242,6 @@
     "%lld pt" : {
 
     },
-    "%lld walks waiting for your iPhone" : {
-
-    },
     "%lld%%" : {
 
     },
@@ -275,9 +249,6 @@
 
     },
     "1 photograph" : {
-
-    },
-    "1 walk waiting for your iPhone" : {
 
     },
     "A hike is in progress on %@. End it there to walk this trail." : {
@@ -407,9 +378,6 @@
     "Ask for Removal First" : {
 
     },
-    "Asking your iPhone for your trails…" : {
-
-    },
     "At least one photo couldn’t be added to this hike. It’s still in your photo library." : {
 
     },
@@ -450,9 +418,6 @@
 
     },
     "Border" : {
-
-    },
-    "Bring your iPhone nearby, with OpenHikes installed, to send your trails over." : {
 
     },
     "By adding photos, you agree to the Terms & Conditions." : {
@@ -507,6 +472,9 @@
 
     },
     "Close" : {
+
+    },
+    "Close this edit?" : {
 
     },
     "Close this trail?" : {
@@ -668,6 +636,9 @@
     "Diagnostics" : {
 
     },
+    "Discard Changes" : {
+
+    },
     "Discard Recording" : {
 
     },
@@ -719,13 +690,19 @@
     "ESE" : {
 
     },
+    "Each track becomes a hike of its own." : {
+
+    },
     "Edit" : {
 
     },
     "Edit Place" : {
 
     },
-    "Elapsed" : {
+    "Edit Route" : {
+
+    },
+    "Edit Trail" : {
 
     },
     "Elevation" : {
@@ -761,9 +738,6 @@
     "Fee" : {
 
     },
-    "Fetching this trail from your iPhone…" : {
-
-    },
     "Find Photos of This Hike" : {
 
     },
@@ -771,12 +745,6 @@
 
     },
     "Finding a path…" : {
-
-    },
-    "Finding you on the trail…" : {
-
-    },
-    "Finding your position…" : {
 
     },
     "First of %lld photos taken here" : {
@@ -850,9 +818,6 @@
     "Hike Progress" : {
 
     },
-    "Hike Recording" : {
-
-    },
     "Hike Summary" : {
 
     },
@@ -887,12 +852,6 @@
 
     },
     "Import GPX file" : {
-
-    },
-    "Import a GPX file or record a hike on your iPhone, and it will appear here." : {
-
-    },
-    "Install OpenHikes on the iPhone paired with this watch to send trails across." : {
 
     },
     "Issued by %@" : {
@@ -998,9 +957,6 @@
     "Location access is off" : {
 
     },
-    "Location is off, so your position isn't shown." : {
-
-    },
     "Looking along the trail…" : {
 
     },
@@ -1025,9 +981,6 @@
     "Map Tiles" : {
 
     },
-    "Map of %@" : {
-
-    },
     "Mapped Here" : {
 
     },
@@ -1041,6 +994,9 @@
 
     },
     "Moderate" : {
+
+    },
+    "Month" : {
 
     },
     "More" : {
@@ -1118,9 +1074,6 @@
     "No Location Yet" : {
 
     },
-    "No OpenHikes on Your iPhone" : {
-
-    },
     "No OpenStreetMap trails here — try another area" : {
 
     },
@@ -1137,9 +1090,6 @@
 
     },
     "No Times on This Route" : {
-
-    },
-    "No Trails Yet" : {
 
     },
     "No community hikes here" : {
@@ -1191,9 +1141,6 @@
 
     },
     "Not Now" : {
-
-    },
-    "Not Recording" : {
 
     },
     "Not on This Device" : {
@@ -1253,9 +1200,6 @@
     "On" : {
 
     },
-    "On Your iPhone" : {
-
-    },
     "On the Trail" : {
 
     },
@@ -1303,9 +1247,6 @@
 
     },
     "OpenHikes can only see the photos you have shared with it, and none of those were taken while you were out on this hike. If your pictures of this walk are elsewhere in your library, share them and OpenHikes will look again." : {
-
-    },
-    "OpenHikes couldn't do that." : {
 
     },
     "OpenHikes couldn’t reach Apple Weather. It will try again automatically." : {
@@ -1402,12 +1343,6 @@
 
     },
     "Pause Hike Recording" : {
-
-    },
-    "Pause recording" : {
-
-    },
-    "Paused. The ground you cover now isn't part of the walk." : {
 
     },
     "Pauses the hike being recorded, and turns the GPS off until you resume." : {
@@ -1567,9 +1502,6 @@
     "Profile and settings" : {
 
     },
-    "Progress along the trail" : {
-
-    },
     "Project on GitHub" : {
 
     },
@@ -1612,9 +1544,6 @@
     "Recents" : {
 
     },
-    "Record" : {
-
-    },
     "Record Along Trail" : {
 
     },
@@ -1624,9 +1553,6 @@
     "Record Hike" : {
 
     },
-    "Record This Hike" : {
-
-    },
     "Record a hike" : {
 
     },
@@ -1634,9 +1560,6 @@
 
     },
     "Recording resumed after OpenHikes restarted." : {
-
-    },
-    "Records on this watch, with or without your iPhone. The walk goes to your iPhone when it's back in range." : {
 
     },
     "Recovered recording" : {
@@ -1681,6 +1604,12 @@
     "Reorder List" : {
 
     },
+    "Replace Drawing" : {
+
+    },
+    "Replace the trail you're drawing?" : {
+
+    },
     "Report" : {
 
     },
@@ -1718,9 +1647,6 @@
 
     },
     "Resume it, stop to save it, or discard it below." : {
-
-    },
-    "Resume recording" : {
 
     },
     "Resuming it could not be saved, so the hike is still paused. Try resuming it again." : {
@@ -1810,9 +1736,6 @@
     "Select More Photos…" : {
 
     },
-    "Select a trail in OpenHikes" : {
-
-    },
     "Send" : {
 
     },
@@ -1829,9 +1752,6 @@
 
     },
     "Sent for review" : {
-
-    },
-    "Sent to your iPhone." : {
 
     },
     "Sent. It appears for other hikers once a person has checked it. Opens a request to withdraw it." : {
@@ -1903,9 +1823,6 @@
     "Shows the map licences you can open" : {
 
     },
-    "Shows your selected trail or a hike currently being recorded." : {
-
-    },
     "Some photos couldn’t be added. Try adding them again." : {
 
     },
@@ -1933,12 +1850,6 @@
     "Start Hike Recording" : {
 
     },
-    "Start or stop recording a hike." : {
-
-    },
-    "Starting…" : {
-
-    },
     "Starts recording a hike and follows one of your saved trails." : {
 
     },
@@ -1961,9 +1872,6 @@
 
     },
     "Stop Hike Recording" : {
-
-    },
-    "Stop recording" : {
 
     },
     "Stops the hike being recorded and saves it." : {
@@ -2024,9 +1932,6 @@
     "Terms & Conditions" : {
 
     },
-    "That hike isn't recording any more." : {
-
-    },
     "That place couldn't be found. Try another search." : {
 
     },
@@ -2045,6 +1950,9 @@
     "The hike itself isn't reported — only the photo somebody added to it." : {
 
     },
+    "The maker holds one trail at a time, and the one you left half-drawn will be discarded." : {
+
+    },
     "The map search service is busy. Try again in a moment." : {
 
     },
@@ -2061,6 +1969,9 @@
 
     },
     "The route and photographs are deleted for good. The hiker is not told, and their app goes on reading “waiting for review”." : {
+
+    },
+    "The shared copy shows the route before your edit. Ask for its removal, then share this one." : {
 
     },
     "Their community hikes don't appear on this device. Blocking is kept on this device only, and doesn't remove anything for anyone else — to have a hike taken down, report it from the hike's own screen." : {
@@ -2135,9 +2046,6 @@
     "This was sent and has not been published yet." : {
 
     },
-    "Time walking" : {
-
-    },
     "Title" : {
 
     },
@@ -2150,13 +2058,13 @@
     "Too short to draw." : {
 
     },
+    "Totals" : {
+
+    },
     "Trail" : {
 
     },
     "Trail routes from OpenStreetMap contributors." : {
-
-    },
-    "Trails" : {
 
     },
     "Travel Mode" : {
@@ -2172,9 +2080,6 @@
 
     },
     "Turn on Follow This Trail in Details, then set off along the trail. Finished hikes are kept here." : {
-
-    },
-    "Turn on Precise Location in Settings to carry on." : {
 
     },
     "Unblock" : {
@@ -2222,22 +2127,10 @@
     "WSW" : {
 
     },
-    "Waiting for Your iPhone" : {
-
-    },
     "Waiting for review" : {
 
     },
-    "Waiting for your iPhone to come back in range…" : {
-
-    },
-    "Waiting for your iPhone. It'll go across on its own." : {
-
-    },
     "Waiting for your location" : {
-
-    },
-    "Walk Kept" : {
 
     },
     "Walked" : {
@@ -2288,6 +2181,9 @@
     "What's wrong" : {
 
     },
+    "Year" : {
+
+    },
     "Yes" : {
 
     },
@@ -2316,9 +2212,6 @@
 
     },
     "Your drawing wasn't lost. Check that the device has storage available, then save again." : {
-
-    },
-    "Your iPhone is recording" : {
 
     },
     "Your own hike, already live for other hikers." : {
