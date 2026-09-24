@@ -9,15 +9,6 @@ nonisolated public enum TrailTravelMode: String, CaseIterable, Codable, Sendable
 
     public static let allCases: [Self] = [.hiking, .walking, .cycling, .driving]
 
-    public var label: String {
-        switch self {
-        case .walking: String(localized: "Walking")
-        case .hiking: String(localized: "Hiking")
-        case .cycling: String(localized: "Cycling")
-        case .driving: String(localized: "Driving")
-        }
-    }
-
     public var symbolName: String {
         switch self {
         case .walking: "figure.walk"

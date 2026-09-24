@@ -11,6 +11,7 @@ on:
       - "**/*.swift"
       - "OpenHikes.xcodeproj/**"
       - "OpenHikesShared/Package*"
+      - "OpenHikesData/Package*"
       - ".github/workflows/codeql.yml"
   push:
     branches:
