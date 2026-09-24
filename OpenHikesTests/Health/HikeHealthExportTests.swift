@@ -145,6 +145,32 @@ struct HikeHealthExportTests {
         #expect(request.weather?.humidity == reading.conditions.humidity)
     }
 
+    /// A lunch stop longer than the badge's window puts the last reading
+    /// well past start-plus-moving-time; it is still the walk's weather,
+    /// because the walk ended when the hiker stopped it.
+    @Test("a reading taken just before Stop goes with a walk that paused")
+    func aReadingAfterAPauseIsAttached() async throws {
+        let pause: TimeInterval = 3600
+        let stoppedAt = Self.startedAt.addingTimeInterval(Harness.recordedSeconds + pause)
+        let reading = WeatherSnapshot(
+            symbolName: "cloud.sun.fill",
+            temperature: Measurement(value: 11, unit: UnitTemperature.celsius),
+            conditionDescription: "Partly Cloudy",
+            capturedAt: stoppedAt.addingTimeInterval(-300),
+            conditions: .preview
+        )
+        let harness = try harness(
+            savesToHealth: .on,
+            weather: .reading(reading, subject: .me(.init(latitude: 47.63, longitude: 12.86))),
+            pausedSeconds: pause
+        )
+        _ = try harness.persist()
+        await harness.settle()
+
+        let request = try #require(harness.writer.written.first)
+        #expect(request.weather?.temperature == reading.temperature)
+    }
+
     @Test("with no reading, the workout carries no weather")
     func noReadingMeansNoWeather() async throws {
         let harness = try harness(savesToHealth: .on)
@@ -202,9 +228,15 @@ struct HikeHealthExportTests {
 
     private func harness(
         savesToHealth: Harness.Switch,
-        weather: WeatherBadgeState = .idle
+        weather: WeatherBadgeState = .idle,
+        pausedSeconds: TimeInterval = 0
     ) throws -> Harness {
-        try Harness(savesToHealth: savesToHealth, startedAt: Self.startedAt, weather: weather)
+        try Harness(
+            savesToHealth: savesToHealth,
+            startedAt: Self.startedAt,
+            weather: weather,
+            pausedSeconds: pausedSeconds
+        )
     }
 
     @MainActor
@@ -218,6 +250,9 @@ struct HikeHealthExportTests {
         let defaults: UserDefaults
         let context: ModelContext
         private let startedAt: Date
+        /// Time the walk stood paused, which the journal's wall-clock end
+        /// includes and ``recordedSeconds`` does not.
+        private let pausedSeconds: TimeInterval
 
         /// Three states rather than a flag, because *never set* is the one
         /// the default exists for and is not the same as explicitly off.
@@ -227,8 +262,14 @@ struct HikeHealthExportTests {
             case on
         }
 
-        init(savesToHealth: Switch, startedAt: Date, weather: WeatherBadgeState) throws {
+        init(
+            savesToHealth: Switch,
+            startedAt: Date,
+            weather: WeatherBadgeState,
+            pausedSeconds: TimeInterval
+        ) throws {
             self.startedAt = startedAt
+            self.pausedSeconds = pausedSeconds
             let container = try Fixture.modelContainer()
             context = container.mainContext
             let suite = UserDefaults(suiteName: "health-export-\(UUID().uuidString)")
@@ -264,7 +305,7 @@ struct HikeHealthExportTests {
 
         func persist(sessionID: UUID = UUID()) throws -> Hike {
             try recorder.persist(
-                Self.session(id: sessionID, startedAt: startedAt),
+                Self.session(id: sessionID, startedAt: startedAt, pausedSeconds: pausedSeconds),
                 prepared: prepared()
             )
         }
@@ -290,13 +331,18 @@ struct HikeHealthExportTests {
             )
         }
 
-        private static func session(id: UUID, startedAt: Date) -> TrackJournalSession {
-            TrackJournalSession(
+        private static func session(
+            id: UUID,
+            startedAt: Date,
+            pausedSeconds: TimeInterval
+        ) -> TrackJournalSession {
+            let endedAt = startedAt.addingTimeInterval(Self.recordedSeconds + pausedSeconds)
+            return TrackJournalSession(
                 metadata: TrackJournalMetadata(
                     sessionID: id,
                     startedAt: startedAt,
-                    endedAt: startedAt.addingTimeInterval(Self.recordedSeconds),
-                    lastUpdatedAt: startedAt.addingTimeInterval(Self.recordedSeconds),
+                    endedAt: endedAt,
+                    lastUpdatedAt: endedAt,
                     pausedIntervals: [],
                     title: nil
                 ),

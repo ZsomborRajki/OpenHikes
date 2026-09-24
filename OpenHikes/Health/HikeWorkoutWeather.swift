@@ -47,6 +47,10 @@ nonisolated struct HikeWorkoutWeather: Equatable, Sendable {
     /// The reading a walk from `startedAt` to `endedAt` may carry, or `nil`
     /// when `state` holds none that is about it. See the file header for the
     /// two conditions.
+    ///
+    /// `endedAt` is when the walk stopped by the clock, pauses included — not
+    /// start plus moving time. The poll loop keeps refreshing through a pause,
+    /// so the reading a walk ends with is one taken near the stop.
     init?(
         state: WeatherBadgeState,
         walkFrom startedAt: Date,
