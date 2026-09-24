@@ -3,6 +3,7 @@
 //  OpenHikesTests
 //
 
+import CoreLocation
 import Foundation
 @testable import OpenHikes
 import SwiftData
@@ -52,7 +53,7 @@ struct SheetRouteTests {
         #expect(path == [.recording])
     }
 
-    @Test("deleting a hike takes its pushed photo viewer and place screens with it")
+    @Test("deleting a hike takes its pushed photo viewer, place screens and place form with it")
     func photoRouteBelongsToItsHike() throws {
         let context = try Fixture.modelContext()
         let deleted = Fixture.hike(in: context, title: "Ridge Loop")
@@ -61,6 +62,7 @@ struct SheetRouteTests {
             .hike(deleted),
             .photo(deleted, UUID()),
             .place(deleted, UUID()),
+            .newPlace(deleted, HikePlaceSpot(CLLocationCoordinate2D(latitude: 47.6, longitude: 12.9))),
             .hike(survivor),
         ]
 

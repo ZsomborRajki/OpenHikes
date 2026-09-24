@@ -14,6 +14,9 @@
 //  History is read, and taken away — not deleted — by the switch beside the
 //  *Places* heading.
 //
+//  And *Add Place* from the map's pill: a form with a pin standing where the
+//  place will go, which puts nothing on the hike until *Add*.
+//
 
 import XCTest
 
@@ -102,5 +105,65 @@ nonisolated final class PlaceUITests: XCTestCase {
 
         scrollToTap(toggle, in: app)
         XCTAssertTrue(pin.waitForExistence(timeout: UITestTimeout.existence), "switched back on, they return")
+    }
+
+    // MARK: - Add Place, from the pill
+
+    @MainActor
+    private func openPlaceAdder(in app: XCUIApplication) {
+        openHikeDetail(in: app, titled: Self.hikeTitle)
+        let addPlace = element("map-add-place-button", in: app)
+        XCTAssertTrue(addPlace.waitForExistence(timeout: UITestTimeout.navigation), "a hike's screen offers Add Place")
+        addPlace.tap()
+        XCTAssertTrue(
+            element("hike-place-adder-title", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "the pill opens the form"
+        )
+    }
+
+    @MainActor
+    func testAddingAPlaceFromThePill() {
+        let app = launchApp(arguments: ["--ui-test-import-gpx=\(Self.fixture)"])
+        openPlaceAdder(in: app)
+
+        XCTAssertEqual(element("hike-place-adder-title", in: app).label, "Viewpoint")
+        XCTAssertEqual(app.textFields["hike-place-adder-name"].value as? String, "Viewpoint")
+        XCTAssertTrue(element("hike-place-placeholder", in: app).exists, "a pin stands where the place will go")
+        XCTAssertTrue(element("hike-place-adder-camera", in: app).exists)
+        XCTAssertTrue(element("hike-place-adder-library", in: app).exists)
+        // Nothing to share, remove or find on the map: it is not a place yet.
+        XCTAssertFalse(element("hike-place-share", in: app).exists)
+        XCTAssertFalse(element("hike-place-remove", in: app).exists)
+        XCTAssertFalse(element("hike-place-show-on-map", in: app).exists)
+        XCTAssertFalse(element("map-add-place-button", in: app).exists, "the pill steps aside for the form")
+
+        app.buttons["hike-place-adder-add"].tap()
+
+        let title = element("hike-place-title", in: app)
+        XCTAssertTrue(title.waitForExistence(timeout: UITestTimeout.navigation), "adding opens the new place")
+        XCTAssertEqual(title.label, "Viewpoint")
+        XCTAssertTrue(app.buttons["hike-place-edit"].exists, "it is the hiker's own")
+        popScreen(in: app)
+        XCTAssertTrue(
+            app.navigationBars[Self.hikeTitle].waitForExistence(timeout: UITestTimeout.navigation),
+            "back from the new place is the hike, not the spent form"
+        )
+    }
+
+    @MainActor
+    func testCancellingAddPlaceLeavesNothingBehind() {
+        let app = launchApp(arguments: ["--ui-test-import-gpx=\(Self.fixture)"])
+        openPlaceAdder(in: app)
+        let placeholder = element("hike-place-placeholder", in: app)
+        XCTAssertTrue(placeholder.exists)
+
+        app.buttons["hike-place-adder-cancel"].tap()
+
+        XCTAssertTrue(app.navigationBars[Self.hikeTitle].waitForExistence(timeout: UITestTimeout.navigation))
+        XCTAssertTrue(placeholder.waitForNonExistence(timeout: UITestTimeout.existence), "the pin goes with the form")
+        XCTAssertFalse(
+            app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Viewpoint")).firstMatch.exists,
+            "and no place was added"
+        )
     }
 }

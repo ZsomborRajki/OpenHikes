@@ -508,6 +508,8 @@ struct MapSheet: View {
             pendingPhotosDestination(pending)
         case let .place(hike, placeID):
             placeDestination(placeID, of: hike)
+        case let .newPlace(hike, spot):
+            placeAdderDestination(at: spot, on: hike)
         case .trailDraft:
             trailDraftDestination
         case .recording:

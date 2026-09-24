@@ -47,6 +47,9 @@ final class TrailPlaceAnnotation: NSObject, MKAnnotation {
     /// Whether this is the drawing's place, which opens the place sheet, rather
     /// than a saved hike's, which opens the place's screen.
     let belongsToDraft: Bool
+    /// Whether this is where a place about to be added would stand, rather
+    /// than a place the hike has. Opens nothing. See ``HikePlaceAdder``.
+    let isPlaceholder: Bool
 
     @objc var title: String? { place.displayName }
 
@@ -66,11 +69,12 @@ final class TrailPlaceAnnotation: NSObject, MKAnnotation {
         return parts.joined(separator: " · ")
     }
 
-    init(row: TrailPlaceRow, belongsToDraft: Bool) {
+    init(row: TrailPlaceRow, belongsToDraft: Bool, isPlaceholder: Bool = false) {
         place = row.place
         coordinate = row.place.clCoordinate
         anchor = row.anchor
         self.belongsToDraft = belongsToDraft
+        self.isPlaceholder = isPlaceholder
     }
 
     func matches(_ row: TrailPlaceRow, belongsToDraft: Bool) -> Bool {
@@ -113,8 +117,14 @@ extension MapView.Coordinator {
         view.glyphImage = UIImage(systemName: annotation.place.systemImageName)
         view.displayPriority = .required
         view.markerTintColor = UIColor(annotation.place.tint)
-        view.accessibilityIdentifier = annotation.belongsToDraft ? "trail-draft-place" : "hike-place"
+        view.accessibilityIdentifier = switch (annotation.belongsToDraft, annotation.isPlaceholder) {
+        case (true, _): "trail-draft-place"
+        case (false, true): "hike-place-placeholder"
+        case (false, false): "hike-place"
+        }
         #endif
+        // The pin a hiker is placing stands in front of the ones already there.
+        view.zPriority = annotation.isPlaceholder ? .max : .defaultUnselected
         // Neither kind shows a callout: the drawing's opens the place sheet
         // and a saved hike's opens the place's screen — see
         // ``selectHikePlaceAnnotation(_:on:)``.

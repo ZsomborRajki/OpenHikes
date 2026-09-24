@@ -157,6 +157,57 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// Three abreast took a third of a phone's width off the map, so the pill
+    /// stands up: *Add Place* on top, the camera, then the library — and the
+    /// two photo buttons stay put whether *Add Place* is offered or not,
+    /// because the pill is pinned at its bottom edge.
+    @Test("the pill is a column, and Add Place joins it only for a hike's own screen")
+    func photoControlsStackAddPlaceOnTop() async throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        let controls = try #require(coordinator.photoControls)
+        let addPlace = try #require(controls.addPlaceButton)
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+
+        // A screen offering photographs only — a place's own, or a recording.
+        let photosOnly = photoCapture.attach(to: hike) { nil }
+        await settleDelegateHop(until: "the camera pill to appear") { !controls.isHidden }
+        #expect(addPlace.isHidden)
+        map.layoutIfNeeded()
+        let twoTall = controls.frame
+        #expect(twoTall.height > twoTall.width, "the photo buttons are stacked, not side by side")
+
+        // A hike's screen, which also says where a place would go.
+        let detail = photoCapture.attach(to: hike, placeAnchor: { nil }, anchor: { nil })
+        photoCapture.detach(token: photosOnly)
+        await settleDelegateHop(until: "Add Place to join the pill") { !addPlace.isHidden }
+        map.layoutIfNeeded()
+        #expect(controls.frame.width == twoTall.width)
+        #expect(controls.frame.height > twoTall.height)
+        #expect(abs(controls.frame.maxY - twoTall.maxY) < 1, "the pill grew upward from its pinned edge")
+
+        let order = Self.buttons(in: controls)
+            .sorted { $0.convert($0.bounds, to: controls).midY < $1.convert($1.bounds, to: controls).midY }
+            .map { $0.accessibilityIdentifier ?? "" }
+        #expect(order == ["map-add-place-button", "map-camera-button", "map-photo-library-button"])
+
+        photoCapture.detach(token: detail)
+        await settleDelegateHop(until: "the camera pill to fade out") { controls.alpha == 0 }
+        #endif
+    }
+
+    #if os(iOS)
+    private static func buttons(in view: UIView) -> [UIButton] {
+        view.subviews.flatMap { subview -> [UIButton] in
+            if let button = subview as? UIButton { return [button] }
+            return buttons(in: subview)
+        }
+    }
+    #endif
+
     /// `withObservationTracking` has no way to cancel a registration, so a
     /// second one is permanent: two observers, two overlapping fade animations
     /// against one view, for the life of the map. The guard is the same one

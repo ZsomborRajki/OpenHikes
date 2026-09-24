@@ -424,6 +424,7 @@ struct OpenHikesView: View {
                 photoPresentation.pickedPhotos = []
                 photoPresentation.showLibraryPicker = true
             }
+            .onChange(of: photoCapture.placeRequest) { _, _ in openPlaceAdder() }
             // The same shape, for the pill that shares that slot: the map
             // posts a token and the push belongs here, because this view owns
             // the sheet's navigation stack. Assigned rather than appended —
@@ -921,6 +922,8 @@ struct ImportSelectionGate {
         // A place's screen is its hike's, one push further in, on the photo
         // viewer's terms.
         case .some(.place(let hike, _)): .hike(hike.id)
+        // So is a place being added to it.
+        case .some(.newPlace(let hike, _)): .hike(hike.id)
         // A walk's summary is its hike's screen two pushes in, on the same
         // terms as the photo viewer.
         case .some(.walk(let walk)): .hike(walk.hikeID)
@@ -964,4 +967,27 @@ struct ImportSelectionGate {
     return OpenHikesView()
         .environment(model)
         .modelContainer(container)
+}
+
+// MARK: - Add Place
+
+// In this file rather than beside the photo handlers, because the map's
+// controller is private to it.
+private extension OpenHikesView {
+    /// Opens *Add Place* at the spot the pill resolved, with a pin standing
+    /// there and the map on it.
+    ///
+    /// The spot is read at the tap, as a photograph's is at the shutter: the
+    /// live match while auto-follow has one, otherwise wherever the elevation
+    /// graph's tracker is — see
+    /// ``PhotoTrailAnchor/placeCoordinate(profile:live:scrubbed:)``. The
+    /// sheet goes to its middle detent before the camera moves, because
+    /// that is the height the move frames its target above — see
+    /// ``SheetPresentation/restAtMiddleWhenFullHeightScreenPops()``.
+    func openPlaceAdder() {
+        guard let spot = photoCapture.placeSpot() else { return }
+        sheet.path.append(.newPlace(spot.hike, HikePlaceSpot(spot.coordinate)))
+        sheet.makeRoomForTheMap()
+        mapController.showPhotoSpot(spot.coordinate)
+    }
 }

@@ -24,6 +24,11 @@ enum SheetRoute: Hashable {
     /// yes and nothing collects the downloads.
     case communityPhoto(CommunityListing, [CommunityGalleryPhoto], Int)
     case hike(Hike)
+    /// A place about to be added to a hike from the map's pill, at the spot
+    /// the pill resolved when it was tapped. Carries the spot rather than a
+    /// ``TrailPlace`` because nothing is on the hike until the hiker says
+    /// *Add* — see ``HikePlaceAdder``.
+    case newPlace(Hike, HikePlaceSpot)
     /// A submission waiting for review. Carries the queue entry for the reason
     /// ``communityHike(_:)`` carries a listing — there is no `Hike` and no
     /// listing either, and the value is `Sendable` with no store behind it.
@@ -78,6 +83,7 @@ enum SheetRoute: Hashable {
         case let .hike(hike): hike.id == hikeID
         case let .photo(hike, _): hike.id == hikeID
         case let .place(hike, _): hike.id == hikeID
+        case let .newPlace(hike, _): hike.id == hikeID
         case let .walk(walk): walk.hikeID == hikeID
         // None of them shows a `Hike`, so none is popped by one being
         // deleted. A community preview — and the gallery over it — is about a
@@ -122,7 +128,7 @@ enum SheetRoute: Hashable {
     var isCommunityPreview: Bool {
         switch self {
         case .communityHike, .communityPhoto: true
-        case .hike, .pendingPhotos, .pendingSubmission, .photo, .place, .recording, .trailDraft, .walk:
+        case .hike, .newPlace, .pendingPhotos, .pendingSubmission, .photo, .place, .recording, .trailDraft, .walk:
             false
         }
     }
@@ -133,7 +139,8 @@ enum SheetRoute: Hashable {
     var prefersFullHeight: Bool {
         switch self {
         case .communityPhoto, .photo: true
-        case .communityHike, .hike, .pendingPhotos, .pendingSubmission, .place, .recording, .trailDraft, .walk:
+        case .communityHike, .hike, .newPlace, .pendingPhotos, .pendingSubmission, .place, .recording,
+            .trailDraft, .walk:
             false
         }
     }
@@ -148,6 +155,7 @@ enum SheetRoute: Hashable {
         case let (.hike(left), .hike(right)): left == right
         case let (.photo(left, leftPhoto), .photo(right, rightPhoto)): left == right && leftPhoto == rightPhoto
         case let (.place(left, leftPlace), .place(right, rightPlace)): left == right && leftPlace == rightPlace
+        case let (.newPlace(left, leftSpot), .newPlace(right, rightSpot)): left == right && leftSpot == rightSpot
         case (.recording, .recording): true
         case (.trailDraft, .trailDraft): true
         case let (.walk(left), .walk(right)): left.persistentModelID == right.persistentModelID
@@ -203,6 +211,10 @@ enum SheetRoute: Hashable {
             hasher.combine(9)
             hasher.combine(hike)
             hasher.combine(placeID)
+        case let .newPlace(hike, spot):
+            hasher.combine(10)
+            hasher.combine(hike)
+            hasher.combine(spot)
         }
     }
 }

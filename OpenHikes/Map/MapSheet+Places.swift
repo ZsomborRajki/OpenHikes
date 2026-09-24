@@ -2,7 +2,8 @@
 //  MapSheet+Places.swift
 //  OpenHikes
 //
-//  A hike's place, pushed onto the sheet. See ``HikePlaceView``.
+//  A hike's place, pushed onto the sheet — see ``HikePlaceView`` — and the
+//  form that adds one from the map's pill — see ``HikePlaceAdder``.
 //
 //  Its own file for the reason ``MapSheetHikes`` is one: the sheet's own file
 //  is at the length the linter allows, and this is a destination rather than
@@ -37,5 +38,25 @@ extension MapSheet {
         } else {
             presentation.path.append(.place(hike, placeID))
         }
+    }
+
+    /// *Add Place*, at the spot the pill resolved.
+    ///
+    /// Adding replaces the form with the new place's screen rather than
+    /// stacking it, so back from there is the hike rather than a spent form.
+    func placeAdderDestination(at spot: HikePlaceSpot, on hike: Hike) -> some View {
+        HikePlaceAdder(
+            hike: hike,
+            spot: spot,
+            placePins: placePins,
+            onAdded: { placeID in
+                guard case .newPlace = presentation.path.last else { return }
+                presentation.path[presentation.path.count - 1] = .place(hike, placeID)
+            },
+            onCancel: {
+                guard case .newPlace = presentation.path.last else { return }
+                presentation.path.removeLast()
+            }
+        )
     }
 }

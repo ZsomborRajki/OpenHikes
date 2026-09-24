@@ -33,14 +33,63 @@ extension View {
     ///     ``PhotoCaptureController`` for why this is a closure.
     ///   - place: The place on the trail this screen is about, which files
     ///     a photo under it — see ``HikePhoto/placeID``.
+    ///   - placeAnchor: Where the pill's *Add Place* would put a place,
+    ///     evaluated at the tap. `nil` offers no *Add Place* — see
+    ///     ``PhotoCaptureController/Subject/placeAnchor``.
     func photoCaptureSubject(
         _ controller: PhotoCaptureController?,
         for hike: Hike?,
         place: UUID? = nil,
+        placeAnchor: (() -> CLLocationCoordinate2D?)? = nil,
         anchor: @escaping () -> CLLocationCoordinate2D?
     ) -> some View {
         modifier(
-            PhotoCaptureSubject(controller: controller, hike: hike, place: place, anchor: anchor)
+            PhotoCaptureSubject(
+                controller: controller,
+                hike: hike,
+                place: place,
+                placeAnchor: placeAnchor,
+                anchor: anchor
+            )
+        )
+    }
+}
+
+extension View {
+    /// A saved hike's claim on the pill: a photo taken now is pinned where
+    /// the elevation graph says — see ``PhotoTrailAnchor`` — and the pill
+    /// offers *Add Place* at the same position, the trailhead included — see
+    /// ``PhotoTrailAnchor/placeCoordinate(profile:live:scrubbed:)``.
+    ///
+    /// Both anchors run at the tap, not as the chart moves: `tracker` is
+    /// handed in as the reference it is and dereferenced only inside them,
+    /// because reading it from the detail screen's body is the one thing
+    /// ``TrackerState`` exists to prevent. `profile` is a closure for the
+    /// same timing: the claim is made on appear, before the profile has been
+    /// built, and a value captured then would be `nil` for good.
+    func trailPhotoCaptureSubject(
+        _ controller: PhotoCaptureController?,
+        for hike: Hike,
+        profile: @escaping () -> RouteProfile?,
+        tracker: TrackerState
+    ) -> some View {
+        photoCaptureSubject(
+            controller,
+            for: hike,
+            placeAnchor: {
+                PhotoTrailAnchor.placeCoordinate(
+                    profile: profile(),
+                    live: tracker.liveTrackerDistance,
+                    scrubbed: tracker.trackerDistance
+                )
+            },
+            anchor: {
+                PhotoTrailAnchor.coordinate(
+                    profile: profile(),
+                    live: tracker.liveTrackerDistance,
+                    scrubbed: tracker.trackerDistance
+                )
+            }
         )
     }
 }
@@ -49,6 +98,7 @@ private struct PhotoCaptureSubject: ViewModifier {
     let controller: PhotoCaptureController?
     let hike: Hike?
     let place: UUID?
+    let placeAnchor: (() -> CLLocationCoordinate2D?)?
     let anchor: () -> CLLocationCoordinate2D?
 
     @State private var token: Int?
@@ -74,7 +124,7 @@ private struct PhotoCaptureSubject: ViewModifier {
 
     private func claim() {
         guard let controller, let hike else { return }
-        token = controller.attach(to: hike, place: place, anchor: anchor)
+        token = controller.attach(to: hike, place: place, placeAnchor: placeAnchor, anchor: anchor)
     }
 
     private func release() {

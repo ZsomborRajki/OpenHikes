@@ -44,6 +44,18 @@ final class PhotoCaptureController {
         /// Resolved at capture time — see the note above. `nil` means the
         /// photo joins the gallery without a place on the map.
         let anchor: () -> CLLocationCoordinate2D?
+        /// Where a place added from the pill would stand, resolved when the
+        /// pill's *Add Place* is tapped. `nil` for a screen that does not
+        /// offer one — the recording screen has its own *Add Place*, and a
+        /// place's own screen is already about a place. See
+        /// ``HikePlaceAdder``.
+        let placeAnchor: (() -> CLLocationCoordinate2D?)?
+    }
+
+    /// Where the pill's *Add Place* would put a place, resolved at the tap.
+    struct PlaceSpot {
+        let hike: Hike
+        let coordinate: CLLocationCoordinate2D
     }
 
     /// Where a photo taken now goes, resolved at the shutter — see
@@ -58,11 +70,16 @@ final class PhotoCaptureController {
     /// ``MapView/Coordinator``, so showing or hiding it never re-renders a
     /// SwiftUI view.
     private(set) var isAvailable = false
+    /// Whether the pill also offers *Add Place*: only while it is available
+    /// at all, and only for a screen that says where a place would go. See
+    /// ``Subject/placeAnchor``.
+    private(set) var canAddPlace = false
 
     /// One-shot requests, in the same shape ``MapController``'s commands take:
     /// a token whose *change* is the message.
     private(set) var cameraRequest = 0
     private(set) var libraryRequest = 0
+    private(set) var placeRequest = 0
 
     @ObservationIgnored private(set) var subject: Subject?
     @ObservationIgnored private var nextToken = 0
@@ -85,10 +102,17 @@ final class PhotoCaptureController {
     @discardableResult func attach(
         to hike: Hike,
         place placeID: UUID? = nil,
+        placeAnchor: (() -> CLLocationCoordinate2D?)? = nil,
         anchor: @escaping () -> CLLocationCoordinate2D?
     ) -> Int {
         nextToken += 1
-        subject = Subject(token: nextToken, hike: hike, placeID: placeID, anchor: anchor)
+        subject = Subject(
+            token: nextToken,
+            hike: hike,
+            placeID: placeID,
+            anchor: anchor,
+            placeAnchor: placeAnchor
+        )
         refreshAvailability()
         return nextToken
     }
@@ -175,10 +199,27 @@ final class PhotoCaptureController {
         libraryRequest &+= 1
     }
 
+    /// Refused like the two above, and also while the screen offering the
+    /// pill has nowhere to put a place.
+    func requestPlace() {
+        guard canAddPlace else { return }
+        placeRequest &+= 1
+    }
+
     private func refreshAvailability() {
         let available = subject != nil && hasHostScreen
-        guard isAvailable != available else { return }
-        isAvailable = available
+        if isAvailable != available { isAvailable = available }
+        let addsPlaces = available && subject?.placeAnchor != nil
+        if canAddPlace != addsPlaces { canAddPlace = addsPlaces }
+    }
+
+    /// The hike a place added now belongs to, and where it would stand —
+    /// read once, at the tap, for the reason ``currentSubject()`` reads its
+    /// anchor at the shutter. `nil` when the pill offers no *Add Place*, or
+    /// the screen cannot say where yet (its route is still being built).
+    func placeSpot() -> PlaceSpot? {
+        guard canAddPlace, let subject, let coordinate = subject.placeAnchor?() else { return nil }
+        return PlaceSpot(hike: subject.hike, coordinate: coordinate)
     }
 
     /// The hike a photo taken now belongs to, and where to pin it.
