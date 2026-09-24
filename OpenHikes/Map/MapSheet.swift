@@ -69,7 +69,7 @@ struct MapSheet: View {
     /// ``TrailDraftController``.
     var trailMaker: TrailDraftController
 
-    var onImportGPX: (URL) -> Void = { _ in /* no-op default */ }
+    var onImportGPX: ([URL]) -> Void = { _ in /* no-op default */ }
     /// The document picker failed to produce a file at all.
     var onImportFailed: () -> Void = { /* no-op default */ }
     /// A place search reached MapKit and came back with an error.
@@ -189,16 +189,7 @@ struct MapSheet: View {
         .accessibilityIdentifier("map-sheet")
         // Presented from inside the sheet so it isn't blocked by the sheet's
         // own presentation context.
-        .fileImporter(isPresented: $showImporter, allowedContentTypes: Self.gpxContentTypes) { result in
-            switch result {
-            case let .success(url): onImportGPX(url)
-            // Rare — the picker couldn't hand over the file at all — but
-            // dropping it here would be the same silent no-op the import path
-            // itself was just fixed for. From the user's side it's the same
-            // story as an unreadable file, so it's told the same way.
-            case .failure: onImportFailed()
-            }
-        }
+        .gpxFileImporter(isPresented: $showImporter, onImport: onImportGPX, onFailed: onImportFailed)
         // Presented from here rather than from the row that offered it, for
         // the reason ``withdrawingHike`` gives: the dialog is already gone by
         // the time this opens.
@@ -803,16 +794,6 @@ private func startSearch(request: MKLocalSearch.Request, fallbackName: String) {
         // Drop to the detent the map framed the result against.
         presentation.makeRoomForTheMap()
     }
-}
-
-/// GPX has no system-declared UTType; the app imports topografix's, which
-/// is what makes the lookup below resolve. XML stays as a fallback for a
-/// track exported under a different extension.
-private static var gpxContentTypes: [UTType] {
-    var types: [UTType] = []
-    if let gpx = UTType(filenameExtension: "gpx") { types.append(gpx) }
-    types.append(.xml)
-    return types
 }
 
 /// A method rather than a closure at the call site, so the sheet's content
