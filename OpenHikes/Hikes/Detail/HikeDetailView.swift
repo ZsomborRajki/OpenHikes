@@ -193,9 +193,13 @@ struct HikeDetailView: View {
             case .history: HikeWalkHistory(hike: hike, onOpen: onOpenWalk)
             }
         }
-        // On the container rather than in the Places section, so flipping to
-        // History leaves the places on the map — see ``HikePlacePinClaim``.
-        .background { HikePlacePinClaim(hike: hike, controller: placePins, onOpen: onOpenPlace) }
+        // On the container rather than in the Photos and Places sections, so
+        // flipping to History leaves the photos and places on the map — see
+        // ``HikePhotoPinClaim`` and ``HikePlacePinClaim``.
+        .background {
+            HikePhotoPinClaim(hike: hike, controller: photoPins, onOpen: onOpenPhoto)
+            HikePlacePinClaim(hike: hike, controller: placePins, onOpen: onOpenPlace)
+        }
         .navigationTitle(hike.displayTitle)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -648,7 +652,7 @@ private extension HikeDetailView {
     /// Always drawn, on every hike: the strip when there are photos, and the
     /// offer to go and find some either way. See ``HikePhotoSection``.
     private var photoSection: some View {
-        HikePhotoSection(hike: hike, mapPins: photoPins, onOpen: onOpenPhoto)
+        HikePhotoSection(hike: hike, onOpen: onOpenPhoto)
     }
 
     /// The places marked along this trail, and the pins that draw them.

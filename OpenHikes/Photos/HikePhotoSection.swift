@@ -37,9 +37,6 @@ import SwiftUI
 struct HikePhotoSection: View {
     let hike: Hike
     var store: HikePhotoStore = .shared
-    /// Draws these photos on the map for as long as this strip is on screen.
-    /// `nil` in a preview, and in a test that has no map.
-    var mapPins: PhotoMapPinController?
     /// Opens the viewer at a photo.
     var onOpen: (HikePhoto) -> Void
 
@@ -113,11 +110,9 @@ struct HikePhotoSection: View {
     /// The horizontal strip of thumbnails, drawn only when there is at least
     /// one.
     ///
-    /// The pins go up from here rather than from the section around it,
-    /// deliberately: deleting the last photo takes this subtree down, and its
-    /// `onDisappear` is what clears the pins that were standing for it. Moving
-    /// the modifier up to the always-present container would leave a deleted
-    /// photo's marker on the map.
+    /// The pins are not claimed from here: the strip is only on the *Details*
+    /// face, and the pins have to outlast a flip to *History* — see
+    /// ``HikePhotoPinClaim``.
     ///
     /// **`LazyHStack`, and on this strip it is the one that matters most.** A
     /// plain `HStack` builds every tile the moment the strip appears, so every
@@ -163,15 +158,6 @@ struct HikePhotoSection: View {
         // stack's name — and the strip unreachable under its own. That is
         // what it did until a performance scenario went looking for it.
         .accessibilityIdentifier("hike-photo-strip")
-        // Published from here rather than from `HikeDetailView`, because this
-        // is already the body that reads `hike.photos` — the whole reason this
-        // section is its own view. Attaching it a level up would put a photo
-        // capture through the elevation chart, the stats grid and the action
-        // bar to reach the map.
-        .photoMapPins(mapPins, photos: photos) { photoID in
-            guard let photo = hike.photos.first(where: { $0.id == photoID }) else { return }
-            onOpen(photo)
-        }
     }
 
     /// The line under the strip and the button.

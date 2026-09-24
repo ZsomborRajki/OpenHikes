@@ -121,11 +121,11 @@ struct RecordingView: View {
         }
         // …and each one stands on the map as soon as it is taken, rather than
         // only once the walk has been saved. A background because the claim is
-        // all this draws — see ``RecordingPhotoPins`` for why it is a separate
+        // all this draws — see ``HikePhotoPinClaim`` for why it is a separate
         // view rather than a modifier on this one.
         .background {
             if let hike = recorder.currentHike {
-                RecordingPhotoPins(hike: hike, controller: photoPins) { photo in
+                HikePhotoPinClaim(hike: hike, controller: photoPins) { photo in
                     onOpenPhoto(hike, photo)
                 }
             }
@@ -152,44 +152,5 @@ struct RecordingView: View {
             #endif
             Button("OK", role: .cancel) { /* no-op */ }
         }
-    }
-}
-
-/// The photos already taken on this walk, as pins on the map's live track.
-///
-/// Its own view for the reason ``HikePhotoSection`` is one on the detail
-/// screen: ``Hike/orderedPhotos`` is a full sort behind a computed property,
-/// and `hike.photos` is a `@Model` relationship, which notifies on *every*
-/// write to it. Reading the gallery from `RecordingView`'s body would put both
-/// up there — a sort per body pass, and a body pass per photograph taken,
-/// across the whole of a six-hour walk, to produce the same handful of pins
-/// every time.
-///
-/// It is **not** true, and used to be claimed here, that the screen's body
-/// re-runs on every accepted fix. `HikeRecorder.stats` is a `let` holding a
-/// stable ``RecordingStats``, and `@Observable` instruments `var`s only, so
-/// reading it registers the reference and nothing in it: the per-fix readers
-/// are ``RecordingStatsSection`` and the trail line under the card's title,
-/// which are the boundaries, and the screen's own
-/// observable inputs are `phase` and `currentHike`, both of which move a
-/// handful of times a session. The note is worth keeping as a correction
-/// because the wrong version made a per-fix body pass on this screen sound
-/// like the expected cost.
-///
-/// It draws nothing itself. The pins are MapKit annotations published through
-/// ``PhotoMapPinController``; this exists only to own the claim, which is why
-/// it is a zero-sized background rather than anything on the screen.
-private struct RecordingPhotoPins: View {
-    let hike: Hike
-    var controller: PhotoMapPinController?
-    var onOpen: (HikePhoto) -> Void
-
-    var body: some View {
-        Color.clear
-            .frame(width: 0, height: 0)
-            .photoMapPins(controller, photos: hike.orderedPhotos) { photoID in
-                guard let photo = hike.photos.first(where: { $0.id == photoID }) else { return }
-                onOpen(photo)
-            }
     }
 }

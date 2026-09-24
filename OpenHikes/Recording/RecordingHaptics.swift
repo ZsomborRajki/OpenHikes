@@ -14,7 +14,7 @@
 //  not come. The phase is where those two answers arrive.
 //
 //  It is a `View` and not a modifier on `RecordingView` for the reason
-//  ``RecordingPhotoPins`` is one, and the instructions file states it as a
+//  ``HikePhotoPinClaim`` is one, and the instructions file states it as a
 //  rule under *Render isolation, in practice*: a `sensoryFeedback` modifier is
 //  inlined into the body that declares it, so writing it on the screen would
 //  register `phase` as an input of the screen. That happens to be harmless
