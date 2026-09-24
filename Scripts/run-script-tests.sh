@@ -1184,9 +1184,14 @@ echo "Periphery configuration"
 
 periphery="$repository_root/Scripts/periphery.sh"
 export STUB_PERIPHERY_VERSION="$(cat "$repository_root/.periphery-version")"
-unset STUB_PERIPHERY_STATUS STUB_PERIPHERY_OUTPUT || true
+unset STUB_PERIPHERY_STATUS STUB_PERIPHERY_OUTPUT STUB_XCODEBUILD_STATUS || true
+# Every case that reaches the build names a folder under the suite's own
+# scratch directory, because the script writes its build log into the folder
+# and the default one is inside the working tree.
+periphery_derived_data="$work/periphery-derived-data"
 
-run_script "periphery scans at the pinned version" "$periphery"
+run_script "periphery scans at the pinned version" "$periphery" \
+    --derived-data "$periphery_derived_data"
 if expect_status 0 \
     && expect_contains "$calls" "periphery scan --quiet --disable-update-check" \
         "the recorded calls" \
@@ -1195,7 +1200,44 @@ if expect_status 0 \
     pass
 fi
 
-run_script "periphery --exclude-tests reaches the scan" "$periphery" --exclude-tests
+# The fix this is here for: Periphery's own build shares one derived-data
+# folder between every checkout on the machine, and its scan reads every unit
+# in it. So the script builds into the folder it was given and scans exactly
+# that folder's index, and Periphery builds nothing.
+run_script "periphery scans the index it built, in the folder it was given" \
+    "$periphery" --derived-data "$periphery_derived_data"
+if expect_status 0 \
+    && expect_contains "$calls" \
+        "xcodebuild -project OpenHikes.xcodeproj -scheme OpenHikes -parallelizeTargets -derivedDataPath $periphery_derived_data -quiet build-for-testing" \
+        "the recorded calls" \
+    && expect_contains "$calls" "COMPILER_INDEX_STORE_ENABLE=YES" "the recorded calls" \
+    && expect_contains "$calls" "-skipPackagePluginValidation -destination generic/platform=iOS Simulator" \
+        "the recorded calls" \
+    && expect_contains "$calls" \
+        "--index-store-path $periphery_derived_data/Index.noindex/DataStore" \
+        "the recorded calls"; then
+    pass
+fi
+
+export STUB_XCODEBUILD_STATUS=65
+run_script "periphery does not scan when its build failed" "$periphery" \
+    --derived-data "$periphery_derived_data"
+if expect_status 1 \
+    && expect_contains "$output" "the build Periphery reads its index from failed" "the error" \
+    && expect_absent "$calls" "periphery scan" "the recorded calls"; then
+    pass
+fi
+unset STUB_XCODEBUILD_STATUS
+
+run_script "periphery --derived-data needs a path" "$periphery" --derived-data
+if expect_status 2 \
+    && expect_contains "$output" "--derived-data needs a path" "the error" \
+    && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
+    pass
+fi
+
+run_script "periphery --exclude-tests reaches the scan" "$periphery" --exclude-tests \
+    --derived-data "$periphery_derived_data"
 if expect_status 0 \
     && expect_contains "$calls" "--exclude-tests" "the recorded calls"; then
     pass
@@ -1207,7 +1249,8 @@ fi
 # nothing prints too.
 export STUB_PERIPHERY_OUTPUT="warning: .periphery.yml: invalid key 'retain_hashable_properties'
 * No unused code detected."
-run_script "periphery fails a scan that did not read .periphery.yml" "$periphery"
+run_script "periphery fails a scan that did not read .periphery.yml" "$periphery" \
+    --derived-data "$periphery_derived_data"
 if expect_status 1 \
     && expect_contains "$output" "did not read .periphery.yml as written" "the error"; then
     pass
@@ -1215,7 +1258,8 @@ fi
 
 export STUB_PERIPHERY_OUTPUT="error: The '--targets' option is required."
 export STUB_PERIPHERY_STATUS=1
-run_script "periphery reports a missing option as a broken config, not a finding" "$periphery"
+run_script "periphery reports a missing option as a broken config, not a finding" "$periphery" \
+    --derived-data "$periphery_derived_data"
 if expect_status 1 \
     && expect_contains "$output" "did not read .periphery.yml as written" "the error"; then
     pass
@@ -1223,7 +1267,8 @@ fi
 unset STUB_PERIPHERY_OUTPUT STUB_PERIPHERY_STATUS
 
 export STUB_PERIPHERY_STATUS=1
-run_script "periphery reports a scan that could not complete" "$periphery"
+run_script "periphery reports a scan that could not complete" "$periphery" \
+    --derived-data "$periphery_derived_data"
 if expect_status 1 \
     && expect_contains "$output" "nothing was analysed" "the error"; then
     pass
@@ -1242,7 +1287,8 @@ if expect_status 1 \
 fi
 
 export STUB_PERIPHERY_VERSION="3.9.0"
-run_script "periphery warns about a version newer than the pin and scans on" "$periphery"
+run_script "periphery warns about a version newer than the pin and scans on" "$periphery" \
+    --derived-data "$periphery_derived_data"
 if expect_status 0 \
     && expect_contains "$output" "3.9.0 installed" "the warning" \
     && expect_contains "$calls" "periphery scan" "the recorded calls"; then
@@ -1253,6 +1299,7 @@ export STUB_PERIPHERY_VERSION="$(cat "$repository_root/.periphery-version")"
 run_script "periphery --help prints the options without scanning" "$periphery" --help
 if expect_status 0 \
     && expect_contains "$output" "Usage: Scripts/periphery.sh" "the help" \
+    && expect_contains "$output" ".build/periphery" "the help" \
     && expect_absent "$calls" "periphery scan" "the recorded calls"; then
     pass
 fi

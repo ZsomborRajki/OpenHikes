@@ -1,4 +1,6 @@
-# Periphery — unused-code analysis. Run with `Scripts/periphery.sh`.
+# Periphery — unused-code analysis. Run with `Scripts/periphery.sh`, not a
+# bare `periphery scan`, which would build without the two arguments the
+# script passes and share its index with every other checkout.
 #
 # Not part of the build or of CI: a scan compiles the whole project with
 # indexing enabled and takes minutes, and its output is a list of candidates to
@@ -23,19 +25,12 @@ project: OpenHikes.xcodeproj
 schemes:
   - OpenHikes
 
-# Periphery builds into its own DerivedData, so it re-resolves packages from
-# scratch and hits the same SwiftLintPlugins fingerprint check that every
-# xcodebuild call in .github/workflows/ci.yml has to skip. Without this the
-# scan fails before it indexes anything.
-#
-# The destination is needed for the same reason it is needed everywhere else
-# here: Periphery passes none of its own, so xcodebuild resolves the scheme
-# against "Any iOS Device" and then cannot find a test host for OpenWidgetTests,
-# which is built for the simulator like everything else in this project.
-build_arguments:
-  - -skipPackagePluginValidation
-  - -destination
-  - generic/platform=iOS Simulator
+# No `build_arguments`: Scripts/periphery.sh builds the index itself, into a
+# folder of the checkout's own, and scans it with `--index-store-path`, which
+# skips Periphery's build — so arguments here would never be read. The script
+# says why Periphery's own build could not be used: every checkout on the
+# machine shared its derived data, and the scan read all of them. It also
+# carries the two build arguments this file used to, and the reasons for them.
 
 # `#Preview` bodies reference views nothing else does and are not compiled into
 # a Release build, so without this every preview-only view is reported and the
