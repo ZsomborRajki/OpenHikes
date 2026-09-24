@@ -856,6 +856,9 @@ struct ImportSelectionGate {
         /// drawing a line must not have the map's selection — and the route
         /// drawn on it — replaced by a GPX arriving from Files.
         case trailDraft
+        /// The library's totals. Its own case so an import finishing while
+        /// they are open does not pull the screen out from under them.
+        case totals
         case hike(UUID)
         /// A published hike's preview, keyed by its listing.
         ///
@@ -906,37 +909,6 @@ struct ImportSelectionGate {
             && token.destination == destination(for: path)
             && currentRecordingHikeID == nil
             && !recordingPresented
-    }
-
-    private func destination(
-        for path: [SheetRoute]
-    ) -> Destination {
-        switch path.last {
-        case nil: .root
-        case .some(.recording): .recording
-        case .some(.trailDraft): .trailDraft
-        case .some(.hike(let hike)): .hike(hike.id)
-        // A photo viewer is a hike's own screen one push further in: an
-        // import that arrives while it is open is still landing on the hike
-        // the user is looking at.
-        case .some(.photo(let hike, _)): .hike(hike.id)
-        // A place's screen is its hike's, one push further in, on the photo
-        // viewer's terms.
-        case .some(.place(let hike, _)): .hike(hike.id)
-        // So is a place being added to it.
-        case .some(.newPlace(let hike, _)): .hike(hike.id)
-        // A walk's summary is its hike's screen two pushes in, on the same
-        // terms as the photo viewer.
-        case .some(.walk(let walk)): .hike(walk.hikeID)
-        case .some(.communityHike(let listing)): .communityHike(listing.id)
-        // A shared hike's gallery is that preview's screen one push further
-        // in, on the same terms the photo viewer is the hike's.
-        case .some(.communityPhoto(let listing, _, _)): .communityHike(listing.id)
-        case .some(.pendingSubmission(let pending)): .pendingSubmission(pending.id)
-        // A contributed set under review is the same kind of screen and gets
-        // the same protection, keyed on its own queue entry.
-        case .some(.pendingPhotos(let pending)): .pendingSubmission(pending.id)
-        }
     }
 }
 
