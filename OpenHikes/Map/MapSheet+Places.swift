@@ -60,3 +60,16 @@ extension MapSheet {
         )
     }
 }
+
+// MARK: - Totals
+
+extension MapSheet {
+    /// One of *Totals*' records, pushed over the totals rather than in place
+    /// of them, so Back goes back to the figures it was chosen from. A second
+    /// tap before the push lands would otherwise stack the hike twice.
+    func openRecord(_ hike: Hike) {
+        guard presentation.path.last != .hike(hike) else { return }
+        selectedHike = hike
+        presentation.path.append(.hike(hike))
+    }
+}

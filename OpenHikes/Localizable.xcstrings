@@ -1,0 +1,2267 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@" : {
+
+    },
+    "%@ %@" : {
+      "comment" : "A wind speed and its compass direction",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
+    "%@ along the route" : {
+
+    },
+    "%@ of climb" : {
+
+    },
+    "%@ of descent" : {
+
+    },
+    "%@ of the trail not walked" : {
+
+    },
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@ · by %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · by %2$@"
+          }
+        }
+      }
+    },
+    "%@ — resized before sending, with camera details and original location data removed. Your route, your notes and this walk's name stay on your device." : {
+
+    },
+    "%@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "%@, %@ chance of precipitation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@ chance of precipitation"
+          }
+        }
+      }
+    },
+    "%@, already sent, not shared again" : {
+
+    },
+    "%@, already sent, shared again" : {
+
+    },
+    "%@, by %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, by %2$@"
+          }
+        }
+      }
+    },
+    "%@, gusting %@" : {
+      "comment" : "A wind speed and direction, followed by the gust speed",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, gusting %2$@"
+          }
+        }
+      }
+    },
+    "%@, not on this device" : {
+
+    },
+    "%@, not shared" : {
+
+    },
+    "%@, place only, no photo in the file" : {
+
+    },
+    "%@, shared" : {
+
+    },
+    "%@, taken %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, taken %2$@"
+          }
+        }
+      }
+    },
+    "%@, unavailable" : {
+
+    },
+    "%@/h" : {
+      "comment" : "A depth of rain per hour"
+    },
+    "%lld" : {
+
+    },
+    "%lld %@" : {
+      "comment" : "A UV index number followed by its exposure band",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld %2$@"
+          }
+        }
+      }
+    },
+    "%lld hikes" : {
+
+    },
+    "%lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "%lld of %lld have a place on the trail." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld have a place on the trail."
+          }
+        }
+      }
+    },
+    "%lld of %lld selected" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld selected"
+          }
+        }
+      }
+    },
+    "%lld of this hike's photos are on the device they were added on, so they can't be shared from here." : {
+
+    },
+    "%lld of this submission's photos didn't download, so none can be left out here — leaving one out rewrites the whole set from the copies on this device. Publish it as it is, decline it, or open it again." : {
+
+    },
+    "%lld percent complete, %@ remaining" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld percent complete, %2$@ remaining"
+          }
+        }
+      }
+    },
+    "%lld photographs" : {
+
+    },
+    "%lld photos" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld photo"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld photos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld photos go on %@, each with the spot on the trail and the time it was taken at" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld photos go on %2$@, each with the spot on the trail and the time it was taken at"
+          }
+        }
+      }
+    },
+    "%lld photos have already been sent from this hike, so they're left out. Tap one to send it again anyway." : {
+
+    },
+    "%lld photos taken here, first on %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld photos taken here, first on %2$@"
+          }
+        }
+      }
+    },
+    "%lld points" : {
+
+    },
+    "%lld pt" : {
+
+    },
+    "%lld%%" : {
+
+    },
+    "1 hike" : {
+
+    },
+    "1 photograph" : {
+
+    },
+    "A hike is in progress on %@. End it there to walk this trail." : {
+
+    },
+    "A hike needs a title. Put one back to publish this." : {
+
+    },
+    "A place is marked where you are standing. Try again once the walk has a location." : {
+
+    },
+    "A trail already in the community list." : {
+
+    },
+    "A trail from OpenStreetMap, which has no photos of its own." : {
+
+    },
+    "About" : {
+
+    },
+    "Access" : {
+
+    },
+    "Add" : {
+
+    },
+    "Add %lld" : {
+
+    },
+    "Add More Photos" : {
+
+    },
+    "Add Photos" : {
+
+    },
+    "Add Photos to This Trail" : {
+
+    },
+    "Add Place" : {
+
+    },
+    "Add Stop" : {
+
+    },
+    "Add Your Own Place" : {
+
+    },
+    "Add Your Photos Instead" : {
+
+    },
+    "Add a photo from your library" : {
+
+    },
+    "Add a place to this trail" : {
+
+    },
+    "Add more photos, or ask for them, or the hike, to be taken down." : {
+
+    },
+    "Add more photos, or ask for yours to be taken down." : {
+
+    },
+    "Add photos you took yourself, on this trail. A photo taken at your front door shows where you live." : {
+
+    },
+    "Add your photos to this trail" : {
+
+    },
+    "Add, report or block" : {
+
+    },
+    "Added by you" : {
+
+    },
+    "Adding %lld of %lld…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Adding %1$lld of %2$lld…"
+          }
+        }
+      }
+    },
+    "Adding one is a build-time step — see Secrets.example.plist in the project." : {
+
+    },
+    "Adding to" : {
+
+    },
+    "Address" : {
+
+    },
+    "Adds up everything you have hiked today." : {
+
+    },
+    "Alpine huts, wilderness huts and shelters" : {
+
+    },
+    "Also Save to Photos" : {
+
+    },
+    "Alternative route, %@" : {
+
+    },
+    "Anything else" : {
+
+    },
+    "Anything that helps decide quickly — which photo, which part of the route." : {
+
+    },
+    "Apple Maps directions are unavailable. Try again." : {
+
+    },
+    "Apple Maps is busy. Try again later." : {
+
+    },
+    "Apple Weather has no severe-weather source for this area." : {
+
+    },
+    "Ask for Photo Removal" : {
+
+    },
+    "Ask for Removal" : {
+
+    },
+    "Ask for Removal First" : {
+
+    },
+    "At least one photo couldn’t be added to this hike. It’s still in your photo library." : {
+
+    },
+    "Auto-Save Tiles" : {
+
+    },
+    "Back to the %@" : {
+
+    },
+    "Background Tracking" : {
+
+    },
+    "Background Trail Tracking" : {
+
+    },
+    "Base" : {
+
+    },
+    "Block" : {
+
+    },
+    "Block %@" : {
+
+    },
+    "Block %@?" : {
+
+    },
+    "Block This Hiker" : {
+
+    },
+    "Block this hiker?" : {
+
+    },
+    "Blocked" : {
+
+    },
+    "Blocked %@" : {
+
+    },
+    "Border" : {
+
+    },
+    "By adding photos, you agree to the Terms & Conditions." : {
+
+    },
+    "By sharing, you agree to the Terms & Conditions." : {
+
+    },
+    "Camera Access Off" : {
+
+    },
+    "Camp" : {
+
+    },
+    "Campsites" : {
+
+    },
+    "Can't be shared" : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Cancel offline map download" : {
+
+    },
+    "Capacity" : {
+
+    },
+    "Caution" : {
+
+    },
+    "Check Whether It's Still Live" : {
+
+    },
+    "Check access between the stops and the route" : {
+
+    },
+    "Choose Destination" : {
+
+    },
+    "Choose Start" : {
+
+    },
+    "Choose a start and a destination above, or press and hold the map." : {
+
+    },
+    "Clear Map Cache" : {
+
+    },
+    "Clear search" : {
+
+    },
+    "Close" : {
+
+    },
+    "Close this edit?" : {
+
+    },
+    "Close this trail?" : {
+
+    },
+    "Color" : {
+
+    },
+    "Community" : {
+
+    },
+    "Community Hikes" : {
+
+    },
+    "Community hike photo, taken %@" : {
+
+    },
+    "Community hike, %@" : {
+
+    },
+    "Community hikes are walks worth someone else's day out — a whole route, walked by you, that isn't already on the list." : {
+
+    },
+    "Completion" : {
+
+    },
+    "Conditions" : {
+
+    },
+    "Conditions in %@" : {
+
+    },
+    "Connect to the internet to get Apple Maps directions." : {
+
+    },
+    "Coordinates" : {
+
+    },
+    "Copy %@" : {
+
+    },
+    "Could not change this hike" : {
+
+    },
+    "Could not end this hike" : {
+
+    },
+    "Couldn't Search" : {
+
+    },
+    "Couldn't check" : {
+
+    },
+    "Couldn't finish" : {
+
+    },
+    "Couldn't reach the community list just now, so this hike still reads the way it did. Try again when you're back online." : {
+
+    },
+    "Couldn't search for places." : {
+
+    },
+    "Couldn't take it down" : {
+
+    },
+    "Couldn't take them down" : {
+
+    },
+    "Couldn’t Add Photo" : {
+
+    },
+    "Couldn’t Delete Offline Tiles" : {
+
+    },
+    "Couldn’t Save Photo" : {
+
+    },
+    "Credit" : {
+
+    },
+    "Current Hike Progress" : {
+
+    },
+    "Current conditions" : {
+
+    },
+    "Cycling" : {
+
+    },
+    "Dangerous or misleading route" : {
+
+    },
+    "Data Source" : {
+
+    },
+    "Daylight" : {
+
+    },
+    "Decline" : {
+
+    },
+    "Decline and Delete" : {
+
+    },
+    "Decline these photos?" : {
+
+    },
+    "Decline this submission?" : {
+
+    },
+    "Delete" : {
+
+    },
+    "Delete All" : {
+
+    },
+    "Delete All Reports" : {
+
+    },
+    "Delete All Saved Tiles" : {
+
+    },
+    "Delete Hike" : {
+
+    },
+    "Delete Photo" : {
+
+    },
+    "Delete every saved map tile?" : {
+
+    },
+    "Delete photo" : {
+
+    },
+    "Delete this hike's offline tiles" : {
+
+    },
+    "Delete this photograph?" : {
+
+    },
+    "Delete “%@”?" : {
+
+    },
+    "Description" : {
+
+    },
+    "Deselect All" : {
+
+    },
+    "Destination" : {
+
+    },
+    "Details" : {
+
+    },
+    "Device Reports" : {
+
+    },
+    "Diagnostics" : {
+
+    },
+    "Discard Changes" : {
+
+    },
+    "Discard Recording" : {
+
+    },
+    "Discard Trail" : {
+
+    },
+    "Discard this recording?" : {
+
+    },
+    "Dismiss" : {
+
+    },
+    "Display" : {
+
+    },
+    "Display name" : {
+
+    },
+    "Distance" : {
+
+    },
+    "Distance Hiked Today" : {
+
+    },
+    "Distance Today" : {
+
+    },
+    "Done" : {
+
+    },
+    "Done Reordering" : {
+
+    },
+    "Drinking Water" : {
+
+    },
+    "Driving" : {
+
+    },
+    "Dropped Pin" : {
+
+    },
+    "E" : {
+
+    },
+    "ENE" : {
+
+    },
+    "ESE" : {
+
+    },
+    "Each track becomes a hike of its own." : {
+
+    },
+    "Edit" : {
+
+    },
+    "Edit Place" : {
+
+    },
+    "Edit Route" : {
+
+    },
+    "Edit Trail" : {
+
+    },
+    "Elevation" : {
+
+    },
+    "Elevation from %@." : {
+
+    },
+    "Elevation profile" : {
+
+    },
+    "End Hike" : {
+
+    },
+    "End this hike?" : {
+
+    },
+    "Energy" : {
+
+    },
+    "Every community hike is checked by a person before anyone else can see it." : {
+
+    },
+    "Every photo is checked by a person before anyone else can see it." : {
+
+    },
+    "Every photo is left out, so there is nothing to publish." : {
+
+    },
+    "Extreme" : {
+
+    },
+    "Fee" : {
+
+    },
+    "Find Photos of This Hike" : {
+
+    },
+    "Find Places Along Trail" : {
+
+    },
+    "Finding a path…" : {
+
+    },
+    "First of %lld photos taken here" : {
+
+    },
+    "Follow Paths" : {
+
+    },
+    "Follow This Trail" : {
+
+    },
+    "Followed: %@" : {
+
+    },
+    "For a shared hike · %@" : {
+
+    },
+    "For an OpenStreetMap trail · %@" : {
+
+    },
+    "Free Up Space" : {
+
+    },
+    "From OpenStreetMap" : {
+
+    },
+    "GPS Accuracy" : {
+
+    },
+    "Give this hike a name, or leave it blank to keep the default." : {
+
+    },
+    "Give this trail a name, or leave it blank to keep the default." : {
+
+    },
+    "Have a GPX file? Tap %@ to import it." : {
+
+    },
+    "Have a GPX file? Tap the Import GPX file button to import it." : {
+
+    },
+    "Health" : {
+
+    },
+    "Hides their hikes on this device" : {
+
+    },
+    "High" : {
+
+    },
+    "High %@, low %@" : {
+      "comment" : "A day's forecast range, spoken",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "High %1$@, low %2$@"
+          }
+        }
+      }
+    },
+    "Hike" : {
+
+    },
+    "Hike Active" : {
+
+    },
+    "Hike Paused" : {
+
+    },
+    "Hike Progress" : {
+
+    },
+    "Hike Summary" : {
+
+    },
+    "Hike name" : {
+
+    },
+    "Hike started on %@" : {
+
+    },
+    "Hike title" : {
+
+    },
+    "Hiker who shared without a name" : {
+
+    },
+    "Hikes" : {
+
+    },
+    "Hikes from everyone on this list will appear again." : {
+
+    },
+    "Hikes to show" : {
+
+    },
+    "Hiking" : {
+
+    },
+    "Hours" : {
+
+    },
+    "If no message opened — no mail account set up, or you closed the draft — copy this and send it yourself." : {
+
+    },
+    "Import GPX file" : {
+
+    },
+    "Issued by %@" : {
+
+    },
+    "It stops appearing for everybody, and the route and photographs behind it are deleted for good. This can't be undone." : {
+
+    },
+    "It'll appear for other hikers once it's been checked." : {
+
+    },
+    "Its photos stay in this hike's gallery." : {
+
+    },
+    "Its record could not be saved, so the hike is still under way. Try ending it again." : {
+
+    },
+    "Its route and statistics are deleted for good." : {
+
+    },
+    "Its route, statistics and %@ are deleted for good." : {
+
+    },
+    "Its route, statistics, %@ and %@ are deleted for good." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Its route, statistics, %1$@ and %2$@ are deleted for good."
+          }
+        }
+      }
+    },
+    "Junction" : {
+
+    },
+    "Keep Drawing" : {
+
+    },
+    "Keep for Later" : {
+
+    },
+    "Keep it for later and it will be here the next time you make a trail." : {
+
+    },
+    "Keep photo %lld" : {
+
+    },
+    "Keep the Screen On" : {
+
+    },
+    "Keeps your Home Screen widget and Live Activity showing your progress along the selected trail even when OpenHikes isn't open, using occasional, low-power location updates." : {
+
+    },
+    "Kind" : {
+
+    },
+    "Last Hike" : {
+
+    },
+    "Leave out any photo that shouldn't be published. The rest still go." : {
+
+    },
+    "Leave photo %lld out" : {
+
+    },
+    "Legal" : {
+      "comment" : "Link to Apple Weather's legal attribution page"
+    },
+    "Legs run along paths mapped in OpenStreetMap. Turn this off to draw straight lines." : {
+
+    },
+    "Line style" : {
+
+    },
+    "Line width" : {
+
+    },
+    "Live Activity" : {
+
+    },
+    "Live for other hikers. Add photos you've taken since, or ask for the hike to be taken down." : {
+
+    },
+    "Live, and the photos you added are waiting for a person to check them. Opens a request to withdraw them, or the hike." : {
+
+    },
+    "Loading community hikes" : {
+
+    },
+    "Loading photos…" : {
+
+    },
+    "Loading route…" : {
+
+    },
+    "Loading submission…" : {
+
+    },
+    "Location" : {
+
+    },
+    "Location access is off" : {
+
+    },
+    "Looking along the trail…" : {
+
+    },
+    "Looking for community hikes…" : {
+
+    },
+    "Looking on OpenStreetMap…" : {
+
+    },
+    "Looking through your photo library…" : {
+
+    },
+    "Low" : {
+
+    },
+    "Make a trail" : {
+
+    },
+    "Map" : {
+
+    },
+    "Map Tiles" : {
+
+    },
+    "Mapped Here" : {
+
+    },
+    "Maps" : {
+
+    },
+    "Measured Activities" : {
+
+    },
+    "Memory and Storage" : {
+
+    },
+    "Moderate" : {
+
+    },
+    "Month" : {
+
+    },
+    "More" : {
+
+    },
+    "More about this route" : {
+
+    },
+    "Move Down" : {
+
+    },
+    "Move Up" : {
+
+    },
+    "Move the map and tap Search This Area to look somewhere else." : {
+
+    },
+    "My Hikes" : {
+
+    },
+    "My Location" : {
+
+    },
+    "N" : {
+
+    },
+    "NE" : {
+
+    },
+    "NNE" : {
+
+    },
+    "NNW" : {
+
+    },
+    "NW" : {
+
+    },
+    "Name" : {
+
+    },
+    "Name Your Hike" : {
+
+    },
+    "Name Your Trail" : {
+
+    },
+    "Near %@" : {
+
+    },
+    "Near Here" : {
+
+    },
+    "New Place" : {
+
+    },
+    "New Trail" : {
+
+    },
+    "Next" : {
+
+    },
+    "Next days" : {
+
+    },
+    "Next hours" : {
+
+    },
+    "Next photo" : {
+
+    },
+    "No" : {
+
+    },
+    "No Location Yet" : {
+
+    },
+    "No OpenStreetMap trails here — try another area" : {
+
+    },
+    "No Photo in the File" : {
+
+    },
+    "No Photos" : {
+
+    },
+    "No Photos Found" : {
+
+    },
+    "No Shared Photos From This Hike" : {
+
+    },
+    "No Times on This Route" : {
+
+    },
+    "No community hikes here" : {
+
+    },
+    "No elevation data for this hike" : {
+
+    },
+    "No forecast available" : {
+
+    },
+    "No forecast for %@" : {
+
+    },
+    "No hikes yet" : {
+
+    },
+    "No longer published" : {
+
+    },
+    "No mail app answered" : {
+
+    },
+    "No mapped path here" : {
+
+    },
+    "No photos of this place yet. Take one here, or add some from your library." : {
+
+    },
+    "No photos yet. Take one here, or add some from your library." : {
+
+    },
+    "No places matched that search." : {
+
+    },
+    "No route found for this travel mode" : {
+
+    },
+    "None" : {
+
+    },
+    "None of these has a place on the trail yet — pick a point on the graph first." : {
+
+    },
+    "None." : {
+
+    },
+    "Not Enough Space for This Map" : {
+
+    },
+    "Not Now" : {
+
+    },
+    "Not on This Device" : {
+
+    },
+    "Note" : {
+
+    },
+    "Notes" : {
+
+    },
+    "Notes about this hike" : {
+
+    },
+    "Nothing Else Mapped" : {
+
+    },
+    "Nothing in your photo library was taken while you were out on this hike — or everything that was is already here." : {
+
+    },
+    "Nothing mapped here — try another area" : {
+
+    },
+    "Nothing mapped right here." : {
+
+    },
+    "Nothing on this device offered to write the message." : {
+
+    },
+    "Nothing to Restore" : {
+
+    },
+    "Nothing written." : {
+
+    },
+    "Nothing yet. Add photos to this hike and they can go on %@ for other hikers to see." : {
+
+    },
+    "OK" : {
+
+    },
+    "Offensive or inappropriate" : {
+
+    },
+    "Offline" : {
+
+    },
+    "Offline Storage" : {
+
+    },
+    "Offline tiles" : {
+
+    },
+    "Offline tiles · %@" : {
+
+    },
+    "On" : {
+
+    },
+    "On the Trail" : {
+
+    },
+    "One of this hike's photos is on the device it was added on, so it can't be shared from here." : {
+
+    },
+    "One of this submission's photos didn't download, so none can be left out here — leaving one out rewrites the whole set from the copies on this device. Publish it as it is, decline it, or open it again." : {
+
+    },
+    "One photo goes on %@, with the spot on the trail and the time it was taken at" : {
+
+    },
+    "One photo has already been sent from this hike, so it's left out. Tap it to send it again anyway." : {
+
+    },
+    "Open Hike" : {
+
+    },
+    "Open Settings" : {
+
+    },
+    "Open hike recording" : {
+
+    },
+    "Open photo taken %@" : {
+
+    },
+    "Open photo taken %@, first of %lld taken here" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Open photo taken %1$@, first of %2$lld taken here"
+          }
+        }
+      }
+    },
+    "Open this community hike" : {
+
+    },
+    "OpenHikes Pro" : {
+
+    },
+    "OpenHikes can look through your photo library for pictures taken while you walked this hike, and pin each one to the point of the trail you were on." : {
+
+    },
+    "OpenHikes can only see the photos you have shared with it, and none of those were taken while you were out on this hike. If your pictures of this walk are elsewhere in your library, share them and OpenHikes will look again." : {
+
+    },
+    "OpenHikes couldn’t reach Apple Weather. It will try again automatically." : {
+
+    },
+    "OpenHikes couldn’t store the photo you just took, so it hasn’t been added to this hike. Check that your device has free space and try again." : {
+
+    },
+    "OpenHikes keeps photo files on the device they were added on — only where and when the photo was taken travels with the hike." : {
+
+    },
+    "OpenHikes matched these to the moment each point of this hike was recorded. Photos your camera saved a location with are checked against the route as well. Nothing is added until you tap Add." : {
+
+    },
+    "OpenHikes needs to read your photo library to find pictures taken during this hike. You can turn that on in Settings." : {
+
+    },
+    "OpenHikes needs your location before it can pick your hike back up." : {
+
+    },
+    "OpenHikes needs your location before it can record a hike." : {
+
+    },
+    "OpenStreetMap has nothing more on this trail's line." : {
+
+    },
+    "OpenStreetMap is busy · try again" : {
+
+    },
+    "OpenStreetMap rate-limited" : {
+
+    },
+    "OpenStreetMap rate-limited · %@" : {
+
+    },
+    "OpenStreetMap trails rate-limited" : {
+
+    },
+    "OpenStreetMap trails rate-limited · %@" : {
+
+    },
+    "OpenStreetMap trails unavailable" : {
+
+    },
+    "OpenStreetMap unavailable" : {
+
+    },
+    "Opened in your mail app" : {
+
+    },
+    "Opens a saved hike in OpenHikes, with its route on the map." : {
+
+    },
+    "Opens a search for somewhere to put this stop" : {
+
+    },
+    "Opens an explanation of why this hike can't be shared." : {
+
+    },
+    "Opens the App Store subscription settings." : {
+
+    },
+    "Opens the full warning from %@" : {
+
+    },
+    "Opens the map licence in your browser" : {
+
+    },
+    "Opens the subscription screen, where purchases can also be restored." : {
+
+    },
+    "Opens the trail, where the hike can be paused or ended." : {
+
+    },
+    "Operator" : {
+
+    },
+    "Optional" : {
+
+    },
+    "Order" : {
+
+    },
+    "Other hikers can find this hike now." : {
+
+    },
+    "Parking" : {
+
+    },
+    "Pause" : {
+
+    },
+    "Pause Hike" : {
+
+    },
+    "Pause Hike Recording" : {
+
+    },
+    "Pauses the hike being recorded, and turns the GPS off until you resume." : {
+
+    },
+    "Pausing it could not be saved, so the hike is still under way. Try pausing it again." : {
+
+    },
+    "Peaks and saddles" : {
+
+    },
+    "Pending Review (%lld)" : {
+
+    },
+    "Phone" : {
+
+    },
+    "Photo" : {
+
+    },
+    "Photo %lld" : {
+
+    },
+    "Photo %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Photo %lld of %lld, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo %1$lld of %2$lld, %3$@"
+          }
+        }
+      }
+    },
+    "Photo Access Off" : {
+
+    },
+    "Photo Access Unavailable" : {
+
+    },
+    "Photo Unavailable" : {
+
+    },
+    "Photo actions" : {
+
+    },
+    "Photo added by" : {
+
+    },
+    "Photo by %@" : {
+
+    },
+    "Photo library access is turned off for this device, so OpenHikes can’t look for pictures of this hike." : {
+
+    },
+    "Photo taken %@" : {
+
+    },
+    "Photo taken %@, pinned to the trail" : {
+
+    },
+    "Photo taken at %@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo taken at %1$@, %2$@"
+          }
+        }
+      }
+    },
+    "Photo, %lld in this hike" : {
+
+    },
+    "Photos" : {
+
+    },
+    "Photos (%lld of %lld)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photos (%1$lld of %2$lld)"
+          }
+        }
+      }
+    },
+    "Photos (%lld)" : {
+
+    },
+    "Photos for a hike" : {
+
+    },
+    "Photos for a trail" : {
+
+    },
+    "Photos for an OpenStreetMap trail" : {
+
+    },
+    "Photos from %@" : {
+
+    },
+    "Photos of This Hike" : {
+
+    },
+    "Photos published to this trail" : {
+
+    },
+    "Photos waiting for review" : {
+
+    },
+    "Photos you take on this hike appear here." : {
+
+    },
+    "Picks the paused hike back up where you left it." : {
+
+    },
+    "Place" : {
+
+    },
+    "Places" : {
+
+    },
+    "Places Along Trail" : {
+
+    },
+    "Places within %@ of the trail, from OpenStreetMap. Kinds turned off in the trail maker are left out." : {
+
+    },
+    "Preparing…" : {
+
+    },
+    "Press and hold the map to add a stop, or tap a grey route to take it instead. Press and hold a stop to drag it somewhere else." : {
+
+    },
+    "Previous" : {
+
+    },
+    "Previous photo" : {
+
+    },
+    "Privacy Policy" : {
+
+    },
+    "Private place or person" : {
+
+    },
+    "Profile and settings" : {
+
+    },
+    "Project on GitHub" : {
+
+    },
+    "Publish" : {
+
+    },
+    "Published" : {
+
+    },
+    "Published to the community" : {
+
+    },
+    "Published without permission" : {
+
+    },
+    "Publishing deletes the %lld faded photos from the submission for good. The rest still go." : {
+
+    },
+    "Publishing deletes the faded photo from the submission for good. The rest still go." : {
+
+    },
+    "Publishing makes this visible to everybody, immediately." : {
+
+    },
+    "Publishing puts these on the trail for everybody, immediately." : {
+
+    },
+    "Publishing waits for the description and photographs to load." : {
+
+    },
+    "Publishing waits for the photos to load." : {
+
+    },
+    "Read the ground you walk on" : {
+
+    },
+    "Reason" : {
+
+    },
+    "Recents" : {
+
+    },
+    "Record Along Trail" : {
+
+    },
+    "Record Along a Trail" : {
+
+    },
+    "Record Hike" : {
+
+    },
+    "Record a hike" : {
+
+    },
+    "Recording" : {
+
+    },
+    "Recording resumed after OpenHikes restarted." : {
+
+    },
+    "Recovered recording" : {
+
+    },
+    "Remind Me to Pause and Resume" : {
+
+    },
+    "Reminders" : {
+
+    },
+    "Removal requests are read and acted on within 24 hours." : {
+
+    },
+    "Remove" : {
+
+    },
+    "Remove %@" : {
+
+    },
+    "Remove %@?" : {
+
+    },
+    "Remove Photo" : {
+
+    },
+    "Remove Pin" : {
+
+    },
+    "Remove Place" : {
+
+    },
+    "Remove Stop" : {
+
+    },
+    "Rename hike" : {
+
+    },
+    "Reorder Hikes" : {
+
+    },
+    "Reorder List" : {
+
+    },
+    "Replace Drawing" : {
+
+    },
+    "Replace the trail you're drawing?" : {
+
+    },
+    "Report" : {
+
+    },
+    "Report Hike" : {
+
+    },
+    "Report Photo" : {
+
+    },
+    "Reports are read and acted on within 24 hours." : {
+
+    },
+    "Reports how far and how long a hike you have saved was." : {
+
+    },
+    "Reports the most recent hike you finished." : {
+
+    },
+    "Reset" : {
+
+    },
+    "Responsiveness" : {
+
+    },
+    "Restore Purchases" : {
+
+    },
+    "Resume" : {
+
+    },
+    "Resume Hike" : {
+
+    },
+    "Resume Hike Recording" : {
+
+    },
+    "Resume it, stop to save it, or discard it below." : {
+
+    },
+    "Resuming it could not be saved, so the hike is still paused. Try resuming it again." : {
+
+    },
+    "Retry Save" : {
+
+    },
+    "Review" : {
+
+    },
+    "Review Photos" : {
+
+    },
+    "Route" : {
+
+    },
+    "Route border" : {
+
+    },
+    "Route color" : {
+
+    },
+    "Routes use Apple Maps directions. Turn this off to draw straight lines." : {
+
+    },
+    "S" : {
+
+    },
+    "SE" : {
+
+    },
+    "SSE" : {
+
+    },
+    "SSW" : {
+
+    },
+    "SW" : {
+
+    },
+    "Save" : {
+
+    },
+    "Save Hikes to Health" : {
+
+    },
+    "Save Reviewed Hike" : {
+
+    },
+    "Save maps for offline use" : {
+
+    },
+    "Saved" : {
+
+    },
+    "Saved Hikes Unavailable" : {
+
+    },
+    "Says how far and how long you are into the hike you are recording." : {
+
+    },
+    "Search Maps" : {
+
+    },
+    "Search Maps for “%@”" : {
+
+    },
+    "Search This Area" : {
+
+    },
+    "Search for a place" : {
+
+    },
+    "Search this area" : {
+
+    },
+    "Searching" : {
+
+    },
+    "Section" : {
+
+    },
+    "Select All" : {
+
+    },
+    "Select More Photos…" : {
+
+    },
+    "Send" : {
+
+    },
+    "Send this to %@" : {
+
+    },
+    "Sending" : {
+
+    },
+    "Sent %@" : {
+
+    },
+    "Sent as “%@”" : {
+
+    },
+    "Sent for review" : {
+
+    },
+    "Sent. It appears for other hikers once a person has checked it. Opens a request to withdraw it." : {
+
+    },
+    "Sent. They appear on the trail once a person has checked them. Opens a request to withdraw them." : {
+
+    },
+    "Settings" : {
+
+    },
+    "Share" : {
+
+    },
+    "Share Diagnostics" : {
+
+    },
+    "Share Diagnostics File" : {
+
+    },
+    "Share Hike" : {
+
+    },
+    "Share hike" : {
+
+    },
+    "Share hike with photos" : {
+
+    },
+    "Share only a route, photos and notes that are yours to publish. A hike that starts at your front door shows where you live." : {
+
+    },
+    "Share photo" : {
+
+    },
+    "Share with the community" : {
+
+    },
+    "Shared as" : {
+
+    },
+    "Shared by" : {
+
+    },
+    "Shared by %@." : {
+
+    },
+    "Shelter" : {
+
+    },
+    "Shelters and Huts" : {
+
+    },
+    "Show Places on Map" : {
+
+    },
+    "Show on Lock Screen" : {
+
+    },
+    "Show on Map" : {
+
+    },
+    "Show where this photo was taken" : {
+
+    },
+    "Shows the conditions and where this forecast comes from" : {
+
+    },
+    "Shows the map licences you can open" : {
+
+    },
+    "Some photos couldn’t be added. Try adding them again." : {
+
+    },
+    "Someone" : {
+
+    },
+    "Something else" : {
+
+    },
+    "Sort hikes" : {
+
+    },
+    "Sources marked “Needs API key” aren't available in this build." : {
+
+    },
+    "Springs, waterfalls and drinking water" : {
+
+    },
+    "Start" : {
+
+    },
+    "Start Hike" : {
+
+    },
+    "Start Hike Recording" : {
+
+    },
+    "Starts recording a hike and follows one of your saved trails." : {
+
+    },
+    "Starts recording a new hike, with the screen off and the phone in your pocket." : {
+
+    },
+    "Status" : {
+
+    },
+    "Still published" : {
+
+    },
+    "Stop" : {
+
+    },
+    "Stop %lld" : {
+
+    },
+    "Stop Hike" : {
+
+    },
+    "Stop Hike Recording" : {
+
+    },
+    "Stops the hike being recorded and saves it." : {
+
+    },
+    "Submission" : {
+
+    },
+    "Summit" : {
+
+    },
+    "Summits" : {
+
+    },
+    "Sync with iCloud" : {
+
+    },
+    "Take Down" : {
+
+    },
+    "Take Photo" : {
+
+    },
+    "Take These Photos Down" : {
+
+    },
+    "Take a photo of this trail" : {
+
+    },
+    "Take these photos down?" : {
+
+    },
+    "Take this hike down?" : {
+
+    },
+    "Tap %@ on the map to record a walk, or %@ to draw a trail." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tap %1$@ on the map to record a walk, or %2$@ to draw a trail."
+          }
+        }
+      }
+    },
+    "Tap a photo to see it, and where on the trail it was taken." : {
+
+    },
+    "Tap the map to add another point, then save again." : {
+
+    },
+    "Tells the reviewer something is wrong with it" : {
+
+    },
+    "Terminations" : {
+
+    },
+    "Terms & Conditions" : {
+
+    },
+    "That place couldn't be found. Try another search." : {
+
+    },
+    "The %@ reaches the reviewer only once you send it there." : {
+
+    },
+    "The Search this area button on the map adds what OpenStreetMap has mapped near your trail as pins you can tap. Choose what it looks for. Turning a kind off also removes its pins from the map." : {
+
+    },
+    "The copy you sent to the community stays where it is; deleting this hike does not withdraw it." : {
+
+    },
+    "The file behind this photo is here but couldn’t be read." : {
+
+    },
+    "The hike itself isn't reported — only the photo somebody added to it." : {
+
+    },
+    "The maker holds one trail at a time, and the one you left half-drawn will be discarded." : {
+
+    },
+    "The map search service is busy. Try again in a moment." : {
+
+    },
+    "The photograph is deleted from this device for good." : {
+
+    },
+    "The photos are deleted for good. The hiker is not told, and their app goes on reading “waiting for review”. The trail itself is not touched." : {
+
+    },
+    "The published copy stays in the community; deleting this hike does not take it down." : {
+
+    },
+    "The recorded track cannot be recovered after it is discarded." : {
+
+    },
+    "The route and photographs are deleted for good. The hiker is not told, and their app goes on reading “waiting for review”." : {
+
+    },
+    "The shared copy shows the route before your edit. Ask for its removal, then share this one." : {
+
+    },
+    "Their community hikes don't appear on this device. Blocking is kept on this device only, and doesn't remove anything for anyone else — to have a hike taken down, report it from the hike's own screen." : {
+
+    },
+    "Their hikes stop appearing on this device. You can undo this in Settings. Blocking doesn't report the hike or take it down." : {
+
+    },
+    "Their photos stop appearing on any hike, on this device. You can undo this in Settings. Blocking doesn't report them or take anything down." : {
+
+    },
+    "Their places are on the map behind this sheet." : {
+
+    },
+    "There is nothing to share yet." : {
+
+    },
+    "These are the hikes from the last search that worked." : {
+
+    },
+    "They'll appear on this trail once they've been checked." : {
+
+    },
+    "They're removed for everybody and deleted for good. The hike itself isn't touched." : {
+
+    },
+    "This also removes it from your other devices." : {
+
+    },
+    "This came from an imported GPX file, which records where a photo was taken but cannot carry the photo itself. Its place on the trail is on the map." : {
+
+    },
+    "This hike is already in your list." : {
+
+    },
+    "This hike is still live for other hikers, so it's still somewhere your photos can go." : {
+
+    },
+    "This hike isn't in the community list any more. You can reset it here, which forgets that it was ever sent and lets you share a corrected walk — but it also forgets the details a removal request needs, so only do it if you no longer want this one back." : {
+
+    },
+    "This hike’s route doesn’t record when each point was reached, so photos can’t be matched to it by time. Walk it with OpenHikes and they can." : {
+
+    },
+    "This hike’s route doesn’t record when each point was reached, so there is nothing to match a photo’s own timestamp against. Hikes you record in OpenHikes always carry those times — and on an imported trail, walking it with OpenHikes gives this the times it needs." : {
+
+    },
+    "This is wider than a search reaches." : {
+
+    },
+    "This photograph couldn’t be opened." : {
+
+    },
+    "This route is mapped by OpenStreetMap contributors." : {
+
+    },
+    "This submission has no creator recorded, so a published listing would be invisible and nobody could block its author. It cannot be published." : {
+
+    },
+    "This submission has no creator recorded, so nobody could block whoever sent it. It cannot be published." : {
+
+    },
+    "This trail couldn't be saved." : {
+
+    },
+    "This trail is already in the community list. Opens a form to add your photos to it." : {
+
+    },
+    "This trail needs at least two points." : {
+
+    },
+    "This was sent and has not been published yet." : {
+
+    },
+    "Title" : {
+
+    },
+    "Today" : {
+      "comment" : "The first row of the daily forecast"
+    },
+    "Too far apart to follow a path" : {
+
+    },
+    "Too short to draw." : {
+
+    },
+    "Totals" : {
+
+    },
+    "Trail" : {
+
+    },
+    "Trail routes from OpenStreetMap contributors." : {
+
+    },
+    "Travel Mode" : {
+
+    },
+    "Try Again" : {
+
+    },
+    "Try a different name, or a nearby town." : {
+
+    },
+    "Try again in a moment." : {
+
+    },
+    "Turn on Follow This Trail in Details, then set off along the trail. Finished hikes are kept here." : {
+
+    },
+    "Unblock" : {
+
+    },
+    "Unblock %@" : {
+
+    },
+    "Unblock Everyone" : {
+
+    },
+    "Unblock everyone?" : {
+
+    },
+    "Unlists it for everybody and deletes the submission" : {
+
+    },
+    "Unlocks on every device signed in to your Apple Account." : {
+
+    },
+    "Version" : {
+
+    },
+    "Very High" : {
+
+    },
+    "View on OpenStreetMap" : {
+
+    },
+    "View or correct it on OpenStreetMap" : {
+
+    },
+    "Viewpoint" : {
+
+    },
+    "Viewpoints" : {
+
+    },
+    "W" : {
+
+    },
+    "WNW" : {
+
+    },
+    "WSW" : {
+
+    },
+    "Waiting for review" : {
+
+    },
+    "Waiting for your location" : {
+
+    },
+    "Walked" : {
+
+    },
+    "Walking" : {
+
+    },
+    "Water" : {
+
+    },
+    "Weather" : {
+
+    },
+    "Weather Warnings" : {
+
+    },
+    "Weather data provided by %@" : {
+
+    },
+    "Website" : {
+
+    },
+    "What gets added" : {
+
+    },
+    "What gets shared" : {
+
+    },
+    "What is worth knowing here" : {
+
+    },
+    "What it covered so far is kept as a record. A hike under 100 m is not." : {
+
+    },
+    "What was this hike like?" : {
+
+    },
+    "What was this hike?" : {
+
+    },
+    "What you're asking about" : {
+
+    },
+    "What you're reporting" : {
+
+    },
+    "What's wrong" : {
+
+    },
+    "Year" : {
+
+    },
+    "Yes" : {
+
+    },
+    "You appear to be offline. Saved hikes and downloaded maps still work." : {
+
+    },
+    "You can add photos to it next." : {
+
+    },
+    "You don't have to give a reason. It's your hike." : {
+
+    },
+    "You've already added photos from this hike. Sending again adds a second set beside the first — it doesn't replace it, and this app can't take that one down. Ask for it to be removed from this hike's own screen." : {
+
+    },
+    "You've already published this walk, and a published hike can't be amended — so its route, its name and its notes stay exactly as they are, and these photos go on as an addition to it." : {
+
+    },
+    "You've already shared this hike. Sending it again adds a second copy for other hikers — it doesn't replace or update the first, and this app can't take that one down. Ask for it to be removed by reporting it from its own screen." : {
+
+    },
+    "Your Hikes" : {
+
+    },
+    "Your Own Place" : {
+
+    },
+    "Your drawing wasn't lost. Check that the device has storage available, then save again." : {
+
+    },
+    "Your own hike, already live for other hikers." : {
+
+    },
+    "Your photographs are yours, and %@ is already in the list. They go on it with the spot each one was taken, and a person reviews them before anybody else sees them." : {
+
+    },
+    "Your report opens in your mail app so you can send it. You don't need an account to report a hike." : {
+
+    },
+    "Your request opens in your mail app so you can send it. It carries the record names a reviewer needs, which this hike is the only place holding. The hike stays on this device either way — deleting it here would not take the shared copy down." : {
+
+    },
+    "Zoom in to look here" : {
+
+    },
+    "Zoom in to search somewhere else." : {
+
+    },
+    "by %@" : {
+
+    },
+    "iCloud" : {
+
+    },
+    "matched by both time and place" : {
+
+    },
+    "measuring the climb" : {
+
+    },
+    "not pinned to the trail" : {
+
+    },
+    "pinned to the trail" : {
+
+    },
+    "placed by how far your walk had got" : {
+
+    },
+    "placed by time, %@ from the nearest recorded point" : {
+
+    },
+    "placed by where your camera says it was" : {
+
+    },
+    "taken on a recorded point of this hike" : {
+
+    }
+  },
+  "version" : "1.0"
+}
