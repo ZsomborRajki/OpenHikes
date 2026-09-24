@@ -147,130 +147,19 @@ nonisolated enum GPXImport {
         }
     }
 
-    /// What one picked file is allowed to cost.
-    ///
-    /// The app has no say in what arrives here. A file the user chose from
-    /// Files at least passed under their eyes first; one delivered through
-    /// `Documents/Inbox` — AirDrop, a mail attachment, a share extension —
-    /// was chosen by somebody else and is read unattended, so these two
-    /// numbers are the only thing standing between the import and however
-    /// much memory the sender felt like spending.
-    ///
-    /// Two bounds because neither implies the other: the byte cap bounds the
-    /// single allocation `Data(contentsOf:)` makes, while the point cap bounds
-    /// the arrays the parse grows out of those bytes, which a file written
-    /// without whitespace or elevations can fill from far fewer of them.
-    ///
-    /// Taken as a parameter rather than read as a constant only so the suite
-    /// can drive both bounds directly instead of having to serialize a file
-    /// large enough to reach the shipping ones; every caller in the app takes
-    /// ``standard``.
-    struct Limits: Sendable, Equatable {
-        var maximumFileSizeBytes: Int
-        var maximumPointCount: Int
-
-        /// Sized against the largest file a hiker could plausibly own, not
-        /// against the smallest one that would still work.
-        ///
-        /// A day out recorded at 1 Hz is roughly 20,000 track points and a
-        /// little over 2 MB; the same points carrying Garmin's or Strava's
-        /// `<extensions>` (heart rate, cadence, temperature) are nearer 6 MB.
-        /// 32 MB is well over an order of magnitude above a day's walk, so
-        /// nothing anybody would recognise as one of their own hikes comes
-        /// near it, and reading plus parsing a file at the cap still peaks
-        /// inside what iOS lets a foreground app hold. Half a million points
-        /// is around 140 hours of 1 Hz fixes — more than any single track is —
-        /// and is what a file that spends all its bytes on points runs into
-        /// first.
-        ///
-        /// Both are deliberately loose. A cap that refuses a real hike is a
-        /// worse failure than one that lets an absurd file through, because
-        /// the hiker with the real hike has no way to get it in.
-        static let standard = Self(
-            maximumFileSizeBytes: standardFileSizeBytes,
-            maximumPointCount: standardPointCount
-        )
-
-        private static let standardFileSizeBytes = 32 * 1024 * 1024
-        private static let standardPointCount = 500_000
-    }
-
-    /// Why a file couldn't be turned into a hike.
-    ///
-    /// Worth distinguishing rather than collapsing to "import failed": each
-    /// means something genuinely different to whoever picked the file, and
-    /// sends them somewhere different to fix it. The import used to say nothing
-    /// at all — a picked file that produced no hike looked exactly like a
-    /// picked file that was ignored.
-    ///
-    /// `CaseIterable` so the suite can walk every case and insist it carries
-    /// copy: a case added here without a sentence to show is an empty alert,
-    /// and a hand-written list of cases in a test cannot notice the omission.
-    enum ImportFailure: LocalizedError, CaseIterable, Equatable, Sendable {
-        /// More than one `<trk>` (or more than one `<rte>`) carrying usable
-        /// points. Each is a separate activity, and a hike here holds exactly
-        /// one route, so the file has no single answer to "which walk is
-        /// this?". Refused rather than answered by guessing: joining them
-        /// invents a leg between two places nobody travelled between, and
-        /// picking one silently throws the others away.
-        case multipleTracks
-        /// Parsed, but nothing in it carried a coordinate this app can project
-        /// — no points at all, points missing `lat`/`lon`, or points outside
-        /// Web Mercator's range.
-        case noUsablePoints
-        /// Past one of ``Limits``. Refused before the bytes are read where the
-        /// file system will say how big the file is, and mid-parse where it
-        /// won't.
-        case tooLarge
-        /// One usable point. Enough to put a pin on a map; not a route — no
-        /// length, no elevation profile, nothing to draw. Policy rather than a
-        /// parse failure, so ``load(from:limits:)`` still returns such a track
-        /// and the import is what refuses it.
-        case tooShort
-        /// Not there, or not well-formed XML — the parser had nothing to work
-        /// with. Note that well-formed XML that simply *isn't* GPX (an HTML
-        /// page, say) parses happily into an empty document, so it arrives as
-        /// ``noUsablePoints`` instead; the copy for that case allows for it.
-        case unreadable
-
-        var errorDescription: String? {
-            switch self {
-            case .multipleTracks: "This GPX file holds more than one track."
-            case .noUsablePoints: "No track points were found in this file."
-            case .tooLarge: "This GPX file is too large to import."
-            case .tooShort: "This GPX file has only one track point."
-            case .unreadable: "This file couldn't be read."
-            }
-        }
-
-        var recoverySuggestion: String? {
-            switch self {
-            // Says what the app would otherwise have had to invent, because
-            // that is the part the hiker can't see for themselves: the file
-            // opens fine everywhere else, and the damage would only show up
-            // later as a straight line across the map and a length nobody
-            // walked.
-            case .multipleTracks: "Each track is a separate hike, and joining them would draw a line between "
-                + "places you never travelled. Split the file so each track imports as its own hike."
-            // Deliberately covers "it isn't GPX at all" as well — see the case's
-            // own note for why that lands here.
-            case .noUsablePoints: "It may not be a GPX file, or its points are missing coordinates or out of range."
-            // No number in the copy: the message has to be true of both bounds,
-            // and the hiker can act on it without knowing which one was hit.
-            case .tooLarge: "A single hike is a few megabytes at most. A file this size usually holds many tracks, "
-                + "and splitting it lets them import one at a time."
-            case .tooShort: "A hike needs at least two points to have a route."
-            case .unreadable: "Check that it's a .gpx file and isn't damaged."
-            }
-        }
-    }
-
     /// Parses the file at `url`.
     ///
     /// A one-point file parses *successfully* — refusing it is the import's
     /// call, not the parser's, and the distinction is what lets the caller say
     /// which of the two happened. See ``ImportFailure``.
     static func load(from url: URL, limits: Limits = .standard) throws(ImportFailure) -> Track {
+        let tracks = try contents(of: try document(at: url, limits: limits), limits: limits).tracks
+        guard tracks.count == 1, let track = tracks.first else { throw .multipleTracks }
+        return track
+    }
+
+    /// The file read and parsed, before any of it is judged as a track.
+    private static func document(at url: URL, limits: Limits) throws(ImportFailure) -> ParsedDocument {
         // Asked of the file system before the read rather than measured after
         // it. `Data(contentsOf:)` brings the whole file in as one allocation,
         // so a size learned from `data.count` has already been paid for, and
@@ -295,7 +184,41 @@ nonisolated enum GPXImport {
         guard parser.parse() else {
             throw documentParser.hasExceededPointLimit ? .tooLarge : .unreadable
         }
-        return try track(from: documentParser.document)
+        return documentParser.document
+    }
+
+    /// Parses the file at `url` into one track per `<trk>` (or `<rte>`) that
+    /// carries usable points, in the order the file lists them.
+    ///
+    /// One track is what almost every file holds, and it comes back exactly
+    /// as ``load(from:limits:)`` would return it. Several are a multi-day trip
+    /// exported a day to a track, or a region's walks in one download: each
+    /// becomes its own hike, never one line joined across the gaps. The
+    /// file's loose `<wpt>`s go to the track they lie on — see
+    /// ``GPXTrackSplit``. Past ``Limits/maximumTrackCount`` the file is
+    /// refused as ``ImportFailure/tooLarge``.
+    static func loadAll(from url: URL, limits: Limits = .standard) throws(ImportFailure) -> Contents {
+        try contents(of: try document(at: url, limits: limits), limits: limits)
+    }
+
+    /// What a file becomes: its tracks, and how many of its loose waypoints
+    /// lay on none of them and were left out — see ``GPXTrackSplit``.
+    struct Contents: Sendable {
+        var tracks: [Track]
+        var unplacedWaypoints = 0
+    }
+
+    /// ``loadAll(from:limits:)`` without occupying the main actor — see
+    /// ``loadOffMain(from:limits:)`` for what that does and does not buy.
+    @concurrent
+    static func loadAllOffMain(
+        from url: URL,
+        limits: Limits = .standard
+    ) async throws(ImportFailure) -> Contents {
+        assertOffMainThread(
+            "GPX parsing and route preparation must stay off the main thread"
+        )
+        return try loadAll(from: url, limits: limits)
     }
 
     /// Parses and prepares a picked file without occupying the main actor.
@@ -320,7 +243,7 @@ nonisolated enum GPXImport {
         return try load(from: url, limits: limits)
     }
 
-    private static func track(from document: ParsedDocument) throws(ImportFailure) -> Track {
+    private static func contents(of document: ParsedDocument, limits: Limits) throws(ImportFailure) -> Contents {
         // Chosen on what the file *contains*, not on what survives validation,
         // which is what keeps a file full of unprojectable `<trkpt>` reporting
         // that its track is unusable instead of quietly importing a route's
@@ -341,17 +264,32 @@ nonisolated enum GPXImport {
             let points = segment.points.compactMap(point)
             return points.isEmpty ? nil : (segment.containerIndex, points)
         }
-        guard let first = usable.first else { throw .noUsablePoints }
-        // Judged on the segments that survived, so a `<trk>` holding only
+        guard !usable.isEmpty else { throw .noUsablePoints }
+        // Grouped on the segments that survived, so a `<trk>` holding only
         // unprojectable points — or none at all, which plenty of exporters
-        // leave behind — doesn't make a perfectly ordinary file unimportable.
-        guard usable.allSatisfy({ $0.container == first.container }) else {
-            throw .multipleTracks
+        // leave behind — neither becomes a hike nor stops the others.
+        let containers = usable.chunked(on: \.container)
+        guard containers.count <= limits.maximumTrackCount else { throw .tooLarge }
+        guard containers.count > 1 else {
+            let segments = usable.map(\.points)
+            let track = singleTrack(from: document, segments: segments, hasGeometryOfItsOwn: hasGeometryOfItsOwn)
+            return Contents(tracks: [track])
         }
+        return splitTracks(
+            from: document,
+            containers: containers.map { container, segments in (container, segments.map(\.points)) }
+        )
+    }
 
-        let segments = usable.map(\.points)
-        return Track(
-            name: nonEmpty(document.firstTrackName)
+    /// The one hike a single-track file becomes: the file's own name, notes
+    /// and waypoints all belong to it.
+    private static func singleTrack(
+        from document: ParsedDocument,
+        segments: [[Point]],
+        hasGeometryOfItsOwn: Bool
+    ) -> Track {
+        Track(
+            name: nonEmpty(document.trackNames[0])
                 ?? nonEmpty(document.metadataName),
             // Bounded here, where the file enters, for the reason
             // ``HikeTitle`` bounds the name two lines up — see
@@ -363,8 +301,8 @@ nonisolated enum GPXImport {
             // because a description that is present is the one the hiker
             // meant even when it is too long.
             trackDescription: BoundedText.bounded(
-                nonEmpty(document.firstTrackDescription)
-                    ?? nonEmpty(document.firstTrackComment)
+                nonEmpty(document.trackDescriptions[0])
+                    ?? nonEmpty(document.trackComments[0])
                     ?? nonEmpty(document.metadataDescription),
                 to: .notes
             ),
@@ -390,6 +328,48 @@ nonisolated enum GPXImport {
                 ? Array(document.waypoints.compactMap(place).prefix(maximumPlaces))
                 : []
         )
+    }
+
+    /// One hike per track of a file that holds several.
+    ///
+    /// Each keeps its own `<name>` and `<desc>` — the file's `<metadata>`
+    /// name is the file's, not any one day's, so it names none of them — and
+    /// its own start, the first stamped point it carries, because the file's
+    /// `<time>` is when the first of them began. The author and keywords are
+    /// the file's and go with every one. The loose `<wpt>`s are shared out by
+    /// ``GPXTrackSplit``: a place or a photograph belongs to the track it lies
+    /// on, and one that lies on none of them is dropped rather than guessed.
+    private static func splitTracks(
+        from document: ParsedDocument,
+        containers: [(container: Int, segments: [[Point]])]
+    ) -> Contents {
+        let routes = containers.map { container in
+            container.segments.joined().map { point in
+                RouteCoordinate(latitude: point.coordinate.latitude, longitude: point.coordinate.longitude)
+            }
+        }
+        let places = Array(document.waypoints.compactMap(place).prefix(maximumPlaces))
+        let photographs = document.waypoints.compactMap(photograph)
+        let placesByTrack = GPXTrackSplit.assign(places, at: \.clCoordinate, to: routes)
+        let photographsByTrack = GPXTrackSplit.assign(photographs, at: \.coordinate, to: routes)
+        let placed = placesByTrack.joined().count + photographsByTrack.joined().count
+        let tracks = containers.enumerated().map { offset, container in
+            Track(
+                name: nonEmpty(document.trackNames[container.container]),
+                trackDescription: BoundedText.bounded(
+                    nonEmpty(document.trackDescriptions[container.container])
+                        ?? nonEmpty(document.trackComments[container.container]),
+                    to: .notes
+                ),
+                author: BoundedText.bounded(document.metadataAuthor, to: .credit),
+                keywords: BoundedText.bounded(document.metadataKeywords, to: .keywords),
+                startTime: container.segments.lazy.joined().first { $0.time != nil }?.time,
+                segments: container.segments,
+                photographs: photographsByTrack[offset],
+                places: placesByTrack[offset]
+            )
+        }
+        return Contents(tracks: tracks, unplacedWaypoints: places.count + photographs.count - placed)
     }
 
     /// How many `<wpt>`s of a file may become places.
@@ -567,9 +547,12 @@ nonisolated private extension GPXImport {
         var metadataAuthor: String?
         var metadataKeywords: String?
         var metadataTime: Date?
-        var firstTrackName: String?
-        var firstTrackDescription: String?
-        var firstTrackComment: String?
+        /// Each `<trk>`'s own `<name>`, `<desc>` and `<cmt>`, by its index in
+        /// the file — the same index a segment's ``ParsedSegment/containerIndex``
+        /// carries, so a track's words and its points meet by number.
+        var trackNames: [Int: String] = [:]
+        var trackDescriptions: [Int: String] = [:]
+        var trackComments: [Int: String] = [:]
         var trackSegments: [ParsedSegment] = []
         var routeSegments: [ParsedSegment] = []
         var waypoints: [ParsedPoint] = []
@@ -771,9 +754,9 @@ nonisolated private extension GPXImport {
             case Element.name where isMetadataAuthorChild: document.metadataAuthor = value
             case Element.keywords where isDirectChild(of: Element.metadata): document.metadataKeywords = value
             case Element.time where isDirectChild(of: Element.metadata): document.metadataTime = date(from: value)
-            case Element.name where isFirstTrackChild: document.firstTrackName = value
-            case Element.description where isFirstTrackChild: document.firstTrackDescription = value
-            case Element.comment where isFirstTrackChild: document.firstTrackComment = value
+            case Element.name where isTrackChild: document.trackNames[currentTrackIndex] = value
+            case Element.description where isTrackChild: document.trackDescriptions[currentTrackIndex] = value
+            case Element.comment where isTrackChild: document.trackComments[currentTrackIndex] = value
             case Element.trackPoint, Element.routePoint, Element.waypoint: finishPoint(element)
             default: break
             }
@@ -786,8 +769,8 @@ nonisolated private extension GPXImport {
             path.dropLast().last == parent
         }
 
-        private var isFirstTrackChild: Bool {
-            currentTrackIndex == 0 && isDirectChild(of: Element.track)
+        private var isTrackChild: Bool {
+            currentTrackIndex >= 0 && isDirectChild(of: Element.track)
         }
 
         private var isMetadataAuthorChild: Bool {

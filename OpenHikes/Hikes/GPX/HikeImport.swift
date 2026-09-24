@@ -48,10 +48,20 @@ nonisolated enum HikeImportFailure: LocalizedError, Equatable, Sendable {
     /// and the alert says the part that is the hiker's to know. Same division
     /// ``HikeIntentFailure`` makes.
     case notSaved
+    /// Several picked files, some of which did not become hikes — one alert
+    /// for all of them rather than one per file. Each names its file and why.
+    case several([FileFailure])
+
+    /// One file of several that did not become a hike, for ``several(_:)``.
+    struct FileFailure: Equatable, Sendable {
+        let fileName: String
+        let reason: String
+    }
 
     var errorDescription: String? {
         switch self {
         case .file(let failure): failure.errorDescription
+        case .several(let failures): "\(failures.count) files couldn't be imported."
         case .notSaved: "This hike couldn't be saved."
         }
     }
@@ -63,6 +73,11 @@ nonisolated enum HikeImportFailure: LocalizedError, Equatable, Sendable {
         // import is that the file was the problem — and here it wasn't, so the
         // next thing to try is the same file again.
         case .notSaved: "The file wasn't changed. Check that the device has storage available, then import it again."
+        // The others are hikes now, and this says which were not and why —
+        // the one thing a single "some failed" would leave the hiker to find
+        // out by scrolling their library.
+        case .several(let failures):
+            failures.map { "\($0.fileName): \($0.reason)" }.joined(separator: "\n")
         }
     }
 }
@@ -93,7 +108,7 @@ enum HikeImportOutcome {
     /// only source OpenHikes controls. See ``GPXInbox``.
     var discardsSourceCopy: Bool {
         switch self {
-        case .imported, .refused(.file): true
+        case .imported, .refused(.file), .refused(.several): true
         case .refused(.notSaved): false
         }
     }
@@ -125,6 +140,32 @@ enum HikeImport {
         into modelContext: ModelContext,
         save: @Sendable (ModelContext) throws -> Void = { try $0.save() }
     ) async throws(HikeImportFailure) -> Hike {
+        // A caller with no way to ask which tracks answers "none of them",
+        // which is the refusal a multi-track file used to get.
+        let hikes = try await hikes(from: url, into: modelContext, choosing: { _, _ in [] }, save: save)
+        guard let hike = hikes.first else { throw .file(.multipleTracks) }
+        return hike
+    }
+
+    /// Parses the file at `url` and returns the hikes it is now kept as —
+    /// one for an ordinary file, one per chosen track for a file that holds
+    /// several.
+    ///
+    /// - Parameter choosing: asked only when the file holds more than one
+    ///   track, with the tracks and how many of the file's waypoints lie on
+    ///   none of them; answers the indices to import, empty for none. See
+    ///   ``GPXTrackChoice``. Never asked for a one-track file, which imports
+    ///   exactly as it always has.
+    ///
+    /// All of the chosen tracks are committed together or none of them are:
+    /// a refused save that kept three days of a five-day trip would leave the
+    /// hiker to work out which three.
+    static func hikes(
+        from url: URL,
+        into modelContext: ModelContext,
+        choosing: ([GPXImport.Track], Int) async -> [Int],
+        save: @Sendable (ModelContext) throws -> Void = { try $0.save() }
+    ) async throws(HikeImportFailure) -> [Hike] {
         let scoped = url.startAccessingSecurityScopedResource()
         let span = FieldSignpost.begin(.hikeImport)
         defer {
@@ -134,20 +175,43 @@ enum HikeImport {
             }
         }
 
-        let track = try await parsed(url)
-        let id = try await stored(
-            track,
-            // Both settled here, on the actor that owns the UI types they
-            // reach: the title is bounded rather than absorbed downstream,
-            // because this name came out of a file the hiker may never have
-            // opened (see ``HikeTitle``), and the tint is mixed through
-            // SwiftUI's `Color`.
-            titled: HikeTitle.imported(trackName: track.name, fileURL: url),
-            tintedWith: Hike.randomTintHex(),
-            in: modelContext.container,
-            save: save
-        )
-        return try imported(id, into: modelContext)
+        let contents = try await parsed(url)
+        let chosen: [(number: Int, track: GPXImport.Track)]
+        if contents.tracks.count == 1, let only = contents.tracks.first {
+            chosen = [(1, only)]
+        } else {
+            let picks = await choosing(contents.tracks, contents.unplacedWaypoints)
+            guard !picks.isEmpty else { throw .file(.multipleTracks) }
+            chosen = Set(picks).sorted()
+                .filter { contents.tracks.indices.contains($0) }
+                .map { ($0 + 1, contents.tracks[$0]) }
+        }
+        let rows = chosen.map { number, track in
+            PendingRow(
+                track: track,
+                // Both settled here, on the actor that owns the UI types they
+                // reach: the title is bounded rather than absorbed downstream,
+                // because this name came out of a file the hiker may never
+                // have opened (see ``HikeTitle``), and the tint is mixed
+                // through SwiftUI's `Color`.
+                title: chosen.count == 1 && contents.tracks.count == 1
+                    ? HikeTitle.imported(trackName: track.name, fileURL: url)
+                    : HikeTitle.imported(trackName: track.name, fileURL: url, trackNumber: number),
+                tintHex: Hike.randomTintHex()
+            )
+        }
+        let ids = try await stored(rows, in: modelContext.container, save: save)
+        var hikes: [Hike] = []
+        for id in ids { hikes.append(try imported(id, into: modelContext)) }
+        return hikes
+    }
+
+    /// One row to write: a track, and the two things settled for it on the
+    /// main actor.
+    struct PendingRow: Sendable {
+        let track: GPXImport.Track
+        let title: String
+        let tintHex: String
     }
 
     /// Builds the row and commits it, off the main actor.
@@ -166,33 +230,36 @@ enum HikeImport {
     /// hike's id — never the non-`Sendable` `Hike` itself.
     @concurrent
     nonisolated private static func stored(
-        _ track: GPXImport.Track,
-        titled title: String,
-        tintedWith tintHex: String,
+        _ rows: [PendingRow],
         in container: ModelContainer,
         save: @Sendable (ModelContext) throws -> Void
-    ) async throws(HikeImportFailure) -> UUID {
+    ) async throws(HikeImportFailure) -> [UUID] {
         assertOffMainThread(
             "Serializing an imported route must stay off the main thread"
         )
         let context = ModelContext(container)
-        let hike = Hike(
-            title: title,
-            distanceMeters: track.distanceMeters,
-            date: track.startTime ?? .now,
-            tintHex: tintHex,
-            route: track.route,
-            trackDescription: track.trackDescription,
-            author: track.author,
-            keywords: track.keywords
-        )
-        hike.photos = placeOnlyPhotos(of: track)
-        context.insert(hike)
-        // After the insert, because a place is a row of its own and a
-        // relationship assigned to a hike that is not in a context yet has
-        // nowhere to put it — the same order ``TrailDraftSave`` takes, and for
-        // the same reason.
-        hike.replacePlaces(with: track.places, in: context)
+        var ids: [UUID] = []
+        for row in rows {
+            let track = row.track
+            let hike = Hike(
+                title: row.title,
+                distanceMeters: track.distanceMeters,
+                date: track.startTime ?? .now,
+                tintHex: row.tintHex,
+                route: track.route,
+                trackDescription: track.trackDescription,
+                author: track.author,
+                keywords: track.keywords
+            )
+            hike.photos = placeOnlyPhotos(of: track)
+            context.insert(hike)
+            // After the insert, because a place is a row of its own and a
+            // relationship assigned to a hike that is not in a context yet
+            // has nowhere to put it — the same order ``TrailDraftSave``
+            // takes, and for the same reason.
+            hike.replacePlaces(with: track.places, in: context)
+            ids.append(hike.id)
+        }
         do {
             try save(context)
         } catch {
@@ -209,7 +276,7 @@ enum HikeImport {
             )
             throw .notSaved
         }
-        return hike.id
+        return ids
     }
 
     /// The file's photo waypoints as rows on the imported hike.
@@ -256,17 +323,19 @@ enum HikeImport {
     /// The parse, with its refusals widened to the ones an import can have.
     private static func parsed(
         _ url: URL
-    ) async throws(HikeImportFailure) -> GPXImport.Track {
-        let track: GPXImport.Track
+    ) async throws(HikeImportFailure) -> GPXImport.Contents {
+        var contents: GPXImport.Contents
         do throws(GPXImport.ImportFailure) {
-            track = try await GPXImport.loadOffMain(from: url)
+            contents = try await GPXImport.loadAllOffMain(from: url)
         } catch {
             throw .file(error)
         }
         // Policy rather than a parse failure, which is why the parser hands
         // such a track back and the import is what refuses it. See
-        // ``GPXImport/ImportFailure/tooShort``.
-        guard track.points.count > 1 else { throw .file(.tooShort) }
-        return track
+        // ``GPXImport/ImportFailure/tooShort``. In a file of several, a
+        // one-point track is left out and the others go on.
+        contents.tracks.removeAll { $0.points.count < 2 }
+        guard !contents.tracks.isEmpty else { throw .file(.tooShort) }
+        return contents
     }
 }

@@ -1,0 +1,190 @@
+//
+//  GPXMultiTrackTests.swift
+//  OpenHikesTests
+//
+//  A file with several tracks becomes several hikes — the answer the refusal
+//  it used to get already stated, and then left to the hiker on a device with
+//  no way to split a file.
+//
+
+import CoreLocation
+import Foundation
+@testable import OpenHikes
+import SwiftData
+import Testing
+
+@Suite("GPX multi-track import")
+struct GPXMultiTrackTests {
+    /// Three days of a trip, a track each. The second is unnamed. A hut sits
+    /// on day one's line, a spring on day three's, and a viewpoint on
+    /// nobody's.
+    private static let tripGPX = """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <gpx version="1.1" creator="OpenHikesTests" xmlns="http://www.topografix.com/GPX/1/1">
+        <metadata><name>Alps Week</name><time>2026-07-01T06:00:00Z</time></metadata>
+        <wpt lat="47.6310" lon="12.8600"><name>Hut</name></wpt>
+        <wpt lat="47.8010" lon="12.9000"><name>Spring</name></wpt>
+        <wpt lat="46.0000" lon="10.0000"><name>Far viewpoint</name></wpt>
+        <trk><name>Day 1</name><desc>Up to the hut</desc><trkseg>
+            <trkpt lat="47.6300" lon="12.8600"><time>2026-07-01T07:00:00Z</time></trkpt>
+            <trkpt lat="47.6320" lon="12.8600"><time>2026-07-01T08:00:00Z</time></trkpt>
+        </trkseg></trk>
+        <trk><trkseg>
+            <trkpt lat="47.7000" lon="12.8800"><time>2026-07-02T07:00:00Z</time></trkpt>
+            <trkpt lat="47.7020" lon="12.8800"><time>2026-07-02T08:00:00Z</time></trkpt>
+        </trkseg></trk>
+        <trk><name>Day 3</name><trkseg>
+            <trkpt lat="47.8000" lon="12.9000"><time>2026-07-03T07:00:00Z</time></trkpt>
+            <trkpt lat="47.8020" lon="12.9000"><time>2026-07-03T08:00:00Z</time></trkpt>
+        </trkseg></trk>
+    </gpx>
+    """
+
+    private func write(_ xml: String, named name: String = "alps-week") throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "multitrack-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appending(path: "\(name).gpx")
+        try Data(xml.utf8).write(to: url)
+        return url
+    }
+
+    private func openStore(in directory: URL) throws -> ModelContext {
+        ModelContext(
+            try ModelContainer.openHikes(
+                url: directory.appending(path: "OpenHikes.store"),
+                localURL: directory.appending(path: "OpenHikesLocal.store")
+            )
+        )
+    }
+
+    // MARK: The parse
+
+    @Test("each track becomes its own, with its own name, notes and start")
+    func eachTrackIsItsOwn() throws {
+        let contents = try GPXImport.loadAll(from: try write(Self.tripGPX))
+
+        #expect(contents.tracks.count == 3)
+        #expect(contents.tracks.map(\.name) == ["Day 1", nil, "Day 3"])
+        #expect(contents.tracks.first?.trackDescription == "Up to the hut")
+        // The file's <time> is when the first began, not when each did.
+        #expect(contents.tracks.map(\.startTime) == [
+            ISO8601DateFormatter().date(from: "2026-07-01T07:00:00Z"),
+            ISO8601DateFormatter().date(from: "2026-07-02T07:00:00Z"),
+            ISO8601DateFormatter().date(from: "2026-07-03T07:00:00Z"),
+        ])
+        // Never joined: each is only as long as its own two points.
+        #expect(contents.tracks.allSatisfy { $0.distanceMeters < 300 })
+    }
+
+    /// A `<wpt>` is the file's, not a track's, so the line decides.
+    @Test("a waypoint goes to the track it lies on, and one on none is counted and left out")
+    func waypointsGoToTheirTrack() throws {
+        let contents = try GPXImport.loadAll(from: try write(Self.tripGPX))
+
+        #expect(contents.tracks[0].places.map(\.name) == ["Hut"])
+        #expect(contents.tracks[1].places.isEmpty)
+        #expect(contents.tracks[2].places.map(\.name) == ["Spring"])
+        #expect(contents.unplacedWaypoints == 1)
+    }
+
+    /// The one-track answer is unchanged, `load` included.
+    @Test("a one-track file is exactly what it always was")
+    func oneTrackIsUnchanged() throws {
+        let single = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+            <metadata><name>From the metadata</name></metadata>
+            <wpt lat="46.0000" lon="10.0000"><name>Anywhere</name></wpt>
+            <trk><trkseg>
+                <trkpt lat="47.6300" lon="12.8600"/><trkpt lat="47.6320" lon="12.8600"/>
+            </trkseg></trk>
+        </gpx>
+        """
+        let contents = try GPXImport.loadAll(from: try write(single))
+        #expect(contents.tracks.count == 1)
+        #expect(contents.tracks.first?.name == "From the metadata")
+        #expect(contents.tracks.first?.places.count == 1, "a lone track keeps every place, near it or not")
+        #expect(contents.unplacedWaypoints == 0)
+    }
+
+    @Test("past the track cap, the file is refused as too large")
+    func tooManyTracksIsTooLarge() throws {
+        var limits = GPXImport.Limits.standard
+        limits.maximumTrackCount = 2
+        let url = try write(Self.tripGPX)
+        #expect(throws: GPXImport.ImportFailure.tooLarge) {
+            try GPXImport.loadAll(from: url, limits: limits)
+        }
+    }
+
+    // MARK: The import
+
+    @Test("the tracks chosen become hikes, named, and committed together")
+    func chosenTracksBecomeHikes() async throws {
+        let url = try write(Self.tripGPX)
+        let context = try openStore(in: url.deletingLastPathComponent())
+        var asked: (count: Int, unplaced: Int)?
+
+        let hikes = try await HikeImport.hikes(from: url, into: context) { tracks, unplaced in
+            asked = (tracks.count, unplaced)
+            return [2, 1]
+        }
+
+        #expect(asked?.count == 3)
+        #expect(asked?.unplaced == 1)
+        // In the file's order, whatever order they were answered in; the
+        // unnamed one named for the file and its place in it.
+        #expect(hikes.map(\.title) == ["alps-week, Track 2", "Day 3"])
+        let stored = try openStore(in: url.deletingLastPathComponent()).fetch(FetchDescriptor<Hike>())
+        #expect(stored.count == 2)
+    }
+
+    /// Cancelling is the one thing ``GPXImport/ImportFailure/multipleTracks``
+    /// still means.
+    @Test("choosing none imports nothing")
+    func choosingNoneImportsNothing() async throws {
+        let url = try write(Self.tripGPX)
+        let context = try openStore(in: url.deletingLastPathComponent())
+
+        await #expect(throws: HikeImportFailure.file(.multipleTracks)) {
+            _ = try await HikeImport.hikes(from: url, into: context) { _, _ in [] }
+        }
+        let stored = try openStore(in: url.deletingLastPathComponent()).fetch(FetchDescriptor<Hike>())
+        #expect(stored.isEmpty)
+    }
+
+    @Test("a one-track file is never asked about")
+    func oneTrackIsNotAsked() async throws {
+        let single = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+            <trk><name>Thumsee</name><trkseg>
+                <trkpt lat="47.6300" lon="12.8600"/><trkpt lat="47.6320" lon="12.8600"/>
+            </trkseg></trk>
+        </gpx>
+        """
+        let url = try write(single)
+        let context = try openStore(in: url.deletingLastPathComponent())
+        var asked = false
+
+        let hikes = try await HikeImport.hikes(from: url, into: context) { _, _ in
+            asked = true
+            return []
+        }
+
+        #expect(!asked)
+        #expect(hikes.map(\.title) == ["Thumsee"])
+    }
+
+    @Test("several failed files are one sentence naming each")
+    func severalFailuresAreOneAlert() {
+        let failure = HikeImportFailure.several([
+            .init(fileName: "a.gpx", reason: "This file couldn't be read."),
+            .init(fileName: "b.gpx", reason: "This GPX file is too large to import."),
+        ])
+        #expect(failure.errorDescription == "2 files couldn't be imported.")
+        #expect(failure.recoverySuggestion?.contains("a.gpx: This file couldn't be read.") == true)
+        #expect(failure.recoverySuggestion?.contains("b.gpx") == true)
+    }
+}

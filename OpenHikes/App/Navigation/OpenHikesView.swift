@@ -26,17 +26,7 @@ struct OpenHikesView: View {
     /// The stretches of the drawn route a finished walk covered, observed
     /// directly by the map — see ``WalkHighlight``.
     @State private var walkHighlight = WalkHighlight()
-    /// Set when a picked file couldn't become a hike; drives the alert that
-    /// says so. `nil` the rest of the time.
-    ///
-    /// Wider than the parser's own failure, because a file that read perfectly
-    /// and a store that refused to keep it are different sentences and only
-    /// one of them is about the hiker's file. See ``HikeImportFailure``.
-    @State private var importFailure: HikeImportFailure?
     @State private var searchFailure: SearchFailure?
-    /// Invalidates an import's permission to replace the current selection
-    /// when recording or navigation moves on while GPX parsing is off-main.
-    @State private var importSelectionGate = ImportSelectionGate()
     /// Lets the hike detail view drive one-shot map commands (e.g. the Zoom button).
     @State private var mapController = MapController()
     /// Keeps the selected route's Core Location projection across unrelated
@@ -62,7 +52,6 @@ struct OpenHikesView: View {
     /// Owned here for the same reason ``photoCapture`` is: the pins are drawn
     /// on the map and the photos live on a screen inside the sheet.
     @State private var photoPins = PhotoMapPinController()
-    @State private var didProcessLaunchFixture = false
 
     // swiftlint:disable private_swiftui_state
     /// The hike whose route the map draws, and whose screen the sheet opens
@@ -104,6 +93,21 @@ struct OpenHikesView: View {
     /// a modal attached beside a sheet that is never dismissed is never
     /// presented at all. See the `.photoCapturePickers` call below.
     @State var photoPresentation = PhotoCaptureState()
+    /// The question a multi-track GPX file asks before it becomes hikes —
+    /// see ``GPXTrackChoice``. Presented from inside `MapSheet`, like the
+    /// pickers above.
+    @State var gpxTrackChoice = GPXTrackChoice()
+    /// Set when a picked file couldn't become a hike; drives the alert that
+    /// says so. `nil` the rest of the time.
+    ///
+    /// Wider than the parser's own failure, because a file that read perfectly
+    /// and a store that refused to keep it are different sentences and only
+    /// one of them is about the hiker's file. See ``HikeImportFailure``.
+    @State var importFailure: HikeImportFailure?
+    /// Invalidates an import's permission to replace the current selection
+    /// when recording or navigation moves on while GPX parsing is off-main.
+    @State var importSelectionGate = ImportSelectionGate()
+    @State var didProcessLaunchFixture = false
     // swiftlint:enable private_swiftui_state
 
     /// Whether the sheet's contents belong in ``MapSidePanel`` rather than in
@@ -154,7 +158,7 @@ struct OpenHikesView: View {
         }
     }
 
-    private var currentRecordingHikeID: UUID? {
+    var currentRecordingHikeID: UUID? {
         appModel.hikeRecorder.currentHike?.id
     }
 
@@ -568,6 +572,7 @@ extension OpenHikesView {
                 onPicked: attachPickedPhotos
             )
             .weatherDetailSheet(weatherDetail, weather: appModel.weatherManager)
+            .gpxTrackChoice(gpxTrackChoice)
             .mapScreenAlerts(
                 importFailure: $importFailure,
                 searchFailure: $searchFailure,
@@ -575,90 +580,6 @@ extension OpenHikesView {
                 locationAccess: locationAccessPrompt.isShowingBinding,
                 photoCapture: $photoPresentation
             )
-    }
-}
-
-// MARK: - GPX import
-
-/// Importing, and the selection it competes for, kept out of the view's own
-/// body so `type_body_length` measures the screen rather than the plumbing.
-/// Same file, so these still reach the view's `private` state.
-extension OpenHikesView {
-    /// Parses a picked .gpx file, persists it as a `Hike`, and shows it on the map.
-    /// A file that can't become a hike raises ``importFailure`` rather than
-    /// leaving the user looking at an unchanged screen.
-    private func importGPX(from url: URL) {
-        // Discarded explicitly rather than by `@discardableResult`: a
-        // single-expression closure returns its value, and a `Task` carrying
-        // an outcome that holds a `Hike` is a task carrying something
-        // SwiftData does not let cross an isolation boundary.
-        Task { _ = await performImport(from: url) }
-    }
-
-    private func importRequestedGPXFixture() async {
-        guard !didProcessLaunchFixture,
-              let name = AppLaunchEnvironment.importedGPXFixtureName else { return }
-        didProcessLaunchFixture = true
-        guard let url = Bundle.main.url(forResource: name, withExtension: "gpx") else {
-            importFailure = .file(.unreadable)
-            return
-        }
-        let outcome = await performImport(from: url)
-        await seedRequestedPhotos(for: outcome.hike)
-        seedRequestedWalks(for: outcome.hike)
-    }
-
-    /// Imports `url`, and hands back the hike it persisted — whether or not
-    /// that hike went on to win the selection below. A caller with something
-    /// left to do to the new hike needs the hike itself; reading the selection
-    /// afterwards would hand it whatever won the race instead.
-    ///
-    /// Refused only when the file could not become a *kept* hike, which the
-    /// alert this raises is already the report of. The failure is carried out
-    /// as well as shown, because what a caller may do with the file next
-    /// depends on which of the two failures it was — see
-    /// ``HikeImportOutcome``.
-    private func performImport(from url: URL) async -> HikeImportOutcome {
-        let selectionToken = importSelectionGate.token(
-            selectedHikeID: selectedHike?.id,
-            path: sheet.path
-        )
-        #if DEBUG
-        // Losing this race needs a navigation or selection change to land in
-        // the moment a GPX parse takes, which is not something automation can
-        // aim at. A scenario that is about the losing side asks for it here
-        // instead; see ``AppLaunchEnvironment/losesImportSelection``.
-        if AppLaunchEnvironment.losesImportSelection {
-            importSelectionGate.invalidate()
-        }
-        #endif
-        let importedHike: Hike
-        // Typed, so the catch below can't quietly widen to `any Error` and
-        // start swallowing something this screen has no message for.
-        do throws(HikeImportFailure) {
-            importedHike = try await HikeImport.hike(
-                from: url,
-                into: modelContext
-            )
-        } catch {
-            importFailure = error
-            return .refused(error)
-        }
-
-        // The imported row remains persisted when another action won the
-        // selection race; only its stale attempt to take over the map and
-        // sheet is dropped.
-        guard importSelectionGate.permits(
-            token: selectionToken,
-            selectedHikeID: selectedHike?.id,
-            path: sheet.path,
-            currentRecordingHikeID: currentRecordingHikeID,
-            recordingPresented: sheet.isRecordingPresented
-        ) else { return .imported(importedHike) }
-        selectedHike = importedHike
-        // The selection draws the imported route; expanding reveals it.
-        sheet.makeRoomForTheMap()
-        return .imported(importedHike)
     }
 }
 
@@ -761,8 +682,9 @@ private extension OpenHikesView {
 
 /// The bundled stand-ins a UI-testing launch can ask for, held apart from the
 /// view's own body: none of it draws anything, and none of it exists in a
-/// shipping build.
-private extension OpenHikesView {
+/// shipping build. Internal rather than private so the import in
+/// `OpenHikesView+GPXImport.swift` can hand its hike to them.
+extension OpenHikesView {
     /// Gives the imported hike the photos a walk would have come home with.
     ///
     /// After the import rather than inside it, because the selection race
