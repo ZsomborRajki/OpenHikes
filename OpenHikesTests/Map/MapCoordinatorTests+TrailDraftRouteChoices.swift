@@ -171,6 +171,36 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// The heights land about two seconds after the drawing settles, from a
+    /// task nobody is watching, and no leg or stop moves when they do — so
+    /// the only thing that can redraw the bubble is the map's registration
+    /// reading the climb. See ``TrailDraftDrawnState``.
+    @Test("a hiking route's bubble takes the climb when its heights land")
+    func theRouteBubbleCountsTheClimb() async throws {
+        #if os(iOS)
+        let maker = TrailDraftController(
+            elevationSource: ClimbingHeightSource(),
+            elevationPause: { _ in /* instant */ }
+        )
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(trailMaker: maker), coordinator)
+        defer { detach(map) }
+        maker.setEditing(true)
+        maker.appendWaypoint(at: CLLocationCoordinate2D(latitude: Valley.south, longitude: Valley.longitude))
+        maker.appendWaypoint(at: CLLocationCoordinate2D(latitude: Valley.north, longitude: Valley.longitude))
+
+        await settle(until: "the climbing time to reach the route's bubble") {
+            maker.elevation.summary != nil
+                && coordinator.trailDraftRouteChoices.times.first?.travelTime
+                == maker.draft.travelTime(climb: maker.elevation.summary)
+        }
+
+        let bubble = try #require(coordinator.trailDraftRouteChoices.times.first { $0.choice == nil })
+        #expect(maker.draft.travelMode == .hiking)
+        #expect(bubble.travelTime > maker.draft.travelTime * 2, "a 600 m climb dominates a 1.1 km line")
+        #endif
+    }
+
     @Test("a leg still being routed has no time to show")
     func aRoutingLegHasNoTime() async {
         #if os(iOS)
@@ -190,5 +220,17 @@ extension MapCoordinatorTests {
             coordinator.trailDraftRouteChoices.times.isEmpty
         }
         #endif
+    }
+}
+
+/// Heights that climb 600 m from the first point asked about to the last, so
+/// a line of any shape has a climb far past the deadband.
+nonisolated private final class ClimbingHeightSource: CuratedElevationSourcing {
+    static let climbMeters = 600.0
+
+    @concurrent
+    func heights(at coordinates: [CLLocationCoordinate2D]) async -> [Double] {
+        let steps = Double(max(1, coordinates.count - 1))
+        return coordinates.indices.map { index in 1000 + Self.climbMeters * Double(index) / steps }
     }
 }

@@ -133,7 +133,7 @@ nonisolated enum HikeDetailPreparation {
     /// nothing to count but the flat, and a flat figure on an alpine route is
     /// out by the factor of two this stat exists to correct — no figure is the
     /// honest answer there, as it is for the climb itself.
-    static func estimatedTime(
+    private static func estimatedTime(
         distanceMeters: Double,
         statistics: HikeRouteStatistics
     ) -> Stat? {
