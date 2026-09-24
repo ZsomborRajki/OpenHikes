@@ -891,6 +891,12 @@ final class CommunityBrowser {
             } catch is CancellationError {
                 return
             } catch {
+                // Not held after all, so the merged answer landing over these
+                // rows asks for them again rather than counting a failure as
+                // a line — the second chance the one request per answer used
+                // to give them. Only while this request still belongs to the
+                // rows: a newer answer has reset the set and owns it.
+                if !Task.isCancelled { self?.outlinedIDs.subtract(unasked.map(\.id)) }
                 Self.logger.error(
                     """
                     Community outlines failed: \
@@ -1099,7 +1105,10 @@ extension CommunityBrowser {
     private func fail(with failure: CommunityFailure, answering question: Question) {
         switch question {
         case .nearby:
-            awaitingCuratedHalf = false
+            // ``awaitingCuratedHalf`` is deliberately left alone. A failure
+            // brings no rows, so whatever is on screen is still what it was —
+            // and if that was a published half, a return visit must still ask
+            // again rather than treat it as the whole answer.
             state = .failed(failure)
             // The area that failed is forgotten, so the map offers it again
             // rather than refusing it as "the same question".
