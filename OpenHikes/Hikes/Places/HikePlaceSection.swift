@@ -128,7 +128,12 @@ private struct TrailPlacePinSwitch: View {
     var body: some View {
         Toggle(
             "Show Places on Map",
-            isOn: Binding(get: { controller.showsPins }, set: controller.setShowsPins)
+            // A closure rather than `controller.setShowsPins` itself: handing
+            // the main-actor method over as the setter makes the compiler
+            // write an `@isolated(any)` reabstraction thunk, and Swift 6.3's
+            // IRGen crashes emitting it — which is the compiler CodeQL still
+            // builds with.
+            isOn: Binding(get: { controller.showsPins }, set: { controller.setShowsPins($0) })
         )
         .labelsHidden()
         .accessibilityIdentifier("hike-place-pins-toggle")
