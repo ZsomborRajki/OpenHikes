@@ -25,6 +25,16 @@
 //  its Live Activity, Control Center and Siri; the watch's is reachable from
 //  here and nowhere else.
 //
+//  ## Double Tap
+//
+//  Pause and resume answer it, on either recording — the watch's own and the
+//  phone's mirrored one, since the screen shows exactly one of the two. A
+//  hiker with a pole in each hand is who the gesture exists for, and pausing
+//  is what they reach for at a stile or a view. Stop never answers it: a
+//  gesture that can fire from a hand closing on a pole must not be the one
+//  that ends the walk, and Start does not either, because an idle screen has
+//  no walk to protect and a mistaken start is a second hike to delete.
+//
 //  ## What this body may read
 //
 //  `model.recorder.phase`, which changes when the hiker presses something.
@@ -129,6 +139,7 @@ struct WatchRecordingView: View {
                 }
                 .tint(.green)
                 .accessibilityLabel("Resume recording")
+                .handGestureShortcut(.primaryAction)
             } else {
                 Button {
                     model.pauseRecording()
@@ -138,6 +149,7 @@ struct WatchRecordingView: View {
                 }
                 .tint(.orange)
                 .accessibilityLabel("Pause recording")
+                .handGestureShortcut(.primaryAction)
             }
             Button {
                 model.stopRecording()
@@ -298,8 +310,10 @@ private struct PhoneRecordingPanel: View {
         HStack(spacing: 8) {
             if recording.state == .paused {
                 button(.resume, "Resume recording on your iPhone", "play.fill", .green)
+                    .handGestureShortcut(.primaryAction)
             } else {
                 button(.pause, "Pause recording on your iPhone", "pause.fill", .orange)
+                    .handGestureShortcut(.primaryAction)
             }
             button(.stop, "Stop recording on your iPhone", "stop.fill", .red)
         }

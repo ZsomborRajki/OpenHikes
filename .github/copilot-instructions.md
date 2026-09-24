@@ -460,8 +460,13 @@ elevation, muted emphasis, and a hand-picked point-of-interest list — which
 costs no basemap transfer because MapKit fetches its own. *Tiles* are still
 absent and cannot be otherwise: `MKTileOverlay`, `MKTileOverlayRenderer` and
 `MKMapView` are all `API_UNAVAILABLE(watchos)`. `TrailGlyphView` is internal
-again, and is now only the iOS widget's fallback. No complications, no Smart
-Stack widget and no Double Tap. No watch-side
+again, and is now only the iOS widget's fallback. The Smart Stack gets the
+phone's Live Activity through its `.small` family (`HikeActivitySmallView`),
+with no watch-side code, and Double Tap is the pause/resume button on the
+Record screen — never Stop, never Start; `WatchRecordingView`'s header says
+why. No complication and no watch widget of its own: that needs a watch
+extension target, a watch App Group and a live-recording snapshot the app does
+not write yet (issue #661). No watch-side
 community, photographs, weather or offline maps. Following a trail *without*
 recording gets a live position only while the app is on screen, because the
 alternative is starting a workout session nobody asked for. And the mirror

@@ -28,6 +28,9 @@ enum HikeActivityLayout {
     /// The expanded Dynamic Island loses width to the sensor housing, and its
     /// bottom region sits under two other regions rather than beside them.
     static let expandedMetricLimit = 2
+    /// The watch's Smart Stack has room for the two headline figures and
+    /// nothing under them — see ``HikeActivitySmallView``.
+    static let smallMetricLimit = 0
 
     static let progressBarPadding: Double = 2
     /// How far a figure may shrink before it truncates instead. A distance
@@ -129,8 +132,6 @@ struct HikeActivityFigure: View {
     }
 }
 
-/// The full-width Lock Screen banner, and what the Dynamic Island falls back
-/// to on a device that doesn't have one.
 /// The panel's own pause and resume, and whatever the last tap could not do.
 ///
 /// Its own view, and deliberately *outside* the combined accessibility element
@@ -196,6 +197,8 @@ struct HikeActivityControls: View {
     }
 }
 
+/// The full-width Lock Screen banner, and what the Dynamic Island falls back
+/// to on a device that doesn't have one.
 struct HikeActivityLockScreenView: View {
     let attributes: HikeActivityAttributes
     let state: HikeActivityAttributes.ContentState
@@ -280,6 +283,99 @@ struct HikeActivityLockScreenView: View {
                     .foregroundStyle(.secondary)
             }
             .accessibilityHidden(true)
+        case let .figure(value, caption):
+            HikeActivityFigure(
+                value: value,
+                caption: caption,
+                alignment: .trailing
+            )
+        case nil:
+            EmptyView()
+        }
+    }
+}
+
+/// Which layout the activity's content closure draws, by family.
+///
+/// A view of its own because `activityFamily` is an environment value, and
+/// the `ActivityConfiguration` closure is not a view that can read one.
+/// `.medium` is the Lock Screen banner and every other full-width surface;
+/// `.small` is the paired watch's Smart Stack.
+struct HikeActivityContentView: View {
+    let attributes: HikeActivityAttributes
+    let state: HikeActivityAttributes.ContentState
+
+    @Environment(\.activityFamily)
+    private var family
+
+    var body: some View {
+        if family == .small {
+            HikeActivitySmallView(attributes: attributes, state: state)
+        } else {
+            HikeActivityLockScreenView(attributes: attributes, state: state)
+                .padding()
+        }
+    }
+}
+
+/// The activity on a paired Apple Watch: the title row, the two headline
+/// figures, and a followed trail's progress — the banner with its chips and
+/// its button taken off.
+///
+/// No chips because the Smart Stack's cell is three short lines, and a fourth
+/// row would shrink the two figures a hiker actually glances at. No pause
+/// button because the watch app's Record screen already drives the phone's
+/// recording — pause, resume and stop, with Double Tap on the first two — and
+/// a second control in a cell this size would be a target too small to hit
+/// with a glove on.
+///
+/// No padding of its own: the Smart Stack applies the system's content
+/// margins, and the banner's `.padding()` on top of them would cost a line.
+struct HikeActivitySmallView: View {
+    let attributes: HikeActivityAttributes
+    let state: HikeActivityAttributes.ContentState
+
+    private var tint: Color { Color(hex: attributes.tintHex) ?? .green }
+
+    var body: some View {
+        let presentation = attributes.presentation(
+            for: state,
+            metricLimit: HikeActivityLayout.smallMetricLimit
+        )
+        VStack(alignment: .leading, spacing: 4) {
+            HikeActivityHeader(presentation: presentation, tint: tint)
+            HStack(alignment: .firstTextBaseline) {
+                HikeActivityFigure(
+                    value: presentation.primaryValue,
+                    caption: presentation.primaryCaption
+                )
+                Spacer(minLength: 8)
+                trailingFigure(presentation)
+            }
+            if let progress = presentation.progress {
+                TrailWidgetProgressBar(
+                    fraction: progress,
+                    tint: tint,
+                    onMap: false
+                )
+            }
+        }
+        // One element, as on the banner: the cell is one tap target.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(presentation.accessibilityLabel)
+        .accessibilityValue(presentation.accessibilityValue)
+    }
+
+    /// The banner's second slot, with its clock left uncaptioned: the cell
+    /// has no line to spare for "Elapsed", and a ticking `h:mm:ss` beside a
+    /// distance needs no label to be read as time.
+    @ViewBuilder
+    private func trailingFigure(
+        _ presentation: HikeActivityPresentation
+    ) -> some View {
+        switch presentation.secondaryFigure {
+        case .elapsed:
+            HikeActivityElapsed(presentation: presentation)
         case let .figure(value, caption):
             HikeActivityFigure(
                 value: value,
