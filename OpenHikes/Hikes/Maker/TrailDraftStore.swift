@@ -52,6 +52,8 @@ nonisolated struct StoredTrailDraft: Equatable, Sendable {
     /// The hike this drawing is an edit of — see
     /// ``TrailDraftRecord/editingHikeID``.
     var editingHikeID: UUID?
+    /// See ``TrailDraftRecord/editingPlaceIDs``.
+    var editingPlaceIDs: [UUID] = []
 
     /// Both lists, because either on its own is a drawing worth coming back
     /// to — see ``TrailDraft/isEmpty``.
@@ -103,7 +105,8 @@ struct TrailDraftStore {
                 snapsToPaths: record.snapsToPaths,
                 travelMode: record.travelMode,
                 startIsOpen: record.startIsOpen,
-                editingHikeID: record.editingHikeID
+                editingHikeID: record.editingHikeID,
+                editingPlaceIDs: record.editingPlaceIDs
             )
         } catch {
             log("load", error)
@@ -127,7 +130,8 @@ struct TrailDraftStore {
         snapsToPaths: Bool,
         travelMode: TrailTravelMode = .hiking,
         startIsOpen: Bool = false,
-        editingHikeID: UUID? = nil
+        editingHikeID: UUID? = nil,
+        editingPlaceIDs: [UUID] = []
     ) {
         let points = waypoints.map(\.routeCoordinate)
         // Written in the same statement that writes the points, every time, so
@@ -145,6 +149,7 @@ struct TrailDraftStore {
                 record.travelMode = travelMode
                 record.startIsOpen = startIsOpen
                 record.editingHikeID = editingHikeID
+                record.editingPlaceIDs = editingPlaceIDs
                 record.updatedAt = .now
             } else {
                 context.insert(
@@ -156,7 +161,8 @@ struct TrailDraftStore {
                         updatedAt: .now,
                         travelMode: travelMode,
                         startIsOpen: startIsOpen,
-                        editingHikeID: editingHikeID
+                        editingHikeID: editingHikeID,
+                        editingPlaceIDs: editingPlaceIDs
                     )
                 )
             }

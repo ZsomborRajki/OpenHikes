@@ -531,7 +531,15 @@ struct TrailDraftView: View {
             startNaming()
             return
         }
-        finish(TrailDraftSave.update(hike, from: draft, into: modelContext, heights: maker.elevation.samples))
+        finish(
+            TrailDraftSave.update(
+                hike,
+                from: draft,
+                openedWith: maker.editingPlaceIDs,
+                into: modelContext,
+                heights: maker.elevation.samples
+            )
+        )
     }
 
     /// Asks what to call it, with the field blank.

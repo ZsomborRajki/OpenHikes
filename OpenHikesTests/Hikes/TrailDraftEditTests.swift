@@ -87,7 +87,7 @@ struct TrailDraftEditTests {
         let lengthBefore = hike.distanceMeters
 
         let edited = Self.draft([Line.south, Line.north, Line.further])
-        let outcome = TrailDraftSave.update(hike, from: edited, into: context)
+        let outcome = TrailDraftSave.update(hike, from: edited, openedWith: [], into: context)
 
         let saved = try #require(outcome.hike)
         #expect(saved.id == id)
@@ -116,7 +116,7 @@ struct TrailDraftEditTests {
         let away = TrailDraft()
         away.append(CLLocationCoordinate2D(latitude: Line.south, longitude: Line.longitude + 0.02))
         away.append(CLLocationCoordinate2D(latitude: Line.north, longitude: Line.longitude + 0.02))
-        let saved = try #require(TrailDraftSave.update(hike, from: away, into: context).hike)
+        let saved = try #require(TrailDraftSave.update(hike, from: away, openedWith: [spring.id], into: context).hike)
 
         #expect(saved.places.isEmpty)
         #expect(saved.photos.count == 1)
@@ -126,6 +126,60 @@ struct TrailDraftEditTests {
     /// Share Again is gone, so an edit changes the hike and not the listing —
     /// and the hike says so. A fresh share is a new submission, and the note
     /// goes by itself.
+    @Test("what happened to the hike's places while the edit was open is kept")
+    func placesChangedDuringTheEditSurvive() throws {
+        let context = try Fixture.modelContext()
+        let draft = Self.draft([Line.south, Line.north])
+        let hut = TrailPlace(latitude: Line.middle, longitude: Line.longitude, name: "Hut")
+        draft.addPlaces([hut])
+        let hike = try #require(TrailDraftSave.hike(from: draft, named: "Ridge", into: context).hike)
+        let row = try #require(hike.trailPoints?.first)
+        let opened = Set(hike.places.map(\.id))
+
+        // On the hike's own screen, while the drawing waits: the hut is
+        // annotated and a spring is added.
+        row.apply(name: "Hut", symbol: nil, note: "Open in summer")
+        let spring = TrailPlace(latitude: Line.north, longitude: Line.longitude, name: "Spring")
+        hike.addPlace(spring, in: context)
+
+        let saved = try #require(
+            TrailDraftSave.update(hike, from: draft, openedWith: opened, into: context).hike
+        )
+        #expect(Set(saved.places.map(\.name)) == ["Hut", "Spring"], "the spring added since is not deleted")
+        #expect(saved.places.first { $0.id == hut.id }?.note == "Open in summer", "nor the note reverted")
+        #expect(saved.trailPoints?.contains { $0 === row } == true, "an unchanged place keeps its row")
+    }
+
+    @Test("a place removed on either side while the edit was open stays removed")
+    func placesRemovedDuringTheEditStayGone() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, title: "Ridge")
+        let kept = TrailPlace(latitude: Line.south, longitude: Line.longitude, name: "Kept")
+        let fromHike = TrailPlace(latitude: Line.middle, longitude: Line.longitude, name: "Gone from the hike")
+        let fromMaker = TrailPlace(latitude: Line.north, longitude: Line.longitude, name: "Gone from the maker")
+        let found = TrailPlace(latitude: Line.further, longitude: Line.longitude, name: "Found in the maker")
+        hike.replacePlaces(with: [kept, fromMaker], in: context)
+
+        let places = TrailDraftSave.places(
+            of: hike,
+            drawn: [kept, fromHike, found],
+            atOpen: [kept.id, fromHike.id, fromMaker.id]
+        )
+        #expect(Set(places.map(\.name)) == ["Kept", "Found in the maker"])
+    }
+
+    @Test("an edit forgets the library's cached climb, which was about the old line")
+    func anEditClearsTheCachedClimb() throws {
+        let context = try Fixture.modelContext()
+        let hike = try savedTrail(in: context)
+        hike.climbMeters = 120
+        hike.descentMeters = 80
+
+        _ = TrailDraftSave.update(hike, from: Self.draft([Line.south, Line.further]), openedWith: [], into: context)
+        #expect(hike.climbMeters == nil)
+        #expect(hike.descentMeters == nil)
+    }
+
     @Test("editing a shared trail marks its shared copy as out of date")
     func editingASharedTrailMarksIt() throws {
         let context = try Fixture.modelContext()
@@ -134,7 +188,7 @@ struct TrailDraftEditTests {
         hike.communityListingID = "listing-1"
         #expect(!hike.isSharedCopyOutOfDate)
 
-        _ = TrailDraftSave.update(hike, from: Self.draft([Line.south, Line.further]), into: context)
+        _ = TrailDraftSave.update(hike, from: Self.draft([Line.south, Line.further]), openedWith: [], into: context)
         #expect(hike.isSharedCopyOutOfDate)
         #expect(hike.communityListingID == "listing-1", "the publication is kept")
 
@@ -149,11 +203,13 @@ struct TrailDraftEditTests {
         try context.save()
         let route = hike.route
         let drawn = hike.drawnRouteData
+        hike.climbMeters = 120
 
         struct Refused: Error {}
         let outcome = TrailDraftSave.update(
             hike,
             from: Self.draft([Line.south, Line.further]),
+            openedWith: [],
             into: context,
             save: { _ in throw Refused() }
         )
@@ -164,13 +220,14 @@ struct TrailDraftEditTests {
         }
         #expect(hike.route == route)
         #expect(hike.drawnRouteData == drawn)
+        #expect(hike.climbMeters == 120)
     }
 
     @Test("one point is not a trail, edit or not")
     func anEditNeedsTwoPoints() throws {
         let context = try Fixture.modelContext()
         let hike = try savedTrail(in: context)
-        let outcome = TrailDraftSave.update(hike, from: Self.draft([Line.south]), into: context)
+        let outcome = TrailDraftSave.update(hike, from: Self.draft([Line.south]), openedWith: [], into: context)
         guard case .refused(.tooShort) = outcome else {
             Issue.record("a one-point edit should be refused")
             return
@@ -230,16 +287,31 @@ struct TrailDraftEditTests {
 
     /// A half-finished edit resumes as an edit after a relaunch, rather than
     /// saving a second copy of the trail.
+    @Test("emptying the drawing ends the edit, so the next trail drawn is a new one")
+    func emptyingTheDrawingEndsTheEdit() throws {
+        let context = try Fixture.modelContext()
+        let maker = TrailDraftController()
+        maker.edit(try savedTrail(in: context))
+        maker.setEditing(true)
+        maker.removeWaypoints(atOffsets: IndexSet(integersIn: 0..<maker.draft.waypoints.count))
+
+        #expect(maker.draft.isEmpty)
+        #expect(maker.editingHikeID == nil)
+    }
+
     @Test("an edit in progress survives a relaunch as an edit")
     func anEditSurvivesALaunch() throws {
         let context = try Fixture.modelContext()
         let hike = try savedTrail(in: context)
+        hike.addPlace(TrailPlace(latitude: Line.middle, longitude: Line.longitude, name: "Spring"), in: context)
         let store = TrailDraftStore(context: context)
         TrailDraftController(store: store).edit(hike)
 
         let relaunched = TrailDraftController(store: store)
         relaunched.setEditing(true)
         #expect(relaunched.editingHikeID == hike.id)
+        #expect(relaunched.editingPlaceIDs == Set(hike.places.map(\.id)))
         #expect(relaunched.draft.waypoints.count == 2)
+        #expect(!relaunched.editingPlaceIDs.isEmpty)
     }
 }

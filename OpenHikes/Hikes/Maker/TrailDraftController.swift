@@ -174,13 +174,19 @@ final class TrailDraftController {
 
     /// The saved hike this drawing is an edit of, or `nil` for a new trail.
     ///
-    /// Set by ``edit(_:)`` and by nothing else, cleared by ``discard()``, and
-    /// written down with the drawing, so a half-finished edit comes back as
-    /// one. What it changes is where Save writes: back into the same row —
+    /// Set by ``edit(_:)`` and by nothing else, cleared by ``discard()`` and
+    /// by emptying the drawing, and written down with the drawing, so a
+    /// half-finished edit comes back as one. What it changes is where Save writes: back into the same row —
     /// same `id`, so walks, places, photographs, a widget pin and a
     /// publication all keep pointing at it — rather than a second trail. See
-    /// ``TrailDraftSave/update(_:from:into:heights:save:)``.
+    /// ``TrailDraftSave/update(_:from:openedWith:into:heights:save:)``.
     private(set) var editingHikeID: UUID?
+
+    /// The places ``editingHikeID``'s hike held when the edit opened, which is
+    /// how its save tells a place the maker removed from one the hike gained
+    /// since — see ``TrailDraftSave/places(of:drawn:atOpen:)``. Read by Save
+    /// alone, so nothing observes it.
+    @ObservationIgnored private(set) var editingPlaceIDs: Set<UUID> = []
 
     /// Whether this maker can make a leg follow a path at all.
     ///
@@ -368,6 +374,7 @@ final class TrailDraftController {
                 travelMode: drawn.travelMode
             )
             editingHikeID = hike.id
+            editingPlaceIDs = Set(hike.places.map(\.id))
             persist()
         }
         openRequest &+= 1
@@ -668,7 +675,12 @@ final class TrailDraftController {
         namer.clear()
         selection = nil
         droppedPin = nil
+        endEdit()
+    }
+
+    private func endEdit() {
         editingHikeID = nil
+        editingPlaceIDs = []
     }
 
     private func restoreIfNeeded() {
@@ -684,6 +696,7 @@ final class TrailDraftController {
             startIsOpen: stored.startIsOpen
         )
         editingHikeID = stored.editingHikeID
+        editingPlaceIDs = Set(stored.editingPlaceIDs)
     }
 
     /// Runs one edit to the points and, only if it changed them, ends it the
@@ -723,18 +736,24 @@ final class TrailDraftController {
 
     /// Writes the drawing down — what every edit ends with.
     private func persist() {
-        guard let store else { return }
         guard !draft.isEmpty else {
-            store.clear()
+            store?.clear()
+            // An emptied drawing is no longer an edit of anything, as the
+            // cleared store already says: left set, the next trail drawn from
+            // the pill would be saved over this hike under an *Edit Trail*
+            // title, and only until a relaunch.
+            endEdit()
             return
         }
+        guard let store else { return }
         store.save(
             waypoints: draft.waypoints,
             places: draft.places,
             snapsToPaths: draft.snapsToPaths,
             travelMode: draft.travelMode,
             startIsOpen: draft.startIsOpen,
-            editingHikeID: editingHikeID
+            editingHikeID: editingHikeID,
+            editingPlaceIDs: Array(editingPlaceIDs)
         )
     }
 
