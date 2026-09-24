@@ -76,6 +76,24 @@ struct AppLaunchEnvironmentTests {
         #expect(shipping.communityScenarioName == nil)
     }
 
+    /// The stand-in place search, on the same terms as the database above:
+    /// named, or absent.
+    @Test("a stand-in place search is only ever selected by name")
+    func trailPointScenarioIsExplicit() {
+        let named = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-testing", "--ui-test-trail-points=refused"]
+        )
+        #expect(SeededTrailPointSource.Scenario(argument: named.trailPointScenarioName) == .refused)
+
+        let silent = AppLaunchEnvironment.Configuration(arguments: ["OpenHikes", "--ui-testing"])
+        #expect(silent.trailPointScenarioName == nil)
+
+        let shipping = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-test-trail-points=seeded"]
+        )
+        #expect(shipping.trailPointScenarioName == nil)
+    }
+
     /// A name nobody defined is not a database.
     @Test("an unknown community scenario selects nothing")
     func unknownCommunityScenarioIsRefused() {

@@ -28,6 +28,9 @@ nonisolated enum AppLaunchEnvironment {
         /// `nil` unless a launch asked for a stand-in public database — see
         /// ``AppLaunchEnvironment/communityScenarioName``.
         let communityScenarioName: String?
+        /// `nil` unless a launch asked for a stand-in place search — see
+        /// ``AppLaunchEnvironment/trailPointScenarioName``.
+        let trailPointScenarioName: String?
         let simulatesOffline: Bool
         let seededPhotoCount: Int
         /// How many bare hikes a launch asked for — see
@@ -64,6 +67,7 @@ nonisolated enum AppLaunchEnvironment {
             importedGPXFixtureName = nil
             trailGraphFixtureName = nil
             communityScenarioName = nil
+            trailPointScenarioName = nil
             simulatesOffline = false
             seededPhotoCount = 0
             seededLibraryHikeCount = 0
@@ -83,6 +87,7 @@ nonisolated enum AppLaunchEnvironment {
         private static let importGPXPrefix = "--ui-test-import-gpx="
         private static let trailGraphPrefix = "--ui-test-trail-graph="
         private static let communityPrefix = "--ui-test-community="
+        private static let trailPointsPrefix = "--ui-test-trail-points="
         private static let offlineArgument = "--ui-test-offline"
         private static let seedPhotosPrefix = "--ui-test-seed-photos="
         private static let seedHikesPrefix = "--ui-test-seed-hikes="
@@ -143,6 +148,9 @@ nonisolated enum AppLaunchEnvironment {
                 in: arguments,
                 prefix: Self.communityPrefix,
                 isUITesting: isUITesting
+            )
+            trailPointScenarioName = Self.fixtureName(
+                in: arguments, prefix: Self.trailPointsPrefix, isUITesting: isUITesting
             )
             seededPhotoCount = Self.count(
                 in: arguments,
@@ -305,6 +313,16 @@ nonisolated enum AppLaunchEnvironment {
     /// all — and this is the single, explicit exception a scenario has to
     /// spell out by name. See ``SeededCommunityTransport``.
     static let communityScenarioName = configuration.communityScenarioName
+
+    /// Which stand-in OpenStreetMap place search this launch asked for, or
+    /// `nil` for every launch that did not.
+    ///
+    /// The same shape as ``communityScenarioName`` and for the same reason one
+    /// service over: a launch running tests gets no place source at all, so
+    /// *Find Places Along Trail* and the recording sheet's *Mapped Here* are
+    /// absent from every suite unless a scenario names this. See
+    /// ``SeededTrailPointSource``.
+    static let trailPointScenarioName = configuration.trailPointScenarioName
 
     /// How many synthetic photos to attach to the hike a launch imports.
     ///

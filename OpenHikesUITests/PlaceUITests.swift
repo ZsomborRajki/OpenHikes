@@ -21,17 +21,8 @@
 import XCTest
 
 nonisolated final class PlaceUITests: XCTestCase {
-    private static let fixture = "ThumseeLoopPlaces"
-    private static let hikeTitle = "Thumsee Loop (places)"
-
-    @MainActor
-    private func openPlace(named name: String, in app: XCUIApplication) {
-        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", name)).firstMatch
-        scrollToTap(row, in: app)
-        let title = element("hike-place-title", in: app)
-        XCTAssertTrue(title.waitForExistence(timeout: UITestTimeout.navigation), "a place row should open its screen")
-        XCTAssertEqual(title.label, name)
-    }
+    private static let fixture = PlaceFixture.gpxName
+    private static let hikeTitle = PlaceFixture.hikeTitle
 
     @MainActor
     func testTheHikersOwnPlaceOpensAndCanBeEdited() {
@@ -108,18 +99,6 @@ nonisolated final class PlaceUITests: XCTestCase {
     }
 
     // MARK: - Add Place, from the pill
-
-    @MainActor
-    private func openPlaceAdder(in app: XCUIApplication) {
-        openHikeDetail(in: app, titled: Self.hikeTitle)
-        let addPlace = element("map-add-place-button", in: app)
-        XCTAssertTrue(addPlace.waitForExistence(timeout: UITestTimeout.navigation), "a hike's screen offers Add Place")
-        addPlace.tap()
-        XCTAssertTrue(
-            element("hike-place-adder-title", in: app).waitForExistence(timeout: UITestTimeout.navigation),
-            "the pill opens the form"
-        )
-    }
 
     @MainActor
     func testAddingAPlaceFromThePill() {

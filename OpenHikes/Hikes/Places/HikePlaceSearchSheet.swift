@@ -62,7 +62,10 @@ struct HikePlaceSearchSheet: View {
             } description: {
                 Text(TrailPointNotice.outage(outage).caption.text)
             } actions: {
+                // The community page's retry, and for the reason it has one: a
+                // bare text button here is a 64 × 18 pt target (#662).
                 Button("Try Again") { search.start(for: hike, source: source, showing: symbols) }
+                    .glassButtonStyle()
             }
         case let .found(rows, outage):
             if rows.isEmpty {
