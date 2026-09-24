@@ -260,7 +260,7 @@ nonisolated enum WeatherReadingFormat {
     }
 }
 
-extension WeatherPollingPolicy {
+nonisolated extension WeatherPollingPolicy {
     /// How old a reading may get before the app stops presenting it as the
     /// current conditions.
     ///

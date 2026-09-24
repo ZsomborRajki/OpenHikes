@@ -361,7 +361,8 @@ private extension OpenHikesModel {
         defaults: UserDefaults,
         liveActivityController: HikeLiveActivityController?,
         movementReminders: MovementReminderController? = nil,
-        workoutWriter: (any HikeWorkoutWriting)? = nil
+        workoutWriter: (any HikeWorkoutWriting)? = nil,
+        weatherState: @escaping () -> WeatherBadgeState = { .idle }
     ) -> HikeRecorder {
         HikeRecorder(
             container: container,
@@ -380,7 +381,8 @@ private extension OpenHikesModel {
             sharedStateStore: AppGroupRecordingSharedStateStore(),
             liveActivityController: liveActivityController,
             movementReminders: movementReminders,
-            workoutWriter: workoutWriter
+            workoutWriter: workoutWriter,
+            weatherState: weatherState
         )
     }
 
@@ -674,15 +676,6 @@ private extension OpenHikesModel {
             liveActivityController: liveActivities
         )
         let autoSave = Self.makeAutoSaveController(defaults: defaults)
-        let recorder = Self.makeRecorder(
-            container: container,
-            trailGraphProvider: graphProvider,
-            defaults: defaults,
-            liveActivityController: liveActivities,
-            movementReminders: reminders,
-            workoutWriter: Self.makeWorkoutWriter()
-        )
-        let locationManager = LocationManager(manager: Self.dormantLocationSource())
         // The geocoder is passed here and deliberately *not* on the
         // UI-testing path below: naming a forecast's place reaches MapKit's
         // network, and a launch that must not do that heads the detail sheet
@@ -706,6 +699,18 @@ private extension OpenHikesModel {
             // a run's reload budget. See ``WeatherWidgetPublisher/inert``.
             widgetPublisher: AppLaunchEnvironment.isRunningTests ? .inert : .system
         )
+        let recorder = Self.makeRecorder(
+            container: container,
+            trailGraphProvider: graphProvider,
+            defaults: defaults,
+            liveActivityController: liveActivities,
+            movementReminders: reminders,
+            workoutWriter: Self.makeWorkoutWriter(),
+            // Read once per saved hike, for the workout Health is handed —
+            // which is why the weather manager is built before the recorder.
+            weatherState: { [weak weatherManager] in weatherManager?.state ?? .idle }
+        )
+        let locationManager = LocationManager(manager: Self.dormantLocationSource())
         let significantLocations = SignificantLocationFeed(
             monitor: significantLocationRegistration.client(
                 for: .movementFeed,
