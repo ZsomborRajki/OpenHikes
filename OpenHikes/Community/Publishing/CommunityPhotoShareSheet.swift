@@ -445,21 +445,15 @@ private extension CommunityPhotoShareSheet {
     ///
     /// Number-neutral after the count, like every other sentence here, and it
     /// names the undo: the tap that put them out is the tap that puts them
-    /// back, and a hiker who genuinely wants a second copy is allowed one.
+    /// back, and a hiker who genuinely wants a second copy is allowed one. The
+    /// catalog's singular variation says "One photo has already been sent".
     static func alreadySent(count: Int) -> String {
-        count == 1
-            ? String(
-                localized: """
-                One photo has already been sent from this hike, so it's left \
-                out. Tap it to send it again anyway.
-                """
-            )
-            : String(
-                localized: """
-                \(count) photos have already been sent from this hike, so they're \
-                left out. Tap one to send it again anyway.
-                """
-            )
+        String(
+            localized: """
+            \(count) photos have already been sent from this hike, so they're \
+            left out. Tap one to send it again anyway.
+            """
+        )
     }
 
     /// Why the route is staying behind, read off the hike the same way the
@@ -506,20 +500,14 @@ nonisolated enum CommunityPhotoDisclosure {
             )
         }
         // Number-neutral after the count, like every other sentence in this
-        // feature that quotes one.
-        let photos = photoCount == 1
-            ? String(
-                localized: """
-                One photo goes on \(trailTitle), with the spot on the trail and the \
-                time it was taken at
-                """
-            )
-            : String(
-                localized: """
-                \(photoCount) photos go on \(trailTitle), each with the spot on the \
-                trail and the time it was taken at
-                """
-            )
+        // feature that quotes one: the catalog's singular variation says "One
+        // photo goes on", and names the trail by position (`%2$@`).
+        let photos = String(
+            localized: """
+            \(photoCount) photos go on \(trailTitle), each with the spot on the \
+            trail and the time it was taken at
+            """
+        )
         return String(
             localized: """
             \(photos) — resized before sending, with camera details and original \

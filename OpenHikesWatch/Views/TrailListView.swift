@@ -83,11 +83,8 @@ struct TrailListView: View {
 
     private var queuedFooter: some View {
         Label {
-            Text(
-                model.queuedWalkCount == 1
-                    ? "1 walk waiting for your iPhone"
-                    : "\(model.queuedWalkCount) walks waiting for your iPhone"
-            )
+            // "1 walk" is the catalog's plural variation.
+            Text("\(model.queuedWalkCount) walks waiting for your iPhone")
             .font(.footnote)
         } icon: {
             Image(systemName: "arrow.up.circle")

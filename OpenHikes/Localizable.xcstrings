@@ -140,7 +140,26 @@
       }
     },
     "%lld hikes" : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld hike"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld hikes"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld of %lld" : {
       "localizations" : {
@@ -173,10 +192,48 @@
       }
     },
     "%lld of this hike's photos are on the device they were added on, so they can't be shared from here." : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "One of this hike's photos is on the device it was added on, so it can't be shared from here."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld of this hike's photos are on the device they were added on, so they can't be shared from here."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld of this submission's photos didn't download, so none can be left out here — leaving one out rewrites the whole set from the copies on this device. Publish it as it is, decline it, or open it again." : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "One of this submission's photos didn't download, so none can be left out here — leaving one out rewrites the whole set from the copies on this device. Publish it as it is, decline it, or open it again."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld of this submission's photos didn't download, so none can be left out here — leaving one out rewrites the whole set from the copies on this device. Publish it as it is, decline it, or open it again."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld percent complete, %@ remaining" : {
       "localizations" : {
@@ -189,7 +246,26 @@
       }
     },
     "%lld photographs" : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld photograph"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld photographs"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld photos" : {
       "localizations" : {
@@ -216,15 +292,46 @@
     "%lld photos go on %@, each with the spot on the trail and the time it was taken at" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld photos go on %2$@, each with the spot on the trail and the time it was taken at"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "One photo goes on %2$@, with the spot on the trail and the time it was taken at"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld photos go on %2$@, each with the spot on the trail and the time it was taken at"
+                }
+              }
+            }
           }
         }
       }
     },
     "%lld photos have already been sent from this hike, so they're left out. Tap one to send it again anyway." : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "One photo has already been sent from this hike, so it's left out. Tap it to send it again anyway."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld photos have already been sent from this hike, so they're left out. Tap one to send it again anyway."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld photos taken here, first on %@" : {
       "localizations" : {
@@ -243,12 +350,6 @@
 
     },
     "%lld%%" : {
-
-    },
-    "1 hike" : {
-
-    },
-    "1 photograph" : {
 
     },
     "A hike is in progress on %@. End it there to walk this trail." : {
@@ -1203,18 +1304,6 @@
     "On the Trail" : {
 
     },
-    "One of this hike's photos is on the device it was added on, so it can't be shared from here." : {
-
-    },
-    "One of this submission's photos didn't download, so none can be left out here — leaving one out rewrites the whole set from the copies on this device. Publish it as it is, decline it, or open it again." : {
-
-    },
-    "One photo goes on %@, with the spot on the trail and the time it was taken at" : {
-
-    },
-    "One photo has already been sent from this hike, so it's left out. Tap it to send it again anyway." : {
-
-    },
     "Open Hike" : {
 
     },
@@ -1518,10 +1607,26 @@
 
     },
     "Publishing deletes the %lld faded photos from the submission for good. The rest still go." : {
-
-    },
-    "Publishing deletes the faded photo from the submission for good. The rest still go." : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Publishing deletes the faded photo from the submission for good. The rest still go."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Publishing deletes the %lld faded photos from the submission for good. The rest still go."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "Publishing makes this visible to everybody, immediately." : {
 
