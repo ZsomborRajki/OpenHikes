@@ -1478,6 +1478,9 @@
     "Places Along Trail" : {
 
     },
+    "Places are hidden from the map and won't be saved with this trail. Turn this on to show them and search for more." : {
+
+    },
     "Places within %@ of the trail, from OpenStreetMap. Kinds turned off in the trail maker are left out." : {
 
     },
