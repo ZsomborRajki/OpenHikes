@@ -451,6 +451,7 @@ jobs:
           for path in \
             "$app/OpenHikes" \
             "$app/PlugIns/OpenWidgetExtension.appex" \
+            "$app/Watch/OpenHikesWatch.app/PlugIns/OpenHikesWatchWidgets.appex" \
             "build/OpenHikes.xcarchive/dSYMs/OpenHikes.app.dSYM" \
             "build/OpenHikes.xcarchive/dSYMs/OpenWidgetExtension.appex.dSYM"
           do

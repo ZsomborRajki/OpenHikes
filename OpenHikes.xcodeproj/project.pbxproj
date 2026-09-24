@@ -21,6 +21,8 @@
 		F9B04205302D981D00E03D91 /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04204302D981D00E03D91 /* OrderedCollections */; };
 		F9B04212302D981D00E03D91 /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04211302D981D00E03D91 /* Algorithms */; };
 		F9B04465302DA28800E03D91 /* AsyncAlgorithms in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04221302D981D00E03D91 /* AsyncAlgorithms */; };
+		B1000000000000000000000D /* OpenHikesShared in Frameworks */ = {isa = PBXBuildFile; productRef = B1000000000000000000000C /* OpenHikesShared */; };
+		B10000000000000000000010 /* OpenHikesWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* OpenHikesWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,6 +61,13 @@
 			remoteGlobalIDString = AF0000000000000000000001;
 			remoteInfo = OpenHikesWatch;
 		};
+		B1000000000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A85E85452FE3EBF500558639 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B10000000000000000000001;
+			remoteInfo = OpenHikesWatchWidgets;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -84,6 +93,17 @@
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B1000000000000000000000F /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B10000000000000000000010 /* OpenHikesWatchWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -98,6 +118,7 @@
 		AE0000000000000000000008 /* OpenHikesUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenHikesUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF0000000000000000000008 /* OpenHikesWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenHikesWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F904328F302E65CC00D840D2 /* OpenHikes.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = OpenHikes.xctestplan; sourceTree = "<group>"; };
+		B10000000000000000000008 /* OpenHikesWatchWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenHikesWatchWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -129,6 +150,13 @@
 				Info.plist,
 			);
 			target = AF0000000000000000000001 /* OpenHikesWatch */;
+		};
+		B1000000000000000000000E /* Exceptions for "OpenHikesWatchWidgets" folder in "OpenHikesWatchWidgets" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B10000000000000000000001 /* OpenHikesWatchWidgets */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -171,6 +199,14 @@
 				AF000000000000000000000E /* Exceptions for "OpenHikesWatch" folder in "OpenHikesWatch" target */,
 			);
 			path = OpenHikesWatch;
+			sourceTree = "<group>";
+		};
+		B10000000000000000000009 /* OpenHikesWatchWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B1000000000000000000000E /* Exceptions for "OpenHikesWatchWidgets" folder in "OpenHikesWatchWidgets" target */,
+			);
+			path = OpenHikesWatchWidgets;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -230,6 +266,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B10000000000000000000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1000000000000000000000D /* OpenHikesShared in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -245,6 +289,7 @@
 				AC0000000000000000000009 /* OpenWidgetTests */,
 				AE0000000000000000000009 /* OpenHikesUITests */,
 				AF0000000000000000000009 /* OpenHikesWatch */,
+				B10000000000000000000009 /* OpenHikesWatchWidgets */,
 				A8838AE5302A232300FAEEEE /* Frameworks */,
 				A85E854E2FE3EBF500558639 /* Products */,
 			);
@@ -259,6 +304,7 @@
 				AC0000000000000000000008 /* OpenWidgetTests.xctest */,
 				AE0000000000000000000008 /* OpenHikesUITests.xctest */,
 				AF0000000000000000000008 /* OpenHikesWatch.app */,
+				B10000000000000000000008 /* OpenHikesWatchWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -413,11 +459,13 @@
 				AF0000000000000000000005 /* Sources */,
 				AF0000000000000000000006 /* Frameworks */,
 				AF0000000000000000000007 /* Resources */,
+				B1000000000000000000000F /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				AF0000000000000000000011 /* PBXTargetDependency */,
+				B1000000000000000000000A /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				AF0000000000000000000009 /* OpenHikesWatch */,
@@ -429,6 +477,29 @@
 			productName = OpenHikesWatch;
 			productReference = AF0000000000000000000008 /* OpenHikesWatch.app */;
 			productType = "com.apple.product-type.application";
+		};
+		B10000000000000000000001 /* OpenHikesWatchWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B10000000000000000000002 /* Build configuration list for PBXNativeTarget "OpenHikesWatchWidgets" */;
+			buildPhases = (
+				B10000000000000000000005 /* Sources */,
+				B10000000000000000000006 /* Frameworks */,
+				B10000000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B10000000000000000000009 /* OpenHikesWatchWidgets */,
+			);
+			name = OpenHikesWatchWidgets;
+			packageProductDependencies = (
+				B1000000000000000000000C /* OpenHikesShared */,
+			);
+			productName = OpenHikesWatchWidgets;
+			productReference = B10000000000000000000008 /* OpenHikesWatchWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -466,6 +537,9 @@
 					AF0000000000000000000001 = {
 						CreatedOnToolsVersion = 27.0;
 					};
+					B10000000000000000000001 = {
+						CreatedOnToolsVersion = 27.0;
+					};
 				};
 			};
 			buildConfigurationList = A85E85482FE3EBF500558639 /* Build configuration list for PBXProject "OpenHikes" */;
@@ -495,6 +569,7 @@
 				AC0000000000000000000001 /* OpenWidgetTests */,
 				AE0000000000000000000001 /* OpenHikesUITests */,
 				AF0000000000000000000001 /* OpenHikesWatch */,
+				B10000000000000000000001 /* OpenHikesWatchWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -542,6 +617,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B10000000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -581,6 +663,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		AF0000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000000000000000000005 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -636,6 +725,11 @@
 		EF4BAF084DBB48CA878846F1 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			productRef = D8E7B06498004382AE2DB59C /* SwiftLintBuildToolPlugin */;
+		};
+		B1000000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B10000000000000000000001 /* OpenHikesWatchWidgets */;
+			targetProxy = B1000000000000000000000B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1184,6 +1278,75 @@
 			};
 			name = Release;
 		};
+		B10000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = OpenHikesWatchWidgets/OpenHikesWatchWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 7;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = OpenHikesWatchWidgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenHikes.watchkitapp.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+		B10000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = OpenHikesWatchWidgets/OpenHikesWatchWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 7;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = OpenHikesWatchWidgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenHikes.watchkitapp.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1246,6 +1409,15 @@
 			buildConfigurations = (
 				AF0000000000000000000003 /* Debug */,
 				AF0000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B10000000000000000000002 /* Build configuration list for PBXNativeTarget "OpenHikesWatchWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000000000000000000003 /* Debug */,
+				B10000000000000000000004 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1368,6 +1540,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F9B04220302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */;
 			productName = AsyncAlgorithms;
+		};
+		B1000000000000000000000C /* OpenHikesShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenHikesShared" */;
+			productName = OpenHikesShared;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

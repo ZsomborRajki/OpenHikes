@@ -13,6 +13,7 @@ included:
   - OpenWidget
   - OpenWidgetTests
   - OpenHikesWatch
+  - OpenHikesWatchWidgets
 
 excluded:
   - .build
