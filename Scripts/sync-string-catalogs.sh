@@ -12,6 +12,12 @@
 # never sees it. Strings that left the source are marked stale rather than
 # deleted, which is what the IDE does too.
 #
+# Each catalog is then put in the IDE's key order by
+# Scripts/lib/sort-string-catalogs.swift. `xcstringstool` writes keys in byte
+# order and the IDE case-insensitively, so without it every build in Xcode
+# re-sorted the app's catalog into a diff that meant nothing, and the next run
+# of this sorted it straight back.
+#
 # Build first (any build of the OpenHikes scheme compiles all four targets),
 # then point this at the same derived data:
 #
@@ -93,6 +99,7 @@ for pair in OpenHikes:OpenHikes OpenWidget:OpenWidgetExtension OpenHikesWatch:Op
         copy="$scratch/$folder/Localizable.xcstrings"
         cp "$catalog" "$copy"
         xcrun xcstringstool sync "$copy" "${args[@]}"
+        swift Scripts/lib/sort-string-catalogs.swift "$copy"
         if ! cmp -s "$catalog" "$copy"; then
             echo "error: $catalog is out of date — run Scripts/sync-string-catalogs.sh $1" >&2
             outdated=true
@@ -101,6 +108,7 @@ for pair in OpenHikes:OpenHikes OpenWidget:OpenWidgetExtension OpenHikesWatch:Op
         fi
     else
         xcrun xcstringstool sync "$catalog" "${args[@]}"
+        swift Scripts/lib/sort-string-catalogs.swift "$catalog"
         echo "  synced  $catalog ($(( ${#args[@]} / 2 )) source files)"
     fi
 done

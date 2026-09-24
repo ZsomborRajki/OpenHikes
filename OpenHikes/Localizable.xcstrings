@@ -4,27 +4,7 @@
     "%@" : {
 
     },
-    "%@ %@" : {
-      "comment" : "A wind speed and its compass direction",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ %2$@"
-          }
-        }
-      }
-    },
-    "%@ along the route" : {
-
-    },
-    "%@ of climb" : {
-
-    },
-    "%@ of descent" : {
-
-    },
-    "%@ of the trail not walked" : {
+    "%@ — resized before sending, with camera details and original location data removed. Your route, your notes and this walk's name stay on your device." : {
 
     },
     "%@ · %@" : {
@@ -47,7 +27,27 @@
         }
       }
     },
-    "%@ — resized before sending, with camera details and original location data removed. Your route, your notes and this walk's name stay on your device." : {
+    "%@ %@" : {
+      "comment" : "A wind speed and its compass direction",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
+    "%@ along the route" : {
+
+    },
+    "%@ of climb" : {
+
+    },
+    "%@ of descent" : {
+
+    },
+    "%@ of the trail not walked" : {
 
     },
     "%@, %@" : {
@@ -379,13 +379,28 @@
     "Add %lld" : {
 
     },
+    "Add a photo from your library" : {
+
+    },
+    "Add a place to this trail" : {
+
+    },
     "Add More Photos" : {
+
+    },
+    "Add more photos, or ask for them, or the hike, to be taken down." : {
+
+    },
+    "Add more photos, or ask for yours to be taken down." : {
 
     },
     "Add Photos" : {
 
     },
     "Add Photos to This Trail" : {
+
+    },
+    "Add photos you took yourself, on this trail. A photo taken at your front door shows where you live." : {
 
     },
     "Add Place" : {
@@ -398,21 +413,6 @@
 
     },
     "Add Your Photos Instead" : {
-
-    },
-    "Add a photo from your library" : {
-
-    },
-    "Add a place to this trail" : {
-
-    },
-    "Add more photos, or ask for them, or the hike, to be taken down." : {
-
-    },
-    "Add more photos, or ask for yours to be taken down." : {
-
-    },
-    "Add photos you took yourself, on this trail. A photo taken at your front door shows where you live." : {
 
     },
     "Add your photos to this trail" : {
@@ -521,6 +521,9 @@
     "Border" : {
 
     },
+    "by %@" : {
+
+    },
     "By adding photos, you agree to the Terms & Conditions." : {
 
     },
@@ -551,19 +554,19 @@
     "Caution" : {
 
     },
+    "Check access between the stops and the route" : {
+
+    },
     "Check Whether It's Still Live" : {
 
     },
-    "Check access between the stops and the route" : {
+    "Choose a start and a destination above, or press and hold the map." : {
 
     },
     "Choose Destination" : {
 
     },
     "Choose Start" : {
-
-    },
-    "Choose a start and a destination above, or press and hold the map." : {
 
     },
     "Clear Map Cache" : {
@@ -587,13 +590,13 @@
     "Community" : {
 
     },
-    "Community Hikes" : {
-
-    },
     "Community hike photo, taken %@" : {
 
     },
     "Community hike, %@" : {
+
+    },
+    "Community Hikes" : {
 
     },
     "Community hikes are walks worth someone else's day out — a whole route, walked by you, that isn't already on the list." : {
@@ -623,16 +626,25 @@
     "Could not end this hike" : {
 
     },
-    "Couldn't Search" : {
+    "Couldn’t Add Photo" : {
 
     },
     "Couldn't check" : {
+
+    },
+    "Couldn’t Delete Offline Tiles" : {
 
     },
     "Couldn't finish" : {
 
     },
     "Couldn't reach the community list just now, so this hike still reads the way it did. Try again when you're back online." : {
+
+    },
+    "Couldn’t Save Photo" : {
+
+    },
+    "Couldn't Search" : {
 
     },
     "Couldn't search for places." : {
@@ -644,22 +656,13 @@
     "Couldn't take them down" : {
 
     },
-    "Couldn’t Add Photo" : {
-
-    },
-    "Couldn’t Delete Offline Tiles" : {
-
-    },
-    "Couldn’t Save Photo" : {
-
-    },
     "Credit" : {
 
     },
-    "Current Hike Progress" : {
+    "Current conditions" : {
 
     },
-    "Current conditions" : {
+    "Current Hike Progress" : {
 
     },
     "Cycling" : {
@@ -689,6 +692,9 @@
     "Delete" : {
 
     },
+    "Delete “%@”?" : {
+
+    },
     "Delete All" : {
 
     },
@@ -698,25 +704,22 @@
     "Delete All Saved Tiles" : {
 
     },
-    "Delete Hike" : {
-
-    },
-    "Delete Photo" : {
-
-    },
     "Delete every saved map tile?" : {
 
     },
+    "Delete Hike" : {
+
+    },
     "Delete photo" : {
+
+    },
+    "Delete Photo" : {
 
     },
     "Delete this hike's offline tiles" : {
 
     },
     "Delete this photograph?" : {
-
-    },
-    "Delete “%@”?" : {
 
     },
     "Description" : {
@@ -743,10 +746,10 @@
     "Discard Recording" : {
 
     },
-    "Discard Trail" : {
+    "Discard this recording?" : {
 
     },
-    "Discard this recording?" : {
+    "Discard Trail" : {
 
     },
     "Dismiss" : {
@@ -785,12 +788,6 @@
     "E" : {
 
     },
-    "ENE" : {
-
-    },
-    "ESE" : {
-
-    },
     "Each track becomes a hike of its own." : {
 
     },
@@ -821,7 +818,13 @@
     "End this hike?" : {
 
     },
+    "ENE" : {
+
+    },
     "Energy" : {
+
+    },
+    "ESE" : {
 
     },
     "Every community hike is checked by a person before anyone else can see it." : {
@@ -872,13 +875,13 @@
     "From OpenStreetMap" : {
 
     },
-    "GPS Accuracy" : {
-
-    },
     "Give this hike a name, or leave it blank to keep the default." : {
 
     },
     "Give this trail a name, or leave it blank to keep the default." : {
+
+    },
+    "GPS Accuracy" : {
 
     },
     "Have a GPX file? Tap %@ to import it." : {
@@ -913,19 +916,19 @@
     "Hike Active" : {
 
     },
+    "Hike name" : {
+
+    },
     "Hike Paused" : {
 
     },
     "Hike Progress" : {
 
     },
-    "Hike Summary" : {
-
-    },
-    "Hike name" : {
-
-    },
     "Hike started on %@" : {
+
+    },
+    "Hike Summary" : {
 
     },
     "Hike title" : {
@@ -947,6 +950,9 @@
 
     },
     "Hours" : {
+
+    },
+    "iCloud" : {
 
     },
     "If no message opened — no mail account set up, or you closed the draft — copy this and send it yourself." : {
@@ -1088,7 +1094,13 @@
     "Maps" : {
 
     },
+    "matched by both time and place" : {
+
+    },
     "Measured Activities" : {
+
+    },
+    "measuring the climb" : {
 
     },
     "Memory and Storage" : {
@@ -1109,10 +1121,10 @@
     "Move Down" : {
 
     },
-    "Move Up" : {
+    "Move the map and tap Search This Area to look somewhere else." : {
 
     },
-    "Move the map and tap Search This Area to look somewhere else." : {
+    "Move Up" : {
 
     },
     "My Hikes" : {
@@ -1124,18 +1136,6 @@
     "N" : {
 
     },
-    "NE" : {
-
-    },
-    "NNE" : {
-
-    },
-    "NNW" : {
-
-    },
-    "NW" : {
-
-    },
     "Name" : {
 
     },
@@ -1143,6 +1143,9 @@
 
     },
     "Name Your Trail" : {
+
+    },
+    "NE" : {
 
     },
     "Near %@" : {
@@ -1169,28 +1172,13 @@
     "Next photo" : {
 
     },
+    "NNE" : {
+
+    },
+    "NNW" : {
+
+    },
     "No" : {
-
-    },
-    "No Location Yet" : {
-
-    },
-    "No OpenStreetMap trails here — try another area" : {
-
-    },
-    "No Photo in the File" : {
-
-    },
-    "No Photos" : {
-
-    },
-    "No Photos Found" : {
-
-    },
-    "No Shared Photos From This Hike" : {
-
-    },
-    "No Times on This Route" : {
 
     },
     "No community hikes here" : {
@@ -1208,6 +1196,9 @@
     "No hikes yet" : {
 
     },
+    "No Location Yet" : {
+
+    },
     "No longer published" : {
 
     },
@@ -1215,6 +1206,18 @@
 
     },
     "No mapped path here" : {
+
+    },
+    "No OpenStreetMap trails here — try another area" : {
+
+    },
+    "No Photo in the File" : {
+
+    },
+    "No Photos" : {
+
+    },
+    "No Photos Found" : {
 
     },
     "No photos of this place yet. Take one here, or add some from your library." : {
@@ -1227,6 +1230,12 @@
 
     },
     "No route found for this travel mode" : {
+
+    },
+    "No Shared Photos From This Hike" : {
+
+    },
+    "No Times on This Route" : {
 
     },
     "None" : {
@@ -1245,6 +1254,9 @@
 
     },
     "Not on This Device" : {
+
+    },
+    "not pinned to the trail" : {
 
     },
     "Note" : {
@@ -1280,7 +1292,7 @@
     "Nothing yet. Add photos to this hike and they can go on %@ for other hikers to see." : {
 
     },
-    "OK" : {
+    "NW" : {
 
     },
     "Offensive or inappropriate" : {
@@ -1298,6 +1310,9 @@
     "Offline tiles · %@" : {
 
     },
+    "OK" : {
+
+    },
     "On" : {
 
     },
@@ -1305,9 +1320,6 @@
 
     },
     "Open Hike" : {
-
-    },
-    "Open Settings" : {
 
     },
     "Open hike recording" : {
@@ -1326,10 +1338,13 @@
         }
       }
     },
+    "Open Settings" : {
+
+    },
     "Open this community hike" : {
 
     },
-    "OpenHikes Pro" : {
+    "Opened in your mail app" : {
 
     },
     "OpenHikes can look through your photo library for pictures taken while you walked this hike, and pin each one to the point of the trail you were on." : {
@@ -1359,31 +1374,7 @@
     "OpenHikes needs your location before it can record a hike." : {
 
     },
-    "OpenStreetMap has nothing more on this trail's line." : {
-
-    },
-    "OpenStreetMap is busy · try again" : {
-
-    },
-    "OpenStreetMap rate-limited" : {
-
-    },
-    "OpenStreetMap rate-limited · %@" : {
-
-    },
-    "OpenStreetMap trails rate-limited" : {
-
-    },
-    "OpenStreetMap trails rate-limited · %@" : {
-
-    },
-    "OpenStreetMap trails unavailable" : {
-
-    },
-    "OpenStreetMap unavailable" : {
-
-    },
-    "Opened in your mail app" : {
+    "OpenHikes Pro" : {
 
     },
     "Opens a saved hike in OpenHikes, with its route on the map." : {
@@ -1408,6 +1399,30 @@
 
     },
     "Opens the trail, where the hike can be paused or ended." : {
+
+    },
+    "OpenStreetMap has nothing more on this trail's line." : {
+
+    },
+    "OpenStreetMap is busy · try again" : {
+
+    },
+    "OpenStreetMap rate-limited" : {
+
+    },
+    "OpenStreetMap rate-limited · %@" : {
+
+    },
+    "OpenStreetMap trails rate-limited" : {
+
+    },
+    "OpenStreetMap trails rate-limited · %@" : {
+
+    },
+    "OpenStreetMap trails unavailable" : {
+
+    },
+    "OpenStreetMap unavailable" : {
 
     },
     "Operator" : {
@@ -1481,9 +1496,6 @@
     "Photo Access Unavailable" : {
 
     },
-    "Photo Unavailable" : {
-
-    },
     "Photo actions" : {
 
     },
@@ -1511,6 +1523,9 @@
           }
         }
       }
+    },
+    "Photo Unavailable" : {
+
     },
     "Photo, %lld in this hike" : {
 
@@ -1558,7 +1573,19 @@
     "Picks the paused hike back up where you left it." : {
 
     },
+    "pinned to the trail" : {
+
+    },
     "Place" : {
+
+    },
+    "placed by how far your walk had got" : {
+
+    },
+    "placed by time, %@ from the nearest recorded point" : {
+
+    },
+    "placed by where your camera says it was" : {
 
     },
     "Places" : {
@@ -1652,16 +1679,16 @@
     "Recents" : {
 
     },
-    "Record Along Trail" : {
+    "Record a hike" : {
 
     },
     "Record Along a Trail" : {
 
     },
-    "Record Hike" : {
+    "Record Along Trail" : {
 
     },
-    "Record a hike" : {
+    "Record Hike" : {
 
     },
     "Recording" : {
@@ -1784,28 +1811,16 @@
     "S" : {
 
     },
-    "SE" : {
-
-    },
-    "SSE" : {
-
-    },
-    "SSW" : {
-
-    },
-    "SW" : {
-
-    },
     "Save" : {
 
     },
     "Save Hikes to Health" : {
 
     },
-    "Save Reviewed Hike" : {
+    "Save maps for offline use" : {
 
     },
-    "Save maps for offline use" : {
+    "Save Reviewed Hike" : {
 
     },
     "Saved" : {
@@ -1817,19 +1832,22 @@
     "Says how far and how long you are into the hike you are recording." : {
 
     },
+    "SE" : {
+
+    },
+    "Search for a place" : {
+
+    },
     "Search Maps" : {
 
     },
     "Search Maps for “%@”" : {
 
     },
-    "Search This Area" : {
-
-    },
-    "Search for a place" : {
-
-    },
     "Search this area" : {
+
+    },
+    "Search This Area" : {
 
     },
     "Searching" : {
@@ -1880,10 +1898,10 @@
     "Share Diagnostics File" : {
 
     },
-    "Share Hike" : {
+    "Share hike" : {
 
     },
-    "Share hike" : {
+    "Share Hike" : {
 
     },
     "Share hike with photos" : {
@@ -1913,13 +1931,13 @@
     "Shelters and Huts" : {
 
     },
-    "Show Places on Map" : {
-
-    },
     "Show on Lock Screen" : {
 
     },
     "Show on Map" : {
+
+    },
+    "Show Places on Map" : {
 
     },
     "Show where this photo was taken" : {
@@ -1947,6 +1965,12 @@
 
     },
     "Springs, waterfalls and drinking water" : {
+
+    },
+    "SSE" : {
+
+    },
+    "SSW" : {
 
     },
     "Start" : {
@@ -1994,7 +2018,13 @@
     "Summits" : {
 
     },
+    "SW" : {
+
+    },
     "Sync with iCloud" : {
+
+    },
+    "Take a photo of this trail" : {
 
     },
     "Take Down" : {
@@ -2006,13 +2036,13 @@
     "Take These Photos Down" : {
 
     },
-    "Take a photo of this trail" : {
-
-    },
     "Take these photos down?" : {
 
     },
     "Take this hike down?" : {
+
+    },
+    "taken on a recorded point of this hike" : {
 
     },
     "Tap %@ on the map to record a walk, or %@ to draw a trail." : {
@@ -2046,9 +2076,6 @@
     "The %@ reaches the reviewer only once you send it there." : {
 
     },
-    "The Search this area button on the map adds what OpenStreetMap has mapped near your trail as pins you can tap. Choose what it looks for. Turning a kind off also removes its pins from the map." : {
-
-    },
     "The copy you sent to the community stays where it is; deleting this hike does not withdraw it." : {
 
     },
@@ -2077,6 +2104,9 @@
 
     },
     "The route and photographs are deleted for good. The hiker is not told, and their app goes on reading “waiting for review”." : {
+
+    },
+    "The Search this area button on the map adds what OpenStreetMap has mapped near your trail as pins you can tap. Choose what it looks for. Turning a kind off also removes its pins from the map." : {
 
     },
     "The shared copy shows the route before your edit. Ask for its removal, then share this one." : {
@@ -2178,10 +2208,10 @@
     "Travel Mode" : {
 
     },
-    "Try Again" : {
+    "Try a different name, or a nearby town." : {
 
     },
-    "Try a different name, or a nearby town." : {
+    "Try Again" : {
 
     },
     "Try again in a moment." : {
@@ -2229,12 +2259,6 @@
     "W" : {
 
     },
-    "WNW" : {
-
-    },
-    "WSW" : {
-
-    },
     "Waiting for review" : {
 
     },
@@ -2253,10 +2277,10 @@
     "Weather" : {
 
     },
-    "Weather Warnings" : {
+    "Weather data provided by %@" : {
 
     },
-    "Weather data provided by %@" : {
+    "Weather Warnings" : {
 
     },
     "Website" : {
@@ -2289,6 +2313,12 @@
     "What's wrong" : {
 
     },
+    "WNW" : {
+
+    },
+    "WSW" : {
+
+    },
     "Year" : {
 
     },
@@ -2313,16 +2343,16 @@
     "You've already shared this hike. Sending it again adds a second copy for other hikers — it doesn't replace or update the first, and this app can't take that one down. Ask for it to be removed by reporting it from its own screen." : {
 
     },
-    "Your Hikes" : {
-
-    },
-    "Your Own Place" : {
-
-    },
     "Your drawing wasn't lost. Check that the device has storage available, then save again." : {
 
     },
+    "Your Hikes" : {
+
+    },
     "Your own hike, already live for other hikers." : {
+
+    },
+    "Your Own Place" : {
 
     },
     "Your photographs are yours, and %@ is already in the list. They go on it with the spot each one was taken, and a person reviews them before anybody else sees them." : {
@@ -2338,36 +2368,6 @@
 
     },
     "Zoom in to search somewhere else." : {
-
-    },
-    "by %@" : {
-
-    },
-    "iCloud" : {
-
-    },
-    "matched by both time and place" : {
-
-    },
-    "measuring the climb" : {
-
-    },
-    "not pinned to the trail" : {
-
-    },
-    "pinned to the trail" : {
-
-    },
-    "placed by how far your walk had got" : {
-
-    },
-    "placed by time, %@ from the nearest recorded point" : {
-
-    },
-    "placed by where your camera says it was" : {
-
-    },
-    "taken on a recorded point of this hike" : {
 
     }
   },
