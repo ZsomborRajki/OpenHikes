@@ -83,6 +83,16 @@ nonisolated enum HikeTitle {
             ?? ""
     }
 
+    /// The same, for one track of a file that holds several: an unnamed
+    /// track is the file's name with its place in the file, because every
+    /// track of it falling back to the bare file name is a list of identical
+    /// rows nobody can tell apart.
+    static func imported(trackName: String?, fileURL: URL, trackNumber: Int) -> String {
+        bounded(trackName)
+            ?? bounded("\(fileURL.deletingPathExtension().lastPathComponent), Track \(trackNumber)")
+            ?? ""
+    }
+
     /// The name a trail drawn on the map gets: what the hiker typed, otherwise
     /// the day they drew it.
     ///

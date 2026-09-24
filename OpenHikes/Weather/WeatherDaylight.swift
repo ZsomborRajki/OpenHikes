@@ -113,3 +113,22 @@ extension WeatherDaylight {
         )
     }
 }
+
+extension WeatherBadgeState {
+    /// Today's light where a walk is, or `nil` when the reading on the badge
+    /// is about somewhere else.
+    ///
+    /// A walk's badge is about the hiker (``WeatherSubject/me``) or about the
+    /// trail they selected, which follows them once they are out on it — see
+    /// ``WeatherFocus/trailFollowRadius``. A searched city is neither, and its
+    /// dusk is a different dusk. A reading from another day needs no rule
+    /// here: its dusk has passed, and ``DuskWatch`` says nothing about a dusk
+    /// that has passed.
+    var daylightNearHiker: WeatherDaylight? {
+        guard case let .reading(snapshot, subject) = self else { return nil }
+        switch subject {
+        case .me, .trail: return snapshot.daylight
+        case .place: return nil
+        }
+    }
+}

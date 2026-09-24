@@ -183,7 +183,7 @@ extension HikeRecorder {
                 customName: customName,
                 suggestedTitle: suggestedTitle
             )
-            exportToHealth(finalized, prepared: prepared)
+            exportToHealth(finalized, session: session, prepared: prepared)
             return finalized
         }
 
@@ -208,7 +208,7 @@ extension HikeRecorder {
         )
         do {
             try saveModelContext(container.mainContext)
-            exportToHealth(hike, prepared: prepared)
+            exportToHealth(hike, session: session, prepared: prepared)
             return hike
         } catch {
             discardRecordedWalk(walk)
@@ -227,18 +227,34 @@ extension HikeRecorder {
     /// route and no half-finished builder behind, so unlike a file written
     /// outside SwiftData this needs no owner and no sweep.
     ///
-    /// The ascent comes off the accumulator rather than from the saved line:
-    /// it is barometrically fused where the device had a barometer, and
-    /// re-deriving it from route altitudes would be a second opinion that
-    /// could only disagree with the figure the hike itself shows.
-    private func exportToHealth(_ hike: Hike, prepared: PreparedRecording) {
+    /// The ascent and descent come off the accumulator rather than from the
+    /// saved line: they are barometrically fused where the device had a
+    /// barometer, and re-deriving them from route altitudes would be a second
+    /// opinion that could only disagree with the figures the hike itself
+    /// shows. The weather is read here, at save, and only kept if it is
+    /// about this walk — see ``HikeWorkoutWeather``. The walk it is measured
+    /// against ends when the hiker pressed Stop, not at start plus moving
+    /// time: a lunch stop longer than the badge's window would otherwise put
+    /// the reading taken just before Stop "after the walk", and refuse it.
+    private func exportToHealth(
+        _ hike: Hike,
+        session: TrackJournalSession,
+        prepared: PreparedRecording
+    ) {
         guard let workoutWriter, savesHikesToHealth else { return }
+        let endedAt = prepared.startedAt.addingTimeInterval(prepared.recordedSeconds)
         let request = HikeWorkoutRequest(
             hikeID: hike.id,
             startedAt: prepared.startedAt,
-            endedAt: prepared.startedAt.addingTimeInterval(prepared.recordedSeconds),
+            endedAt: endedAt,
             distanceMeters: prepared.distanceMeters,
             elevationGainMeters: accumulator.elevationGainMeters,
+            elevationLossMeters: accumulator.elevationLossMeters,
+            weather: HikeWorkoutWeather(
+                state: weatherState(),
+                walkFrom: prepared.startedAt,
+                to: session.metadata.endedAt ?? endedAt
+            ),
             route: prepared.route
         )
         Task { [container] in

@@ -101,19 +101,26 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
         /// The walk's clock with its pauses taken out.
         public var activeSeconds: TimeInterval
         public var startedAt: Date
+        /// How long the rest of the trail takes at this walk's own pace, or
+        /// `nil` when the app had nothing honest to say — the app's
+        /// `WalkTimeLeft` decides. Computed there because the route's heights
+        /// are there; carried here so the Lock Screen says the same figure.
+        public var secondsLeft: TimeInterval?
 
         public init(
             state: State,
             coveredFraction: Double,
             furthestDistanceMeters: Double,
             activeSeconds: TimeInterval,
-            startedAt: Date
+            startedAt: Date,
+            secondsLeft: TimeInterval? = nil
         ) {
             self.state = state
             self.coveredFraction = coveredFraction
             self.furthestDistanceMeters = furthestDistanceMeters
             self.activeSeconds = activeSeconds
             self.startedAt = startedAt
+            self.secondsLeft = secondsLeft
         }
     }
 

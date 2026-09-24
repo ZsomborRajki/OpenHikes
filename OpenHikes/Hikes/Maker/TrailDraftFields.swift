@@ -156,7 +156,9 @@ struct TrailDraftLineHeader: View {
         let waiting = elevation.isMeasuring
         let length = Self.length(draft.distanceMeters)
         // Only once there is a line: a lone point takes no time to walk.
-        let time = draft.canBeSaved ? draft.travelTime : nil
+        // Counting the climb once it is measured — see
+        // ``TrailDraft/travelTime(climb:)``.
+        let time = draft.canBeSaved ? draft.travelTime(climb: climb) : nil
         // Stacked rather than clipped at the accessibility type sizes, where
         // three figures and a heading do not fit across a phone. The audit
         // measures exactly this — see ``AccessibilityUITests``.

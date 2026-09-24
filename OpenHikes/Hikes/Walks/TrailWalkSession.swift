@@ -100,6 +100,11 @@ final class TrailWalkSession {
 
     @ObservationIgnored private(set) var record: TrailWalkRecord?
     @ObservationIgnored private var walkedHike: Hike?
+    /// The walked route's distance and height index, for the time left —
+    /// see ``secondsLeft(at:)``. Taken from whichever foreground match or
+    /// Start hands one in, so a walk adopted at launch has none until the
+    /// detail's follow loop supplies it.
+    @ObservationIgnored private(set) var walkedProfile: RouteProfile?
     @ObservationIgnored private let context: ModelContext
     @ObservationIgnored private let tracker: BackgroundTrailTracker?
     @ObservationIgnored private let clock: @Sendable () -> Date
@@ -114,8 +119,12 @@ final class TrailWalkSession {
     /// outranks a followed trail" expressible here as well — see
     /// ``MovementReminderController``. Optional so a suite about the state
     /// machine alone reaches no notification centre.
-    @ObservationIgnored private let reminders: MovementReminderController?
+    @ObservationIgnored let reminders: MovementReminderController?
     @ObservationIgnored private let commit: (ModelContext) throws -> Void
+    /// Today's light where the hiker is, for the after-dark warning — see
+    /// ``DuskWatch``. A closure for the reason ``activeRecordingHikeID`` is
+    /// one: the weather manager is the single authority on the reading.
+    @ObservationIgnored let daylight: () -> WeatherDaylight?
     @ObservationIgnored private var lastPersistedAt: Date?
     @ObservationIgnored private var lastPersistenceAttemptAt: Date?
     /// Capped at two: the first failure gets one prompt retry, then attempts
@@ -149,6 +158,7 @@ final class TrailWalkSession {
         reminders: MovementReminderController? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
         activeRecordingHikeID: @escaping () -> UUID? = { nil },
+        daylight: @escaping () -> WeatherDaylight? = { nil },
         save: @escaping (ModelContext) throws -> Void = { try $0.save() }
     ) {
         self.context = context
@@ -157,6 +167,7 @@ final class TrailWalkSession {
         self.clock = clock
         commit = save
         self.activeRecordingHikeID = activeRecordingHikeID
+        self.daylight = daylight
         tracker?.walkSession = self
     }
 
@@ -191,13 +202,19 @@ final class TrailWalkSession {
     /// `hikeID` is not being walked.
     func payload(for hikeID: UUID, state: SharedTrailSnapshot.Walk.State? = nil) -> SharedTrailSnapshot.Walk? {
         guard let record, record.hikeID == hikeID else { return nil }
-        return Self.payload(for: record, at: clock(), state: state)
+        let now = clock()
+        return Self.payload(for: record, at: now, state: state, secondsLeft: secondsLeft(at: now))
     }
 
     /// The walk's clock, minus its pauses, read now. Not observable — the
     /// readout that draws it ticks on its own timer.
     func activeSeconds() -> TimeInterval {
         record?.activeSeconds(at: clock()) ?? 0
+    }
+
+    /// The time left, read now — see ``secondsLeft(at:)``.
+    func secondsLeft() -> TimeInterval? {
+        secondsLeft(at: clock())
     }
 
     // MARK: Feeding
@@ -233,6 +250,7 @@ final class TrailWalkSession {
         if record == nil {
             startIfEligible(hike: hike, profile: profile, at: matchedAt)
         }
+        if record?.hikeID == hike.id { walkedProfile = profile }
         return recordMatch(hikeID: hike.id, distance: distance, at: matchedAt)
     }
 
@@ -336,6 +354,7 @@ final class TrailWalkSession {
         if coveredFraction != fraction { coveredFraction = fraction }
         let furthest = current.coverage.furthestDistanceMeters
         if furthestDistanceMeters != furthest { furthestDistanceMeters = furthest }
+        estimateFinish(at: now)
         if current.reachesEnd(atMatch: distance) {
             // A refused commit leaves the walk under way, and the fix that
             // fed it is an ordinary one again.
@@ -367,6 +386,7 @@ final class TrailWalkSession {
             startedAt: now
         )
         adopt(started, hike: hike)
+        walkedProfile = profile
         startNotice = TrailWalkStartNotice(hikeID: hike.id, title: hike.displayTitle)
         // A refused first write is not a refused start: nothing on disk says
         // otherwise yet, and the walk is under way in memory. `persist` left
@@ -447,7 +467,11 @@ final class TrailWalkSession {
 
     private func publishState() {
         guard let record else { return }
-        tracker?.walkStateDidChange(Self.payload(for: record, at: clock()), hikeID: record.hikeID)
+        let now = clock()
+        tracker?.walkStateDidChange(
+            Self.payload(for: record, at: now, secondsLeft: secondsLeft(at: now)),
+            hikeID: record.hikeID
+        )
     }
 
     // MARK: End
@@ -463,6 +487,10 @@ final class TrailWalkSession {
     /// is going, and a walk has to hang off one.
     func discardWalk(forDeletedHike hikeID: UUID) {
         guard let record, record.hikeID == hikeID else { return }
+        // As `finish` does: the standing banners are about a walk that no
+        // longer exists, and the once-per-walk warnings must re-arm for the
+        // next one, or it would never hear that it ends after dark.
+        reminders?.walkDidStopFollowing()
         clearState()
         tracker?.walkDidEnd(final: nil)
     }
@@ -556,6 +584,7 @@ final class TrailWalkSession {
         reminders?.walkDidResumeOrEnd()
         record = nil
         walkedHike = nil
+        walkedProfile = nil
         endedHikeID = nil
         lastPersistedAt = nil
         lastPersistenceAttemptAt = nil
@@ -625,14 +654,16 @@ final class TrailWalkSession {
     private static func payload(
         for record: TrailWalkRecord,
         at now: Date,
-        state: SharedTrailSnapshot.Walk.State? = nil
+        state: SharedTrailSnapshot.Walk.State? = nil,
+        secondsLeft: TimeInterval? = nil
     ) -> SharedTrailSnapshot.Walk {
         SharedTrailSnapshot.Walk(
             state: state ?? (record.phase == .paused ? .paused : .active),
             coveredFraction: record.coveredFraction,
             furthestDistanceMeters: record.coverage.furthestDistanceMeters,
             activeSeconds: record.activeSeconds(at: now),
-            startedAt: record.startedAt
+            startedAt: record.startedAt,
+            secondsLeft: secondsLeft
         )
     }
 }
@@ -675,6 +706,7 @@ extension TrailWalkSession {
             startedAt: now
         )
         adopt(started, hike: hike)
+        walkedProfile = profile
         persist(started, at: now)
         tracker?.walkDidStart(hikeID: hike.id)
         // Now rather than on the first match: a hiker standing at the

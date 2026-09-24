@@ -86,6 +86,31 @@ nonisolated final class MapScreenAlertUITests: XCTestCase {
         )
     }
 
+    /// A file with two tracks asks which to import, from inside the sheet's
+    /// contents like every other modal here — a sheet attached beside the
+    /// permanent one would never open, and the import would wait forever on
+    /// a question nobody could see.
+    @MainActor
+    func testAMultiTrackImportAsksWhichTracks() {
+        let app = launchApp(arguments: ["--ui-test-expanded-sheet", "--ui-test-import-gpx=ThumseeTwoDays"])
+        let importButton = element("gpx-track-choice-import", in: app)
+        XCTAssertTrue(
+            importButton.waitForExistence(timeout: UITestTimeout.navigation),
+            "a file with two tracks should ask which to import"
+        )
+        let second = element("gpx-track-1", in: app)
+        XCTAssertTrue(second.waitForExistence(timeout: UITestTimeout.existence))
+        second.tap()
+        importButton.tap()
+
+        XCTAssertTrue(
+            awaitHikeRow(titled: "Thumsee Day 1", in: app).exists,
+            "the ticked track should become a hike"
+        )
+        XCTAssertFalse(hikeRow(titled: "Thumsee Day 2", in: app).exists, "and the unticked one should not")
+        XCTAssertTrue(element("map-sheet", in: app).exists, "and the sheet should have survived the question")
+    }
+
     /// Enough taps to land one inside another's presentation, and few enough
     /// that the test is over in a couple of seconds.
     private static let rapidTaps = 5

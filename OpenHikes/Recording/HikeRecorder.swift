@@ -91,6 +91,11 @@ final class HikeRecorder: NSObject {
     /// `nil` for a launch that must not reach HealthKit — see
     /// ``OpenHikesModel/makeWorkoutWriter()``.
     @ObservationIgnored let workoutWriter: (any HikeWorkoutWriting)?
+    /// What the weather badge holds, read once when a finished hike is
+    /// written to Health. A closure rather than the manager, because the
+    /// recorder has no other business with the weather and a suite can hand
+    /// it a state without building one.
+    @ObservationIgnored let weatherState: () -> WeatherBadgeState
     /// The reminders a pause can produce, when the app has any. Optional for
     /// the reason ``liveActivityController`` is: a recorder built by a suite
     /// has no business putting a banner on the developer's Lock Screen, and
@@ -316,6 +321,7 @@ final class HikeRecorder: NSObject {
         liveActivityController: HikeLiveActivityController? = nil,
         movementReminders: MovementReminderController? = nil,
         workoutWriter: (any HikeWorkoutWriting)? = nil,
+        weatherState: @escaping () -> WeatherBadgeState = { .idle },
         journalDirectory: URL? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
         uptime: @escaping @Sendable () -> TimeInterval = {
@@ -346,6 +352,7 @@ final class HikeRecorder: NSObject {
         self.liveActivityController = liveActivityController
         self.movementReminders = movementReminders
         self.workoutWriter = workoutWriter
+        self.weatherState = weatherState
         journal = resolvedDirectory.map { directory in
             TrackJournal(directory: directory, clock: clock)
         }

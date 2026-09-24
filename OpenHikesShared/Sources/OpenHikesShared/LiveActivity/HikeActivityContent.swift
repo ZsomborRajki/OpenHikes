@@ -126,6 +126,7 @@ public extension HikeActivityAttributes.ContentState {
             currentElevationMeters: snapshot.liveFix?.elevationMeters,
             offRouteMeters: snapshot.liveFix?.offRouteMeters,
             coveredFractionComplete: snapshot.walk?.coveredFraction,
+            secondsLeft: snapshot.walk?.secondsLeft,
             runState: snapshot.walk.map { walk in RunState(walkState: walk.state) } ?? .running,
             elapsedSeconds: snapshot.walk?.activeSeconds ?? 0,
             updatedAt: snapshot.updatedAt

@@ -33,7 +33,9 @@ nonisolated enum TrailTravelMode: String, CaseIterable, Codable, Sendable {
     /// directions answer carries one.
     ///
     /// Hiking is 4 km/h rather than walking's 5 because a path is not a
-    /// pavement; neither counts the climb, which no single leg is measured for.
+    /// pavement. Neither counts the climb, which no single leg is measured
+    /// for; a hiking *route* does once its heights are in — see
+    /// ``TrailDraft/travelTime(climb:)``, whose flat half is this pace.
     var paceMetersPerSecond: Double {
         let pace = switch self {
         case .walking: Self.walkingPace

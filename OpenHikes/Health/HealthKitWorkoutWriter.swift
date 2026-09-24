@@ -94,13 +94,9 @@ final class HealthKitWorkoutWriter: HikeWorkoutWriting {
         )
         try await builder.beginCollection(at: request.startedAt)
         try await builder.addSamples([distanceSample(for: request)])
-        if let ascent = request.elevationGainMeters {
-            try await builder.addMetadata([
-                HKMetadataKeyElevationAscended: HKQuantity(
-                    unit: .meter(),
-                    doubleValue: ascent
-                ),
-            ])
+        let metadata = Self.metadata(for: request)
+        if !metadata.isEmpty {
+            try await builder.addMetadata(metadata)
         }
         try await builder.endCollection(at: request.endedAt)
         guard let workout = try await builder.finishWorkout() else {
@@ -140,6 +136,33 @@ final class HealthKitWorkoutWriter: HikeWorkoutWriting {
             of: HKQuantityType.workoutType(),
             predicate: HKQuery.predicateForObject(with: workoutID)
         )
+    }
+
+    /// The climb, the descent and the weather, each only when the request
+    /// has it: a missing key is Health drawing nothing, where a zero would be
+    /// Health drawing a claim.
+    ///
+    /// Metadata on a sample this app wrote, and nothing read — so the
+    /// write-only promise in ``HikeWorkoutWriting`` holds as written.
+    private static func metadata(for request: HikeWorkoutRequest) -> [String: Any] {
+        var metadata: [String: Any] = [:]
+        if let ascent = request.elevationGainMeters {
+            metadata[HKMetadataKeyElevationAscended] = HKQuantity(unit: .meter(), doubleValue: ascent)
+        }
+        if let descent = request.elevationLossMeters {
+            metadata[HKMetadataKeyElevationDescended] = HKQuantity(unit: .meter(), doubleValue: descent)
+        }
+        if let weather = request.weather {
+            metadata[HKMetadataKeyWeatherTemperature] = HKQuantity(
+                unit: .degreeCelsius(),
+                doubleValue: weather.temperature.converted(to: .celsius).value
+            )
+            metadata[HKMetadataKeyWeatherHumidity] = HKQuantity(
+                unit: .percent(),
+                doubleValue: weather.humidity
+            )
+        }
+        return metadata
     }
 
     /// The walked distance as one sample spanning the whole workout.

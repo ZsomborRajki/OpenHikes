@@ -69,6 +69,34 @@ struct WalkPresentationTests {
         #expect(presentation.accessibilityValue.contains("50 percent walked"))
     }
 
+    /// How long the rest takes sits beside how far it is, ahead of the height
+    /// chips, written the way a planned route writes a time.
+    @Test("a walk with a time left shows it beside the distance left")
+    func timeLeftFollowsTheDistanceLeft() {
+        var state = Self.walking
+        state.secondsLeft = 70 * 60
+        let presentation = Self.presentation(state)
+        let kinds = presentation.metrics.map(\.kind)
+        #expect(Array(kinds.prefix(2)) == [.remaining, .timeLeft])
+        let timeLeft = presentation.metrics.first { $0.kind == .timeLeft }
+        #expect(timeLeft?.value == WidgetFormat.timeLeft(seconds: 70 * 60))
+        #expect(presentation.accessibilityValue.contains("Time left"))
+    }
+
+    /// The app had nothing honest to say, or no walk is under way: no chip.
+    @Test("no time left, or no walk, draws no chip")
+    func noTimeLeftNoChip() {
+        #expect(!Self.presentation(Self.walking).metrics.contains { $0.kind == .timeLeft })
+        let plain = HikeActivityAttributes.ContentState(distanceMeters: 6200, offRouteMeters: 4, secondsLeft: 600)
+        #expect(!Self.presentation(plain).metrics.contains { $0.kind == .timeLeft })
+    }
+
+    @Test("a time left is rounded up to the minute and never zero")
+    func timeLeftIsPlannedStyle() {
+        #expect(WidgetFormat.timeLeft(seconds: 1) == WidgetFormat.timeLeft(seconds: 60))
+        #expect(WidgetFormat.timeLeft(seconds: 61) == WidgetFormat.timeLeft(seconds: 120))
+    }
+
     /// Pausing has to reach the panel as a word and as a stopped clock — a
     /// `Text(timerInterval:)` cannot be told to stop once drawn.
     @Test("a paused walk says paused and freezes its clock")

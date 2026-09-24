@@ -347,6 +347,7 @@ extension OpenHikesModel {
 // MARK: - Recording composition
 
 private extension OpenHikesModel {
+
     /// The app's real recorder, with its system-backed sensors and the live
     /// tile network policy wired in.
     ///
@@ -361,7 +362,8 @@ private extension OpenHikesModel {
         defaults: UserDefaults,
         liveActivityController: HikeLiveActivityController?,
         movementReminders: MovementReminderController? = nil,
-        workoutWriter: (any HikeWorkoutWriting)? = nil
+        workoutWriter: (any HikeWorkoutWriting)? = nil,
+        weatherState: @escaping () -> WeatherBadgeState = { .idle }
     ) -> HikeRecorder {
         HikeRecorder(
             container: container,
@@ -380,7 +382,8 @@ private extension OpenHikesModel {
             sharedStateStore: AppGroupRecordingSharedStateStore(),
             liveActivityController: liveActivityController,
             movementReminders: movementReminders,
-            workoutWriter: workoutWriter
+            workoutWriter: workoutWriter,
+            weatherState: weatherState
         )
     }
 
@@ -674,15 +677,6 @@ private extension OpenHikesModel {
             liveActivityController: liveActivities
         )
         let autoSave = Self.makeAutoSaveController(defaults: defaults)
-        let recorder = Self.makeRecorder(
-            container: container,
-            trailGraphProvider: graphProvider,
-            defaults: defaults,
-            liveActivityController: liveActivities,
-            movementReminders: reminders,
-            workoutWriter: Self.makeWorkoutWriter()
-        )
-        let locationManager = LocationManager(manager: Self.dormantLocationSource())
         // The geocoder is passed here and deliberately *not* on the
         // UI-testing path below: naming a forecast's place reaches MapKit's
         // network, and a launch that must not do that heads the detail sheet
@@ -706,6 +700,18 @@ private extension OpenHikesModel {
             // a run's reload budget. See ``WeatherWidgetPublisher/inert``.
             widgetPublisher: AppLaunchEnvironment.isRunningTests ? .inert : .system
         )
+        let recorder = Self.makeRecorder(
+            container: container,
+            trailGraphProvider: graphProvider,
+            defaults: defaults,
+            liveActivityController: liveActivities,
+            movementReminders: reminders,
+            workoutWriter: Self.makeWorkoutWriter(),
+            // Read once per saved hike, for the workout Health is handed —
+            // which is why the weather manager is built before the recorder.
+            weatherState: { [weak weatherManager] in weatherManager?.state ?? .idle }
+        )
+        let locationManager = LocationManager(manager: Self.dormantLocationSource())
         let significantLocations = SignificantLocationFeed(
             monitor: significantLocationRegistration.client(
                 for: .movementFeed,
@@ -805,5 +811,28 @@ private extension OpenHikesModel {
         let weatherManager: WeatherManager
         let significantLocations: SignificantLocationFeed
         let communityTransport: (any CommunityTransporting)?
+    }
+}
+
+// MARK: - Walk composition
+
+extension OpenHikesModel {
+    /// The walk session, asking the recorder which hike is a draft and the
+    /// weather manager what the light is doing — each the single authority
+    /// on its answer, so the session only asks.
+    static func makeWalkSession(
+        _ container: ModelContainer,
+        _ tracker: BackgroundTrailTracker,
+        _ reminders: MovementReminderController?,
+        _ recorder: HikeRecorder,
+        _ weather: WeatherManager
+    ) -> TrailWalkSession {
+        TrailWalkSession(
+            context: container.mainContext,
+            tracker: tracker,
+            reminders: reminders,
+            activeRecordingHikeID: { [weak recorder] in recorder?.currentHike?.id },
+            daylight: { [weak weather] in weather?.state.daylightNearHiker }
+        )
     }
 }
