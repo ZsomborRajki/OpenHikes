@@ -236,7 +236,10 @@ final class CommunityBrowser {
     /// It covers **both** halves of that question and could not cover one:
     /// ``MergedCommunityTransport`` asks CloudKit and Overpass side by side
     /// and returns when both have answered or failed, so there is a single
-    /// request here and this is its whole life. The outlines that follow an
+    /// request here and this is its whole life. The published hikes can be
+    /// drawn before it ends — see ``acceptPublishedFirst(_:about:)`` — and
+    /// this stays true over them, because the trails are still coming and the
+    /// pill is the one thing that says so. The outlines that follow an
     /// answer are deliberately outside it — the rows and pins are already up
     /// by then, and a control that kept spinning for the lines would be
     /// reporting work the hiker is not waiting on.
@@ -364,7 +367,23 @@ final class CommunityBrowser {
     /// second request that must not delay the first: the rows and the pins go
     /// up as soon as they land, and the lines arrive under them. A failure
     /// here costs the lines and nothing else.
-    @ObservationIgnored private var outlineTask: Task<Void, Never>?
+    @ObservationIgnored private var outlineTasks: [Task<Void, Never>] = []
+    /// The listings the held outline requests cover, landed or in flight.
+    ///
+    /// What lets the merged answer ask only about the rows the published
+    /// half did not already bring, rather than dropping the lines already
+    /// drawn and asking for all of them again — see
+    /// ``requestOutlines(for:keepingHeld:)``.
+    @ObservationIgnored private var outlinedIDs: Set<String> = []
+    /// Whether the rows on screen are the published half of a nearby answer
+    /// whose OpenStreetMap half has not landed.
+    ///
+    /// Those rows have a ``resultsArea`` — they are an answer about it — but
+    /// not the whole answer, and two places must not mistake them for one:
+    /// ``stopBrowsing()``, whose kept rows make a return visit free, and
+    /// ``refreshAfterBlock()``, which would otherwise re-ask without the trails
+    /// that were still on their way.
+    @ObservationIgnored private var awaitingCuratedHalf = false
     /// Where a tapped map pin goes. Set once by ``OpenHikesView``, which owns
     /// the sheet's navigation path; see ``open(_:)``.
     @ObservationIgnored private var openListing: ((CommunityListing) -> Void)?
@@ -618,10 +637,19 @@ final class CommunityBrowser {
         isBrowsing = false
         nearbyTask?.cancel()
         nameTask?.cancel()
-        outlineTask?.cancel()
+        outlineTasks.forEach { $0.cancel() }
         nearbyTask = nil
         nameTask = nil
-        outlineTask = nil
+        outlineTasks = []
+        // Published rows whose trails were still on their way are not an
+        // answer to come back to: forgetting the area is what makes the next
+        // ``startBrowsing()`` ask again, the way it does for a request
+        // cancelled before anything landed. The rows stay drawn under the
+        // spinner in the meantime.
+        if awaitingCuratedHalf {
+            awaitingCuratedHalf = false
+            resultsArea = nil
+        }
         // ``nearbyResults``, ``nearbyOutlines``, ``resultsArea`` and
         // ``areaName`` deliberately survive — see above. The lines go with the
         // pins by way of ``nearbyListings``, and the open preview's own line
@@ -710,7 +738,11 @@ final class CommunityBrowser {
         // anything, and the curated rows in the list are unaffected by it —
         // they have no author to block. Re-asking Overpass here would spend
         // two round trips to get back the same trails.
-        requestNearby(resultsArea, from: .publishedOnly)
+        //
+        // Unless the trails have not arrived yet. This request supersedes the
+        // one still fetching them, and asking for the published hikes alone
+        // would quietly cancel the half the hiker's search asked for.
+        requestNearby(resultsArea, from: awaitingCuratedHalf ? .withCuratedTrails : .publishedOnly)
     }
 
     /// Takes a hike out of both lists, because it is no longer in the
@@ -795,13 +827,14 @@ final class CommunityBrowser {
     /// makes the refill carry the author who was just blocked.
     private func requestNearby(_ area: CommunitySearchArea, from scope: CommunityNearbyScope) {
         let excluded = blockList.blockedIDs
-        perform(.nearby, describing: "a nearby search", about: area, from: scope) { transport in
+        perform(.nearby, describing: "a nearby search", about: area, from: scope) { transport, publishedFirst in
             try await transport.listings(
                 near: area.coordinate,
                 radiusMeters: area.radiusMeters,
                 limit: Self.resultLimit,
                 excluding: excluded,
-                scope: scope
+                scope: scope,
+                publishedFirst: publishedFirst
             )
         }
     }
@@ -820,25 +853,41 @@ final class CommunityBrowser {
     /// kept them would leave the map drawing trails that are no longer in the
     /// list beside it.
     ///
+    /// Except with `keepingHeld`, which is the merged answer landing over its
+    /// own published half: those rows' lines are already drawn or already
+    /// asked for, and dropping them would blink every published line off the
+    /// map and back for the sake of a second request about the same hikes.
+    /// Only the rows nobody has asked about yet — the trails — are asked for,
+    /// and lines for rows the page no longer holds still go.
+    ///
     /// Failing is silent, like the publication check and for the same reason:
     /// nobody asked for this, there is nothing on screen that reports it, and
     /// what a hiker is left with is the pins and rows they already had.
-    private func requestOutlines(for listings: [CommunityListing]) {
-        outlineTask?.cancel()
-        nearbyOutlines = [:]
-        guard let transport, !listings.isEmpty else { return }
+    private func requestOutlines(for listings: [CommunityListing], keepingHeld: Bool = false) {
+        if keepingHeld {
+            let held = Set(listings.map(\.id))
+            nearbyOutlines = nearbyOutlines.filter { held.contains($0.key) }
+        } else {
+            outlineTasks.forEach { $0.cancel() }
+            outlineTasks = []
+            outlinedIDs = []
+            nearbyOutlines = [:]
+        }
+        let unasked = listings.filter { !outlinedIDs.contains($0.id) }
+        guard let transport, !unasked.isEmpty else { return }
+        outlinedIDs.formUnion(unasked.map(\.id))
         requestsInFlight += 1
-        outlineTask = Task { [weak self] in
+        outlineTasks.append(Task { [weak self] in
             defer { self?.requestsInFlight -= 1 }
             do {
-                let outlines = try await transport.outlines(for: listings)
+                let outlines = try await transport.outlines(for: unasked)
                 guard !Task.isCancelled, let self else { return }
                 // Only for rows still on screen: a block or a newer answer
                 // can land between the request and its reply, and an outline
                 // keyed on a listing nobody holds draws nothing but is a line
                 // of state nothing will ever clear.
                 let wanted = Set(nearbyResults.map(\.id))
-                nearbyOutlines = outlines.filter { wanted.contains($0.key) }
+                nearbyOutlines.merge(outlines.filter { wanted.contains($0.key) }) { _, new in new }
             } catch is CancellationError {
                 return
             } catch {
@@ -849,7 +898,7 @@ final class CommunityBrowser {
                     """
                 )
             }
-        }
+        })
     }
 
     /// Asks what the area being searched is called, superseding any earlier
@@ -908,14 +957,19 @@ final class CommunityBrowser {
     ///   asked about OpenStreetMap. A published-only refresh has nothing to
     ///   say about a rate limit and must not clear one that still stands.
     ///   `nil` for a title search.
+    /// - Parameter work: The request, handed the transport and where to put
+    ///   a nearby answer's published half if it lands before the rest — see
+    ///   ``acceptPublishedFirst(_:about:)``. A title search ignores the second.
     private func perform(
         _ question: Question,
         describing reason: String,
         about area: CommunitySearchArea? = nil,
         matching title: String? = nil,
         from scope: CommunityNearbyScope? = nil,
-        _ work: @escaping @Sendable (any CommunityTransporting) async throws
-            -> CommunityNearbyAnswer
+        _ work: @escaping @Sendable (
+            any CommunityTransporting,
+            @escaping @Sendable ([CommunityListing]) async -> Void
+        ) async throws -> CommunityNearbyAnswer
     ) {
         guard let transport else { return }
         issuedRequests += 1
@@ -936,7 +990,9 @@ final class CommunityBrowser {
             await previous?.value
             guard !Task.isCancelled else { return }
             do {
-                let answer = try await work(transport)
+                let answer = try await work(transport) { [weak self] rows in
+                    await self?.acceptPublishedFirst(rows, about: area)
+                }
                 guard !Task.isCancelled else { return }
                 self?.accept(
                     answer,
@@ -959,6 +1015,39 @@ final class CommunityBrowser {
         }
         setTask(task, for: question)
     }
+}
+
+// MARK: - Answers landing
+
+// An extension rather than more of the class, for the reason the two below
+// are: the class body is at its length limit, and this is a whole step of its
+// own — what an answer, half an answer or a failure does to what is on screen
+// — that shares only file-private state with everything above.
+extension CommunityBrowser {
+    /// Draws the published half of a nearby answer while the OpenStreetMap
+    /// half is still on its way.
+    ///
+    /// What the hiker asked for when *Search this area* sat for ten seconds
+    /// over an area whose published hikes CloudKit had returned in one: the
+    /// rows, the pins and their lines go up now, under the area's name, and
+    /// ``state`` stays ``CommunityBrowseState/refreshing`` — rows on screen,
+    /// request in flight — so the pill keeps spinning until
+    /// ``accept(_:answering:about:matching:from:)`` has the whole answer.
+    ///
+    /// Everything that describes the *answer* rather than the rows is left for
+    /// that call: ``curatedNotice``, which is about the half not here yet, and
+    /// the `.loaded` that stops the spinner.
+    private func acceptPublishedFirst(_ rows: [CommunityListing], about area: CommunitySearchArea?) {
+        // The task this runs in is the one ``perform`` started, so a
+        // superseded or abandoned search is refused here as it is there.
+        guard !Task.isCancelled, let area else { return }
+        nearbyResults = rows
+        resultsArea = area
+        awaitingCuratedHalf = true
+        requestOutlines(for: rows)
+        areaName = area == pendingArea ? pendingName : nil
+        state = .refreshing
+    }
 
     /// Publishes an answer: the rows, the area they are about, and the name
     /// of that area, in one place so the three cannot disagree.
@@ -972,9 +1061,12 @@ final class CommunityBrowser {
         let results = answer.listings
         switch question {
         case .nearby:
+            // Over its own published half, whose lines are already asked for.
+            let extending = awaitingCuratedHalf && resultsArea == area
+            awaitingCuratedHalf = false
             nearbyResults = results
             resultsArea = area
-            requestOutlines(for: results)
+            requestOutlines(for: results, keepingHeld: extending)
             // Only a question that asked about OpenStreetMap may answer for
             // it. ``CuratedTrailOutcome/notAsked`` from a published-only
             // refresh means exactly that, and writing its `nil` notice would
@@ -1007,6 +1099,7 @@ final class CommunityBrowser {
     private func fail(with failure: CommunityFailure, answering question: Question) {
         switch question {
         case .nearby:
+            awaitingCuratedHalf = false
             state = .failed(failure)
             // The area that failed is forgotten, so the map offers it again
             // rather than refusing it as "the same question".
@@ -1112,7 +1205,7 @@ extension CommunityBrowser {
         // the question is asked is the right one — a block made while it is in
         // flight is applied by the read-time filter above.
         let excluded = blockList.blockedIDs
-        perform(.title, describing: "a title search", matching: titleQuery) { transport in
+        perform(.title, describing: "a title search", matching: titleQuery) { transport, _ in
             // Wrapped rather than given a shape of its own: a title search has
             // no curated half to fail — see ``MergedCommunityTransport`` — so
             // there is one thing for it to answer and it is the rows.
