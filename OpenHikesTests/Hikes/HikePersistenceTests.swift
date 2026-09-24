@@ -65,6 +65,7 @@ struct HikePersistenceTests {
                 tintHex: "#FF9500FF",
                 routeWidth: 7,
                 routeLinePatternID: RouteLinePattern.dotted.rawValue,
+                routeBorderHex: "#FFFFFFCC",
                 symbol: "mountain.2",
                 route: Fixture.ridgeRoute,
                 rawRoute: Array(Fixture.ridgeRoute.reversed()),
@@ -100,7 +101,7 @@ struct HikePersistenceTests {
         #expect(reopened.displayTitle == "My Ridge")
         #expect(reopened.distanceMeters == 1234.5)
         #expect(reopened.date == date)
-        #expect(reopened.tintHex == "#FF9500FF")
+        #expect([reopened.tintHex, reopened.routeBorderHex] == ["#FF9500FF", "#FFFFFFCC"])
         #expect(reopened.routeWidth == 7)
         #expect(reopened.routeLinePattern == .dotted)
         #expect(reopened.symbol == "mountain.2")

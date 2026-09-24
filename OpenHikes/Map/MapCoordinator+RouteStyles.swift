@@ -2,9 +2,9 @@
 //  MapCoordinator+RouteStyles.swift
 //  OpenHikes
 //
-//  How the qualified stretches of a route are drawn: the inferred ones and
-//  the paused ones, both derived from the route's own tint and width so they
-//  cannot drift from the line they sit on.
+//  How a route is drawn: the line itself, and the qualified stretches over
+//  it — the inferred ones and the paused ones, both derived from the route's
+//  own tint and width so they cannot drift from the line they sit on.
 //
 //  Split out of `MapCoordinator.swift` for the reason the highlight dot and
 //  the walk's stretches were: that file is the observation plumbing, and it
@@ -32,6 +32,33 @@ extension MapView.Coordinator {
     /// Dotted where the inferred line is dashed, which is what separates
     /// the two at a glance on a route that carries both.
     private static let pausedRouteDashPattern: [Int] = [1, 6]
+
+    /// Applies the current tint (with its alpha), width, line pattern and
+    /// border to the route line. Everything the pattern decides is an
+    /// ordinary stroke property except the chevrons, which the renderer
+    /// draws itself — as it does the border, which MapKit has no property for.
+    func applyStyle(to renderer: MKPolylineRenderer) {
+        #if os(macOS)
+        renderer.strokeColor = NSColor(routeTint)
+        #else
+        renderer.strokeColor = UIColor(routeTint)
+        #endif
+        renderer.lineWidth = CGFloat(routeWidth)
+        renderer.lineJoin = .round
+        renderer.lineCap = routePattern.lineCap
+        let dashes = routePattern.dashLengths(forWidth: routeWidth)
+        // `lineDashPattern` is an `[NSNumber]?`; an empty array is not a
+        // documented way to say "unbroken", so a solid line clears it.
+        // swiftlint:disable:next legacy_objc_type
+        renderer.lineDashPattern = dashes.isEmpty ? nil : dashes.map { NSNumber(value: $0) }
+        guard let directional = renderer as? DirectionalPolylineRenderer else { return }
+        directional.pattern = routePattern
+        #if os(macOS)
+        directional.borderColor = NSColor(routeBorder).cgColor
+        #else
+        directional.borderColor = UIColor(routeBorder).cgColor
+        #endif
+    }
 
     /// The route's own tint, drawn dashed and faded.
     ///

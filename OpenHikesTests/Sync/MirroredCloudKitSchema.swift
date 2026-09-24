@@ -52,6 +52,7 @@ enum MirroredCloudKitSchema {
                 "photos",
                 "rawRoute",
                 "route",
+                "routeBorderHex",
                 "routeLinePatternID",
                 "routeWidth",
                 "surfaceMetersByCategory",

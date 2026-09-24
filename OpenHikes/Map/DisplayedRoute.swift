@@ -45,7 +45,7 @@ struct DisplayedRoute: Equatable {
     /// and excluded for the same reason.
     ///
     /// Tint and width are excluded because they aren't here: they live in
-    /// ``RouteStyle``, so a colour, width or pattern drag never reaches this
+    /// ``RouteStyle``, so a colour, width, pattern or border change never reaches this
     /// value — and therefore never reaches the view that builds it.
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.id == rhs.id
@@ -120,7 +120,7 @@ final class DisplayedRouteCoordinateCache {
     }
 }
 
-/// The drawn route's tint, width and line pattern, held in a reference type so
+/// The drawn route's tint, width, line pattern and border, held in a reference type so
 /// the controls that write them — a `ColorPicker` drag, a `Slider` drag, both
 /// continuous, and the pattern picker — never re-render a SwiftUI view above
 /// the map. The map observes this directly and restyles its existing polyline
@@ -146,8 +146,11 @@ final class RouteStyle {
     static let defaultTint: Color = .green
     static let defaultWidth: Double = 3
     static let defaultPattern: RouteLinePattern = .default
+    /// No border — the transparent ``Hike/routeBorderHex`` every hike starts
+    /// with, so a hike that never picked one draws as it always did.
+    static let defaultBorder: Color = .clear
 
-    /// Written only through ``apply(tint:width:pattern:)``, which restates the
+    /// Written only through ``apply(tint:width:pattern:border:)``, which restates the
     /// followed hike's appearance on every notification — including the many
     /// that change nothing, since SwiftData notifies on a same-value write to
     /// `tintHex` as readily as on a real one. The map's observer is one `Task`
@@ -155,9 +158,9 @@ final class RouteStyle {
     /// to where it already was shouldn't pay for either.
     ///
     /// What stops it is Observation's own expansion, which skips an assignment
-    /// that compares equal, and all three of these are `Equatable`. Say it out
+    /// that compares equal, and all four of these are `Equatable`. Say it out
     /// loud, because the `if`s in `apply` read as though they are the filter
-    /// and they are not: delete all three and nothing downstream notices.
+    /// and they are not: delete all four and nothing downstream notices.
     /// They are belt-and-braces over undocumented runtime behaviour, kept for
     /// the same reason as the guard in `HikeRecorder`'s accepted-fix path.
     /// `an equal write to the map's appearance types notifies nobody` in
@@ -166,6 +169,7 @@ final class RouteStyle {
     private(set) var tint: Color = defaultTint
     private(set) var width: Double = defaultWidth
     private(set) var pattern: RouteLinePattern = defaultPattern
+    private(set) var border: Color = defaultBorder
 
     /// Identifies the current registration. A `withObservationTracking`
     /// callback can only be cancelled by ignoring it, so a notification still
@@ -183,14 +187,14 @@ final class RouteStyle {
     /// ``appliedCount``.
     @ObservationIgnored private var generation = 0
 
-    /// How many times ``apply(tint:width:pattern:)`` has run.
+    /// How many times ``apply(tint:width:pattern:border:)`` has run.
     ///
     /// A test seam, and the only one this file's stale-callback guard has.
     /// Every apply restates the *currently* tracked hike's appearance, so a
     /// duplicated one writes values that are already there — and Observation
     /// drops an equal write to an `Equatable` property. A stale callback that
     /// slipped through `generation` and armed a second registration is
-    /// therefore invisible in `tint`, `width` and `pattern` however many of
+    /// therefore invisible in `tint`, `width`, `pattern` and `border` however many of
     /// them pile up; only the amount of work changes, so the work is what is
     /// counted. `@ObservationIgnored` because a counter that notified would be
     /// the very cost it exists to measure.
@@ -204,7 +208,7 @@ final class RouteStyle {
     /// cleared field from a stale one.
     @ObservationIgnored private(set) var trackedHike: Hike?
 
-    /// Tracks `hike`'s tint, width and line pattern, or resets to the defaults
+    /// Tracks `hike`'s tint, width, line pattern and border, or resets to the defaults
     /// with `nil`.
     ///
     /// Called from `OpenHikesView`'s selection change handler — deliberately not
@@ -218,10 +222,15 @@ final class RouteStyle {
             // that has been told to follow nothing should not still be holding
             // a `Hike` from the store.
             trackedHike = nil
-            apply(tint: Self.defaultTint, width: Self.defaultWidth, pattern: Self.defaultPattern)
+            apply(
+                tint: Self.defaultTint,
+                width: Self.defaultWidth,
+                pattern: Self.defaultPattern,
+                border: Self.defaultBorder
+            )
             return
         }
-        apply(tint: hike.tint, width: hike.routeWidth, pattern: hike.routeLinePattern)
+        apply(tint: hike.tint, width: hike.routeWidth, pattern: hike.routeLinePattern, border: hike.routeBorder)
         trackedHike = hike
         track(generation: generation)
     }
@@ -237,21 +246,24 @@ final class RouteStyle {
             _ = hike.tint
             _ = hike.routeWidth
             _ = hike.routeLinePatternID
+            _ = hike.routeBorderHex
         } onChange: { route in
             guard generation == route.generation, let followed = route.trackedHike else { return }
             route.apply(
                 tint: followed.tint,
                 width: followed.routeWidth,
-                pattern: followed.routeLinePattern
+                pattern: followed.routeLinePattern,
+                border: followed.routeBorder
             )
             route.track(generation: generation)
         }
     }
 
-    private func apply(tint: Color, width: Double, pattern: RouteLinePattern) {
+    private func apply(tint: Color, width: Double, pattern: RouteLinePattern, border: Color) {
         appliedCount &+= 1
         if self.tint != tint { self.tint = tint }
         if self.width != width { self.width = width }
         if self.pattern != pattern { self.pattern = pattern }
+        if self.border != border { self.border = border }
     }
 }

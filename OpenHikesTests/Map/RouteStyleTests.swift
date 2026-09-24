@@ -26,6 +26,7 @@ struct RouteStyleTests {
             hike.tintHex = "#FF0000FF"
             hike.routeWidth = 9
             hike.routeLinePattern = .dotted
+            hike.routeBorderHex = "#FFFFFFFF"
         }
         let style = RouteStyle()
 
@@ -33,6 +34,7 @@ struct RouteStyleTests {
         #expect(style.tint == hike.tint)
         #expect(style.width == 9)
         #expect(style.pattern == .dotted)
+        #expect(style.border == hike.routeBorder)
     }
 
     /// Deselecting leaves no trace of the last trail: the next route to be
@@ -43,6 +45,7 @@ struct RouteStyleTests {
         let hike = Fixture.hike(in: context) { hike in
             hike.tintHex = "#FF0000FF"
             hike.routeLinePattern = .arrowheads
+            hike.routeBorderHex = "#000000FF"
         }
         let style = RouteStyle()
         style.follow(hike)
@@ -51,6 +54,7 @@ struct RouteStyleTests {
         #expect(style.tint == RouteStyle.defaultTint)
         #expect(style.width == RouteStyle.defaultWidth)
         #expect(style.pattern == RouteStyle.defaultPattern)
+        #expect(style.border == RouteStyle.defaultBorder)
 
         // And the hike it used to follow can no longer reach it.
         let map = ObservationCounter { _ = style.tint }
@@ -65,7 +69,7 @@ struct RouteStyleTests {
     /// a drag that returns a colour to where it already was must stop here.
     ///
     /// It does stop here, but not where the code reads as though it does. The
-    /// three `if self.x != x` guards in ``RouteStyle/apply(tint:width:pattern:)``
+    /// four `if self.x != x` guards in ``RouteStyle/apply(tint:width:pattern:border:)``
     /// can all be deleted and this stays green: what filters the write is
     /// Observation's own expansion, which skips an assignment that compares
     /// equal, and `Color`, `Double` and `RouteLinePattern` all are `Equatable`.
@@ -106,7 +110,7 @@ struct RouteStyleTests {
     }
 
     /// The same claim without the model in the way. Re-following the hike
-    /// already followed drives ``RouteStyle/apply(tint:width:pattern:)``
+    /// already followed drives ``RouteStyle/apply(tint:width:pattern:border:)``
     /// synchronously with the appearance it is already showing, so the zero
     /// here is a fact about what `RouteStyle` publishes rather than about
     /// whether anything called it — which is the one thing the test above
@@ -186,6 +190,24 @@ struct RouteStyleTests {
         await map.settle()
         #expect(map.count == 1, "the previous hike must not reach the style at all")
         #expect(style.width == 7)
+    }
+
+    /// The border is picked on the detail screen while the hike is followed,
+    /// exactly as the tint is, so it has to arrive the same way — through the
+    /// registration — rather than only on the next selection.
+    @Test("a border picked while following reaches the style")
+    func borderWriteReachesTheStyle() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let style = RouteStyle()
+        style.follow(hike)
+        #expect(style.border == hike.routeBorder, "a new hike starts with no border")
+
+        hike.routeBorderHex = "#FFFFFFFF"
+        await settleDelegateHop(until: "the border to reach the style") {
+            style.border == hike.routeBorder
+        }
+        #expect(style.border == Color(hex: "#FFFFFFFF"))
     }
 
     /// Two writes in one turn: the second lands while no registration is armed
