@@ -162,6 +162,9 @@ enum TrailDraftSave {
             // listing all draw them without a line added to any of them.
             route: heights?.filling(route) ?? route
         )
+        // The stops it was drawn from, so *Edit Route* can reopen it — see
+        // ``DrawnRoute``.
+        hike.drawnRoute = DrawnRoute(draft)
         context.insert(hike)
         // After the insert, because a ``TrailPoint`` is a row of its own and a
         // relationship assigned to a hike that is not in a context yet has
@@ -196,5 +199,128 @@ enum TrailDraftSave {
             return .refused(.notSaved)
         }
         return .saved(hike)
+    }
+
+    /// Writes `draft` back into `hike` — *Edit Route*'s Save.
+    ///
+    /// The same row, so every walk, place, photograph, widget pin and
+    /// publication pointing at it still does. The name, the colour, the
+    /// symbol and the date stay what they were; what changes is what the
+    /// line is: the route and its length, the stops it was drawn from, and
+    /// the places it passes — by the rule a new trail's save keeps them by. A
+    /// place the edit took away returns its photographs to the gallery, as
+    /// removing it on its own screen does.
+    ///
+    /// **Past walks are kept**, the owner's decision: a ``HikeWalk`` is a
+    /// record of a walk that happened, measured against the route as it stood
+    /// then. The surface and difficulty breakdowns are not kept — they
+    /// describe the old line — and are emptied so the next open asks
+    /// OpenStreetMap about the new one, which is what "never analyzed" means.
+    ///
+    /// A shared hike keeps its publication and learns that the shared copy
+    /// is now out of date — see ``DrawnRoute/editedUnderSubmissionID``.
+    ///
+    /// - Parameter placesAtOpen: the hike's places when the edit opened — see
+    ///   ``places(of:drawn:atOpen:)``, which is what it tells apart.
+    ///
+    /// A refused save puts everything back: the rows through the context's
+    /// rollback, and the hike's own columns by hand, because a rolled-back
+    /// context still holds an attribute written over an existing row — the
+    /// measurement ``StoredTileDeletion`` records.
+    @discardableResult static func update(
+        _ hike: Hike,
+        from draft: TrailDraft,
+        openedWith placesAtOpen: Set<UUID>,
+        into context: ModelContext,
+        heights: RouteHeightSamples? = nil,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) -> TrailDraftSaveOutcome {
+        guard draft.waypoints.count > 1 else { return .refused(.tooShort) }
+        let route = draft.routeCoordinates
+        let before = (
+            route: hike.route,
+            distance: hike.distanceMeters,
+            drawn: hike.drawnRouteData,
+            surface: hike.surfaceMetersByCategory,
+            difficulty: hike.difficultyMetersByGrade,
+            photos: hike.photos,
+            climb: hike.climbMeters,
+            descent: hike.descentMeters
+        )
+        let kept = TrailPlaceOrder.touched(
+            places(of: hike, drawn: draft.places, atOpen: placesAtOpen),
+            along: route
+        )
+        let keptIDs = Set(kept.map(\.id))
+        for place in hike.places where !keptIDs.contains(place.id) {
+            hike.unfilePhotos(fromPlace: place.id)
+        }
+        hike.route = heights?.filling(route) ?? route
+        hike.distanceMeters = draft.distanceMeters
+        hike.surfaceMetersByCategory = [:]
+        hike.difficultyMetersByGrade = [:]
+        // The library's cached climb is a figure about the old line, and
+        // nothing else would ever notice it had gone stale: it is refilled
+        // only where it is missing. See ``HikeListMetrics``.
+        if before.climb != nil || before.descent != nil {
+            hike.climbMeters = nil
+            hike.descentMeters = nil
+        }
+        hike.drawnRoute = DrawnRoute(draft, editedUnderSubmissionID: hike.communitySubmissionID)
+        hike.replacePlaces(with: kept, in: context)
+        do {
+            try save(context)
+        } catch {
+            context.rollback()
+            hike.route = before.route
+            hike.distanceMeters = before.distance
+            hike.drawnRouteData = before.drawn
+            hike.surfaceMetersByCategory = before.surface
+            hike.difficultyMetersByGrade = before.difficulty
+            hike.photos = before.photos
+            if before.climb != nil || before.descent != nil {
+                hike.climbMeters = before.climb
+                hike.descentMeters = before.descent
+            }
+            logger.error(
+                """
+                An edited trail could not be saved: \
+                \(error.localizedDescription, privacy: .public)
+                """
+            )
+            return .refused(.notSaved)
+        }
+        return .saved(hike)
+    }
+
+    /// The places an edit's save chooses from: the drawing's, merged with what
+    /// happened to the hike's own while the edit was open.
+    ///
+    /// An edit can stay open for days — the back button keeps it, and so does
+    /// a relaunch — while the hike's screen goes on taking places: *Add
+    /// Place*, *Find Places Along Trail*, a rename, a note, a removal, or any
+    /// of those arriving from the hiker's other device. The drawing holds a
+    /// copy taken when it opened, so saving that copy as it stood would delete
+    /// what was added since, photographs unfiled, and put back what was
+    /// removed or renamed. `atOpen` is what tells the two apart:
+    ///
+    /// - one the drawing and the hike both hold is the **hike's** — the maker
+    ///   can take a place away but never changes one, so the hike's copy is
+    ///   the newer;
+    /// - one only the drawing holds is new from the maker's search, unless
+    ///   the hike held it at the open, in which case it was removed since;
+    /// - one only the hike holds was added since, unless the hike held it at
+    ///   the open, in which case the maker removed it.
+    ///
+    /// Everything that survives still has to pass the line, like any save.
+    static func places(of hike: Hike, drawn: [TrailPlace], atOpen: Set<UUID>) -> [TrailPlace] {
+        let held = hike.places
+        let heldByID = Dictionary(held.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let drawnIDs = Set(drawn.map(\.id))
+        let fromDrawing = drawn.compactMap { place in
+            heldByID[place.id] ?? (atOpen.contains(place.id) ? nil : place)
+        }
+        let addedSince = held.filter { !drawnIDs.contains($0.id) && !atOpen.contains($0.id) }
+        return fromDrawing + addedSince
     }
 }

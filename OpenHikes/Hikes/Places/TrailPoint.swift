@@ -172,13 +172,28 @@ extension Hike {
     /// callers have the whole set: a drawn trail is saved once and an imported
     /// file arrives once. The rows that go are deleted rather than orphaned —
     /// the cascade only fires when the *hike* goes.
+    ///
+    /// A row whose place is unchanged is kept rather than rewritten, which
+    /// only *Edit Route*'s save can meet: re-inserting every place on every
+    /// edit would be a CloudKit delete and insert per place for a trail whose
+    /// places mostly did not move, and would restamp their `createdAt`.
     func replacePlaces(with places: [TrailPlace], in context: ModelContext, now: Date = .now) {
+        let wanted = Set(places)
+        var kept: [TrailPoint] = []
         for existing in trailPoints ?? [] {
-            context.delete(existing)
+            if wanted.contains(existing.place) {
+                kept.append(existing)
+            } else {
+                context.delete(existing)
+            }
         }
-        trailPoints = places.map { place in
+        let keptIDs = Set(kept.map(\.id))
+        let added = places.filter { !keptIDs.contains($0.id) }.map { place in
             TrailPoint(hikeID: id, place: place, createdAt: now)
         }
+        // Inserted before they are related, as ``addPlaces(_:in:now:)``'s are.
+        for row in added { context.insert(row) }
+        trailPoints = kept + added
     }
 
     /// Adds `places` to the ones this hike already has, leaving out any it

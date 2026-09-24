@@ -258,6 +258,12 @@ final class Hike {
     /// means "never analyzed".
     var difficultyMetersByGrade: [String: Double] = [:]
 
+    /// The stops a trail drawn in the maker was drawn from, as JSON, or `nil`
+    /// for any other hike — read through ``drawnRoute``. See ``DrawnRoute``
+    /// for why it is one synced column rather than several, and why a
+    /// recording or an import never carries one.
+    var drawnRouteData: Data?
+
     /// Photos taken or imported while this hike was open, newest last once
     /// read through ``orderedPhotos``.
     ///
