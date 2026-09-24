@@ -253,6 +253,15 @@ nonisolated enum MovementReminderWording {
     /// has a button that carries it out; this one would be telling a hiker in
     /// fog what to do about terrain the app cannot see. What it owes them is
     /// the fact, at the moment they can still act on it.
+    static func leftTheTrail(trailTitle: String, offRouteMeters: Double) -> MovementReminder {
+        let subject = trailTitle.isEmpty ? "the trail" : trailTitle
+        return MovementReminder(
+            kind: .leftTheTrail,
+            title: "Off the trail",
+            body: "You're about \(distance(offRouteMeters)) from \(subject)."
+        )
+    }
+
     /// The two times, stated as times: when the walk ends at this pace and
     /// when the light goes. No instruction, for the reason
     /// ``leftTheTrail(trailTitle:offRouteMeters:)`` gives none — turning back,
@@ -265,15 +274,6 @@ nonisolated enum MovementReminderWording {
             title: "Finishing after dark",
             body: "At your pace you'll reach the end of \(subject) around \(finishAt.formatted(time)),"
                 + " and it's dark from \(civilDusk.formatted(time))."
-        )
-    }
-
-    static func leftTheTrail(trailTitle: String, offRouteMeters: Double) -> MovementReminder {
-        let subject = trailTitle.isEmpty ? "the trail" : trailTitle
-        return MovementReminder(
-            kind: .leftTheTrail,
-            title: "Off the trail",
-            body: "You're about \(distance(offRouteMeters)) from \(subject)."
         )
     }
 

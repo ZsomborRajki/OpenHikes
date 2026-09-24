@@ -93,6 +93,61 @@ struct WalkTimeLeftTests {
         #expect(abs(left - flatRest * 1.5) < 1)
     }
 
+    /// A walk from the stored end back towards the start: at the turn, what
+    /// is ahead is the 600 m climb, walked down. Measured towards the stored
+    /// end instead, it was the flat half behind the hiker — no heights, no
+    /// figure — and a climb counted forwards would have timed a descent as
+    /// an ascent.
+    @Test("a walk the other way round has the start ahead of it, downhill")
+    func aReversedWalkLooksTowardsTheStart() throws {
+        let total = Self.profile.totalDistanceMeters
+        let turn = Self.profile.distances[30]
+        let covered = [turn...total]
+        #expect(WalkTimeLeft.isReversed(position: turn, covered: covered, routeMeters: total))
+
+        let seconds = try #require(WalkTimeLeft.seconds(
+            profile: Self.profile,
+            position: turn,
+            remainingMeters: turn,
+            covered: covered,
+            activeSeconds: 0
+        ))
+        let firstHalf = try #require(Self.profile.climb(from: 0, to: turn))
+        let expected = WalkingTimeEstimate.seconds(
+            distanceMeters: turn,
+            ascentMeters: firstHalf.lossMeters,
+            descentMeters: firstHalf.gainMeters
+        )
+        #expect(abs(seconds - expected) < 0.001)
+    }
+
+    /// The same stretch walked down is quicker by the signposts than walked
+    /// up, so the same hour over it is a slower hiker.
+    @Test("a reversed walk's pace is measured against the way it was climbed")
+    func aReversedWalkCalibratesAgainstItsDescent() throws {
+        let turn = Self.profile.distances[30]
+        let covered = [0...turn]
+        let upwards = try #require(
+            WalkTimeLeft.paceFactor(profile: Self.profile, covered: covered, activeSeconds: 3 * 3600)
+        )
+        let downwards = try #require(WalkTimeLeft.paceFactor(
+            profile: Self.profile,
+            covered: covered,
+            activeSeconds: 3 * 3600,
+            reversed: true
+        ))
+        #expect(downwards > upwards)
+    }
+
+    @Test("the direction is read off the coverage, and off the nearer end before there is any")
+    func theDirectionComesFromTheCoverage() {
+        let total = 6000.0
+        #expect(!WalkTimeLeft.isReversed(position: 2000, covered: [0...2000], routeMeters: total))
+        #expect(WalkTimeLeft.isReversed(position: 4000, covered: [4000...6000], routeMeters: total))
+        #expect(!WalkTimeLeft.isReversed(position: 100, covered: [], routeMeters: total))
+        #expect(WalkTimeLeft.isReversed(position: 5900, covered: [5900...5900], routeMeters: total))
+    }
+
     @Test("the walk's own pace is bounded both ways")
     func thePaceFactorIsBounded() throws {
         let total = Self.profile.totalDistanceMeters

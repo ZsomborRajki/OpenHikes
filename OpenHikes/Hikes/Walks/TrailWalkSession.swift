@@ -487,6 +487,10 @@ final class TrailWalkSession {
     /// is going, and a walk has to hang off one.
     func discardWalk(forDeletedHike hikeID: UUID) {
         guard let record, record.hikeID == hikeID else { return }
+        // As `finish` does: the standing banners are about a walk that no
+        // longer exists, and the once-per-walk warnings must re-arm for the
+        // next one, or it would never hear that it ends after dark.
+        reminders?.walkDidStopFollowing()
         clearState()
         tracker?.walkDidEnd(final: nil)
     }
