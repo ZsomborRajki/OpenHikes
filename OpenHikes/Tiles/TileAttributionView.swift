@@ -54,7 +54,9 @@ struct TileAttributionView: View {
 #Preview("Attribution") {
     Form {
         Section {
-            Text("Map")
+            // Verbatim for the same reason as SettingsView's DEBUG line:
+            // Xcode's catalog sync skips previews and deleted the key.
+            Text(verbatim: "Map")
         } footer: {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(TileProvider.all) { provider in

@@ -434,9 +434,6 @@
         }
       }
     },
-    "Adding one is a build-time step — see Secrets.example.plist in the project." : {
-
-    },
     "Adding to" : {
 
     },
@@ -1080,9 +1077,6 @@
 
     },
     "Make a trail" : {
-
-    },
-    "Map" : {
 
     },
     "Map Tiles" : {
