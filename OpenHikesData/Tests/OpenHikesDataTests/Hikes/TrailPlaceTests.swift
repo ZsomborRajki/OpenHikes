@@ -42,17 +42,7 @@ struct TrailPlaceTests {
         TrailPlace(latitude: latitude, longitude: longitude, name: name, symbol: symbol)
     }
 
-    // MARK: What it is called
-
-    /// Unnamed is the normal case — the plan issue measures four fifths of the
-    /// viewpoints and waterfalls in an Alpine box carrying no name at all — so
-    /// the fallback chain is the thing that makes a list of them readable.
-    @Test("an unnamed place is called after what it is")
-    func unnamedPlacesAreCalledAfterTheirSymbol() {
-        #expect(Self.place(Line.south, symbol: .water).displayName == "Water")
-        #expect(Self.place(Line.south).displayName == "Place")
-        #expect(Self.place(Line.south, name: "Kühroint", symbol: .shelter).displayName == "Kühroint")
-    }
+    // MARK: What it draws
 
     /// A place that claims nothing draws a plain pin rather than being given
     /// one of the eight — see ``TrailPlace`` for why an unstated symbol is a

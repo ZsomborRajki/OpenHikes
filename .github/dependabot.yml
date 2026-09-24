@@ -17,14 +17,18 @@ updates:
     commit-message:
       prefix: "ci"
 
-  # Two roots, because the packages live in two places. `/` covers the Xcode
+  # Three roots, because the packages live in three places. `/` covers the Xcode
   # project: Dependabot reads the version constraints out of
   # OpenHikes.xcodeproj/project.pbxproj and updates the nested
   # project.xcworkspace/xcshareddata/swiftpm/Package.resolved, which is where
   # this repository's five pinned dependencies actually are.
-  # `/OpenHikesShared` covers the local package. It declares no external
+  # `/OpenHikesShared` covers the shared package. It declares no external
   # dependency today and so produces nothing; it is listed so that the first
   # one added is covered without anybody remembering to come back here.
+  # `/OpenHikesData` does declare two — swift-collections and swift-algorithms
+  # — and its own Package.resolved pins them to the versions the project
+  # resolves, which only holds while a bump reaches both lockfiles — so it is
+  # listed here, or the app's would move on and this one would not.
   #
   # A bump here has to keep the `Verify resolved packages` step in ci.yml green,
   # which fails if `xcodebuild -resolvePackageDependencies` would rewrite
@@ -34,6 +38,7 @@ updates:
     directories:
       - "/"
       - "/OpenHikesShared"
+      - "/OpenHikesData"
     schedule:
       interval: "weekly"
       day: "monday"

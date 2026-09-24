@@ -58,12 +58,14 @@ let package = Package(
 extension [SwiftSetting] {
     /// The app target's language, so a file moved here compiles to the same
     /// thing it compiled to there: `OpenHikesShared`'s two upcoming features,
-    /// and main-actor default isolation — the setting that package cannot
-    /// have and this one exists to carry.
+    /// the one `SWIFT_APPROACHABLE_CONCURRENCY` adds to them in Swift 6 mode
+    /// (isolated conformances), and main-actor default isolation — the
+    /// setting that package cannot have and this one exists to carry.
     static var data: Self {
         [
             .enableUpcomingFeature("MemberImportVisibility"),
             .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+            .enableUpcomingFeature("InferIsolatedConformances"),
             .defaultIsolation(MainActor.self)
         ]
     }
