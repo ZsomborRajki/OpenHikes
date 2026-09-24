@@ -12,9 +12,10 @@
 //  hike's ``RouteLinePattern``. Dashing is left to `MKPolylineRenderer`'s own
 //  stroke properties; only the chevrons are drawn here.
 //
-//  A border colour, when the hike has one, is drawn first and underneath: a
-//  ring round the line's own stroke and the chevrons again, widened, so the
-//  outline follows every mark the pattern makes. See ``RouteBorder``.
+//  A border colour, when the hike has one, is drawn first and underneath: the
+//  line again, wider, with the line's own stroke cleared out of it, and the
+//  chevrons again, widened, so the outline follows every mark the pattern
+//  makes. See ``RouteBorder``.
 //
 //  A chevron is offered to ``RouteChevronField`` before it is drawn, which is
 //  what keeps a route that comes home the way it went out from stamping two
@@ -22,6 +23,7 @@
 //
 
 import MapKit
+import os
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
@@ -32,12 +34,42 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
     /// The hike's chosen line pattern. Set by the map coordinator alongside the
     /// stroke colour and width, so a pattern change restyles the live renderer
     /// rather than rebuilding the overlay.
-    var pattern: RouteLinePattern = .default
+    var pattern: RouteLinePattern = .default {
+        didSet { invalidateBorderLine() }
+    }
 
     /// The hike's border colour, set alongside ``pattern``. A `CGColor`
     /// rather than the platform colour because that is all drawing needs; an
     /// alpha of zero — every hike that never picked one — draws nothing.
-    var borderColor: CGColor?
+    var borderColor: CGColor? {
+        didSet { invalidateBorderLine() }
+    }
+
+    override var lineWidth: CGFloat {
+        didSet { invalidateBorderLine() }
+    }
+
+    /// The border's copy of the line: MapKit's own polyline renderer, wider,
+    /// in the border colour, never added to a map — only drawn from inside
+    /// ``draw(_:zoomScale:in:)``.
+    ///
+    /// MapKit's rather than a path stroked here, because MapKit thins a line's
+    /// points to what the zoom can show before stroking it, and nothing
+    /// outside it can. A route seen whole is thousands of points inside a few
+    /// pixels; stroking every one of them at the width of the border cost
+    /// tens of milliseconds a tile where MapKit's own line costs microseconds.
+    ///
+    /// Built by the first draw that needs it and never changed afterwards —
+    /// a draw runs on MapKit's tile threads, several at once, so a copy one
+    /// of them is drawing must not be restyled under it. A change to the
+    /// width, pattern or colour drops it instead, and the next draw builds
+    /// another. Built in a draw rather than when the style is set because it
+    /// is sized by the renderer's `contentScaleFactor`, which MapKit only
+    /// sets once the renderer is on a map; the factor it was built for is
+    /// kept with it, so a change to that rebuilds it too.
+    private let borderLine = OSAllocatedUnfairLock<(scale: CGFloat, line: MKPolylineRenderer)?>(
+        uncheckedState: nil
+    )
 
     /// The chevron geometry for one draw pass, in the map points the renderer
     /// draws in rather than the screen points the pattern states it in. The
@@ -105,44 +137,77 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         strokeChevrons(in: mapRect, zoomScale: zoomScale, context: context, color: arrowColor(), widenedBy: 0)
     }
 
-    /// The border, drawn under the marks it outlines: a ring round the line's
-    /// own stroke, and each chevron again, widened.
+    /// The border, drawn under the marks it outlines: the line again, wider,
+    /// with the line itself cleared back out of it, and each chevron again,
+    /// widened.
     ///
-    /// The line's ring is traced round the shape MapKit is about to stroke —
-    /// its width, its dashes, its caps, straight from `applyStrokeProperties`
-    /// — rather than round a stroke rebuilt here from the same numbers. That
-    /// rebuild is what the first version of this did, and on a map it was
-    /// invisible: MapKit scales a line by the renderer's `contentScaleFactor`
-    /// as well as by the zoom, so the "wider" copy came out a third of the
-    /// width of the line on top of it. A unit test cannot see that, because a
-    /// renderer drawn outside a map has a factor of one.
-    ///
-    /// The border's own thickness is scaled the same way, so it stays a third
-    /// of the line on screen whatever MapKit's factor is.
+    /// Both the copy and the chevrons are scaled by the renderer's
+    /// `contentScaleFactor` as well as by the zoom, because that is how MapKit
+    /// scales the line they sit under — on a map it is the screen's scale, so
+    /// a border sized by the zoom alone came out a third of the width of the
+    /// line on top of it and was invisible. The copy is never on a map, so its
+    /// own factor stays one and the factor goes into its width and dashes
+    /// instead. Not into its zoom scale, which would size it the same: MapKit
+    /// thins the line's points by the zoom scale, and a copy thinned three
+    /// times as hard cut the corners the line on top of it kept. A unit test
+    /// cannot see any of this: a renderer drawn outside a map has a factor of
+    /// one too.
     private func drawBorder(
         _ color: CGColor,
         in mapRect: MKMapRect,
         zoomScale: MKZoomScale,
         context: CGContext
     ) {
-        let border = CGFloat(RouteBorder.width(forLineWidth: Double(lineWidth))) * contentScaleFactor / zoomScale
+        let scale = contentScaleFactor
         if pattern.drawsLine {
-            if path == nil { createPath() }
-            if let path {
-                context.saveGState()
-                context.addPath(path)
-                applyStrokeProperties(to: context, atZoomScale: zoomScale)
-                context.replacePathWithStrokedPath()
-                // Centred on the outline, so half of it is under the line.
-                context.setLineWidth(border * 2)
-                context.setLineDash(phase: 0, lengths: [])
-                context.setLineJoin(.round)
-                context.setStrokeColor(color)
-                context.strokePath()
-                context.restoreGState()
-            }
+            borderLine(forScale: scale).draw(mapRect, zoomScale: zoomScale, in: context)
+            // The line's own stroke, clearing what it covers. What is left is
+            // a ring, so a translucent line shows the map through it rather
+            // than the border — and a line with no colour at all, just the
+            // ring. The line is drawn again, in its colour, straight after.
+            context.saveGState()
+            context.setBlendMode(.clear)
+            super.draw(mapRect, zoomScale: zoomScale, in: context)
+            context.restoreGState()
         }
+        let border = CGFloat(RouteBorder.width(forLineWidth: Double(lineWidth))) * scale / zoomScale
         strokeChevrons(in: mapRect, zoomScale: zoomScale, context: context, color: color, widenedBy: border * 2)
+    }
+
+    /// Drops the border's copy of the line, for the next draw to rebuild from
+    /// the style as it is now.
+    private func invalidateBorderLine() {
+        borderLine.withLockUnchecked { $0 = nil }
+    }
+
+    /// The border's copy of the line for a renderer at `scale`: the one built
+    /// already if it still fits, or a new one. See ``borderLine``, and
+    /// ``RouteBorder/dashes(outlining:cap:borderWidth:)`` for the dashes.
+    private func borderLine(forScale scale: CGFloat) -> MKPolylineRenderer {
+        borderLine.withLockUnchecked { built in
+            if let built, built.scale == scale { return built.line }
+            let line = MKPolylineRenderer(polyline: polyline)
+            let width = Double(lineWidth)
+            let border = RouteBorder.width(forLineWidth: width)
+            let dashes = RouteBorder.dashes(
+                outlining: pattern.dashLengths(forWidth: width),
+                cap: pattern.lineCap,
+                borderWidth: border
+            )
+            line.lineWidth = CGFloat(width + border * 2) * scale
+            line.lineJoin = .round
+            line.lineCap = pattern.lineCap
+            // swiftlint:disable:next legacy_objc_type
+            line.lineDashPattern = dashes.lengths.isEmpty ? nil : dashes.lengths.map { NSNumber(value: $0 * scale) }
+            line.lineDashPhase = CGFloat(dashes.phase) * scale
+            #if canImport(UIKit)
+            line.strokeColor = borderColor.map { UIColor(cgColor: $0) }
+            #else
+            line.strokeColor = borderColor.flatMap { NSColor(cgColor: $0) }
+            #endif
+            built = (scale, line)
+            return line
+        }
     }
 
     /// One pass of chevrons along the whole line, in `color` — `widenedBy` map

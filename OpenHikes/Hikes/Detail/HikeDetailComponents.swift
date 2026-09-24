@@ -246,7 +246,7 @@ struct RouteAppearanceControls<
 
     var body: some View {
         VStack(spacing: 12) {
-            // The action row is two or three glass tiles side by side, so it
+            // The action row is three or four glass tiles side by side, so it
             // samples the screen behind it once for the row rather than once
             // per tile — and the tiles blend into each other as the row
             // tightens at large text sizes.
