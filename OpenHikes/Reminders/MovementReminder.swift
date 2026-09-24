@@ -29,6 +29,13 @@ import UserNotifications
 /// the Lock Screen rather than stacking a third one under it. That is the
 /// whole reason the identifier is derived rather than made unique per post.
 nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
+    /// At the walk's own pace, the followed trail ends after civil dusk.
+    ///
+    /// Like ``leftTheTrail`` and ``severeWeather``, a fact rather than a
+    /// disagreement — the app telling the hiker something about the walk
+    /// while there is still light to act on it. Said once per walk; see
+    /// ``DuskWatch``.
+    case afterDark = "afterDark"
     /// The walk is under way and the hiker is no longer on the route.
     ///
     /// The odd one out of the four, and deliberately. The other three are
@@ -83,7 +90,7 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
         // that only silenced the banner would offer to stop saying the one
         // thing this reminder exists to say. The alert's own link is in the
         // detail sheet, which is where the authority's advice is.
-        case .leftTheTrail, .severeWeather: nil
+        case .afterDark, .leftTheTrail, .severeWeather: nil
         case .pauseRecording: .pause
         case .resumeRecording, .resumeWalk: .resume
         }
@@ -120,7 +127,7 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
     /// is for.
     var interruptionLevel: UNNotificationInterruptionLevel {
         switch self {
-        case .leftTheTrail, .severeWeather: .timeSensitive
+        case .afterDark, .leftTheTrail, .severeWeather: .timeSensitive
         case .pauseRecording, .resumeRecording, .resumeWalk: .active
         }
     }
@@ -140,12 +147,13 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
         switch self {
         case .severeWeather: Relevance.weatherWarning
         case .leftTheTrail: Relevance.offTheRoute
+        case .afterDark: Relevance.lightRunningOut
         case .resumeRecording, .resumeWalk: Relevance.walkGoingUnrecorded
         case .pauseRecording: Relevance.stopCountedAsMoving
         }
     }
 
-    /// The four rungs of that ladder, named rather than written into the
+    /// The rungs of that ladder, named rather than written into the
     /// switch as literals: the gaps between them are the argument, and a
     /// bare `0.8` beside a bare `0.5` says nothing about which pair of
     /// reminders it is keeping apart.
@@ -156,6 +164,10 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
         /// A fact about where the hiker is, worth more than anything about
         /// bookkeeping and less than a warning from an agency.
         static let offTheRoute = 0.8
+        /// A fact about the walk, like the route warning, but about the hours
+        /// ahead rather than the ground underfoot — so it sorts after being
+        /// off the line and before anything about bookkeeping.
+        static let lightRunningOut = 0.7
         /// A walk that is happening and is not being written down. The
         /// kilometres lost to it cannot be recovered afterwards.
         static let walkGoingUnrecorded = 0.5
@@ -241,6 +253,21 @@ nonisolated enum MovementReminderWording {
     /// has a button that carries it out; this one would be telling a hiker in
     /// fog what to do about terrain the app cannot see. What it owes them is
     /// the fact, at the moment they can still act on it.
+    /// The two times, stated as times: when the walk ends at this pace and
+    /// when the light goes. No instruction, for the reason
+    /// ``leftTheTrail(trailTitle:offRouteMeters:)`` gives none — turning back,
+    /// pushing on and taking a head torch out are the hiker's call.
+    static func afterDark(trailTitle: String, finishAt: Date, civilDusk: Date) -> MovementReminder {
+        let subject = trailTitle.isEmpty ? "the trail" : trailTitle
+        let time = Date.FormatStyle(date: .omitted, time: .shortened)
+        return MovementReminder(
+            kind: .afterDark,
+            title: "Finishing after dark",
+            body: "At your pace you'll reach the end of \(subject) around \(finishAt.formatted(time)),"
+                + " and it's dark from \(civilDusk.formatted(time))."
+        )
+    }
+
     static func leftTheTrail(trailTitle: String, offRouteMeters: Double) -> MovementReminder {
         let subject = trailTitle.isEmpty ? "the trail" : trailTitle
         return MovementReminder(

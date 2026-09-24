@@ -77,6 +77,17 @@ public enum WidgetFormat {
             .formatted(.time(pattern: .hourMinuteSecond))
     }
 
+    /// A time still to come, the way a planned route writes one — "1 hr,
+    /// 10 min" — rounded up to the minute and never "0 min". The app's
+    /// `HikeFormat.travelTime` is the same rule; a clock face like
+    /// ``duration(seconds:)`` would read as time already spent.
+    public static func timeLeft(seconds: TimeInterval) -> String {
+        let minutes = max(1, (max(0, seconds) / 60).rounded(.up))
+        return Duration.seconds(minutes * 60).formatted(
+            Duration.UnitsFormatStyle(allowedUnits: [.hours, .minutes], width: .abbreviated)
+        )
+    }
+
     /// Walking-pace style, to one decimal — "4.3 km/h", "2.7 mph".
     ///
     /// `usage: .general`, and no explicit conversion before it, which is what
@@ -237,6 +248,7 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
         case pace = "pace"
         case points = "points"
         case remaining = "remaining"
+        case timeLeft = "timeLeft"
     }
 
     public let kind: Kind
@@ -262,6 +274,7 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
         case .pace: "speedometer"
         case .points: "point.3.connected.trianglepath.dotted"
         case .remaining: "flag.pattern.checkered"
+        case .timeLeft: "clock"
         }
     }
 
@@ -275,6 +288,7 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
         case .pace: "Average speed"
         case .points: "Track points"
         case .remaining: "Remaining"
+        case .timeLeft: "Time left"
         }
     }
 
@@ -338,6 +352,13 @@ extension TrailWidgetMetric {
             kind: .currentElevation,
             value: WidgetFormat.elevation(meters: meters, locale: locale)
         )
+    }
+
+    /// Absent with nothing honest to say — see
+    /// ``SharedTrailSnapshot/Walk/secondsLeft`` — and once the trail is done.
+    static func timeLeft(seconds: TimeInterval?) -> Self? {
+        guard let seconds, seconds.isFinite, seconds > 0 else { return nil }
+        return Self(kind: .timeLeft, value: WidgetFormat.timeLeft(seconds: seconds))
     }
 
     /// Absent while standing still: a pace of zero is what every recording

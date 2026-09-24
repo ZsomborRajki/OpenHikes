@@ -27,7 +27,7 @@ import UserNotifications
 struct MovementReminderUrgencyTests {
     /// The two that are not bookkeeping: an agency's warning about the ground
     /// the hiker is standing on, and a fork taken wrong.
-    private static let warnings: Set<MovementReminderKind> = [.severeWeather, .leftTheTrail]
+    private static let warnings: Set<MovementReminderKind> = [.severeWeather, .leftTheTrail, .afterDark]
 
     @Test("a warning about the weather or the route breaks through a Focus")
     func warningsAreTimeSensitive() {

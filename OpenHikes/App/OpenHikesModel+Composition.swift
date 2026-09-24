@@ -347,6 +347,7 @@ extension OpenHikesModel {
 // MARK: - Recording composition
 
 private extension OpenHikesModel {
+
     /// The app's real recorder, with its system-backed sensors and the live
     /// tile network policy wired in.
     ///
@@ -810,5 +811,28 @@ private extension OpenHikesModel {
         let weatherManager: WeatherManager
         let significantLocations: SignificantLocationFeed
         let communityTransport: (any CommunityTransporting)?
+    }
+}
+
+// MARK: - Walk composition
+
+extension OpenHikesModel {
+    /// The walk session, asking the recorder which hike is a draft and the
+    /// weather manager what the light is doing — each the single authority
+    /// on its answer, so the session only asks.
+    static func makeWalkSession(
+        _ container: ModelContainer,
+        _ tracker: BackgroundTrailTracker,
+        _ reminders: MovementReminderController?,
+        _ recorder: HikeRecorder,
+        _ weather: WeatherManager
+    ) -> TrailWalkSession {
+        TrailWalkSession(
+            context: container.mainContext,
+            tracker: tracker,
+            reminders: reminders,
+            activeRecordingHikeID: { [weak recorder] in recorder?.currentHike?.id },
+            daylight: { [weak weather] in weather?.state.daylightNearHiker }
+        )
     }
 }

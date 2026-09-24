@@ -111,6 +111,9 @@ final class MovementReminderController {
     /// ``OffTrailWatch``. Not per-subject the way the pauses above are:
     /// exactly one trail is followed at a time.
     private var offTrail = OffTrailWatch()
+    /// Whether the followed trail has been said to end after dark — see
+    /// ``DuskWatch``. One per walk, like ``offTrail``.
+    private var dusk = DuskWatch()
 
     /// What to do when a pause stops being watched for a reason the recorder
     /// has not heard about — today, the hiker turning the switch off with a
@@ -387,7 +390,33 @@ extension MovementReminderController {
     /// this watch starts mattering rather than when it stops.
     func walkDidStopFollowing() {
         offTrail.reset()
+        dusk.reset()
         withdraw(.leftTheTrail)
+        withdraw(.afterDark)
+    }
+
+    /// A fresh estimate of when the walk under way ends, against when the
+    /// light goes.
+    ///
+    /// Suppressed by a recording for the reason every walk reminder is — see
+    /// ``walkObserved(offRouteMeters:trailTitle:at:)`` — and by the hiker's
+    /// switch. Said once per walk; ``walkDidStopFollowing()`` re-arms it.
+    func walkFinishEstimated(
+        finishAt: Date,
+        civilDusk: Date?,
+        trailTitle: String,
+        at date: Date
+    ) {
+        guard isEnabled, !hasActiveRecording() else { return }
+        guard dusk.observed(finishAt: finishAt, civilDusk: civilDusk, now: date),
+              let civilDusk else { return }
+        post(
+            MovementReminderWording.afterDark(
+                trailTitle: trailTitle,
+                finishAt: finishAt,
+                civilDusk: civilDusk
+            )
+        )
     }
 }
 

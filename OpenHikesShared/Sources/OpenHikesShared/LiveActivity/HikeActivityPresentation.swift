@@ -204,6 +204,7 @@ public extension HikeActivityAttributes {
         let metrics = Array(
             [
                 walk.remainingMetric,
+                walk.timeLeftMetric,
                 TrailWidgetMetric.currentElevation(
                     meters: state.currentElevationMeters,
                     locale: locale
@@ -280,7 +281,15 @@ public extension HikeActivityAttributes {
             return TrailWidgetMetric(kind: .remaining, value: remaining)
         }
 
+        /// Beside the distance left, which is where a hiker looks for it —
+        /// ahead of the height chips, which describe where they are rather
+        /// than what is still to do.
+        let timeLeftMetric: TrailWidgetMetric?
+
         init(attributes: HikeActivityAttributes, state: ContentState, locale: Locale) {
+            timeLeftMetric = state.coveredFractionComplete == nil
+                ? nil
+                : TrailWidgetMetric.timeLeft(seconds: state.secondsLeft)
             coveredFraction = state.coveredFractionComplete
             remaining = attributes.remainingDistanceMeters(for: state).map { meters in
                 WidgetFormat.length(meters: meters, locale: locale)
