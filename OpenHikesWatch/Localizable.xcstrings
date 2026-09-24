@@ -1,0 +1,149 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@ %@   %@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@   %3$@ %4$@"
+          }
+        }
+      }
+    },
+    "%@ of climb, %@ of descent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ of climb, %2$@ of descent"
+          }
+        }
+      }
+    },
+    "%lld percent" : {
+
+    },
+    "%lld walks waiting for your iPhone" : {
+
+    },
+    "1 walk waiting for your iPhone" : {
+
+    },
+    "Asking your iPhone for your trails…" : {
+
+    },
+    "Bring your iPhone nearby, with OpenHikes installed, to send your trails over." : {
+
+    },
+    "Done" : {
+
+    },
+    "Fetching this trail from your iPhone…" : {
+
+    },
+    "Finding you on the trail…" : {
+
+    },
+    "Finding your position…" : {
+
+    },
+    "Import a GPX file or record a hike on your iPhone, and it will appear here." : {
+
+    },
+    "Install OpenHikes on the iPhone paired with this watch to send trails across." : {
+
+    },
+    "Location is off, so your position isn't shown." : {
+
+    },
+    "Map of %@" : {
+
+    },
+    "No OpenHikes on Your iPhone" : {
+
+    },
+    "No Trails Yet" : {
+
+    },
+    "Not Recording" : {
+
+    },
+    "OK" : {
+
+    },
+    "On Your iPhone" : {
+
+    },
+    "Pause" : {
+
+    },
+    "Pause recording" : {
+
+    },
+    "Paused. The ground you cover now isn't part of the walk." : {
+
+    },
+    "Progress along the trail" : {
+
+    },
+    "Record" : {
+
+    },
+    "Record This Hike" : {
+
+    },
+    "Recording" : {
+
+    },
+    "Records on this watch, with or without your iPhone. The walk goes to your iPhone when it's back in range." : {
+
+    },
+    "Resume" : {
+
+    },
+    "Resume recording" : {
+
+    },
+    "Sent to your iPhone." : {
+
+    },
+    "Start Hike" : {
+
+    },
+    "Starting…" : {
+
+    },
+    "Stop" : {
+
+    },
+    "Stop recording" : {
+
+    },
+    "Time walking" : {
+
+    },
+    "Trail" : {
+
+    },
+    "Trails" : {
+
+    },
+    "Waiting for Your iPhone" : {
+
+    },
+    "Waiting for your iPhone to come back in range…" : {
+
+    },
+    "Waiting for your iPhone. It'll go across on its own." : {
+
+    },
+    "Walk Kept" : {
+
+    },
+    "Your iPhone is recording" : {
+
+    }
+  },
+  "version" : "1.0"
+}
