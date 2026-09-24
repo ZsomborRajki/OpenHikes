@@ -25,10 +25,26 @@
 
     },
     "%lld walks waiting for your iPhone" : {
-
-    },
-    "1 walk waiting for your iPhone" : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld walk waiting for your iPhone"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld walks waiting for your iPhone"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "Asking your iPhone for your trails…" : {
 

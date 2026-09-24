@@ -66,6 +66,9 @@ if [[ ! -d "$intermediates" ]]; then
     exit 1
 fi
 
+scratch="$(mktemp -d)"
+trap 'rm -rf "$scratch"' EXIT
+
 # Catalog folder, then the target whose compile extracts its strings.
 for pair in OpenHikes:OpenHikes OpenWidget:OpenWidgetExtension OpenHikesWatch:OpenHikesWatch \
     OpenHikesWatchWidgets:OpenHikesWatchWidgets; do
@@ -84,7 +87,10 @@ for pair in OpenHikes:OpenHikes OpenWidget:OpenWidgetExtension OpenHikesWatch:Op
     fi
     catalog="$folder/Localizable.xcstrings"
     if $check; then
-        copy="$(mktemp -d)/Localizable.xcstrings"
+        # A folder per catalog, because the file name is the table the sync
+        # takes strings from, so the copy has to keep it.
+        mkdir "$scratch/$folder"
+        copy="$scratch/$folder/Localizable.xcstrings"
         cp "$catalog" "$copy"
         xcrun xcstringstool sync "$copy" "${args[@]}"
         if ! cmp -s "$catalog" "$copy"; then

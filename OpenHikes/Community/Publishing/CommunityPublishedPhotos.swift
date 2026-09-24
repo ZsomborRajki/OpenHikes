@@ -80,27 +80,19 @@ nonisolated struct CommunityPublishedPhotos: Equatable, Sendable {
 ///
 /// Both are number-neutral after the count, the rule
 /// ``CommunityShareDisclosure`` already follows: one photograph reads as
-/// written English rather than as a template with a 1 in it.
+/// written English rather than as a template with a 1 in it. The singular is
+/// each string's plural variation in the catalog.
 nonisolated extension CommunityPublishedPhotos {
     /// Why nothing can be left out, when a download came back short.
     static func incompleteDownload(missing: Int) -> String {
-        missing == 1
-            ? String(
-                localized: """
-                One of this submission's photos didn't download, so none can be \
-                left out here — leaving one out rewrites the whole set from the \
-                copies on this device. Publish it as it is, decline it, or open \
-                it again.
-                """
-            )
-            : String(
-                localized: """
-                \(missing) of this submission's photos didn't download, so none \
-                can be left out here — leaving one out rewrites the whole set \
-                from the copies on this device. Publish it as it is, decline it, \
-                or open it again.
-                """
-            )
+        String(
+            localized: """
+            \(missing) of this submission's photos didn't download, so none \
+            can be left out here — leaving one out rewrites the whole set \
+            from the copies on this device. Publish it as it is, decline it, \
+            or open it again.
+            """
+        )
     }
 
     /// What publishing will do to the struck-off photographs.
@@ -109,18 +101,11 @@ nonisolated extension CommunityPublishedPhotos {
     /// screen short of declining, and because the strip above it is still
     /// showing the pictures it is about.
     static func removalWarning(count: Int) -> String {
-        count == 1
-            ? String(
-                localized: """
-                Publishing deletes the faded photo from the submission for good. \
-                The rest still go.
-                """
-            )
-            : String(
-                localized: """
-                Publishing deletes the \(count) faded photos from the submission \
-                for good. The rest still go.
-                """
-            )
+        String(
+            localized: """
+            Publishing deletes the \(count) faded photos from the submission \
+            for good. The rest still go.
+            """
+        )
     }
 }

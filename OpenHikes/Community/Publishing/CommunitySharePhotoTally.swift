@@ -103,20 +103,14 @@ struct CommunitySharePhotoTally {
     ///
     /// Number-neutral after the count, the rule the rest of this feature's
     /// wording follows: one photograph reads as written English rather than as
-    /// a template with a 1 in it.
+    /// a template with a 1 in it. That singular is the catalog's plural
+    /// variation, not a branch here.
     static func onAnotherDevice(count: Int) -> String {
-        count == 1
-            ? String(
-                localized: """
-                One of this hike's photos is on the device it was added on, \
-                so it can't be shared from here.
-                """
-            )
-            : String(
-                localized: """
-                \(count) of this hike's photos are on the device they were \
-                added on, so they can't be shared from here.
-                """
-            )
+        String(
+            localized: """
+            \(count) of this hike's photos are on the device they were \
+            added on, so they can't be shared from here.
+            """
+        )
     }
 }

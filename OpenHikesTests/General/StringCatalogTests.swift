@@ -33,6 +33,40 @@ struct StringCatalogTests {
         #expect(String(localized: "\(3) photos") == "3 photos")
     }
 
+    /// The sentences that used to branch on `count == 1` and now carry their
+    /// singular as a variation, where no other suite already reads the
+    /// singular back. A key edited without its catalog entry falls back to
+    /// the plural wording, which is what these would catch.
+    @Test("a sentence that spells out one keeps its singular wording")
+    func singularVariationsReadAsWritten() {
+        // `CommunityPhotoShareSheet.alreadySent` is private to its view, so
+        // this one is read by its key.
+        func alreadySent(_ count: Int) -> String {
+            String(
+                localized: """
+                \(count) photos have already been sent from this hike, so they're \
+                left out. Tap one to send it again anyway.
+                """
+            )
+        }
+        #expect(alreadySent(1).hasPrefix("One photo has already been sent"))
+        #expect(alreadySent(2).hasPrefix("2 photos have already been sent"))
+        #expect(CommunityPublishedPhotos.removalWarning(count: 1).hasPrefix("Publishing deletes the faded photo "))
+        #expect(CommunityPublishedPhotos.removalWarning(count: 2).hasPrefix("Publishing deletes the 2 faded photos"))
+        #expect(CommunityPublishedPhotos.incompleteDownload(missing: 1).hasPrefix("One of this submission's photos"))
+        #expect(CommunityPublishedPhotos.incompleteDownload(missing: 2).hasPrefix("2 of this submission's photos"))
+    }
+
+    /// The singular drops the count but not the trail, so it names the trail
+    /// by position (`%2$@`); a plain `%@` there would be handed the count.
+    @Test("a singular that drops the count still names the trail")
+    func singularKeepsLaterArguments() {
+        let one = CommunityPhotoDisclosure.text(photoCount: 1, trailTitle: "Almbachklamm")
+        #expect(one.hasPrefix("One photo goes on Almbachklamm, with the spot"))
+        let two = CommunityPhotoDisclosure.text(photoCount: 2, trailTitle: "Almbachklamm")
+        #expect(two.hasPrefix("2 photos go on Almbachklamm, each with the spot"))
+    }
+
     /// The catalog holds words, never figures: distances, heights and
     /// durations are formatted per locale at the call site, and a catalog
     /// must not freeze one locale's spelling of a unit into English.
