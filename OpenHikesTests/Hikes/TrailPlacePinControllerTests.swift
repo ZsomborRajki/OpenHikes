@@ -159,4 +159,31 @@ struct TrailPlacePinControllerTests {
         controller.detach(token: token)
         #expect(controller.rows.isEmpty)
     }
+
+    @Test("once the place is on the hike its row is the pin, not a second one beside it")
+    func addedPlaceReplacesItsPlaceholder() {
+        let controller = TrailPlacePinController()
+        let placeholder = TrailPlaceRow(
+            place: TrailPlace(latitude: 47.63, longitude: 12.99, symbol: .viewpoint),
+            anchor: nil
+        )
+        var opened: [UUID] = []
+        let token = controller.attach([Self.spring], placeholder: placeholder) { opened.append($0) }
+
+        // What *Add* does while the form is still filing photographs: the
+        // hike now holds the place, under the placeholder's id.
+        var added = placeholder
+        added.place.name = "Kanzel"
+        controller.update([Self.spring, added], token: token, placeholder: placeholder)
+
+        #expect(controller.rows == [Self.spring, added])
+        #expect(controller.placeholderID == nil)
+        #expect(controller.open(added.id))
+        #expect(opened == [added.id])
+
+        // Hidden by the switch, the pin being placed stays until the form goes.
+        controller.setShowsPins(false)
+        #expect(controller.rows == [placeholder])
+        #expect(controller.placeholderID == placeholder.id)
+    }
 }

@@ -151,12 +151,18 @@ final class TrailPlacePinController {
 
     private func publish() {
         guard hasHostScreen else {
+            placeholderID = nil
             if !rows.isEmpty { rows = [] }
             return
         }
         var visible = showsPins ? claimed : []
-        if let placeholder { visible.append(placeholder) }
-        placeholderID = placeholder?.id
+        // *Add* puts the place on the hike under the placeholder's own id, and
+        // the form stays up while its photographs are filed. From then on the
+        // hike's row is the pin, and drawing the placeholder too would stand
+        // two pins on one spot with one id between them.
+        let pending = placeholder.flatMap { row in visible.contains { $0.id == row.id } ? nil : row }
+        if let pending { visible.append(pending) }
+        placeholderID = pending?.id
         guard visible != rows else { return }
         rows = visible
     }

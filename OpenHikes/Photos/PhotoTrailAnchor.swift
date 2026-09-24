@@ -67,8 +67,9 @@ nonisolated enum PhotoTrailAnchor {
     /// A photo may go without a pin and a place may not, so the one case
     /// ``coordinate(profile:live:scrubbed:)`` answers with "nowhere" — the
     /// untouched placeholder — is answered here with what the graph is
-    /// showing at that moment, which is the trailhead. The hiker sees the
-    /// pin appear there and can scrub to move it before adding anything.
+    /// showing at that moment, which is the trailhead. The spot is fixed once
+    /// the form is up; a hiker who wanted it elsewhere cancels, scrubs, and
+    /// taps again.
     static func placeCoordinate(
         profile: RouteProfile?,
         live: Double?,

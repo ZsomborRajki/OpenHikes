@@ -52,6 +52,10 @@ struct HikePlaceAdder: View {
     @State private var photos: [HikePlaceStagedPhoto] = []
     @State private var capture = PhotoCaptureState()
     @State private var isAdding = false
+    /// Photographs taken or picked that are still being read into the strip.
+    /// *Add* waits for them: it files what the strip holds, and a frame
+    /// straight off the camera that arrived a moment after it would be lost.
+    @State private var stagingCount = 0
     /// The place, once it is on the hike, while an alert about a photograph
     /// that did not make it is still up. The place's screen opens when the
     /// alert goes.
@@ -87,7 +91,7 @@ struct HikePlaceAdder: View {
                     .accessibilityIdentifier("hike-place-adder-cancel")
             }
             ToolbarItem(placement: .confirmationAction) {
-                if isAdding {
+                if isAdding || stagingCount > 0 {
                     ProgressView()
                 } else {
                     Button("Add", action: add)
@@ -174,7 +178,9 @@ struct HikePlaceAdder: View {
     }
 
     private func stage(_ frame: CapturedFrame) {
+        stagingCount += 1
         Task {
+            defer { stagingCount -= 1 }
             let thumbnail = await HikePlaceStagedPhoto.thumbnail(of: frame.image)
             photos.append(HikePlaceStagedPhoto(source: .captured(frame), thumbnail: thumbnail))
         }
@@ -184,7 +190,9 @@ struct HikePlaceAdder: View {
     /// it and a picture that cannot be read is reported while the hiker is
     /// still choosing.
     private func stage(_ items: [PhotosPickerItem]) {
+        stagingCount += 1
         Task {
+            defer { stagingCount -= 1 }
             for item in items {
                 guard let data = try? await item.loadTransferable(type: Data.self) else {
                     capture.failure = .importFailed
@@ -202,7 +210,7 @@ struct HikePlaceAdder: View {
     /// Puts the place on the hike, files every held photograph under it, and
     /// opens it — after the alert, if a photograph did not make it.
     private func add() {
-        guard !isAdding else { return }
+        guard !isAdding, stagingCount == 0 else { return }
         let place = draft.place(at: spot)
         guard hike.isAttached, hike.addPlace(place, in: modelContext) else { return }
         try? modelContext.save()
@@ -244,7 +252,7 @@ private struct HikePlaceStagedPhotoStrip: View {
     /// over a bright sky.
     private static let scrimOpacity = 0.6
     private static let removeInset: CGFloat = 4
-    /// What a tile shows while its thumbnail is still being made.
+    /// What a tile shows for a photograph no thumbnail could be made of.
     private static let pendingOpacity = 0.2
 
     let photos: [HikePlaceStagedPhoto]
