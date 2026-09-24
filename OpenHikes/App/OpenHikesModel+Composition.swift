@@ -265,7 +265,16 @@ extension OpenHikesModel {
     /// pill, the same shape ``TrailDraftController/canSnapToPaths`` takes for
     /// a launch with no trail graph. A control that cannot answer is worse
     /// than no control.
+    ///
+    /// The one way past the guard is ``SeededTrailPointSource``, which a
+    /// scenario has to ask for by name — the exception
+    /// ``makeCommunityTransport()`` makes, and on the same terms.
     static func makeTrailPointSource() -> (any TrailPointSourcing)? {
+        #if DEBUG
+        if let scenario = SeededTrailPointSource.Scenario(argument: AppLaunchEnvironment.trailPointScenarioName) {
+            return SeededTrailPointSource(scenario: scenario)
+        }
+        #endif
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
         return TrailPointSource()
     }
