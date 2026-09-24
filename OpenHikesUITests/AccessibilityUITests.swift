@@ -405,7 +405,7 @@ nonisolated final class AccessibilityUITests: XCTestCase {
     /// The empty state, which is a screen made almost entirely of glyphs
     /// interpolated into sentences.
     ///
-    /// "Tap ⬇️ to import a GPX file" contributes nothing spoken where the
+    /// "Tap ⬇️ to import it" contributes nothing spoken where the
     /// symbol is, so each line carries a rewritten label naming the button it
     /// points at. This is also the only screen a first launch shows, which
     /// makes it the worst one to leave unreadable.
@@ -414,7 +414,7 @@ nonisolated final class AccessibilityUITests: XCTestCase {
         let app = launchApp(arguments: ["--ui-test-expanded-sheet"])
 
         let importPrompt = app.staticTexts[
-            "Tap the Import GPX file button to import a GPX file."
+            "Have a GPX file? Tap the Import GPX file button to import it."
         ]
         XCTAssertTrue(
             importPrompt.waitForExistence(timeout: UITestTimeout.existence),
@@ -422,7 +422,8 @@ nonisolated final class AccessibilityUITests: XCTestCase {
         )
         XCTAssertTrue(
             app.staticTexts[
-                "Or tap the Record a hike button to record one as you walk."
+                "Tap the Record a hike button on the map to record a walk, "
+                    + "or the Make a trail button to draw a trail."
             ].exists
         )
         XCTAssertEqual(
@@ -433,6 +434,10 @@ nonisolated final class AccessibilityUITests: XCTestCase {
         XCTAssertEqual(
             element("record-hike-button", in: app).label,
             "Record a hike"
+        )
+        XCTAssertEqual(
+            element("map-trail-maker-button", in: app).label,
+            "Make a trail"
         )
 
         try audit(app)

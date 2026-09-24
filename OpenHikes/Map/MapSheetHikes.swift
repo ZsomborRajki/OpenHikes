@@ -29,9 +29,6 @@ struct MapSheetHikes: View, Equatable {
     /// without swallowing the title on top of it.
     private static let selectedHikeHighlightOpacity: Double = 0.28
     private static let actionGlyphSize: CGFloat = 40
-    /// Under the 8pt gap between the two action circles, so they stay separate
-    /// targets at rest and their glass still blends at the edges.
-    private static let actionGlassSpacing: CGFloat = 6
     /// Every hike this hiker has, newest first.
     ///
     /// Internal rather than private so the community section can read it from
@@ -132,7 +129,6 @@ struct MapSheetHikes: View, Equatable {
     /// the deletion "enough detail to identify it" is a title and a date typed
     /// from memory. See ``CommunityWithdrawal``.
     var onWithdraw: (Hike) -> Void = { _ in /* no-op default */ }
-    let onRecord: () -> Void
     let onImport: () -> Void
 
     /// Lets `.equatable()` skip this subtree when nothing it draws has changed.
@@ -247,11 +243,10 @@ private extension MapSheetHikes {
             }
             .padding(.horizontal)
 
-            // Under the heading rather than beside it. The two circles up
-            // there are things a hiker *does* — record a walk, import a file —
-            // and an order is a way of looking at what is already there. It
-            // also gave the segmented control back the width it was competing
-            // for.
+            // Under the heading rather than beside it. The circle up there is
+            // something a hiker *does* — import a file — and an order is a way
+            // of looking at what is already there. It also gave the segmented
+            // control back the width it was competing for.
             if community.isBrowsing {
                 // The community half has no orders to choose between, only a
                 // hand-made one — so the bar is just the way back out of it.
@@ -301,60 +296,18 @@ private extension MapSheetHikes {
         }
     }
 
-    /// Recording and GPX import actions, shown whether or not there are hikes.
+    /// GPX import, shown whether or not there are hikes. Recording and making
+    /// a trail are the map's, under its leading edge — see
+    /// ``MapTrailDraftControlsView`` for why they moved there.
     ///
-    /// The glass circles are drawn at 40pt but reach 44, which is the smallest
+    /// The glass circle is drawn at 40pt but reaches 44, which is the smallest
     /// target a finger can be expected to hit — the sizes are separate so the
     /// row keeps its proportions.
     var hikeActions: some View {
-        GlassStack(spacing: Self.actionGlassSpacing) {
-            HStack(spacing: 8) {
-                #if os(iOS)
-                recordButton
-                #endif
-                importButton
-            }
-        }
-        .font(.title3)
-        .buttonStyle(.plain)
+        importButton
+            .font(.title3)
+            .buttonStyle(.plain)
     }
-
-    #if os(iOS)
-    var recordButton: some View {
-        Button {
-            Task {
-                if !recorder.isActive {
-                    await recorder.start()
-                }
-                onRecord()
-            }
-        } label: {
-            Image(
-                systemName: recorder.isActive
-                    ? "stop.circle.fill"
-                    : "record.circle"
-            )
-                .foregroundStyle(.red)
-                .frame(width: Self.actionGlyphSize, height: Self.actionGlyphSize)
-                // Tinted while a recording is live, so the control carries the
-                // same red the map and the row badge use rather than leaving
-                // only its glyph to say so.
-                .glassSurface(
-                    recorder.isActive
-                        ? .regular.tint(.red).interactive()
-                        : .regular.interactive(),
-                    in: .circle
-                )
-                .minimumTapTarget()
-        }
-        .accessibilityLabel(
-            recorder.isActive
-                ? "Open hike recording"
-                : "Record a hike"
-        )
-        .accessibilityIdentifier("record-hike-button")
-    }
-    #endif
 
     /// The row that says how the list is ordered, and offers the others.
     ///
@@ -621,19 +574,25 @@ private extension MapSheetHikes {
                 .accessibilityHidden(true)
             Text("No hikes yet")
                 .font(.headline)
-            Text("Tap \(importIcon) to import a GPX file.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                // The glyph is interpolated as an image and contributes
-                // nothing spoken, so the sentence has to name the button it
-                // is pointing at.
-                .accessibilityLabel("Tap the Import GPX file button to import a GPX file.")
+            // The two on the map first: they are the two a first launch is
+            // most likely to want, and the ones this sentence has to point
+            // away from the sheet to find.
             #if os(iOS)
-            Text("Or tap \(recordIcon) to record one as you walk.")
+            Text("Tap \(recordIcon) on the map to record a walk, or \(makerIcon) to draw a trail.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .accessibilityLabel("Or tap the Record a hike button to record one as you walk.")
+                // The glyphs are interpolated as images and contribute
+                // nothing spoken, so the sentence has to name the buttons it
+                // is pointing at.
+                .accessibilityLabel(
+                    "Tap the Record a hike button on the map to record a walk, "
+                        + "or the Make a trail button to draw a trail."
+                )
             #endif
+            Text("Have a GPX file? Tap \(importIcon) to import it.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Have a GPX file? Tap the Import GPX file button to import it.")
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
@@ -646,9 +605,15 @@ private extension MapSheetHikes {
         Text(Image(systemName: "square.and.arrow.down")).foregroundStyle(.tint)
     }
 
+    #if os(iOS)
     var recordIcon: Text {
-        Text(Image(systemName: "record.circle")).foregroundStyle(.red)
+        Text(Image(systemName: MapTrailDraftControlsView.recordSymbolName)).foregroundStyle(.red)
     }
+
+    var makerIcon: Text {
+        Text(Image(systemName: MapTrailDraftControlsView.symbolName)).foregroundStyle(.tint)
+    }
+    #endif
 }
 
 // MARK: - Search results

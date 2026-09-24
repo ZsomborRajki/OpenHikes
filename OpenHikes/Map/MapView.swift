@@ -106,6 +106,12 @@ struct MapView: MapViewRepresentable, Equatable {
     /// down moves MapKit and nothing else — see ``TrailDraftController``.
     var trailMaker: TrailDraftController
 
+    /// Whether a recording is live, and the request the record button under
+    /// the maker's raises. Observed directly by the map (not via SwiftUI) so
+    /// a recording starting turns the button red and re-renders nothing — see
+    /// ``RecordingEntry``.
+    var recordingEntry: RecordingEntry
+
     /// Told where the map came to rest, so community results can follow the
     /// map without any SwiftUI body reading the region.
     ///
@@ -216,7 +222,9 @@ struct MapView: MapViewRepresentable, Equatable {
         // reason: a map built while the sheet already has nothing pushed has
         // to offer the maker on this first pass rather than waiting for a
         // navigation that may not come.
-        coordinator.observeTrailDraftControls(trailMaker)
+        // The record button in that pill comes with it, so a map rebuilt
+        // mid-recording draws it red at once.
+        coordinator.observeTrailDraftControls(trailMaker, recording: recordingEntry)
         // The line and its numbered pins, which are drawn only while the
         // maker's screen is up — including on a map rebuilt underneath one, as
         // a rotation rebuilds it.
@@ -491,12 +499,15 @@ struct MapView: MapViewRepresentable, Equatable {
     static let controlInset: CGFloat = 12
 
     #if os(iOS)
-    /// The gap between the camera pill and the credit line under it.
+    /// The gap between the pill in the leading-edge slot and the credit line
+    /// under it.
     ///
-    /// Much smaller than the inset above, on purpose: this is the space
-    /// *inside* one stack of leading-edge chrome, not the space between that
-    /// chrome and the edge of the map.
-    static let creditLineSpacing: CGFloat = 4
+    /// Smaller than the inset above, on purpose: this is the space *inside*
+    /// one stack of leading-edge chrome, not the space between that chrome and
+    /// the edge of the map. Eight rather than the four it was, since the
+    /// record button moved to the bottom of that stack: a thumb reaching for
+    /// it should not land on a credit.
+    static let creditLineSpacing: CGFloat = 8
     #endif
 
     /// Draws the current route (if any) and fits the map to it. No-op while the
@@ -738,6 +749,7 @@ extension MapView {
             && lhs.photoPins === rhs.photoPins
             && lhs.placePins === rhs.placePins
             && lhs.trailMaker === rhs.trailMaker
+            && lhs.recordingEntry === rhs.recordingEntry
             && lhs.community === rhs.community
             && lhs.searchCompleter === rhs.searchCompleter
             && lhs.sidePanelInset == rhs.sidePanelInset

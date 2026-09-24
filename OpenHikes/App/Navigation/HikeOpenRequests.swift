@@ -65,4 +65,13 @@ final class HikeOpenRequests {
         link = url
         request &+= 1
     }
+
+    /// Asks for the live recording's screen, as though the widget showing it
+    /// had been tapped — which is also what the map's record button does once
+    /// it has started one. See ``RecordingEntry``.
+    func openRecording() {
+        guard let url = TrailWidgetDeepLink.recordingURL() else { return }
+        link = url
+        request &+= 1
+    }
 }

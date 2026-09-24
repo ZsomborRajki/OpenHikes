@@ -2,26 +2,28 @@
 //  MapTrailDraftControls.swift
 //  OpenHikes
 //
-//  The *make a trail* button, on the map's leading edge.
+//  The *make a trail* and *record* buttons, on the map's leading edge.
 //
-//  It sits in the slot ``MapPhotoControlsView`` occupies, and that is a
+//  They sit in the slot ``MapPhotoControlsView`` occupies, and that is a
 //  decision rather than a coincidence of layout. The camera pill is offered
 //  only while a screen is pushed that has attached a hike to photograph, so on
 //  the search screen — the one a hiker is looking at when they decide where to
 //  walk on Saturday — that corner of the map is empty and has been since it
 //  was built. `MapView.addPhotoControls` says so in its own comment. This is
-//  what goes there.
+//  what goes there: the two ways of making a hike that happen on the map.
+//  Importing a file is the third, and it stays beside the list it adds to.
+//
+//  *Record* is the lower of the two, because the bottom of the column is the
+//  one a thumb reaches first and recording is the one a hiker does standing
+//  at a trailhead. It is on the map rather than in the sheet so it can be
+//  reached at the compact detent, where the sheet draws no list at all.
 //
 //  UIKit for the reason the camera pill is, and it is the same reason twice
 //  over: it has to sit at exactly the height the tracking button sits at,
 //  follow the sheet through ``MapView/Coordinator/applySheetTop(on:)`` without
 //  a SwiftUI pass in between, and fade exactly where the rest of that row
-//  fades. It shares ``MapPhotoControlsView/controlSize``, the glass capsule
+//  fades. It shares ``MapPhotoControlsView/controlSize``, the glass container
 //  and ``MapView/Coordinator/applyCreditLineClearance()``.
-//
-//  One button rather than two, so there is no container effect here: a
-//  `UIGlassContainerEffect` exists to merge neighbouring shapes, and a lone
-//  capsule has nothing to merge with.
 //
 
 import Foundation
@@ -30,21 +32,37 @@ import MapKit
 #if os(iOS)
 import UIKit
 
-/// The pill itself. Owns its appearance and its one action; where it sits is
+/// The pill itself. Owns its appearance and its two actions; where it sits is
 /// decided by ``MapView/Coordinator/applySheetTop(on:)``, which positions the
 /// whole leading-edge column together.
 final class MapTrailDraftControlsView: UIView {
     /// The glyph a route is drawn with everywhere this app has one to draw:
     /// two points and the line between them.
     static let symbolName = "point.topleft.down.to.point.bottomright.curvepath"
+    /// The record button's glyph at rest, and while a recording is under way —
+    /// the two the sheet's button drew before it moved here.
+    static let recordSymbolName = "record.circle"
+    static let recordingSymbolName = "stop.circle.fill"
     private static let symbolPointSize: CGFloat = 17
+    /// The camera pill's figures, for the reason it gives: separate targets at
+    /// rest, one merged shape of glass.
+    private static let glassMergeSpacing: CGFloat = 10
+    private static let buttonSpacing: CGFloat = 4
 
     private let onDraw: () -> Void
+    private let onRecord: () -> Void
+    /// Kept for ``setRecording(_:)``, which re-dresses it in place.
+    private(set) var recordButton: UIButton?
+    private var recordGlass: UIVisualEffectView?
+    /// What ``setRecording(_:)`` last drew, so a repeat is free.
+    private(set) var isRecording = false
 
-    init(onDraw: @escaping () -> Void) {
+    init(onDraw: @escaping () -> Void, onRecord: @escaping () -> Void) {
         self.onDraw = onDraw
+        self.onRecord = onRecord
         super.init(frame: .zero)
         buildHierarchy()
+        applyRecordingAppearance()
     }
 
     @available(*, unavailable)
@@ -52,39 +70,115 @@ final class MapTrailDraftControlsView: UIView {
         fatalError("MapTrailDraftControlsView is created in code only")
     }
 
+    /// Dresses the record button for a recording under way, or for none.
+    ///
+    /// Red glass with a white glyph while one is live — the same red the map's
+    /// trace and the row badge use — rather than a red glyph on red glass,
+    /// which is a glyph nobody can see.
+    func setRecording(_ recording: Bool) {
+        guard recording != isRecording else { return }
+        isRecording = recording
+        applyRecordingAppearance()
+    }
+
+    private func applyRecordingAppearance() {
+        guard let recordButton, let recordGlass else { return }
+        recordButton.configuration?.image = Self.symbol(
+            isRecording ? Self.recordingSymbolName : Self.recordSymbolName
+        )
+        recordButton.tintColor = isRecording ? .white : .systemRed
+        let glass = UIGlassEffect(style: .regular)
+        if isRecording { glass.tintColor = .systemRed }
+        recordGlass.effect = glass
+        recordButton.accessibilityLabel = isRecording
+            ? String(localized: "Open hike recording")
+            : String(localized: "Record a hike")
+    }
+
+    private func buildHierarchy() {
+        let container = UIVisualEffectView(
+            effect: {
+                let effect = UIGlassContainerEffect()
+                effect.spacing = Self.glassMergeSpacing
+                return effect
+            }()
+        )
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        let (drawGlass, _) = glassButton(
+            symbol: Self.symbolName,
+            label: String(localized: "Make a trail"),
+            identifier: "map-trail-maker-button",
+            action: onDraw
+        )
+        // The same identifier the sheet's button carried, so everything that
+        // starts a recording by it still finds one.
+        let (recordCapsule, recordControl) = glassButton(
+            symbol: Self.recordSymbolName,
+            label: String(localized: "Record a hike"),
+            identifier: "record-hike-button",
+            action: onRecord
+        )
+        recordGlass = recordCapsule
+        recordButton = recordControl
+
+        let stack = UIStackView(arrangedSubviews: [drawGlass, recordCapsule])
+        stack.axis = .vertical
+        stack.spacing = Self.buttonSpacing
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        addSubview(container)
+        container.contentView.addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            container.leadingAnchor.constraint(equalTo: leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: trailingAnchor),
+            container.topAnchor.constraint(equalTo: topAnchor),
+            container.bottomAnchor.constraint(equalTo: bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: container.contentView.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: container.contentView.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: container.contentView.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: container.contentView.bottomAnchor),
+        ])
+    }
+
+    private static func symbol(_ name: String) -> UIImage? {
+        UIImage(
+            systemName: name,
+            withConfiguration: UIImage.SymbolConfiguration(
+                pointSize: symbolPointSize,
+                weight: .medium
+            )
+        )
+    }
+
     /// One glass capsule with a glyph-only button inside it, sized to
     /// ``AccessibilityMetrics/minimumTapTarget`` rather than to its symbol and
     /// carrying a spoken name of its own — a glyph is not a label, and
     /// `performAccessibilityAudit` measures both.
-    private func buildHierarchy() {
+    private func glassButton(
+        symbol: String,
+        label: String,
+        identifier: String,
+        action: @escaping () -> Void
+    ) -> (UIVisualEffectView, UIButton) {
         var configuration = UIButton.Configuration.plain()
-        configuration.image = UIImage(
-            systemName: Self.symbolName,
-            withConfiguration: UIImage.SymbolConfiguration(
-                pointSize: Self.symbolPointSize,
-                weight: .medium
-            )
-        )
+        configuration.image = Self.symbol(symbol)
         let button = UIButton(
             configuration: configuration,
-            primaryAction: UIAction { [onDraw] _ in onDraw() }
+            primaryAction: UIAction { _ in action() }
         )
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.accessibilityLabel = String(localized: "Make a trail")
-        button.accessibilityIdentifier = "map-trail-maker-button"
+        button.accessibilityLabel = label
+        button.accessibilityIdentifier = identifier
 
         let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
         glass.translatesAutoresizingMaskIntoConstraints = false
         glass.cornerConfiguration = .capsule()
         glass.contentView.addSubview(button)
-        addSubview(glass)
 
         let size = MapPhotoControlsView.controlSize
         NSLayoutConstraint.activate([
-            glass.leadingAnchor.constraint(equalTo: leadingAnchor),
-            glass.trailingAnchor.constraint(equalTo: trailingAnchor),
-            glass.topAnchor.constraint(equalTo: topAnchor),
-            glass.bottomAnchor.constraint(equalTo: bottomAnchor),
             glass.widthAnchor.constraint(equalToConstant: size),
             glass.heightAnchor.constraint(equalToConstant: size),
             button.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor),
@@ -92,6 +186,7 @@ final class MapTrailDraftControlsView: UIView {
             button.topAnchor.constraint(equalTo: glass.contentView.topAnchor),
             button.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor),
         ])
+        return (glass, button)
     }
 }
 #endif
@@ -104,7 +199,8 @@ final class MapTrailDraftControlsView: UIView {
 /// folder: a feature owns the piece of the map it draws, and the file that
 /// builds every control on this map is at its length limit.
 extension MapView {
-    /// The *make a trail* pill, in the same place the camera pill sits.
+    /// The *make a trail* and *record* pill, in the same place the camera
+    /// pill sits.
     ///
     /// Not merely nearby: it hangs off the same two constraints against the
     /// credit line that ``addPhotoControls(to:_:alignedTo:)`` builds, so the
@@ -123,7 +219,8 @@ extension MapView {
         alignedTo guide: UILayoutGuide
     ) {
         let controls = MapTrailDraftControlsView(
-            onDraw: { [trailMaker] in trailMaker.requestOpen() }
+            onDraw: { [trailMaker] in trailMaker.requestOpen() },
+            onRecord: { [recordingEntry] in recordingEntry.requestRecording() }
         )
         controls.translatesAutoresizingMaskIntoConstraints = false
         // Starts out of the way, for the reason the camera pill does:
@@ -170,10 +267,17 @@ extension MapView.Coordinator {
     /// would leave two observers running two overlapping fades against the
     /// same view, and `withObservationTracking` offers no way to cancel the
     /// first.
-    func observeTrailDraftControls(_ controller: TrailDraftController) {
+    ///
+    /// The record button in the same pill is registered here too, under the
+    /// same guard: it is one view, observed once.
+    func observeTrailDraftControls(
+        _ controller: TrailDraftController,
+        recording entry: RecordingEntry
+    ) {
         guard !isObservingTrailDraftControls else { return }
         isObservingTrailDraftControls = true
         trackTrailDraftControls(controller)
+        trackRecordingEntry(entry)
     }
 
     private func trackTrailDraftControls(_ controller: TrailDraftController) {
@@ -233,5 +337,20 @@ extension MapView.Coordinator {
               trailDraftControls.alpha != alpha else { return }
         trailDraftControls.alpha = alpha
         #endif
+    }
+
+    /// Keeps the record button's red in step with the recorder, then
+    /// re-registers — the arrangement every observation on this map uses, so
+    /// a recording starting or ending re-dresses one button and re-renders
+    /// nothing.
+    private func trackRecordingEntry(_ entry: RecordingEntry) {
+        #if os(iOS)
+        trailDraftControls?.setRecording(entry.isRecording)
+        #endif
+        reobserving(self, entry) {
+            _ = entry.isRecording
+        } onChange: { coordinator, model in
+            coordinator.trackRecordingEntry(model)
+        }
     }
 }

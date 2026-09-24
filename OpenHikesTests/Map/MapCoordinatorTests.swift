@@ -44,6 +44,13 @@ struct MapCoordinatorTests {
     /// `MapCoordinatorTests+TrailDraft.swift`. No store: what those ask about
     /// is the map, and a draft that is not written down draws the same.
     let trailMaker = TrailDraftController()
+    /// Whether the record button in the maker's pill draws a live recording,
+    /// driven by hand — see `MapCoordinatorTests+RecordButton.swift`. No
+    /// recorder behind it: what those ask about is the button.
+    let recordingState = RecordingStateStub()
+    /// Where the record button's tap lands, so a test can see it arrive.
+    let openRequests = HikeOpenRequests()
+    let recordingEntry: RecordingEntry
     /// Internal so the line-tap tests can ask what a thumb opened — see
     /// `MapCoordinatorTests+RouteTap.swift`.
     let drawnRouteTap = DrawnRouteTap()
@@ -63,6 +70,11 @@ struct MapCoordinatorTests {
     init() {
         locationManager = LocationManager(clock: clock.read)
         sheetMetrics = SheetMetrics(clock: clock.read)
+        recordingEntry = RecordingEntry(
+            isLive: { [recordingState] in recordingState.isLive },
+            start: { [recordingState] in recordingState.isLive = true },
+            openRequests: openRequests
+        )
     }
 
     static let osm = ActiveTileSource(
@@ -114,6 +126,7 @@ struct MapCoordinatorTests {
             photoPins: photoPins,
             placePins: placePins,
             trailMaker: trailMaker ?? self.trailMaker,
+            recordingEntry: recordingEntry,
             community: community,
             searchCompleter: searchCompleter,
             sidePanelInset: sidePanelInset

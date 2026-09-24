@@ -154,7 +154,6 @@ struct MapSheet: View {
                     onSelectPendingPhotos: { presentation.path.append(.pendingPhotos($0)) },
                     onDelete: delete,
                     onWithdraw: { withdrawingHike = $0 },
-                    onRecord: openRecording,
                     onImport: presentImporter
                 )
                     // The list of every hike, rebuilt only when one of the
