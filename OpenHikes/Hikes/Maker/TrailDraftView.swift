@@ -537,7 +537,8 @@ struct TrailDraftView: View {
                 from: draft,
                 openedWith: maker.editingPlaceIDs,
                 into: modelContext,
-                heights: maker.elevation.samples
+                heights: maker.elevation.samples,
+                keepingPlaces: maker.finder.filter.placesShown
             )
         )
     }
@@ -570,7 +571,8 @@ struct TrailDraftView: View {
             // Whatever the heights were last read for, applied only if they
             // are still about this line — nothing here waits for an answer
             // that has not landed. See ``TrailDraftElevation``.
-            heights: maker.elevation.samples
+            heights: maker.elevation.samples,
+            keepingPlaces: maker.finder.filter.placesShown
         ))
     }
 

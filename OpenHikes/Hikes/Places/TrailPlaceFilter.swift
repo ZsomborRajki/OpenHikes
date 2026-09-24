@@ -23,6 +23,15 @@
 //  the next request leaves the tag out (``TrailPointFinder``), and the pins of
 //  that kind already on the trail go (``TrailDraftController/setShowsPlaces(_:of:)``).
 //
+//  ## And one switch above all of them
+//
+//  ``placesShown`` is the switch beside the section's heading, and it is a
+//  different kind of *off*: it hides rather than removes. The trail's places
+//  stay on the drawing, out of sight, the *Search this area* pill goes, and a
+//  save attaches none of them — see ``TrailDraftSave``. On again brings them
+//  all back, because nothing was taken away. App-wide and on this device for
+//  the reasons the kinds are.
+//
 
 import Foundation
 import Observation
@@ -36,6 +45,11 @@ final class TrailPlaceFilter {
     /// The symbols switched off.
     private(set) var hidden: Set<TrailPlaceSymbol>
 
+    /// Whether the maker deals in places at all: its pins, its pill, and what
+    /// a save attaches. See the file header for how this differs from a kind
+    /// switched off.
+    private(set) var placesShown: Bool
+
     /// Where the choice is kept, or `nil` for one that lives only as long as
     /// this object — a preview, and every suite that does not ask for one.
     @ObservationIgnored private let defaults: UserDefaults?
@@ -43,6 +57,9 @@ final class TrailPlaceFilter {
     init(defaults: UserDefaults?) {
         self.defaults = defaults
         hidden = defaults.map(Self.load(from:)) ?? []
+        // What is stored is the switch turned *off*, so an empty store is the
+        // default: places are shown.
+        placesShown = !(defaults?.bool(forKey: SettingsKey.trailPlacesHidden) ?? false)
     }
 
     nonisolated deinit { /* intentionally empty */ }
@@ -71,6 +88,12 @@ final class TrailPlaceFilter {
             hidden.insert(symbol)
         }
         save()
+    }
+
+    func setPlacesShown(_ shown: Bool) {
+        guard placesShown != shown else { return }
+        placesShown = shown
+        defaults?.set(!shown, forKey: SettingsKey.trailPlacesHidden)
     }
 
     // MARK: - Storage

@@ -160,6 +160,29 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// The switch beside *Search This Area* turned off withdraws the pill
+    /// with the maker still up — a search would add pins nobody can see — and
+    /// on brings it back.
+    @Test("the places switch withdraws the pill and brings it back")
+    func thePlacesSwitchWithdrawsThePill() async throws {
+        #if os(iOS)
+        let maker = Self.drawingMaker()
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(trailMaker: maker), coordinator)
+        defer { detach(map) }
+        let pill = try #require(coordinator.trailPointSearchControl)
+        #expect(!pill.isHidden)
+
+        maker.setPlacesShown(false)
+        await settle(until: "the pill to be withdrawn") { pill.isHidden }
+        #expect(!pill.isUserInteractionEnabled)
+
+        maker.setPlacesShown(true)
+        await settle(until: "the pill to come back") { !pill.isHidden && pill.alpha == 1 }
+        #expect(pill.isUserInteractionEnabled)
+        #endif
+    }
+
     /// **The rule.** A hiker can be browsing shared trails and then tap *make
     /// a trail*; without this they had two pills in one strip, one asking
     /// OpenStreetMap for routes and one asking it for places.
@@ -236,5 +259,41 @@ extension MapCoordinatorTests {
 
         #expect(!map.annotations.contains { $0 is TrailPlaceAnnotation })
         #expect(maker.draft.places.count == 1)
+    }
+
+    /// The switch hides the pins and keeps the places, so on puts every pin
+    /// back without a search.
+    @Test("the places switch takes the pins off the map and puts them back")
+    func thePlacesSwitchHidesThePins() async {
+        let maker = Self.drawingMaker(offering: [Self.place(47.601, 12.901)])
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(trailMaker: maker), coordinator)
+        defer { detach(map) }
+
+        maker.finder.regionDidSettle(Self.searchableRegion())
+        maker.searchNearbyPlaces()
+        await settle(until: "the place to reach the map") {
+            coordinator.trailDraftPlaceAnnotations.count == 1
+        }
+
+        maker.setPlacesShown(false)
+        await settle(until: "the pin to go") { coordinator.trailDraftPlaceAnnotations.isEmpty }
+        #expect(maker.draft.places.count == 1)
+
+        maker.setPlacesShown(true)
+        await settle(until: "the pin to come back") { coordinator.trailDraftPlaceAnnotations.count == 1 }
+    }
+
+    /// And while they are hidden the pill's verb asks nothing, so no answer
+    /// can land on a drawing whose places nobody can see.
+    @Test("a search is refused while the places are switched off")
+    func noSearchWhileThePlacesAreOff() {
+        let maker = Self.drawingMaker(offering: [Self.place(47.601, 12.901)])
+        maker.finder.regionDidSettle(Self.searchableRegion())
+
+        maker.setPlacesShown(false)
+        maker.searchNearbyPlaces()
+
+        #expect(!maker.finder.isSearching)
     }
 }

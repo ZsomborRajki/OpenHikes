@@ -124,6 +124,26 @@ struct TrailDraftSaveTests {
         #expect(draft.places.map(\.name) == ["Spring", "Summit"])
     }
 
+    /// The switch beside *Search This Area* turned off: the places were out of
+    /// sight, so none is attached — and the drawing still holds them, since
+    /// the switch hid them rather than removing them.
+    @Test("a save with the places switched off attaches none of them")
+    func savesNoPlacesWhenSwitchedOff() throws {
+        let context = try context()
+        let draft = Self.draft([Line.south, Line.north])
+        draft.addPlaces([
+            TrailPlace(latitude: Line.south + 0.001, longitude: Line.longitude, name: "Spring"),
+        ])
+
+        let hike = try #require(
+            TrailDraftSave.hike(from: draft, named: "Ridge", into: context, keepingPlaces: false).hike
+        )
+
+        #expect(hike.places.isEmpty)
+        #expect(try context.fetchCount(FetchDescriptor<TrailPoint>()) == 0)
+        #expect(draft.places.map(\.name) == ["Spring"])
+    }
+
     /// A place is a spot beside a trail rather than part of one, so it does
     /// not lengthen the route and is not one of its coordinates.
     @Test("a place is not a point of the saved route")

@@ -241,6 +241,9 @@ extension MapView.Coordinator {
             // reason the line is: they are drawn while the maker is up and not
             // otherwise.
             _ = controller.draft.placeRows
+            // And whether they are shown at all — the switch beside *Search
+            // This Area*, which hides them without taking them off the trail.
+            _ = controller.finder.filter.placesShown
             // The route's time bubble counts the climb once it is measured,
             // which lands on its own schedule, two seconds after the drawing
             // settles — see ``TrailDraftElevation``.
@@ -269,7 +272,8 @@ extension MapView.Coordinator {
         // Before the guard below, deliberately: that one lets a pass through
         // only when the *line* changed, and places and the sheet's pin change
         // without a leg moving. Each has a guard of its own.
-        applyTrailDraftPlaces(isDrawing ? draft.placeRows : [], on: mapView)
+        let showsPlaces = isDrawing && controller.finder.filter.placesShown
+        applyTrailDraftPlaces(showsPlaces ? draft.placeRows : [], on: mapView)
         applyTrailDraftDroppedPin(isDrawing ? controller.droppedPin : nil, on: mapView)
         // And the strip at the top of the map, which the maker takes from the
         // *Community* tab for as long as it is up — the one exclusion in this

@@ -71,6 +71,19 @@ struct TrailPlaceFilterTests {
         #expect(TrailPlaceFilter(defaults: defaults).hidden == [.shelter])
     }
 
+    /// The switch beside the heading starts on and, like the kinds, stays
+    /// where it was left for the next maker.
+    @Test("the places switch starts on and is kept")
+    func thePlacesSwitchIsKept() throws {
+        let defaults = try Self.defaults()
+        let first = TrailPlaceFilter(defaults: defaults)
+        #expect(first.placesShown)
+
+        first.setPlacesShown(false)
+
+        #expect(!TrailPlaceFilter(defaults: defaults).placesShown)
+    }
+
     /// A place that claims no symbol has no switch to be turned off by.
     @Test("a place with no symbol is always admitted")
     func aPlaceWithNoSymbolIsAdmitted() {
@@ -135,5 +148,48 @@ struct TrailPlaceFilterTests {
         maker.setShowsPlaces(false, of: .shelter)
 
         #expect(maker.selection == nil)
+    }
+
+    // MARK: - The switch above the kinds
+
+    /// **Off hides, it does not remove**: the places stay on the drawing and
+    /// on disk, so on brings every one of them back — the opposite of a kind
+    /// switched off.
+    @Test("the places switch hides the trail's places without removing them")
+    func thePlacesSwitchKeepsThePlaces() throws {
+        let store = TrailDraftStore(context: try Fixture.modelContext())
+        let maker = TrailDraftController(store: store)
+        maker.setEditing(true)
+        maker.draft.addPlaces([
+            TrailPlace(coordinate: Self.coordinate(Line.north), name: "Hut", symbol: .shelter),
+        ])
+        maker.appendWaypoint(at: Self.coordinate(Line.south))
+
+        maker.setPlacesShown(false)
+
+        #expect(maker.draft.places.map(\.name) == ["Hut"])
+        #expect(store.load().places.map(\.name) == ["Hut"])
+        #expect(maker.finder.filter.shows(.shelter), "the kinds are left as they were")
+    }
+
+    /// The card about a place closes with its pin, and no card can be opened
+    /// on one while they are hidden.
+    @Test("the places switch closes a place card and opens none")
+    func thePlacesSwitchClosesTheCard() {
+        let maker = TrailDraftController()
+        maker.setEditing(true)
+        let hut = TrailPlace(coordinate: Self.coordinate(Line.north), name: "Hut", symbol: .shelter)
+        maker.draft.addPlaces([hut])
+        maker.select(.place(hut.id))
+
+        maker.setPlacesShown(false)
+        #expect(maker.selection == nil)
+
+        maker.select(.place(hut.id))
+        #expect(maker.selection == nil)
+
+        maker.setPlacesShown(true)
+        maker.select(.place(hut.id))
+        #expect(maker.selection == .place(hut.id))
     }
 }

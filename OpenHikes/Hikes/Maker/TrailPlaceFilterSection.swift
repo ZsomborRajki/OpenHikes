@@ -9,6 +9,11 @@
 //  under *Follow Paths*, and where a hiker who never wants parking pins says
 //  so once — see ``TrailPlaceFilter`` for why the choice is app-wide.
 //
+//  The switch beside the heading is the one above the kinds: off hides the
+//  trail's places, withdraws the pill and keeps them out of the save — see
+//  ``TrailPlaceFilter/placesShown``. The kinds' rows go with it, because
+//  there is nothing left for them to choose between.
+//
 //  Its own `View` for the reason ``TrailDraftSnapToggle`` is one: a `Toggle`
 //  declared in ``TrailDraftView``'s body would make every flip of a switch a
 //  pass over the whole route.
@@ -21,8 +26,9 @@ struct TrailPlaceFilterSection: View {
 
     var body: some View {
         let filter = maker.finder.filter
+        let placesShown = filter.placesShown
         Section {
-            ForEach(TrailPointQuery.searchableSymbols, id: \.self) { symbol in
+            ForEach(placesShown ? TrailPointQuery.searchableSymbols : [], id: \.self) { symbol in
                 Toggle(isOn: Binding(
                     get: { filter.shows(symbol) },
                     set: { shows in maker.setShowsPlaces(shows, of: symbol) }
@@ -57,15 +63,38 @@ struct TrailPlaceFilterSection: View {
             // at footnote size: a paragraph in iOS's bold header type reads as
             // a heading of its own.
             VStack(alignment: .leading, spacing: Self.subtitleSpacing) {
-                Text("Search This Area")
-                Text(
-                    """
-                    The Search this area button on the map adds what \
-                    OpenStreetMap has mapped near your trail as pins you can tap. \
-                    Choose what it looks for. Turning a kind off also removes its \
-                    pins from the map.
-                    """
-                )
+                HStack {
+                    Text("Search This Area")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Toggle(
+                        "Search This Area",
+                        // A closure rather than the method itself, for the
+                        // reason ``TrailPlacePinSwitch`` gives: the
+                        // reabstraction thunk crashes Swift 6.3's IRGen.
+                        isOn: Binding(get: { placesShown }, set: { maker.setPlacesShown($0) })
+                    )
+                    .labelsHidden()
+                    .accessibilityIdentifier("trail-places-toggle")
+                }
+                Group {
+                    if placesShown {
+                        Text(
+                            """
+                            The Search this area button on the map adds what \
+                            OpenStreetMap has mapped near your trail as pins you can tap. \
+                            Choose what it looks for. Turning a kind off also removes its \
+                            pins from the map.
+                            """
+                        )
+                    } else {
+                        Text(
+                            """
+                            Places are hidden from the map and won't be saved with \
+                            this trail. Turn this on to show them and search for more.
+                            """
+                        )
+                    }
+                }
                 .font(.footnote)
                 .fontWeight(.regular)
                 .accessibilityIdentifier("trail-place-filter-explanation")
