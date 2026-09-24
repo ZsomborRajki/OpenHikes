@@ -85,6 +85,7 @@ struct HikePlaceSection: View {
                     Button("Find Places Along Trail", systemImage: "magnifyingglass") {
                         isSearching = true
                     }
+                    .sectionActionButtonStyle()
                     .accessibilityIdentifier("hike-place-search")
                     .sheet(isPresented: $isSearching) {
                         HikePlaceSearchSheet(hike: hike, source: search.source, symbols: search.symbols)
