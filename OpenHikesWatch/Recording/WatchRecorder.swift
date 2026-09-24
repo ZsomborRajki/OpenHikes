@@ -104,6 +104,8 @@ final class WatchRecorder: NSObject {
     var onWalkQueued: (@MainActor (WatchRecordedWalk) -> Void)?
 
     @ObservationIgnored private let store: WatchStore
+    /// The complication's copy of this recording — see ``WatchGlance``.
+    @ObservationIgnored private let glances = WatchGlancePublisher()
     @ObservationIgnored private let healthStore = HKHealthStore()
     @ObservationIgnored private let locations = CLLocationManager()
     @ObservationIgnored private var session: HKWorkoutSession?
@@ -127,6 +129,11 @@ final class WatchRecorder: NSObject {
         locations.desiredAccuracy = kCLLocationAccuracyBest
         locations.distanceFilter = WatchFixPolicy.minimumDisplacement
         locations.allowsBackgroundLocationUpdates = true
+        // Nothing survives a relaunch — a recording lives in this process and
+        // no other — so a complication still showing one is showing a walk
+        // that ended with the last process. Said now, rather than left to
+        // tick for the six hours ``WatchGlanceDisplay/staleAfter`` allows.
+        publishGlance()
     }
 
     /// Starts a recording, optionally naming the trail being walked.
@@ -149,6 +156,7 @@ final class WatchRecorder: NSObject {
         guard startWorkoutSession() else { return }
         locations.startUpdatingLocation()
         phase = .recording
+        publishGlance()
     }
 
     func pause() {
@@ -162,12 +170,14 @@ final class WatchRecorder: NSObject {
         // location updates would be a recording the system is free to suspend
         // and never resume.
         phase = .paused
+        publishGlance()
     }
 
     func resume() {
         guard phase == .paused else { return }
         session?.resume()
         phase = .recording
+        publishGlance()
     }
 
     /// Stops, writes the walk to disk and hands it back for sending.
@@ -180,6 +190,8 @@ final class WatchRecorder: NSObject {
         guard phase.isActive else { return nil }
         locations.stopUpdatingLocation()
         endWorkoutSession()
+        // Whatever happens to the walk below, nothing is being recorded now.
+        glances.publish(.idle(at: .now))
 
         guard let walk = accumulator.recordedWalk(
             sessionID: sessionID,
@@ -375,7 +387,31 @@ final class WatchRecorder: NSObject {
                 fixCount: accumulator.fixes.count
             )
         )
+        publishGlance(asOf: location.timestamp)
         onFix?(location)
+    }
+
+    /// What the complication is told: the phase and the figures as they
+    /// stand. Asked on every fix and every phase change; the publisher's
+    /// policy decides which of those are worth a write and a redraw.
+    ///
+    /// `asOf` is the moment the accumulator's clock was read at: a fix's own
+    /// timestamp, since ``WatchWalkAccumulator/activeSeconds`` runs to the
+    /// last kept fix and a batch can be delivered late.
+    private func publishGlance(asOf date: Date = .now) {
+        let state: WatchGlance.State = switch phase {
+        case .recording: .recording
+        case .paused: .paused
+        case .idle, .preparing, .saved, .failed: .idle
+        }
+        glances.publish(
+            WatchGlance(
+                state: state,
+                distanceMeters: accumulator.distanceMeters,
+                activeSeconds: accumulator.activeSeconds,
+                updatedAt: date
+            )
+        )
     }
 
     /// Fixes arriving while nothing is being recorded, so a trail can still be
