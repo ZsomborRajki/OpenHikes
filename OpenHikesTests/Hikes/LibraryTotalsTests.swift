@@ -41,7 +41,7 @@ struct LibraryTotalsTests {
             climbMeters: climb,
             highestMeters: highest,
             movingSeconds: clock ? 3600 : nil,
-            hasClock: clock,
+            clock: clock ? DateInterval(start: date, duration: 3 * 3600) : nil,
             isFromCommunity: community
         )
     }
@@ -56,6 +56,7 @@ struct LibraryTotalsTests {
         LibraryWalkFacts(
             hikeID: hikeID,
             startedAt: date,
+            endedAt: date.addingTimeInterval(1800),
             coveredMeters: covered,
             routeDistanceMeters: route,
             activeSeconds: 1800,
@@ -118,6 +119,26 @@ struct LibraryTotalsTests {
         #expect(totals.allTime.outings == 1)
     }
 
+    /// Following and recording run side by side, so one afternoon can leave
+    /// both a recording and a walk along the trail it followed.
+    @Test("a walk followed during a recording is not counted a second time")
+    func walkDuringRecordingIsSkipped() {
+        let trail = UUID()
+        let afternoon = Self.date(2026, 7).addingTimeInterval(13 * 3600)
+        let totals = Self.totals(
+            [
+                Self.hike(on: Self.date(2025, 1), meters: 8000, id: trail, clock: false),
+                Self.hike(on: afternoon, meters: 11_000),
+            ],
+            [
+                Self.walk(of: trail, on: afternoon.addingTimeInterval(1200), covered: 6000, of: 8000),
+                Self.walk(of: trail, on: afternoon.addingTimeInterval(-86_400), covered: 8000, of: 8000),
+            ]
+        )
+        #expect(totals.allTime.distanceMeters == 19_000, "the recording, and the walk of the day before")
+        #expect(totals.allTime.outings == 2)
+    }
+
     @Test("a trail saved from the community and walked counts its walk")
     func walkedCommunityTrailCounts() {
         let saved = UUID()
@@ -169,6 +190,22 @@ struct LibraryTotalsTests {
         #expect(totals.longest?.title == "Long")
         #expect(totals.highest?.title == "High")
         #expect(totals.steepest?.title == "Steep")
+    }
+
+    /// A record is how far one outing went, not how long the trail it was on
+    /// is.
+    @Test("a trail walked part of the way is a record of the part")
+    func recordsAreOutings() {
+        let trail = UUID()
+        let totals = Self.totals(
+            [
+                Self.hike(on: Self.date(2025, 1), meters: 30_000, id: trail, title: "Trail", clock: false),
+                Self.hike(on: Self.date(2026, 2), meters: 10_000, title: "Recorded"),
+            ],
+            [Self.walk(of: trail, on: Self.date(2026, 3), covered: 2000, of: 30_000)]
+        )
+        #expect(totals.longest?.title == "Recorded")
+        #expect(totals.longest?.distanceMeters == 10_000)
     }
 
     /// A few hundred steep metres is a driveway, not a record.

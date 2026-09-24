@@ -29,6 +29,18 @@
 //  covered. Nothing measured the climb of the stretches themselves, and the
 //  proportion is closer than counting the whole trail or none of it.
 //
+//  Following a trail and recording are independent — starting a recording
+//  leaves a walk under way alone — so one afternoon can leave both a
+//  recording and a walk along the trail it followed. A followed walk whose
+//  time overlaps a counted hike's clock is that afternoon's second copy, and
+//  is left out: the recording is the whole of it, the walk only the stretch
+//  that lay on the trail.
+//
+//  A record is one outing, not one trail: the longest is the furthest anyone
+//  walked in one go, so a thirty-kilometre trail walked for two is a
+//  two-kilometre record. Only the highest is the trail's, because coverage
+//  says how far a walk went and not whether it reached the top.
+//
 //  ## Where it is worked out
 //
 //  Not in a body. Every route in the library is walked once, off the main
@@ -68,14 +80,18 @@ nonisolated struct LibraryHikeFacts: Equatable, Sendable {
     let climbMeters: Double?
     let highestMeters: Double?
     let movingSeconds: TimeInterval?
-    let hasClock: Bool
+    /// First stamp to last, or `nil` for a hike with no clock.
+    let clock: DateInterval?
     let isFromCommunity: Bool
+
+    var hasClock: Bool { clock != nil }
 }
 
 /// One walk along a saved trail, as the sweep read it.
 nonisolated struct LibraryWalkFacts: Equatable, Sendable {
     let hikeID: UUID
     let startedAt: Date
+    let endedAt: Date
     let coveredMeters: Double
     let routeDistanceMeters: Double
     let activeSeconds: TimeInterval
@@ -136,13 +152,14 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
         monthsThisYear = Self.months(of: outings, in: year, calendar: calendar)
         monthsLastYear = Self.months(of: outings, in: year - 1, calendar: calendar)
 
-        let walkedIDs = Set(outings.map(\.hikeID))
-        let candidates = hikes.filter { walkedIDs.contains($0.hikeID) }.map { hike in
-            LibraryRecordCandidate(
+        let byID = Self.byID(hikes)
+        let candidates = outings.compactMap { outing -> LibraryRecordCandidate? in
+            guard let hike = byID[outing.hikeID] else { return nil }
+            return LibraryRecordCandidate(
                 hikeID: hike.hikeID,
                 title: hike.title,
-                distanceMeters: hike.distanceMeters,
-                climbMeters: hike.climbMeters,
+                distanceMeters: outing.distanceMeters,
+                climbMeters: hike.climbMeters == nil ? nil : outing.climbMeters,
                 highestMeters: hike.highestMeters
             )
         }
@@ -156,8 +173,10 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
 
     /// Every outing in the library, by the rules the file header gives.
     static func outings(hikes: [LibraryHikeFacts], walks: [LibraryWalkFacts]) -> [LibraryOuting] {
-        let byID = Dictionary(hikes.map { ($0.hikeID, $0) }) { first, _ in first }
-        let clocked = hikes.filter { $0.hasClock && !$0.isFromCommunity }.map { hike in
+        let byID = byID(hikes)
+        let counted = hikes.filter { $0.hasClock && !$0.isFromCommunity }
+        let clocks = counted.compactMap(\.clock)
+        let clocked = counted.map { hike in
             LibraryOuting(
                 hikeID: hike.hikeID,
                 date: hike.date,
@@ -166,7 +185,11 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
                 movingSeconds: hike.movingSeconds ?? 0
             )
         }
-        let followed = walks.filter { !$0.isRecordingsOwn }.map { walk in
+        let followed = walks.filter { walk in
+            !walk.isRecordingsOwn
+                && !clocks.contains { walk.startedAt < $0.end && walk.endedAt > $0.start }
+        }
+        .map { walk in
             let fraction = walk.routeDistanceMeters > 0
                 ? min(1, max(0, walk.coveredMeters / walk.routeDistanceMeters))
                 : 0
@@ -179,6 +202,10 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
             )
         }
         return clocked + followed
+    }
+
+    private static func byID(_ hikes: [LibraryHikeFacts]) -> [UUID: LibraryHikeFacts] {
+        Dictionary(hikes.map { ($0.hikeID, $0) }) { first, _ in first }
     }
 
     private static func months(of outings: [LibraryOuting], in year: Int, calendar: Calendar) -> [Double] {
@@ -220,7 +247,9 @@ nonisolated enum LibraryTotalsSweep {
                 climbMeters: statistics.elevationGain?.converted(to: .meters).value,
                 highestMeters: statistics.maxElevation?.converted(to: .meters).value,
                 movingSeconds: statistics.movingDuration ?? statistics.duration,
-                hasClock: statistics.duration != nil,
+                clock: statistics.duration == nil ? nil : statistics.startDate.flatMap { start in
+                    statistics.endDate.map { DateInterval(start: start, end: max(start, $0)) }
+                },
                 isFromCommunity: hike.importedFromListingID != nil
             )
         }
@@ -229,6 +258,7 @@ nonisolated enum LibraryTotalsSweep {
             LibraryWalkFacts(
                 hikeID: walk.hikeID,
                 startedAt: walk.startedAt,
+                endedAt: walk.endedAt,
                 coveredMeters: walk.coverage.coveredMeters,
                 routeDistanceMeters: walk.routeDistanceMeters,
                 activeSeconds: walk.activeSeconds,

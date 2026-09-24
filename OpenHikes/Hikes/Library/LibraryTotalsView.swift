@@ -139,6 +139,12 @@ private struct LibraryMonthChart: View {
     private static let cornerRadius: CGFloat = 4
     private static let height: CGFloat = 180
     private static let lastYearOpacity = 0.5
+    /// What a bar is plotted against. The x axis is categorical, so its
+    /// values have to be twelve distinct ones — the one-letter names are not:
+    /// January, June and July would share a single "J" column.
+    private static let monthKeys = Calendar.autoupdatingCurrent.shortMonthSymbols
+    /// What the axis prints under each key, which only has to fit.
+    private static let monthLabels = Calendar.autoupdatingCurrent.veryShortMonthSymbols
 
     let totals: LibraryTotals
 
@@ -165,7 +171,7 @@ private struct LibraryMonthChart: View {
         let unit = TotalsFormat.chartUnit
         Chart(bars) { bar in
             BarMark(
-                x: .value("Month", Calendar.autoupdatingCurrent.veryShortMonthSymbols[bar.month]),
+                x: .value("Month", Self.monthKeys[bar.month]),
                 y: .value("Distance", Self.value(bar.meters, in: unit)),
                 width: .ratio(Self.barWidth)
             )
@@ -179,6 +185,15 @@ private struct LibraryMonthChart: View {
         }
         .chartForegroundStyleScale([lastYear: Color.gray.opacity(Self.lastYearOpacity), thisYear: Color.accentColor])
         .chartLegend(position: .top, alignment: .leading)
+        .chartXAxis {
+            AxisMarks { value in
+                AxisValueLabel {
+                    if let key = value.as(String.self), let month = Self.monthKeys.firstIndex(of: key) {
+                        Text(Self.monthLabels[month])
+                    }
+                }
+            }
+        }
         .chartYAxisLabel(unit.symbol)
         .frame(height: Self.height)
         .accessibilityIdentifier("library-month-chart")
