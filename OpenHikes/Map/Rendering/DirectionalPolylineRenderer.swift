@@ -12,6 +12,10 @@
 //  hike's ``RouteLinePattern``. Dashing is left to `MKPolylineRenderer`'s own
 //  stroke properties; only the chevrons are drawn here.
 //
+//  A border colour, when the hike has one, is drawn first and underneath: a
+//  ring round the line's own stroke and the chevrons again, widened, so the
+//  outline follows every mark the pattern makes. See ``RouteBorder``.
+//
 //  A chevron is offered to ``RouteChevronField`` before it is drawn, which is
 //  what keeps a route that comes home the way it went out from stamping two
 //  opposed chevrons on every metre of it. That file carries the reasoning.
@@ -29,6 +33,11 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
     /// stroke colour and width, so a pattern change restyles the live renderer
     /// rather than rebuilding the overlay.
     var pattern: RouteLinePattern = .default
+
+    /// The hike's border colour, set alongside ``pattern``. A `CGColor`
+    /// rather than the platform colour because that is all drawing needs; an
+    /// alpha of zero — every hike that never picked one — draws nothing.
+    var borderColor: CGColor?
 
     /// The chevron geometry for one draw pass, in the map points the renderer
     /// draws in rather than the screen points the pattern states it in. The
@@ -84,13 +93,71 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
     }
 
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
+        if let borderColor, borderColor.alpha > 0 {
+            drawBorder(borderColor, in: mapRect, zoomScale: zoomScale, context: context)
+        }
         // The dash pattern (and the cap that makes a dotted line round) are
         // ordinary stroke properties, so the inherited draw already honours
         // them; only `arrowheads`, which has no line at all, opts out.
         if pattern.drawsLine {
             super.draw(mapRect, zoomScale: zoomScale, in: context)
         }
+        strokeChevrons(in: mapRect, zoomScale: zoomScale, context: context, color: arrowColor(), widenedBy: 0)
+    }
 
+    /// The border, drawn under the marks it outlines: a ring round the line's
+    /// own stroke, and each chevron again, widened.
+    ///
+    /// The line's ring is traced round the shape MapKit is about to stroke —
+    /// its width, its dashes, its caps, straight from `applyStrokeProperties`
+    /// — rather than round a stroke rebuilt here from the same numbers. That
+    /// rebuild is what the first version of this did, and on a map it was
+    /// invisible: MapKit scales a line by the renderer's `contentScaleFactor`
+    /// as well as by the zoom, so the "wider" copy came out a third of the
+    /// width of the line on top of it. A unit test cannot see that, because a
+    /// renderer drawn outside a map has a factor of one.
+    ///
+    /// The border's own thickness is scaled the same way, so it stays a third
+    /// of the line on screen whatever MapKit's factor is.
+    private func drawBorder(
+        _ color: CGColor,
+        in mapRect: MKMapRect,
+        zoomScale: MKZoomScale,
+        context: CGContext
+    ) {
+        let border = CGFloat(RouteBorder.width(forLineWidth: Double(lineWidth))) * contentScaleFactor / zoomScale
+        if pattern.drawsLine {
+            if path == nil { createPath() }
+            if let path {
+                context.saveGState()
+                context.addPath(path)
+                applyStrokeProperties(to: context, atZoomScale: zoomScale)
+                context.replacePathWithStrokedPath()
+                // Centred on the outline, so half of it is under the line.
+                context.setLineWidth(border * 2)
+                context.setLineDash(phase: 0, lengths: [])
+                context.setLineJoin(.round)
+                context.setStrokeColor(color)
+                context.strokePath()
+                context.restoreGState()
+            }
+        }
+        strokeChevrons(in: mapRect, zoomScale: zoomScale, context: context, color: color, widenedBy: border * 2)
+    }
+
+    /// One pass of chevrons along the whole line, in `color` — `widenedBy` map
+    /// points wider for the pass that draws their outline. A chevron's caps
+    /// and joins are round, so its wider stroke is exactly its outline.
+    ///
+    /// Both passes place exactly the same chevrons: placement depends only on
+    /// the line and the zoom, never on the colour or the width drawn.
+    private func strokeChevrons(
+        in mapRect: MKMapRect,
+        zoomScale: MKZoomScale,
+        context: CGContext,
+        color: CGColor,
+        widenedBy extraWidth: CGFloat
+    ) {
         guard let metrics = pattern.chevronMetrics(forWidth: Double(lineWidth)) else { return }
         guard let polyline = overlay as? MKPolyline, polyline.pointCount > 1 else { return }
         let count = polyline.pointCount
@@ -99,13 +166,13 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         // Convert screen-point sizes into map-point space for this zoom level.
         guard let plan = ChevronPlan(metrics: metrics, zoomScale: Double(zoomScale)) else { return }
 
-        context.setLineWidth(CGFloat(plan.strokeWidth))
+        context.setLineWidth(CGFloat(plan.strokeWidth) + extraWidth)
         context.setLineCap(.round)
         context.setLineJoin(.round)
         // The stroke above may have left a dash pattern on the context; a
         // chevron is a solid glyph whatever the line it rides is drawn as.
         context.setLineDash(phase: 0, lengths: [])
-        context.setStrokeColor(arrowColor())
+        context.setStrokeColor(color)
 
         var pass = ChevronPass(plan: plan, mapRect: mapRect)
         for i in 1..<count {

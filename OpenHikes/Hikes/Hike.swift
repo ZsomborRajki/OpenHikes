@@ -58,6 +58,10 @@ final class Hike {
     /// as its stable string id (like ``tintHex``) rather than as an enum, so an
     /// unrecognised value degrades to the default instead of failing to decode.
     var routeLinePatternID: String = RouteLinePattern.default.rawValue
+    /// The colour of the outline drawn around the map polyline — see
+    /// ``RouteBorder``. Stored like ``tintHex``, and fully transparent until
+    /// the hiker picks one, which is what "no border" is.
+    var routeBorderHex: String = "#00000000"
     /// SF Symbol shown in the row's colored circle.
     var symbol: String = "figure.hiking"
     /// Ordered track points making up the route.
@@ -315,6 +319,7 @@ final class Hike {
         tintHex: String = "#1B7F3B",
         routeWidth: Double = 3,
         routeLinePatternID: String = RouteLinePattern.default.rawValue,
+        routeBorderHex: String = RouteBorder.noneHex,
         symbol: String = "figure.hiking",
         route: [RouteCoordinate] = [],
         rawRoute: [RouteCoordinate] = [],
@@ -334,6 +339,7 @@ final class Hike {
         self.tintHex = tintHex
         self.routeWidth = routeWidth
         self.routeLinePatternID = routeLinePatternID
+        self.routeBorderHex = routeBorderHex
         self.symbol = symbol
         self.route = route
         self.rawRoute = rawRoute

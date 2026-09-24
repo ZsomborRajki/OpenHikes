@@ -448,12 +448,15 @@ extension MapCoordinatorTests {
         let hike = Fixture.hike(in: context) { hike in
             hike.tintHex = "#FF0000FF"
             hike.routeWidth = 9
+            hike.routeBorderHex = "#FFFFFFFF"
         }
+        #expect(renderer.borderColor?.alpha == 0, "a line drawn before any hike is followed has no border")
         routeStyle.follow(hike)
         await settle()
 
         #expect(coordinator.routeWidth == 9)
         #expect(renderer.lineWidth == 9, "the drawn line, not just the coordinator's copy of the number")
+        #expect(renderer.borderColor?.alpha == 1, "the border is drawn by the renderer, so it has to be on it")
         #expect(coordinator.routeOverlay === line, "restyling must not rebuild the line")
     }
 

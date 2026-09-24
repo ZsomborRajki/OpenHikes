@@ -104,6 +104,7 @@ extension MapView {
         var routeTint: Color = RouteStyle.defaultTint
         var routeWidth: Double = RouteStyle.defaultWidth
         var routePattern: RouteLinePattern = RouteStyle.defaultPattern
+        var routeBorder: Color = RouteStyle.defaultBorder
         var highlightAnnotation: MKPointAnnotation?
 
         // MARK: Tracking button
@@ -398,26 +399,6 @@ extension MapView {
         )
         #endif
 
-        /// Applies the current tint (with its alpha), width and line pattern to
-        /// the route line. Everything the pattern decides is an ordinary stroke
-        /// property except the chevrons, which the renderer draws itself.
-        func applyStyle(to renderer: MKPolylineRenderer) {
-            #if os(macOS)
-            renderer.strokeColor = NSColor(routeTint)
-            #else
-            renderer.strokeColor = UIColor(routeTint)
-            #endif
-            renderer.lineWidth = CGFloat(routeWidth)
-            renderer.lineJoin = .round
-            renderer.lineCap = routePattern.lineCap
-            let dashes = routePattern.dashLengths(forWidth: routeWidth)
-            // `lineDashPattern` is an `[NSNumber]?`; an empty array is not a
-            // documented way to say "unbroken", so a solid line clears it.
-            // swiftlint:disable:next legacy_objc_type
-            renderer.lineDashPattern = dashes.isEmpty ? nil : dashes.map { NSNumber(value: $0) }
-            (renderer as? DirectionalPolylineRenderer)?.pattern = routePattern
-        }
-
         /// Width occupied beyond the safe leading edge by the landscape panel.
         var sidePanelInset: CGFloat = 0
 
@@ -528,17 +509,24 @@ extension MapView {
         /// width slider are dragged, so their writes arrive at touch frequency
         /// and must not travel through SwiftUI to reach the map.
         func observeRouteStyle(_ style: RouteStyle, on mapView: MKMapView) {
-            applyRouteStyle(tint: style.tint, width: style.width, pattern: style.pattern, on: mapView)
+            applyRouteStyle(
+                tint: style.tint,
+                width: style.width,
+                pattern: style.pattern,
+                border: style.border,
+                on: mapView
+            )
             reobserving(self, mapView, style) {
                 _ = style.tint
                 _ = style.width
                 _ = style.pattern
+                _ = style.border
             } onChange: { coordinator, map, model in
                 coordinator.observeRouteStyle(model, on: map)
             }
         }
 
-        /// Restyles the drawn line (colour/alpha, width, and the highlight dot)
+        /// Restyles the drawn line (colour/alpha, width, border, and the highlight dot)
         /// without rebuilding the overlay — the route id hasn't changed.
         ///
         /// Safe to call before there is a line to restyle: with no renderer yet,
@@ -548,15 +536,18 @@ extension MapView {
             tint: Color,
             width: Double,
             pattern: RouteLinePattern,
+            border: Color,
             on mapView: MKMapView
         ) {
             let tintChanged = routeTint != tint
             let widthChanged = routeWidth != width
             let patternChanged = routePattern != pattern
-            guard tintChanged || widthChanged || patternChanged else { return }
+            let borderChanged = routeBorder != border
+            guard tintChanged || widthChanged || patternChanged || borderChanged else { return }
             routeTint = tint
             routeWidth = width
             routePattern = pattern
+            routeBorder = border
             if let renderer = routeRenderer {
                 applyStyle(to: renderer)
                 renderer.setNeedsDisplay()

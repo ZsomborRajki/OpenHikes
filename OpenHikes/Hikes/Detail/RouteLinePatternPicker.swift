@@ -8,7 +8,8 @@
 //  colour.
 //
 //  A view of its own for the reason the other appearance pieces are: it reads
-//  the hike's tint and pattern, and a colour drag writes the tint continuously.
+//  the hike's tint, border and pattern, and a colour drag writes the first two
+//  continuously.
 //  Keeping the reads here means a drag repaints five small swatches rather
 //  than the detail screen around them.
 //
@@ -82,7 +83,7 @@ struct RouteLinePatternPicker: View {
         return Button {
             hike.routeLinePattern = pattern
         } label: {
-            RouteLinePatternSwatch(pattern: pattern, tint: hike.tintOpaque)
+            RouteLinePatternSwatch(pattern: pattern, tint: hike.tintOpaque, border: hike.routeBorder)
                 .frame(height: swatchHeight)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
@@ -124,7 +125,7 @@ struct RouteLinePatternPicker: View {
 
 /// A short horizontal run of route drawn exactly as ``RouteLinePattern`` tells
 /// the map to draw it: same dash lengths, same chevron geometry, same contrast
-/// rule for the chevrons.
+/// rule for the chevrons, and the same ``RouteBorder`` round all of them.
 ///
 /// Only the chevron *spacing* differs — a swatch is too short to show one at
 /// the on-map interval, so it spaces them to fit and stays a preview of the
@@ -132,6 +133,8 @@ struct RouteLinePatternPicker: View {
 struct RouteLinePatternSwatch: View {
     let pattern: RouteLinePattern
     let tint: Color
+    /// Clear draws no border, as on the map.
+    var border: Color = .clear
     /// Fixed rather than taken from the hike: the swatch is only ~26 pt tall,
     /// so a 12 pt route would fill it, and reading the width here would also
     /// repaint every swatch on every sample of a width drag.
@@ -142,42 +145,65 @@ struct RouteLinePatternSwatch: View {
 
     var body: some View {
         Canvas { context, size in
-            let midY = size.height / 2
-            if pattern.drawsLine {
-                var line = Path()
-                line.move(to: CGPoint(x: 0, y: midY))
-                line.addLine(to: CGPoint(x: size.width, y: midY))
-                context.stroke(
-                    line,
-                    with: .color(tint),
-                    style: StrokeStyle(
-                        lineWidth: lineWidth,
-                        lineCap: pattern.lineCap == .butt ? .butt : .round,
-                        dash: pattern.dashLengths(forWidth: lineWidth).map { CGFloat($0) }
-                    )
-                )
-            }
-
-            guard let metrics = pattern.chevronMetrics(forWidth: lineWidth) else { return }
-            let step = size.width / Double(Self.chevronCount)
-            var chevrons = Path()
-            for index in 0..<Self.chevronCount {
-                let x = step * (Double(index) + 0.5)
-                chevrons.move(to: CGPoint(x: x - metrics.halfLength, y: midY - metrics.halfWidth))
-                chevrons.addLine(to: CGPoint(x: x + metrics.halfLength, y: midY))
-                chevrons.addLine(to: CGPoint(x: x - metrics.halfLength, y: midY + metrics.halfWidth))
-            }
-            context.stroke(
-                chevrons,
-                with: .color(chevronColor),
-                style: StrokeStyle(
-                    lineWidth: metrics.strokeWidth,
-                    lineCap: .round,
-                    lineJoin: .round
-                )
-            )
+            draw(in: context, size: size)
         }
         .accessibilityHidden(true)
+    }
+
+    private func draw(in context: GraphicsContext, size: CGSize) {
+        let midY = size.height / 2
+        var line = Path()
+        line.move(to: CGPoint(x: 0, y: midY))
+        line.addLine(to: CGPoint(x: size.width, y: midY))
+        let lineStyle = StrokeStyle(
+            lineWidth: lineWidth,
+            lineCap: pattern.lineCap,
+            dash: pattern.dashLengths(forWidth: lineWidth).map { CGFloat($0) }
+        )
+        let metrics = pattern.chevronMetrics(forWidth: lineWidth)
+        let chevrons = metrics.map { chevronPath(for: $0, width: size.width, midY: midY) }
+        let borderWidth = RouteBorder.width(forLineWidth: lineWidth)
+
+        // Underneath everything, as on the map: a ring round the line's own
+        // stroke, and the chevrons again, widened, so the outline is the
+        // silhouette of both.
+        if pattern.drawsLine {
+            context.stroke(
+                line.strokedPath(lineStyle),
+                with: .color(border),
+                style: StrokeStyle(lineWidth: borderWidth * 2, lineJoin: .round)
+            )
+        }
+        if let metrics, let chevrons {
+            context.stroke(
+                chevrons,
+                with: .color(border),
+                style: Self.chevronStyle(width: metrics.strokeWidth + borderWidth * 2)
+            )
+        }
+
+        if pattern.drawsLine {
+            context.stroke(line, with: .color(tint), style: lineStyle)
+        }
+        if let metrics, let chevrons {
+            context.stroke(chevrons, with: .color(chevronColor), style: Self.chevronStyle(width: metrics.strokeWidth))
+        }
+    }
+
+    private static func chevronStyle(width: Double) -> StrokeStyle {
+        StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round)
+    }
+
+    private func chevronPath(for metrics: RouteChevronMetrics, width: Double, midY: Double) -> Path {
+        let step = width / Double(Self.chevronCount)
+        var chevrons = Path()
+        for index in 0..<Self.chevronCount {
+            let x = step * (Double(index) + 0.5)
+            chevrons.move(to: CGPoint(x: x - metrics.halfLength, y: midY - metrics.halfWidth))
+            chevrons.addLine(to: CGPoint(x: x + metrics.halfLength, y: midY))
+            chevrons.addLine(to: CGPoint(x: x - metrics.halfLength, y: midY + metrics.halfWidth))
+        }
+        return chevrons
     }
 
     private var chevronColor: Color {

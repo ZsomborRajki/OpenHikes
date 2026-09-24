@@ -224,7 +224,8 @@ struct HikeElevationPlaceholder: View {
 }
 
 /// Owns appearance-control observations while preserving the action bar's
-/// original action, toggle, and width-control order.
+/// original action, toggle, and width-control order. The two colour tiles —
+/// the line and its border — close the action row.
 struct RouteAppearanceControls<
     Actions: View,
     MiddleControls: View
@@ -253,6 +254,7 @@ struct RouteAppearanceControls<
                 HStack(spacing: 12) {
                     actions
                     colorControl
+                    borderControl
                 }
             }
             middleControls
@@ -274,6 +276,25 @@ struct RouteAppearanceControls<
                 .foregroundStyle(.secondary)
                 // `labelsHidden()` keeps the picker's spoken name, so this
                 // caption is a second stop that repeats it.
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// The outline round the line, beside the colour it outlines. The same
+    /// picker, so "no border" is what it is for the colour too: the opacity
+    /// taken to zero — which is where every hike starts.
+    private var borderControl: some View {
+        ActionTile {
+            ColorPicker(
+                "Route border",
+                selection: borderBinding,
+                supportsOpacity: true
+            )
+            .labelsHidden()
+            .accessibilityIdentifier("route-border-picker")
+            Text("Border")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
         }
     }
@@ -304,6 +325,13 @@ struct RouteAppearanceControls<
         Binding(
             get: { hike.tint },
             set: { hike.tintHex = $0.hexRGBA }
+        )
+    }
+
+    private var borderBinding: Binding<Color> {
+        Binding(
+            get: { hike.routeBorder },
+            set: { hike.routeBorderHex = RouteBorder.pickedHex($0.hexRGBA, over: hike.routeBorderHex) }
         )
     }
 

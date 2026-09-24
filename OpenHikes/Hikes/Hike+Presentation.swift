@@ -23,6 +23,10 @@ extension Hike {
     /// Full tint including the user's chosen alpha — used for the map polyline.
     var tint: Color { Color(hex: tintHex) ?? .green }
 
+    /// The outline around the map polyline, with its alpha. Clear when unset
+    /// or unreadable, which draws nothing.
+    var routeBorder: Color { Color(hex: routeBorderHex) ?? .clear }
+
     /// The stored line pattern as the map and the picker use it. An id no build
     /// recognises resolves to the default, so the route is always drawable.
     var routeLinePattern: RouteLinePattern {
