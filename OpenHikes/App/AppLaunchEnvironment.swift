@@ -44,6 +44,9 @@ nonisolated enum AppLaunchEnvironment {
         let losesImportSelection: Bool
         let stubsWeather: Bool
         let grantsPaidMaps: Bool
+        /// Whether the trail maker may ask Apple and Stadia — see
+        /// ``AppLaunchEnvironment/asksLiveMakerServices``.
+        let asksLiveMakerServices: Bool
         /// `nil` when the real photo library should be read — see
         /// ``AppLaunchEnvironment/stubbedLibraryPhotoCount``.
         let stubbedLibraryPhotoCount: Int?
@@ -77,6 +80,7 @@ nonisolated enum AppLaunchEnvironment {
             losesImportSelection = false
             stubsWeather = false
             grantsPaidMaps = false
+            asksLiveMakerServices = false
             stubbedLibraryPhotoCount = nil
         }
 
@@ -98,6 +102,7 @@ nonisolated enum AppLaunchEnvironment {
             "--ui-test-lose-import-selection"
         private static let stubWeatherArgument = "--ui-test-weather"
         private static let entitledArgument = "--ui-test-entitled"
+        private static let liveMakerArgument = "--ui-test-live-maker"
         private static let photoLibraryPrefix = "--ui-test-photo-library="
         /// Enough to fill the review grid and force it to scroll.
         private static let maximumStubbedLibraryPhotos = 24
@@ -183,6 +188,8 @@ nonisolated enum AppLaunchEnvironment {
                 && arguments.contains(Self.stubWeatherArgument)
             grantsPaidMaps = isUITesting
                 && arguments.contains(Self.entitledArgument)
+            asksLiveMakerServices = isUITesting
+                && arguments.contains(Self.liveMakerArgument)
             stubbedLibraryPhotoCount = Self.stubbedLibraryPhotoCount(
                 in: arguments,
                 isUITesting: isUITesting
@@ -426,6 +433,23 @@ nonisolated enum AppLaunchEnvironment {
     /// on a fresh simulator is always "not entitled", so the locked path is
     /// the default a test gets for free.
     static let grantsPaidMaps = configuration.grantsPaidMaps
+
+    /// Whether the trail maker should ask Apple Maps for directions and
+    /// Stadia for heights, as a shipping launch does, rather than being
+    /// handed the no-route answer and no climb every other test launch gets.
+    ///
+    /// For one caller: the App Store frame of a drawn trail, which is a
+    /// picture of a Walking route following the Rinnkendlsteig and is not
+    /// that picture with straight legs. Nothing asserts on what comes back —
+    /// the frame waits for *a* route and *a* climb and shoots whatever they
+    /// are — so the reason the other launches are stubbed, that an assertion
+    /// would be about Apple's map data rather than this app, does not reach
+    /// it. The billed half is one Stadia call per run, and only with the Pro
+    /// grant beside it, since ``StadiaElevationSource`` checks that too.
+    ///
+    /// The hiking router is not part of this: it asks a volunteer-run
+    /// Overpass server, and no launch under automation may.
+    static let asksLiveMakerServices = configuration.asksLiveMakerServices
 
     /// How many photographs a stubbed photo library should hold, or `nil` when
     /// the real one should be read.

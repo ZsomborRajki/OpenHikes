@@ -156,21 +156,6 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// below four fifths is unambiguously it.
     private static let collapsedSheetFraction = 0.8
 
-    /// Written beside the run so `Scripts/screenshots.sh` can lift them out of
-    /// the `.xcresult` by name. Numbered because App Store Connect orders
-    /// screenshots by upload order, and the first three are the ones that
-    /// appear in search results.
-    private enum Frame: String, CaseIterable {
-        case route = "01-trail-and-its-photos"
-        case photos = "02-photos-along-the-trail"
-        case nearby = "03-nearby-trails"
-        case statistics = "04-statistics-and-profile"
-        case recording = "05-recording-a-hike"
-        case offline = "06-offline-maps"
-        case walkHistory = "07-walk-summary"
-        case trailMaker = "08-draw-your-own-trail"
-    }
-
     // MARK: - Frames
 
     /// The hero: the whole trail on the map, the sheet out of the way, and one
@@ -400,91 +385,6 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         )
         capture(as: .walkHistory)
     }
-
-    /// Drawing a trail: the one frame in the set that shows the app *making*
-    /// something rather than showing something.
-    ///
-    /// The map is the canvas and the sheet is the drawing, so this is the only
-    /// frame that needs both halves of the screen doing work at once — which
-    /// is why the sheet stays at its middle detent and the points go down in
-    /// the band above it.
-    ///
-    /// **The legs are straight and that is honest here.** A drawn leg follows
-    /// mapped paths by asking Overpass, and no launch running tests may reach
-    /// a volunteer-run API — see ``OpenHikesModel/makeTrailMaker(container:graph:defaults:)``.
-    /// A launch with no graph hides the *Follow Paths* switch rather than
-    /// offering one it could not honour, so what this shoots is exactly what a
-    /// hiker drawing freehand sees, and nothing in the frame claims otherwise.
-    ///
-    /// The map is put over the fixture route's trailhead through the
-    /// simulator's own location rather than by importing a hike, because
-    /// selecting a hike pushes its screen and the maker's pill is offered only
-    /// while no screen is pushed.
-    @MainActor
-    func testCapturesDrawingATrail() {
-        let app = makeApp(arguments: [
-            "--ui-test-expanded-sheet",
-            "--ui-test-enable-location",
-        ])
-        app.resetAuthorizationStatus(for: .location)
-        addLocationPermissionMonitor()
-        setSimulatedLocation(Self.trailhead)
-        defer { XCUIDevice.shared.location = nil }
-
-        launch(app)
-        let map = element("trail-map", in: app)
-        XCTAssertTrue(
-            map.waitForExistence(timeout: UITestTimeout.navigation),
-            "the map should be up before anything is drawn on it"
-        )
-        openTrailMaker(in: app)
-        drawTrailPoints(Self.drawnTrail, on: map, in: app)
-
-        liftDrawnTrailClearOfTheSheet(in: app)
-        // The header is the sentence this frame is of — how long the line is
-        // so far — and it is now the first thing in the list rather than the
-        // second: the *Find a Place* field that used to sit above it went with
-        // the search that moved into a sheet of its own. The scroll stays,
-        // because what a middle detent opens on is a question about the
-        // device's height rather than about this screen.
-        XCTAssertTrue(
-            scrollIntoView(element("trail-draft-length", in: app), in: app),
-            "the maker should show the line's length beside its points"
-        )
-        capture(as: .trailMaker)
-    }
-
-    /// Four taps in the band above a sheet at its middle detent, spread so the
-    /// line bends twice rather than running straight across.
-    ///
-    /// Wider apart than ``TrailMakerUITests``' own offsets: that suite is
-    /// asserting that a tap becomes a point, and this one is a picture of a
-    /// route somebody planned.
-    ///
-    /// **The pins do not land where the taps did**, and correcting the offsets
-    /// is not the fix. Measured over two captures: the same four taps drew
-    /// 0.28, 0.19, 0.14 and about 0.10 of the screen lower than they were
-    /// made — a shrinking drift, which is a camera still settling under a map
-    /// that has just been given a location rather than a constant to subtract.
-    /// So the taps stay where they read well and
-    /// ``liftDrawnTrailClearOfTheSheet(in:)`` pans afterwards, which is the
-    /// same answer `liftRecordedLineClearOfTheSheet(in:)` gives to the same
-    /// problem on the recording frame.
-    ///
-    /// **Tapped ends first.** The first two fill the start and the destination
-    /// and every later one goes into the nearest leg, so the west-to-east
-    /// zigzag is tapped as its two ends and then its two middle stops.
-    private static let drawnTrail: [CGVector] = [
-        CGVector(dx: 0.26, dy: 0.30),
-        CGVector(dx: 0.80, dy: 0.15),
-        CGVector(dx: 0.43, dy: 0.16),
-        CGVector(dx: 0.64, dy: 0.25),
-    ]
-
-    /// How far the drawn line is panned up afterwards, in fractions of the
-    /// window. Enough to bring the first point out from behind the sheet
-    /// without taking the last one under the status bar.
-    private static let drawnTrailLift: CGFloat = 0.18
 }
 
 /// The gestures and lookups the frames above are built from.
@@ -495,6 +395,24 @@ nonisolated final class ScreenshotUITests: XCTestCase {
 /// still reaches the class's own state from here.
 extension ScreenshotUITests {
     // MARK: - Support
+
+    // Here rather than in the class body, where `test_case_accessibility`
+    // would have it private: frame 08 reads it from its own file.
+
+    /// Written beside the run so `Scripts/screenshots.sh` can lift them out of
+    /// the `.xcresult` by name. Numbered because App Store Connect orders
+    /// screenshots by upload order, and the first three are the ones that
+    /// appear in search results.
+    enum Frame: String, CaseIterable {
+        case route = "01-trail-and-its-photos"
+        case photos = "02-photos-along-the-trail"
+        case nearby = "03-nearby-trails"
+        case statistics = "04-statistics-and-profile"
+        case recording = "05-recording-a-hike"
+        case offline = "06-offline-maps"
+        case walkHistory = "07-walk-summary"
+        case trailMaker = "08-draw-your-own-trail"
+    }
 
     /// Whether `Scripts/screenshots.sh` seeded this simulator's photo library
     /// and granted access to it.
@@ -794,30 +712,6 @@ extension ScreenshotUITests {
             )
     }
 
-    /// Drags the map up so the whole drawn line sits in the band the sheet is
-    /// not over.
-    ///
-    /// A fixed pan for the reason ``liftRecordedLineClearOfTheSheet(in:)`` is
-    /// one: the legs are `MKPolyline`s, which are drawn rather than exposed,
-    /// so there is no element to measure and correct against.
-    ///
-    /// Safe as a *press* and drag while the maker is up, which is the part
-    /// worth saying: a press of ``dragPressDuration`` is well under
-    /// ``MapView/Coordinator/waypointGrabPressDuration``, so this pans the map
-    /// rather than taking hold of a waypoint — and it starts clear of the line
-    /// in any case, since a tap on a leg would insert a point into it.
-    @MainActor
-    private func liftDrawnTrailClearOfTheSheet(in app: XCUIApplication) {
-        let map = mapElement(in: app)
-        map.coordinate(withNormalizedOffset: CGVector(dx: 0.12, dy: 0.38))
-            .press(
-                forDuration: Self.dragPressDuration,
-                thenDragTo: map.coordinate(
-                    withNormalizedOffset: CGVector(dx: 0.12, dy: 0.38 - Self.drawnTrailLift)
-                )
-            )
-    }
-
     /// Puts the map back to north-up if a gesture has turned it.
     ///
     /// `XCUIElement.pinch` is a two-finger gesture and MapKit reads a little
@@ -930,7 +824,7 @@ extension ScreenshotUITests {
     /// there. The parameter this used to take was the app it then never
     /// asked.
     @MainActor
-    private func capture(as frame: Frame) {
+    func capture(as frame: Frame) {
         let shot = XCUIScreen.main.screenshot()
         let attachment = XCTAttachment(screenshot: shot)
         attachment.name = frame.rawValue

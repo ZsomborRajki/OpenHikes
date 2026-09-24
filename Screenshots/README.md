@@ -25,7 +25,7 @@ in, because App Store Connect orders screenshots by the order they arrive.
 | 5 | `05-recording-a-hike` | It records, with live figures and the line so far |
 | 6 | `06-offline-maps` | It works with no signal |
 | 7 | `07-walk-summary` | A trail walked end to end |
-| 8 | `08-draw-your-own-trail` | Plan Saturday: press the map and make the trail |
+| 8 | `08-draw-your-own-trail` | Plan Saturday: search three places and walk between them |
 
 Frame 8 is eighth deliberately rather than by arriving last. It is the only one
 that shows the app *making* something rather than showing something, which is an
@@ -33,13 +33,16 @@ argument for putting it in the first three — and which of the eight those are 
 a listing decision rather than a capture one, so it is appended here and moving
 it is a rename. Nothing in the capture depends on the number.
 
-Its legs are straight lines, and that is honest rather than a limitation of the
-harness: a drawn leg follows mapped paths by asking Overpass, no launch running
-tests may reach a volunteer-run API, and a launch with no walking graph hides the
-*Follow Paths* switch instead of offering one it cannot honour. The frame is
-exactly what a hiker drawing freehand sees. Shooting a snapped line would need a
-seeded graph wide enough to route across a valley, which nothing in the
-repository has.
+It is the walk frame 1 is of, planned rather than imported: *Schönau am
+Königssee*, *Kühroint* and *St. Bartholomä*, picked from the maker's own search,
+routed in **Walking** mode. Apple's walking answer through those three stops runs
+a median 7 m from the fixture's line — up to Kühroint and down the
+Rinnkendlsteig — so the frame shows a real routed path rather than the straight
+legs it used to. Hiking mode would ask Overpass, which no test launch may; the
+frame's `--ui-test-live-maker` lets that one launch ask Apple for directions and
+Stadia for the climb, which needs `OpenHikes/Secrets.plist` and spends one
+Stadia call a run. Like frame 6 it is captured with `--ui-test-entitled`, since
+the climb is a Pro feature.
 
 ## Capturing
 

@@ -37,12 +37,19 @@ extension MapView.Coordinator {
     /// The override is read before the traits because the traits take it in
     /// on the next layout pass, and a renderer asked for in between would be
     /// resolved against the appearance the map is leaving.
+    ///
+    /// **The asset, not `Color.accentColor`.** That one bridges to the view's
+    /// tint, and UIKit greys every tint behind a presented sheet — so a stop
+    /// picked in the search sheet, whose pin is made while that sheet is still
+    /// over the map, came out grey and stayed grey: a layer holds a `CGColor`,
+    /// and nothing un-dims it when the sheet goes.
     static func trailDraftTint(on mapView: MKMapView) -> UIColor {
         let override = mapView.overrideUserInterfaceStyle
         let traits = override == .unspecified
             ? mapView.traitCollection
             : mapView.traitCollection.modifyingTraits { $0.userInterfaceStyle = override }
-        return UIColor(Color.accentColor).resolvedColor(with: traits)
+        let accent = UIColor(named: "AccentColor") ?? UIColor(Color.accentColor)
+        return accent.resolvedColor(with: traits)
     }
 
     /// Redraws the trail being drawn in the colour the map now calls for.

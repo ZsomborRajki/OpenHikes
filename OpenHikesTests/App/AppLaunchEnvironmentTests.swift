@@ -228,6 +228,7 @@ struct AppLaunchEnvironmentTests {
                 "--ui-test-fail-first-save",
                 "--ui-test-lose-import-selection",
                 "--ui-test-weather",
+                "--ui-test-live-maker",
             ]
         )
         let quiet = AppLaunchEnvironment.Configuration(
@@ -237,11 +238,15 @@ struct AppLaunchEnvironmentTests {
         #expect(requested.failsFirstSave)
         #expect(requested.losesImportSelection)
         #expect(requested.stubsWeather)
+        #expect(requested.asksLiveMakerServices)
         #expect(!quiet.failsFirstSave)
         // An import takes the selection on every launch that did not ask for
         // the losing side of that race.
         #expect(!quiet.losesImportSelection)
         #expect(!quiet.stubsWeather)
+        // The maker's routes and heights stay stubbed unless asked for: an
+        // assertion about a route would otherwise be one about Apple's map.
+        #expect(!quiet.asksLiveMakerServices)
     }
 
     /// Every test-only option is inert without `--ui-testing`, which is what
@@ -257,6 +262,7 @@ struct AppLaunchEnvironmentTests {
                 "--ui-test-fail-first-save",
                 "--ui-test-lose-import-selection",
                 "--ui-test-weather",
+                "--ui-test-live-maker",
             ]
         )
 
@@ -265,5 +271,6 @@ struct AppLaunchEnvironmentTests {
         #expect(!configuration.failsFirstSave)
         #expect(!configuration.losesImportSelection)
         #expect(!configuration.stubsWeather)
+        #expect(!configuration.asksLiveMakerServices)
     }
 }
