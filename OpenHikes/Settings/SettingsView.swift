@@ -214,7 +214,10 @@ struct SettingsView: View {
                     // half-finished app.
                     Text("Sources marked \u{201C}Needs API key\u{201D} aren't available in this build.")
                     #if DEBUG
-                    Text("Adding one is a build-time step — see Secrets.example.plist in the project.")
+                    // Verbatim: only a contributor reads it, so it is not
+                    // for translation, and Xcode's own catalog sync leaves
+                    // `#if DEBUG` code out and deleted the key on every build.
+                    Text(verbatim: "Adding one is a build-time step — see Secrets.example.plist in the project.")
                     #endif
                 }
                 if !entitlement.isEntitled,
