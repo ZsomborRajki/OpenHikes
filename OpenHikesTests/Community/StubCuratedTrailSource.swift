@@ -79,6 +79,10 @@ final class StubCuratedTrailSource: CuratedTrailSourcing, @unchecked Sendable {
 
     var geometryResult: GeometryResult = .drawn
 
+    /// Held open so a suite can watch the published half arrive while this
+    /// one is still out — the ten seconds Overpass can take, without them.
+    var beforeListingsReturn: (@Sendable () async -> Void)?
+
     /// Every route this source knows, by relation. A relation absent from here
     /// is one OSM no longer has, which is a real and unremarkable state: ids
     /// are stable but not permanent.
@@ -102,6 +106,7 @@ final class StubCuratedTrailSource: CuratedTrailSourcing, @unchecked Sendable {
     func listings(near area: CommunitySearchArea, limit: Int) async throws -> [CuratedTrail] {
         state.withLock { $0.areaRequests.append((area: area, limit: limit)) }
         await Task.yield()
+        await beforeListingsReturn?()
         let answer = try nearbyResult.get()
         return Array(answer.prefix(max(0, limit)))
     }

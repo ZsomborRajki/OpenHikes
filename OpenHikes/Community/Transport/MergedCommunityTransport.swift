@@ -10,9 +10,10 @@
 //  second source. The browser is 1,025 lines and already parameterised on a
 //  two-case question with two task handles, two accept branches and two fail
 //  branches; a third would touch every one of them. Nothing above this line
-//  has to change, and nothing above this line can tell there are two.
+//  has to change, and the one thing above it that can tell there are two is
+//  that the published half may arrive early — see the fourth rule.
 //
-//  ## Three rules, and each of them is a correction to the obvious version
+//  ## Four rules, and each of them is a correction to the obvious version
 //
 //  **A published hike never loses its place to a curated one.** The limit is
 //  spent on CloudKit first and only the remainder is asked of Overpass. The
@@ -53,6 +54,14 @@
 //  question's own answer to which sources it covers: the hiker's own
 //  approaches to the trails ask for both, and the requests the app makes for
 //  itself do not.
+//
+//  **The fast half is not held for the slow one.** CloudKit answers a nearby
+//  query in a fraction of a second, and Overpass's two passes can take ten.
+//  The published rows are handed up through `publishedFirst` the moment they
+//  land, so the hiker's own hikes are on the map and in the list while the
+//  trails are still on their way; the merged answer replaces them when it
+//  arrives, and only it ends the request. They are the same rows the merged
+//  page leads with, so nothing drawn early is taken away by the full answer.
 //
 //  **A curated id must never reach CloudKit.** Every per-listing method routes
 //  on the listing's ``CommunityOrigin`` — ``CommunityListing/relationID`` and
@@ -112,6 +121,25 @@ nonisolated extension MergedCommunityTransport {
         excluding: Set<String>,
         scope: CommunityNearbyScope
     ) async throws -> CommunityNearbyAnswer {
+        try await listings(
+            near: coordinate,
+            radiusMeters: radiusMeters,
+            limit: limit,
+            excluding: excluding,
+            scope: scope,
+            publishedFirst: { _ in /* the caller waits for the whole answer */ }
+        )
+    }
+
+    @concurrent
+    func listings(
+        near coordinate: CLLocationCoordinate2D,
+        radiusMeters: Double,
+        limit: Int,
+        excluding: Set<String>,
+        scope: CommunityNearbyScope,
+        publishedFirst: @Sendable ([CommunityListing]) async -> Void
+    ) async throws -> CommunityNearbyAnswer {
         async let publishedRows = attempt {
             // `.publishedOnly` is what this call *is*, whatever the question
             // was: the half being asked here is CloudKit, and the curated half
@@ -143,6 +171,13 @@ nonisolated extension MergedCommunityTransport {
         async let curatedListed = listCurated(near: area, limit: limit, for: scope)
 
         let publishedAnswer = await publishedRows
+        // Up before Overpass has answered, while the listing pass above is
+        // still running — see the file header's fourth rule. Only when there
+        // is a slower half to wait for, and only with rows in it; see
+        // ``CommunityTransporting/listings(near:radiusMeters:limit:excluding:scope:publishedFirst:)``.
+        if scope == .withCuratedTrails, !publishedAnswer.rows.isEmpty {
+            await publishedFirst(nearestFirst(publishedAnswer.rows, to: coordinate))
+        }
         // What Overpass had to say, or — when it refused — what this device
         // already had about the same area. See ``listCurated(near:limit:for:)``.
         let listed = await curatedListed
@@ -162,18 +197,8 @@ nonisolated extension MergedCommunityTransport {
         // Nearest first across both halves, so the list reads as one answer to
         // one question rather than two answers stacked. Both sources already
         // sort this way; what this settles is the interleave between them.
-        //
-        // Measured once per row and then sorted, rather than measured inside
-        // the comparator: a haversine is trigonometry, and a comparator that
-        // recomputes both sides runs it twice per comparison — about two
-        // hundred times for a page, against fifty here. See
-        // ``CuratedTrailSource/listings(near:limit:)``, which sorts the same
-        // way over four times as many rows.
         return CommunityNearbyAnswer(
-            listings: rows
-                .map { ($0, RouteGeometry.distanceMeters(from: coordinate, to: $0.coordinate)) }
-                .sorted { $0.1 < $1.1 }
-                .map(\.0),
+            listings: nearestFirst(rows, to: coordinate),
             curated: outcome(listed: listed, completed: curatedRows, for: scope)
         )
     }
@@ -628,6 +653,24 @@ nonisolated private extension MergedCommunityTransport {
         guard scope == .withCuratedTrails else { return .notAsked }
         if let outage = listed.outage ?? completed.outage { return .outage(outage) }
         return .trails(listed.trails.count)
+    }
+
+    /// `rows` nearest `coordinate` first.
+    ///
+    /// Measured once per row and then sorted, rather than measured inside the
+    /// comparator: a haversine is trigonometry, and a comparator that
+    /// recomputes both sides runs it twice per comparison — about two hundred
+    /// times for a page, against fifty here. See
+    /// ``CuratedTrailSource/listings(near:limit:)``, which sorts the same way
+    /// over four times as many rows.
+    func nearestFirst(
+        _ rows: [CommunityListing],
+        to coordinate: CLLocationCoordinate2D
+    ) -> [CommunityListing] {
+        rows
+            .map { ($0, RouteGeometry.distanceMeters(from: coordinate, to: $0.coordinate)) }
+            .sorted { $0.1 < $1.1 }
+            .map(\.0)
     }
 
     /// The two halves as one page, with the published half served first.

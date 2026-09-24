@@ -231,6 +231,39 @@ nonisolated protocol CommunityTransporting: Sendable {
         scope: CommunityNearbyScope
     ) async throws -> CommunityNearbyAnswer
 
+    /// The same question, with the published hikes handed to `publishedFirst`
+    /// as soon as they land when a slower source is still being asked.
+    ///
+    /// CloudKit answers in well under a second; an Overpass listing pass and
+    /// the geometry pass after it can take ten. Holding the hiker's own
+    /// published hikes back for the whole of that is waiting on the half they
+    /// are least likely to be looking for, so the rows go up the moment they
+    /// exist and the trails join them when they arrive. The returned answer is
+    /// still the whole one — the early rows included — and it is the only
+    /// thing that ends the request, which is what keeps *Search this area*
+    /// spinning until OpenStreetMap has had its say.
+    ///
+    /// **Called at most once, and never with nothing.** An empty published
+    /// half is not handed over: replacing the last area's rows with an empty
+    /// list mid-search would draw *No community hikes here* over an area whose
+    /// trails are still on their way. Nor is it called when there is no
+    /// slower half to wait for — a ``CommunityNearbyScope/publishedOnly``
+    /// question, or a conformance with one source, whose answer *is* the
+    /// published half. That second case is the default below, so only
+    /// ``MergedCommunityTransport`` has anything to say here.
+    ///
+    /// A published half that arrived is never followed by a thrown answer
+    /// other than a cancellation: the merge throws only when CloudKit failed.
+    @concurrent
+    func listings(
+        near coordinate: CLLocationCoordinate2D,
+        radiusMeters: Double,
+        limit: Int,
+        excluding: Set<String>,
+        scope: CommunityNearbyScope,
+        publishedFirst: @Sendable ([CommunityListing]) async -> Void
+    ) async throws -> CommunityNearbyAnswer
+
     /// Published hikes whose title matches `query`, newest first.
     @concurrent
     func listings(
@@ -591,4 +624,29 @@ nonisolated protocol CommunityTransporting: Sendable {
     /// never at risk from it.
     @concurrent
     func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws
+}
+
+// `nonisolated` for the reason ``MergedCommunityTransport``'s extensions spell
+// it: under default main-actor isolation an unannotated extension is a
+// main-actor context.
+nonisolated extension CommunityTransporting {
+    /// One source, so nothing arrives before the answer does. See the
+    /// requirement.
+    @concurrent
+    func listings(
+        near coordinate: CLLocationCoordinate2D,
+        radiusMeters: Double,
+        limit: Int,
+        excluding: Set<String>,
+        scope: CommunityNearbyScope,
+        publishedFirst _: @Sendable ([CommunityListing]) async -> Void
+    ) async throws -> CommunityNearbyAnswer {
+        try await listings(
+            near: coordinate,
+            radiusMeters: radiusMeters,
+            limit: limit,
+            excluding: excluding,
+            scope: scope
+        )
+    }
 }

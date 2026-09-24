@@ -154,6 +154,13 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     /// question is still waiting — the window in which an answer about a
     /// replaced submission would be written back.
     var beforeContributionReturns: (@Sendable () async -> Void)?
+    /// A slower OpenStreetMap half for a
+    /// ``CommunityNearbyScope/withCuratedTrails`` answer: the scripted rows
+    /// are handed up through `publishedFirst` at once, and the answer waits on
+    /// `gate` before returning them with `rows` behind. `nil` — the default —
+    /// answers in one piece, which is what every suite written before the
+    /// published half could arrive early is describing.
+    var curatedHalf: (rows: [CommunityListing], gate: AsyncGate)?
     /// The same, for the outline request — which lands *after* the rows it
     /// belongs to and so is the one a suite has to be able to hold.
     var beforeOutlinesReturn: (@Sendable () async -> Void)?
@@ -209,6 +216,35 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
             // ``MergedCommunityTransport`` does, and the rule
             // ``CommunityBrowser`` is held to.
             curated: scope == .withCuratedTrails ? curatedOutcome : .notAsked
+        )
+    }
+
+    /// What ``MergedCommunityTransport`` does when Overpass is the slow half,
+    /// when a suite has armed ``curatedHalf``; otherwise the one-piece answer
+    /// above, which is what the protocol's default does too.
+    @concurrent
+    func listings(
+        near coordinate: CLLocationCoordinate2D,
+        radiusMeters: Double,
+        limit: Int,
+        excluding: Set<String>,
+        scope: CommunityNearbyScope,
+        publishedFirst: @Sendable ([CommunityListing]) async -> Void
+    ) async throws -> CommunityNearbyAnswer {
+        let published = try await listings(
+            near: coordinate,
+            radiusMeters: radiusMeters,
+            limit: limit,
+            excluding: excluding,
+            scope: scope
+        )
+        guard scope == .withCuratedTrails, let curatedHalf else { return published }
+        if !published.listings.isEmpty { await publishedFirst(published.listings) }
+        await curatedHalf.gate.wait()
+        try Task.checkCancellation()
+        return CommunityNearbyAnswer(
+            listings: published.listings + curatedHalf.rows,
+            curated: published.curated
         )
     }
 
