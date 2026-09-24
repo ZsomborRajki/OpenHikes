@@ -25,6 +25,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 import os
 
 /// The one region monitor a process may have.

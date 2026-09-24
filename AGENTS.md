@@ -37,6 +37,9 @@ xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
 # The standalone shared package
 swift test --package-path OpenHikesShared
 
+# The data package — the models, on the macOS host
+swift test --package-path OpenHikesData
+
 # The watch app alone — the faster loop while working on it. Building the
 # `OpenHikes` scheme above already compiles it, because it is a dependency of
 # the app and embedded in it, so there is no way to break the watch that
@@ -52,7 +55,7 @@ nearly six minutes of a red run that says nothing about the code, against
 eighteen seconds of a green one. CI boots as its own step for the same reason;
 see *Build and test* in the instructions file.
 
-Those three are the gates CI runs, on the same device and the same compiler.
+Those four are the gates CI runs, on the same device and the same compiler.
 **The `-only-testing:` scoping is part of the command, not a refinement of
 it** — `OpenHikes.xctestplan` also carries `OpenHikesUITests`, so dropping it
 turns a twenty-second gate into thirteen minutes of simulator automation and

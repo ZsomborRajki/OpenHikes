@@ -8,6 +8,7 @@
 //  under it are the hike detail's own — see ``RecordingStatsSection``.
 //
 
+import OpenHikesData
 import os
 import SwiftUI
 

@@ -14,6 +14,7 @@
 //  iCloud, flip a switch, or wait.
 //
 
+import OpenHikesData
 import SwiftUI
 
 struct CloudSyncSection: View {

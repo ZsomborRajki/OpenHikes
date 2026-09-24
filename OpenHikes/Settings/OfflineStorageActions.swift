@@ -23,6 +23,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// The three storage jobs behind the section's two byte rows and its two
 /// buttons.

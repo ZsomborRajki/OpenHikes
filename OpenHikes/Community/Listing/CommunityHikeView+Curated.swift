@@ -15,6 +15,7 @@
 //  the credit that has to be *linked* rather than merely present.
 //
 
+import OpenHikesData
 import SwiftUI
 
 extension CommunityHikeView {

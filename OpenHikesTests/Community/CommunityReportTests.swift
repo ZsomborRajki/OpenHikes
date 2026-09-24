@@ -5,6 +5,7 @@
 
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// What a reviewer actually receives when a hiker reports a published hike.

@@ -13,6 +13,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// What Core Location will do to a recording started right now, which is what
 /// decides whether "start a hike" can be answered without the app on screen.

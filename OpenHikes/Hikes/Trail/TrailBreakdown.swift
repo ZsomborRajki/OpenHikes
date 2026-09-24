@@ -21,6 +21,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// A category a stretch of route can be attributed to by reading one OSM tag.
 ///

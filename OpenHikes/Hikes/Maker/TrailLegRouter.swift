@@ -59,6 +59,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 import os
 
 /// Where a leg's shape comes from.

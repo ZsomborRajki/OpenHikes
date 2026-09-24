@@ -6,6 +6,7 @@
 //  competes for.
 //
 
+import OpenHikesData
 import SwiftUI
 
 // MARK: - GPX import

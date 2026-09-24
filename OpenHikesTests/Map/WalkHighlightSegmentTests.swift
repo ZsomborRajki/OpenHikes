@@ -22,6 +22,7 @@
 
 import CoreLocation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 @Suite("Walk highlight segments")

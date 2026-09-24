@@ -49,6 +49,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// A row a block can be applied to after it has arrived.
 ///

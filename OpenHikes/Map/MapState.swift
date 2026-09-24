@@ -9,6 +9,7 @@
 import Algorithms
 import Foundation
 import MapKit
+import OpenHikesData
 
 /// The scrub-highlight location, held in a reference type so it can be updated at
 /// drag frequency *without* re-rendering any SwiftUI view. The map observes it

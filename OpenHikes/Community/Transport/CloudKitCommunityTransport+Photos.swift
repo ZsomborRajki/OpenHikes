@@ -48,6 +48,7 @@
 import CloudKit
 import CoreLocation
 import Foundation
+import OpenHikesData
 import os
 
 nonisolated extension CloudKitCommunityTransport {

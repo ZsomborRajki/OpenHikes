@@ -36,6 +36,7 @@
 //  different things by the same tap.
 //
 
+import OpenHikesData
 import SwiftUI
 
 /// The photographs a hiker is about to send, and which of them are going.

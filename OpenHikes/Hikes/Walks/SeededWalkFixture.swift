@@ -15,6 +15,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import SwiftData
 
 #if DEBUG

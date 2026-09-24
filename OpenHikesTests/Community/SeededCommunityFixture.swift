@@ -14,6 +14,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 
 nonisolated enum SeededCommunityFixture {
     static let startLatitude = SeededCommunityTransport.startLatitude

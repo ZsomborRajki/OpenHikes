@@ -10,6 +10,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 import os
 
 @Observable

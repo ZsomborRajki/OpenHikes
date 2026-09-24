@@ -7,6 +7,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated extension TrailMatcherGraphIndex {
     /// A uniform grid over the graph's edges, so a fix is projected

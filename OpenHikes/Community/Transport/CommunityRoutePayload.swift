@@ -58,6 +58,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 import OpenHikesShared
 
 /// Reads the full route off a published submission, and refuses what should

@@ -2,6 +2,7 @@ import CoreLocation
 import Foundation
 import MapKit
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 @Suite("Apple Maps trail legs")

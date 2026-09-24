@@ -30,6 +30,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 nonisolated enum FieldMetricsFormat {
     static let notReported = "Not reported"

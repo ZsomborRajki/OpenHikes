@@ -58,6 +58,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated extension TrailPlaceOSM {
     /// A file name that cannot leave the directory it is written in, so the

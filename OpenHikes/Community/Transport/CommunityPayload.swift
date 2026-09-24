@@ -14,6 +14,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// One photograph's place in a shared hike.
 ///

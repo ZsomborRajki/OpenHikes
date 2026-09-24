@@ -28,6 +28,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 nonisolated struct RecordingTrailNames: Equatable, Sendable {
     /// The share of the walk one trail has to cover before its name may be

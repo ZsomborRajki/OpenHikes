@@ -5,6 +5,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated extension TrailMatcher {
     static func emptyMatchResult(points: [RecordingPoint]) -> TrailMatchResult {

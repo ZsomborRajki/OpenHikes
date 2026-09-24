@@ -12,6 +12,7 @@
 //  picture and losing it.
 //
 
+import OpenHikesData
 import PhotosUI
 import SwiftData
 import SwiftUI

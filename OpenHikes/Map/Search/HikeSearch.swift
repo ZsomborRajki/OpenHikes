@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// Imported/recorded hikes whose name matches the current query, with names
 /// that start with the query ranked above ones that merely contain it —

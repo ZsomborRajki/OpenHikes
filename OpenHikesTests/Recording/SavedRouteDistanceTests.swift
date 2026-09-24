@@ -6,6 +6,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// What a finished hike says it was, against what the hiker watched it become.

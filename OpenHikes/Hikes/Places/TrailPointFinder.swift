@@ -44,6 +44,7 @@ import CoreLocation
 import Foundation
 import MapKit
 import Observation
+import OpenHikesData
 import os
 
 /// The caption under the maker's *Search this area*: what the last search has

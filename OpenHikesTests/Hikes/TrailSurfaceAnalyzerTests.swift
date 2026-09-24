@@ -10,6 +10,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 nonisolated private let metersPerDegreeLongitude = 74_933.0

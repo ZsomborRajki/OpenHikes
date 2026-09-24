@@ -39,6 +39,7 @@ import Foundation
 // For `move(fromOffsets:toOffset:)`, whose semantics are `ForEach`'s and whose
 // indices are the ones a drag reports. Re-deriving that arithmetic here would
 // be re-deriving the one thing the caller and this type have to agree about.
+import OpenHikesData
 import SwiftUI
 
 enum HikeListOrder {

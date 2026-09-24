@@ -19,6 +19,7 @@
 import CloudKit
 import Foundation
 import Observation
+import OpenHikesData
 
 /// Whether iCloud is usable at all, in the terms a person would recognise.
 ///

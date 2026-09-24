@@ -15,6 +15,7 @@
 
 import CoreGraphics
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// Point-to-polyline distance in screen points, and the pick that follows.

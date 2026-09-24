@@ -23,6 +23,7 @@
 //
 
 import AppIntents
+import OpenHikesData
 
 nonisolated struct OpenHikesShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {

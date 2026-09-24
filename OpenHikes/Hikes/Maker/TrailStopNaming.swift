@@ -59,6 +59,7 @@
 import CoreLocation
 import Foundation
 import MapKit
+import OpenHikesData
 import os
 
 /// What MapKit knows about a coordinate, or `nil` for a lookup that found

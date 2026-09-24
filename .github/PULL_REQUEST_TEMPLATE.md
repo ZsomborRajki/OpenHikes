@@ -18,7 +18,7 @@ says which commands to run.
 
 - [ ] `Scripts/lint.sh` passes
 - [ ] `xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes -destination 'platform=iOS Simulator,name=iPhone 18 Pro' -only-testing:OpenHikesTests -only-testing:OpenWidgetTests` passes
-- [ ] `swift test --package-path OpenHikesShared` passes
+- [ ] `swift test --package-path OpenHikesShared` and `swift test --package-path OpenHikesData` pass
 - [ ] `Scripts/run-ui-tests.sh --all` — needed for a change to recording, the map or the sheet
 - [ ] New behaviour has a test that fails without the change
 

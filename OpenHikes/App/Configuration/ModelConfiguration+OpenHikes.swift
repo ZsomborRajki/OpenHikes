@@ -24,6 +24,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import SwiftData
 
 extension ModelConfiguration {

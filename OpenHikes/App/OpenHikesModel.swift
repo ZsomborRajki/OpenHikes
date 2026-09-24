@@ -19,6 +19,7 @@
 
 import Foundation
 import Observation
+import OpenHikesData
 import SwiftData
 
 nonisolated struct StorageStartupIssue: Equatable, Sendable {

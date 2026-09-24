@@ -26,6 +26,7 @@
 import CoreLocation
 import Foundation
 import HealthKit
+import OpenHikesData
 import os
 
 @MainActor

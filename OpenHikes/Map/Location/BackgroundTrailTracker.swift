@@ -42,6 +42,7 @@
 import CoreLocation
 import Foundation
 import Observation
+import OpenHikesData
 import OpenHikesShared
 import SwiftData
 import Synchronization

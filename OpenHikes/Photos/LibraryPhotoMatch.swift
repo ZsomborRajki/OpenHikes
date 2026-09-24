@@ -40,6 +40,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// Everything the matching below needs to know about one photo in the library.
 ///

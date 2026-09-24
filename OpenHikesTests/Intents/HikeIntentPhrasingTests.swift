@@ -15,6 +15,7 @@
 
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 @Suite("Hike intent phrasing")

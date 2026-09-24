@@ -11,6 +11,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// One point a hiker put down, and the identity that lets a list draw it.
 ///

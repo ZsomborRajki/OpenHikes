@@ -31,6 +31,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated struct HikePhotoTimeline: Sendable {
     /// How far outside a fix a photograph can be taken and still be placed at

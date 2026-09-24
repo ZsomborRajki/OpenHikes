@@ -20,6 +20,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import OpenHikesShared
 import Synchronization
 

@@ -1,3 +1,4 @@
+import OpenHikesData
 import SwiftUI
 
 /// Apple Maps' mode bar: the four modes as one segmented control, icons only.

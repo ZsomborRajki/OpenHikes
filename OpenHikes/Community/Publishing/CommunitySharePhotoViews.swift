@@ -15,6 +15,7 @@
 //  two apart is what lets the floor go on measuring it.
 //
 
+import OpenHikesData
 import OpenHikesShared
 import SwiftData
 import SwiftUI

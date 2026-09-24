@@ -25,6 +25,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// The wording of the confirmation shown before a hike is deleted.
 struct HikeDeletionPrompt: Equatable {

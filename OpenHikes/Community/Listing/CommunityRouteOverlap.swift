@@ -42,6 +42,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated enum CommunityRouteOverlap {
     /// How far off a line a point may be and still count as on it.

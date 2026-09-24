@@ -25,6 +25,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// The temporary directories Community writes into, and the sweep that clears
 /// up the ones their owners never did.

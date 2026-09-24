@@ -19,6 +19,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated struct TileOwnership: Sendable {
     private let route: [RouteCoordinate]

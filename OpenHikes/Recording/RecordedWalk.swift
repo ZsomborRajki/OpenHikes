@@ -26,6 +26,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import SwiftData
 
 extension HikeWalk {

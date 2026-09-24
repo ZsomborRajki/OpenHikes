@@ -8,6 +8,7 @@
 import CoreLocation
 import Foundation
 import HeapModule
+import OpenHikesData
 import OrderedCollections
 
 // MARK: - Shared types (used by TrailMatcher and TrailMatcherGraphIndex)

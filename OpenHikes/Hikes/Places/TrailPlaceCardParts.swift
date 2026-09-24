@@ -12,6 +12,7 @@
 //
 
 import CoreLocation
+import OpenHikesData
 import SwiftUI
 
 /// What OpenStreetMap says about a place, then where it is.

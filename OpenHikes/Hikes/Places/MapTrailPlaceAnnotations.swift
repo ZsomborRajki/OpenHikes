@@ -29,6 +29,7 @@
 //
 
 import MapKit
+import OpenHikesData
 import OpenHikesShared
 import SwiftUI
 #if canImport(UIKit)

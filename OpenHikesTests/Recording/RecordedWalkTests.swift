@@ -6,6 +6,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// The row a saved recording leaves in its own History, and the two figures it

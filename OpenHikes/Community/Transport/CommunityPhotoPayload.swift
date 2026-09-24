@@ -38,6 +38,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// A set of photographs offered to a hike that already exists, ready to
 /// upload.

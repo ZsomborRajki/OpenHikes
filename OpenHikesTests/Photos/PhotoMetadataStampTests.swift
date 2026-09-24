@@ -21,6 +21,7 @@ import CoreLocation
 import Foundation
 import ImageIO
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 #if canImport(UIKit)

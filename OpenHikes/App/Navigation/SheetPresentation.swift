@@ -38,6 +38,7 @@
 //  ask which shape they are being drawn in.
 //
 
+import OpenHikesData
 import SwiftUI
 
 /// The shape the sheet's contents are drawn in.

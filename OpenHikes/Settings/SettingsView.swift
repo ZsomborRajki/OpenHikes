@@ -13,6 +13,7 @@
 //  wrong than a switch the hiker has to set before setting off.
 //
 
+import OpenHikesData
 import StoreKit
 import SwiftData
 import SwiftUI

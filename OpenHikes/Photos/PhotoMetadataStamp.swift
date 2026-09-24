@@ -37,6 +37,7 @@ import CoreGraphics
 import CoreLocation
 import Foundation
 import ImageIO
+import OpenHikesData
 import os
 
 /// Adds capture time and place to encoded image bytes, without touching the

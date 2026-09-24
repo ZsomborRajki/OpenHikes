@@ -213,6 +213,24 @@ jobs:
             -Xswiftc -warnings-as-errors \
             | xcbeautify --renderer github-actions --disable-logging
 
+      # The domain package, on the same terms: its suites are the app's that
+      # needed nothing but the models, and here they run on the host with no
+      # simulator. Unlike `OpenHikesShared` it has external dependencies —
+      # swift-collections and swift-algorithms, pinned by its own
+      # Package.resolved to the versions the app resolves.
+      - name: Test data package
+        run: |
+          set -o pipefail
+          swift test --package-path OpenHikesData -Xswiftc -warnings-as-errors \
+            | xcbeautify --renderer github-actions --disable-logging
+
+      - name: Test data package in Release
+        run: |
+          set -o pipefail
+          swift test --package-path OpenHikesData --configuration release \
+            -Xswiftc -warnings-as-errors \
+            | xcbeautify --renderer github-actions --disable-logging
+
       - name: Verify resolved packages
         run: |
           xcodebuild -resolvePackageDependencies \

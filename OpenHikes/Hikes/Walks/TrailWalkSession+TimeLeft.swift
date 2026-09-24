@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 extension TrailWalkSession {
     /// Seconds to the end of the walked trail at `now`, or `nil` with no walk,

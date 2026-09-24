@@ -51,6 +51,7 @@
 
 import Foundation
 import Observation
+import OpenHikesData
 import OpenHikesShared
 #if canImport(UIKit)
 import UIKit

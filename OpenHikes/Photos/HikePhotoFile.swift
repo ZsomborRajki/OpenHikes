@@ -18,6 +18,7 @@
 
 import CoreTransferable
 import Foundation
+import OpenHikesData
 import UniformTypeIdentifiers
 
 /// A photograph the share sheet can carry.

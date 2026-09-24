@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import os
 
 nonisolated extension TileCache {

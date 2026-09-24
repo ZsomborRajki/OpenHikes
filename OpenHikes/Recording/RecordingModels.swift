@@ -11,6 +11,7 @@ import CoreLocation
 import DequeModule
 import Foundation
 import Observation
+import OpenHikesData
 import OpenHikesShared
 
 nonisolated struct RecordingPointFlags: OptionSet, Codable, Hashable, Sendable {
@@ -134,7 +135,9 @@ nonisolated enum LocationPurposeKey {
 
 nonisolated enum RecordingFixPolicy {
     static let maximumHorizontalAccuracy: CLLocationAccuracy = 50
-    static let maximumSpeed: CLLocationSpeed = 8
+    /// See ``MovementThresholds/maximumOnFootSpeed``, which a saved route's
+    /// statistics read too.
+    static let maximumSpeed = MovementThresholds.maximumOnFootSpeed
     static let minimumDisplacement: CLLocationDistance = 5
     static let maximumInterval: TimeInterval = 10
     static let bearingChangeDegrees = 15.0

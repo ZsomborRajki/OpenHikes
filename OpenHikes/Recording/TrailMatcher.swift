@@ -8,6 +8,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated enum TrailMatcher {
     static let maximumCandidatesPerFix = 8

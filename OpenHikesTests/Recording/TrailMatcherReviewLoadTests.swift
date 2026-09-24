@@ -26,6 +26,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 @Suite("Trail matcher review load")

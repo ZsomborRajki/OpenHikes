@@ -68,6 +68,7 @@
 import CoreLocation
 import Foundation
 import MapKit
+import OpenHikesData
 
 /// What the latest map region means for the community list.
 enum CommunityQueryAction: Equatable {

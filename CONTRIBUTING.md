@@ -55,6 +55,9 @@ xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
 
 # The standalone shared package
 swift test --package-path OpenHikesShared
+
+# The data package — the models, on the macOS host
+swift test --package-path OpenHikesData
 ```
 
 `Scripts/install-git-hooks.sh` installs an opt-in pre-push hook that runs the

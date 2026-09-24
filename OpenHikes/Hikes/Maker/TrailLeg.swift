@@ -33,6 +33,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// The two ends of one leg, which is what a resolved shape is looked up by.
 ///

@@ -16,6 +16,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 extension OfflineTileDownloader {
     /// The coverage a run ended with, or `nil` when it saved nothing.

@@ -11,6 +11,7 @@
 //  detail screen.
 //
 
+import OpenHikesData
 import SwiftUI
 
 nonisolated extension TrailDifficulty: TrailCategoryPresentation {

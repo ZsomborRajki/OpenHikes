@@ -40,6 +40,7 @@
 
 import CoreLocation
 import MapKit
+import OpenHikesData
 import SwiftUI
 
 struct HikePhotoViewer: View {

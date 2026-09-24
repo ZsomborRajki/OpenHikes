@@ -20,6 +20,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// Removes the entries of a staging directory that are older than a cutoff.
 nonisolated enum StagedFiles {

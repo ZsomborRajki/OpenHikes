@@ -24,6 +24,7 @@
 import CoreLocation
 import Foundation
 import Observation
+import OpenHikesData
 
 nonisolated enum NearbyPlaceSuggestions {
     /// How close a mapped place must be to count as *here*.

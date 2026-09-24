@@ -20,6 +20,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Synchronization
 
 /// A transport that answers from a script and remembers what it was asked.

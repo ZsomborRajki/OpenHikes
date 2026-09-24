@@ -30,6 +30,7 @@ import Foundation
 import MapKit
 
 #if os(iOS)
+import OpenHikesData
 import UIKit
 
 /// The pill itself. Owns its appearance and its two actions; where it sits is

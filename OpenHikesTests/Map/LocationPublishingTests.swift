@@ -11,6 +11,7 @@ import CoreLocation
 import Foundation
 import MapKit
 @testable import OpenHikes
+import OpenHikesData
 import SwiftUI
 import Testing
 

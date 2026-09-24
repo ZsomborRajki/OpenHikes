@@ -24,6 +24,7 @@
 //
 
 import Observation
+import OpenHikesData
 import SwiftUI
 
 /// What the hiker is typing into the save alert, for as long as that alert is

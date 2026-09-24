@@ -68,6 +68,7 @@
 
 import Foundation
 import Observation
+import OpenHikesData
 
 /// The heights of the trail being drawn, and the one thing that asks for them.
 ///

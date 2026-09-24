@@ -45,6 +45,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 import os
 import Photos
 

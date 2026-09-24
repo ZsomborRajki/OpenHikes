@@ -52,6 +52,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// A submission waiting for a person to look at it.
 ///

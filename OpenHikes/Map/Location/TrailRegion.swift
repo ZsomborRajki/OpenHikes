@@ -35,6 +35,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// The circle the tracked trail sits inside, as registered with the system.
 ///

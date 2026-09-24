@@ -16,6 +16,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// UserDefaults / `@AppStorage` key shared between the settings UI and the map.
 nonisolated enum SettingsKey {

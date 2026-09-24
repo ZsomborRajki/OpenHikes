@@ -22,6 +22,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated enum PhotoTrailAnchor {
     /// How far along the route a photo taken now belongs, or `nil` when the

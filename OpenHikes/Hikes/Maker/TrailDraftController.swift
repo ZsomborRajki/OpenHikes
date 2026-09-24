@@ -57,6 +57,7 @@
 import CoreLocation
 import Foundation
 import Observation
+import OpenHikesData
 
 /// What the place sheet is about: the dropped pin, one of the trail's places,
 /// or one of its stops.

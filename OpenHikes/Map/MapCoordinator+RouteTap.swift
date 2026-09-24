@@ -51,6 +51,7 @@
 //
 
 import MapKit
+import OpenHikesData
 import OpenHikesShared
 #if canImport(UIKit)
 import UIKit

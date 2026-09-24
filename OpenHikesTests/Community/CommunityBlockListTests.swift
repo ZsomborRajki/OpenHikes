@@ -5,6 +5,7 @@
 
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// What a block is keyed on, what it survives, and what it must not hide.

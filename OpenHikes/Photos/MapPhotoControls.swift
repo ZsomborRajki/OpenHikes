@@ -29,6 +29,7 @@
 import Foundation
 
 #if os(iOS)
+import OpenHikesData
 import UIKit
 
 /// The pill itself. Owns its appearance and its actions, and nothing else

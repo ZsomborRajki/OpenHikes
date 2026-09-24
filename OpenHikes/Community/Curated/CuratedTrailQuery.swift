@@ -32,6 +32,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// The Overpass requests a curated search makes, and the arithmetic that
 /// decides which routes are worth asking about.

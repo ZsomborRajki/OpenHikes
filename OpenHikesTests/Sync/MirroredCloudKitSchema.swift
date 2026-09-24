@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// The mirrored half of the schema, written down.
 ///

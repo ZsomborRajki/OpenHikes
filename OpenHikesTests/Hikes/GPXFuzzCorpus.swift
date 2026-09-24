@@ -19,6 +19,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// One generated input, carrying the recipe that produced it so a failure
 /// names something a reader can act on rather than only a seed.

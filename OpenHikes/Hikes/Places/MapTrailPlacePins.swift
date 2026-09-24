@@ -26,6 +26,7 @@
 
 import MapKit
 import Observation
+import OpenHikesData
 import SwiftUI
 
 /// The places of the hike whose screen is up, and the claim a screen holds

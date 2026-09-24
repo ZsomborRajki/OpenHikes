@@ -33,6 +33,7 @@
 //  ``CommunityBrowser/startBrowsing()`` and ``CommunityBrowser/stopBrowsing()``.
 //
 
+import OpenHikesData
 import OpenHikesShared
 import SwiftUI
 

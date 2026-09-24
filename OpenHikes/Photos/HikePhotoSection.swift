@@ -32,6 +32,7 @@
 //  between an explanation and a row of broken pictures.
 //
 
+import OpenHikesData
 import SwiftUI
 
 struct HikePhotoSection: View {

@@ -43,6 +43,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 nonisolated enum TileFetchPurpose: String, Sendable {
     /// The map is trying to draw this tile now. Refusing shows the hiker a

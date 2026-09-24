@@ -2,6 +2,7 @@ import Algorithms
 import CoreLocation
 import Foundation
 import MapKit
+import OpenHikesData
 import OpenHikesShared
 
 /// One instance per mode; ordered endpoints never share an answer with another

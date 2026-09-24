@@ -19,6 +19,7 @@
 //  twice, once correctly and once as a discard.
 //
 
+import OpenHikesData
 import OpenHikesShared
 
 /// A walk's phase in the terms the shared table speaks.

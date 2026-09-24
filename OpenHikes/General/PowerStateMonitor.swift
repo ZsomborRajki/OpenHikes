@@ -27,6 +27,7 @@
 
 import Foundation
 import Observation
+import OpenHikesData
 import Synchronization
 
 nonisolated struct PowerState: Equatable, Sendable {

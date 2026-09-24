@@ -35,6 +35,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// The thresholds every reminder in this folder is decided by.
 ///

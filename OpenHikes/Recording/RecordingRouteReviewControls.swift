@@ -12,6 +12,7 @@
 //  leave the whole review answering to one name.
 //
 
+import OpenHikesData
 import os
 import SwiftUI
 

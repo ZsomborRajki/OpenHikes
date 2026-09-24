@@ -6,6 +6,7 @@
 //  its own in, so a walk looks the same while it is recorded as after.
 //
 
+import OpenHikesData
 import SwiftUI
 
 /// Distance, duration and ascent in the strip, and the rest in the list.

@@ -47,6 +47,7 @@
 import CoreLocation
 import Foundation
 #if canImport(UIKit)
+import OpenHikesData
 import UIKit
 #endif
 

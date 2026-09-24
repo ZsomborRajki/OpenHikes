@@ -53,6 +53,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import os
 
 /// The submissions waiting for a person, held for as long as the tab is up.

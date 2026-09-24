@@ -36,6 +36,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// One `CLLocationManager` configuration, named so a signpost, a log line and
 /// the recording screen can all say which one is in force without any of them

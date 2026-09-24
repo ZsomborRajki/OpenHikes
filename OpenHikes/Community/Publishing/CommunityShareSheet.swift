@@ -34,6 +34,7 @@
 //  same absence behind. See ``CommunityPublicationState``.
 //
 
+import OpenHikesData
 import SwiftData
 import SwiftUI
 

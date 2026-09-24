@@ -16,6 +16,7 @@ import CoreLocation
 import Foundation
 import MapKit
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// Where the shared hikes go, as opposed to where they start.

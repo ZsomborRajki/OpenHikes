@@ -18,6 +18,7 @@
 //  where reading `selectedHike` would cost the whole map screen a render.
 //
 
+import OpenHikesData
 import SwiftUI
 
 extension OpenHikesView {

@@ -24,6 +24,7 @@
 
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import SwiftUI
 import Testing
 #if canImport(UIKit)

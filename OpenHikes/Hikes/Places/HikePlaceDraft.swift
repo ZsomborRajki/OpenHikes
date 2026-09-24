@@ -13,6 +13,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// Where a place about to be added stands, and the id it will be added under.
 ///

@@ -33,6 +33,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated enum TrailPointRanking {
     /// The whole choosing step, off the main actor: the places the hiker has
@@ -92,8 +93,10 @@ nonisolated enum TrailPointRanking {
         }
     }
 
-    /// How close a candidate has to be to a marked place to be the same place.
-    static let alreadyMarkedMeters: Double = 25
+    /// How close a candidate has to be to a marked place to be the same place
+    /// — see ``TrailPlace/alreadyMarkedMeters``, which a saved hike's own
+    /// place list reads too.
+    static let alreadyMarkedMeters = TrailPlace.alreadyMarkedMeters
 
     /// The `limit` places of `found` nearest the drawing, or nearest
     /// `centre` where there is no drawing to be near.

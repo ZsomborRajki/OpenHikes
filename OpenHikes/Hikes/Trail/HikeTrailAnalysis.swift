@@ -14,6 +14,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// Everything one pass over the trail graph can say about a route. Either
 /// half is `nil` when it could not be measured.

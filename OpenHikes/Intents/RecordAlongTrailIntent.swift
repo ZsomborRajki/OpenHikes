@@ -47,6 +47,7 @@
 
 import AppIntents
 import Foundation
+import OpenHikesData
 import OpenHikesShared
 
 /// Not `nonisolated`, for the reason ``HikeEntity`` gives: `@Parameter` and

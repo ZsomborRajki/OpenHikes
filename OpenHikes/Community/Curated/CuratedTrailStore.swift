@@ -41,6 +41,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// The on-disk half of the curated trail cache.
 ///

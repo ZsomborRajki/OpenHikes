@@ -16,6 +16,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 import OpenHikesShared
 
 nonisolated enum TrailGraphCorridor {

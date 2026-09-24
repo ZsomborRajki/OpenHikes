@@ -7,6 +7,7 @@
 
 import CoreLocation
 import Observation
+import OpenHikesData
 
 /// The elevation graph's tracker positions, held in a reference type so a
 /// published location fix moves the chart without re-rendering the rest of

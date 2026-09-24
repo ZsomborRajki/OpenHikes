@@ -5,6 +5,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 import OpenHikesShared
 
 nonisolated struct PreparedRecording: Sendable {

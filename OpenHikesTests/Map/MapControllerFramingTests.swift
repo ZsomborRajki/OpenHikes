@@ -15,6 +15,7 @@
 import CoreLocation
 import MapKit
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 @MainActor

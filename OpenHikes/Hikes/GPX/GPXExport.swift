@@ -10,6 +10,7 @@
 import CoreLocation
 import CoreTransferable
 import Foundation
+import OpenHikesData
 import UniformTypeIdentifiers
 
 nonisolated enum GPXExport {

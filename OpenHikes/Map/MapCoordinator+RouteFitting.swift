@@ -47,6 +47,7 @@
 //
 
 import MapKit
+import OpenHikesData
 
 extension MapView.Coordinator {
     /// Fits the currently drawn route into the focus area. Shared by the

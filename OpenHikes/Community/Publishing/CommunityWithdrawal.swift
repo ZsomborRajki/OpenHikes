@@ -61,6 +61,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 /// One hiker's request to take their own shared hike down, and the mail it
 /// composes.

@@ -27,6 +27,7 @@
 //
 
 import Foundation
+import OpenHikesData
 
 nonisolated struct HikePhotoSearchPlan: Sendable {
     /// The route's own time-to-place index, when its points carry timestamps.

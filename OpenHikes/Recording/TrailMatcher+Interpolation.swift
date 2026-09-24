@@ -8,6 +8,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated extension TrailMatcher {
     struct InterpolationContext {

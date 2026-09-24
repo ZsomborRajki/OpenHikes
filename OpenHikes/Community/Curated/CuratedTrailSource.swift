@@ -40,6 +40,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 import OrderedCollections
 
 /// What a geometry pass came back with.

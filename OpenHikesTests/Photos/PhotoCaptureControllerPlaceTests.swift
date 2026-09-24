@@ -9,6 +9,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// A coordinate a test can move after handing out the closure that reads it.

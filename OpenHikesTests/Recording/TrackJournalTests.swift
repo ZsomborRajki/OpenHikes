@@ -5,6 +5,7 @@
 
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 @Suite("Track journal")

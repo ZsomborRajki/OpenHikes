@@ -18,6 +18,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import SwiftData
 import Testing
 

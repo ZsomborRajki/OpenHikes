@@ -21,6 +21,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 /// Records every request and answers each with the next queued response.
