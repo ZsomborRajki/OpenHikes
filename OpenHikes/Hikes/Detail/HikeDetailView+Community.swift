@@ -302,6 +302,18 @@ extension HikeDetailView {
         _ contribution: CommunityContributionState,
         _ transport: any CommunityTransporting
     ) -> some View {
+        // A published trail edited since it was sent: the listing still shows
+        // the old line, and a submission cannot be amended. Said here, over
+        // the removal request it points to — the owner's decision, and the
+        // only path to publishing an amended route. See ``DrawnRoute``.
+        if hike.isSharedCopyOutOfDate {
+            Section("The shared copy shows the route before your edit. Ask for its removal, then share this one.") {
+                Button("Ask for Removal", systemImage: "envelope", role: .destructive) {
+                    isWithdrawingFromCommunity = true
+                }
+                .accessibilityIdentifier("community-withdraw-edited-button")
+            }
+        }
         if let target = CommunityPhotoTarget.published(
             listingID: hike.communityListingID,
             title: hike.displayTitle
@@ -324,10 +336,13 @@ extension HikeDetailView {
             checkWhetherStillLive(transport)
         }
         .accessibilityIdentifier("community-liveness-button")
-        Button("Ask for Removal", systemImage: "envelope", role: .destructive) {
-            isWithdrawingFromCommunity = true
+        // Once, not twice: an edited trail carries it in the section above.
+        if !hike.isSharedCopyOutOfDate {
+            Button("Ask for Removal", systemImage: "envelope", role: .destructive) {
+                isWithdrawingFromCommunity = true
+            }
+            .accessibilityIdentifier("community-withdraw-button")
         }
-        .accessibilityIdentifier("community-withdraw-button")
     }
 
     /// The same three-state shape, about the photographs rather than the

@@ -162,6 +162,9 @@ enum TrailDraftSave {
             // listing all draw them without a line added to any of them.
             route: heights?.filling(route) ?? route
         )
+        // The stops it was drawn from, so *Edit Route* can reopen it — see
+        // ``DrawnRoute``.
+        hike.drawnRoute = DrawnRoute(draft)
         context.insert(hike)
         // After the insert, because a ``TrailPoint`` is a row of its own and a
         // relationship assigned to a hike that is not in a context yet has
@@ -190,6 +193,78 @@ enum TrailDraftSave {
             logger.error(
                 """
                 A drawn trail could not be saved: \
+                \(error.localizedDescription, privacy: .public)
+                """
+            )
+            return .refused(.notSaved)
+        }
+        return .saved(hike)
+    }
+
+    /// Writes `draft` back into `hike` — *Edit Route*'s Save.
+    ///
+    /// The same row, so every walk, place, photograph, widget pin and
+    /// publication pointing at it still does. The name, the colour, the
+    /// symbol and the date stay what they were; what changes is what the
+    /// line is: the route and its length, the stops it was drawn from, and
+    /// the places it passes — by the rule a new trail's save keeps them by. A
+    /// place the edit took away returns its photographs to the gallery, as
+    /// removing it on its own screen does.
+    ///
+    /// **Past walks are kept**, the owner's decision: a ``HikeWalk`` is a
+    /// record of a walk that happened, measured against the route as it stood
+    /// then. The surface and difficulty breakdowns are not kept — they
+    /// describe the old line — and are emptied so the next open asks
+    /// OpenStreetMap about the new one, which is what "never analyzed" means.
+    ///
+    /// A shared hike keeps its publication and learns that the shared copy
+    /// is now out of date — see ``DrawnRoute/editedUnderSubmissionID``.
+    ///
+    /// A refused save puts everything back: the rows through the context's
+    /// rollback, and the hike's own columns by hand, because a rolled-back
+    /// context still holds an attribute written over an existing row — the
+    /// measurement ``StoredTileDeletion`` records.
+    @discardableResult static func update(
+        _ hike: Hike,
+        from draft: TrailDraft,
+        into context: ModelContext,
+        heights: RouteHeightSamples? = nil,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) -> TrailDraftSaveOutcome {
+        guard draft.waypoints.count > 1 else { return .refused(.tooShort) }
+        let route = draft.routeCoordinates
+        let before = (
+            route: hike.route,
+            distance: hike.distanceMeters,
+            drawn: hike.drawnRouteData,
+            surface: hike.surfaceMetersByCategory,
+            difficulty: hike.difficultyMetersByGrade,
+            photos: hike.photos
+        )
+        let kept = TrailPlaceOrder.touched(draft.places, along: route)
+        let keptIDs = Set(kept.map(\.id))
+        for place in hike.places where !keptIDs.contains(place.id) {
+            hike.unfilePhotos(fromPlace: place.id)
+        }
+        hike.route = heights?.filling(route) ?? route
+        hike.distanceMeters = draft.distanceMeters
+        hike.surfaceMetersByCategory = [:]
+        hike.difficultyMetersByGrade = [:]
+        hike.drawnRoute = DrawnRoute(draft, editedUnderSubmissionID: hike.communitySubmissionID)
+        hike.replacePlaces(with: kept, in: context)
+        do {
+            try save(context)
+        } catch {
+            context.rollback()
+            hike.route = before.route
+            hike.distanceMeters = before.distance
+            hike.drawnRouteData = before.drawn
+            hike.surfaceMetersByCategory = before.surface
+            hike.difficultyMetersByGrade = before.difficulty
+            hike.photos = before.photos
+            logger.error(
+                """
+                An edited trail could not be saved: \
                 \(error.localizedDescription, privacy: .public)
                 """
             )

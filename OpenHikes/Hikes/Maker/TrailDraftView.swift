@@ -169,7 +169,7 @@ struct TrailDraftView: View {
             search.end()
             completer.clear()
         }
-        .navigationTitle("New Trail")
+        .navigationTitle(maker.editingHikeID == nil ? "New Trail" : "Edit Trail")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -181,7 +181,7 @@ struct TrailDraftView: View {
             // Save and close share one glass pill on the trailing edge, the ✕
             // outermost, where Apple Maps puts its own.
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("Save", systemImage: "checkmark", action: startNaming)
+                Button("Save", systemImage: "checkmark", action: saveTapped)
                     .disabled(!draft.canBeSaved)
                     .accessibilityIdentifier("trail-draft-save")
                 Button("Close", systemImage: "xmark", action: close)
@@ -193,11 +193,11 @@ struct TrailDraftView: View {
         // from inside the sheet's contents*, and which ``RecordingView``'s own
         // alerts already follow.
         .confirmationDialog(
-            "Close this trail?",
+            maker.editingHikeID == nil ? "Close this trail?" : "Close this edit?",
             isPresented: $isConfirmingClose,
             titleVisibility: .visible
         ) {
-            Button("Discard Trail", role: .destructive) {
+            Button(maker.editingHikeID == nil ? "Discard Trail" : "Discard Changes", role: .destructive) {
                 maker.discard()
                 onClose()
             }
@@ -515,6 +515,25 @@ struct TrailDraftView: View {
         isConfirmingClose = true
     }
 
+    /// Save: a new trail asks for its name, an edit is written straight back
+    /// under the name it already has — rename lives on the hike's own screen.
+    ///
+    /// An edit whose hike has gone — deleted on this device or another while
+    /// the drawing was open — is saved as a new trail instead, because the
+    /// drawing is still the hiker's work and there is nothing left to write
+    /// it into.
+    private func saveTapped() {
+        guard let id = maker.editingHikeID,
+              let hike = try? modelContext.fetch(
+                  FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
+              ).first
+        else {
+            startNaming()
+            return
+        }
+        finish(TrailDraftSave.update(hike, from: draft, into: modelContext, heights: maker.elevation.samples))
+    }
+
     /// Asks what to call it, with the field blank.
     ///
     /// Blank rather than pre-filled with the default, which is the trap
@@ -535,7 +554,7 @@ struct TrailDraftView: View {
     /// goes with it, so the alert that comes back is about the save that is
     /// about to happen rather than the one that didn't.
     private func save(madeOn date: Date) {
-        switch TrailDraftSave.hike(
+        finish(TrailDraftSave.hike(
             from: draft,
             named: name.text,
             into: modelContext,
@@ -544,7 +563,13 @@ struct TrailDraftView: View {
             // are still about this line — nothing here waits for an answer
             // that has not landed. See ``TrailDraftElevation``.
             heights: maker.elevation.samples
-        ) {
+        ))
+    }
+
+    /// What either save comes to: the drawing cleared and the hike shown, or
+    /// the refusal said and the drawing left exactly where it was.
+    private func finish(_ outcome: TrailDraftSaveOutcome) {
+        switch outcome {
         case .saved(let hike):
             // The one tier of ``HapticMoment`` this screen did not already
             // speak. A tap on the map, a point picked up and a row dropped are

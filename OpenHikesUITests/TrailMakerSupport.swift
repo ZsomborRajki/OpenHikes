@@ -14,6 +14,39 @@
 import XCTest
 
 extension XCTestCase {
+    /// Answers the alert Save opens, which is the only place the maker asks
+    /// what the trail is called.
+    ///
+    /// The field opens blank — the placeholder is the default name — so this
+    /// types rather than replaces, unlike `stopRecording(named:in:)` next
+    /// door.
+    @MainActor
+    func nameTheTrail(_ name: String, in app: XCUIApplication) {
+        let prompt = app.alerts["Name Your Trail"]
+        XCTAssertTrue(
+            prompt.waitForExistence(timeout: UITestTimeout.navigation),
+            "saving should ask what the trail is called"
+        )
+        let field = prompt.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: UITestTimeout.navigation))
+        // Typed into the field the alert focused on the way in, rather than
+        // tapped first: a tap on a field that already has the keyboard opens
+        // the edit menu over it — AutoFill, Paste.
+        field.typeText(name)
+        // **The alert can move under the press.** On a freshly created
+        // simulator the software keyboard hides while a name is typed and
+        // comes back a moment later, carrying the alert up with it, and a
+        // press aimed at where Save was lands on the dimmed screen behind it —
+        // the alert stays up with the name typed in, and the save never
+        // happens. Seen in a screen recording of exactly that. Pressed again
+        // only if it happened: a press that landed has taken the alert down.
+        let save = prompt.buttons["Save"]
+        save.tap()
+        if !waitUntil(timeout: UITestTimeout.existence, { !prompt.exists }) {
+            save.tap()
+        }
+    }
+
     /// How long ``dropPin(at:on:)`` holds: longer than the half second the
     /// app waits before a press drops a pin, so a loaded runner's late touch
     /// still counts.

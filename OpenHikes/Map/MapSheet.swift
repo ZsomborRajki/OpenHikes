@@ -490,6 +490,7 @@ struct MapSheet: View {
                 placePins: placePins,
                 placeSearch: appModel.placeSearchScope,
                 communityTransport: appModel.communityTransport,
+                trailMaker: trailMaker,
                 onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
                 onOpenPlace: { placeID in openPlace(placeID, of: hike) },
                 onOpenWalk: { walk in presentation.path.append(.walk(walk)) },

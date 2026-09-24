@@ -49,6 +49,9 @@ nonisolated struct StoredTrailDraft: Equatable, Sendable {
     var snapsToPaths: Bool
     var travelMode: TrailTravelMode = .hiking
     var startIsOpen = false
+    /// The hike this drawing is an edit of — see
+    /// ``TrailDraftRecord/editingHikeID``.
+    var editingHikeID: UUID?
 
     /// Both lists, because either on its own is a drawing worth coming back
     /// to — see ``TrailDraft/isEmpty``.
@@ -99,7 +102,8 @@ struct TrailDraftStore {
                 places: record.places,
                 snapsToPaths: record.snapsToPaths,
                 travelMode: record.travelMode,
-                startIsOpen: record.startIsOpen
+                startIsOpen: record.startIsOpen,
+                editingHikeID: record.editingHikeID
             )
         } catch {
             log("load", error)
@@ -122,7 +126,8 @@ struct TrailDraftStore {
         places: [TrailPlace],
         snapsToPaths: Bool,
         travelMode: TrailTravelMode = .hiking,
-        startIsOpen: Bool = false
+        startIsOpen: Bool = false,
+        editingHikeID: UUID? = nil
     ) {
         let points = waypoints.map(\.routeCoordinate)
         // Written in the same statement that writes the points, every time, so
@@ -139,6 +144,7 @@ struct TrailDraftStore {
                 record.snapsToPaths = snapsToPaths
                 record.travelMode = travelMode
                 record.startIsOpen = startIsOpen
+                record.editingHikeID = editingHikeID
                 record.updatedAt = .now
             } else {
                 context.insert(
@@ -149,7 +155,8 @@ struct TrailDraftStore {
                         snapsToPaths: snapsToPaths,
                         updatedAt: .now,
                         travelMode: travelMode,
-                        startIsOpen: startIsOpen
+                        startIsOpen: startIsOpen,
+                        editingHikeID: editingHikeID
                     )
                 )
             }
