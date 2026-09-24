@@ -59,13 +59,31 @@ final class RecordingEntry {
     /// Starts a recording when none is under way, then asks for its screen —
     /// the two steps the sheet's button took before it moved to the map.
     ///
-    /// A start refused for want of location still leaves the recorder
-    /// active, on its failure, so the screen opens on the reason rather than
-    /// the tap doing nothing. See ``HikeRecorder/start()``.
+    /// A start refused for want of location leaves **no** session and the
+    /// recorder inactive, but the screen is where that refusal is explained
+    /// and Settings offered — so the request goes out regardless, and the
+    /// link's handler admits it through ``HikeRecorder/hasScreenToShow``.
     func requestRecording() {
         Task {
             if !isLive() { await start() }
             openRequests.openRecording()
         }
+    }
+}
+
+extension HikeRecorder {
+    /// Whether the recording screen has something to show: a recording under
+    /// way, or a start refused before any session existed.
+    ///
+    /// Wider than ``isActive`` by exactly that refusal. A start that fails on
+    /// `.locationDenied` clears `startRequested` with no session behind it, so
+    /// the recorder is not active — yet the recording screen is the one place
+    /// that failure is explained and its Settings button offered. The map's
+    /// record button reaches that screen through the widget's link, and a link
+    /// gated on `isActive` alone turned the tap into nothing at all. A widget
+    /// never offers the link without a live snapshot, so it gains nothing here.
+    var hasScreenToShow: Bool {
+        if case .failed = phase { return true }
+        return isActive
     }
 }
