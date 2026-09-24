@@ -430,3 +430,37 @@ nonisolated final class PhotoUITests: XCTestCase {
 
     private static let shouldAsk = "deleting a photograph should ask first"
 }
+
+// The map's half of the photographs, kept out of the class body above, which
+// is at the length limit.
+extension PhotoUITests {
+    /// The pins belong to the hike's screen, not to the strip on its Details
+    /// face: reading its History leaves them on the map, and deleting the
+    /// last photograph still takes its pin away.
+    @MainActor
+    func testPhotoPinsOutliveHistoryAndLeaveWithTheirPhoto() {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+                "--ui-test-seed-photos=1",
+            ]
+        )
+        openHikeDetail(in: app)
+        let pin = element("photo-pin", in: app)
+        XCTAssertTrue(pin.waitForExistence(timeout: UITestTimeout.navigation), "a hike's photo stands on the map")
+
+        app.segmentedControls["walk-segment"].buttons["History"].tap()
+        XCTAssertTrue(element("walk-history-empty", in: app).waitForExistence(timeout: UITestTimeout.existence))
+        XCTAssertTrue(pin.exists, "reading the hike's history keeps its photos on the map")
+
+        app.segmentedControls["walk-segment"].buttons["Details"].tap()
+        XCTAssertTrue(scrollIntoView(element("hike-photo-strip", in: app), in: app))
+        photoTile(at: 1, of: 1, in: app).tap()
+        element("photo-delete-button", in: app).tap()
+        confirmDestructive("Delete Photo", in: app, failureMessage: Self.shouldAsk)
+        XCTAssertTrue(
+            app.navigationBars[UITestFixture.importedHikeTitle].waitForExistence(timeout: UITestTimeout.navigation)
+        )
+        XCTAssertTrue(pin.waitForNonExistence(timeout: UITestTimeout.existence), "a deleted photo's pin leaves the map")
+    }
+}

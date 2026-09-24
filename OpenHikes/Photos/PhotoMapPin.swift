@@ -250,6 +250,53 @@ extension View {
     }
 }
 
+/// A hike's photos, as pins on the map, claimed by a whole screen — the
+/// saved hike's detail and the recording screen alike.
+///
+/// Not by the gallery strip that shows them. The strip is only drawn on the
+/// detail screen's *Details* face, and a claim made from there was withdrawn
+/// by flipping to *History*: the pins went with the strip. Hung off the
+/// screen's container instead, where the segment switch never reaches.
+/// Deleting the last photo still clears its pin: the photos change to none,
+/// and ``PhotoMapPinController/update(_:token:)`` publishes that like any
+/// other change.
+///
+/// Its own view, and reading ``Hike/orderedPhotos`` in its own body, because
+/// that is a full sort behind a computed property and `hike.photos` is a
+/// `@Model` relationship that notifies on *every* write to it. Read from the
+/// hosting screen's body instead, both would land there — a sort per body
+/// pass, and a body pass per photograph taken, across the whole of a six-hour
+/// walk, to produce the same handful of pins every time.
+///
+/// It is **not** true, and used to be claimed here, that the recording
+/// screen's body re-runs on every accepted fix. `HikeRecorder.stats` is a
+/// `let` holding a stable ``RecordingStats``, and `@Observable` instruments
+/// `var`s only, so reading it registers the reference and nothing in it: the
+/// per-fix readers are ``RecordingStatsSection`` and the trail line under the
+/// card's title, which are the boundaries, and that screen's own observable
+/// inputs are `phase` and `currentHike`, both of which move a handful of
+/// times a session. The note is worth keeping as a correction because the
+/// wrong version made a per-fix body pass on that screen sound like the
+/// expected cost.
+///
+/// It draws nothing itself. The pins are MapKit annotations published through
+/// ``PhotoMapPinController``; this exists only to own the claim, which is why
+/// it is a zero-sized background rather than anything on the screen.
+struct HikePhotoPinClaim: View {
+    let hike: Hike
+    var controller: PhotoMapPinController?
+    var onOpen: (HikePhoto) -> Void
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .photoMapPins(controller, photos: hike.orderedPhotos) { photoID in
+                guard let photo = hike.photos.first(where: { $0.id == photoID }) else { return }
+                onOpen(photo)
+            }
+    }
+}
+
 private struct PhotoMapPinsModifier: ViewModifier {
     let controller: PhotoMapPinController?
     let photos: [HikePhoto]
