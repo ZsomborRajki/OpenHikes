@@ -29,6 +29,15 @@
 //  calibrated itself the flat estimate is scaled by a pace that already
 //  includes whatever the hiker has been climbing, and is worth showing.
 //
+//  ## Which way the walk is going
+//
+//  A walk can cover the route from its stored end back to its start —
+//  ``TrailWalkRecord/reachesEnd(atMatch:)`` finishes either way — and a loop
+//  is walked backwards as often as not. Then what is ahead is the stretch from
+//  the start to the hiker, and its climbs are descents: DIN 33466 times the
+//  two differently, so both have to turn round. The direction is read off the
+//  coverage, which lies behind the hiker whichever way they walk.
+//
 
 import Foundation
 import OpenHikesShared
@@ -62,8 +71,11 @@ nonisolated enum WalkTimeLeft {
         activeSeconds: TimeInterval
     ) -> TimeInterval? {
         guard remainingMeters.isFinite, remainingMeters > 0 else { return nil }
-        let ahead = profile.climb(from: position, to: profile.totalDistanceMeters)
-        let pace = paceFactor(profile: profile, covered: covered, activeSeconds: activeSeconds)
+        let reversed = isReversed(position: position, covered: covered, routeMeters: profile.totalDistanceMeters)
+        let ahead = reversed
+            ? climb(profile, from: 0, to: position, reversed: true)
+            : climb(profile, from: position, to: profile.totalDistanceMeters, reversed: false)
+        let pace = paceFactor(profile: profile, covered: covered, activeSeconds: activeSeconds, reversed: reversed)
         // Neither heights nor a calibrated pace: a flat figure is the error
         // this exists to correct.
         guard ahead != nil || pace != nil else { return nil }
@@ -77,11 +89,13 @@ nonisolated enum WalkTimeLeft {
 
     /// How this walk compares with the signposts so far, as a factor on their
     /// time, or `nil` until it has covered ``calibrationMeters`` in
-    /// ``calibrationSeconds``.
+    /// ``calibrationSeconds``. `reversed` is a walk from the stored end
+    /// towards the start, whose covered stretches were climbed the other way.
     static func paceFactor(
         profile: RouteProfile,
         covered: [ClosedRange<Double>],
-        activeSeconds: TimeInterval
+        activeSeconds: TimeInterval,
+        reversed: Bool = false
     ) -> Double? {
         let coveredMeters = covered.reduce(0) { $0 + ($1.upperBound - $1.lowerBound) }
         guard coveredMeters >= calibrationMeters,
@@ -89,9 +103,14 @@ nonisolated enum WalkTimeLeft {
         var gain = 0.0
         var loss = 0.0
         for stretch in covered {
-            guard let climb = profile.climb(from: stretch.lowerBound, to: stretch.upperBound) else { continue }
-            gain += climb.gainMeters
-            loss += climb.lossMeters
+            guard let stretchClimb = climb(
+                profile,
+                from: stretch.lowerBound,
+                to: stretch.upperBound,
+                reversed: reversed
+            ) else { continue }
+            gain += stretchClimb.gainMeters
+            loss += stretchClimb.lossMeters
         }
         let expected = WalkingTimeEstimate.seconds(
             distanceMeters: coveredMeters,
@@ -100,5 +119,34 @@ nonisolated enum WalkTimeLeft {
         )
         guard expected > 0 else { return nil }
         return min(max(activeSeconds / expected, paceFactorBounds.lowerBound), paceFactorBounds.upperBound)
+    }
+
+    /// Whether the walk is heading for the route's stored start — see the
+    /// file header.
+    ///
+    /// More coverage beyond the hiker than before them means they came from
+    /// the far end. With none either side yet, the first fix of a walk, the
+    /// nearer end is where they set off from.
+    static func isReversed(position: Double, covered: [ClosedRange<Double>], routeMeters: Double) -> Bool {
+        var behind = 0.0
+        var beyond = 0.0
+        for stretch in covered {
+            behind += max(0, min(stretch.upperBound, position) - stretch.lowerBound)
+            beyond += max(0, stretch.upperBound - max(stretch.lowerBound, position))
+        }
+        guard behind == beyond else { return beyond > behind }
+        return position > routeMeters / 2
+    }
+
+    /// ``RouteProfile/climb(from:to:)`` walked the way the hiker walks it:
+    /// towards the stored start, a stretch's ascents are its descents.
+    private static func climb(
+        _ profile: RouteProfile,
+        from start: Double,
+        to end: Double,
+        reversed: Bool
+    ) -> (gainMeters: Double, lossMeters: Double)? {
+        guard let climb = profile.climb(from: start, to: end) else { return nil }
+        return reversed ? (climb.lossMeters, climb.gainMeters) : climb
     }
 }

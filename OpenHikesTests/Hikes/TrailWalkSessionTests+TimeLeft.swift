@@ -79,4 +79,22 @@ extension TrailWalkSessionTests {
 
         #expect(harness.notifier.posted.isEmpty)
     }
+
+    /// A walk forgotten because its hike was deleted ends as surely as one
+    /// that was ended, and the next walk is owed its own warning.
+    @Test("deleting the walked hike takes the warning down and re-arms it")
+    func deletingTheHikeRearmsTheWarning() async {
+        let harness = MovementReminderHarness.harness()
+        let session = daylightSession(harness, dusk: clock.read().addingTimeInterval(8 * 60))
+        let first = hike()
+        walk(session, hike: first, profile: RouteProfile(route: first.route), from: 0, through: 3)
+        session.discardWalk(forDeletedHike: first.id)
+
+        let second = hike(title: "Valley Path")
+        walk(session, hike: second, profile: RouteProfile(route: second.route), from: 0, through: 1)
+        await harness.controller.settle()
+
+        #expect(harness.notifier.withdrawn.contains(.afterDark))
+        #expect(harness.notifier.postedKinds == [.afterDark, .afterDark])
+    }
 }
