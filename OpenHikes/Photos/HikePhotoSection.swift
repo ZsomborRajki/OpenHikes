@@ -100,13 +100,10 @@ struct HikePhotoSection: View {
     /// and asking it costs no photo-library permission, because the timeline
     /// is built before access is requested.
     private var discoverButton: some View {
-        Button {
+        Button("Find Photos of This Hike", systemImage: "magnifyingglass") {
             isDiscovering = true
-        } label: {
-            Label("Find Photos of This Hike", systemImage: "sparkle.magnifyingglass")
-                .font(.subheadline)
         }
-        .glassButtonStyle()
+        .sectionActionButtonStyle()
         // Deliberately not prefixed `hike-photo-`: the performance suite
         // counts the gallery's tiles by that prefix, and a button that is not
         // a photo answering to it would be counted as one.

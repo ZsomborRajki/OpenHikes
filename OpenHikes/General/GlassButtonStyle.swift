@@ -39,4 +39,15 @@ extension View {
         buttonStyle(.glassProminent)
         #endif
     }
+
+    /// A section's own "go and find more" action — *Find Photos of This Hike*,
+    /// *Find Places Along Trail* — drawn once so the two cannot drift apart.
+    ///
+    /// A capsule rather than a borderless row, because the rows above it in a
+    /// section open something and this starts something; not full width and
+    /// not prominent, because in Apple Maps those belong to the card's main
+    /// actions, not to one section's.
+    func sectionActionButtonStyle() -> some View {
+        font(.subheadline).glassButtonStyle()
+    }
 }
