@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import OpenHikesShared
 
 nonisolated struct HikeDetailPreparedContent: Sendable {
     let profile: RouteProfile
@@ -65,7 +66,7 @@ nonisolated enum HikeDetailPreparation {
             ),
             statistics.duration.map { duration in
                 Stat("Duration", HikeFormat.duration(duration), headline: true)
-            },
+            } ?? estimatedTime(distanceMeters: distanceMeters, statistics: statistics),
             statistics.elevationGain.map { gain in
                 Stat("Elevation Gain", HikeFormat.elevation(gain), headline: true)
             },
@@ -118,6 +119,33 @@ nonisolated enum HikeDetailPreparation {
             },
         ]
         return items.compactMap(\.self)
+    }
+
+    /// How long a route with no clock takes to walk, in the slot a clock's
+    /// duration would fill — see ``WalkingTimeEstimate``.
+    ///
+    /// Only where there is no clock: a measured duration always wins, and the
+    /// two are never drawn together. Labelled as an estimate, and written the
+    /// way the trail maker writes a planned time, so it never passes for a
+    /// measurement.
+    ///
+    /// Only where the route has heights, too. Without them the rule has
+    /// nothing to count but the flat, and a flat figure on an alpine route is
+    /// out by the factor of two this stat exists to correct — no figure is the
+    /// honest answer there, as it is for the climb itself.
+    static func estimatedTime(
+        distanceMeters: Double,
+        statistics: HikeRouteStatistics
+    ) -> Stat? {
+        guard distanceMeters > 0,
+              let gain = statistics.elevationGain,
+              let loss = statistics.elevationLoss else { return nil }
+        let seconds = WalkingTimeEstimate.seconds(
+            distanceMeters: distanceMeters,
+            ascentMeters: gain.converted(to: .meters).value,
+            descentMeters: loss.converted(to: .meters).value
+        )
+        return Stat("Estimated Time", HikeFormat.travelTime(seconds), headline: true)
     }
 
     private static func formatted(_ date: Date) -> String {

@@ -172,21 +172,25 @@ nonisolated struct TrailDraftPinFacts {
 }
 
 /// Everything a pin or a time bubble says that a leg does not: the stops with
-/// their names, which field a lone stop is in, and the pace a straight leg is
-/// timed at. Compared beside the legs, so a stop being named or a mode change
-/// on a freehand line redraws what they changed.
+/// their names, which field a lone stop is in, the pace a straight leg is
+/// timed at and the climb a hiking route's time counts. Compared beside the
+/// legs, so a stop being named, a mode change on a freehand line or a climb
+/// landing redraws what they changed.
 nonisolated struct TrailDraftDrawnState: Equatable {
     var waypoints: [TrailWaypoint] = []
     var startIsOpen = false
     var travelMode = TrailTravelMode.hiking
+    /// See ``TrailDraft/travelTime(climb:)``.
+    var climb: RouteElevationSummary?
 
     init() { /* nothing drawn */ }
 
     @MainActor
-    init(_ draft: TrailDraft) {
+    init(_ draft: TrailDraft, climb: RouteElevationSummary?) {
         waypoints = draft.waypoints
         startIsOpen = draft.startIsOpen
         travelMode = draft.travelMode
+        self.climb = climb
     }
 }
 
@@ -237,6 +241,10 @@ extension MapView.Coordinator {
             // reason the line is: they are drawn while the maker is up and not
             // otherwise.
             _ = controller.draft.placeRows
+            // The route's time bubble counts the climb once it is measured,
+            // which lands on its own schedule, two seconds after the drawing
+            // settles — see ``TrailDraftElevation``.
+            _ = controller.elevation.summary
         } onChange: { coordinator, map, model in
             coordinator.trackTrailDraft(model, on: map)
         }
@@ -254,7 +262,9 @@ extension MapView.Coordinator {
         let draft = controller.draft
         let isDrawing = controller.isEditing
         let legs = isDrawing ? draft.legs : []
-        let drawn = isDrawing ? TrailDraftDrawnState(draft) : TrailDraftDrawnState()
+        let drawn = isDrawing
+            ? TrailDraftDrawnState(draft, climb: controller.elevation.summary)
+            : TrailDraftDrawnState()
         let held = isDrawing ? draft.drag : nil
         // Before the guard below, deliberately: that one lets a pass through
         // only when the *line* changed, and places and the sheet's pin change
@@ -279,7 +289,9 @@ extension MapView.Coordinator {
         // Every bubble is a leg's time and every grey line a leg's
         // alternative, so a stop being named — the commonest commit that moves
         // neither — leaves them where they are.
-        let routeChoicesChanged = legs != trailDraftLegs || drawn.travelMode != trailDraftDrawn.travelMode
+        let routeChoicesChanged = legs != trailDraftLegs
+            || drawn.travelMode != trailDraftDrawn.travelMode
+            || drawn.climb != trailDraftDrawn.climb
         trailDraftDrawn = drawn
         // Whatever was bent is about to be drawn again from the committed
         // geometry, so nothing is held as far as the map is concerned. Cleared
@@ -305,9 +317,9 @@ extension MapView.Coordinator {
             on: mapView
         )
         // Under the drawn line, which the diff above has kept on the map — see
-        // ``addTrailDraftRouteChoices(for:of:to:)``.
+        // ``addTrailDraftRouteChoices(for:of:climb:to:)``.
         if routeChoicesChanged, !legs.isEmpty {
-            addTrailDraftRouteChoices(for: legs, of: draft, to: mapView)
+            addTrailDraftRouteChoices(for: legs, of: draft, climb: drawn.climb, to: mapView)
         }
         // A drag that is still held across a commit: an answer for another leg
         // can land while a finger is down, and the diff above has just put
@@ -342,7 +354,12 @@ extension MapView.Coordinator {
         if held != nil {
             removeTrailDraftRouteChoices(from: mapView)
         } else if let controller = trailDraftController {
-            addTrailDraftRouteChoices(for: trailDraftLegs, of: controller.draft, to: mapView)
+            addTrailDraftRouteChoices(
+                for: trailDraftLegs,
+                of: controller.draft,
+                climb: trailDraftDrawn.climb,
+                to: mapView
+            )
         }
 
         if let released, released.index != held?.index,
