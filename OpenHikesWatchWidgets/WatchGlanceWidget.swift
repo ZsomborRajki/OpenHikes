@@ -9,10 +9,10 @@
 //  It draws ``WatchGlanceDisplay`` and decides nothing: what to show, when a
 //  glance is too old to believe and when to redraw all live in the shared
 //  package, where they are tested — see *The watch app* in the repository
-//  instructions. One timeline entry per glance: a running clock is a
-//  `Text(timerInterval:)`, which the system ticks without an entry a second,
-//  and the app asks for a reload when something the hiker would notice has
-//  changed.
+//  instructions. A running clock is a `Text(timerInterval:)`, which the
+//  system ticks without an entry a second; the app asks for a reload when
+//  something the hiker would notice has changed, and ``WatchGlanceTimeline``
+//  adds the one entry nobody would ask for — the moment a glance goes stale.
 //
 
 import OpenHikesShared
@@ -40,25 +40,21 @@ struct WatchGlanceProvider: TimelineProvider {
     // answers are already in memory and are handed back at once.
     // swiftlint:disable:next unneeded_escaping
     func getSnapshot(in context: Context, completion: @escaping (WatchGlanceEntry) -> Void) {
-        completion(Self.current())
+        completion(Self.entries()[0])
     }
 
     // swiftlint:disable:next unneeded_escaping
     func getTimeline(in context: Context, completion: @escaping (Timeline<WatchGlanceEntry>) -> Void) {
-        let entry = Self.current()
-        // A recording is redrawn by the app when it changes; the one thing
-        // nobody will ask for is the moment its glance goes stale, so that
-        // is when this asks again.
-        let refresh: TimelineReloadPolicy = switch entry.display {
-        case .idle: .never
-        case .recording, .paused: .after(entry.date.addingTimeInterval(WatchGlanceDisplay.staleAfter))
-        }
-        completion(Timeline(entries: [entry], policy: refresh))
+        // `.never`: every change worth drawing is a reload the app asks for,
+        // and going stale is already an entry of its own.
+        completion(Timeline(entries: Self.entries(), policy: .never))
     }
 
-    private static func current() -> WatchGlanceEntry {
-        let now = Date.now
-        return WatchGlanceEntry(date: now, display: WatchGlanceDisplay(WatchGlanceStore.load(), now: now))
+    /// Never empty: the first is always what to draw now.
+    private static func entries() -> [WatchGlanceEntry] {
+        WatchGlanceTimeline.entries(for: WatchGlanceStore.load(), now: .now).map { entry in
+            WatchGlanceEntry(date: entry.date, display: entry.display)
+        }
     }
 }
 

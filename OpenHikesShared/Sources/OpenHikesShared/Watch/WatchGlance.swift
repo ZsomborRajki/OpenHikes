@@ -95,6 +95,30 @@ public enum WatchGlanceDisplay: Equatable, Sendable {
     }
 }
 
+/// The complication's timeline for one read of the glance.
+///
+/// A recording's glance is drawn now and gives way to the idle face at the
+/// moment it goes stale, **measured from when it was written** — not from
+/// when the timeline was asked for. WidgetKit reloads a timeline for reasons
+/// of its own (a face change, a restart), and a stale moment counted from the
+/// read would move back six hours with every one of them, which is how a
+/// recording that died at noon would still be ticking at midnight. And an
+/// entry rather than a reload request, because the system draws an entry on
+/// time and treats a requested reload as a hint.
+public enum WatchGlanceTimeline {
+    public struct Entry: Equatable, Sendable {
+        public let date: Date
+        public let display: WatchGlanceDisplay
+    }
+
+    public static func entries(for glance: WatchGlance?, now: Date, locale: Locale = .current) -> [Entry] {
+        let current = Entry(date: now, display: WatchGlanceDisplay(glance, now: now, locale: locale))
+        guard let glance, current.display != .idle else { return [current] }
+        let staleAt = glance.updatedAt.addingTimeInterval(WatchGlanceDisplay.staleAfter)
+        return [current, Entry(date: staleAt, display: .idle)]
+    }
+}
+
 /// Whether a new glance is worth writing and a complication reload.
 ///
 /// WidgetKit budgets a watch's reloads the way it budgets a phone's, and the
