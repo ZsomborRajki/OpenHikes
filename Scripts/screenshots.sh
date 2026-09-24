@@ -157,11 +157,11 @@ xcrun simctl spawn "$udid" defaults write -g AppleLocale -string "$locale_id"
 xcrun simctl spawn "$udid" defaults write -g AppleLanguages \
     -array "${locale_id//_/-}"
 
-# Whether the two frames that drive the real photo library have anything to
+# Whether the three frames that drive the real photo library have anything to
 # drive it with. Handed to the tests rather than guessed at by them: they skip
 # on 0 and assert on 1, so this script is the only thing that can make them run
 # — and a machine without `Screenshots/Stamped`, which the repository does not
-# carry, skips those two instead of failing them. `TEST_RUNNER_` is
+# carry, skips those three instead of failing them. `TEST_RUNNER_` is
 # xcodebuild's own prefix for passing a variable through to the test runner.
 export TEST_RUNNER_OPENHIKES_STAMPED_LIBRARY=0
 

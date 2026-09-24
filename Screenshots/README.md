@@ -11,7 +11,7 @@ it. OpenHikes is `TARGETED_DEVICE_FAMILY = 1`, so there is no iPad set at all.
 
 **Between one and ten of them.** Not ten: only the first three appear in search
 results, and every frame past the first few is one more thing to re-shoot when
-the UI moves. The eight captured here are already more than most listings use.
+the UI moves. The nine captured here are already more than most listings use.
 
 The order below is the upload order, and it is the order the frames are named
 in, because App Store Connect orders screenshots by the order they arrive.
@@ -26,6 +26,7 @@ in, because App Store Connect orders screenshots by the order they arrive.
 | 6 | `06-offline-maps` | It works with no signal |
 | 7 | `07-walk-summary` | A trail walked end to end |
 | 8 | `08-draw-your-own-trail` | Plan Saturday: search three places and walk between them |
+| 9 | `09-a-place-and-its-photos` | A place on the walk, kept with its own photographs |
 
 Frame 8 is eighth deliberately rather than by arriving last. It is the only one
 that shows the app *making* something rather than showing something, which is an
@@ -43,6 +44,15 @@ frame's `--ui-test-live-maker` lets that one launch ask Apple for directions and
 Stadia for the climb, which needs `OpenHikes/Secrets.plist` and spends one
 Stadia call a run. Like frame 6 it is captured with `--ui-test-entitled`, since
 the climb is a Pro feature.
+
+Frame 9 is a place of the hiker's own, made from the map pill's *Add Place* on
+the frame-1 hike: two of the stamped photographs picked in the system picker, a
+name and a note, then *Add*. The pill puts the place where the elevation
+graph's tracker is, so the frame taps the chart near its end first — the
+lakeside stretch into St. Bartholomä — rather than leaving it at the start,
+which is a car park in Schönau. It needs the stamped library like frames 1 and
+2, and skips without it. The fixture itself carries no `<wpt>` on purpose: a
+place in it would stand on the map in every other frame too.
 
 ## Capturing
 

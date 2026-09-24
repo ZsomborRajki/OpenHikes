@@ -412,6 +412,7 @@ extension ScreenshotUITests {
         case offline = "06-offline-maps"
         case walkHistory = "07-walk-summary"
         case trailMaker = "08-draw-your-own-trail"
+        case place = "09-a-place-and-its-photos"
     }
 
     /// Whether `Scripts/screenshots.sh` seeded this simulator's photo library
@@ -420,7 +421,7 @@ extension ScreenshotUITests {
     /// Told rather than discovered, and the telling is the point.
     /// `Screenshots/Stamped` holds the hiker's own photographs and is
     /// deliberately not in the repository — see `.gitignore` and
-    /// `Screenshots/README.md` — so the two frames that drive the real
+    /// `Screenshots/README.md` — so the three frames that drive the real
     /// library have a fixture that most machines running this bundle do not
     /// have. Without this they failed there: a bare `xcodebuild test`, or
     /// ⌘U in Xcode, went red on a missing photograph rather than on
@@ -438,8 +439,8 @@ extension ScreenshotUITests {
 
     /// What a machine without the fixture is told, which is how to get it.
     static let noStampedLibrary = """
-        No stamped photo library on this simulator. These two frames import \
-        photographs through the real library and the real matcher, which \
+        No stamped photo library on this simulator. These frames import \
+        photographs through the real library, which \
         Scripts/screenshots.sh seeds from Screenshots/Stamped before it runs \
         them — a directory the repository does not carry. Run them through \
         that script rather than on their own.
