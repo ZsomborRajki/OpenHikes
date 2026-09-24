@@ -21,6 +21,11 @@
 //  walk, an imported file, a hike saved from somebody else. See
 //  ``TrailPlaceCorridorSearch``.
 //
+//  The switch beside the heading takes every saved hike's places off the map
+//  and deletes none of them — see ``TrailPlacePinController/showsPins``. The
+//  pins are claimed by the screen around this section, not by it, so they
+//  outlast a flip to the hike's History — see ``HikePlacePinClaim``.
+//
 //  ## Absent only when there is nothing to show and nothing to offer
 //
 //  A hike with no places draws the section when it can offer the search —
@@ -33,8 +38,10 @@ import SwiftUI
 
 struct HikePlaceSection: View {
     let hike: Hike
-    /// Draws these places on the map for as long as this section is on screen.
-    /// `nil` in a preview, and in a test that has no map.
+    /// Holds the switch beside the heading that takes these places off the
+    /// map. The pins themselves are claimed by the screen around this
+    /// section — see ``HikePlacePinClaim``. `nil` in a preview, and in a test
+    /// that has no map, and then there is no switch.
     var mapPins: TrailPlacePinController?
     /// Where *Find Places Along Trail* asks, or `nil` for a launch that must
     /// not ask anything — see ``OpenHikesModel/makeTrailPointSource()``.
@@ -57,10 +64,15 @@ struct HikePlaceSection: View {
         let rows = hike.orderedPlaces
         if !rows.isEmpty || canSearch {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Places")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityAddTraits(.isHeader)
+                HStack {
+                    Text("Places")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityAddTraits(.isHeader)
+                    if let mapPins, !rows.isEmpty {
+                        TrailPlacePinSwitch(controller: mapPins)
+                    }
+                }
                 if !rows.isEmpty {
                     let photoCounts = Self.photoCounts(hike.photos)
                     VStack(spacing: 0) {
@@ -92,10 +104,6 @@ struct HikePlaceSection: View {
                     }
                 }
             }
-            // The claim is on the section rather than on the screen, so the
-            // pins go on the map when there are places to draw and come off
-            // when the hiker leaves — see ``TrailPlacePinController``.
-            .trailPlacePins(mapPins, rows: rows, onOpen: onOpen)
         }
     }
 
@@ -105,6 +113,25 @@ struct HikePlaceSection: View {
             guard let placeID = photo.placeID else { return }
             counts[placeID, default: 0] += 1
         }
+    }
+}
+
+/// The switch beside a saved hike's *Places* heading: on draws every saved
+/// hike's places on the map, off takes the pins away and deletes nothing. See
+/// ``TrailPlacePinController/showsPins``.
+///
+/// Its own view so the switch's position is read here and not by the section:
+/// flipping it redraws one control rather than the list beside it.
+private struct TrailPlacePinSwitch: View {
+    let controller: TrailPlacePinController
+
+    var body: some View {
+        Toggle(
+            "Show Places on Map",
+            isOn: Binding(get: { controller.showsPins }, set: controller.setShowsPins)
+        )
+        .labelsHidden()
+        .accessibilityIdentifier("hike-place-pins-toggle")
     }
 }
 

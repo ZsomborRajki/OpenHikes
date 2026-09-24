@@ -193,6 +193,9 @@ struct HikeDetailView: View {
             case .history: HikeWalkHistory(hike: hike, onOpen: onOpenWalk)
             }
         }
+        // On the container rather than in the Places section, so flipping to
+        // History leaves the places on the map — see ``HikePlacePinClaim``.
+        .background { HikePlacePinClaim(hike: hike, controller: placePins, onOpen: onOpenPlace) }
         .navigationTitle(hike.displayTitle)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

@@ -10,6 +10,10 @@
 //  OpenStreetMap's — photographs only. The rule these defend is the user's:
 //  a place from OpenStreetMap is edited only by adding pictures to it.
 //
+//  And the pins those places stand on the map as: kept there while the hike's
+//  History is read, and taken away — not deleted — by the switch beside the
+//  *Places* heading.
+//
 
 import XCTest
 
@@ -74,5 +78,29 @@ nonisolated final class PlaceUITests: XCTestCase {
             app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Boathouse")).firstMatch
                 .waitForNonExistence(timeout: UITestTimeout.navigation)
         )
+    }
+
+    @MainActor
+    func testPlacePinsOutliveHistoryAndHideBehindTheirSwitch() {
+        let app = launchApp(arguments: ["--ui-test-import-gpx=\(Self.fixture)"])
+        openHikeDetail(in: app, titled: Self.hikeTitle)
+        let pin = element("hike-place", in: app)
+        XCTAssertTrue(pin.waitForExistence(timeout: UITestTimeout.navigation), "a saved hike's places stand on the map")
+
+        app.segmentedControls["walk-segment"].buttons["History"].tap()
+        XCTAssertTrue(element("walk-history-empty", in: app).waitForExistence(timeout: UITestTimeout.existence))
+        XCTAssertTrue(pin.exists, "reading the hike's history keeps its places on the map")
+
+        app.segmentedControls["walk-segment"].buttons["Details"].tap()
+        let toggle = app.switches["hike-place-pins-toggle"]
+        scrollToTap(toggle, in: app)
+        XCTAssertTrue(pin.waitForNonExistence(timeout: UITestTimeout.existence), "switched off, the pins leave the map")
+        XCTAssertTrue(
+            app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Boathouse")).firstMatch.exists,
+            "and the places stay on the hike"
+        )
+
+        scrollToTap(toggle, in: app)
+        XCTAssertTrue(pin.waitForExistence(timeout: UITestTimeout.existence), "switched back on, they return")
     }
 }

@@ -89,6 +89,13 @@ final class OpenHikesModel {
     /// writing it down. See ``TrailDraftController``.
     let trailMaker: TrailDraftController
 
+    /// The open hike's marked places, observed directly by the map. Owned
+    /// here rather than as a `@State` of the root view because it keeps the
+    /// hiker's show-places switch, and a UI-testing launch has to keep that in
+    /// its scratch defaults rather than the developer's. See
+    /// ``TrailPlacePinController``.
+    let placePins: TrailPlacePinController
+
     /// Where the app asks OpenStreetMap what is on a trail — the maker's
     /// *Search this area*, a saved hike's *Find Places Along Trail* and the
     /// recording screen's *Add Place*. One source for all three, so they share
@@ -192,6 +199,7 @@ final class OpenHikesModel {
         )
         self.communityTransport = communityTransport
         trailMaker = Self.makeTrailMaker(container: container, graph: trailGraphProvider, defaults: defaults)
+        placePins = TrailPlacePinController(defaults: defaults)
         watchLink = Self.makeWatchLink(container: container)
         communityBlocks = CommunityBlockList(defaults: defaults)
         community = Self.makeCommunityBrowser(transport: communityTransport, blocks: communityBlocks)
