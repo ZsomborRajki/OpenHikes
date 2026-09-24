@@ -61,6 +61,29 @@ struct WatchGlanceTests {
         #expect(WatchGlanceDisplay(dayOld, now: Self.now) == .idle)
     }
 
+    // MARK: The timeline
+
+    /// Counted from the read, a timeline WidgetKit reloaded five hours in
+    /// would believe a dead recording for eleven.
+    @Test("a recording's timeline goes idle six hours after the write, not after the read")
+    func timelineGoesStaleFromTheWrite() {
+        let written = Self.now.addingTimeInterval(-5 * 3600)
+        let entries = WatchGlanceTimeline.entries(
+            for: Self.glance(.recording, at: written),
+            now: Self.now,
+            locale: Self.locale
+        )
+        #expect(entries.map(\.date) == [Self.now, written.addingTimeInterval(WatchGlanceDisplay.staleAfter)])
+        #expect(entries.first?.display != .idle)
+        #expect(entries.last?.display == .idle)
+    }
+
+    @Test("an idle timeline is one entry, with nothing to go stale")
+    func idleTimelineIsOneEntry() {
+        #expect(WatchGlanceTimeline.entries(for: nil, now: Self.now) == [.init(date: Self.now, display: .idle)])
+        #expect(WatchGlanceTimeline.entries(for: .idle(at: Self.now), now: Self.now).count == 1)
+    }
+
     // MARK: When to redraw
 
     @Test("every change of state redraws")
