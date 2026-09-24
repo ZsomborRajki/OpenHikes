@@ -187,18 +187,23 @@ extension Hike {
     /// *Already holds* is the same OpenStreetMap element, or anything within
     /// ``TrailPointRanking/alreadyMarkedMeters`` of a place already here —
     /// the rule the maker's search uses, and for its reason: a place a hiker
-    /// added by hand at the hut is the hut, whatever it is called. Each of
-    /// `places` is also checked against the ones added before it, so an answer
-    /// that names one spring twice adds it once.
+    /// added by hand at the hut is the hut, whatever it is called.
+    ///
+    /// Each of `places` is checked against the ones added before it **by
+    /// element only**, so an answer that names one spring twice adds it once
+    /// while the hut and the spring beside it both go in. The distance rule is
+    /// for what the hike held before, not for `places` among themselves:
+    /// *Find Places Along Trail* lists every place it found as a row of its
+    /// own, and a ticked row that quietly failed to arrive would be the list
+    /// saying one thing and the hike another.
     @discardableResult func addPlaces(
         _ places: [TrailPlace],
         in context: ModelContext,
         now: Date = .now
     ) -> [TrailPlace] {
-        var held = self.places
+        let held = self.places
         var added: [TrailPlace] = []
-        for place in places where !Self.holds(place, among: held) {
-            held.append(place)
+        for place in places where !Self.holds(place, among: held) && !Self.isSameElement(place, asAnyOf: added) {
             added.append(place)
         }
         guard !added.isEmpty else { return [] }
@@ -218,10 +223,7 @@ extension Hike {
     /// adds both meant both. Only the same OpenStreetMap element twice is
     /// refused, because that is one place.
     @discardableResult func addPlace(_ place: TrailPlace, in context: ModelContext, now: Date = .now) -> Bool {
-        if let osm = place.osm,
-           places.contains(where: { $0.osm.map(osm.isSameElement(as:)) == true }) {
-            return false
-        }
+        if Self.isSameElement(place, asAnyOf: places) { return false }
         let row = TrailPoint(hikeID: id, place: place, createdAt: now)
         context.insert(row)
         trailPoints = (trailPoints ?? []) + [row]
@@ -229,11 +231,17 @@ extension Hike {
     }
 
     private static func holds(_ place: TrailPlace, among held: [TrailPlace]) -> Bool {
-        held.contains { existing in
-            if let osm = place.osm, let other = existing.osm, osm.isSameElement(as: other) { return true }
-            return RouteGeometry.distanceMeters(from: existing.clCoordinate, to: place.clCoordinate)
+        isSameElement(place, asAnyOf: held) || held.contains { existing in
+            RouteGeometry.distanceMeters(from: existing.clCoordinate, to: place.clCoordinate)
                 <= TrailPointRanking.alreadyMarkedMeters
         }
+    }
+
+    /// Whether `place` is an OpenStreetMap element one of `others` already is.
+    /// Never true of a place the hiker made, which is no element.
+    private static func isSameElement(_ place: TrailPlace, asAnyOf others: [TrailPlace]) -> Bool {
+        guard let osm = place.osm else { return false }
+        return others.contains { $0.osm.map(osm.isSameElement(as:)) == true }
     }
 
     /// Renames, re-kinds and re-describes one of the hiker's own places.

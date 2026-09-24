@@ -59,16 +59,6 @@ struct NearbyPlaceSuggestionsTests {
 
     // MARK: The finder
 
-    /// Waits for the finder's live search to come back — the effect, not a
-    /// duration. The search crosses to the concurrent executor, so a yield is
-    /// only a barrier when repeated until the flag it sets has moved.
-    private static func settled(_ finder: NearbyPlaceFinder) async {
-        for _ in 0..<10_000 where finder.isSearching {
-            await Task.yield()
-        }
-        #expect(!finder.isSearching, "the live search never came back")
-    }
-
     @Test("the live answer replaces what the device had")
     func liveAnswerReplacesStored() async {
         let stored = Self.place(1, metresNorth: 10)
@@ -76,8 +66,7 @@ struct NearbyPlaceSuggestionsTests {
         let finder = NearbyPlaceFinder()
 
         let source = NearbySource(stored: [stored], live: [live], refuses: false)
-        finder.start(around: Self.here, excluding: [], from: source)
-        await Self.settled(finder)
+        await finder.start(around: Self.here, excluding: [], from: source).value
 
         #expect(finder.suggestions.map(\.osm?.elementID) == [2])
         #expect(finder.outage == nil)
@@ -89,8 +78,7 @@ struct NearbyPlaceSuggestionsTests {
         let finder = NearbyPlaceFinder()
 
         let source = NearbySource(stored: [stored], live: [], refuses: true)
-        finder.start(around: Self.here, excluding: [], from: source)
-        await Self.settled(finder)
+        await finder.start(around: Self.here, excluding: [], from: source).value
 
         #expect(finder.suggestions.map(\.osm?.elementID) == [1])
         #expect(finder.outage != nil)
