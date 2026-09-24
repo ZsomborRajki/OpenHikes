@@ -25,6 +25,10 @@
 //  A tap anywhere else still opens the recording screen, which is where the
 //  rest of the controls are.
 //
+//  The same activity reaches a paired Apple Watch's Smart Stack with no
+//  watch-side code at all: the `.small` family below is what it is drawn from
+//  there, and ``HikeActivitySmallView`` is its layout.
+//
 
 import ActivityKit
 import OpenHikesShared
@@ -34,11 +38,10 @@ import WidgetKit
 struct HikeLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: HikeActivityAttributes.self) { context in
-            HikeActivityLockScreenView(
+            HikeActivityContentView(
                 attributes: context.attributes,
                 state: context.state
             )
-            .padding()
             .activityBackgroundTint(nil)
             .activitySystemActionForegroundColor(
                 Color(hex: context.attributes.tintHex)
@@ -49,6 +52,12 @@ struct HikeLiveActivity: Widget {
         } dynamicIsland: { context in
             dynamicIsland(for: context)
         }
+        // The paired watch's Smart Stack. Without this family watchOS builds
+        // the activity out of the compact island's two regions — a glyph and
+        // one number, laid out for a pill beside the camera — and a hiker
+        // following a trail gets neither its name nor how much is left.
+        // ``HikeActivityContentView`` draws the layout meant for the wrist.
+        .supplementalActivityFamilies([.small])
     }
 
     /// Split out of the builder above so neither closure grows past the point
