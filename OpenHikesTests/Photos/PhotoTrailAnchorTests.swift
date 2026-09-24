@@ -149,4 +149,47 @@ struct PhotoTrailAnchorTests {
 
         #expect(draft.route.isEmpty)
     }
+
+    // MARK: - Where a place added from the pill stands
+
+    @Test("a place takes the photograph's position when there is one")
+    func placeFollowsThePhotoRule() throws {
+        let profile = RouteProfile(route: Fixture.ridgeRoute)
+        let live = Self.liveMatchMeters
+        let place = try #require(
+            PhotoTrailAnchor.placeCoordinate(profile: profile, live: live, scrubbed: Self.scrubbedMeters)
+        )
+        let photo = try #require(
+            PhotoTrailAnchor.coordinate(profile: profile, live: live, scrubbed: Self.scrubbedMeters)
+        )
+        // Auto-follow's live match outranks the scrub, for both.
+        #expect(place.latitude == photo.latitude)
+        #expect(place.longitude == photo.longitude)
+
+        let scrubbed = try #require(
+            PhotoTrailAnchor.placeCoordinate(profile: profile, live: nil, scrubbed: Self.scrubbedMeters)
+        )
+        let expected = try #require(profile.coordinate(atDistance: Self.scrubbedMeters))
+        #expect(scrubbed.latitude == expected.latitude)
+        #expect(scrubbed.longitude == expected.longitude)
+    }
+
+    @Test("an untouched tracker puts a place at the trailhead, where the graph shows it")
+    func placeFallsBackToTheTrailhead() throws {
+        let profile = RouteProfile(route: Fixture.ridgeRoute)
+        // The case a photograph answers with no pin at all.
+        #expect(PhotoTrailAnchor.coordinate(profile: profile, live: nil, scrubbed: 0) == nil)
+
+        let place = try #require(PhotoTrailAnchor.placeCoordinate(profile: profile, live: nil, scrubbed: 0))
+        let trailhead = try #require(profile.coordinate(atDistance: 0))
+        #expect(place.latitude == trailhead.latitude)
+        #expect(place.longitude == trailhead.longitude)
+        #expect(PhotoTrailAnchor.placeCoordinate(profile: profile, live: nil, scrubbed: .nan) != nil)
+    }
+
+    @Test("no profile yet means nowhere to put a place")
+    func placeNeedsAProfile() {
+        #expect(PhotoTrailAnchor.placeCoordinate(profile: nil, live: Self.liveMatchMeters, scrubbed: 0) == nil)
+        #expect(PhotoTrailAnchor.placeCoordinate(profile: RouteProfile(route: []), live: nil, scrubbed: 0) == nil)
+    }
 }

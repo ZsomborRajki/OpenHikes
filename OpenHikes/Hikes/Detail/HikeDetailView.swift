@@ -306,17 +306,10 @@ struct HikeDetailView: View {
             invalidateStoredBytesMeasurement()
         }
         // Offers the map's camera pill while this screen is up, and tells it
-        // where a photo taken now belongs on this trail. The anchor is
-        // evaluated at the shutter, not published as the chart moves — reading
-        // `tracker` from this body is the one thing ``TrackerState`` exists to
-        // prevent; inside a closure that runs once per photo it costs nothing.
-        .photoCaptureSubject(photoCapture, for: hike) {
-            PhotoTrailAnchor.coordinate(
-                profile: profile,
-                live: tracker.liveTrackerDistance,
-                scrubbed: tracker.trackerDistance
-            )
-        }
+        // where a photo — or a place — added now belongs on this trail. See
+        // ``SwiftUICore/View/trailPhotoCaptureSubject(_:for:profile:tracker:)``
+        // for why `tracker` goes in as a reference.
+        .trailPhotoCaptureSubject(photoCapture, for: hike, profile: { profile }, tracker: tracker)
         .offlineStorageAlerts(
             downloader: downloader,
             deletionFailure: $storageDeletionFailure

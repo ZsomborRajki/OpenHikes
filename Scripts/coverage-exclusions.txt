@@ -123,6 +123,10 @@
 # `TrailPlaceCorridorSearch` (with `HikePlaceSearch`),
 # `NearbyPlaceSuggestions`, and the editing rules on `Hike` in `TrailPoint`.
 #
+# `HikePlaceAdder` followed the same day, *Add Place* from the camera pill: a
+# form, entirely body code. What it decides is `HikePlaceDraft` and what it
+# files is `HikePlaceStagedPhoto`, each in a file and a suite of its own.
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -193,6 +197,7 @@ OpenHikes/Weather/WeatherBadge.swift
 OpenHikes/Weather/WeatherDetailSheet.swift
 OpenHikes/Hikes/Places/HikePlaceView.swift
 OpenHikes/Hikes/Places/HikePlaceEditor.swift
+OpenHikes/Hikes/Places/HikePlaceAdder.swift
 OpenHikes/Hikes/Places/HikePlaceSearchSheet.swift
 OpenHikes/Hikes/Places/TrailPlaceCardParts.swift
 OpenHikes/Recording/RecordingPlaceSheet.swift

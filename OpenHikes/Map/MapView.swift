@@ -451,7 +451,8 @@ struct MapView: MapViewRepresentable, Equatable {
     ) {
         let controls = MapPhotoControlsView(
             onCamera: { [photoCapture] in photoCapture.requestCamera() },
-            onLibrary: { [photoCapture] in photoCapture.requestLibrary() }
+            onLibrary: { [photoCapture] in photoCapture.requestLibrary() },
+            onAddPlace: { [photoCapture] in photoCapture.requestPlace() }
         )
         controls.translatesAutoresizingMaskIntoConstraints = false
         // Starts out of the way: `observePhotoControls` decides on the first

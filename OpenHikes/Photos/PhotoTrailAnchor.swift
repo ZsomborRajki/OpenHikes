@@ -61,6 +61,27 @@ nonisolated enum PhotoTrailAnchor {
         return coordinate
     }
 
+    /// Where a place added now would stand: the photograph's rule, and then
+    /// the tracker wherever it is sitting.
+    ///
+    /// A photo may go without a pin and a place may not, so the one case
+    /// ``coordinate(profile:live:scrubbed:)`` answers with "nowhere" — the
+    /// untouched placeholder — is answered here with what the graph is
+    /// showing at that moment, which is the trailhead. The hiker sees the
+    /// pin appear there and can scrub to move it before adding anything.
+    static func placeCoordinate(
+        profile: RouteProfile?,
+        live: Double?,
+        scrubbed: Double
+    ) -> CLLocationCoordinate2D? {
+        guard let profile else { return nil }
+        let distance = distanceAlongRoute(live: live, scrubbed: scrubbed) ?? (scrubbed.isFinite ? max(scrubbed, 0) : 0)
+        guard let coordinate = profile.coordinate(atDistance: distance),
+              CLLocationCoordinate2DIsValid(coordinate)
+        else { return nil }
+        return coordinate
+    }
+
     /// The coordinate for a photo taken while recording, where there is no
     /// elevation graph to read and the hiker is, by definition, standing at
     /// the point the picture is of.

@@ -113,4 +113,50 @@ struct TrailPlacePinControllerTests {
         next.attach([Self.spring])
         #expect(next.rows.isEmpty)
     }
+
+    // MARK: - The placeholder *Add Place* stands up
+
+    @Test("a placeholder is drawn after the hike's places and opens nothing")
+    func placeholderOpensNothing() {
+        let controller = TrailPlacePinController()
+        let placeholder = TrailPlaceRow(
+            place: TrailPlace(latitude: 47.63, longitude: 12.99, symbol: .viewpoint),
+            anchor: nil
+        )
+        var opened: [UUID] = []
+        controller.attach([Self.spring], placeholder: placeholder) { opened.append($0) }
+
+        #expect(controller.rows.map(\.id) == [Self.spring.id, placeholder.id])
+        #expect(controller.placeholderID == placeholder.id)
+        #expect(controller.open(placeholder.id) == false)
+        #expect(controller.open(Self.spring.id))
+        #expect(opened == [Self.spring.id])
+    }
+
+    @Test("the switch hides the hike's places but never the pin being placed")
+    func placeholderOutlivesTheSwitch() {
+        let controller = TrailPlacePinController()
+        let placeholder = TrailPlaceRow(
+            place: TrailPlace(latitude: 47.63, longitude: 12.99, symbol: .viewpoint),
+            anchor: nil
+        )
+        let token = controller.attach([Self.spring, Self.hut], placeholder: placeholder)
+
+        controller.setShowsPins(false)
+        #expect(controller.rows.map(\.id) == [placeholder.id])
+
+        // Re-kinded while hidden: still the one pin, in its new glyph.
+        var summit = placeholder
+        summit.place.symbol = .summit
+        controller.update([Self.spring, Self.hut], token: token, placeholder: summit)
+        #expect(controller.rows == [summit])
+
+        // Nothing at all while the sheet has no screen pushed, and nothing
+        // once the form has gone.
+        controller.setHostScreenPresent(false)
+        #expect(controller.rows.isEmpty)
+        controller.setHostScreenPresent(true)
+        controller.detach(token: token)
+        #expect(controller.rows.isEmpty)
+    }
 }
