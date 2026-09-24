@@ -1,0 +1,55 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "Elapsed" : {
+
+    },
+    "Hike Recording" : {
+
+    },
+    "OpenHikes couldn't do that." : {
+
+    },
+    "Pause" : {
+
+    },
+    "Resume" : {
+
+    },
+    "Select a trail in OpenHikes" : {
+
+    },
+    "Shows your selected trail or a hike currently being recorded." : {
+
+    },
+    "Start Hike" : {
+
+    },
+    "Start or stop recording a hike." : {
+
+    },
+    "Stop Hike" : {
+
+    },
+    "That hike isn't recording any more." : {
+
+    },
+    "Trail" : {
+
+    },
+    "Turn on Precise Location in Settings to carry on." : {
+
+    }
+  },
+  "version" : "1.0"
+}
