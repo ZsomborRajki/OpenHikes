@@ -110,7 +110,7 @@ extension CuratedTrailStoreTests {
         let store = CuratedTrailStore(directory: directory, clock: clock.read)
         store.save(Self.trail(4_811_001, metresNorth: 0))
 
-        clock.advance(by: CuratedTrailStore.lifetime - Self.day)
+        clock.advance(by: OverpassCache.lifetime - Self.day)
         #expect(store.trail(of: 4_811_001) != nil, "inside the horizon it is still trusted")
 
         clock.advance(by: Self.day * 2)
@@ -240,7 +240,7 @@ extension CuratedTrailStoreTests {
         let store = CuratedTrailStore(directory: directory, clock: clock.read)
         store.save(Self.trail(4_811_001, metresNorth: 1000))
 
-        clock.advance(by: CuratedTrailStore.lifetime + Self.day)
+        clock.advance(by: OverpassCache.lifetime + Self.day)
 
         #expect(store.trails(near: Self.area(radiusMeters: 20_000), limit: 25).isEmpty)
     }

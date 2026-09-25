@@ -248,13 +248,6 @@ actor CuratedTrailSource: CuratedTrailSourcing {
     /// kilometres off the map they are looking at.
     private var lastArea: CommunitySearchArea?
 
-    /// When Overpass will accept another request, if it has told us to wait.
-    ///
-    /// The same courtesy ``OverpassTrailGraphProvider`` extends: a `429` is a
-    /// request to stop asking, and retrying into it is what turns one rate
-    /// limit into a block.
-    private var retryAfter: Date?
-
     /// - Parameter directory: Where downloaded routes are kept between
     ///   launches. A suite passes one of its own — see *Deliberate test seams*
     ///   in the repository instructions — and must, since the default is the
@@ -346,7 +339,7 @@ extension CuratedTrailSource {
         // inside a comparator: a full sort with a haversine on both sides runs
         // the trigonometry about fourteen hundred times over the hundred-odd
         // relations one Alpine box answers with, to keep twenty-five of them.
-        // `min(count:)` is the shape ``CuratedTrailStore/trim()`` already uses
+        // `min(count:)` is the shape ``OverpassCache/trim(_:keeping:)`` already uses
         // for the same question — *the k smallest, in order* — and it is what
         // `sorted().prefix()` was spelling the long way.
         let centre = area.coordinate
