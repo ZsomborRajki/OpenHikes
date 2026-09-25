@@ -32,42 +32,83 @@ import UIKit
 #endif
 
 #if os(iOS)
+/// One pill's two ways of standing on the credit line: a fixed gap above it,
+/// and — when there is no line drawn — flush with where its bottom would be.
+///
+/// A constraint belongs to one view, so each pill in the slot carries a pair of
+/// its own, built against the same two anchors by
+/// ``MapView/placeInCreditLineSlot(_:on:_:alignedTo:)``.
+struct CreditLineClearance {
+    let above: NSLayoutConstraint
+    let flush: NSLayoutConstraint
+
+    /// Turns on whichever of the two `wantsFlush` calls for, and does nothing
+    /// when it is already the one that is on.
+    func apply(flush wantsFlush: Bool) {
+        let wanted = wantsFlush ? flush : above
+        guard !wanted.isActive else { return }
+        NSLayoutConstraint.deactivate([above, flush])
+        NSLayoutConstraint.activate([wanted])
+    }
+}
+
+extension MapView {
+    /// Puts a glyph pill in the slot on the map's leading edge directly above
+    /// the credit line, withdrawn until its first visibility pass says
+    /// otherwise, and hands back the pair that picks between the line's two
+    /// cases — `nil` before there is a credit line to hang it from.
+    ///
+    /// Both pills in that slot — the camera's, see
+    /// ``addPhotoControls(to:_:alignedTo:)``, and the maker's, see
+    /// ``addTrailDraftControls(to:_:alignedTo:)`` — are placed here, because
+    /// they take turns in one place and ride the sheet as one row. Two
+    /// spellings of that geometry is two pills that drift a point apart as
+    /// they change hands.
+    func placeInCreditLineSlot(
+        _ pill: UIView,
+        on mapView: MKMapView,
+        _ coordinator: Coordinator,
+        alignedTo guide: UILayoutGuide
+    ) -> CreditLineClearance? {
+        pill.translatesAutoresizingMaskIntoConstraints = false
+        pill.isHidden = true
+        pill.alpha = 0
+        mapView.addSubview(pill)
+
+        guard let attribution = coordinator.attributionView else { return nil }
+        NSLayoutConstraint.activate([
+            pill.leadingAnchor.constraint(
+                equalTo: guide.leadingAnchor,
+                constant: Self.controlInset
+            ),
+        ])
+        return CreditLineClearance(
+            above: pill.bottomAnchor.constraint(
+                equalTo: attribution.topAnchor,
+                constant: -Self.creditLineSpacing
+            ),
+            flush: pill.bottomAnchor.constraint(equalTo: attribution.bottomAnchor)
+        )
+    }
+}
+
 extension MapView.Coordinator {
-    /// Leaves room above the credit line for the camera pill, or closes that
-    /// room when there is no line to leave it for.
+    /// Leaves room above the credit line for the pills in its slot, or closes
+    /// that room when there is no line to leave it for.
     ///
     /// Idempotent, and deliberately so: this runs from the tile-source pass,
     /// which is reached on every provider change, and `NSLayoutConstraint`
     /// activation invalidates the map's layout whether or not anything moved.
     /// The map is the one view here that cannot afford a free layout pass.
+    ///
+    /// An absent pair is the ordinary case during `makeMapView`, where the
+    /// pills are built one after the other and each calls this as soon as it
+    /// has its own.
     func applyCreditLineClearance() {
         guard let attributionView else { return }
         let wantsFlush = attributionView.isHidden
-        apply(
-            flush: wantsFlush,
-            above: photoControlsAboveCreditLine,
-            flushWith: photoControlsWithoutCreditLine
-        )
-        apply(
-            flush: wantsFlush,
-            above: trailDraftAboveCreditLine,
-            flushWith: trailDraftWithoutCreditLine
-        )
-    }
-
-    /// Switches one pill's pair. Absent constraints are the ordinary case
-    /// during `makeMapView`, where the pills are built one after the other and
-    /// each calls this as soon as it has its own.
-    private func apply(
-        flush wantsFlush: Bool,
-        above: NSLayoutConstraint?,
-        flushWith flush: NSLayoutConstraint?
-    ) {
-        guard let above, let flush else { return }
-        let wanted = wantsFlush ? flush : above
-        guard !wanted.isActive else { return }
-        NSLayoutConstraint.deactivate([above, flush])
-        NSLayoutConstraint.activate([wanted])
+        photoControlsClearance?.apply(flush: wantsFlush)
+        trailDraftClearance?.apply(flush: wantsFlush)
     }
 }
 #endif

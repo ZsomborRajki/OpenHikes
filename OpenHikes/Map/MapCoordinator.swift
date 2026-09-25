@@ -159,13 +159,11 @@ extension MapView {
         // Stored state for `MapPhotoControls.swift`. The pill sits on the
         // map's leading edge directly above the credit line, and rides the
         // sheet because the line does — see `MapView.addPhotoControls`. The
-        // two constraints are the same relationship with and without a credit
-        // to leave room for; exactly one is active at a time.
-
-        var photoControlsAboveCreditLine: NSLayoutConstraint?
-        var photoControlsWithoutCreditLine: NSLayoutConstraint?
+        // clearance is the same relationship with and without a credit to
+        // leave room for; exactly one of its two is active at a time.
 
         #if os(iOS)
+        var photoControlsClearance: CreditLineClearance?
         weak var photoControls: MapPhotoControlsView?
         #endif
 
@@ -197,13 +195,13 @@ extension MapView {
 
         #if os(iOS)
         weak var trailDraftControls: MapTrailDraftControlsView?
-        #endif
         /// The same pair of constraints the camera pill has, against the same
         /// two anchors — a constraint belongs to one view, so the slot is
         /// shared by building it twice rather than by handing one over. See
         /// ``applyCreditLineClearance()``.
-        var trailDraftAboveCreditLine: NSLayoutConstraint?
-        var trailDraftWithoutCreditLine: NSLayoutConstraint?
+        var trailDraftClearance: CreditLineClearance?
+        #endif
+
         weak var trailDraftController: TrailDraftController?
         /// Guards `observeTrailDraftControls` for the reason the flag above
         /// guards its own — a second registration can never be cancelled.
