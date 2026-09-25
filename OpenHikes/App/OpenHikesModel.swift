@@ -248,9 +248,14 @@ final class OpenHikesModel {
             store.start()
         }
         // Behind the test guard for the same reason every other startup writer
-        // is: both unit-test bundles are hosted by the app, and adopting a
-        // walk writes the sidecar and pins the tracker, underneath suites that
-        // own their own. Here rather than in the root view's launch task because
+        // is: both unit-test bundles are hosted by the app, and a launch a
+        // suite hosts deletes nothing.
+        if !AppLaunchEnvironment.isRunningTests {
+            Task { await Self.removeRetiredDeviceReports() }
+        }
+        // Behind the same guard, and for the same reason: adopting a walk
+        // writes the sidecar and pins the tracker, underneath suites that own
+        // their own. Here rather than in the root view's launch task because
         // a background relaunch never shows a view — see
         // ``TrailWalkSession/restoreAtLaunch(now:)``.
         if !AppLaunchEnvironment.isRunningTests, startupIssue == nil {
