@@ -6,9 +6,6 @@
 import Foundation
 import OpenHikesData
 import SwiftUI
-#if os(iOS)
-import UIKit
-#endif
 
 struct RecordingView: View {
     private static let cardID = "recording-card"
@@ -141,16 +138,9 @@ struct RecordingView: View {
                 .post()
         }
         .alert(isPresented: showingFailure, error: recordingFailure) {
-            #if os(iOS)
             if failureNeedsSettings {
-                Button("Open Settings") {
-                    guard let url = URL(
-                        string: UIApplication.openSettingsURLString
-                    ) else { return }
-                    UIApplication.shared.open(url)
-                }
+                OpenSettingsLink.link
             }
-            #endif
             Button("OK", role: .cancel) { /* no-op */ }
         }
     }
