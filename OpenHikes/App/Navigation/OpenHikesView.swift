@@ -168,7 +168,7 @@ struct OpenHikesView: View {
     /// geometry to be about yet.
     private var selectedTrailSubject: WeatherSubject? {
         guard let hike = selectedHike, let route = displayedRoute else { return nil }
-        return .trail(id: hike.id, name: hike.title, along: route.coordinates)
+        return .trail(id: hike.id, name: hike.displayTitle, along: route.coordinates)
     }
 
     /// Resolves the selected provider (with API key substituted) for the map.
