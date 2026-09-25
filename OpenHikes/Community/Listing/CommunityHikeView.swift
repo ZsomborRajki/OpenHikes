@@ -392,15 +392,7 @@ struct CommunityHikeView: View {
             behind it are deleted for good. This can't be undone.
             """)
         }
-        .alert(
-            "Couldn't take it down",
-            isPresented: $takeDownFailure.isPresent(),
-            presenting: takeDownFailure
-        ) { _ in
-            Button("OK", role: .cancel) { takeDownFailure = nil }
-        } message: { failure in
-            Text(failure.recoverySuggestion ?? failure.localizedDescription)
-        }
+        .communityFailureAlert("Couldn't take it down", failure: $takeDownFailure)
         // Started here and *held*, rather than simply run by the modifier.
         // `.task`'s own cancellation is the right trigger and the wrong reach:
         // it cancels this closure, and the work that writes into the download

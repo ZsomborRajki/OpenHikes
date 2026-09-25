@@ -156,15 +156,7 @@ struct CommunityPhotoActions: View {
             isn't touched.
             """)
         }
-        .alert(
-            "Couldn't take them down",
-            isPresented: $takeDownFailure.isPresent(),
-            presenting: takeDownFailure
-        ) { _ in
-            Button("OK", role: .cancel) { takeDownFailure = nil }
-        } message: { failure in
-            Text(failure.recoverySuggestion ?? failure.localizedDescription)
-        }
+        .communityFailureAlert("Couldn't take them down", failure: $takeDownFailure)
     }
 }
 
