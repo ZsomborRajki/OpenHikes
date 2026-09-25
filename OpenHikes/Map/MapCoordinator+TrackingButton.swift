@@ -39,8 +39,9 @@ extension MapView.Coordinator {
     /// Gap kept between the button and whatever bounds it — the sheet below it,
     /// or the top safe area above.
     private static let trackingButtonSpacing: CGFloat = 16
-    /// Used only before the button has been laid out or measured.
-    private static let trackingButtonFallbackHeight: CGFloat = 44
+    /// Used only before the button has been laid out or measured: the height
+    /// its capsule is built at, see ``MapView/makeTrackingButton(for:_:)``.
+    private static let trackingButtonFallbackHeight = MapGlassPill.controlSize
 
     /// Observes `sheetMetrics.topY` and repositions the tracking button
     /// imperatively, then re-registers. Keeps sheet drags off SwiftUI's
