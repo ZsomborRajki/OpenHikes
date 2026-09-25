@@ -1,5 +1,5 @@
 //
-//  CommunityUITests+PhotoPins.swift
+//  CommunityPhotoPinUITests.swift
 //  OpenHikesUITests
 //
 //  The loop between a stranger's gallery and the map under it.

@@ -1368,6 +1368,27 @@ if expect_status 0 \
     pass
 fi
 
+# --all runs the classes named in the script's `suites` list and no others, so
+# a class written and never added to it is a class --all never runs — with a
+# green summary, since nothing it did not select can fail. Three sat outside it
+# unnoticed. Every `XCTestCase` in the bundle has to be in the invocation --all
+# prints, bar `ScreenshotUITests`, which the screenshot scripts run instead.
+run_script "run-ui-tests --all selects every UI test class" \
+    "$ui_tests" --device "iPhone 17 Pro" --all --serial --dry-run
+if expect_status 0; then
+    unselected=()
+    while read -r class; do
+        [[ "$class" == "ScreenshotUITests" ]] && continue
+        [[ "$output" == *"-only-testing:$ui_bundle/$class "* ]] || unselected+=("$class")
+    done < <(grep -rhoE 'class [A-Za-z0-9_]+: XCTestCase' "$repository_root/$ui_bundle" \
+        | sed -E 's/^class ([A-Za-z0-9_]+):.*/\1/' | sort -u)
+    if (( ${#unselected[@]} == 0 )); then
+        pass
+    else
+        fail "--all does not select ${unselected[*]}; add them to \`suites\` in Scripts/run-ui-tests.sh" "$output"
+    fi
+fi
+
 echo "Second pass and verbose"
 
 # A parallel --all runs twice: the classes across clones, then the pinned
