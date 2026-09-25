@@ -140,19 +140,13 @@ nonisolated enum AppLaunchEnvironment {
             simulatesOffline = isUITesting
                 && arguments.contains(Self.offlineArgument)
             importedGPXFixtureName = Self.fixtureName(
-                in: arguments,
-                prefix: Self.importGPXPrefix,
-                isUITesting: isUITesting
+                in: arguments, prefix: Self.importGPXPrefix, isUITesting: isUITesting
             )
             trailGraphFixtureName = Self.fixtureName(
-                in: arguments,
-                prefix: Self.trailGraphPrefix,
-                isUITesting: isUITesting
+                in: arguments, prefix: Self.trailGraphPrefix, isUITesting: isUITesting
             )
             communityScenarioName = Self.fixtureName(
-                in: arguments,
-                prefix: Self.communityPrefix,
-                isUITesting: isUITesting
+                in: arguments, prefix: Self.communityPrefix, isUITesting: isUITesting
             )
             trailPointScenarioName = Self.fixtureName(
                 in: arguments, prefix: Self.trailPointsPrefix, isUITesting: isUITesting
