@@ -1013,8 +1013,7 @@ final class CommunityBrowser {
                 return
             } catch {
                 guard !Task.isCancelled else { return }
-                let failure = error as? CommunityFailure
-                    ?? .unavailable(error.localizedDescription)
+                let failure = CommunityFailure(error)
                 Self.logger.error(
                     "Community \(reason, privacy: .public) failed: \(failure.localizedDescription, privacy: .public)"
                 )

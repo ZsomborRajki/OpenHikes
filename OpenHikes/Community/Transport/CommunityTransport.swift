@@ -133,6 +133,18 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
     }
 }
 
+nonisolated extension CommunityFailure {
+    /// `error` as something a screen can say: itself when it is already a
+    /// community failure, which everything a transport throws is, and
+    /// ``unavailable(_:)`` carrying its own description when it is not — a
+    /// file error while staging photographs, say.
+    ///
+    /// The one spelling of a conversion nine call sites made for themselves.
+    init(_ error: any Error) {
+        self = error as? CommunityFailure ?? .unavailable(error.localizedDescription)
+    }
+}
+
 /// What the community feature needs from a backend.
 ///
 /// Submitting and publishing are different record types with different

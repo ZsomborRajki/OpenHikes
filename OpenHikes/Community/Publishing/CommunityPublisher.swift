@@ -186,7 +186,7 @@ nonisolated enum CommunityPublisher {
         do {
             submissionID = try await transport.submit(staged.draft)
         } catch {
-            let failure = error as? CommunityFailure ?? .unavailable(error.localizedDescription)
+            let failure = CommunityFailure(error)
             logger.error(
                 "Sharing a hike failed: \(failure.localizedDescription, privacy: .public)"
             )
