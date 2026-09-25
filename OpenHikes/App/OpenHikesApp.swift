@@ -18,14 +18,6 @@ struct OpenHikesApp: App {
     @State private var model: OpenHikesModel
 
     init() {
-        // Before anything else: the API requires this to start no later than
-        // the first scene connecting, and `init()` runs at
-        // `didFinishLaunching` time. Paired with `LaunchMeasurement.finish()`
-        // where the map is built — see `FieldSignpost.swift` for why the map
-        // rather than the first frame is the boundary a hiker experiences.
-        if !AppLaunchEnvironment.isRunningTests {
-            LaunchMeasurement.begin()
-        }
         #if DEBUG
         // UI automation keeps the watchdog off: its ping loop is one more
         // thread competing with the runner.

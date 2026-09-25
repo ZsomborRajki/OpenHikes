@@ -11,12 +11,6 @@
 //  hikers to report an issue on GitHub, and until this existed nothing in the
 //  app told them which build they were reporting about.
 //
-//  `FieldMetricsSection` draws a version too, and it is deliberately not this
-//  one: `report.appVersion` comes off a stored MetricKit payload and says
-//  which build *crashed*, which on a fresh install is nothing at all. The
-//  spelling below is the one `FieldMetricsFormat.version(_:)` uses for a
-//  report, so a running build and a stored one read the same way.
-//
 
 import Foundation
 

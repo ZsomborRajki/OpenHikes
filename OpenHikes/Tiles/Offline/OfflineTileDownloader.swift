@@ -237,15 +237,10 @@ final class OfflineTileDownloader {
         // racing its completion for the manifest.
         registry.track(self)
         let maxZoom = max(source.maximumZ, Self.minZoom)
-        // Bracketed for MetricKit: what a maximum-budget download costs in
-        // CPU, footprint and *logical writes* is a question no Simulator run
-        // can answer, because the Simulator writes to a Mac's SSD.
-        let span = FieldSignpost.begin(.offlineDownload)
         // Before the task starts rather than inside it, so a hiker who taps
         // Save and locks the phone in the same second is already covered.
         reserveBackgroundTime()
         task = Task { [weak self] in
-            defer { FieldSignpost.end(span) }
             await self?.prepareAndRun(
                 route: route,
                 source: source,

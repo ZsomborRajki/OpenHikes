@@ -351,7 +351,7 @@ struct OpenHikesView: View {
                 }
             }
             .task { await importRequestedGPXFixture() }
-            .task { await seedRequestedLaunchFixtures() }
+            .task { seedRequestedLaunchFixtures() }
             .sheet(isPresented: $showSheet) {
                 mapSheet(
                     onSheetTopChange: { topY in
@@ -710,14 +710,13 @@ extension OpenHikesView {
         #endif
     }
 
-    /// The launch fixtures that belong to no hike: device reports and a
-    /// weather reading.
+    /// The launch fixtures that belong to no imported hike: a library of bare
+    /// hikes and a weather reading.
     ///
     /// Separate from the GPX task because neither depends on an import having
-    /// happened — Settings and the badge are reachable from a launch with no
-    /// hikes at all, and making them wait on a fixture they do not use would
-    /// tie two unrelated scenarios together.
-    func seedRequestedLaunchFixtures() async {
+    /// happened, and making them wait on a fixture they do not use would tie
+    /// two unrelated scenarios together.
+    func seedRequestedLaunchFixtures() {
         #if DEBUG
         // First, so a scenario that also imports a GPX gets the imported hike
         // *above* these: it is the newest, and the list is newest-first.
@@ -728,9 +727,6 @@ extension OpenHikesView {
         if AppLaunchEnvironment.stubsWeather {
             appModel.weatherManager.applyUITestSnapshot()
         }
-        await SeededFieldMetricsFixture.seed(
-            count: AppLaunchEnvironment.seededMetricsReportCount
-        )
         #endif
     }
 }

@@ -502,7 +502,6 @@ extension HikeRecorder {
     ) {
         cancelLiveMatching(clearWindow: false)
         cancelTrailGraphPrefetches()
-        endFieldRecordingSpan()
         if endLocationUpdates {
             stopLocationSensors()
         }
@@ -536,7 +535,6 @@ extension HikeRecorder {
 
     func resetSession() {
         cancelTrailGraphPrefetches()
-        endFieldRecordingSpan()
         phase = .idle
         recoveryState = .absent
         sessionStartedAt = nil
@@ -618,7 +616,6 @@ extension HikeRecorder {
 
     func initializeSessionState(id: UUID, startedAt: Date) {
         cancelTrailGraphPrefetches()
-        beginFieldRecordingSpan()
         sessionID = id
         sessionStartedAt = startedAt
         sessionUptimeBase = uptime()

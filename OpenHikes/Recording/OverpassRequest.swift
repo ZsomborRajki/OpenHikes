@@ -220,20 +220,8 @@ nonisolated enum OverpassRequest {
     /// half: ``headers(of:)`` exists because mirrors vary in the case they
     /// send, and a transport that skipped it would hand its caller a
     /// dictionary the rate-limit reader cannot look anything up in.
-    ///
-    /// - Parameter span: A MetricKit span to time the request inside, for the
-    ///   one caller whose request is an unavoidable radio wake-up during a
-    ///   hike. The curated-trail fetch passes none: it happens with the app in
-    ///   the hiker's hand and is not the wake-up worth the telemetry budget —
-    ///   see the note at the top of ``FieldSignpost``.
-    static func liveTransport(
-        timing span: FieldSignpost.Span? = nil
-    ) -> @Sendable (URLRequest) async throws -> OverpassHTTPResponse {
+    static func liveTransport() -> @Sendable (URLRequest) async throws -> OverpassHTTPResponse {
         { request in
-            let token = span.map(FieldSignpost.begin)
-            defer {
-                if let token { FieldSignpost.end(token) }
-            }
             let (data, urlResponse) = try await URLSession.shared.data(for: request)
             guard let httpResponse = urlResponse as? HTTPURLResponse else {
                 throw TrailGraphProviderError.invalidResponse

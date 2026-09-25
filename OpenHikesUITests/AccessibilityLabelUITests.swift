@@ -267,31 +267,6 @@ nonisolated final class AccessibilityLabelUITests: XCTestCase {
         )
     }
 
-    /// MetricKit reports nothing on a Simulator — `mxSignpost` attaches the
-    /// literal `NO_METRICS` there — so the only state this can ever reach in
-    /// automation is the empty one. That is worth asserting anyway: the empty
-    /// state is what every user sees for the first day after installing, and
-    /// a row whose value is blank would announce itself as the bare word
-    /// "Reports" with nothing after it.
-    @MainActor
-    func testDeviceReportRowReadsAsLabelAndValue() {
-        let app = launchApp()
-        openSettings(in: app)
-
-        let reports = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label == %@", "Reports"))
-            .firstMatch
-        XCTAssertTrue(
-            scrollIntoView(reports, in: app),
-            "the device reports section should be reachable in Settings"
-        )
-        XCTAssertFalse(
-            (reports.value as? String ?? "").isEmpty,
-            "whether a report exists yet belongs in the row's value, not in "
-                + "an empty row the reader has to interpret"
-        )
-    }
-
     /// The map's own glass controls, which MapKit hosts and this app builds by
     /// hand in UIKit — so none of SwiftUI's labelling applies to them.
     @MainActor

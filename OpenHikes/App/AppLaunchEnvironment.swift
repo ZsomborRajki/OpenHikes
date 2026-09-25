@@ -39,7 +39,6 @@ nonisolated enum AppLaunchEnvironment {
         /// `nil` unless a launch asked for a walk fixture — see
         /// ``AppLaunchEnvironment/seededWalkFixtureName``.
         let seededWalkFixtureName: String?
-        let seededMetricsReportCount: Int
         let failsFirstSave: Bool
         let losesImportSelection: Bool
         let stubsWeather: Bool
@@ -75,7 +74,6 @@ nonisolated enum AppLaunchEnvironment {
             seededPhotoCount = 0
             seededLibraryHikeCount = 0
             seededWalkFixtureName = nil
-            seededMetricsReportCount = 0
             failsFirstSave = false
             losesImportSelection = false
             stubsWeather = false
@@ -96,7 +94,6 @@ nonisolated enum AppLaunchEnvironment {
         private static let seedPhotosPrefix = "--ui-test-seed-photos="
         private static let seedHikesPrefix = "--ui-test-seed-hikes="
         private static let seedWalksPrefix = "--ui-test-seed-walks="
-        private static let seedMetricsPrefix = "--ui-test-seed-metrics="
         private static let failFirstSaveArgument = "--ui-test-fail-first-save"
         private static let loseImportSelectionArgument =
             "--ui-test-lose-import-selection"
@@ -113,9 +110,6 @@ nonisolated enum AppLaunchEnvironment {
         /// ends of the list, and few enough that seeding them is not what a
         /// scenario spends its time on.
         private static let maximumSeededLibraryHikes = 12
-        /// One metrics digest and one diagnostic report is already both shapes
-        /// the screen draws; past that a scenario is only re-reading itself.
-        private static let maximumSeededMetricsReports = 8
 
         /// - Parameters:
         ///   - arguments: the process arguments to parse.
@@ -167,12 +161,6 @@ nonisolated enum AppLaunchEnvironment {
                 in: arguments,
                 prefix: Self.seedWalksPrefix,
                 isUITesting: isUITesting
-            )
-            seededMetricsReportCount = Self.count(
-                in: arguments,
-                prefix: Self.seedMetricsPrefix,
-                isUITesting: isUITesting,
-                limit: Self.maximumSeededMetricsReports
             )
             failsFirstSave = isUITesting
                 && arguments.contains(Self.failFirstSaveArgument)
@@ -356,22 +344,6 @@ nonisolated enum AppLaunchEnvironment {
     /// query and the shipping cascade; only the walk is invented.
     static let seededWalkFixtureName = configuration.seededWalkFixtureName
 
-    /// How many synthetic MetricKit reports to write before Settings is
-    /// opened.
-    ///
-    /// MetricKit reports nothing on a Simulator — `mxSignpost` attaches the
-    /// literal `NO_METRICS` there and no payload is ever delivered — so the
-    /// only state Device Reports could reach in automation was the empty one.
-    /// That left the report screen, the export screen, the share sheet and
-    /// the delete button unreachable: four screens' worth of rows whose whole
-    /// job is to say what a number means, and no way to check that any of
-    /// them says anything at all.
-    ///
-    /// The reports go through the real ``FieldMetricsStore``, so what a test
-    /// reads afterwards is the shipping decode, retention and export path;
-    /// only the numbers are invented.
-    static let seededMetricsReportCount = configuration.seededMetricsReportCount
-
     /// Whether the first attempt to save a recording should fail.
     ///
     /// The retry path is the one branch of the recording screen that a test
@@ -501,23 +473,6 @@ nonisolated enum AppLaunchEnvironment {
         return FileManager.default.temporaryDirectory
             .appendingPathComponent(
                 "OpenHikesUITesting-\(ProcessInfo.processInfo.processIdentifier)",
-                isDirectory: true
-            )
-    }
-
-    /// A per-launch directory for seeded MetricKit reports, so automation
-    /// never writes into — or reads — the reports a real device left in
-    /// Application Support.
-    ///
-    /// Per-launch rather than merely separate: a seeded report that outlived
-    /// its scenario would make the *next* run's "no reports yet" assertion
-    /// fail, and the empty state is the one every user sees for their first
-    /// day.
-    static func fieldMetricsDirectory() -> URL? {
-        guard isUITesting else { return nil }
-        return FileManager.default.temporaryDirectory
-            .appendingPathComponent(
-                "OpenHikesUITestingMetrics-\(ProcessInfo.processInfo.processIdentifier)",
                 isDirectory: true
             )
     }

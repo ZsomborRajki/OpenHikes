@@ -248,17 +248,9 @@ final class OpenHikesModel {
             store.start()
         }
         // Behind the test guard for the same reason every other startup writer
-        // is: both unit-test bundles are hosted by the app, and a delivered
-        // payload would write into Application Support underneath a suite that
-        // owns its own store. Nothing arrives during a test run in practice —
-        // MetricKit reports daily and only on a device — but "in practice" is
-        // not a guarantee, and this costs one branch.
-        if !AppLaunchEnvironment.isRunningTests {
-            FieldMetrics.shared.register()
-        }
-        // Behind the same guard, and for the same reason: adopting a walk
-        // writes the sidecar and pins the tracker, underneath suites that own
-        // their own. Here rather than in the root view's launch task because
+        // is: both unit-test bundles are hosted by the app, and adopting a
+        // walk writes the sidecar and pins the tracker, underneath suites that
+        // own their own. Here rather than in the root view's launch task because
         // a background relaunch never shows a view — see
         // ``TrailWalkSession/restoreAtLaunch(now:)``.
         if !AppLaunchEnvironment.isRunningTests, startupIssue == nil {

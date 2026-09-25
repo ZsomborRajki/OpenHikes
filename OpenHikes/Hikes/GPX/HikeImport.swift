@@ -126,12 +126,6 @@ enum HikeImport {
 
     /// Parses the file at `url` and returns the hike it is now kept as.
     ///
-    /// The MetricKit span covers the whole import rather than only the parse
-    /// ``GPXImport/loadOffMain(from:limits:)`` already times: what is worth
-    /// knowing in the field is what opening somebody's 20,000-point GPX costs
-    /// end to end, including the SwiftData insert and the commit, and that is
-    /// not a number a three-point fixture can produce.
-    ///
     /// - Parameter save: The seam the commit goes through, so a suite can
     ///   refuse it — the same shape ``HikeRecorder`` and
     ///   ``HikePhotoImport/remove(_:from:store:save:)`` take theirs in. There
@@ -171,9 +165,7 @@ enum HikeImport {
         save: @Sendable (ModelContext) throws -> Void = { try $0.save() }
     ) async throws(HikeImportFailure) -> [Hike] {
         let scoped = url.startAccessingSecurityScopedResource()
-        let span = FieldSignpost.begin(.hikeImport)
         defer {
-            FieldSignpost.end(span)
             if scoped {
                 url.stopAccessingSecurityScopedResource()
             }

@@ -111,7 +111,7 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        // This screen is a `Form` of a dozen sections in one body, so every
+        // This screen is a `Form` of eleven sections in one body, so every
         // input it takes costs all of it. An input that follows a *hike* — a
         // recording writing to its draft per fix, or auto-save folding tile
         // keys in every couple of seconds — would be the expensive one, and
@@ -137,7 +137,6 @@ struct SettingsView: View {
                 // and it sits next to the other thing the community feature
                 // put in this screen's reach.
                 BlockedHikersSection(blocks: blocks)
-                FieldMetricsSection()
                 // The paywall's second entry point, and the only one a build
                 // with no `Secrets.plist` still has — the provider rows that
                 // used to be its sole route are disabled outright there. Not
@@ -163,7 +162,7 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     // A view rather than `Button("Done") { dismiss() }`: a
                     // `.toolbar` closure is inlined into the body around it,
-                    // and this body is the seven-section `Form` above. See
+                    // and this body is the whole `Form` above. See
                     // ``DismissButton`` for what the environment's dismiss
                     // action costs a screen that declares it.
                     DismissButton()
