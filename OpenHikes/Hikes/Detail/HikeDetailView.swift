@@ -144,6 +144,8 @@ struct HikeDetailView: View {
     /// How long the section picker takes to fade as the sheet settles at,
     /// or leaves, its smallest detent. See ``segmentPicker``.
     private static let compactFadeDuration: TimeInterval = 0.2
+    /// Where *Rename* scrolls to, so the field it opens is on screen.
+    private static let headerAnchor = "hike-detail-header"
 
     /// Built once per hike in `.task`, never in `init`. Scrubbing then resolves
     /// points in O(log n).
@@ -325,30 +327,37 @@ struct HikeDetailView: View {
         .keepsScreenAwake { walkSession.isWalking(hike.id) }
     }
 
-    /// The screen as it always was: everything derived from the file, with
-    /// the walk's controls and live coverage in its progress section while a
-    /// walk is under way.
+    /// Everything derived from the file, laid out as an Apple Maps place card
+    /// under the elevation chart: the walk's card, the title, a row of
+    /// actions, the headline figures, then the sections, the map settings and
+    /// a closing list of actions.
     private var details: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                elevationSection
-                progressSection
-                header
-                statsSummary
-                photoSection
-                placeSection
-                surfaceSection
-                difficultySection
-                if hasMetadata { metadataSection }
-                actionBar
+        ScrollViewReader { scroller in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    elevationSection
+                    progressSection
+                    header
+                        .id(Self.headerAnchor)
+                    actionRow
+                    headlineStats
+                    photoSection
+                    placeSection
+                    surfaceSection
+                    difficultySection
+                    if hasMetadata { aboutSection }
+                    statList
+                    mapSection
+                    closingActions(scroller)
+                }
+                .padding()
             }
-            .padding()
+            // The elevation chart and the tinted header run right up under the
+            // navigation bar. `.soft` is the progressive blur that lets them
+            // scroll away behind it instead of meeting a hard line, which is
+            // what the bar's own glass is drawn to sit on.
+            .softScrollEdgeEffect(for: .top)
         }
-        // The elevation chart and the tinted header run right up under the
-        // navigation bar. `.soft` is the progressive blur that lets them scroll
-        // away behind it instead of meeting a hard line, which is what the
-        // bar's own glass is drawn to sit on.
-        .softScrollEdgeEffect(for: .top)
     }
 
     /// `Details | History`. *History* rather than *Walks* because it holds
@@ -406,38 +415,47 @@ nonisolated enum HikeDetailSegment: String, CaseIterable, Identifiable, Sendable
 private extension HikeDetailView {
     // MARK: Actions
 
-    /// Trailing row of actions: zoom the map to the route, save it for offline use,
-    /// and recolor the route line.
-    private var actionBar: some View {
-        VStack(spacing: 12) {
-            RouteAppearanceControls(hike: hike) {
-                zoomButton
-                if let source = activeTileSource, activeProvider.supportsBulkDownload {
-                    OfflineDownloadButton(
-                        downloader: downloader,
-                        canDownload: canDownload
-                    ) {
-                        downloader.start(
-                            route: hike.route,
-                            source: source,
-                            // What a previous run already put on disk and
-                            // claimed, so a download killed at 90% resumes
-                            // rather than starting over — see
-                            // ``OfflineTileDownloader/defaultClaimBatchSize``.
-                            alreadySaved: OfflineTileDownloader.resumableKeys(
-                                from: hike.offlineDownloads,
-                                source: source
-                            ),
-                            claim: offlineDownloadClaim
-                        )
-                    }
+    /// Zoom, Follow, Offline and Share, under the title — see
+    /// ``HikeActionRow``.
+    private var actionRow: some View {
+        HikeActionRow(hike: hike) {
+            onZoomToRoute()
+            mapController.fitToRoute()
+        } offlineTile: {
+            if let source = activeTileSource, activeProvider.supportsBulkDownload {
+                OfflineDownloadButton(
+                    downloader: downloader,
+                    canDownload: canDownload
+                ) {
+                    downloader.start(
+                        route: hike.route,
+                        source: source,
+                        // What a previous run already put on disk and
+                        // claimed, so a download killed at 90% resumes
+                        // rather than starting over — see
+                        // ``OfflineTileDownloader/defaultClaimBatchSize``.
+                        alreadySaved: OfflineTileDownloader.resumableKeys(
+                            from: hike.offlineDownloads,
+                            source: source
+                        ),
+                        claim: offlineDownloadClaim
+                    )
                 }
-            } middleControls: {
+            }
+        }
+    }
+
+    /// How this hike sits on the map: saving its tiles as they are browsed,
+    /// and the way to the screen that restyles its line. What is saved, and
+    /// the way to delete it, follow the card.
+    private var mapSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            PlaceCardList(title: String(localized: "On the Map")) {
                 // No toggle at all rather than a disabled one: there is nothing
                 // to save from a map that fetches no tiles, and
                 // `OfflineStorageStatus` says so where the note goes.
                 if !activeProvider.usesSystemBaseMap { autoSaveToggle }
-                autoFollowToggle
+                RouteStyleRow(hike: hike)
             }
             OfflineStorageStatus(
                 hike: hike,
@@ -451,17 +469,6 @@ private extension HikeDetailView {
         }
     }
 
-    private var zoomButton: some View {
-        Button {
-            onZoomToRoute()
-            mapController.fitToRoute()
-        } label: {
-            actionTile(icon: "scope", title: "Zoom")
-        }
-        .buttonStyle(.plain)
-        .disabled(hike.pointCount < 2)
-    }
-
     /// Passive gap-filler alongside (or instead of) the bulk
     /// ``OfflineDownloadButton``: saves tiles as they're actually browsed, so
     /// areas a bulk download missed — or, for OSM-style providers, everything
@@ -470,6 +477,7 @@ private extension HikeDetailView {
         Toggle(isOn: autoSaveBinding) {
             Label("Auto-Save Tiles", systemImage: "arrow.down.circle")
         }
+        .frame(minHeight: StatCardMetrics.rowMinimumHeight)
         .disabled(hike.pointCount < 2)
     }
 
@@ -482,33 +490,24 @@ private extension HikeDetailView {
         )
     }
 
-    /// Shows the live position and allows auto-start on a matched fix.
-    /// The walk's own controls pause or end one already under way.
-    private var autoFollowToggle: some View {
-        Toggle(isOn: autoFollowBinding) {
-            Label("Follow This Trail", systemImage: "location.fill.viewfinder")
+    /// The list a Maps place card closes with: the things done *to* this hike
+    /// rather than with it on the trail. Each row is its own control for the
+    /// reason each was a glyph of its own before — they share nothing but the
+    /// list.
+    private func closingActions(_ scroller: ScrollViewProxy) -> some View {
+        PlaceCardList {
+            archiveButton
+            communityShareButton
+            // The column rather than the decoded value: a body pass should
+            // not decode JSON to ask whether there is any.
+            if let trailMaker, hike.drawnRouteData != nil {
+                HikeRouteEditButton(hike: hike, maker: trailMaker)
+            }
+            renameButton(scroller)
         }
-        .disabled(hike.pointCount < 2)
-    }
-
-    private var autoFollowBinding: Binding<Bool> {
-        Binding(
-            get: { hike.autoFollowEnabled },
-            set: { hike.autoFollowEnabled = $0 }
-        )
     }
 
     private var canDownload: Bool { activeProvider.supportsBulkDownload && hike.pointCount > 1 }
-
-    private func actionTile(icon: String, title: String, tint: Color = .accentColor) -> some View {
-        ActionTile(tint: tint) {
-            Image(systemName: icon)
-                .font(.title3)
-                .accessibilityHidden(true)
-            Text(title).font(.caption2.weight(.medium))
-        }
-    }
-
     /// `renderable`, not `provider`: this drives whether a bulk download is
     /// offered at all, so it has to name the source the map is really drawing.
     private var activeProvider: TileProvider { .renderable(id: tileProviderID, entitlement: entitlement.state) }
@@ -566,71 +565,20 @@ private extension HikeDetailView {
                     .accessibilityAddTraits(.isHeader)
             }
         } subtitle: {
-            dateAndActions
-        }
-    }
-
-    /// The four glyphs used to follow the name on its own line, where their
-    /// tap targets — 44pt each, so up to 176pt of the row — left a long title
-    /// wrapping after a word or two. They sit on the date's line instead: the
-    /// date is the shortest text on the screen, so it leaves them room without
-    /// the name having to give any up, and the name now gets the full width.
-    private var dateAndActions: some View {
-        HStack(spacing: 0) {
             Text(hike.date.formatted(date: .abbreviated, time: .omitted))
-
-            Spacer(minLength: 8)
-
-            shareButton
-            archiveButton
-            communityShareButton
-            // The column rather than the decoded value: a body pass should
-            // not decode JSON to ask whether there is any.
-            if let trailMaker, hike.drawnRouteData != nil {
-                HikeRouteEditButton(hike: hike, maker: trailMaker)
-            }
-            renameButton
         }
     }
 
-    /// Hands the route to the share sheet as a `.gpx` file — the export half
-    /// of the import this app already does.
-    ///
-    /// The payload is a `Sendable` ``GPXExport/Track`` snapshot rather than the
-    /// `Hike`: `ShareLink` passes the exporter to the system, which calls it
-    /// off the main actor, where a `@Model` must not be read. Building the
-    /// snapshot is a retain of the route's storage, not a copy of it, and the
-    /// XML itself is written only once a destination is picked.
-    ///
-    /// The preview carries an icon so the sheet's header reads as the document
-    /// being sent rather than as a bare line of text.
-    private var shareButton: some View {
-        ShareLink(
-            item: HikeGPXFile(track: GPXExport.Track(hike: hike)),
-            preview: SharePreview(
-                hike.displayTitle,
-                icon: Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
-            )
-        ) {
-            Image(systemName: "square.and.arrow.up")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .minimumTapTarget()
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Share hike")
-        .disabled(hike.pointCount < 2)
-    }
-
-    private var renameButton: some View {
+    /// *Rename* in the closing list. The field it opens is the title itself,
+    /// at the top of the card, so the list scrolls up to it rather than
+    /// leaving the hiker typing into something off screen.
+    private func renameButton(_ scroller: ScrollViewProxy) -> some View {
         Button {
             interaction.titleDraft = hike.displayTitle
             interaction.isEditingTitle = true
+            withAnimation { scroller.scrollTo(Self.headerAnchor, anchor: .top) }
         } label: {
-            Image(systemName: "pencil")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .minimumTapTarget()
+            PlaceCardActionLabel(title: String(localized: "Rename"), systemImage: "pencil")
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Rename hike")
@@ -644,8 +592,31 @@ private extension HikeDetailView {
 
     // MARK: Stats
 
-    private var statsSummary: some View {
-        StatSummary(stats: statItems)
+    /// The figures that answer "how big is it", in the strip under the
+    /// action row — ``StatSummary``'s top half, drawn apart from its list
+    /// because the place card puts its sections between the two, the way the
+    /// recording screen does.
+    @ViewBuilder private var headlineStats: some View {
+        let figures = statItems.filter(\.isHeadline)
+        if !figures.isEmpty {
+            StatStrip {
+                ForEach(figures) { stat in
+                    StatFigure(label: stat.label, value: stat.value)
+                }
+            }
+        }
+    }
+
+    /// Every other figure, as ``StatSummary``'s list.
+    @ViewBuilder private var statList: some View {
+        let rows = statItems.filter { !$0.isHeadline }
+        if !rows.isEmpty {
+            StatList {
+                ForEach(rows) { stat in
+                    StatRow(label: stat.label, value: stat.value)
+                }
+            }
+        }
     }
 
     // MARK: Photos
@@ -739,16 +710,21 @@ private extension HikeDetailView {
     /// published a walk here. Only one of them is ever set today — the
     /// community import writes no `author` — but a row that can say which it
     /// is costs nothing and cannot mislead later.
-    private var metadataSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Details")
-                .font(.headline)
-                .accessibilityAddTraits(.isHeader)
-            if let description = hike.trackDescription { DetailRow(label: "Description", value: description) }
-            if let author = hike.author { DetailRow(label: "Author", value: author) }
-            if let sharedBy = hike.importedAuthorName { DetailRow(label: "Shared by", value: sharedBy) }
-            if let keywords = hike.keywords { DetailRow(label: "Keywords", value: keywords) }
+    ///
+    /// Headed *About*, as the same card is on a Maps place, and filed in the
+    /// same grouped box as the statistics below it.
+    private var aboutSection: some View {
+        PlaceCardList(title: String(localized: "About")) {
+            if let description = hike.trackDescription { aboutRow("Description", description) }
+            if let author = hike.author { aboutRow("Author", author) }
+            if let sharedBy = hike.importedAuthorName { aboutRow("Shared by", sharedBy) }
+            if let keywords = hike.keywords { aboutRow("Keywords", keywords) }
         }
+    }
+
+    private func aboutRow(_ label: String, _ value: String) -> some View {
+        DetailRow(label: label, value: value)
+            .padding(.vertical, 10)
     }
 
     // MARK: Elevation
@@ -782,20 +758,27 @@ private extension HikeDetailView {
 
     // MARK: Progress
 
-    /// How far along the trail the tracked position is. Like the chart, this
+    /// How far along the trail the tracked position is, and the walk under way,
+    /// in one card — the card Maps' navigation draws its time and distance
+    /// in. Like the chart, this
     /// is handed `tracker` as a reference and never reads it here, so the
     /// per-fix auto-follow update redraws the bar and nothing above it.
     @ViewBuilder private var progressSection: some View {
         if let profile, profile.totalDistanceMeters > 0 {
-            HikeTrailProgress(
-                hike: hike,
-                profile: profile,
-                tracker: tracker,
-                walk: walkSession
-            )
-            // Reads the session the way the bar reads `tracker`: as a
-            // reference this body never dereferences.
-            WalkControls(hike: hike, session: walkSession, onOpenWalk: onOpenWalk)
+            VStack(alignment: .leading, spacing: 12) {
+                HikeTrailProgress(
+                    hike: hike,
+                    profile: profile,
+                    tracker: tracker,
+                    walk: walkSession
+                )
+                // Reads the session the way the bar reads `tracker`: as a
+                // reference this body never dereferences.
+                WalkControls(hike: hike, session: walkSession, onOpenWalk: onOpenWalk)
+            }
+            .padding(.vertical, StatCardMetrics.listPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .placeCardGroup()
         }
     }
 

@@ -9,8 +9,8 @@ import OpenHikesData
 import OpenHikesShared
 import SwiftUI
 
-/// The one tile the hike detail's action row is built from — zoom, offline
-/// download, and the colour well.
+/// The one tile the hike detail's action row is built from — Zoom, Follow,
+/// Offline and Share. See ``HikeActionRow``.
 ///
 /// Liquid Glass rather than the filled `.quaternary` rectangle each of the
 /// three used to carry a copy of. These are controls, and glass is the
@@ -23,10 +23,15 @@ import SwiftUI
 /// reads as neither.
 struct ActionTile<Content: View>: View {
     private let tint: Color
+    private let isProminent: Bool
     private let content: Content
 
-    init(tint: Color = .accentColor, @ViewBuilder _ content: () -> Content) {
+    /// - Parameter isProminent: Fills the glass with `tint` and draws the
+    ///   content white — the look of a switch that is on, for the one tile in
+    ///   the row that is a switch.
+    init(tint: Color = .accentColor, isProminent: Bool = false, @ViewBuilder _ content: () -> Content) {
         self.tint = tint
+        self.isProminent = isProminent
         self.content = content()
     }
 
@@ -35,10 +40,10 @@ struct ActionTile<Content: View>: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, ActionTileMetrics.verticalPadding)
             .glassSurface(
-                .regular.interactive(),
+                .regular.tint(isProminent ? tint : nil).interactive(),
                 in: .rect(cornerRadius: ActionTileMetrics.cornerRadius)
             )
-            .foregroundStyle(tint)
+            .foregroundStyle(isProminent ? Color.white : tint)
     }
 }
 
@@ -97,26 +102,38 @@ struct TrailProgressView: View {
         let left = timeLeft.map { "\(Self.length(remaining)) · \(HikeFormat.travelTime($0)) left" }
             ?? "\(Self.length(remaining)) left"
 
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Label(
-                    title(walking: walked != nil, live: live != nil),
-                    systemImage: symbol(walking: walked != nil, live: live != nil)
-                )
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(live == nil && walked == nil ? .secondary : Color.blue)
+        VStack(alignment: .leading, spacing: walked == nil ? 6 : 10) {
+            if walked != nil {
+                // A walk under way reads like Maps' navigation card: the three
+                // numbers a hiker glances down for, big, and the bar under them.
+                WalkFigures(remaining: Self.length(remaining), timeLeft: timeLeft)
+            } else {
+                HStack(spacing: 6) {
+                    Label(
+                        title(walking: false, live: live != nil),
+                        systemImage: symbol(walking: false, live: live != nil)
+                    )
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(live == nil ? .secondary : Color.blue)
 
-                Spacer()
+                    Spacer()
 
-                Text("\(caption) · \(left)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .lineLimit(1)
+                    Text("\(caption) · \(left)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
             }
             ProgressView(value: fraction)
                 .progressViewStyle(.linear)
                 .tint(tint)
+            if walked != nil {
+                Text(caption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title(walking: walked != nil, live: live != nil))
@@ -173,6 +190,48 @@ struct TrailProgressView: View {
     private static func length(_ meters: Double) -> String {
         Measurement(value: meters, unit: UnitLength.meters)
             .formatted(.measurement(width: .abbreviated, usage: .road))
+    }
+}
+
+/// The walk's own figures, the way Apple Maps' navigation card draws them:
+/// how long is left at this walk's pace, how far, and the clock time that
+/// puts the hiker at the end.
+///
+/// Laid out by ``StatStrip``, which turns the three into a column at an
+/// accessibility text size. Silent to VoiceOver, like everything else inside
+/// ``TrailProgressView``: the row speaks all of it as one value.
+private struct WalkFigures: View {
+    let remaining: String
+    /// `nil` until the walk has a pace to project — the first few hundred
+    /// metres — when only the distance is worth a number.
+    let timeLeft: TimeInterval?
+
+    var body: some View {
+        StatStrip {
+            if let timeLeft {
+                figure(HikeFormat.travelTime(timeLeft), caption: "left")
+            }
+            figure(remaining, caption: "to go")
+            if let timeLeft {
+                figure(
+                    Date.now.addingTimeInterval(timeLeft).formatted(date: .omitted, time: .shortened),
+                    caption: "arrival"
+                )
+            }
+        }
+    }
+
+    private func figure(_ value: String, caption: LocalizedStringKey) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.title2.bold().monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(StatCardMetrics.minimumScale)
+            Text(caption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -249,126 +308,6 @@ struct HikeElevationPlaceholder: View {
             // because the heights ride the gate ``StadiaElevationSource``
             // enforces.
             message: "No elevation data for this hike"
-        )
-    }
-}
-
-/// Owns appearance-control observations while preserving the action bar's
-/// original action, toggle, and width-control order. The two colour tiles —
-/// the line and its border — close the action row.
-struct RouteAppearanceControls<
-    Actions: View,
-    MiddleControls: View
->: View {
-    let hike: Hike
-    private let actions: Actions
-    private let middleControls: MiddleControls
-
-    init(
-        hike: Hike,
-        @ViewBuilder actions: () -> Actions,
-        @ViewBuilder middleControls: () -> MiddleControls
-    ) {
-        self.hike = hike
-        self.actions = actions()
-        self.middleControls = middleControls()
-    }
-
-    var body: some View {
-        VStack(spacing: 12) {
-            // The action row is three or four glass tiles side by side, so it
-            // samples the screen behind it once for the row rather than once
-            // per tile — and the tiles blend into each other as the row
-            // tightens at large text sizes.
-            GlassStack(spacing: ActionTileMetrics.glassSpacing) {
-                HStack(spacing: 12) {
-                    actions
-                    colorControl
-                    borderControl
-                }
-            }
-            middleControls
-            widthSlider
-            RouteLinePatternPicker(hike: hike)
-        }
-    }
-
-    private var colorControl: some View {
-        ActionTile {
-            ColorPicker(
-                "Route color",
-                selection: tintBinding,
-                supportsOpacity: true
-            )
-            .labelsHidden()
-            Text("Color")
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
-                // `labelsHidden()` keeps the picker's spoken name, so this
-                // caption is a second stop that repeats it.
-                .accessibilityHidden(true)
-        }
-    }
-
-    /// The outline round the line, beside the colour it outlines. The same
-    /// picker, so "no border" is what it is for the colour too: the opacity
-    /// taken to zero — which is where every hike starts.
-    private var borderControl: some View {
-        ActionTile {
-            ColorPicker(
-                "Route border",
-                selection: borderBinding,
-                supportsOpacity: true
-            )
-            .labelsHidden()
-            .accessibilityIdentifier("route-border-picker")
-            Text("Border")
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-        }
-    }
-
-    private var widthSlider: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Label("Line width", systemImage: "lineweight")
-                    .font(.caption.weight(.medium))
-                Spacer()
-                Text("\(Int(hike.routeWidth)) pt")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            // The caption row is what the slider's own label and value say, so
-            // it is not a stop of its own.
-            .accessibilityHidden(true)
-            Slider(value: widthBinding, in: 1...12, step: 1)
-                .tint(hike.tintOpaque)
-                .accessibilityLabel("Line width")
-                .accessibilityValue("\(Int(hike.routeWidth)) points")
-                .accessibilityIdentifier("route-width-slider")
-        }
-    }
-
-    private var tintBinding: Binding<Color> {
-        Binding(
-            get: { hike.tint },
-            set: { hike.tintHex = $0.hexRGBA }
-        )
-    }
-
-    private var borderBinding: Binding<Color> {
-        Binding(
-            get: { hike.routeBorder },
-            set: { hike.routeBorderHex = RouteBorder.pickedHex($0.hexRGBA, over: hike.routeBorderHex) }
-        )
-    }
-
-    private var widthBinding: Binding<Double> {
-        Binding(
-            get: { hike.routeWidth },
-            set: { hike.routeWidth = $0 }
         )
     }
 }

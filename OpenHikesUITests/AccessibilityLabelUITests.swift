@@ -209,6 +209,7 @@ nonisolated final class AccessibilityLabelUITests: XCTestCase {
             ]
         )
         openHikeDetail(in: app)
+        openRouteStyle(in: app)
 
         let slider = element("route-width-slider", in: app)
         XCTAssertTrue(

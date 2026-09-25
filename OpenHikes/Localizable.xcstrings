@@ -467,6 +467,9 @@
     "Apple Weather has no severe-weather source for this area." : {
 
     },
+    "arrival" : {
+
+    },
     "Ask for Photo Removal" : {
 
     },
@@ -581,7 +584,7 @@
     "Close this trail?" : {
 
     },
-    "Color" : {
+    "Colors" : {
 
     },
     "Community" : {
@@ -839,6 +842,9 @@
     "First of %lld photos taken here" : {
 
     },
+    "Follow" : {
+
+    },
     "Follow Paths" : {
 
     },
@@ -846,6 +852,9 @@
 
     },
     "Followed: %@" : {
+
+    },
+    "Following" : {
 
     },
     "For a shared hike · %@" : {
@@ -1007,10 +1016,19 @@
     "Leave photo %lld out" : {
 
     },
+    "left" : {
+
+    },
     "Legal" : {
       "comment" : "Link to Apple Weather's legal attribution page"
     },
     "Legs run along paths mapped in OpenStreetMap. Turn this off to draw straight lines." : {
+
+    },
+    "Line" : {
+
+    },
+    "Line Color" : {
 
     },
     "Line style" : {
@@ -1287,6 +1305,9 @@
 
     },
     "On" : {
+
+    },
+    "On the Map" : {
 
     },
     "On the Trail" : {
@@ -1700,6 +1721,9 @@
     "Remove Stop" : {
 
     },
+    "Rename" : {
+
+    },
     "Rename hike" : {
 
     },
@@ -1767,6 +1791,9 @@
 
     },
     "Route color" : {
+
+    },
+    "Route Style" : {
 
     },
     "Routes use Apple Maps directions. Turn this off to draw straight lines." : {
@@ -1862,7 +1889,7 @@
     "Share Hike" : {
 
     },
-    "Share hike with photos" : {
+    "Share Hike with Photos" : {
 
     },
     "Share only a route, photos and notes that are yours to publish. A hike that starts at your front door shows where you live." : {
@@ -2139,6 +2166,9 @@
     "Title" : {
 
     },
+    "to go" : {
+
+    },
     "Today" : {
       "comment" : "The first row of the daily forecast"
     },
@@ -2169,7 +2199,7 @@
     "Try again in a moment." : {
 
     },
-    "Turn on Follow This Trail in Details, then set off along the trail. Finished hikes are kept here." : {
+    "Turn on Follow in Details, then set off along the trail. Finished hikes are kept here." : {
 
     },
     "Unblock" : {
@@ -2314,6 +2344,9 @@
 
     },
     "Your request opens in your mail app so you can send it. It carries the record names a reviewer needs, which this hike is the only place holding. The hike stays on this device either way — deleting it here would not take the shared copy down." : {
+
+    },
+    "Zoom" : {
 
     },
     "Zoom in to look here" : {

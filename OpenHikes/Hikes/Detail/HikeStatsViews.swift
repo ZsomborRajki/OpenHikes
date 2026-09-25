@@ -146,32 +146,14 @@ struct StatFigure: View {
 }
 
 /// Every figure that is not a headline, as one grouped list with a hairline
-/// between rows — the *Details* card of a Maps place card.
+/// between rows — the *Details* card of a Maps place card. A
+/// ``PlaceCardList`` that always has a heading.
 struct StatList<Content: View>: View {
     var title = "Statistics"
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.headline)
-                .accessibilityAddTraits(.isHeader)
-            VStack(spacing: 0) {
-                Group(subviews: content) { rows in
-                    ForEach(rows) { row in
-                        if row.id != rows.first?.id {
-                            Divider()
-                        }
-                        row
-                    }
-                }
-            }
-            .padding(.horizontal, StatCardMetrics.listPadding)
-            .background {
-                RoundedRectangle(cornerRadius: StatCardMetrics.listCornerRadius)
-                    .fill(.quaternary)
-            }
-        }
+        PlaceCardList(title: title) { content }
     }
 }
 

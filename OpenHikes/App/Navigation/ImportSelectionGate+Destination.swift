@@ -26,7 +26,7 @@ extension ImportSelectionGate {
         // A contributed set under review is the same kind of screen and gets
         // the same protection, keyed on its own queue entry.
         case .pendingPhotos(let pending): return .pendingSubmission(pending.id)
-        case .hike, .newPlace, .photo, .place, .walk: return .root
+        case .hike, .newPlace, .photo, .place, .routeStyle, .walk: return .root
         }
     }
 
@@ -39,6 +39,7 @@ extension ImportSelectionGate {
         case .photo(let hike, _): hike.id
         case .place(let hike, _): hike.id
         case .newPlace(let hike, _): hike.id
+        case .routeStyle(let hike): hike.id
         case .walk(let walk): walk.hikeID
         case .communityHike, .communityPhoto, .pendingPhotos, .pendingSubmission, .recording, .totals,
             .trailDraft:

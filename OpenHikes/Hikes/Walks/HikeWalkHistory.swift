@@ -63,7 +63,7 @@ struct HikeWalkHistory: View {
                 .accessibilityHidden(true)
             Text("No hikes yet")
                 .font(.headline)
-            Text("Turn on Follow This Trail in Details, then set off along the trail. Finished hikes are kept here.")
+            Text("Turn on Follow in Details, then set off along the trail. Finished hikes are kept here.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }

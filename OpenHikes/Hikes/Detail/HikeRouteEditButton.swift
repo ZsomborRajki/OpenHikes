@@ -11,8 +11,9 @@
 //
 //  The maker holds one drawing at a time, so a half-drawn *other* trail is
 //  asked about before it is replaced, the way the maker's own ✕ asks before a
-//  drawing is thrown away. Its own view, for the reason every glyph on the
-//  header row is: the dialog's state belongs here and nowhere above.
+//  drawing is thrown away. Its own view, for the reason every row in the
+//  detail's closing list of actions is: the dialog's state belongs here and
+//  nowhere above.
 //
 
 import OpenHikesData
@@ -26,13 +27,9 @@ struct HikeRouteEditButton: View {
 
     var body: some View {
         Button(action: tapped) {
-            Image(systemName: "scribble.variable")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .minimumTapTarget()
+            PlaceCardActionLabel(title: String(localized: "Edit Route"), systemImage: "scribble.variable")
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Edit Route")
         .accessibilityIdentifier("hike-edit-route")
         .confirmationDialog(
             "Replace the trail you're drawing?",

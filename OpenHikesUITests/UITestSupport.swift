@@ -401,6 +401,18 @@ extension XCTestCase {
             "tapping a hike row should push its detail view"
         )
     }
+
+    /// From an open hike detail, pushes its *Route Style* screen — the
+    /// line's colour, border, width and pattern.
+    @MainActor
+    func openRouteStyle(in app: XCUIApplication) {
+        scrollToTap(element("route-style-row", in: app), in: app, attempts: 10)
+        XCTAssertTrue(
+            app.navigationBars["Route Style"]
+                .waitForExistence(timeout: UITestTimeout.navigation),
+            "the Route Style row should push its screen"
+        )
+    }
 }
 
 // MARK: - Gestures

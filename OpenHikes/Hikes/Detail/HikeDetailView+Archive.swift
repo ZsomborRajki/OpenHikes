@@ -26,7 +26,8 @@ import SwiftUI
 extension HikeDetailView {
     /// Hands the route *and its photographs* to the share sheet as a `.zip`.
     ///
-    /// A second control rather than a smarter first one. ``shareButton`` keeps
+    /// A second control rather than a smarter first one. The action row's
+    /// *Share* keeps
     /// producing a bare `.gpx` because that is the file a GPX reader can match
     /// and open, and a zip is not — so switching the one button's output based
     /// on whether the hike happens to have a photograph would take that
@@ -38,7 +39,7 @@ extension HikeDetailView {
     /// offering the same bytes in a worse container.
     ///
     /// The payload is a `Sendable` ``HikeArchive`` snapshot for the reason
-    /// ``shareButton``'s is: `ShareLink` passes the exporter to the system,
+    /// ``HikeActionRow``'s *Share* is: `ShareLink` passes the exporter to the system,
     /// which calls it off the main actor, where a `@Model` must not be read.
     /// Nothing is copied or zipped until a destination is picked.
     @ViewBuilder var archiveButton: some View {
@@ -50,13 +51,12 @@ extension HikeDetailView {
                     icon: Image(systemName: "photo.on.rectangle.angled")
                 )
             ) {
-                Image(systemName: "square.and.arrow.up.on.square")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .minimumTapTarget()
+                PlaceCardActionLabel(
+                    title: String(localized: "Share Hike with Photos"),
+                    systemImage: "square.and.arrow.up.on.square"
+                )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Share hike with photos")
             .disabled(hike.pointCount < 2)
         }
     }

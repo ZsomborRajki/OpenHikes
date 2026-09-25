@@ -127,8 +127,8 @@ extension HikeDetailView {
             )
             communityControl(appearance, publication, eligibility, contribution, transport)
                 .accessibilityLabel(appearance.label)
-                // What a tap will do is invisible in a toolbar glyph, so the
-                // hint is the only place it can be explained.
+                // A state's name says where the hike is, not what a tap will
+                // do, so the hint is where that is explained.
                 .accessibilityHint(appearance.hint)
                 .accessibilityIdentifier("community-share-button")
                 // A hike with no route can still carry photographs, and the
@@ -239,20 +239,20 @@ extension HikeDetailView {
                 contributionControl(appearance, target, contribution)
             } else {
                 Button { isSharingToCommunity = true } label: {
-                    Self.shareButtonGlyph(appearance)
+                    Self.shareButtonRow(appearance)
                 }
                 .buttonStyle(.plain)
             }
         case .awaitingReview:
             Button { isWithdrawingFromCommunity = true } label: {
-                Self.shareButtonGlyph(appearance)
+                Self.shareButtonRow(appearance)
             }
             .buttonStyle(.plain)
         case .published:
             Menu {
                 publishedMenuItems(contribution, transport)
             } label: {
-                Self.shareButtonGlyph(appearance)
+                Self.shareButtonRow(appearance)
             }
             .menuStyle(.button)
             .buttonStyle(.plain)
@@ -363,12 +363,12 @@ extension HikeDetailView {
         switch contribution {
         case .notShared:
             Button { contributionTarget = target } label: {
-                Self.shareButtonGlyph(appearance)
+                Self.shareButtonRow(appearance)
             }
             .buttonStyle(.plain)
         case .awaitingReview:
             Button { isWithdrawingPhotosFromCommunity = true } label: {
-                Self.shareButtonGlyph(appearance)
+                Self.shareButtonRow(appearance)
             }
             .buttonStyle(.plain)
         case .published:
@@ -381,20 +381,21 @@ extension HikeDetailView {
                 }
                 .accessibilityIdentifier("community-photo-withdraw-button")
             } label: {
-                Self.shareButtonGlyph(appearance)
+                Self.shareButtonRow(appearance)
             }
             .menuStyle(.button)
             .buttonStyle(.plain)
         }
     }
 
-    private static func shareButtonGlyph(
+    /// A row in the place card's closing list of actions, named for the
+    /// state it is in — *Share with the community*, *Waiting for review* —
+    /// so what has already been done with this walk is readable without
+    /// opening anything.
+    private static func shareButtonRow(
         _ appearance: CommunityShareButtonAppearance
     ) -> some View {
-        Image(systemName: appearance.symbol)
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .minimumTapTarget()
+        PlaceCardActionLabel(title: appearance.label, systemImage: appearance.symbol)
     }
 
     /// Spends one request to ask whether this hike's listing is still there.
