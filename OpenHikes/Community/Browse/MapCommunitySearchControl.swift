@@ -578,10 +578,6 @@ final class MapAreaSearchView: UIView {
 #endif
 
 extension MapView.Coordinator {
-    /// How long the pill takes to arrive or leave. The same quarter-second the
-    /// camera pill uses, so the two controls on this map behave alike.
-    private static let areaSearchFadeDuration: TimeInterval = 0.25
-
     /// Observes which list the sheet is showing, what the map has to offer
     /// about the region on screen, whether a search is in flight and what
     /// OpenStreetMap had to say about the last one, and shows, hides, dims,
@@ -726,26 +722,9 @@ extension MapView.Coordinator {
         // Cleared along with the pill when the tab goes, so the caption never
         // outlives the list it is about.
         areaSearchControl.notice = visible ? community?.curatedNotice?.caption : nil
-        // Hidden as well as transparent, for the reason the camera pill is:
-        // an invisible view still answers hit tests, and this one sits over
-        // the map the hiker is panning. Interaction goes at once rather than
-        // when the fade lands.
-        areaSearchControl.isUserInteractionEnabled = visible
-        if visible { areaSearchControl.isHidden = false }
-        guard animated else {
-            areaSearchControl.alpha = visible ? 1 : 0
-            areaSearchControl.isHidden = !visible
-            return
-        }
-        UIView.animate(withDuration: Self.areaSearchFadeDuration) {
-            areaSearchControl.alpha = visible ? 1 : 0
-        } completion: { [weak self] _ in
-            // Re-read rather than trusting the value this animation started
-            // with: two settles in quick succession overlap, and a completion
-            // that hid the pill the next animation had just brought back would
-            // leave a visible control answering no taps.
-            guard let self, community?.isBrowsing != true else { return }
-            areaSearchControl.isHidden = true
+        areaSearchControl.fadeMapControl(visible: visible, restingAlpha: 1, animated: animated) { [weak self] in
+            guard let self else { return false }
+            return community?.isBrowsing != true
         }
         #endif
     }
