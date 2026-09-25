@@ -8,7 +8,7 @@
 //  A Simulator, in Debug, on a synthetic route cannot answer either of these,
 //  and no amount of care in the measuring makes it able to:
 //
-//  * A real hike-length recording's energy. A three-fix scenario can only
+//  * A real hike-length recording's energy. A few simulated fixes can only
 //    extrapolate, and whether the per-fix cost stays flat over six hours is
 //    exactly what extrapolation cannot say.
 //  * Whether `RecordingEnergyPolicy`'s conserving profile is ever reached. A
@@ -16,10 +16,9 @@
 //    never been exercised outside unit tests.
 //
 //  MetricKit answers both, from the only place they can be answered: a real
-//  phone, in Release, on a real walk. It is the opposite instrument to the
-//  rest of this folder in every dimension — aggregated rather than per-event,
-//  daily rather than immediate, field rather than lab — which is why it
-//  *extends* the harness and replaces nothing in it.
+//  phone, in Release, on a real walk. It is the opposite instrument to a
+//  Simulator run in every dimension — aggregated rather than per-event, daily
+//  rather than immediate, field rather than lab.
 //
 //  This file is deliberately free of MetricKit imports. The extraction lives
 //  next door in `FieldMetricsDigest+MetricKit.swift`; the arithmetic and the

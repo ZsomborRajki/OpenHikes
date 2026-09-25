@@ -36,10 +36,10 @@ extension MapCoordinatorTests {
             didUpdateLocations: [CLLocation(latitude: 47.6300, longitude: 12.8600)]
         )
         // Waits for the region, not just for the flag: `centerOnUser` sets
-        // `hasCentered` and then calls `setRegion(_:animated: true)`, so the
-        // map can still be moving when the flag is already true. Capturing
-        // `centred` mid-animation would make the comparison below fail for a
-        // reason that has nothing to do with the second fix.
+        // `hasHandledFirstFix` and then calls `setRegion(_:animated: true)`,
+        // so the map can still be moving when the flag is already true.
+        // Capturing `centred` mid-animation would make the comparison below
+        // fail for a reason that has nothing to do with the second fix.
         await settleDelegateHop(until: "the first fix to centre the map") {
             coordinator.hasHandledFirstFix && abs(map.region.center.latitude - 47.6300) < Self.centreTolerance
         }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Shared xcodebuild output formatting, sourced by Scripts/run-ui-tests.sh. Not
-# executable on its own.
+# Shared xcodebuild output formatting, sourced by Scripts/run-ui-tests.sh and
+# Scripts/lib/screenshots.sh. Not executable on its own.
 #
 # xcodebuild's raw output is thousands of lines per run, most of it compiler
 # invocations nobody reads. It used to be reduced with hand-rolled `grep -E`

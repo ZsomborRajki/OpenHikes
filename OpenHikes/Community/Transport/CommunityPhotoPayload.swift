@@ -135,8 +135,8 @@ nonisolated struct CommunityPendingPhotos: Identifiable, Hashable, Sendable {
     /// The distance is zero and the title is the hiker's credit, because
     /// neither is a fact this record carries — a contribution is photographs
     /// and nothing else. Nothing draws a row from this; it exists for
-    /// ``CommunityBrowser/previewPhotosLoaded(_:of:)``, which needs a listing
-    /// to key on and reads nothing else off it.
+    /// ``CommunityBrowser/previewPhotosLoaded(_:of:onOpen:)``, which needs a
+    /// listing to key on and reads nothing else off it.
     var prospectiveListing: CommunityListing {
         CommunityListing(
             id: id,

@@ -558,10 +558,6 @@ final class WeatherManager {
     func update(for subject: WeatherSubject) async -> Bool {
         let coordinate = subject.coordinate
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        // Instrumented because WeatherKit is a network call this app makes on
-        // a hiker's behalf without being asked, and the freshness window that
-        // keeps it rare is a constant nobody would notice regressing. The
-        // count per hike is the check.
         do {
             // One round trip, four datasets. `weather(for:including:)` is
             // variadic and answers all of them from the same request, so the

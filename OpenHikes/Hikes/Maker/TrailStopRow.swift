@@ -82,8 +82,8 @@ struct TrailStopRowView: View {
     /// Where in ``TrailDraft/slots`` this row sits.
     let position: Int
     /// Moves the stop one row earlier or later, for VoiceOver. The drag itself
-    /// is the list's `onMove` — see ``TrailDraftView``. Open fields pass `nil`,
-    /// because there is no waypoint there to move.
+    /// is the list's `reorderable()` — see ``TrailDraftView``. Open fields
+    /// pass `nil`, because there is no waypoint there to move.
     var onStep: ((AccessibilityAdjustmentDirection) -> Void)?
     /// Opens the search sheet on this row.
     var onSearch: () -> Void

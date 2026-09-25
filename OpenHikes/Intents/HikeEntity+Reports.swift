@@ -19,8 +19,8 @@ import OpenHikesShared
 
 /// `nonisolated` spelled on the extension rather than inherited, because an
 /// unannotated extension's `static` members are inferred differently by the
-/// two compilers this project is built with — it compiles locally on Xcode 27
-/// and fails on CI's Xcode 26.6 with "main actor-isolated static property
+/// two compilers this project is built with — it compiles on Xcode 27 and
+/// fails on CodeQL's Xcode 26.6 with "main actor-isolated static property
 /// cannot be accessed from outside of the actor". It is also correct on its
 /// own terms: both members below are pure value work, and neither has any
 /// business on the main actor.

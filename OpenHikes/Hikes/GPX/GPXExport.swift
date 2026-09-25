@@ -573,8 +573,6 @@ nonisolated extension GPXExport {
     @concurrent
     static func writeTemporaryFile(for track: Track) async throws -> URL {
         assertOffMainThread("GPX serialization must stay off the main thread")
-        // Spanning the write as well as the markup, since what a share costs
-        // the hiker is both of them together.
         let directory = stagingDirectory
         purgeStagedExports(in: directory, before: .now - stagedExportLifetime)
         let staged = directory.appending(

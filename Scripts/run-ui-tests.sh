@@ -173,7 +173,7 @@ Examples:
   Scripts/run-ui-tests.sh
   Scripts/run-ui-tests.sh --test testImportsBundledGPXAndOpensItsDetails
   Scripts/run-ui-tests.sh --suite AccessibilityUITests --all
-  Scripts/run-ui-tests.sh --all --device 'iPhone 17'
+  Scripts/run-ui-tests.sh --all --device 'iPhone 18 Pro Max'
   Scripts/run-ui-tests.sh --all --serial
   Scripts/run-ui-tests.sh --all --device OH-second --derived-data .dd-second
 EOF

@@ -75,7 +75,8 @@ extension ModelConfiguration {
         ModelConfiguration("Hikes", schema: schema, url: url, cloudKitDatabase: .none)
     }
 
-    /// The sidecar store at a chosen location, alongside ``openHikes(url:)``.
+    /// The sidecar store at a chosen location, alongside
+    /// ``openHikes(schema:url:)``.
     static func openHikesLocal(schema: Schema, url: URL) -> ModelConfiguration {
         ModelConfiguration(
             "HikeLocalState",

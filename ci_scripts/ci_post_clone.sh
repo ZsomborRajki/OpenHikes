@@ -4,12 +4,13 @@
 # it resolves packages, for every workflow — so both `OpenHikes | Default` and
 # `OpenHikes | Default | Archive - iOS` pick it up.
 #
-# Why it exists: the app, widget and test targets use SwiftLintPlugins'
-# SwiftLintBuildToolPlugin, and Xcode refuses to run a build tool plugin whose
-# package fingerprint has not been trusted. On a developer machine that trust is
-# recorded once, per user, in ~/Library/org.swift.swiftpm/security/plugins.json
-# when Xcode offers "Trust & Enable". An Xcode Cloud VM is fresh: it has no such
-# file and nobody to answer the dialog, so `xcodebuild archive` failed with
+# Why it exists: the app, widget, watch and test targets use
+# SwiftLintPlugins' SwiftLintBuildToolPlugin, and Xcode refuses to run a build
+# tool plugin whose package fingerprint has not been trusted. On a developer
+# machine that trust is recorded once, per user, in
+# ~/Library/org.swift.swiftpm/security/plugins.json when Xcode offers "Trust &
+# Enable". An Xcode Cloud VM is fresh: it has no such file and nobody to answer
+# the dialog, so `xcodebuild archive` failed with
 #
 #   Plugin "SwiftLintBuildToolPlugin" from package "SwiftLintPlugins" must be
 #   enabled before it can be used.

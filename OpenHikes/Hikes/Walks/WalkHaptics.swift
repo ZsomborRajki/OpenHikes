@@ -14,9 +14,9 @@
 //  about *how*: under a hundred metres it is dropped, over it is kept, and a
 //  store that refuses leaves the walk running. Only ``TrailWalkEnd`` knows,
 //  and it is returned to the button that asked. So the phase reports the
-//  beginning and the middle, ``moment(for:)`` reports the end, and neither
-//  reports the other — which is what keeps a kept walk from being announced
-//  twice, once correctly and once as a discard.
+//  beginning and the middle, ``TrailWalkEnd/hapticMoment`` reports the end,
+//  and neither reports the other — which is what keeps a kept walk from being
+//  announced twice, once correctly and once as a discard.
 //
 
 import OpenHikesData

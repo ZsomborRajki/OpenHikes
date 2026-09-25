@@ -41,9 +41,10 @@ final class MapPhotoControlsView: UIView {
     /// button's capsule takes its size from here too — see
     /// ``MapView/makeTrackingButton(for:_:)``.
     static let controlSize: CGFloat = 44
-    /// Under the 4pt gap between the two buttons, so they are separate targets
-    /// at rest and their glass merges into one shape — the same relationship
-    /// ``ActionTileMetrics/glassSpacing`` describes for the tiles in the sheet.
+    /// Over the 4pt gap between the buttons, so their glass merges into one
+    /// shape at rest while each button stays a target of its own — the
+    /// opposite of ``ActionTileMetrics/glassSpacing``, which keeps the sheet's
+    /// tiles apart until their row tightens.
     private static let glassMergeSpacing: CGFloat = 10
     private static let buttonSpacing: CGFloat = 4
     private static let symbolPointSize: CGFloat = 17

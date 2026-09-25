@@ -95,9 +95,8 @@ struct CuratedTrailFactsTests {
 
     /// A line running north whose two ends are `endGapMeters` apart.
     ///
-    /// Three points rather than two, because a line of two is refused before
-    /// its gap is ever measured — see `aTwoPointLineIsNotAShape`, which is
-    /// the case that says so.
+    /// Three points, though a line of two is read the same way — see
+    /// `aTwoPointLineIsAShape`.
     private static func line(endGapMeters: Double) -> [RouteCoordinate] {
         let ridgeDegrees = 1000.0 / metersPerDegreeLatitude
         let endDegrees = endGapMeters / metersPerDegreeLatitude

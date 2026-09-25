@@ -5,12 +5,13 @@
 #
 # It exists because that job is the one that keeps breaking `main`. The Xcode
 # build does lint — SwiftLintBuildToolPlugin is attached to OpenHikes,
-# OpenWidgetExtension, OpenHikesTests and OpenWidgetTests — but it runs
-# `swiftlint lint --quiet --force-exclude` with no `--strict`, so it only stops
-# a build on a violation the configuration marks `error`. Every warning-severity
-# rule is invisible there and would otherwise show up for the first time in CI,
-# ten minutes after the push. Both this script and `.github/workflows/ci.yml`
-# read the version from `.swiftlint-version`, so the two cannot drift.
+# OpenWidgetExtension, OpenHikesWatch, OpenHikesTests and OpenWidgetTests — but
+# it runs `swiftlint lint --quiet --force-exclude` with no `--strict`, so it
+# only stops a build on a violation the configuration marks `error`. Every
+# warning-severity rule is invisible there and would otherwise show up for the
+# first time in CI, ten minutes after the push. Both this script and
+# `.github/workflows/ci.yml` read the version from `.swiftlint-version`, so the
+# two cannot drift.
 #
 # Exit status:
 #   0  clean
@@ -27,7 +28,7 @@ usage() {
     cat <<'EOF'
 Usage: Scripts/lint.sh [--fix]
 
-Runs strict SwiftLint over the seven target roots in .swiftlint.yml, at the
+Runs strict SwiftLint over the roots .swiftlint.yml includes, at the
 version pinned in .swiftlint-version. The CI `quality` job runs this same
 script, so a clean run here is a clean run there.
 

@@ -52,8 +52,8 @@ import Foundation
 ///
 /// **Append-only from the day it ships**, like every other raw value that
 /// reaches a mirrored column: a case that goes away leaves rows on other
-/// devices naming it, which is exactly the state ``TrailPoint/symbol``
-/// answers with `nil`.
+/// devices naming it, which is exactly the state
+/// ``TrailPlaceSymbol/named(_:)`` answers with `nil`.
 nonisolated public enum TrailPlaceSymbol: String, CaseIterable, Codable, Hashable, Sendable {
     // Alphabetical, which is also the order the picker draws them in: the
     // linter wants the cases sorted, and eight glyphs on one grid have no

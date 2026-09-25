@@ -169,7 +169,7 @@ nonisolated enum SeededFieldMetricsFixture {
         )
     }
 
-    /// The app's own two spans, named through ``FieldSignpost`` rather than
+    /// Two of the app's own spans, named through ``FieldSignpost`` rather than
     /// as strings — a fixture that spelled them itself would keep passing
     /// after a rename that emptied the real screen.
     private static func signposts() -> [SignpostDigest] {

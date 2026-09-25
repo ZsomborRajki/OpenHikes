@@ -181,11 +181,10 @@ struct HikeDetailView: View {
     @State private var offRouteSearch = OffRouteSearchPolicy()
 
     var body: some View {
-        // Fires on every re-evaluation of this view's body. Auto-follow's
-        // per-fix tracker updates should NOT show up here — they live in
-        // `tracker` (a `TrackerState`), which this body never reads, so those
-        // updates invalidate only the chart and the progress row below. If
-        // this mark starts firing at that cadence again, something
+        // Auto-follow's per-fix tracker updates must NOT re-run this body —
+        // they live in `tracker` (a `TrackerState`), which this body never
+        // reads, so those updates invalidate only the chart and the progress
+        // row below. If it starts re-running at that cadence again, something
         // re-introduced a read of `tracker`'s properties into this body
         // (directly or via a computed var it calls, like `elevationSection`).
         // The same goes for `walkSession`: a matched fix that extends a walk
@@ -322,7 +321,7 @@ struct HikeDetailView: View {
         // Merely reading a trail's detail holds nothing, which is why the
         // question is the walk session's rather than this screen's presence.
         // The read is deliberately inside the closure: this body must not gain
-        // `walkSession` as an input — see the note on the signpost above.
+        // `walkSession` as an input — see the note at the top of `body`.
         .keepsScreenAwake { walkSession.isWalking(hike.id) }
     }
 

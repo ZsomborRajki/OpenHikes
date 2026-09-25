@@ -123,11 +123,10 @@ struct HikeDeletionPrompt: Equatable {
     /// again, and a walk is a record of one; the pixels are not. A hike with
     /// neither is not described as though the hiker were about to lose them.
     ///
-    /// Four whole sentences rather than one assembled from clauses, and the
-    /// counts spelled out by hand: that is how the rest of the app pluralises
-    /// (`MapSubscriptionTerms`, `CommunityHikeRow`, `HikeIntentReports`),
-    /// there is no String Catalog to resolve inflection markup against yet
-    /// (#32), and a translator handed a whole sentence can move its parts.
+    /// Four whole sentences rather than one assembled from clauses, because a
+    /// translator handed a whole sentence can move its parts. The counts
+    /// inside them are plural variations in the catalog — see
+    /// ``photographs(_:)``.
     private static func loss(photoCount: Int, walkCount: Int) -> String {
         switch (photoCount > 0, walkCount > 0) {
         case (false, false):

@@ -152,9 +152,10 @@ struct MapView: MapViewRepresentable, Equatable {
     /// entry points SwiftUI drives — building the map and updating it — against
     /// a real `MKMapView`. Everything below them stays private.
     func makeMapView(_ coordinator: Coordinator) -> MKMapView {
-        // Fires once per MKMapView creation — if this repeats, something is
+        // Runs once per MKMapView creation — if it repeats, something is
         // destroying the representable's identity (e.g. an `.id()` upstream
         // churning), which throws away all MapKit state, not just SwiftUI's.
+        //
         // The launch is over when the app has nothing left to do before the
         // map, not when there is a frame: `histogrammedTimeToFirstDraw` stops
         // at the first CA commit, which on this app is a sheet over an empty
@@ -680,10 +681,9 @@ struct MapView: MapViewRepresentable, Equatable {
     #endif
 
     func update(_ mapView: MKMapView, _ coordinator: Coordinator) {
-        // Fires on every SwiftUI-driven update pass, whether or not any of the
-        // steps below actually change anything — compare its rate against the
-        // "Rebuilt"/"Centered"/"Restyled" marks to see how much of that is
-        // real work vs. free no-ops.
+        // Runs on every SwiftUI-driven update pass, whether or not any of the
+        // steps below actually change anything, so each of them has to be free
+        // when nothing it reads has moved.
         applySidePanelInset(coordinator)
         #if os(iOS)
         applyBuiltInControlMargins(to: mapView)

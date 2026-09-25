@@ -193,20 +193,19 @@ struct OpenHikesView: View {
     }
 
     var body: some View {
-        // Fires on every re-evaluation of this view's body. The observable
-        // inputs here are `appModel.weatherManager.state` (a focus change, or
-        // ~15 min), `appModel.hikeRecorder.currentHike` (start/stop) and
+        // Every observable read here re-runs this whole body. The inputs that
+        // move are `appModel.weatherManager.state` (a focus change, or ~15
+        // min), `appModel.hikeRecorder.currentHike` (start/stop) and
         // `appModel.hikeRecorder.isActive`, which reads the recorder's phase
         // and so moves a handful of times per session — everything
         // high-frequency is passed by reference and read inside MapKit
         // instead. `locationManager.coordinate` in particular is deliberately
-        // *not* an input, so a rate here that tracks the ~1 Hz fix rate means
+        // *not* an input, so this body re-running at the ~1 Hz fix rate means
         // something upstream has started reading it, and neither is
         // `weatherFocus.subject`: the badge's subject reaches this body only
-        // through the state above, which is written once per focus rather
-        // than once per significant-change delivery. Compare against the
-        // `MapUpdateCalled` mark in MapView and `MapCentered` in
-        // MapCoordinator.
+        // through the state above, which is written once per focus rather than
+        // once per significant-change delivery.
+        //
         // The landscape shape of the app's primary surface, beside the map
         // rather than over it — see ``MapSidePanel``. Nothing about it is
         // modal: the map keeps taking touches, and there is nothing to dismiss.
@@ -401,12 +400,11 @@ struct OpenHikesView: View {
             // Written into the flag rather than filtered through a `Binding`
             // built here, because such a binding is a new one on every pass of
             // this body and re-runs the sheet's content with it — measured as
-            // one or two extra `MapSheetBody` evaluations per scenario. No
-            // `initial:`
-            // for the same reason: a portrait launch, which is nearly all of
-            // them, then writes nothing at all. A launch straight into
-            // landscape is a real change of ``SheetPresentation/layout`` and
-            // arrives here as one.
+            // one or two extra evaluations of `MapSheet`'s body per run. No
+            // `initial:` for the same reason: a portrait launch, which is
+            // nearly all of them, then writes nothing at all. A launch
+            // straight into landscape is a real change of
+            // ``SheetPresentation/layout`` and arrives here as one.
             .onChange(of: usesSidePanel) { _, isPanel in
                 showSheet = !isPanel
             }

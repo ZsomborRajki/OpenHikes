@@ -9,8 +9,8 @@
 //  HealthKit is unavailable in a hosted unit test the way ActivityKit and
 //  `StoreKitTest` are — see *Environment capabilities that are absent, not
 //  missing*. So everything worth asserting is arranged to sit *above* this
-//  protocol, and ``OpenHikesModel/makeWorkoutWriter(defaults:)`` returns `nil`
-//  under `isRunningTests`, matching `makeCommunityTransport()` and
+//  protocol, and ``OpenHikesModel/makeWorkoutWriter()`` returns `nil` under
+//  `isRunningTests`, matching `makeCommunityTransport()` and
 //  `makeLiveActivityController(defaults:)`.
 //
 //  ## Why the request is a value

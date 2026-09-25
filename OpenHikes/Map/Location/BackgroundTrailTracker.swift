@@ -159,7 +159,7 @@ final class BackgroundTrailTracker: NSObject {
 
     /// The App Group write currently in flight for the live fix, and the
     /// counter that bounds a wait on it. Chained for ordering — see
-    /// ``updateStoredLiveFix(_:input:elevation:)``.
+    /// ``updateStoredLiveFix(_:input:elevation:walk:)``.
     private var fixPublishTask: Task<Void, Never>?
     private var fixPublishSequence: UInt64 = 0
 
@@ -517,10 +517,6 @@ final class BackgroundTrailTracker: NSObject {
         // Kept even though monitoring is now disarmed on deselection: a fix
         // already in flight can still land in the window between the two.
         guard let hikeID = trackedHikeID else { return }
-        // The other end of the funnel `BackgroundFixDelivered` opens: a fix
-        // this tracker is about to spend a match on. The gap between the two
-        // is wake-ups that bought nothing — a stale cached fix on relaunch, or
-        // a wake with no hike selected to match against.
 
         let modelContainer = container
         let coordinate = location.coordinate
@@ -952,8 +948,9 @@ extension BackgroundTrailTracker {
     /// The second handle is the one that is easy to leave out. A selection
     /// publication writes the whole trail, so a fix landing before it would
     /// simply be overwritten by that trail's own snapshot, which carries none.
-    /// ``publishLiveFix(_:)`` refuses outright while one is in flight; the
-    /// background feed cannot refuse, so it queues behind it instead.
+    /// ``publishLiveFix(hike:profile:match:walk:)`` refuses outright while one
+    /// is in flight; the background feed cannot refuse, so it queues behind it
+    /// instead.
     ///
     /// The tracker is handed back rather than captured, and the publication
     /// runs only if it is still here: a write chained behind a tracker that
@@ -1012,10 +1009,6 @@ extension BackgroundTrailTracker {
 extension BackgroundTrailTracker: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        // The head of this manager's own funnel. Significant-change delivery
-        // is cheap per fix and rare, but it is not free, and counting it here
-        // is the only way a report can tell that energy apart from the map's
-        // and the recorder's — the other two managers count themselves.
         onMainActor { [weak self] in self?.handleBackgroundFix(location) }
     }
 

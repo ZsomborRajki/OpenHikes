@@ -29,8 +29,9 @@ enum LiveActivityHarness {
     /// arbitrary; that it never moves is the point.
     nonisolated private static let fixedEpoch: TimeInterval = 1_750_000_000
 
-    /// The length of the followed trail in ``followingRequest(_:)``, named so
-    /// the progress assertions read as fractions of something.
+    /// The length of the followed trail in
+    /// ``followingRequest(distanceMeters:offRouteMeters:at:)``, named so the
+    /// progress assertions read as fractions of something.
     static let routeDistanceMeters: Double = 4000
 
     /// A defaults suite of its own, never the developer's. The controller

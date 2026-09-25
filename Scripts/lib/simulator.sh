@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Simulator resolution, sourced by Scripts/run-ui-tests.sh. Not executable on
-# its own.
+# Simulator resolution, sourced by Scripts/run-ui-tests.sh,
+# Scripts/lib/screenshots.sh and Scripts/watch-screenshots.sh. Not executable
+# on its own.
 #
 # The script used to send `xcodebuild` to `name=<device>` while doing its
 # simulator housekeeping — clearing a leftover simulated location, granting

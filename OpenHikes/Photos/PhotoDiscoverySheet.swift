@@ -29,9 +29,10 @@ struct PhotoDiscoverySheet: View {
     private static let badgeSize: CGFloat = 22
 
     var body: some View {
-        // A tick per ticked box means the selection is an input of the *sheet*
-        // rather than of the cell that owns it, which rebuilds every visible
-        // tile — and every tile's accessibility label — for one tap.
+        // This body re-running per ticked box would mean the selection is an
+        // input of the *sheet* rather than of the cell that owns it, which
+        // rebuilds every visible tile — and every tile's accessibility label —
+        // for one tap.
         NavigationStack {
             content
                 .navigationTitle("Photos of This Hike")

@@ -39,8 +39,8 @@ retain_swift_ui_previews: true
 
 # Synthesised Codable conformances are invisible to the index: a property that
 # only ever crosses the App Group boundary inside SharedTrailSnapshot or
-# SharedRecordingSnapshot is written by code Periphery cannot see. There are 29
-# Codable types here, so without this the report is mostly them.
+# SharedRecordingSnapshot is written by code Periphery cannot see. There are
+# dozens of Codable types here, so without this the report is mostly them.
 retain_encodable_properties: true
 
 # SwiftData and the few remaining selector-based call sites reach their

@@ -52,10 +52,9 @@ struct HikePhotoSection: View {
 
     var body: some View {
         // Taking a photo writes `hike.photos`, and this is the body that
-        // should absorb that write. The mark is how a regression that pushes
-        // it up into `HikeDetailBody` — or a strip that re-renders once per
-        // tile decode — becomes visible in the report rather than being
-        // argued about.
+        // should absorb that write — not `HikeDetailView`'s, and not a strip
+        // that re-renders once per tile decode.
+        //
         // Ordered once and handed down. `orderedPhotos` sorts, and reading it
         // from both the strip and the caption below would sort twice for one
         // pass.
@@ -102,9 +101,9 @@ struct HikePhotoSection: View {
             isDiscovering = true
         }
         .sectionActionButtonStyle()
-        // Deliberately not prefixed `hike-photo-`: the performance suite
-        // counts the gallery's tiles by that prefix, and a button that is not
-        // a photo answering to it would be counted as one.
+        // Deliberately not prefixed `hike-photo-`: every tile in the gallery
+        // answers to that prefix, so a query counting tiles by it would count
+        // a button that is not a photo as one.
         .accessibilityIdentifier("photo-discovery-button")
     }
 
@@ -252,7 +251,7 @@ struct HikePhotoThumbnail: View {
     let cornerRadius: CGFloat
     /// What the button around this tile is called, before the tile has any
     /// idea whether it can draw the photo. See
-    /// ``HikePhotoSection/label(for:among:)``.
+    /// ``HikePhotoSection/label(for:at:among:)``.
     let label: String
 
     @State private var display = PhotoDisplay.loading

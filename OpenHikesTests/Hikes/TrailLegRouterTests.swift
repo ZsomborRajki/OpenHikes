@@ -259,8 +259,8 @@ struct TrailLegRouterTests {
     }
 
     /// And a settled answer is remembered, which is what makes toggling
-    /// snapping off and on again free — and what Phase 3's reorder will lean
-    /// on, since a reorder moves rows without moving anything on the ground.
+    /// snapping off and on again free — and what a reorder leans on, since it
+    /// moves rows without moving anything on the ground.
     @Test("a settled answer is remembered and costs nothing to ask twice")
     func settledAnswersAreCached() async throws {
         let provider = CountingTrailGraphProvider(graph: Self.pathGraph())

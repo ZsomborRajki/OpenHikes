@@ -572,8 +572,10 @@ private extension OpenHikesModel {
         SignificantLocationRegistration(monitor: Self.dormantLocationSource())
     }
 
-    /// The auto-save controller wired to the real selected map source. ///
-    /// Same argument as ``makeRecorder(container:trailGraphProvider:defaults:)``:
+    /// The auto-save controller wired to the real selected map source.
+    ///
+    /// Same argument as
+    /// ``makeRecorder(container:trailGraphProvider:defaults:liveActivityController:movementReminders:workoutWriter:weatherState:)``:
     /// "which map the user picked" is a choice about the environment, and the
     /// controller takes it as a closure so a suite can decide it outright
     /// instead of inheriting whatever the host app has stored. Read on each
@@ -638,15 +640,14 @@ extension OpenHikesModel {
 // MARK: - What a launch is made of
 
 private extension OpenHikesModel {
-    /// Every dependency the shipping composition root constructs, each behind
-    /// a signpost interval of its own.
+    /// Every dependency the shipping composition root constructs.
     ///
     /// A `struct` and a factory rather than ten locals in `init()`, because
-    /// the linter holds an initializer to sixty lines and ten intervals do not
-    /// fit beside the assembly they feed. It is otherwise the same code in the
-    /// same order — a hoist, not a reordering, which matters because
-    /// `liveActivities` and `reminders` are each shared by two consumers and
-    /// `graphProvider` by three.
+    /// the linter holds a function body to sixty lines and the construction
+    /// does not fit beside the assembly it feeds. It is otherwise the same
+    /// code in the same order — a hoist, not a reordering, which matters
+    /// because `liveActivities` and `reminders` are each shared by two
+    /// consumers and `graphProvider` by three.
     struct LaunchDependencies {
         let graphProvider: OverpassTrailGraphProvider
         let reminders: MovementReminderController?

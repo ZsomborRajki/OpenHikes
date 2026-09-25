@@ -216,11 +216,12 @@ runtime_id() {
 
 # Name to UDID, for watchOS.
 #
-# `Scripts/lib/simulator.sh` is deliberately not sourced here: its
-# `simulator_devices` filters the listing to `-- iOS --` sections, which is the
-# whole point of it — an iPhone and an Apple Watch can share a name and the UI
-# test runner must never resolve one to the other. This is the same function
-# with the other platform, and it keeps that guarantee by staying separate.
+# `Scripts/lib/simulator.sh` is sourced above for the companion phone only,
+# and deliberately not used here: its `simulator_devices` filters the listing
+# to `-- iOS --` sections, which is the whole point of it — an iPhone and an
+# Apple Watch can share a name and the UI test runner must never resolve one
+# to the other. This is the same function with the other platform, and it
+# keeps that guarantee by staying separate.
 watch_udid() {
     local wanted="$1" devices matches booted
     devices="$(xcrun simctl list devices available 2>/dev/null \

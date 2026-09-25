@@ -18,10 +18,9 @@
 //
 //  This is it, and the important word is *explicit*. A launch gets one only by
 //  asking for it by name — `--ui-test-community=<scenario>` — so nothing about
-//  the rule above changes: a hosted unit suite, a performance run and every UI
-//  scenario that does not name this still get `nil`, and no build of the app
-//  that a person could install can reach this file at all, because the whole
-//  of it is `#if DEBUG`.
+//  the rule above changes: a hosted unit suite and every UI scenario that does
+//  not name this still get `nil`, and no build of the app that a person could
+//  install can reach this file at all, because the whole of it is `#if DEBUG`.
 //
 //  ## What is faked, and what is not
 //
@@ -34,11 +33,11 @@
 //  untouched. A test that opens one of these hikes is testing the app.
 //
 //  The photographs are the part worth being careful about. They are generated
-//  rather than bundled — ``SeededPhotoFixture`` already draws incompressible
-//  ones for the performance suite — but at a fraction of that fixture's
-//  resolution, because these are encoded on every preview open rather than
-//  once per scenario, and what a functional test needs from a photograph is
-//  that it is a real file a real decode can read.
+//  rather than bundled — ``SeededPhotoFixture`` already draws incompressible,
+//  camera-sized ones — but at a fraction of that fixture's resolution, because
+//  these are encoded on every preview open rather than once per scenario, and
+//  what a functional test needs from a photograph is that it is a real file a
+//  real decode can read.
 //
 //  ## What the seeded hikes are shaped for
 //

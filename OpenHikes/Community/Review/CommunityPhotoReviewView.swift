@@ -19,9 +19,9 @@
 //  submission is judged against its own route; a contribution is judged
 //  against a trail it names, and the honest question is whether these pictures
 //  were taken on it. The map behind the sheet is what answers that — the pins
-//  go up through ``CommunityBrowser/previewPhotosLoaded(_:of:)``, exactly as
-//  they do for a hike under review, and a contribution whose pictures stand
-//  three valleys away is visible rather than described.
+//  go up through ``CommunityBrowser/previewPhotosLoaded(_:of:onOpen:)``,
+//  exactly as they do for a hike under review, and a contribution whose
+//  pictures stand three valleys away is visible rather than described.
 //
 //  No route goes with them, and that absence is deliberate rather than
 //  missing: this app does not fetch the target trail here. Drawing it would

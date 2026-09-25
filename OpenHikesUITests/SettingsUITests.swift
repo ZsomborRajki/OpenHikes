@@ -189,10 +189,10 @@ nonisolated final class SettingsUITests: XCTestCase {
     /// dismisses itself the moment the store answers. Neither may need it.
     ///
     /// Neither link is tapped. A `Link` hands the URL to Safari, which takes
-    /// the test out of the app for an assertion about a web page; that both
-    /// URLs are absolute and are two different pages is what
-    /// `MapSubscriptionTermsTests` pins, and the rows spend the same constants
-    /// the paywall and the share form do.
+    /// the test out of the app for an assertion about a web page. The rows
+    /// spend the same `MapPurchaseLinks` constants the paywall and the share
+    /// forms do; no suite pins the URLs themselves any more, since the one
+    /// that did went with the paywall's hand-built disclosure.
     @MainActor
     func testPrivacyPolicyIsReachableWithoutThePaywall() {
         for arguments in [[], ["--ui-test-entitled"]] {

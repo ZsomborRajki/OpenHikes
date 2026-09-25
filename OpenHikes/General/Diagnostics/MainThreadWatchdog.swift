@@ -51,11 +51,12 @@ nonisolated enum MainThreadWatchdog {
         /// How long the main thread took to answer, when that was longer than
         /// ``warnThreshold``. `nil` on a healthy cycle.
         ///
-        /// Carried even though the only thing checking cycles today counts
-        /// them, because a report of "a turn happened" that threw away what
+        /// Carried because a report of "a turn happened" that threw away what
         /// the turn found would be a strange thing to hand anyone, and this is
         /// the sole channel through which the stall figure is visible at all —
         /// the log is write-only from inside the process.
+        /// `MainThreadWatchdogTests` is the one observer today, and it reads
+        /// the figure.
         let stall: Duration?
     }
 

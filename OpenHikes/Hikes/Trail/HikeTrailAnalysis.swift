@@ -45,9 +45,6 @@ nonisolated enum HikeTrailAnalysis {
     ) async -> HikeTrailBreakdowns {
         assertOffMainThread("Hike trail analysis must stay off the main thread")
         guard route.count > 1 else { return .empty }
-        // Timed so an open that waits on Overpass can be told apart from one
-        // that measured a graph already on disk.
-
         guard let graph = await graph(covering: route, provider: provider) else { return .empty }
         let surface = try? await TrailBreakdownAnalyzer.breakdown(
             of: TrailSurface.self,
