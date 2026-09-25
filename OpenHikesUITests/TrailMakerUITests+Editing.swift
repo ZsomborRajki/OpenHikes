@@ -39,7 +39,8 @@ extension TrailMakerUITests {
             editRoute.waitForExistence(timeout: UITestTimeout.existence),
             "a trail drawn in the maker should offer Edit Route"
         )
-        editRoute.tap()
+        // In the list that closes the card, below the fold.
+        scrollToTap(editRoute, in: app, attempts: 12)
         XCTAssertTrue(
             app.navigationBars["Edit Trail"].waitForExistence(timeout: UITestTimeout.navigation),
             "Edit Route should open the maker on the trail"

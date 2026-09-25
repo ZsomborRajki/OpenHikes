@@ -92,6 +92,9 @@ struct HikePlaceSection: View {
                             if row.id != rows.last?.id { Divider() }
                         }
                     }
+                    // In the grouped card the statistics sit in, so a place
+                    // card files its rows one way throughout.
+                    .placeCardGroup()
                     .accessibilityIdentifier("hike-places")
                 }
                 if let search, canSearch {

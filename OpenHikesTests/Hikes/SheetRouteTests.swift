@@ -54,7 +54,7 @@ struct SheetRouteTests {
         #expect(path == [.recording])
     }
 
-    @Test("deleting a hike takes its pushed photo viewer, place screens and place form with it")
+    @Test("deleting a hike takes its pushed photo viewer, place screens, place form and route style with it")
     func photoRouteBelongsToItsHike() throws {
         let context = try Fixture.modelContext()
         let deleted = Fixture.hike(in: context, title: "Ridge Loop")
@@ -64,6 +64,7 @@ struct SheetRouteTests {
             .photo(deleted, UUID()),
             .place(deleted, UUID()),
             .newPlace(deleted, HikePlaceSpot(CLLocationCoordinate2D(latitude: 47.6, longitude: 12.9))),
+            .routeStyle(deleted),
             .hike(survivor),
         ]
 
@@ -190,10 +191,14 @@ struct SheetRouteTests {
             .place(hike, id),
             .photo(hike, id),
             .hike(hike),
+            .routeStyle(hike),
+            .routeStyle(hike),
             .recording,
             .trailDraft,
         ]
-        #expect(routes.count == 5)
+        #expect(routes.count == 6)
+        #expect(routes.contains(.routeStyle(hike)))
+        #expect(!routes.contains(.routeStyle(Fixture.hike(in: context))))
         #expect(routes.contains(.place(hike, id)))
         #expect(!routes.contains(.place(hike, UUID())))
     }

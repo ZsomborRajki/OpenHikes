@@ -53,6 +53,9 @@ enum SheetRoute: Hashable {
     /// route showing it. See ``HikePlaceView``.
     case place(Hike, UUID)
     case recording
+    /// How a hike's line is drawn — see ``RouteStyleView``. Pushed over the
+    /// hike's own screen, and popped with it when the hike is deleted.
+    case routeStyle(Hike)
     /// How far the hiker has walked, summed across the library — see
     /// ``LibraryTotalsView``. Carries nothing: it is worked out on open.
     case totals
@@ -88,6 +91,7 @@ enum SheetRoute: Hashable {
         case let .photo(hike, _): hike.id == hikeID
         case let .place(hike, _): hike.id == hikeID
         case let .newPlace(hike, _): hike.id == hikeID
+        case let .routeStyle(hike): hike.id == hikeID
         case let .walk(walk): walk.hikeID == hikeID
         // None of them shows a `Hike`, so none is popped by one being
         // deleted. A community preview — and the gallery over it — is about a
@@ -132,8 +136,8 @@ enum SheetRoute: Hashable {
     var isCommunityPreview: Bool {
         switch self {
         case .communityHike, .communityPhoto: true
-        case .hike, .newPlace, .pendingPhotos, .pendingSubmission, .photo, .place, .recording, .totals, .trailDraft,
-            .walk:
+        case .hike, .newPlace, .pendingPhotos, .pendingSubmission, .photo, .place, .recording, .routeStyle, .totals,
+            .trailDraft, .walk:
             false
         }
     }
@@ -145,7 +149,7 @@ enum SheetRoute: Hashable {
         switch self {
         case .communityPhoto, .photo: true
         case .communityHike, .hike, .newPlace, .pendingPhotos, .pendingSubmission, .place, .recording,
-            .totals, .trailDraft, .walk:
+            .routeStyle, .totals, .trailDraft, .walk:
             false
         }
     }
@@ -158,6 +162,7 @@ enum SheetRoute: Hashable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case let (.hike(left), .hike(right)): left == right
+        case let (.routeStyle(left), .routeStyle(right)): left == right
         case let (.photo(left, leftPhoto), .photo(right, rightPhoto)): left == right && leftPhoto == rightPhoto
         case let (.place(left, leftPlace), .place(right, rightPlace)): left == right && leftPlace == rightPlace
         case let (.newPlace(left, leftSpot), .newPlace(right, rightSpot)): left == right && leftSpot == rightSpot
@@ -191,6 +196,31 @@ enum SheetRoute: Hashable {
         case let .walk(walk):
             hasher.combine(3)
             hasher.combine(walk.persistentModelID)
+        case .communityHike, .communityPhoto, .pendingSubmission, .pendingPhotos:
+            hashCommunity(into: &hasher)
+        case .trailDraft:
+            hasher.combine(8)
+        case .totals:
+            hasher.combine(11)
+        case let .routeStyle(hike):
+            hasher.combine(12)
+            hasher.combine(hike)
+        case let .place(hike, placeID):
+            hasher.combine(9)
+            hasher.combine(hike)
+            hasher.combine(placeID)
+        case let .newPlace(hike, spot):
+            hasher.combine(10)
+            hasher.combine(hike)
+            hasher.combine(spot)
+        }
+    }
+
+    /// The four routes about the shared list, which hash by record names —
+    /// split from ``hash(into:)`` so that switch stays inside the complexity
+    /// limit.
+    private func hashCommunity(into hasher: inout Hasher) {
+        switch self {
         case let .communityHike(listing):
             hasher.combine(4)
             // The listing's record name alone, matching `==` above: the rest
@@ -211,18 +241,8 @@ enum SheetRoute: Hashable {
         case let .pendingPhotos(pending):
             hasher.combine(7)
             hasher.combine(pending.id)
-        case .trailDraft:
-            hasher.combine(8)
-        case .totals:
-            hasher.combine(11)
-        case let .place(hike, placeID):
-            hasher.combine(9)
-            hasher.combine(hike)
-            hasher.combine(placeID)
-        case let .newPlace(hike, spot):
-            hasher.combine(10)
-            hasher.combine(hike)
-            hasher.combine(spot)
+        case .hike, .newPlace, .photo, .place, .recording, .routeStyle, .totals, .trailDraft, .walk:
+            break
         }
     }
 }

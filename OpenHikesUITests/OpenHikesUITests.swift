@@ -152,7 +152,9 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         )
 
         openHikeDetail(in: app)
-        app.buttons["Rename hike"].tap()
+        // At the foot of the card now, with the rest of the things done to a
+        // hike rather than with it.
+        scrollToTap(app.buttons["Rename hike"], in: app, attempts: 12)
 
         let field = element("hike-title-field", in: app)
         XCTAssertTrue(
@@ -242,6 +244,7 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         )
 
         openHikeDetail(in: app)
+        openRouteStyle(in: app)
 
         let directional = element("route-pattern-directional", in: app)
         let dotted = element("route-pattern-dotted", in: app)

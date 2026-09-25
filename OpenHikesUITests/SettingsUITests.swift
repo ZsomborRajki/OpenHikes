@@ -38,7 +38,7 @@ nonisolated final class SettingsUITests: XCTestCase {
         app.buttons["Done"].tap()
 
         openHikeDetail(in: app)
-        scrollIntoView(element("route-width-slider", in: app), in: app)
+        scrollIntoView(element("route-style-row", in: app), in: app)
         XCTAssertFalse(
             element("offline-download-button", in: app).exists,
             "a provider that forbids bulk download must not offer the button"
@@ -70,7 +70,7 @@ nonisolated final class SettingsUITests: XCTestCase {
         app.buttons["Done"].tap()
 
         openHikeDetail(in: app)
-        scrollIntoView(element("route-width-slider", in: app), in: app)
+        scrollIntoView(element("route-style-row", in: app), in: app)
         XCTAssertFalse(
             element("offline-download-button", in: app).exists,
             "a map that fetches no tiles has nothing to download"

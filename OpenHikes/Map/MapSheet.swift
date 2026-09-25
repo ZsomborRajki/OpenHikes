@@ -341,6 +341,27 @@ struct MapSheet: View {
         .accessibilityIdentifier("settings-button")
     }
 
+    /// The four screens about the shared list rather than the library: a
+    /// stranger's hike, its gallery, and the reviewer's two queue rows.
+    ///
+    /// A switch of its own so the one above stays a list the linter allows —
+    /// it passed the complexity limit when *Route Style* joined it.
+    @ViewBuilder
+    private func communityDestination(for route: SheetRoute) -> some View {
+        switch route {
+        case let .communityHike(listing):
+            communityHikeDestination(listing)
+        case let .communityPhoto(listing, photos, startIndex):
+            communityPhotoDestination(listing, photos, startIndex: startIndex, route: route)
+        case let .pendingSubmission(pending):
+            pendingSubmissionDestination(pending)
+        case let .pendingPhotos(pending):
+            pendingPhotosDestination(pending)
+        case .hike, .newPlace, .photo, .place, .recording, .routeStyle, .totals, .trailDraft, .walk:
+            EmptyView()
+        }
+    }
+
     /// Somebody else's hike, or nothing at all on a launch that must not reach
     /// CloudKit — see ``OpenHikesModel/makeCommunityTransport()``.
     ///
@@ -491,14 +512,8 @@ struct MapSheet: View {
                 isSheetCompact: presentation.isCompact,
                 interaction: presentation.hikeInteraction(for: hike)
             )
-        case let .communityHike(listing):
-            communityHikeDestination(listing)
-        case let .communityPhoto(listing, photos, startIndex):
-            communityPhotoDestination(listing, photos, startIndex: startIndex, route: route)
-        case let .pendingSubmission(pending):
-            pendingSubmissionDestination(pending)
-        case let .pendingPhotos(pending):
-            pendingPhotosDestination(pending)
+        case .communityHike, .communityPhoto, .pendingSubmission, .pendingPhotos:
+            communityDestination(for: route)
         case let .place(hike, placeID):
             placeDestination(placeID, of: hike)
         case let .newPlace(hike, spot):
@@ -506,6 +521,7 @@ struct MapSheet: View {
         case .trailDraft: trailDraftDestination
         case .recording: recordingDestination
         case .totals: LibraryTotalsView(onOpenHike: openRecord)
+        case let .routeStyle(hike): RouteStyleView(hike: hike)
         case let .photo(hike, photoID):
             HikePhotoViewer(
                 hike: hike,
