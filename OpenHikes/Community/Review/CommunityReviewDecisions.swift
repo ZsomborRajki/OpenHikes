@@ -270,7 +270,7 @@ final class CommunityReviewDecisions<Subject: CommunityReviewSubject> {
             // waiting — the silence ``CommunityHikeView/load()`` keeps.
             return
         } catch {
-            phase = .failed(Self.failure(error))
+            phase = .failed(CommunityFailure(error))
         }
     }
 
@@ -318,7 +318,7 @@ final class CommunityReviewDecisions<Subject: CommunityReviewSubject> {
                 try await work()
             } catch {
                 isDeciding = false
-                decisionFailure = Self.failure(error)
+                decisionFailure = CommunityFailure(error)
                 // Both decisions and both outcomes pass through here, which is
                 // why the haptic is here rather than on the two buttons: a
                 // reviewer taps Publish and waits on a network round trip, and
@@ -358,9 +358,5 @@ final class CommunityReviewDecisions<Subject: CommunityReviewSubject> {
             try await keepOnly(subject.keptPhotos(at: keeping), staging)
         }
         return photos.count
-    }
-
-    private static func failure(_ error: any Error) -> CommunityFailure {
-        error as? CommunityFailure ?? .unavailable(error.localizedDescription)
     }
 }

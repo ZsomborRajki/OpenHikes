@@ -66,7 +66,7 @@ nonisolated struct HikePlaceDraft: Equatable, Sendable {
     var displayName: String {
         let typed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard typed.isEmpty else { return typed }
-        return symbol?.label ?? String(localized: "Place")
+        return TrailPlace.unnamedName(for: symbol)
     }
 
     /// The place as it would go onto the hike.

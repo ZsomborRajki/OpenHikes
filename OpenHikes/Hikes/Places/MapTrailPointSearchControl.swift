@@ -52,11 +52,10 @@ extension MapView {
     /// The maker's *Search this area*, in the same strip the Community tab's
     /// sits in.
     ///
-    /// The same geometry as ``addAreaSearchControl(to:_:alignedTo:)`` — the
-    /// top of the map rather than the sheet's edge, held clear of MapKit's
-    /// compass and of the weather badge by the same side clearances. Two views
-    /// occupying one strip is safe because only one of them is ever visible;
-    /// see this file's header for why that needed saying out loud.
+    /// The same geometry as ``addAreaSearchControl(to:_:alignedTo:)``, from
+    /// ``placeInAreaSearchStrip(_:on:alignedTo:)``. Two views occupying one
+    /// strip is safe because only one of them is ever visible; see this file's
+    /// header for why that needed saying out loud.
     func addTrailPointSearchControl(
         to mapView: MKMapView,
         _ coordinator: Coordinator,
@@ -67,39 +66,16 @@ extension MapView {
             onTap: { [trailMaker] in trailMaker.searchNearbyPlaces() },
             onDismissNotice: { [trailMaker] in trailMaker.finder.dismissNotice() }
         )
-        control.translatesAutoresizingMaskIntoConstraints = false
-        // Starts out of the way: the maker is not up on launch, and a pill
-        // that flashed in before its first visibility pass would be offering
-        // to search an area for a screen nobody has opened.
-        control.isHidden = true
-        control.alpha = 0
-        mapView.addSubview(control)
+        // The maker is not up on launch, and a pill that flashed in before its
+        // first visibility pass would be offering to search an area for a
+        // screen nobody has opened.
+        placeInAreaSearchStrip(control, on: mapView, alignedTo: guide)
         coordinator.trailPointSearchControl = control
-
-        NSLayoutConstraint.activate([
-            control.topAnchor.constraint(equalTo: guide.topAnchor, constant: Self.areaSearchTopInset),
-            control.leadingAnchor.constraint(
-                equalTo: guide.leadingAnchor,
-                constant: Self.areaSearchSideClearance
-            ),
-            control.trailingAnchor.constraint(
-                equalTo: guide.trailingAnchor,
-                constant: -Self.areaSearchSideClearance
-            ),
-        ])
-        // The map's own top edge, not the guide's, for the reason the other
-        // one says: the weather badge the caption is kept clear of is measured
-        // from the screen's edge and the map ignores its safe area.
-        control.keepNoticeClear(of: mapView.topAnchor)
     }
 }
 #endif
 
 extension MapView.Coordinator {
-    /// The same quarter-second the other pills arrive and leave on, because
-    /// they are the same control in the same place.
-    private static let trailPointSearchFadeDuration: TimeInterval = 0.25
-
     /// Observes whether the maker is up, whether a search is out, whether a
     /// tap would ask anything and what the last one said — and shows, hides,
     /// dims, spins or captions the pill.
@@ -169,30 +145,11 @@ extension MapView.Coordinator {
         // Cleared along with the pill, so a caption never outlives the maker
         // it is about.
         trailPointSearchControl.notice = visible ? finder.notice?.caption : nil
-        // Hidden as well as transparent, for the reason every other control
-        // over this map is: an invisible view still answers hit tests, and
-        // this one sits over the canvas the hiker is drawing on. Interaction
-        // goes at once rather than when the fade lands.
-        trailPointSearchControl.isUserInteractionEnabled = visible
-        if visible { trailPointSearchControl.isHidden = false }
-        guard animated else {
-            trailPointSearchControl.alpha = visible ? 1 : 0
-            trailPointSearchControl.isHidden = !visible
-            return
-        }
-        UIView.animate(withDuration: Self.trailPointSearchFadeDuration) {
-            trailPointSearchControl.alpha = visible ? 1 : 0
-        } completion: { [weak self] _ in
-            // Re-read rather than trusting the value this animation started
-            // with: opening and closing the maker quickly overlaps two fades,
-            // and a completion that hid the pill the next one had just brought
-            // back would leave a visible control answering no taps. The switch
-            // is re-read for the same reason: it withdraws the pill with the
-            // maker still up.
-            guard let self,
-                  trailDraftController.map({ $0.isEditing && $0.finder.filter.placesShown }) != true
-            else { return }
-            trailPointSearchControl.isHidden = true
+        // The switch is re-read along with the maker when a fade-out lands,
+        // because it withdraws the pill with the maker still up.
+        trailPointSearchControl.fadeMapControl(visible: visible, restingAlpha: 1, animated: animated) { [weak self] in
+            guard let self else { return false }
+            return trailDraftController.map { $0.isEditing && $0.finder.filter.placesShown } != true
         }
         #endif
     }

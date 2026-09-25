@@ -109,11 +109,11 @@ extension MapView.Coordinator {
         for annotation: TrailPlaceAnnotation,
         on mapView: MKMapView
     ) -> MKAnnotationView {
-        let identifier = TrailPlaceAnnotation.reuseIdentifier
-        let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
-            as? MKMarkerAnnotationView
-            ?? MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
-        view.annotation = annotation
+        let view = mapView.reusableView(
+            MKMarkerAnnotationView.self,
+            for: annotation,
+            reuseIdentifier: TrailPlaceAnnotation.reuseIdentifier
+        )
         #if os(iOS)
         view.glyphImage = UIImage(systemName: annotation.place.systemImageName)
         view.displayPriority = .required

@@ -38,7 +38,6 @@
 //  outlast the edit.
 //
 
-import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -47,19 +46,10 @@ import OpenHikesData
 ///
 /// A value rather than an actor: every caller is already inside
 /// ``CuratedTrailSource``'s isolation, which is where the serialisation this
-/// needs comes from, and an actor of its own would add a second hop to every
-/// read for nothing. Nothing here touches the main actor — see the repository
-/// instructions on disk work.
+/// needs comes from. How the directory behaves — expiry, the re-stamp on use,
+/// the trim — is ``OverpassFileStore``'s, and is the same for every
+/// OpenStreetMap cache this app keeps.
 nonisolated struct CuratedTrailStore: Sendable {
-    /// How long a stored route is trusted, in seconds.
-    ///
-    /// The thirty days ``OverpassTrailGraphProvider`` gives a walking graph,
-    /// for the same reason: this is OSM's own geometry, which moves when
-    /// somebody maps a re-route, not when the hiker walks. A day would throw
-    /// away the whole point; forever would leave a trail that has been
-    /// re-routed drawn along a path that is no longer there.
-    static let lifetime: TimeInterval = 30 * 24 * 60 * 60
-
     /// How many routes are kept on disk.
     ///
     /// Eight pages of results, against the memory cache's four. A route's line
@@ -81,90 +71,51 @@ nonisolated struct CuratedTrailStore: Sendable {
             .appendingPathComponent("CuratedTrails", isDirectory: true)
     }
 
-    /// One relation, and when it was downloaded.
-    private struct StoredTrail: Codable {
+    /// One relation, and when it was downloaded — the file format.
+    ///
+    /// Internal rather than private, and only because the compiler needs it:
+    /// a `private` type as the generic argument of ``files`` crashes Swift
+    /// 6.4's IRGen ("Global is external, but doesn't have external or weak
+    /// linkage") when the file is compiled in a batch with its neighbours.
+    nonisolated struct StoredTrail: OverpassFileEntry {
         let fetchedAt: Date
         let trail: CuratedTrail
+
+        var value: CuratedTrail { trail }
+
+        init(fetchedAt: Date, value: CuratedTrail) {
+            self.fetchedAt = fetchedAt
+            trail = value
+        }
     }
 
-    private let directory: URL
-    private let clock: @Sendable () -> Date
+    private let files: OverpassFileStore<StoredTrail>
 
     init(directory: URL, clock: @escaping @Sendable () -> Date) {
-        self.directory = directory
-        self.clock = clock
+        files = OverpassFileStore(directory: directory, maximumFiles: Self.maximumFiles, clock: clock)
     }
 }
 
-// MARK: - One relation at a time
-
 nonisolated extension CuratedTrailStore {
     /// The stored route for `relationID`, or `nil` for one that was never
-    /// stored or has expired.
-    ///
-    /// A hit re-stamps the file's modification date, which is what makes the
-    /// eviction below *least recently used* rather than least recently
-    /// written. Without it, the twenty-five routes a hiker keeps coming back
-    /// to would be the twenty-five oldest files in the directory, and the
-    /// first trim would take exactly those.
+    /// stored or has expired. A hit counts as a use — see
+    /// ``OverpassFileStore/value(named:)``.
     func trail(of relationID: Int64) -> CuratedTrail? {
-        let url = fileURL(for: relationID)
-        guard let data = try? Data(contentsOf: url),
-              let stored = try? JSONDecoder().decode(StoredTrail.self, from: data)
-        else { return nil }
-        guard clock().timeIntervalSince(stored.fetchedAt) <= Self.lifetime else {
-            // Expired rather than corrupt, and removed for the same reason a
-            // corrupt one is: it will never be read again, and leaving it
-            // costs a slot in the trim below that a usable route could have.
-            try? FileManager.default.removeItem(at: url)
-            return nil
-        }
-        touch(url)
-        return stored.trail
+        files.value(named: Self.fileName(for: relationID))
     }
 
     /// Writes `trail` down, replacing whatever was there.
-    ///
-    /// Failure is silent and that is deliberate: this is a cache, the caller
-    /// already has the route in hand, and a hiker looking at a list of trails
-    /// has nothing to do about a full disk. The next search asks Overpass
-    /// again, which is what would have happened anyway.
     func save(_ trail: CuratedTrail) {
         save([trail])
     }
 
-    /// Writes a whole geometry pass down, and trims **once**.
-    ///
-    /// The plural is the one that matters, because the caller is plural: a
-    /// page is twenty-five routes, and a per-route trim would enumerate a
-    /// directory of two hundred files twenty-five times for one search — on
-    /// the actor a hiker is waiting on. The trim only has to be right about
-    /// the ceiling after the batch, not during it.
+    /// Writes a whole geometry pass down, and trims once — a page is
+    /// twenty-five routes, and a trim per route would read a directory of two
+    /// hundred files twenty-five times for one search.
     func save(_ trails: [CuratedTrail]) {
-        guard !trails.isEmpty,
-              (try? FileManager.default.createDirectory(
-                  at: directory,
-                  withIntermediateDirectories: true
-              )) != nil
-        else { return }
-        let now = clock()
-        for trail in trails {
-            let stored = StoredTrail(fetchedAt: now, trail: trail)
-            guard let data = try? JSONEncoder().encode(stored) else { continue }
-            let url = fileURL(for: trail.relationID)
-            try? data.write(to: url, options: .atomic)
-            // Stamped from the same clock a read stamps with, so the eviction
-            // order below is one clock's opinion rather than a mixture of this
-            // one's and the file system's.
-            touch(url)
-        }
-        trim()
+        files.save(trails.map { (name: Self.fileName(for: $0.relationID), value: $0) })
     }
-}
 
-// MARK: - What is already here, near there
-
-nonisolated extension CuratedTrailStore {
     /// Stored routes whose pin stands within `area`, nearest first.
     ///
     /// **This is what a refused search draws, and it does not claim to be the
@@ -175,88 +126,14 @@ nonisolated extension CuratedTrailStore {
     /// the caption under *Search this area* that says so — see
     /// ``CuratedTrailOutage`` and ``MergedCommunityTransport``.
     ///
-    /// Every file is read, because nothing here indexes them. That is the cost
-    /// this cache deliberately does not pay up front — see the file header —
-    /// and it is paid on the one path where the alternative is a round trip
-    /// that is not going to be answered.
+    /// By the pin, which is the box's centre — the same point the row's
+    /// distance and the map's annotation use, so a trail the list offers is a
+    /// trail the map can show. See ``CuratedTrailQuery/centre(of:)``.
     func trails(near area: CommunitySearchArea, limit: Int) -> [CuratedTrail] {
-        guard limit > 0,
-              let files = try? FileManager.default.contentsOfDirectory(
-                  at: directory,
-                  includingPropertiesForKeys: nil,
-                  options: [.skipsHiddenFiles]
-              )
-        else { return [] }
-
-        let centre = area.coordinate
-        let within = files.compactMap { url -> (url: URL, trail: CuratedTrail, distance: Double)? in
-            guard let data = try? Data(contentsOf: url),
-                  let stored = try? JSONDecoder().decode(StoredTrail.self, from: data),
-                  clock().timeIntervalSince(stored.fetchedAt) <= Self.lifetime
-            else { return nil }
-            // By the pin, which is the box's centre — the same point the row's
-            // distance and the map's annotation use, so a trail the list
-            // offers is a trail the map can show. See
-            // ``CuratedTrailQuery/centre(of:)``.
-            let distance = RouteGeometry.distanceMeters(
-                from: centre,
-                to: stored.trail.coordinate
-            )
-            guard distance <= area.radiusMeters else { return nil }
-            return (url: url, trail: stored.trail, distance: distance)
-        }
-        // `min(count:)` rather than a full sort and a `prefix`, which is the
-        // same question ``trim()`` asks four lines down and is worth asking
-        // the same way: two hundred files are read to keep twenty-five.
-        let nearest = within.min(count: limit) { $0.distance < $1.distance }
-        // Re-stamped, for the reason ``trail(of:)`` re-stamps a hit. These are
-        // the rows the hiker is looking at, and without this they keep
-        // whatever age they had — so the fall-back a refused search draws is
-        // made of exactly the files the next ``trim()`` is most likely to
-        // take. The ones that were read and not offered are left alone: a file
-        // this opened and rejected for being in another valley is not a route
-        // anybody used.
-        for entry in nearest { touch(entry.url) }
-        return nearest.map(\.trail)
-    }
-}
-
-// MARK: - Keeping the directory bounded
-
-nonisolated private extension CuratedTrailStore {
-    func fileURL(for relationID: Int64) -> URL {
-        directory.appendingPathComponent("relation-\(relationID).json")
+        files.values(near: area, limit: limit, at: \.coordinate)
     }
 
-    /// Moves `url` to the newest end of the eviction order.
-    func touch(_ url: URL) {
-        try? FileManager.default.setAttributes(
-            [.modificationDate: clock()],
-            ofItemAtPath: url.path
-        )
-    }
-
-    /// Drops the least recently used files once there are more than
-    /// ``maximumFiles``.
-    ///
-    /// The same shape ``OverpassTrailGraphProvider/trimCache()`` uses, against
-    /// the same `.contentModificationDateKey` — and here that key means *last
-    /// read or written*, because ``trail(of:)`` re-stamps a hit.
-    func trim() {
-        guard let files = try? FileManager.default.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: [.contentModificationDateKey],
-            options: [.skipsHiddenFiles]
-        ), files.count > Self.maximumFiles else { return }
-        let dated = files.map { url in
-            let date = (try? url.resourceValues(
-                forKeys: [.contentModificationDateKey]
-            ).contentModificationDate) ?? .distantPast
-            return (url: url, date: date)
-        }
-        let doomed = dated.min(count: files.count - Self.maximumFiles) { $0.date < $1.date }
-        for (url, _) in doomed {
-            try? FileManager.default.removeItem(at: url)
-        }
+    private static func fileName(for relationID: Int64) -> String {
+        "relation-\(relationID)"
     }
 }

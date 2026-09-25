@@ -163,6 +163,28 @@ nonisolated public struct RouteCoordinate: Codable, Hashable, Sendable {
     public var isPauseBoundary: Bool { boundary == .paused }
 }
 
+nonisolated public extension [RouteCoordinate] {
+    /// The route as Core Location coordinates, for the tile work that plans
+    /// against them — throwing as soon as the task doing it is cancelled.
+    ///
+    /// A stored route can be tens of thousands of points, and the callers are
+    /// all work a hiker can walk away from: an offline download being planned,
+    /// the storage a hike's tiles take being measured, and auto-save's
+    /// corridor being built for a hike that is no longer selected. So the
+    /// conversion checks in every 255 points rather than finishing a route
+    /// nobody is waiting for. Outside a task `Task.isCancelled` is always
+    /// `false`, and a synchronous caller never sees the throw.
+    func clCoordinates() throws(CancellationError) -> [CLLocationCoordinate2D] {
+        var coordinates: [CLLocationCoordinate2D] = []
+        coordinates.reserveCapacity(count)
+        for (index, point) in enumerated() {
+            if index.isMultiple(of: 255), Task.isCancelled { throw CancellationError() }
+            coordinates.append(point.clCoordinate)
+        }
+        return coordinates
+    }
+}
+
 nonisolated public enum RouteGeometry {
     /// Mean earth radius, for the great-circle work below. Deliberately not
     /// the figure ``metersPerDegreeLatitude`` is rounded from: a distance
@@ -311,10 +333,24 @@ nonisolated public enum RouteGeometry {
     /// own, and one of those had drifted into a different arrangement of the
     /// same arithmetic — agreeing with this one everywhere either is called,
     /// which is exactly the kind of agreement that holds until it doesn't.
+    /// `CuratedTrailQuery` grew a fourth after those two were folded, in yet
+    /// another arrangement, and it was folded the same way.
     public static func normalizedLongitude(_ longitude: Double) -> Double {
         var normalized = longitude.truncatingRemainder(dividingBy: 360)
         if normalized >= 180 { normalized -= 360 }
         if normalized < -180 { normalized += 360 }
         return normalized
+    }
+
+    /// The smallest absolute angle between two compass bearings, 0…180°.
+    ///
+    /// The one copy on the phone: ``RouteProfile`` asks it whether a segment
+    /// runs the way the hiker is heading, and the recorder's fix policy asks
+    /// it whether the hiker has turned. The watch's `WatchRouteTracker` writes
+    /// its own inline, for the reason `WatchGeodesy` keeps its own geodesy —
+    /// see that file's header.
+    public static func bearingDifference(_ first: Double, _ second: Double) -> Double {
+        let delta = abs(first - second).truncatingRemainder(dividingBy: 360)
+        return delta > 180 ? 360 - delta : delta
     }
 }

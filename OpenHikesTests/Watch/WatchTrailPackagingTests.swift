@@ -139,30 +139,30 @@ struct WatchTrailPackagingTests {
         }
 
         @MainActor
-        static var longInput: WatchTrailPackaging.Input { input(route: longRoute) }
+        static var longInput: HikeRouteInput { input(route: longRoute) }
         @MainActor
-        static var shortInput: WatchTrailPackaging.Input { input(route: shortRoute) }
+        static var shortInput: HikeRouteInput { input(route: shortRoute) }
         @MainActor
-        static var sawtoothInput: WatchTrailPackaging.Input { input(route: sawtoothRoute) }
+        static var sawtoothInput: HikeRouteInput { input(route: sawtoothRoute) }
         @MainActor
-        static var flatlessInput: WatchTrailPackaging.Input { input(route: flatlessRoute) }
+        static var flatlessInput: HikeRouteInput { input(route: flatlessRoute) }
         @MainActor
-        static var singlePointInput: WatchTrailPackaging.Input {
+        static var singlePointInput: HikeRouteInput {
             input(route: [RouteCoordinate(latitude: baseLatitude, longitude: longitude)])
         }
 
         /// Built through a real `Hike`, because reading a model on the main
-        /// actor is what `Input` exists to be: a fixture that bypassed it
+        /// actor is what `HikeRouteInput` exists to be: a fixture that bypassed it
         /// would not exercise the seam.
         @MainActor
-        private static func input(route: [RouteCoordinate]) -> WatchTrailPackaging.Input {
+        private static func input(route: [RouteCoordinate]) -> HikeRouteInput {
             let profile = RouteProfile(route: route)
             let hike = Hike(
                 title: "Packaged",
                 distanceMeters: profile.distances.last ?? 0,
                 route: route
             )
-            return WatchTrailPackaging.Input(hike: hike)
+            return HikeRouteInput(hike: hike)
         }
     }
 }

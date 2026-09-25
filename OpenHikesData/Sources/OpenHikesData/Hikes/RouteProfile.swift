@@ -442,7 +442,7 @@ nonisolated extension RouteProfile {
 
         func runsWithTheHiker(_ candidate: NearestCandidate) -> Bool {
             guard let course else { return false }
-            return Self.bearingDifference(course, candidate.bearingDegrees) < Self.courseAgreementDegrees
+            return RouteGeometry.bearingDifference(course, candidate.bearingDegrees) < Self.courseAgreementDegrees
         }
 
         // Among every segment projection within `tieBreakToleranceMeters` of
@@ -555,12 +555,6 @@ nonisolated extension RouteProfile {
             }
         }
         return (tied.distanceAlongRoute, tied.offRouteMeters)
-    }
-
-    /// Smallest absolute angle between two compass bearings, 0…180°.
-    private static func bearingDifference(_ a: Double, _ b: Double) -> Double {
-        let delta = abs(a - b).truncatingRemainder(dividingBy: 360)
-        return delta > 180 ? 360 - delta : delta
     }
 
     /// Index of the value in an ascending array closest to `target`. O(log n).

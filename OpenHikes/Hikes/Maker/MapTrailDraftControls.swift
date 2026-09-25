@@ -22,8 +22,8 @@
 //  over: it has to sit at exactly the height the tracking button sits at,
 //  follow the sheet through ``MapView/Coordinator/applySheetTop(on:)`` without
 //  a SwiftUI pass in between, and fade exactly where the rest of that row
-//  fades. It shares ``MapPhotoControlsView/controlSize``, the glass container
-//  and ``MapView/Coordinator/applyCreditLineClearance()``.
+//  fades. It is built from ``MapGlassPill``, as the camera pill is, and shares
+//  ``MapView/Coordinator/applyCreditLineClearance()`` with it.
 //
 
 import Foundation
@@ -44,11 +44,6 @@ final class MapTrailDraftControlsView: UIView {
     /// the two the sheet's button drew before it moved here.
     static let recordSymbolName = "record.circle"
     static let recordingSymbolName = "stop.circle.fill"
-    private static let symbolPointSize: CGFloat = 17
-    /// The camera pill's figures, for the reason it gives: separate targets at
-    /// rest, one merged shape of glass.
-    private static let glassMergeSpacing: CGFloat = 10
-    private static let buttonSpacing: CGFloat = 4
 
     private let onDraw: () -> Void
     private let onRecord: () -> Void
@@ -86,7 +81,7 @@ final class MapTrailDraftControlsView: UIView {
         guard let recordButton, let recordGlass else { return }
         // The configuration's colour rather than the button's tint, which a
         // plain button on glass does not carry to its glyph.
-        recordButton.configuration?.image = Self.symbol(
+        recordButton.configuration?.image = MapGlassPill.symbol(
             isRecording ? Self.recordingSymbolName : Self.recordSymbolName
         )
         recordButton.configuration?.baseForegroundColor = isRecording ? .white : .systemRed
@@ -99,16 +94,7 @@ final class MapTrailDraftControlsView: UIView {
     }
 
     private func buildHierarchy() {
-        let container = UIVisualEffectView(
-            effect: {
-                let effect = UIGlassContainerEffect()
-                effect.spacing = Self.glassMergeSpacing
-                return effect
-            }()
-        )
-        container.translatesAutoresizingMaskIntoConstraints = false
-
-        let (drawGlass, _) = glassButton(
+        let draw = MapGlassPill.button(
             symbol: Self.symbolName,
             label: String(localized: "Make a trail"),
             identifier: "map-trail-maker-button",
@@ -116,80 +102,16 @@ final class MapTrailDraftControlsView: UIView {
         )
         // The same identifier the sheet's button carried, so everything that
         // starts a recording by it still finds one.
-        let (recordCapsule, recordControl) = glassButton(
+        let record = MapGlassPill.button(
             symbol: Self.recordSymbolName,
             label: String(localized: "Record a hike"),
             identifier: "record-hike-button",
             action: onRecord
         )
-        recordGlass = recordCapsule
-        recordButton = recordControl
+        recordGlass = record.glass
+        recordButton = record.button
 
-        let stack = UIStackView(arrangedSubviews: [drawGlass, recordCapsule])
-        stack.axis = .vertical
-        stack.spacing = Self.buttonSpacing
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        addSubview(container)
-        container.contentView.addSubview(stack)
-
-        NSLayoutConstraint.activate([
-            container.leadingAnchor.constraint(equalTo: leadingAnchor),
-            container.trailingAnchor.constraint(equalTo: trailingAnchor),
-            container.topAnchor.constraint(equalTo: topAnchor),
-            container.bottomAnchor.constraint(equalTo: bottomAnchor),
-            stack.leadingAnchor.constraint(equalTo: container.contentView.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: container.contentView.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: container.contentView.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: container.contentView.bottomAnchor),
-        ])
-    }
-
-    private static func symbol(_ name: String) -> UIImage? {
-        UIImage(
-            systemName: name,
-            withConfiguration: UIImage.SymbolConfiguration(
-                pointSize: symbolPointSize,
-                weight: .medium
-            )
-        )
-    }
-
-    /// One glass capsule with a glyph-only button inside it, sized to
-    /// ``AccessibilityMetrics/minimumTapTarget`` rather than to its symbol and
-    /// carrying a spoken name of its own — a glyph is not a label, and
-    /// `performAccessibilityAudit` measures both.
-    private func glassButton(
-        symbol: String,
-        label: String,
-        identifier: String,
-        action: @escaping () -> Void
-    ) -> (UIVisualEffectView, UIButton) {
-        var configuration = UIButton.Configuration.plain()
-        configuration.image = Self.symbol(symbol)
-        let button = UIButton(
-            configuration: configuration,
-            primaryAction: UIAction { _ in action() }
-        )
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.accessibilityLabel = label
-        button.accessibilityIdentifier = identifier
-
-        let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
-        glass.translatesAutoresizingMaskIntoConstraints = false
-        glass.cornerConfiguration = .capsule()
-        glass.contentView.addSubview(button)
-
-        let size = MapPhotoControlsView.controlSize
-        NSLayoutConstraint.activate([
-            glass.widthAnchor.constraint(equalToConstant: size),
-            glass.heightAnchor.constraint(equalToConstant: size),
-            button.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor),
-            button.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor),
-            button.topAnchor.constraint(equalTo: glass.contentView.topAnchor),
-            button.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor),
-        ])
-        return (glass, button)
+        MapGlassPill.install([draw.glass, record.glass], in: self)
     }
 }
 #endif
@@ -213,7 +135,8 @@ extension MapView {
     /// makes sharing the slot safe rather than merely tidy.
     ///
     /// Sharing the *constraints* is not possible, because a constraint belongs
-    /// to one view, so the pair is built again here against the same anchors.
+    /// to one view, so ``placeInCreditLineSlot(_:on:_:alignedTo:)`` builds this
+    /// pill a pair of its own against the same anchors.
     /// ``MapView/Coordinator/applyCreditLineClearance()`` activates whichever
     /// of each pair the current provider calls for.
     func addTrailDraftControls(
@@ -225,42 +148,23 @@ extension MapView {
             onDraw: { [trailMaker] in trailMaker.requestOpen() },
             onRecord: { [recordingEntry] in recordingEntry.requestRecording() }
         )
-        controls.translatesAutoresizingMaskIntoConstraints = false
         // Starts out of the way, for the reason the camera pill does:
         // `observeTrailDraftControls` decides on its first pass whether there
         // is anything to offer, and a pill that flashed in before it answered
         // would be visible over a screen that is already pushed.
-        controls.isHidden = true
-        controls.alpha = 0
-        mapView.addSubview(controls)
+        coordinator.trailDraftClearance = placeInCreditLineSlot(
+            controls,
+            on: mapView,
+            coordinator,
+            alignedTo: guide
+        )
         coordinator.trailDraftControls = controls
-
-        guard let attribution = coordinator.attributionView else { return }
-        coordinator.trailDraftAboveCreditLine = controls.bottomAnchor.constraint(
-            equalTo: attribution.topAnchor,
-            constant: -Self.creditLineSpacing
-        )
-        coordinator.trailDraftWithoutCreditLine = controls.bottomAnchor.constraint(
-            equalTo: attribution.bottomAnchor
-        )
-
-        NSLayoutConstraint.activate([
-            controls.leadingAnchor.constraint(
-                equalTo: guide.leadingAnchor,
-                constant: Self.controlInset
-            ),
-        ])
         coordinator.applyCreditLineClearance()
     }
 }
 #endif
 
 extension MapView.Coordinator {
-    /// The same fade the camera pill arrives and leaves on, because the two
-    /// take turns in one slot and a different duration would read as the slot
-    /// itself twitching.
-    private static let trailDraftControlsFadeDuration: TimeInterval = 0.25
-
     /// Observes whether a trail can be made right now and shows or hides the
     /// pill, then re-registers — the same imperative arrangement
     /// ``observePhotoControls(_:)`` uses, so navigating between screens never
@@ -298,28 +202,15 @@ extension MapView.Coordinator {
         #if os(iOS)
         guard let trailDraftControls else { return }
         let visible = trailDraftController?.isAvailable == true
-        // Hidden as well as transparent, for the reason the camera pill is: a
-        // control that is invisible but still in the hierarchy answers hit
-        // tests, and this one sits over the map the hiker is panning.
-        // Interaction goes at once rather than when the fade lands.
-        trailDraftControls.isUserInteractionEnabled = visible
-        if visible { trailDraftControls.isHidden = false }
-        let target = visible ? photoControlsSheetAlpha : 0
-        guard animated else {
-            trailDraftControls.alpha = target
-            trailDraftControls.isHidden = !visible
-            return
-        }
-        UIView.animate(withDuration: Self.trailDraftControlsFadeDuration) {
-            trailDraftControls.alpha = target
-        } completion: { [weak self] _ in
-            // Re-read rather than trusting the value this animation started
-            // with: a push and an immediate pop overlap, and a completion that
-            // hid a pill the *next* animation had just brought back would
-            // leave a visible control answering no taps.
-            guard let self,
-                  trailDraftController?.isAvailable != true else { return }
-            trailDraftControls.isHidden = true
+        // The camera pill's resting opacity, since the two share a slot and
+        // therefore share the sheet's fade.
+        trailDraftControls.fadeMapControl(
+            visible: visible,
+            restingAlpha: photoControlsSheetAlpha,
+            animated: animated
+        ) { [weak self] in
+            guard let self else { return false }
+            return trailDraftController?.isAvailable != true
         }
         #endif
     }

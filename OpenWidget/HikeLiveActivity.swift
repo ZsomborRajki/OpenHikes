@@ -108,23 +108,17 @@ struct HikeLiveActivity: Widget {
     /// The clock for a recording, the distance left for a follow, and nothing
     /// at all for a hiker who has lost the trail — an empty region collapses,
     /// which is the right answer rather than a dash.
+    ///
+    /// The frame goes on only when there is a figure, as it did when each
+    /// case framed itself, so the empty case is still the bare nothing the
+    /// region collapses around.
     @ViewBuilder
     private func expandedTrailing(
         _ presentation: HikeActivityPresentation
     ) -> some View {
-        switch presentation.secondaryFigure {
-        case .elapsed:
-            HikeActivityElapsed(presentation: presentation)
+        if presentation.secondaryFigure != nil {
+            HikeActivitySecondaryFigure(presentation: presentation)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-        case let .figure(value, caption):
-            HikeActivityFigure(
-                value: value,
-                caption: caption,
-                alignment: .trailing
-            )
-            .frame(maxWidth: .infinity, alignment: .trailing)
-        case nil:
-            EmptyView()
         }
     }
 

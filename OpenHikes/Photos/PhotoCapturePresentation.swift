@@ -137,11 +137,7 @@ private struct PhotoCaptureAlerts: ViewModifier {
     func body(content: Content) -> some View {
         content
             .alert("Camera Access Off", isPresented: $state.cameraAccessDenied) {
-                #if os(iOS)
-                if let settings = URL(string: UIApplication.openSettingsURLString) {
-                    Link("Open Settings", destination: settings)
-                }
-                #endif
+                OpenSettingsLink.link
                 Button("Not Now", role: .cancel) { /* dismiss */ }
             } message: {
                 Text(

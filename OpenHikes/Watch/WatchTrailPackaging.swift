@@ -23,7 +23,8 @@
 //  watch asking for a trail must not cost the hiker a frame on the phone they
 //  are holding. The same shape `HikeImport.stored` and
 //  `BackgroundTrailTracker.buildSnapshotOffMain` use: values are read off the
-//  model on the main actor, and only values cross.
+//  model on the main actor, and only values cross — ``HikeRouteInput``, the
+//  same one the widget's snapshot starts from.
 //
 
 import Foundation
@@ -31,38 +32,13 @@ import OpenHikesData
 import OpenHikesShared
 
 nonisolated enum WatchTrailPackaging {
-    /// What a hike looks like once it is off the main actor.
-    ///
-    /// A `Hike` is a `@Model` and cannot cross an isolation boundary, so this
-    /// is read from one on the main actor and is what the packaging works
-    /// from — the same seam `BackgroundTrailTracker.SnapshotInput` is.
-    struct Input: Sendable {
-        let hikeID: UUID
-        let title: String
-        let tintHex: String
-        let totalDistanceMeters: Double
-        let route: [RouteCoordinate]
-
-        @MainActor
-        init(hike: Hike) {
-            hikeID = hike.id
-            // The name the hiker has seen, resolved here so nothing
-            // downstream has to know a custom name exists — the same
-            // resolution ``SharedHikeSummary`` promises.
-            title = hike.displayTitle
-            tintHex = hike.tintHex
-            totalDistanceMeters = hike.distanceMeters
-            route = hike.route
-        }
-    }
-
     /// The package, or `nil` for a hike with no line to send.
     ///
     /// A single-point route is a place rather than a trail, and every consumer
     /// on the watch wants a line: see ``WatchTrailPackage/isDrawable``. Sent
     /// anyway it would cost a transfer and draw nothing.
     @concurrent
-    static func package(from input: Input) async -> WatchTrailPackage? {
+    static func package(from input: HikeRouteInput) async -> WatchTrailPackage? {
         assertOffMainThread("Packaging a route for the watch must stay off the main thread")
         guard input.route.count > 1 else { return nil }
         // The same stride the widget's polyline uses, taken as *indices* so a

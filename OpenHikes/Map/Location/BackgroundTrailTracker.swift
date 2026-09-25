@@ -330,7 +330,7 @@ final class BackgroundTrailTracker: NSObject {
             }
             return
         }
-        let input = SnapshotInput(hike: hike)
+        let input = HikeRouteInput(hike: hike)
         selectionPublishTask = Task { [weak self] in
             defer { self?.finishSelectionPublish(revision: revision) }
             guard !Task.isCancelled else { return }
@@ -465,7 +465,7 @@ final class BackgroundTrailTracker: NSObject {
         // Values, taken here because a `Hike` belongs to its context and
         // cannot leave the main actor. Everything the write path does with
         // them happens off it.
-        let input = SnapshotInput(hike: hike)
+        let input = HikeRouteInput(hike: hike)
         guard isOnRoute, let match, let coordinate = profile.coordinate(atDistance: match.distanceAlongRoute) else {
             updateStoredLiveFix(nil, input: input, elevation: profile.elevation, walk: walk)
             return
@@ -877,7 +877,7 @@ extension BackgroundTrailTracker {
     /// hiker kept to the same on/off-route status.
     private func updateStoredLiveFix(
         _ fix: SharedTrailSnapshot.LiveFix?,
-        input: SnapshotInput,
+        input: HikeRouteInput,
         elevation: RouteElevationSummary,
         walk: SharedTrailSnapshot.Walk?
     ) {

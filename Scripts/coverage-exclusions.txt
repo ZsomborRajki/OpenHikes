@@ -127,6 +127,15 @@
 # form, entirely body code. What it decides is `HikePlaceDraft` and what it
 # files is `HikePlaceStagedPhoto`, each in a file and a suite of its own.
 #
+# Two arrived with the duplication sweep of 2026-09-25, and they are the
+# case the five from the earlier sweeps describe: body code folded out of
+# screens that were already listed. `PlaceSearchRow` is the search result row
+# `MapSheetHikes` and `TrailStopSearch` both drew; `DoneReorderingButton` is
+# the way out of reorder mode `MapSheetHikes` and `MapSheetCommunitySection`
+# both drew. The same sweep's other views stay measured, because the unit
+# suites reach them: `OpenSettingsLink`, and the UIKit `MapGlassPill` and
+# `MapControlFade` the map's pills are built and faded with.
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -164,6 +173,7 @@ OpenHikes/Hikes/Detail/HikeDetailView.swift
 OpenHikes/Hikes/Trail/HikeDifficultySection.swift
 OpenHikes/Hikes/Places/HikePlaceSection.swift
 OpenHikes/Hikes/Library/HikeRow.swift
+OpenHikes/Hikes/Library/DoneReorderingButton.swift
 OpenHikes/Hikes/Trail/HikeSurfaceSection.swift
 OpenHikes/Hikes/Walks/HikeWalkHistory.swift
 OpenHikes/Hikes/Detail/RouteLinePatternPicker.swift
@@ -180,6 +190,7 @@ OpenHikes/Hikes/Walks/WalkRow.swift
 OpenHikes/Hikes/Walks/WalkSummaryView.swift
 OpenHikes/Map/MapSheetHikes.swift
 OpenHikes/Map/MapSidePanel.swift
+OpenHikes/Map/Search/PlaceSearchRow.swift
 OpenHikes/Photos/HikePhotoSection.swift
 OpenHikes/Photos/HikePhotoViewer.swift
 OpenHikes/Photos/PhotoDiscoverySheet.swift

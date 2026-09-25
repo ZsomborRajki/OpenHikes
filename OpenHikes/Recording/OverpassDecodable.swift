@@ -44,7 +44,7 @@ extension OverpassTrailGraphProvider {
         }
     }
 
-    struct OverpassResponse: Decodable {
+    nonisolated struct OverpassResponse: OverpassAnswer {
         let elements: [OverpassElement]
         /// What the server has to say about a query it did not finish — see
         /// ``OverpassRequest/abort(_:)``. Read by ``decodeGraph(from:)``,

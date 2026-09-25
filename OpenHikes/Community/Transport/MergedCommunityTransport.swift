@@ -509,7 +509,7 @@ nonisolated private extension MergedCommunityTransport {
                     "Published hikes unavailable: \(error.localizedDescription, privacy: .public)"
                 )
             }
-            return ([], error as? CommunityFailure ?? .unavailable(error.localizedDescription))
+            return ([], CommunityFailure(error))
         }
     }
 

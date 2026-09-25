@@ -328,15 +328,9 @@ private extension MapSheetHikes {
                 // The way out of reorder mode, and the only one: while it is
                 // on, a row's tap belongs to the list rather than to the hike,
                 // so a hiker who cannot leave cannot open anything either.
-                Button {
-                    withAnimation { editMode = .inactive }
-                } label: {
-                    Label("Done Reordering", systemImage: "checkmark")
-                        .font(.footnote.weight(.semibold))
+                DoneReorderingButton(identifier: "hike-order-done-button") {
+                    editMode = .inactive
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.tint)
-                .accessibilityIdentifier("hike-order-done-button")
             } else {
                 sortMenu
             }
@@ -669,17 +663,12 @@ private extension MapSheetHikes {
                 Button {
                     onSubmitQuery()
                 } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                            .accessibilityHidden(true)
-                        Text("Search Maps for “\(searchText)”")
-                            .foregroundStyle(.primary)
-                        Spacer(minLength: 0)
-                    }
-                    .contentShape(.rect)
-                    .accessibilityElement(children: .combine)
+                    PlaceSearchRow(
+                        systemImage: "magnifyingglass",
+                        title: String(localized: "Search Maps for “\(searchText)”"),
+                        subtitle: "",
+                        glyphFont: .title3
+                    )
                     .accessibilityIdentifier("map-search-fallback")
                 }
                 .buttonStyle(.plain)
@@ -723,23 +712,12 @@ private extension MapSheetHikes {
     }
 
     func suggestionRow(for suggestion: MKLocalSearchCompletion) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "mappin.circle.fill")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(suggestion.title).foregroundStyle(.primary)
-                if !suggestion.subtitle.isEmpty {
-                    Text(suggestion.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .contentShape(.rect)
-        .accessibilityElement(children: .combine)
+        PlaceSearchRow(
+            systemImage: "mappin.circle.fill",
+            title: suggestion.title,
+            subtitle: suggestion.subtitle,
+            glyphFont: .title3
+        )
     }
 }
 

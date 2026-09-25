@@ -2,8 +2,8 @@
 //  CommunityFailureSections.swift
 //  OpenHikes
 //
-//  The two ways a community screen says a request failed, each of which was
-//  written twice.
+//  The three ways a community screen says a request failed, each of which was
+//  written more than once.
 //
 //  ``CommunityRetryableFailureSection`` is what a screen shows when the
 //  failure is *all* there is — the load that would have filled it never
@@ -16,6 +16,10 @@
 //  not decoration. One replaces a screen and the other annotates one, and
 //  merging them would mean picking a spacing and a colour for both — which is
 //  a choice about how a failure reads, not about how it is spelled.
+//
+//  ``SwiftUI/View/communityFailureAlert(_:failure:)`` is the third: an action
+//  somebody tapped and is waiting on — a take-down, a review decision — that
+//  came back refused, with nothing left on screen to hang a notice under.
 //
 //  What varies between the two uses of each is the accessibility identifier,
 //  so that is what they take. The automation names every screen separately
@@ -71,6 +75,29 @@ struct CommunityFailureNotice: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier(identifier)
+        }
+    }
+}
+
+extension View {
+    /// An alert for an action that failed, titled for what was being done and
+    /// saying why — the failure's own suggestion when it has one, which is the
+    /// sentence that tells a hiker what to do next.
+    ///
+    /// Presented while `failure` holds a value and cleared when dismissed, so
+    /// the next failure can present again. See ``Binding/isPresent()``.
+    func communityFailureAlert(
+        _ title: LocalizedStringKey,
+        failure binding: Binding<CommunityFailure?>
+    ) -> some View {
+        alert(
+            title,
+            isPresented: binding.isPresent(),
+            presenting: binding.wrappedValue
+        ) { _ in
+            Button("OK", role: .cancel) { binding.wrappedValue = nil }
+        } message: { failure in
+            Text(failure.recoverySuggestion ?? failure.localizedDescription)
         }
     }
 }

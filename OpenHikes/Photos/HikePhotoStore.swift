@@ -325,22 +325,12 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
         into directory: URL
     ) -> URL? {
         assertOffMainThread("Photo export must stay off the main thread")
-        guard let source = CGImageSourceCreateWithURL(url(for: photo) as CFURL, nil),
-              let image = CGImageSourceCreateThumbnailAtIndex(
-                  source,
-                  0,
-                  [
-                      kCGImageSourceCreateThumbnailFromImageAlways: true,
-                      // The orientation is baked into the pixels here for the
-                      // same reason ``encode(_:)`` bakes it in: the tag is
-                      // honoured by everything reading through ImageIO and by
-                      // nothing reading the raw buffer, and this copy is going
-                      // to a reader this app will never see.
-                      kCGImageSourceCreateThumbnailWithTransform: true,
-                      kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-                  ] as CFDictionary
-              )
-        else {
+        // The orientation is baked into the pixels by the downsample, which is
+        // what this copy needs for the same reason ``encode(_:)`` bakes it in:
+        // the tag is honoured by everything reading through ImageIO and by
+        // nothing reading the raw buffer, and this copy is going to a reader
+        // this app will never see.
+        guard let image = PhotoDownsampling.image(at: url(for: photo), maxPixelSize: maxPixelSize) else {
             Self.logger.error("Could not read a photo to share it.")
             return nil
         }
@@ -534,26 +524,9 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
     }
 
     /// Decodes at most `maxPixelSize` on the longest edge, with the file's
-    /// orientation applied.
-    ///
-    /// `CGImageSourceCreateThumbnailAtIndex` rather than decoding and scaling:
-    /// it never materialises the full-size bitmap, which for a capture is the
-    /// difference between tens of megabytes and one. `WithTransform` is what
-    /// makes a portrait photo come back portrait, so nothing above this has to
-    /// carry an orientation.
+    /// orientation applied — see ``PhotoDownsampling/image(at:maxPixelSize:)``.
     private static func decode(_ url: URL, maxPixelSize: Int) -> PhotoImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-        ]
-        guard let image = CGImageSourceCreateThumbnailAtIndex(
-            source,
-            0,
-            options as CFDictionary
-        ) else { return nil }
+        guard let image = PhotoDownsampling.image(at: url, maxPixelSize: maxPixelSize) else { return nil }
         #if canImport(UIKit)
         return UIImage(cgImage: image)
         #elseif canImport(AppKit)

@@ -205,7 +205,7 @@ nonisolated enum RecordingFixPolicy {
         guard let previousCourse = previous.course,
               let nextCourse = LocationFixPolicy.course(of: location)
         else { return false }
-        return angularDifference(previousCourse, nextCourse) > bearingChangeDegrees
+        return RouteGeometry.bearingDifference(previousCourse, nextCourse) > bearingChangeDegrees
     }
 
     private static func reportedSpeedSupports(
@@ -215,10 +215,5 @@ nonisolated enum RecordingFixPolicy {
         guard reportedSpeed >= 0 else { return false }
         let tolerance = max(speedToleranceBase, impliedSpeed * speedToleranceFraction)
         return abs(reportedSpeed - impliedSpeed) <= tolerance
-    }
-
-    private static func angularDifference(_ lhs: Double, _ rhs: Double) -> Double {
-        let difference = abs(lhs - rhs).truncatingRemainder(dividingBy: 360)
-        return min(difference, 360 - difference)
     }
 }

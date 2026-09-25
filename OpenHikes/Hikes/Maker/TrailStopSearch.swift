@@ -167,22 +167,11 @@ struct TrailStopSearchSheet: View {
     }
 
     private func row(for suggestion: MKLocalSearchCompletion) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "mappin.circle.fill")
-                .font(.title2)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(suggestion.title).foregroundStyle(.primary)
-                // The address, which is the whole reason this list is the
-                // completer's rather than a list of bare names.
-                if !suggestion.subtitle.isEmpty {
-                    Text(suggestion.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer(minLength: 0)
+        PlaceSearchRow(
+            systemImage: "mappin.circle.fill",
+            title: suggestion.title,
+            subtitle: suggestion.subtitle
+        ) {
             if run.resolving == suggestion {
                 ProgressView()
                     #if os(iOS)
@@ -190,10 +179,6 @@ struct TrailStopSearchSheet: View {
                     #endif
             }
         }
-        .contentShape(.rect)
-        // One element rather than three, the rule every composite row here
-        // follows — see ``HikeRow``.
-        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder private var failureRow: some View {
@@ -270,27 +255,24 @@ private struct TrailStopRecentsSection: View {
         // Said, rather than waited on for ever: a refusal is the one state
         // no fix is coming from — see ``LocationManager/isAccessDenied``.
         let isDenied = locationManager?.isAccessDenied == true
+        let status = if hasFix {
+            ""
+        } else if isDenied {
+            String(localized: "Location access is off")
+        } else {
+            String(localized: "Waiting for your location")
+        }
         return Button {
             guard let here = locationManager?.coordinate else { return }
             onPick(TrailStopSearchPick(name: "", coordinate: here))
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "location.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(hasFix ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("My Location").foregroundStyle(hasFix ? .primary : .secondary)
-                    if !hasFix {
-                        Text(isDenied ? "Location access is off" : "Waiting for your location")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .contentShape(.rect)
-            .accessibilityElement(children: .combine)
+            PlaceSearchRow(
+                systemImage: "location.circle.fill",
+                title: String(localized: "My Location"),
+                subtitle: status,
+                glyphStyle: hasFix ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary),
+                titleStyle: hasFix ? .primary : .secondary
+            )
         }
         .buttonStyle(.plain)
         .disabled(!hasFix)
@@ -300,24 +282,6 @@ private struct TrailStopRecentsSection: View {
     }
 
     private func row(for recent: TrailStopRecent) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "clock.fill")
-                .font(.title2)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(recent.name).foregroundStyle(.primary)
-                if !recent.subtitle.isEmpty {
-                    Text(recent.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .contentShape(.rect)
-        // One element rather than three, the rule every composite row here
-        // follows — see ``HikeRow``.
-        .accessibilityElement(children: .combine)
+        PlaceSearchRow(systemImage: "clock.fill", title: recent.name, subtitle: recent.subtitle)
     }
 }

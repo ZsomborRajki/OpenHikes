@@ -29,7 +29,7 @@ struct HikePlaceEditor: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Name", text: $name, prompt: Text(symbol?.label ?? String(localized: "Place")))
+                    TextField("Name", text: $name, prompt: Text(TrailPlace.unnamedName(for: symbol)))
                         .accessibilityIdentifier("hike-place-name-field")
                     TrailPlaceKindPicker(selection: $symbol)
                 }

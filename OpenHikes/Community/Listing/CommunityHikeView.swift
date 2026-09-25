@@ -392,15 +392,7 @@ struct CommunityHikeView: View {
             behind it are deleted for good. This can't be undone.
             """)
         }
-        .alert(
-            "Couldn't take it down",
-            isPresented: $takeDownFailure.isPresent(),
-            presenting: takeDownFailure
-        ) { _ in
-            Button("OK", role: .cancel) { takeDownFailure = nil }
-        } message: { failure in
-            Text(failure.recoverySuggestion ?? failure.localizedDescription)
-        }
+        .communityFailureAlert("Couldn't take it down", failure: $takeDownFailure)
         // Started here and *held*, rather than simply run by the modifier.
         // `.task`'s own cancellation is the right trigger and the wrong reach:
         // it cancels this closure, and the work that writes into the download
@@ -627,8 +619,7 @@ private extension CommunityHikeView {
                 try await transport.takeDown(listing)
             } catch {
                 isTakingDown = false
-                takeDownFailure = error as? CommunityFailure
-                    ?? .unavailable(error.localizedDescription)
+                takeDownFailure = CommunityFailure(error)
                 HapticMoment.outcomeFailed.play()
                 return
             }
@@ -1032,9 +1023,7 @@ private extension CommunityHikeView {
             // than an error nobody caused.
             return
         } catch {
-            phase = .failed(
-                error as? CommunityFailure ?? .unavailable(error.localizedDescription)
-            )
+            phase = .failed(CommunityFailure(error))
         }
     }
 

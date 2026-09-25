@@ -186,11 +186,7 @@ struct PhotoDiscoverySheet: View {
                 """
             )
         } actions: {
-            #if os(iOS)
-            if let settings = URL(string: UIApplication.openSettingsURLString) {
-                Link("Open Settings", destination: settings)
-            }
-            #endif
+            OpenSettingsLink.link
         }
         .accessibilityIdentifier("photo-discovery-denied")
     }

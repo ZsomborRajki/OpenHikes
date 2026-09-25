@@ -198,15 +198,9 @@ extension MapSheetHikes {
     @ViewBuilder var communityReorderBar: some View {
         if community.isReordering {
             HStack(spacing: 8) {
-                Button {
-                    withAnimation { community.isReordering = false }
-                } label: {
-                    Label("Done Reordering", systemImage: "checkmark")
-                        .font(.footnote.weight(.semibold))
+                DoneReorderingButton(identifier: "community-order-done-button") {
+                    community.isReordering = false
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.tint)
-                .accessibilityIdentifier("community-order-done-button")
                 Spacer(minLength: 0)
             }
             .padding(.horizontal)

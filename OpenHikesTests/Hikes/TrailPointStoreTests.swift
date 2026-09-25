@@ -156,7 +156,7 @@ extension TrailPointStoreTests {
         store.save([Self.found(1)])
         let area = Self.area(radiusMeters: Self.kilometre)
 
-        clock.advance(by: TrailPointStore.lifetime - Self.day)
+        clock.advance(by: OverpassCache.lifetime - Self.day)
         #expect(!store.places(near: area, limit: 10).isEmpty, "inside the horizon it is still trusted")
 
         clock.advance(by: Self.day * 2)

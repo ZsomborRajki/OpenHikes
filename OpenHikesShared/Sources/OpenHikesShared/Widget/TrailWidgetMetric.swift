@@ -18,7 +18,7 @@ import Synchronization
 /// the status line cannot be rounded differently from a distance in a chip.
 ///
 /// `public` because the app is now held to it as well: `HikeFormat.elevation`
-/// has to give the same answer ``elevation(meters:locale:)`` does, and
+/// has to give the same answer ``elevation(meters:locale:width:)`` does, and
 /// `ElevationFormatTests` asserts that against this type rather than against a
 /// restatement of the formula, which would only agree with itself. The app and
 /// the widget drew the same summit as "1,250 m" and "4,101 ft" for exactly as
@@ -48,9 +48,15 @@ public enum WidgetFormat {
     /// `measurementSystem`, so the height agrees with the distance beside it
     /// in every locale rather than in most of them. See that helper for the
     /// eighteen where the two answers part company.
+    ///
+    /// `width` is `.wide` for a sentence read aloud, which is the app's
+    /// `HikeFormat.spokenElevation`: a speech synthesiser handed "535 m" is
+    /// being asked to guess, and the unit it hears is chosen the same way the
+    /// one on the chart is.
     public static func elevation(
         meters: Double,
-        locale: Locale = .current
+        locale: Locale = .current,
+        width: Measurement<UnitLength>.FormatStyle.UnitWidth = .abbreviated
     ) -> String {
         let measurement = Measurement(value: meters, unit: UnitLength.meters)
         let converted = prefersImperialRoadUnits(in: locale)
@@ -61,7 +67,7 @@ public enum WidgetFormat {
             unit: converted.unit
         )
         .formatted(
-            .measurement(width: .abbreviated, usage: .asProvided)
+            .measurement(width: width, usage: .asProvided)
                 .locale(locale)
         )
     }
@@ -78,20 +84,28 @@ public enum WidgetFormat {
     }
 
     /// A time still to come, the way a planned route writes one — "1 hr,
-    /// 10 min" — rounded up to the minute and never "0 min". The app's
-    /// `HikeFormat.travelTime` is the same rule; a clock face like
+    /// 10 min" — rounded up to the minute and never "0 min": a leg too short
+    /// to time still takes a minute to walk. A clock face like
     /// ``duration(seconds:)`` would read as time already spent.
-    public static func timeLeft(seconds: TimeInterval) -> String {
+    ///
+    /// The app's `HikeFormat.travelTime` is this, rather than the same rule
+    /// written twice, and its spoken form is this at `.wide`.
+    public static func timeLeft(
+        seconds: TimeInterval,
+        width: Duration.UnitsFormatStyle.UnitWidth = .abbreviated
+    ) -> String {
         let minutes = max(1, (max(0, seconds) / 60).rounded(.up))
         return Duration.seconds(minutes * 60).formatted(
-            Duration.UnitsFormatStyle(allowedUnits: [.hours, .minutes], width: .abbreviated)
+            Duration.UnitsFormatStyle(allowedUnits: [.hours, .minutes], width: width)
         )
     }
 
-    /// Walking-pace style, to one decimal — "4.3 km/h", "2.7 mph".
+    /// Walking-pace style, to one decimal — "4.3 km/h", "2.7 mph". The app's
+    /// `HikeFormat.speed` is this, so the stats grid and the Lock Screen
+    /// cannot round one pace two ways again.
     ///
     /// `usage: .general`, and no explicit conversion before it, which is what
-    /// `HikeFormat.speed` was fixed to and this copy was not. Asking the
+    /// `HikeFormat.speed` was fixed to and this copy, when it was one, was not. Asking the
     /// locale's measurement system whether to convert is a different question
     /// from asking ICU what the region measures road speed in, and the two
     /// part company in the eighteen locales
@@ -129,7 +143,7 @@ public enum WidgetFormat {
     /// the conversion: 12.3456 °C formats as `54.22208°`, in a capsule laid
     /// out for three characters.
     ///
-    /// Lives here rather than in the app for the reason ``elevation(meters:locale:)``
+    /// Lives here rather than in the app for the reason ``elevation(meters:locale:width:)``
     /// does: the app computes the reading and the widget renders it, so the
     /// rounding and the unit choice have to be made once. `WeatherReadingFormat`
     /// in the app delegates to this, and its header describes what the two
