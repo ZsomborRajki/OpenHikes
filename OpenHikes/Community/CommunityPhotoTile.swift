@@ -83,7 +83,7 @@ struct CommunityPhotoTile: View {
     /// the caller is a SwiftUI `.task` on the main actor.
     @concurrent
     static func decode(_ url: URL, maxPixelSize: Int) async -> Image? {
-        guard let cgImage = thumbnail(url, maxPixelSize: maxPixelSize) else { return nil }
+        guard let cgImage = PhotoDownsampling.image(at: url, maxPixelSize: maxPixelSize) else { return nil }
         return Image(decorative: cgImage, scale: 1)
     }
 
@@ -98,28 +98,8 @@ struct CommunityPhotoTile: View {
     /// is how one copy ends up handling a rotated photograph differently.
     @concurrent
     static func decodeUIImage(_ url: URL, maxPixelSize: Int) async -> UIImage? {
-        guard let cgImage = thumbnail(url, maxPixelSize: maxPixelSize) else { return nil }
+        guard let cgImage = PhotoDownsampling.image(at: url, maxPixelSize: maxPixelSize) else { return nil }
         return UIImage(cgImage: cgImage)
     }
     #endif
-
-    /// The decode itself, bounded and orientation-corrected.
-    ///
-    /// Synchronous and `nonisolated`, called only from the two `@concurrent`
-    /// wrappers above: what makes this safe to run is being off the main
-    /// actor, and that is a promise the caller makes rather than something
-    /// this function can enforce.
-    nonisolated private static func thumbnail(_ url: URL, maxPixelSize: Int) -> CGImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        return CGImageSourceCreateThumbnailAtIndex(
-            source,
-            0,
-            [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceShouldCacheImmediately: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-            ] as CFDictionary
-        )
-    }
 }
