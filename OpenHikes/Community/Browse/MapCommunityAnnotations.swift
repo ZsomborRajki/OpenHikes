@@ -154,11 +154,11 @@ extension MapView.Coordinator {
         for annotation: CommunityMapAnnotation,
         on mapView: MKMapView
     ) -> MKAnnotationView {
-        let identifier = CommunityMapAnnotation.reuseIdentifier
-        let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
-            as? MKMarkerAnnotationView
-            ?? MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
-        view.annotation = annotation
+        let view = mapView.reusableView(
+            MKMarkerAnnotationView.self,
+            for: annotation,
+            reuseIdentifier: CommunityMapAnnotation.reuseIdentifier
+        )
         view.canShowCallout = true
         #if os(iOS)
         view.glyphImage = UIImage(systemName: "figure.hiking")

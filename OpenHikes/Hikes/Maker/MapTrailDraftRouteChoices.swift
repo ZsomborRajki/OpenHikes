@@ -252,10 +252,11 @@ extension MapView.Coordinator {
         on mapView: MKMapView
     ) -> MKAnnotationView {
         #if os(iOS)
-        let identifier = TrailDraftTravelTimeAnnotation.reuseIdentifier
-        let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
-            as? TrailDraftTravelTimeView
-            ?? TrailDraftTravelTimeView(annotation: annotation, reuseIdentifier: identifier)
+        let view = mapView.reusableView(
+            TrailDraftTravelTimeView.self,
+            for: annotation,
+            reuseIdentifier: TrailDraftTravelTimeAnnotation.reuseIdentifier
+        )
         view.show(annotation)
         return view
         #else

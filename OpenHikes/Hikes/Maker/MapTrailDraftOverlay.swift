@@ -604,10 +604,11 @@ extension MapView.Coordinator {
         for annotation: TrailDraftWaypointAnnotation,
         on mapView: MKMapView
     ) -> MKAnnotationView {
-        let identifier = TrailDraftWaypointAnnotation.reuseIdentifier
-        let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
-            ?? MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
-        view.annotation = annotation
+        let view = mapView.reusableView(
+            MKAnnotationView.self,
+            for: annotation,
+            reuseIdentifier: TrailDraftWaypointAnnotation.reuseIdentifier
+        )
         // No callout: a tap opens the place sheet on this stop instead — see
         // `MapTrailDraftSelection.swift`.
         view.canShowCallout = false

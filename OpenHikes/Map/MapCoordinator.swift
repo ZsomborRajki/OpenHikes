@@ -776,10 +776,7 @@ extension MapView.Coordinator {
         // ``makerAnnotationView(for:on:)``.
         if let maker = makerAnnotationView(for: annotation, on: mapView) { return maker }
 
-        let identifier = "routeHighlight"
-        let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
-            ?? MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
-        view.annotation = annotation
+        let view = mapView.reusableView(MKAnnotationView.self, for: annotation, reuseIdentifier: "routeHighlight")
         view.canShowCallout = false
 
         // A small filled dot in the route tint with a white ring.

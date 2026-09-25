@@ -262,11 +262,11 @@ extension MapView.Coordinator {
         for annotation: PhotoMapAnnotation,
         on mapView: MKMapView
     ) -> MKAnnotationView {
-        let identifier = PhotoMapAnnotation.reuseIdentifier
-        let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
-            as? MKMarkerAnnotationView
-            ?? MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
-        view.annotation = annotation
+        let view = mapView.reusableView(
+            MKMarkerAnnotationView.self,
+            for: annotation,
+            reuseIdentifier: PhotoMapAnnotation.reuseIdentifier
+        )
         view.canShowCallout = true
         view.glyphImage = Self.photoPinGlyph
         // A photo is a place the user asked to be shown; letting MapKit hide

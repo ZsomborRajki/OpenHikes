@@ -174,11 +174,11 @@ extension MapView.Coordinator {
         for annotation: TrailDraftDroppedPin,
         on mapView: MKMapView
     ) -> MKAnnotationView {
-        let identifier = TrailDraftDroppedPin.reuseIdentifier
-        let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
-            as? MKMarkerAnnotationView
-            ?? MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
-        view.annotation = annotation
+        let view = mapView.reusableView(
+            MKMarkerAnnotationView.self,
+            for: annotation,
+            reuseIdentifier: TrailDraftDroppedPin.reuseIdentifier
+        )
         view.canShowCallout = false
         view.animatesWhenAdded = true
         #if os(iOS)
