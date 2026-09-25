@@ -45,12 +45,7 @@ nonisolated extension OfflineTileDownloader {
         )
         // The one thing that runs before a download commits to any network
         // traffic.
-        var coordinates: [CLLocationCoordinate2D] = []
-        coordinates.reserveCapacity(route.count)
-        for (index, point) in route.enumerated() {
-            if index.isMultiple(of: 255), Task.isCancelled { throw CancellationError() }
-            coordinates.append(point.clCoordinate)
-        }
+        let coordinates = try route.clCoordinates()
         let result = tiles(
             covering: coordinates,
             minZoom: minZoom,

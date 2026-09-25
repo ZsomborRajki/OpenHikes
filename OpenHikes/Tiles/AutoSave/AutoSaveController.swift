@@ -302,12 +302,7 @@ final class AutoSaveController {
         assertOffMainThread(
             "Auto-save route preparation must stay off the main thread"
         )
-        var coordinates: [CLLocationCoordinate2D] = []
-        coordinates.reserveCapacity(route.count)
-        for (index, point) in route.enumerated() {
-            if index.isMultiple(of: 255), Task.isCancelled { throw CancellationError() }
-            coordinates.append(point.clCoordinate)
-        }
+        let coordinates = try route.clCoordinates()
         guard !Task.isCancelled else { throw CancellationError() }
         return TileCorridor(
             route: coordinates,
