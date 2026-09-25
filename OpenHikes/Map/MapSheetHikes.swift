@@ -663,17 +663,12 @@ private extension MapSheetHikes {
                 Button {
                     onSubmitQuery()
                 } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                            .accessibilityHidden(true)
-                        Text("Search Maps for “\(searchText)”")
-                            .foregroundStyle(.primary)
-                        Spacer(minLength: 0)
-                    }
-                    .contentShape(.rect)
-                    .accessibilityElement(children: .combine)
+                    PlaceSearchRow(
+                        systemImage: "magnifyingglass",
+                        title: String(localized: "Search Maps for “\(searchText)”"),
+                        subtitle: "",
+                        glyphFont: .title3
+                    )
                     .accessibilityIdentifier("map-search-fallback")
                 }
                 .buttonStyle(.plain)
