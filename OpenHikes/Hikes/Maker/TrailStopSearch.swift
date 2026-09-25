@@ -167,22 +167,11 @@ struct TrailStopSearchSheet: View {
     }
 
     private func row(for suggestion: MKLocalSearchCompletion) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "mappin.circle.fill")
-                .font(.title2)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(suggestion.title).foregroundStyle(.primary)
-                // The address, which is the whole reason this list is the
-                // completer's rather than a list of bare names.
-                if !suggestion.subtitle.isEmpty {
-                    Text(suggestion.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer(minLength: 0)
+        PlaceSearchRow(
+            systemImage: "mappin.circle.fill",
+            title: suggestion.title,
+            subtitle: suggestion.subtitle
+        ) {
             if run.resolving == suggestion {
                 ProgressView()
                     #if os(iOS)
@@ -190,10 +179,6 @@ struct TrailStopSearchSheet: View {
                     #endif
             }
         }
-        .contentShape(.rect)
-        // One element rather than three, the rule every composite row here
-        // follows — see ``HikeRow``.
-        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder private var failureRow: some View {
@@ -300,24 +285,6 @@ private struct TrailStopRecentsSection: View {
     }
 
     private func row(for recent: TrailStopRecent) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "clock.fill")
-                .font(.title2)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(recent.name).foregroundStyle(.primary)
-                if !recent.subtitle.isEmpty {
-                    Text(recent.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .contentShape(.rect)
-        // One element rather than three, the rule every composite row here
-        // follows — see ``HikeRow``.
-        .accessibilityElement(children: .combine)
+        PlaceSearchRow(systemImage: "clock.fill", title: recent.name, subtitle: recent.subtitle)
     }
 }
