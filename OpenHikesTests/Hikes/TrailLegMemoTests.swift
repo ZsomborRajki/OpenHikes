@@ -10,7 +10,7 @@
 //  retry — and **the memo is bounded**, or a long editing session is a drawing
 //  that grows in memory for as long as it is open.
 //
-//  ``TrailDraftHistoryTests`` asserts what this is for, from the draft's side.
+//  ``TrailDraftRoutingTests`` asserts what this is for, from the draft's side.
 //
 
 import Foundation

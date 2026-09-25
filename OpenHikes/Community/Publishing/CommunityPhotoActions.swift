@@ -31,8 +31,8 @@
 //
 //  It is also where `@Environment(\.dismiss)` belongs if it is ever needed:
 //  that property invalidates the view declaring it whether or not its body
-//  reads it, which is the reason ``CommunityPhotoMapButton`` next door is its
-//  own type on a screen that re-decodes a photograph on every pass.
+//  reads it, which is the reason ``ShowPhotoSpotButton`` is its own type on a
+//  screen that re-decodes a photograph on every pass.
 //
 //  ## What a block does here, and what it deliberately does not
 //

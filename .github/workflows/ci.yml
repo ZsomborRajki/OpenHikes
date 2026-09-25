@@ -154,7 +154,8 @@ jobs:
       # Each script is parsed by the interpreter its own shebang names.
       # ci_post_clone.sh is `#!/bin/sh` and the rest are bash; checking them all
       # with `sh -n` would reject bash process substitution that is legal where
-      # it is written (Scripts/run-ui-tests.sh:104, verified).
+      # it is written (the `done < <(list_tests)` in Scripts/run-ui-tests.sh,
+      # verified).
       - name: Check shell scripts parse
         run: |
           set -euo pipefail
@@ -196,8 +197,8 @@ jobs:
 
       # The same suite against genuinely optimised code. This is the only place
       # in the repository where a *test* runs against `-O` and whole-module
-      # optimisation: the two app-hosted bundles cannot, because 152 `@testable
-      # import`s need ENABLE_TESTABILITY, and the seams they reach for —
+      # optimisation: the two app-hosted bundles cannot, because their hundreds
+      # of `@testable import`s need ENABLE_TESTABILITY, and the seams they reach for —
       # `AppLaunchEnvironment.Configuration(arguments:)`, `TileLoadGate`'s
       # `TestState`, `MapEntitlement.resetForTesting()` — are inside `#if
       # DEBUG` and so do not exist in a Release build at all. Measured: 61
@@ -550,7 +551,7 @@ jobs:
 
       - uses: ./.github/actions/verify-xcode
 
-      # A private device rather than the image's shared `iPhone 17 Pro`, and
+      # A private device rather than the image's shared `iPhone 18 Pro`, and
       # deleted again below. TSan's shadow memory is the heaviest thing this
       # workflow asks a simulator to hold, and the failure it produces when the
       # machine cannot hold it is not a test failure — it is the app dying

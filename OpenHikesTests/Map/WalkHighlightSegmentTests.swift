@@ -7,7 +7,7 @@
 //
 //  Worth pinning down because what it produces is a claim about where somebody
 //  walked, drawn over the trail they were following. Coverage is kept as
-//  distances along the route — see ``WalkCoverage`` — and the route is a list
+//  distances along the route — see ``TrailWalkCoverage`` — and the route is a list
 //  of points at whatever spacing the GPS happened to produce, so the two ends
 //  of a covered range almost never land on a track point. A stretch that
 //  snapped to the nearest one instead would start and stop up to a track

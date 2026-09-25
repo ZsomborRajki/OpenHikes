@@ -6,7 +6,7 @@
 //  the app is built in the open as.
 //
 //  Its own file for a different reason than ``CloudSyncSection`` and
-//  ``BlockedWalkersSection`` have one — there is no live state here and
+//  ``BlockedHikersSection`` have one — there is no live state here and
 //  nothing that could rebuild ``SettingsView``. It is separate because the
 //  policy link is a submission requirement rather than a setting, and the
 //  reasoning for where it lives belongs beside it: the same argument

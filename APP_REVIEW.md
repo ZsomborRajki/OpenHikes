@@ -62,9 +62,10 @@ Paste-ready:
    Tracking. Turning it on is what raises the Always prompt; turning it off
    takes the feature down where it was turned off. Open a hike, follow the
    trail, and the widget and Live Activity carry that trail's progress.
-2. **The background mode / recording.** Record a hike from the sheet. The
-   location indicator is up for as long as the recording is, and goes when the
-   recording is saved or discarded.
+2. **The background mode / recording.** Tap the record button on the map —
+   the lower of the two buttons on its leading edge — which starts a
+   recording. The location indicator is up for as long as the recording is,
+   and goes when the recording is saved or discarded.
 3. **The watch.** Record a hike on the paired watch. The workout session is
    what holds it up with the wrist down, and it ends with the recording.
 
@@ -126,5 +127,5 @@ The strings a hiker reads on the watch say the same thing, and are in
   `OpenHikesWatch/Info.plist` carries the two background keys and the two
   Health purpose strings.
 - The switch is `SettingsKey.backgroundTrackingEnabled`, drawn by
-  `SettingsView.backgroundTrackingSection`, whose footer says the same thing
-  the prompt does.
+  `BackgroundTrackingSection`, whose footer says the same thing the prompt
+  does.
