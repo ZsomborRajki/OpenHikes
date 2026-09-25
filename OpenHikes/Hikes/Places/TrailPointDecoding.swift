@@ -9,7 +9,7 @@
 //  What it does share is the reading that is not optional — an aborted query
 //  answers with HTTP 200, well-formed JSON and a `remark`, and a decoder that
 //  looked only at `elements` would read *the server gave up* as *there is
-//  nothing here*. See ``OverpassRequest/abort(_:)``.
+//  nothing here*. See ``OverpassRequest/decode(_:from:)``.
 //
 //  ## A found place is a ``TrailPlace`` carrying its element
 //
@@ -46,14 +46,9 @@ nonisolated enum TrailPointDecoding {
         in data: Data,
         showing symbols: Set<TrailPlaceSymbol> = Set(TrailPlaceSymbol.allCases)
     ) throws -> [TrailPlace] {
-        let response: Response
-        do {
-            response = try JSONDecoder().decode(Response.self, from: data)
-        } catch {
-            throw TrailGraphProviderError.malformedGraph(error.localizedDescription)
-        }
-        if let abort = OverpassRequest.abort(response.remark) { throw abort }
-        return response.elements.compactMap { found(in: $0, showing: symbols) }
+        try OverpassRequest.decode(Response.self, from: data)
+            .elements
+            .compactMap { found(in: $0, showing: symbols) }
     }
 
     /// One element as a place, or `nil` for one this app cannot draw.
@@ -136,10 +131,11 @@ nonisolated extension TrailPointDecoding {
         }
     }
 
-    struct Response: Decodable {
+    nonisolated struct Response: OverpassAnswer {
         let elements: [Element]
         /// What the server has to say about a query it did not finish — see
-        /// ``found(in:)`` for why reading it is not optional.
+        /// ``OverpassRequest/decode(_:from:)`` for why reading it is not
+        /// optional.
         let remark: String?
     }
 }

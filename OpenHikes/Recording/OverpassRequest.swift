@@ -206,6 +206,37 @@ nonisolated enum OverpassRequest {
         return .aborted(remark)
     }
 
+    /// `data` read as an Overpass answer, or the error that says it is not one.
+    ///
+    /// Two failures arrive here dressed as successes, and they are the two
+    /// ordinary weathers of a volunteer-run API. An overloaded Overpass
+    /// answers with an **HTML** page carrying HTTP 200, which fails to decode
+    /// and leaves as ``TrailGraphProviderError/malformedGraph(_:)``. A query
+    /// it started and gave up on answers with **valid JSON** carrying HTTP
+    /// 200, an empty or partial `elements` and a `remark` saying so, and
+    /// leaves as ``abort(_:)``'s error. Neither is a bug, both are normal on
+    /// an ordinary afternoon, and the second is the one with teeth: decoded
+    /// blind it is indistinguishable from an area with nothing in it — a tile
+    /// cached as trailless, or a caption telling a hiker there are no trails
+    /// where they are standing. See ``CuratedTrailNotice``.
+    ///
+    /// Every decoder of an Overpass body starts here — the walking graph, the
+    /// waymarked routes and the places — so none of them can read the first
+    /// failure differently from the others, or forget to read the second.
+    static func decode<Answer: OverpassAnswer>(
+        _: Answer.Type,
+        from data: Data
+    ) throws -> Answer {
+        let answer: Answer
+        do {
+            answer = try JSONDecoder().decode(Answer.self, from: data)
+        } catch {
+            throw TrailGraphProviderError.malformedGraph(error.localizedDescription)
+        }
+        if let abort = abort(answer.remark) { throw abort }
+        return answer
+    }
+
     /// The live transport both callers use unless a suite hands them one of
     /// its own — see *Deliberate test seams* in the repository instructions.
     ///
@@ -259,4 +290,12 @@ nonisolated enum OverpassRequest {
         }
         return headers
     }
+}
+
+/// A body Overpass answered with: whatever it carries, and the `remark` a query
+/// the server gave up on comes back with. Read through
+/// ``OverpassRequest/decode(_:from:)``, which is what makes reading the
+/// remark not optional.
+nonisolated protocol OverpassAnswer: Decodable {
+    var remark: String? { get }
 }
