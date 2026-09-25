@@ -89,8 +89,9 @@ enumerable, but a name rather than a permission. What would be new is a way to
 - Data reaching somewhere it should not — the mirrored (private) CloudKit
   database, the `group.tappium.com.OpenHikes` App Group store the widget reads,
   the photo library, a tile provider's servers, or the paired Apple Watch,
-  which is sent the titles and figures of the hiker's hikes and the geometry of
-  one trail and should be sent nothing else.
+  which is sent the titles and figures of the hiker's hikes, the geometry of
+  one trail, and — while the watch app is open — the live figures of a
+  recording the phone is making, and should be sent nothing else.
 - Anything exploitable through untrusted input: an imported GPX file, an
   `openhikes://` deep link, a response from a tile or Overpass endpoint, a
   payload crossing the watch link (`WatchLink` is the only decoder on either
@@ -112,6 +113,6 @@ enumerable, but a name rather than a permission. What would be new is a way to
 
 Secret scanning and push protection are enabled on this repository, so a
 recognised credential is blocked at push time rather than found afterwards.
-Dependency updates come from [Dependabot](../.github/dependabot.yml), and
-[CodeQL](../.github/workflows/codeql.yml) analyses Swift on every push to `main`
-and weekly.
+Dependency updates come from [Dependabot](.github/dependabot.yml), and
+[CodeQL](.github/workflows/codeql.yml) analyses Swift on every pull request that
+touches it, on every push to `main`, and weekly.

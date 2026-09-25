@@ -30,7 +30,8 @@ That is local-first with one deliberate exception. There is no OpenHikes account
 
 - Xcode 27 or later — CI builds on Xcode 27.0 (`27A266a`). The phone targets
   deploy to iOS 27.0, because the trail maker's stops reorder with iOS 27's
-  `reorderable()`; `OpenHikesShared/Package.swift` still declares iOS 26. The
+  `reorderable()`; the two local packages, `OpenHikesShared` and
+  `OpenHikesData`, still declare iOS 26. The
   CodeQL workflow is the one exception and still builds on Xcode 26.6, because
   CodeQL's Swift extractor does not read Swift 6.4 yet — it builds without the
   maker's drag, which is the one iOS 27 API in the app.
@@ -64,7 +65,7 @@ Shipping the subscription for real additionally needs a matching auto-renewable 
 
 ## Recording demo
 
-Launch OpenHikes on a booted iOS Simulator, open **Record Hike**, tap **Start Recording**, and replay the bundled Thumsee route:
+Launch OpenHikes on a booted iOS Simulator, tap the record button (VoiceOver's *Record a hike*: the lower of the two glyph buttons on the map's leading edge, under the one that draws a trail), which starts a recording and opens it, and replay the bundled Thumsee route:
 
 ```sh
 Scripts/simulate-hike.sh start          # ~1.7 km accelerated preview
@@ -141,7 +142,7 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | Path | Purpose |
 |---|---|
 | `OpenHikes/App/` | App entry point, shared app model, configuration, deep-link routing, root navigation. |
-| `OpenHikes/Hikes/` | Persisted hike model, GPX import and export, drawing a trail on the map, route profile, statistics, the surface and difficulty breakdowns, walks along a saved trail and their history, hike screens. |
+| `OpenHikes/Hikes/` | GPX import and export, drawing a trail on the map, the places along a trail, the surface and difficulty breakdowns, walks along a saved trail and their history, hike screens. The model itself is in `OpenHikesData/`. |
 | `OpenHikes/Recording/` | Live recording, recovery journal, sensors, trail matching, recording UI. |
 | `OpenHikes/Map/` | MapKit bridge, map state, search, location tracking, map rendering. |
 | `OpenHikes/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, overlay rendering. |

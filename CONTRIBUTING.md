@@ -29,7 +29,7 @@ a precedent for the next one.
 See [Requirements](README.md#requirements) and [Setup](README.md#setup). In
 short: Xcode 27 or later, an iOS 27.0 deployment target, and an Apple
 development team that can sign the WeatherKit entitlement, the App Group, the
-iCloud container, push and HealthKit.
+iCloud container, push, Time Sensitive Notifications and HealthKit.
 
 `OpenHikes/Secrets.plist` holds the optional Stadia and Thunderforest keys. It
 is gitignored and **must never be committed** — `cp Secrets.example.plist
@@ -38,13 +38,18 @@ default, so a build with no keys works; the paid providers simply stay locked.
 
 ## Before you open a pull request
 
-Run these three. They are what CI runs, so a green run here is a green run
+Run these four. They are what CI runs, so a green run here is a green run
 there:
 
 ```sh
 # Strict SwiftLint, the pinned version, the same script the CI `quality` job
 # runs. --fix applies what SwiftLint can correct on its own.
 Scripts/lint.sh
+
+# Boot the simulator first: against a cold one the test run below fails after
+# several minutes without a single test having reported.
+xcrun simctl boot "iPhone 18 Pro" || true
+xcrun simctl bootstatus "iPhone 18 Pro" -b
 
 # The app and widget unit suites. The -only-testing: scoping is what makes
 # this the run CI gates on: the scheme's test plan carries OpenHikesUITests

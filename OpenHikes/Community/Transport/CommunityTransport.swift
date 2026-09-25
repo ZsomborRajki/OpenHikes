@@ -5,8 +5,8 @@
 //  The seam between the community feature and CloudKit, and the handful of
 //  sentences a failure is allowed to say.
 //
-//  A protocol for the same reason ``TrailGraphProviding``,
-//  ``TileTransporting`` and the injectable containers elsewhere are — see
+//  A protocol for the same reason ``TrailGraphProviding``, the tile
+//  downloader's injected fetch and the injectable containers elsewhere are — see
 //  *Deliberate test seams* in the repository instructions. The whole bundle
 //  runs in one process, so a suite that reached a real `CKDatabase` would
 //  reach the developer's own container, need an account, need a network, and
