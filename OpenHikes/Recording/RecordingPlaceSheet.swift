@@ -100,7 +100,7 @@ struct RecordingPlaceSheet: View {
 
     private var ownSection: some View {
         Section {
-            TextField("Name", text: $name, prompt: Text(symbol?.label ?? String(localized: "Place")))
+            TextField("Name", text: $name, prompt: Text(TrailPlace.unnamedName(for: symbol)))
                 .accessibilityIdentifier("recording-place-name")
             TrailPlaceKindPicker(selection: $symbol)
             TextField("Note", text: $note, axis: .vertical)

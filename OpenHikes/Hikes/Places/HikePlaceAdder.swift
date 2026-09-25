@@ -152,7 +152,7 @@ struct HikePlaceAdder: View {
 
     private var fields: some View {
         StatList(title: String(localized: "Details")) {
-            TextField("Name", text: $draft.name, prompt: Text(draft.symbol?.label ?? String(localized: "Place")))
+            TextField("Name", text: $draft.name, prompt: Text(TrailPlace.unnamedName(for: draft.symbol)))
                 .trailPlaceRow()
                 .accessibilityIdentifier("hike-place-adder-name")
             LabeledContent("Kind") {
