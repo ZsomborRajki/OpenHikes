@@ -139,14 +139,14 @@ nonisolated enum SharedHikeCataloguePublisher {
     /// One hike's snapshot, built the same way the tracker builds the selected
     /// one so the two cannot describe the same trail differently.
     private static func publishTrail(_ hikeID: UUID, container: ModelContainer) async {
-        let input = await MainActor.run { () -> BackgroundTrailTracker.SnapshotInput? in
+        let input = await MainActor.run { () -> HikeRouteInput? in
             let context = ModelContext(container)
             let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
             // A hike deleted since the widget was configured. Nothing to draw
             // and nothing to report: the prune below takes its file, and the
             // widget shows its empty state.
             guard let hike = try? context.fetch(descriptor).first else { return nil }
-            return BackgroundTrailTracker.SnapshotInput(hike: hike)
+            return HikeRouteInput(hike: hike)
         }
         guard let input,
               let snapshot = await BackgroundTrailTracker.buildSnapshotOffMain(

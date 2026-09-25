@@ -23,25 +23,6 @@ import SwiftData
 /// none of it touches the tracker's state, and all of it runs off the main
 /// thread.
 extension BackgroundTrailTracker {
-    // Internal rather than private because `SnapshotWriter` names it, and
-    // that actor now lives in its own file — the same trade
-    // `TrailBasemapRenderer.RenderInput` makes for `Render`.
-    nonisolated struct SnapshotInput: Sendable {
-        let hikeID: UUID
-        let title: String
-        let tintHex: String
-        let totalDistanceMeters: Double
-        let route: [RouteCoordinate]
-
-        init(hike: Hike) {
-            hikeID = hike.id
-            title = hike.title
-            tintHex = hike.tintHex
-            totalDistanceMeters = hike.distanceMeters
-            route = hike.route
-        }
-    }
-
     /// What a live-fix write actually put in the store, so the caller can
     /// decide whether the widget's basemaps need re-rendering without reading
     /// the file back to find out.
@@ -54,7 +35,7 @@ extension BackgroundTrailTracker {
     nonisolated struct BackgroundMatch: Sendable {
         /// The hike the fix was matched against, reduced to values off the
         /// main actor so the write path never has to reach back for it.
-        let input: SnapshotInput
+        let input: HikeRouteInput
         /// Carried so a rebuild of the stored trail doesn't walk the route a
         /// second time to recompute what this pass already has.
         let elevation: RouteElevationSummary
@@ -113,7 +94,7 @@ extension BackgroundTrailTracker {
     /// `Sendable`, and the `ModelContext` built from it is created, used and
     /// discarded inside this one call, so neither it nor the non-`Sendable`
     /// `Hike` it vends ever crosses an isolation boundary. Only the
-    /// ``SnapshotInput`` of values taken from that hike leaves.
+    /// ``HikeRouteInput`` of values taken from that hike leaves.
     ///
     /// Returns `nil` when the hike is gone or too short to match against.
     nonisolated static func match(
@@ -128,7 +109,7 @@ extension BackgroundTrailTracker {
         let context = ModelContext(container)
         let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
         guard let hike = (try? context.fetch(descriptor))?.first, hike.pointCount > 1 else { return nil }
-        let input = SnapshotInput(hike: hike)
+        let input = HikeRouteInput(hike: hike)
         let profile = RouteProfile(route: input.route)
         // Taken once and read twice: the match decides whether there is a fix
         // to publish, and its distance from the line is worth reporting even
@@ -166,14 +147,14 @@ extension BackgroundTrailTracker {
     }
 
     nonisolated static func buildSnapshotOffMain(
-        from input: SnapshotInput,
+        from input: HikeRouteInput,
         liveFix: SharedTrailSnapshot.LiveFix?
     ) async -> SharedTrailSnapshot? {
         await offMainThread { buildSnapshot(from: input, liveFix: liveFix) }
     }
 
     nonisolated private static func buildSnapshot(
-        from input: SnapshotInput,
+        from input: HikeRouteInput,
         liveFix: SharedTrailSnapshot.LiveFix?
     ) -> SharedTrailSnapshot? {
         guard !Task.isCancelled else { return nil }
@@ -186,10 +167,11 @@ extension BackgroundTrailTracker {
         )
     }
 
-    /// Internal for the reason ``SnapshotInput`` is: `SnapshotWriter` rebuilds
-    /// through it, from its own file.
+    /// Internal because `SnapshotWriter` rebuilds through it, from its own
+    /// file — the same trade `TrailBasemapRenderer.RenderInput` makes for
+    /// `Render`.
     nonisolated static func buildSnapshot(
-        from input: SnapshotInput,
+        from input: HikeRouteInput,
         elevation: RouteElevationSummary,
         liveFix: SharedTrailSnapshot.LiveFix?
     ) -> SharedTrailSnapshot? {
