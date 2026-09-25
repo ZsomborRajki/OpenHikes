@@ -723,23 +723,12 @@ private extension MapSheetHikes {
     }
 
     func suggestionRow(for suggestion: MKLocalSearchCompletion) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "mappin.circle.fill")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(suggestion.title).foregroundStyle(.primary)
-                if !suggestion.subtitle.isEmpty {
-                    Text(suggestion.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .contentShape(.rect)
-        .accessibilityElement(children: .combine)
+        PlaceSearchRow(
+            systemImage: "mappin.circle.fill",
+            title: suggestion.title,
+            subtitle: suggestion.subtitle,
+            glyphFont: .title3
+        )
     }
 }
 
