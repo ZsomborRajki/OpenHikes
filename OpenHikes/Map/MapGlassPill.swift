@@ -19,9 +19,12 @@ import UIKit
 enum MapGlassPill {
     /// The height every floating control on this map shares, so they line up
     /// across it rather than merely sitting near each other. The tracking
-    /// button's capsule takes its size from here too — see
-    /// ``MapView/makeTrackingButton(for:_:)``.
-    static let controlSize: CGFloat = 44
+    /// button's capsule and the *Search this area* pills take their size from
+    /// here too — see ``MapView/makeTrackingButton(for:_:)``.
+    ///
+    /// The audit's minimum, because it is what each glyph button is sized to:
+    /// a control on this map is exactly as big as it has to be to be hit.
+    static let controlSize = AccessibilityMetrics.minimumTapTarget
     /// Over the 4pt gap between the buttons, so their glass merges into one
     /// shape at rest while each button stays a target of its own — the
     /// opposite of ``ActionTileMetrics/glassSpacing``, which keeps the sheet's

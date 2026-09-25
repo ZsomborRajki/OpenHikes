@@ -165,7 +165,7 @@ final class MapAreaSearchView: UIView {
     private static let horizontalPadding: CGFloat = 14
     /// Matches the other floating controls, so the pill reads as one of the
     /// map's own rather than as something the sheet put there.
-    private static let height: CGFloat = 44
+    private static let height = MapGlassPill.controlSize
 
     /// How close under the pill the caption may sit.
     ///
