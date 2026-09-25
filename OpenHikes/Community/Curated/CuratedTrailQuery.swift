@@ -152,9 +152,14 @@ nonisolated extension CuratedTrailQuery {
         let latitudeSpan = area.radiusMeters / metresPerDegreeLatitude
         let longitudeSpan = area.radiusMeters
             / (metresPerDegreeLatitude * cos(latitude * .pi / 180))
-        guard latitudeSpan.isFinite, longitudeSpan.isFinite else { return nil }
+        guard latitudeSpan.isFinite, longitudeSpan.isFinite, area.longitude.isFinite else { return nil }
 
-        let longitude = wrapped(area.longitude)
+        // Brought into −180...180 before the span is applied rather than
+        // after, so the split in ``searchBoxes(for:)`` has only the one seam to
+        // look for. A map can hand back a longitude that has wrapped several
+        // times over while the hiker dragged east, and 540° is a real value
+        // meaning 180°.
+        let longitude = RouteGeometry.normalizedLongitude(area.longitude)
         return BoundingBox(
             south: max(-90, latitude - latitudeSpan),
             west: longitude - longitudeSpan,
@@ -192,18 +197,6 @@ nonisolated extension CuratedTrailQuery {
             ]
         }
         return [box]
-    }
-
-    /// `longitude` brought into −180...180.
-    ///
-    /// A map can hand back a longitude that has wrapped several times over
-    /// while the hiker dragged east, and 540° is a real value meaning 180°.
-    /// Normalised before the span is applied rather than after, so the split
-    /// below has only the one seam to look for.
-    private static func wrapped(_ longitude: Double) -> Double {
-        guard longitude.isFinite else { return longitude }
-        let shifted = (longitude + 180).truncatingRemainder(dividingBy: 360)
-        return (shifted < 0 ? shifted + 360 : shifted) - 180
     }
 }
 
@@ -344,7 +337,7 @@ nonisolated extension CuratedTrailQuery {
     static func centre(of box: BoundingBox) -> CLLocationCoordinate2D {
         CLLocationCoordinate2D(
             latitude: (box.south + box.north) / 2,
-            longitude: wrapped(box.west + longitudeSpanDegrees(of: box) / 2)
+            longitude: RouteGeometry.normalizedLongitude(box.west + longitudeSpanDegrees(of: box) / 2)
         )
     }
 }

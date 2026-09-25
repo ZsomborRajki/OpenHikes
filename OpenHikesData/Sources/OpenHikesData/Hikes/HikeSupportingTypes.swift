@@ -311,10 +311,24 @@ nonisolated public enum RouteGeometry {
     /// own, and one of those had drifted into a different arrangement of the
     /// same arithmetic — agreeing with this one everywhere either is called,
     /// which is exactly the kind of agreement that holds until it doesn't.
+    /// `CuratedTrailQuery` grew a fourth after those two were folded, in yet
+    /// another arrangement, and it was folded the same way.
     public static func normalizedLongitude(_ longitude: Double) -> Double {
         var normalized = longitude.truncatingRemainder(dividingBy: 360)
         if normalized >= 180 { normalized -= 360 }
         if normalized < -180 { normalized += 360 }
         return normalized
+    }
+
+    /// The smallest absolute angle between two compass bearings, 0…180°.
+    ///
+    /// The one copy on the phone: ``RouteProfile`` asks it whether a segment
+    /// runs the way the hiker is heading, and the recorder's fix policy asks
+    /// it whether the hiker has turned. The watch's `WatchRouteTracker` writes
+    /// its own inline, for the reason `WatchGeodesy` keeps its own geodesy —
+    /// see that file's header.
+    public static func bearingDifference(_ first: Double, _ second: Double) -> Double {
+        let delta = abs(first - second).truncatingRemainder(dividingBy: 360)
+        return delta > 180 ? 360 - delta : delta
     }
 }
