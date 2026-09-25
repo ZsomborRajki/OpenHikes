@@ -1699,6 +1699,83 @@ if expect_status 1 && expect_contains "$output" "error:" "the output"; then
     fi
 fi
 
+echo "App Store screenshots"
+
+# Scripts/screenshots-light.sh and -dark.sh are run by hand, never by CI, and
+# what they decide is invisible until a frame comes out wrong: which frames
+# get the location grant, and whether the grant lands after the install that
+# would otherwise discard it. The stubbed xcodebuild writes no result bundle,
+# so every frame a case asks for comes out "not shot" — which is also what
+# exercises the retry.
+screenshots_light="$repository_root/Scripts/screenshots-light.sh"
+screenshots_dark="$repository_root/Scripts/screenshots-dark.sh"
+screens_dd="$work/screens-dd"
+mkdir -p "$screens_dd/Build/Products/Debug-iphonesimulator/OpenHikes.app" "$work/screens-out"
+export STUB_DEVICES="$work/devices-two-booted.txt"
+
+# The line of the first recorded call containing `needle`, or 0.
+call_line() {
+    local line
+    line="$(printf '%s\n' "$calls" | grep -nF -- "$1" | head -1 | cut -d: -f1)"
+    printf '%s\n' "${line:-0}"
+}
+
+run_script "screenshots refuses a frame it does not know, before touching a device" \
+    "$screenshots_light" --frame 12 --device "$pro_udid"
+if expect_status 2 \
+    && expect_contains "$output" "Unknown frame: 12" "the error" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls"; then
+    pass
+fi
+
+run_script "screenshots grants location to a location frame, after the install" \
+    "$screenshots_dark" --frame 3 --no-photos --no-retry --device "$pro_udid" \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+install_at="$(call_line "simctl install $pro_udid")"
+grant_at="$(call_line "simctl privacy $pro_udid grant location-always")"
+test_at="$(call_line "xcodebuild test-without-building")"
+if expect_status 1 \
+    && expect_contains "$output" "FAILED — not shot: 03" "the output" \
+    && expect_contains "$calls" "simctl ui $pro_udid appearance dark" "the recorded calls" \
+    && expect_contains "$calls" "-only-testing:OpenHikesUITests/ScreenshotUITests/testCapturesNearbyTrails" \
+        "the recorded calls" \
+    && expect_absent "$calls" "reset location" "the recorded calls"; then
+    if (( install_at > 0 && install_at < grant_at && grant_at < test_at )); then
+        pass
+    else
+        fail "expected install, then grant, then test — got lines $install_at, $grant_at, $test_at" "$calls"
+    fi
+fi
+
+run_script "screenshots shoots map frames without location, and retries only what did not come out" \
+    "$screenshots_light" --frame 4 --frame 3 --no-photos --device "$pro_udid" \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+reset_at="$(call_line "simctl privacy $pro_udid reset location")"
+plain_at="$(call_line "testCapturesStatisticsAndProfile")"
+grant_at="$(call_line "simctl privacy $pro_udid grant location-always")"
+located_at="$(call_line "testCapturesNearbyTrails")"
+runs="$(printf '%s\n' "$calls" | grep -c "xcodebuild test-without-building" || true)"
+if expect_status 1 \
+    && expect_contains "$output" "not shot: 04 03 — retrying those once" "the output" \
+    && expect_contains "$calls" "simctl ui $pro_udid appearance light" "the recorded calls"; then
+    if (( reset_at > 0 && reset_at < plain_at && plain_at < grant_at && grant_at < located_at )) \
+        && [[ "$runs" == 4 ]]; then
+        pass
+    else
+        fail "expected reset, map frame, grant, location frame, and four runs — got lines" \
+            "$reset_at $plain_at $grant_at $located_at, $runs run(s)"
+    fi
+fi
+
+run_script "screenshots skips the library frames when there is no library" \
+    "$screenshots_light" --frame 1 --no-photos --device "$pro_udid" \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 0 \
+    && expect_contains "$output" "nothing left to shoot" "the output" \
+    && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
+    pass
+fi
+
 echo
 if (( failures > 0 )); then
     echo "$failures case(s) failed." >&2
