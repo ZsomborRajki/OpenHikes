@@ -64,30 +64,20 @@ nonisolated public enum HikeFormat {
             : duration.formatted(spokenShortStyle)
     }
 
-    private static let travelTimeStyle = Duration.UnitsFormatStyle(
-        allowedUnits: [.hours, .minutes],
-        width: .abbreviated
-    )
-    private static let spokenTravelTimeStyle = Duration.UnitsFormatStyle(
-        allowedUnits: [.hours, .minutes],
-        width: .wide
-    )
-
     /// How long a planned route takes, as Apple Maps writes it on a route —
-    /// "1 hr, 5 min" — rounded up to the minute, and never "0 min": a leg too
-    /// short to time still takes a minute to walk.
+    /// "1 hr, 5 min" — rounded up to the minute, and never "0 min".
+    ///
+    /// ``WidgetFormat/timeLeft(seconds:width:)``, which the widget and the
+    /// Live Activity draw time left with: one rule for a time still to come,
+    /// wherever it is shown.
     public static func travelTime(_ interval: TimeInterval) -> String {
         guard interval.isFinite else { return "—" }
-        return Duration.seconds(plannedMinutes(interval) * 60).formatted(travelTimeStyle)
+        return WidgetFormat.timeLeft(seconds: interval)
     }
 
     public static func spokenTravelTime(_ interval: TimeInterval) -> String {
         guard interval.isFinite else { return "—" }
-        return Duration.seconds(plannedMinutes(interval) * 60).formatted(spokenTravelTimeStyle)
-    }
-
-    private static func plannedMinutes(_ interval: TimeInterval) -> Double {
-        max(1, (interval / 60).rounded(.up))
+        return WidgetFormat.timeLeft(seconds: interval, width: .wide)
     }
 
     /// The date and the time to the minute — what a photograph, a map pin and
@@ -122,11 +112,15 @@ nonisolated public enum HikeFormat {
     /// measurement built in metres, so it rendered metres to every reader in
     /// the world while the distance beside it used `usage: .road` and adapted.
     /// A US reader read "3.1 mi" and "1,250 m" in the same stats card — and
-    /// ``WidgetFormat/elevation(meters:locale:)`` had already been given the
-    /// conversion below, so the app and the widget disagreed about the same
-    /// hike. That is the same bug ``speed(_:locale:)`` and
-    /// `WeatherReadingFormat` were each fixed for; elevation is the row that
-    /// was never given the treatment.
+    /// the widget's formatter had already been given the conversion, so the
+    /// app and the widget disagreed about the same hike. That is the same bug
+    /// ``speed(_:locale:)`` and `WeatherReadingFormat` were each fixed for;
+    /// elevation is the row that was never given the treatment. It is that
+    /// formatter now, ``WidgetFormat/elevation(meters:locale:width:)``, rather
+    /// than a second copy of its conversion — which is what the eighteen
+    /// locales ``WidgetFormat/prefersImperialRoadUnits(in:)`` names needed:
+    /// `en_LR` drew "5 km" and "4,101 ft" in one stat grid while the copy
+    /// here still asked `measurementSystem`.
     ///
     /// Renamed at the same time, because the old name is what let *Inferred
     /// Path* — a distance — be formatted by the elevation formatter without
@@ -149,11 +143,7 @@ nonisolated public enum HikeFormat {
         locale: Locale = .autoupdatingCurrent
     ) -> String {
         guard measurement.value.isFinite else { return "—" }
-        return converted(measurement, for: locale)
-            .formatted(
-                .measurement(width: .abbreviated, usage: .asProvided)
-                    .locale(locale)
-            )
+        return WidgetFormat.elevation(meters: measurement.converted(to: .meters).value, locale: locale)
     }
 
     /// The same height, in words, for a sentence that is read aloud.
@@ -168,37 +158,11 @@ nonisolated public enum HikeFormat {
         locale: Locale = .autoupdatingCurrent
     ) -> String {
         guard measurement.value.isFinite else { return "—" }
-        return converted(measurement, for: locale)
-            .formatted(
-                .measurement(width: .wide, usage: .asProvided)
-                    .locale(locale)
-            )
-    }
-
-    /// Whole units of whatever the region measures heights in.
-    ///
-    /// The question is asked by ``OpenHikesShared/WidgetFormat/prefersImperialRoadUnits(in:)``
-    /// rather than by `measurementSystem`, and it is asked in the shared
-    /// package rather than here so that the app and the widget cannot answer
-    /// it differently — which is the failure `ElevationFormatTests` exists to
-    /// catch and this is the other half of.
-    ///
-    /// `measurementSystem` was the previous basis and is a *different*
-    /// question that agrees in most places. It disagrees in eighteen locales,
-    /// all of them regions whose measurement system is imperial and whose
-    /// roads are signed in kilometres, and there the height row contradicted
-    /// the distance row directly above it — `en_LR` drew "5 km" and
-    /// "4,101 ft" in the same stat grid. Height has no usage of its own, so
-    /// the unit still has to be chosen by hand; what changed is which question
-    /// chooses it.
-    private static func converted(
-        _ measurement: Measurement<UnitLength>,
-        for locale: Locale
-    ) -> Measurement<UnitLength> {
-        let converted = WidgetFormat.prefersImperialRoadUnits(in: locale)
-            ? measurement.converted(to: .feet)
-            : measurement.converted(to: .meters)
-        return Measurement(value: converted.value.rounded(), unit: converted.unit)
+        return WidgetFormat.elevation(
+            meters: measurement.converted(to: .meters).value,
+            locale: locale,
+            width: .wide
+        )
     }
 
     /// One decimal, in whatever unit the reader's region measures speed in.
@@ -224,13 +188,9 @@ nonisolated public enum HikeFormat {
         locale: Locale = .autoupdatingCurrent
     ) -> String {
         guard measurement.value.isFinite else { return "—" }
-        return measurement.formatted(
-            .measurement(
-                width: .abbreviated,
-                usage: .general,
-                numberFormatStyle: .number.precision(.fractionLength(1))
-            )
-            .locale(locale)
+        return WidgetFormat.speed(
+            metersPerSecond: measurement.converted(to: .metersPerSecond).value,
+            locale: locale
         )
     }
 }
