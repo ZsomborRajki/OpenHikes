@@ -128,17 +128,36 @@ struct TrailProgressView: View {
         // word "metres" used to be written into the sentence, so a US hiker
         // heard a distance in metres followed by one in miles.
         .accessibilityValue(
-            walked.map { fraction in
-                // The time before the distance left rather than after it, so
-                // "remaining" stays the last thing said — and the last field,
-                // which is what the walk suite reads the distance off.
-                "\(percent) percent walked, "
-                    + "\(Self.length(fraction * profile.totalDistanceMeters)) covered, "
-                    + (timeLeft.map { "about \(HikeFormat.spokenTravelTime($0)) to go, " } ?? "")
-                    + "\(Self.length(remaining)) remaining"
-            } ?? "\(percent) percent, \(Self.length(remaining)) remaining"
+            Self.spokenValue(
+                percent: percent,
+                covered: walked.map { $0 * profile.totalDistanceMeters },
+                timeLeft: timeLeft,
+                remaining: remaining
+            )
         )
         .accessibilityIdentifier("trail-progress")
+    }
+
+    /// Built a clause at a time rather than as one `+` chain inside the
+    /// modifier: Xcode 26.6's type checker gives up on the chain, which fails
+    /// the CodeQL build while Xcode 27 compiles it.
+    private static func spokenValue(
+        percent: Int,
+        covered: Double?,
+        timeLeft: TimeInterval?,
+        remaining: Double
+    ) -> String {
+        let remainingClause = "\(length(remaining)) remaining"
+        guard let covered else { return "\(percent) percent, \(remainingClause)" }
+        // The time before the distance left rather than after it, so
+        // "remaining" stays the last thing said — and the last field, which is
+        // what the walk suite reads the distance off.
+        var clauses = ["\(percent) percent walked", "\(length(covered)) covered"]
+        if let timeLeft {
+            clauses.append("about \(HikeFormat.spokenTravelTime(timeLeft)) to go")
+        }
+        clauses.append(remainingClause)
+        return clauses.joined(separator: ", ")
     }
 
     private func title(walking: Bool, live: Bool) -> String {
