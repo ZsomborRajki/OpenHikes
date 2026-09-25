@@ -87,6 +87,11 @@ nonisolated enum AppleWeatherAttribution {
     /// is drawn whether or not the marks ever arrive.
     static let serviceName = "Apple Weather"
 
+    /// How tall the published mark is drawn, atop the weather sheet and in its
+    /// attribution section alike — one figure, so the credit Apple's terms ask
+    /// for is the same size wherever the sheet shows it.
+    static let markHeight: CGFloat = 18
+
     /// The trademark in text, for wherever the published mark is not drawn —
     /// see ``SharedWeatherReading/attributionMark``.
     static let textMark = SharedWeatherReading.attributionMark
