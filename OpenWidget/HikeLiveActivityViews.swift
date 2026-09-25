@@ -132,6 +132,49 @@ struct HikeActivityFigure: View {
     }
 }
 
+/// The second headline figure: a running recording's clock, a paused one's
+/// frozen clock, or a followed trail's distance remaining — and nothing at
+/// all when there is nothing to put there, since a hiker off the trail has no
+/// "remaining" that means anything.
+///
+/// Every surface asks ``HikeActivityPresentation/secondaryFigure`` the same
+/// question and each used to draw the answer with a switch of its own. What
+/// they differ in is only whether the clock is captioned, so that is the one
+/// thing a caller says.
+struct HikeActivitySecondaryFigure: View {
+    let presentation: HikeActivityPresentation
+    /// Whether the clock carries an *Elapsed* caption, as the banner draws it.
+    /// The Smart Stack cell and the Dynamic Island have no line to spare for
+    /// one, and a ticking `h:mm:ss` beside a distance needs no label to be
+    /// read as time.
+    var captionsClock = false
+
+    var body: some View {
+        switch presentation.secondaryFigure {
+        case .elapsed:
+            if captionsClock {
+                VStack(alignment: .trailing, spacing: 0) {
+                    HikeActivityElapsed(presentation: presentation)
+                    Text("Elapsed")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityHidden(true)
+            } else {
+                HikeActivityElapsed(presentation: presentation)
+            }
+        case let .figure(value, caption):
+            HikeActivityFigure(
+                value: value,
+                caption: caption,
+                alignment: .trailing
+            )
+        case nil:
+            EmptyView()
+        }
+    }
+}
+
 /// The panel's own pause and resume, and whatever the last tap could not do.
 ///
 /// Its own view, and deliberately *outside* the combined accessibility element
@@ -244,7 +287,7 @@ struct HikeActivityLockScreenView: View {
                     caption: presentation.primaryCaption
                 )
                 Spacer(minLength: 12)
-                trailingFigure(presentation)
+                HikeActivitySecondaryFigure(presentation: presentation, captionsClock: true)
             }
 
             if let progress = presentation.progress {
@@ -264,34 +307,6 @@ struct HikeActivityLockScreenView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.accessibilityLabel)
         .accessibilityValue(presentation.accessibilityValue)
-    }
-
-    /// The second figure: a running recording's clock, a paused one's frozen
-    /// clock, or a followed trail's distance remaining. Absent when there is
-    /// nothing to put there — a hiker off the trail has no "remaining" that
-    /// means anything.
-    @ViewBuilder
-    private func trailingFigure(
-        _ presentation: HikeActivityPresentation
-    ) -> some View {
-        switch presentation.secondaryFigure {
-        case .elapsed:
-            VStack(alignment: .trailing, spacing: 0) {
-                HikeActivityElapsed(presentation: presentation)
-                Text("Elapsed")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .accessibilityHidden(true)
-        case let .figure(value, caption):
-            HikeActivityFigure(
-                value: value,
-                caption: caption,
-                alignment: .trailing
-            )
-        case nil:
-            EmptyView()
-        }
     }
 }
 
@@ -350,7 +365,7 @@ struct HikeActivitySmallView: View {
                     caption: presentation.primaryCaption
                 )
                 Spacer(minLength: 8)
-                trailingFigure(presentation)
+                HikeActivitySecondaryFigure(presentation: presentation)
             }
             if let progress = presentation.progress {
                 TrailWidgetProgressBar(
@@ -364,26 +379,5 @@ struct HikeActivitySmallView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.accessibilityLabel)
         .accessibilityValue(presentation.accessibilityValue)
-    }
-
-    /// The banner's second slot, with its clock left uncaptioned: the cell
-    /// has no line to spare for "Elapsed", and a ticking `h:mm:ss` beside a
-    /// distance needs no label to be read as time.
-    @ViewBuilder
-    private func trailingFigure(
-        _ presentation: HikeActivityPresentation
-    ) -> some View {
-        switch presentation.secondaryFigure {
-        case .elapsed:
-            HikeActivityElapsed(presentation: presentation)
-        case let .figure(value, caption):
-            HikeActivityFigure(
-                value: value,
-                caption: caption,
-                alignment: .trailing
-            )
-        case nil:
-            EmptyView()
-        }
     }
 }
