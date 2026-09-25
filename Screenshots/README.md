@@ -57,26 +57,59 @@ place in it would stand on the map in every other frame too.
 ## Capturing
 
 ```sh
-Scripts/screenshots.sh                      # light and dark
-Scripts/screenshots.sh --appearance light   # one set, twice as fast
+Scripts/screenshots-light.sh             # the light set
+Scripts/screenshots-dark.sh              # the dark set, files suffixed -dark
+Scripts/screenshots.sh                   # both, one after the other
+Scripts/screenshots-dark.sh --frame 03   # one frame, while debugging it
 ```
 
-That creates a dedicated `iPhone 18 Pro Max` simulator, erases it, pins the
-status bar to 9:41 with a full battery and full bars, runs
-`ScreenshotUITests`, and writes the PNGs to `Screenshots/Output/`. With
-`--appearance both`, which is the default, the dark frames are written again
-with a `-dark` suffix.
+Each appearance has a script, a simulator (`OpenHikes Screenshots Light` /
+`… Dark`, both `iPhone 18 Pro Max`), a derived-data directory and a set of
+logs of its own. The two used to be one script run twice over one device, and
+a dark pass that hung did so twenty minutes in, on a simulator the light pass
+had just worked, with both passes in one log. Split, a dark failure is
+reproduced with the dark script alone, and `--frame` narrows it to the one
+test. The shared machinery is `Scripts/lib/screenshots.sh`.
 
-Each pass is retried once before the script gives up. That is not politeness:
-the community scenario waits on a seeded browse answering, and that wait loses
-to a busy machine rather than to a bug — reliably so on the second pass, when
-the first has just finished working the same simulator.
+A run erases its simulator, pins the status bar to 9:41 with a full battery
+and full bars, pins the locale, grants location and photo access, adds the
+stamped photographs, runs `ScreenshotUITests`, and writes the PNGs to
+`Screenshots/Output/`. It only replaces its own appearance's files, and with
+`--frame` only that frame's. The raw `xcodebuild` log and result bundle of
+every attempt stay in `DerivedData/Screenshots-<appearance>/`, and the run
+prints the path.
 
-The simulator is its own device on purpose. A simulator that has been used
-carries a tile cache, a photo library and possibly a simulated location from an
-earlier run, and all three show up in a screenshot. It also means a capture
-cannot collide with `Scripts/run-ui-tests.sh`, which claims its own device for
-the same reason.
+**Permissions are granted, never prompted for** — and location only for the
+three frames that use it (03, 05, 08), which run as a group of their own after
+the grant. The alert used to come up over the first tap of each of them; a
+frame is a picture of the app, not of its permission prompt. The grant is not
+given to the other six, because MapKit draws the location dot on every map of
+an authorised app, and the hero frame grew a stale dot beside its trailhead the
+one time it was.
+
+**Dark appearance loses the first tap on a segmented picker.** Frames 03 and 08
+used to be blamed on the location alert; with the alert gone, both still took
+one tap in light and two in dark, every run. `tapUntilSelected` is the one
+place that answers it. Whether a hiker's finger meets the same thing is not
+known yet — this machine has no `Simulator.app` to tap by hand.
+
+Frames that did not come out are re-run once, and only those. That is not
+politeness: the community frame waits on a seeded browse answering, and that
+wait can lose to a busy machine rather than to a bug. Each frame also has a
+five-minute allowance, so a stuck one is killed with a spindump rather than
+holding the pass.
+
+`simctl addmedia` is given the whole library in one call with a deadline. One
+photograph at a time, straight after boot, it once hung on the fourth for
+twenty-six minutes before any test had run; when the deadline passes the
+device is erased and prepared again, since the frames pick photographs by
+their position in the library and a half-filled one cannot be added to.
+
+The simulators are their own devices on purpose. A simulator that has been
+used carries a tile cache, a photo library and possibly a simulated location
+from an earlier run, and all three show up in a screenshot. It also means a
+capture cannot collide with `Scripts/run-ui-tests.sh`, which claims its own
+device for the same reason.
 
 **The locale is pinned, to `en_IE`.** A simulator inherits the Mac's region, and
 every figure in this app is formatted through the reader's locale on purpose —
@@ -90,8 +123,8 @@ The watch script has pinned its own for the same reason since it was written.
 
 `ScreenshotUITests` is deliberately **not** in `suites` in
 `Scripts/run-ui-tests.sh`: it asserts almost nothing and exists to produce
-files, so `--all` leaves it alone. `Scripts/screenshots.sh` names it
-explicitly, and that script is what sets up the device the frames assume.
+files, so `--all` leaves it alone. The screenshot scripts name it explicitly,
+and they are what set up the device the frames assume.
 
 ## The route
 
@@ -161,21 +194,23 @@ it for them: every camera move in `MapCoordinator+RouteFitting.swift` frames
 into the strip above a sheet at its *middle* detent, which on this device is
 about a quarter of the screen. Correct for the app; too small for a hero shot.
 
-So the hero frame pans and pinches the map by hand, measuring the photo pins
+So the hero frame pans and zooms the map by hand, measuring the photo pins
 between gestures and correcting. The measuring matters — a drag lands short of
-the vector it is given, and a pinch multiplies whatever is left off-centre.
+the vector it is given, and a zoom doubles whatever is left off-centre.
 
-**`XCUIElement.pinch` also rotates the map a little.** That cost the most time
-here by far. A few degrees off north turns a walk that is six kilometres
-north-to-south and under two wide into a diagonal that fits no frame at any
-zoom, and every attempt to pan it into place crops the other end. MapKit shows
-its compass once the map is off north, and tapping that compass is the fix —
-see `restoreNorth(in:)`. If a map frame ever looks inexplicably cropped, check
-for the compass in the corner before touching the zoom.
+**Zoom with a double tap, never `XCUIElement.pinch`.** A pinch rotates the map
+a little, and that cost the most time here by far: a few degrees off north
+turns a walk that is six kilometres north-to-south and under two wide into a
+diagonal that fits no frame at any zoom. The frame used to pinch, tap MapKit's
+compass to turn the map back, and pan twice more to recover — three gestures
+undoing one. A double tap only zooms, and `zoomMapInOneStep(in:)` asserts the
+compass never appears. The same rule runs through the set: choose the gesture
+that does only what the frame needs, and wait on its effect, rather than make
+a gesture known to disturb the screen and correct afterwards.
 
 ## Before uploading
 
-- The frames are 1320 × 2868. `Scripts/screenshots.sh` prints each one's size;
+- The frames are 1320 × 2868. The scripts print each one's size;
   anything else is the wrong device.
 - The OpenStreetMap attribution has to stay visible in every map frame. It is a
   licence condition, not decoration.

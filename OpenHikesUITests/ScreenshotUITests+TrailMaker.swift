@@ -44,7 +44,9 @@ extension ScreenshotUITests {
             "--ui-test-live-maker",
             "--ui-test-entitled",
         ])
-        app.resetAuthorizationStatus(for: .location)
+        // No `resetAuthorizationStatus`: the script grants location before the
+        // run, so no prompt lands on this frame's first gesture. The monitor
+        // stays for a run started some other way.
         addLocationPermissionMonitor()
         setSimulatedLocation(Self.walkStart)
         defer { XCUIDevice.shared.location = nil }
@@ -55,8 +57,6 @@ extension ScreenshotUITests {
             "the map should be up before anything is drawn on it"
         )
         openTrailMaker(in: app)
-        // Before the first stop, so no leg is ever routed as a straight Hiking
-        // line first and then re-routed.
         chooseWalking(in: app)
 
         for (index, stop) in Self.searchedStops.enumerated() {
@@ -120,26 +120,18 @@ extension ScreenshotUITests {
     /// answers, the maker's two-second settle, and one Stadia call.
     private static let walkedRouteTimeout: TimeInterval = 60
 
-    /// How many taps the Walking segment gets before the frame gives up.
-    private static let walkingTapAttempts = 3
-
-    /// Selects Walking, tapping again if a tap did not take.
+    /// Selects Walking, before the first stop so no leg is ever routed as a
+    /// straight Hiking line first and then re-routed.
     ///
-    /// The first run of the dark pass lost its tap: the location alert had
-    /// just been answered and the sheet was still settling, so the segment
-    /// was found, tapped and never selected. A second tap is waited on like
-    /// the first — by the selection, never by a pause.
+    /// Through ``tapUntilSelected(_:timeout:)``, because this is the second
+    /// segmented picker whose first tap is lost in dark appearance. It was
+    /// blamed on the location alert first; the script grants location before
+    /// the run now, and the dark pass still lost the tap on both attempts.
     @MainActor
     private func chooseWalking(in app: XCUIApplication) {
         let walking = app.segmentedControls["trail-draft-mode"].buttons["Walking"]
         XCTAssertTrue(walking.waitForExistence(timeout: UITestTimeout.navigation))
-        var attempts = 0
-        repeat {
-            walking.tap()
-            attempts += 1
-        } while !waitUntil(timeout: UITestTimeout.brief, { walking.isSelected })
-            && attempts < Self.walkingTapAttempts
-        XCTAssertTrue(walking.isSelected, "the maker should switch to Walking")
+        XCTAssertTrue(tapUntilSelected(walking), "the maker should switch to Walking")
     }
 
     /// Types a stop's name into the search sheet and taps the suggestion that
