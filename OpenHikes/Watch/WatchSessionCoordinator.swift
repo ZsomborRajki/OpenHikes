@@ -186,7 +186,7 @@ final class WatchSessionCoordinator: NSObject {
 
     private func sendTrail(_ hikeID: UUID) {
         Task { [container] in
-            let input = await MainActor.run { () -> WatchTrailPackaging.Input? in
+            let input = await MainActor.run { () -> HikeRouteInput? in
                 let context = ModelContext(container)
                 var descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
                 descriptor.fetchLimit = 1
@@ -194,7 +194,7 @@ final class WatchSessionCoordinator: NSObject {
                 // to send and nothing to report: the watch draws its waiting
                 // state, and the next digest takes the row off its list.
                 guard let hike = try? context.fetch(descriptor).first else { return nil }
-                return WatchTrailPackaging.Input(hike: hike)
+                return HikeRouteInput(hike: hike)
             }
             guard let input, let package = await WatchTrailPackaging.package(from: input) else { return }
             await MainActor.run { self.send(package) }

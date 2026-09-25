@@ -109,7 +109,7 @@ extension BackgroundTrailTracker {
         /// was queued and the write would have restored a superseded trail.
         func applyLiveFix(
             _ fix: SharedTrailSnapshot.LiveFix?,
-            input: SnapshotInput,
+            input: HikeRouteInput,
             elevation: RouteElevationSummary,
             walk: SharedTrailSnapshot.Walk?,
             ifCurrent revision: UInt64
