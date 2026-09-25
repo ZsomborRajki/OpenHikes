@@ -52,11 +52,10 @@ extension MapView {
     /// The maker's *Search this area*, in the same strip the Community tab's
     /// sits in.
     ///
-    /// The same geometry as ``addAreaSearchControl(to:_:alignedTo:)`` — the
-    /// top of the map rather than the sheet's edge, held clear of MapKit's
-    /// compass and of the weather badge by the same side clearances. Two views
-    /// occupying one strip is safe because only one of them is ever visible;
-    /// see this file's header for why that needed saying out loud.
+    /// The same geometry as ``addAreaSearchControl(to:_:alignedTo:)``, from
+    /// ``placeInAreaSearchStrip(_:on:alignedTo:)``. Two views occupying one
+    /// strip is safe because only one of them is ever visible; see this file's
+    /// header for why that needed saying out loud.
     func addTrailPointSearchControl(
         to mapView: MKMapView,
         _ coordinator: Coordinator,
@@ -67,30 +66,11 @@ extension MapView {
             onTap: { [trailMaker] in trailMaker.searchNearbyPlaces() },
             onDismissNotice: { [trailMaker] in trailMaker.finder.dismissNotice() }
         )
-        control.translatesAutoresizingMaskIntoConstraints = false
-        // Starts out of the way: the maker is not up on launch, and a pill
-        // that flashed in before its first visibility pass would be offering
-        // to search an area for a screen nobody has opened.
-        control.isHidden = true
-        control.alpha = 0
-        mapView.addSubview(control)
+        // The maker is not up on launch, and a pill that flashed in before its
+        // first visibility pass would be offering to search an area for a
+        // screen nobody has opened.
+        placeInAreaSearchStrip(control, on: mapView, alignedTo: guide)
         coordinator.trailPointSearchControl = control
-
-        NSLayoutConstraint.activate([
-            control.topAnchor.constraint(equalTo: guide.topAnchor, constant: Self.areaSearchTopInset),
-            control.leadingAnchor.constraint(
-                equalTo: guide.leadingAnchor,
-                constant: Self.areaSearchSideClearance
-            ),
-            control.trailingAnchor.constraint(
-                equalTo: guide.trailingAnchor,
-                constant: -Self.areaSearchSideClearance
-            ),
-        ])
-        // The map's own top edge, not the guide's, for the reason the other
-        // one says: the weather badge the caption is kept clear of is measured
-        // from the screen's edge and the map ignores its safe area.
-        control.keepNoticeClear(of: mapView.topAnchor)
     }
 }
 #endif

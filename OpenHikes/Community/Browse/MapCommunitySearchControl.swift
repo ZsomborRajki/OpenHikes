@@ -732,18 +732,7 @@ extension MapView.Coordinator {
 
 #if os(iOS)
 extension MapView {
-    /// How far below the map's safe area the pill sits. The same inset the
-    /// map's other floating controls use, spelled here because that one is
-    /// private to `MapView.swift` and this is the file that owns this control.
-    ///
-    /// Internal rather than private, along with the side clearance below,
-    /// because the trail maker's pill is the same control in the same strip
-    /// and has to be placed by the same two numbers — see
-    /// `MapTrailPointSearchControl.swift`. A second spelling of them is two
-    /// controls that drift a point apart and one screenshot nobody can explain.
-    static let areaSearchTopInset: CGFloat = 12
-
-    /// How much room the control leaves on each side.
+    /// How much room a *Search this area* pill leaves on each side.
     ///
     /// Enough for MapKit's compass on the trailing edge and the weather badge
     /// on the leading one, both of which live in the same strip and neither of
@@ -752,7 +741,7 @@ extension MapView {
     /// localisation truncates against and what a caption wraps against, and it
     /// clears the badge *sideways* only: the badge hangs lower than this strip,
     /// which is what ``MapAreaSearchView`` drops the caption past.
-    static let areaSearchSideClearance: CGFloat = 56
+    private static let areaSearchSideClearance: CGFloat = 56
 
     /// *Search this area*, centred at the top of the map.
     ///
@@ -761,13 +750,6 @@ extension MapView {
     /// the region on screen, so it belongs at the top where the most map is
     /// visible, and the sheet never reaches it. Its own visibility is the
     /// whole of its behaviour — see ``MapCommunitySearchControl``.
-    ///
-    /// Held clear of MapKit's compass and of the weather badge by the side
-    /// clearances rather than by a fixed width, so a long localisation
-    /// truncates instead of sliding underneath either. The control is the whole
-    /// of that strip and its contents are centred in it — the pill and the
-    /// caption are each their own size, and what the strip decides is where
-    /// either of them runs out of room.
     func addAreaSearchControl(
         to mapView: MKMapView,
         _ coordinator: Coordinator,
@@ -778,17 +760,41 @@ extension MapView {
             onTap: { [community] in community.searchVisibleArea() },
             onDismissNotice: { [community] in community.dismissCuratedNotice() }
         )
+        // Nothing is offered until the map has settled somewhere the list does
+        // not describe, and a pill that flashed in on launch would be offering
+        // to re-ask a question nobody has asked yet.
+        placeInAreaSearchStrip(control, on: mapView, alignedTo: guide)
+        coordinator.areaSearchControl = control
+    }
+
+    /// Puts a *Search this area* pill in the strip at the top of the map,
+    /// withdrawn until its first visibility pass says otherwise.
+    ///
+    /// Both pills — this one and the trail maker's, see
+    /// ``addTrailPointSearchControl(to:_:alignedTo:)`` — are placed here, because
+    /// they are the same control in the same strip. Two spellings of their
+    /// geometry is two controls that drift a point apart and one screenshot
+    /// nobody can explain. The top inset is the one every floating control on
+    /// this map sits in by, ``controlInset``.
+    ///
+    /// Held clear of MapKit's compass and of the weather badge by the side
+    /// clearances rather than by a fixed width, so a long localisation
+    /// truncates instead of sliding underneath either. The control is the
+    /// whole of that strip and its contents are centred in it — the pill and
+    /// the caption are each their own size, and what the strip decides is
+    /// where either of them runs out of room.
+    func placeInAreaSearchStrip(
+        _ control: MapAreaSearchView,
+        on mapView: MKMapView,
+        alignedTo guide: UILayoutGuide
+    ) {
         control.translatesAutoresizingMaskIntoConstraints = false
-        // Starts out of the way: nothing is offered until the map has settled
-        // somewhere the list does not describe, and a pill that flashed in on
-        // launch would be offering to re-ask a question nobody has asked yet.
         control.isHidden = true
         control.alpha = 0
         mapView.addSubview(control)
-        coordinator.areaSearchControl = control
 
         NSLayoutConstraint.activate([
-            control.topAnchor.constraint(equalTo: guide.topAnchor, constant: Self.areaSearchTopInset),
+            control.topAnchor.constraint(equalTo: guide.topAnchor, constant: Self.controlInset),
             control.leadingAnchor.constraint(
                 equalTo: guide.leadingAnchor,
                 constant: Self.areaSearchSideClearance
