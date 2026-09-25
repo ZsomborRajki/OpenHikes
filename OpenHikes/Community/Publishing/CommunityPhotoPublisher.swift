@@ -126,7 +126,7 @@ nonisolated enum CommunityPhotoPublisher {
         do {
             submissionID = try await transport.submitPhotos(staged.draft)
         } catch {
-            let failure = error as? CommunityFailure ?? .unavailable(error.localizedDescription)
+            let failure = CommunityFailure(error)
             logger.error(
                 "Contributing photos failed: \(failure.localizedDescription, privacy: .public)"
             )

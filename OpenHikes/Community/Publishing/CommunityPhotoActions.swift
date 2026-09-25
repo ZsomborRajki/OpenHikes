@@ -228,8 +228,7 @@ private extension CommunityPhotoActions {
                 )
             } catch {
                 isTakingDown = false
-                takeDownFailure = error as? CommunityFailure
-                    ?? .unavailable(error.localizedDescription)
+                takeDownFailure = CommunityFailure(error)
                 HapticMoment.outcomeFailed.play()
                 return
             }

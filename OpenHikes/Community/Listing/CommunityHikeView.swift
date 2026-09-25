@@ -627,8 +627,7 @@ private extension CommunityHikeView {
                 try await transport.takeDown(listing)
             } catch {
                 isTakingDown = false
-                takeDownFailure = error as? CommunityFailure
-                    ?? .unavailable(error.localizedDescription)
+                takeDownFailure = CommunityFailure(error)
                 HapticMoment.outcomeFailed.play()
                 return
             }
@@ -1032,9 +1031,7 @@ private extension CommunityHikeView {
             // than an error nobody caused.
             return
         } catch {
-            phase = .failed(
-                error as? CommunityFailure ?? .unavailable(error.localizedDescription)
-            )
+            phase = .failed(CommunityFailure(error))
         }
     }
 
