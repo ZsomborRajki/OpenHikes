@@ -27,7 +27,7 @@ import SwiftData
 extension OpenHikesModel {
     /// One logger for the sweeps, for the one thing they have to say: a
     /// deletion the store refused.
-    static let sweepLogger = Logger(subsystem: "OpenHikes", category: "LaunchSweeps")
+    nonisolated static let sweepLogger = Logger(subsystem: "OpenHikes", category: "LaunchSweeps")
 }
 
 // MARK: - Claims
@@ -270,5 +270,37 @@ extension OpenHikesModel {
             .max { $0.1.startedAt < $1.1.startedAt }
         guard let (state, record) = open else { return .absent }
         return record.isStale(at: now) ? .abandon(state, record) : .resume(state, record)
+    }
+}
+
+// MARK: - Device reports left behind
+
+extension OpenHikesModel {
+    /// Where Settings ▸ Device Reports kept the MetricKit reports it showed,
+    /// before that screen and the MetricKit integration behind it were
+    /// removed. Nothing writes here any more.
+    nonisolated static let retiredDeviceReportsDirectory = URL.applicationSupportDirectory
+        .appending(path: "FieldMetrics", directoryHint: .isDirectory)
+
+    /// Deletes what an install from before that removal left behind: up to
+    /// sixteen reports and four megabytes that nothing will read again.
+    ///
+    /// The folder belonged to that screen alone, so it goes whole, with no
+    /// claim set to check — unlike every other sweep in this file. Once no
+    /// install predates the build that removed the screen, this can go too.
+    @concurrent
+    static func removeRetiredDeviceReports(
+        at directory: URL = retiredDeviceReportsDirectory
+    ) async {
+        guard FileManager.default.fileExists(atPath: directory.path(percentEncoded: false)) else {
+            return
+        }
+        do {
+            try FileManager.default.removeItem(at: directory)
+        } catch {
+            sweepLogger.error(
+                "Could not remove the retired device reports: \(error.localizedDescription, privacy: .public)"
+            )
+        }
     }
 }
