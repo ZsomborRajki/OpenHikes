@@ -337,25 +337,15 @@ private extension CommunityPhotoShareSheet {
     /// what is yours to publish* — because the whole point of this screen is
     /// that the walk is somebody else's and the pictures are not.
     var reviewSection: some View {
-        Section {
-            CommunityFootnoteLabel(
-                text: Text("Every photo is checked by a person before anyone else can see it."),
-                systemImage: "checkmark.shield",
-                tint: AnyShapeStyle(.tint)
-            )
-        } footer: {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("""
-                Add photos you took yourself, on this trail. A photo taken at your \
-                front door shows where you live.
-                """)
-                Link(destination: MapPurchaseLinks.termsAndConditions) {
-                    Text("By adding photos, you agree to the Terms & Conditions.")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .multilineTextAlignment(.leading)
-                }
-                .accessibilityIdentifier("community-photos-terms-link")
-            }
+        CommunityTermsSection(
+            reviewNotice: Text("Every photo is checked by a person before anyone else can see it."),
+            agreement: Text("By adding photos, you agree to the Terms & Conditions."),
+            termsIdentifier: "community-photos-terms-link"
+        ) {
+            Text("""
+            Add photos you took yourself, on this trail. A photo taken at your \
+            front door shows where you live.
+            """)
         }
     }
 
