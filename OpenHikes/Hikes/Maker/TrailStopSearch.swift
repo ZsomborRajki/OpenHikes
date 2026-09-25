@@ -255,27 +255,24 @@ private struct TrailStopRecentsSection: View {
         // Said, rather than waited on for ever: a refusal is the one state
         // no fix is coming from — see ``LocationManager/isAccessDenied``.
         let isDenied = locationManager?.isAccessDenied == true
+        let status = if hasFix {
+            ""
+        } else if isDenied {
+            String(localized: "Location access is off")
+        } else {
+            String(localized: "Waiting for your location")
+        }
         return Button {
             guard let here = locationManager?.coordinate else { return }
             onPick(TrailStopSearchPick(name: "", coordinate: here))
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "location.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(hasFix ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("My Location").foregroundStyle(hasFix ? .primary : .secondary)
-                    if !hasFix {
-                        Text(isDenied ? "Location access is off" : "Waiting for your location")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .contentShape(.rect)
-            .accessibilityElement(children: .combine)
+            PlaceSearchRow(
+                systemImage: "location.circle.fill",
+                title: String(localized: "My Location"),
+                subtitle: status,
+                glyphStyle: hasFix ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary),
+                titleStyle: hasFix ? .primary : .secondary
+            )
         }
         .buttonStyle(.plain)
         .disabled(!hasFix)
