@@ -529,7 +529,22 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: xcode-27
-    timeout-minutes: 30
+    # 45 rather than 30, on the job's own numbers. Over the 159 green runs
+    # from 2026-09-18 to 2026-09-24 it took 15.2 minutes median, 20.5 p90,
+    # 22.4 p95 and 28.8 at the longest — that one green with 72 seconds to
+    # spare — and three runs in the same span hit the 30-minute gate, the
+    # last of them `main` at ffd78168 (run 36060337040). That run was not a
+    # finding: its 709 tests in 65 suites passed, and the gate fell two
+    # seconds after `** TEST SUCCEEDED **`.
+    #
+    # Almost none of it is the tests, which is what to check before blaming a
+    # new suite. The tests are ~30 seconds; the rest is one cold TSan build of
+    # the app, and it is the build that swings with the machine — 11.6 minutes
+    # on the green PR run of that same change, 25.9 on the `main` run that
+    # timed out, on the same runner image. So this number tracks the size of the project and
+    # the load on the runner pool, and it is raised on the drift, not on the
+    # first timeout.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
