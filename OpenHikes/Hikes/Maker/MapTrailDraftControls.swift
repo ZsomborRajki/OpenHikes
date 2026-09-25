@@ -256,11 +256,6 @@ extension MapView {
 #endif
 
 extension MapView.Coordinator {
-    /// The same fade the camera pill arrives and leaves on, because the two
-    /// take turns in one slot and a different duration would read as the slot
-    /// itself twitching.
-    private static let trailDraftControlsFadeDuration: TimeInterval = 0.25
-
     /// Observes whether a trail can be made right now and shows or hides the
     /// pill, then re-registers — the same imperative arrangement
     /// ``observePhotoControls(_:)`` uses, so navigating between screens never
@@ -298,28 +293,15 @@ extension MapView.Coordinator {
         #if os(iOS)
         guard let trailDraftControls else { return }
         let visible = trailDraftController?.isAvailable == true
-        // Hidden as well as transparent, for the reason the camera pill is: a
-        // control that is invisible but still in the hierarchy answers hit
-        // tests, and this one sits over the map the hiker is panning.
-        // Interaction goes at once rather than when the fade lands.
-        trailDraftControls.isUserInteractionEnabled = visible
-        if visible { trailDraftControls.isHidden = false }
-        let target = visible ? photoControlsSheetAlpha : 0
-        guard animated else {
-            trailDraftControls.alpha = target
-            trailDraftControls.isHidden = !visible
-            return
-        }
-        UIView.animate(withDuration: Self.trailDraftControlsFadeDuration) {
-            trailDraftControls.alpha = target
-        } completion: { [weak self] _ in
-            // Re-read rather than trusting the value this animation started
-            // with: a push and an immediate pop overlap, and a completion that
-            // hid a pill the *next* animation had just brought back would
-            // leave a visible control answering no taps.
-            guard let self,
-                  trailDraftController?.isAvailable != true else { return }
-            trailDraftControls.isHidden = true
+        // The camera pill's resting opacity, since the two share a slot and
+        // therefore share the sheet's fade.
+        trailDraftControls.fadeMapControl(
+            visible: visible,
+            restingAlpha: photoControlsSheetAlpha,
+            animated: animated
+        ) { [weak self] in
+            guard let self else { return false }
+            return trailDraftController?.isAvailable != true
         }
         #endif
     }

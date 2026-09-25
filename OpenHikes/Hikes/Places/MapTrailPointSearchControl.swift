@@ -96,10 +96,6 @@ extension MapView {
 #endif
 
 extension MapView.Coordinator {
-    /// The same quarter-second the other pills arrive and leave on, because
-    /// they are the same control in the same place.
-    private static let trailPointSearchFadeDuration: TimeInterval = 0.25
-
     /// Observes whether the maker is up, whether a search is out, whether a
     /// tap would ask anything and what the last one said — and shows, hides,
     /// dims, spins or captions the pill.
@@ -169,30 +165,11 @@ extension MapView.Coordinator {
         // Cleared along with the pill, so a caption never outlives the maker
         // it is about.
         trailPointSearchControl.notice = visible ? finder.notice?.caption : nil
-        // Hidden as well as transparent, for the reason every other control
-        // over this map is: an invisible view still answers hit tests, and
-        // this one sits over the canvas the hiker is drawing on. Interaction
-        // goes at once rather than when the fade lands.
-        trailPointSearchControl.isUserInteractionEnabled = visible
-        if visible { trailPointSearchControl.isHidden = false }
-        guard animated else {
-            trailPointSearchControl.alpha = visible ? 1 : 0
-            trailPointSearchControl.isHidden = !visible
-            return
-        }
-        UIView.animate(withDuration: Self.trailPointSearchFadeDuration) {
-            trailPointSearchControl.alpha = visible ? 1 : 0
-        } completion: { [weak self] _ in
-            // Re-read rather than trusting the value this animation started
-            // with: opening and closing the maker quickly overlaps two fades,
-            // and a completion that hid the pill the next one had just brought
-            // back would leave a visible control answering no taps. The switch
-            // is re-read for the same reason: it withdraws the pill with the
-            // maker still up.
-            guard let self,
-                  trailDraftController.map({ $0.isEditing && $0.finder.filter.placesShown }) != true
-            else { return }
-            trailPointSearchControl.isHidden = true
+        // The switch is re-read along with the maker when a fade-out lands,
+        // because it withdraws the pill with the maker still up.
+        trailPointSearchControl.fadeMapControl(visible: visible, restingAlpha: 1, animated: animated) { [weak self] in
+            guard let self else { return false }
+            return trailDraftController.map { $0.isEditing && $0.finder.filter.placesShown } != true
         }
         #endif
     }

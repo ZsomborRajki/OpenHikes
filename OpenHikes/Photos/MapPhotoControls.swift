@@ -190,11 +190,6 @@ final class MapPhotoControlsView: UIView {
 #endif
 
 extension MapView.Coordinator {
-    /// How long the pill takes to arrive or leave when the sheet navigates on
-    /// to — or away from — a screen that can receive a photo. Short enough to
-    /// feel like part of the push, long enough not to be a blink.
-    private static let photoControlsFadeDuration: TimeInterval = 0.25
-
     /// Observes whether a photo can be taken right now and shows or hides the
     /// pill, then re-registers — the same imperative arrangement
     /// ``observeSheetMetrics(_:on:)`` uses, so navigating between screens never
@@ -231,31 +226,13 @@ extension MapView.Coordinator {
         if visible {
             photoControls.setAddPlaceVisible(photoCaptureController?.canAddPlace == true)
         }
-        // Hidden as well as transparent: a control that is invisible but still
-        // in the hierarchy answers hit tests, and this one sits over the map
-        // the user is panning.
-        //
-        // Interaction goes at once rather than when the fade lands, for the
-        // same reason: a pill on its way out is still a tap target for the
-        // whole quarter-second it takes to leave.
-        photoControls.isUserInteractionEnabled = visible
-        if visible { photoControls.isHidden = false }
-        let target = visible ? photoControlsSheetAlpha : 0
-        guard animated else {
-            photoControls.alpha = target
-            photoControls.isHidden = !visible
-            return
-        }
-        UIView.animate(withDuration: Self.photoControlsFadeDuration) {
-            photoControls.alpha = target
-        } completion: { [weak self] _ in
-            // Re-read rather than trusting the value this animation started
-            // with: a push and an immediate pop overlap, and a completion that
-            // hid the pill the *next* animation had just brought back would
-            // leave a visible control that answers no taps.
-            guard let self,
-                  photoCaptureController?.isAvailable != true else { return }
-            photoControls.isHidden = true
+        photoControls.fadeMapControl(
+            visible: visible,
+            restingAlpha: photoControlsSheetAlpha,
+            animated: animated
+        ) { [weak self] in
+            guard let self else { return false }
+            return photoCaptureController?.isAvailable != true
         }
         #endif
     }
