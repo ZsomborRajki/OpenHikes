@@ -519,6 +519,30 @@ extension XCTestCase {
         waitUntil(timeout: timeout) { target.isSelected }
     }
 
+    /// Selects a segment of a segmented picker, tapping again only while the
+    /// selection has not happened.
+    ///
+    /// **In dark appearance the first synthesized tap on a segmented picker is
+    /// lost.** Measured on the screenshot run, where both pickers it drives —
+    /// the sheet's *Community* and the maker's *Walking* — took one tap in
+    /// light and two in dark, every run, with the location alert already
+    /// granted away and nothing else on screen. The screen recording shows the
+    /// touch arrive: the selected segment's glass thumb swells under it, and
+    /// the selection stays where it was. Each extra tap is taken only after
+    /// the one before it has had a poll to show its effect, so a tap that did
+    /// land is never answered with another.
+    @MainActor
+    func tapUntilSelected(
+        _ segment: XCUIElement,
+        timeout: TimeInterval = UITestTimeout.navigation
+    ) -> Bool {
+        waitUntil(timeout: timeout) {
+            if segment.isSelected { return true }
+            segment.tap()
+            return segment.isSelected
+        }
+    }
+
     /// Taps a control once it is actually there.
     ///
     /// `tap()` does no waiting of its own: it resolves the query, finds

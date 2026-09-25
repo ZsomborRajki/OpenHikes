@@ -17,9 +17,10 @@
 //  **This class is deliberately absent from `suites` in
 //  `Scripts/run-ui-tests.sh`,** for the reason `measurement_tests` is excluded
 //  from `--all`: it asserts almost nothing and exists to produce files.
-//  `Scripts/screenshots.sh` names it explicitly, and that script is the only
-//  thing that should run it — it is what sets the status bar, the device and
-//  the photo library the frames below assume.
+//  `Scripts/screenshots-light.sh` and `Scripts/screenshots-dark.sh` name it
+//  explicitly, and they are the only things that should run it — they set the
+//  status bar, the device, the photo library and the location grant the
+//  frames below assume.
 //
 //  ## Why the assertions are thin but not absent
 //
@@ -111,9 +112,9 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// Where the walk's middle is aimed, as a share of the screen width.
     ///
     /// Centred. It was biased left for a while, to rescue a trailhead that
-    /// kept hanging off the right edge — which turned out to be the map being
-    /// a few degrees off north rather than anything about where the pins are.
-    /// See ``restoreNorth(in:)``.
+    /// kept hanging off the right edge — which turned out to be a pinch
+    /// turning the map a few degrees off north rather than anything about
+    /// where the pins are. See ``zoomMapInOneStep(in:)``.
     private static let heroRouteCentreX: CGFloat = 0.5
 
     /// Where the walk's middle is aimed, as a share of the screen height.
@@ -129,18 +130,11 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// Where a map-panning drag starts: clear of the pins, the sheet and the
     /// map controls in every corner.
     private static let dragAnchor = (dx: CGFloat(0.72), dy: CGFloat(0.30))
-    /// How much the hero frame enlarges the route once the sheet is down.
-    /// 2.5 takes the line from roughly a quarter of the screen to about two
-    /// thirds of it: the trailhead sits up level with the weather badge and
-    /// the finish clears the camera buttons in the bottom corner. This,
-    /// ``heroRouteCentreX`` and ``heroRouteCentre`` are the three numbers that
-    /// decide how the hero frame sits; nudge them together rather than
-    /// separately.
-    ///
-    /// It only goes this far because the map is put back to north first — see
-    /// ``restoreNorth(in:)``. Turned even a few degrees, the walk is wider
-    /// than the frame well before this.
-    private static let heroZoomIn: CGFloat = 2.5
+    /// Where the hero frame double-taps to zoom: level with the walk's middle
+    /// and a fifth of the screen east of it, which is open water on the
+    /// Königssee — nothing there for the tap to select. Off the line on
+    /// purpose, because a tap on the drawn route opens its hike.
+    private static let zoomTapPoint = CGVector(dx: heroRouteCentreX + 0.2, dy: heroRouteCentre)
 
     /// How far up the recording frame drags its map, as a share of the screen,
     /// to bring the fresh end of the line out from under the sheet.
@@ -290,7 +284,9 @@ nonisolated final class ScreenshotUITests: XCTestCase {
             "--ui-test-enable-location",
             "--ui-test-weather",
         ])
-        app.resetAuthorizationStatus(for: .location)
+        // No `resetAuthorizationStatus`: the script grants location before the
+        // run, so no prompt lands on this frame's first gesture. The monitor
+        // stays for a run started some other way.
         addLocationPermissionMonitor()
         setSimulatedLocation(Self.trailhead)
         defer { XCUIDevice.shared.location = nil }
@@ -656,10 +652,23 @@ extension ScreenshotUITests {
         return map
     }
 
-    /// Pinches the map by `scale` — above 1 zooms in, below 1 zooms out.
+    /// Zooms the map in by one step, with MapKit's own double tap.
+    ///
+    /// Not `XCUIElement.pinch`. A pinch is a two-finger gesture and MapKit
+    /// reads a little rotation out of it, which is not cosmetic here: turned
+    /// a few degrees, a walk six kilometres north-to-south and under two wide
+    /// draws as a diagonal that fits the frame at no zoom. This frame used to
+    /// pinch, then tap MapKit's compass to turn the map back, then pan twice
+    /// more to recover what the turn had moved — three gestures spent undoing
+    /// one. A double tap zooms and does nothing else, so there is nothing to
+    /// undo, and the assertion below says so rather than quietly correcting it.
     @MainActor
-    private func zoomMap(in app: XCUIApplication, by scale: CGFloat) {
-        mapElement(in: app).pinch(withScale: scale, velocity: scale > 1 ? 1 : -1)
+    private func zoomMapInOneStep(in app: XCUIApplication) {
+        mapElement(in: app).coordinate(withNormalizedOffset: Self.zoomTapPoint).doubleTap()
+        XCTAssertFalse(
+            app.buttons["Compass"].waitForExistence(timeout: UITestTimeout.brief),
+            "zooming should leave the map north-up — MapKit shows its compass only when it is not"
+        )
     }
 
     /// Re-frames the route to use the space collapsing the sheet just freed.
@@ -672,21 +681,18 @@ extension ScreenshotUITests {
     /// of padding either side of a 251 pt window: about a quarter of the
     /// screen. Correct for the app, too small for a hero frame.
     ///
-    /// Two gestures rather than one. The route ends up centred a fifth of the
-    /// way down, and a pinch pivots on the map's centre — so zooming without
-    /// panning first drives the line off the top edge. Pan the route's middle
-    /// to the middle, then pinch about it.
+    /// Pan, zoom, pan. The route ends up a fifth of the way down, and a zoom
+    /// doubles every distance from the point it is anchored on — so zooming
+    /// first drives the line off the top edge. The route's middle is panned
+    /// to where the frame wants it, the map zoomed one step beside it, and
+    /// the doubled offset that leaves is panned back out.
     @MainActor
     private func expandRouteIntoTheFreedSpace(in app: XCUIApplication) {
         centrePhotoPins(in: app)
-        zoomMap(in: app, by: Self.heroZoomIn)
-        restoreNorth(in: app)
-        // Twice more, because a pinch multiplies the line's distance from the
-        // map's centre as well as its size — whatever the first pass left
-        // off-centre comes back `heroZoomIn` times worse — and because a drag
-        // lands short of the vector it is given, so one correction only closes
-        // part of the gap. Each pass costs nothing once it is inside
-        // ``centringTolerance``.
+        zoomMapInOneStep(in: app)
+        // Up to twice, because a drag lands short of the vector it is given,
+        // so one correction only closes part of the gap. A pass inside
+        // ``centringTolerance`` spends no gesture.
         centrePhotoPins(in: app)
         centrePhotoPins(in: app)
     }
@@ -711,26 +717,6 @@ extension ScreenshotUITests {
                     withNormalizedOffset: CGVector(dx: 0.7, dy: 0.34 - Self.recordingLift)
                 )
             )
-    }
-
-    /// Puts the map back to north-up if a gesture has turned it.
-    ///
-    /// `XCUIElement.pinch` is a two-finger gesture and MapKit reads a little
-    /// rotation out of it, which is not cosmetic here: turned a few degrees, a
-    /// walk that is six kilometres north-to-south and under two wide draws as
-    /// a diagonal that will not fit the frame at any zoom, and every attempt
-    /// to pan it into place crops the other end. The give-away is MapKit's own
-    /// compass, which it only shows once the map is off north — and which is
-    /// also the fix, because tapping it animates back.
-    @MainActor
-    private func restoreNorth(in app: XCUIApplication) {
-        let compass = app.buttons["Compass"]
-        guard compass.waitForExistence(timeout: UITestTimeout.navigation) else { return }
-        compass.tap()
-        // The reset is animated, and the centring that follows measures pin
-        // positions — so wait for the compass to retire rather than measure
-        // the map mid-turn.
-        _ = compass.waitForNonExistence(timeout: UITestTimeout.navigation)
     }
 
     /// This hike's photo pins, top to bottom.
