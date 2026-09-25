@@ -147,7 +147,7 @@ nonisolated extension CuratedTrailDecoding {
     /// usable name has nothing to put in a row, and one whose box is too big
     /// is not a day hike — see ``CuratedTrailQuery/isDayHike(box:)``.
     static func trails(fromListing data: Data) throws -> [CuratedTrail] {
-        let response = try decode(data)
+        let response = try OverpassRequest.decode(Response.self, from: data)
         return response.elements.compactMap { element -> CuratedTrail? in
             guard element.type == "relation",
                   let bounds = element.bounds,
@@ -193,7 +193,7 @@ nonisolated extension CuratedTrailDecoding {
     /// being fetched the hiker has already chosen this route, and refusing to
     /// draw what they opened would be the filter overreaching.
     static func trails(fromGeometry data: Data) throws -> [Int64: CuratedTrail] {
-        let response = try decode(data)
+        let response = try OverpassRequest.decode(Response.self, from: data)
         var trails: [Int64: CuratedTrail] = [:]
         for element in response.elements where element.type == "relation" {
             guard let bounds = element.bounds,
@@ -437,38 +437,13 @@ nonisolated extension CuratedTrailDecoding {
         }
     }
 
-    struct Response: Decodable {
+    nonisolated struct Response: OverpassAnswer {
         let elements: [Element]
         /// What the server has to say about a query it did not finish. See
-        /// ``OverpassRequest/abort(_:)``, and ``decode(_:)`` for why reading
-        /// it is not optional.
+        /// ``OverpassRequest/decode(_:from:)`` for why reading it is not
+        /// optional, and why a failure leaves as a typed error the caller can
+        /// log and walk past, keeping the published half of the browse list
+        /// standing.
         let remark: String?
-    }
-
-    /// Decodes a response, reporting a malformed one the way the trail graph's
-    /// own decode does — and refusing one that decoded perfectly well and is
-    /// not an answer.
-    ///
-    /// Two failures arrive here dressed as successes, and they are the two
-    /// ordinary weathers of a volunteer-run API. An overloaded Overpass
-    /// answers with an **HTML** page carrying HTTP 200, which fails to decode;
-    /// a query it started and gave up on answers with **valid JSON** carrying
-    /// HTTP 200, an empty or partial `elements`, and a `remark` saying so.
-    /// Neither is a bug, both are normal on an ordinary afternoon, and the
-    /// second is the one with teeth: decoded blind it is indistinguishable
-    /// from an area with no waymarked routes in it, and this app now says that
-    /// out loud under the search button — see ``CuratedTrailNotice``.
-    ///
-    /// Both leave as a typed error the caller can log and walk past, keeping
-    /// the published half of the browse list standing.
-    static func decode(_ data: Data) throws -> Response {
-        let response: Response
-        do {
-            response = try JSONDecoder().decode(Response.self, from: data)
-        } catch {
-            throw TrailGraphProviderError.malformedGraph(error.localizedDescription)
-        }
-        if let abort = OverpassRequest.abort(response.remark) { throw abort }
-        return response
     }
 }

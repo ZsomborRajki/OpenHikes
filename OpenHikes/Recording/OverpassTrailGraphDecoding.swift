@@ -18,22 +18,13 @@ import OpenHikesShared
 
 extension OverpassTrailGraphProvider {
     nonisolated static func decodeGraph(from data: Data) throws -> TrailGraph {
-        let response: OverpassResponse
-        do {
-            response = try JSONDecoder().decode(OverpassResponse.self, from: data)
-        } catch {
-            throw TrailGraphProviderError.malformedGraph(
-                error.localizedDescription
-            )
-        }
-
-        // Before anything is built out of them. An aborted query answers
-        // `200` with valid JSON and an empty `elements`, and a graph built
-        // from that is an empty graph — which this provider would then write
-        // to its cache as *this tile has no trails in it* and keep for the
-        // life of the entry, with nothing anywhere to say the tile was never
-        // really read. See ``OverpassRequest/abort(_:)``.
-        if let abort = OverpassRequest.abort(response.remark) { throw abort }
+        // The remark is read before anything is built out of the elements. An
+        // aborted query answers `200` with valid JSON and an empty `elements`,
+        // and a graph built from that is an empty graph — which this provider
+        // would then write to its cache as *this tile has no trails in it* and
+        // keep for the life of the entry, with nothing anywhere to say the tile
+        // was never really read. See ``OverpassRequest/decode(_:from:)``.
+        let response = try OverpassRequest.decode(OverpassResponse.self, from: data)
 
         let elementsByKey = buildElementIndex(from: response.elements)
         let nodeCoordinates = extractNodeCoordinates(from: response.elements)
