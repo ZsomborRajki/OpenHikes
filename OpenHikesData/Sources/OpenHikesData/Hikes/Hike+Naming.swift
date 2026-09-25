@@ -14,7 +14,11 @@ import Foundation
 public extension Hike {
     /// The name shown everywhere in the UI. Returns ``customName`` when the
     /// user has set one, otherwise falls back to the original ``title``.
-    var displayTitle: String {
+    ///
+    /// `nonisolated`, because it reads nothing but two of the model's own
+    /// columns, and the widget's background match reads it off the main actor
+    /// from a context of its own — see ``HikeRouteInput``.
+    nonisolated var displayTitle: String {
         if let customName, !customName.isEmpty { return customName }
         return title
     }

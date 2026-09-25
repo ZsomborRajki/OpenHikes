@@ -9,7 +9,8 @@
 //  about the name: the watch was sent the one the hiker had given the hike,
 //  and the widget drew the one it was imported under. The name is what is
 //  pinned here, because it is the field a copy can get wrong while still
-//  compiling.
+//  compiling — and so is where it may be read from, because one of the three
+//  reads it off the main actor.
 //
 
 import Foundation
@@ -43,5 +44,21 @@ struct HikeRouteInputTests {
         #expect(input.tintHex == "#FF8800")
         #expect(input.totalDistanceMeters == 1350)
         #expect(input.route == route)
+    }
+
+    @Test("the input is read wherever the hike's context lives, not only on the main actor")
+    func readsWithoutTheMainActor() {
+        let hike = Hike(title: "Afternoon Walk", distanceMeters: 5200)
+        hike.customName = "Jenner Ridge"
+        #expect(Self.readWithoutIsolation(hike).title == "Jenner Ridge")
+    }
+
+    /// Compiles only while the initialiser and ``Hike/displayTitle`` are both
+    /// nonisolated. The widget's background match builds one off the main
+    /// actor, from a context it fetched the hike into there, and a main-actor
+    /// initialiser called from that match is a Swift 6 error that
+    /// `@preconcurrency` had quietly turned into a build warning.
+    nonisolated private static func readWithoutIsolation(_ hike: Hike) -> HikeRouteInput {
+        HikeRouteInput(hike: hike)
     }
 }
