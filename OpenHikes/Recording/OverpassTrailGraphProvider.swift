@@ -6,7 +6,6 @@
 //  sent to Overpass; the recorded trace never leaves the device.
 //
 
-import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesShared
@@ -123,7 +122,6 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         -> OverpassHTTPResponse
 
     private static let cacheZoom = 12
-    private static let cacheLifetime: TimeInterval = 30 * 24 * 60 * 60
     private static let maximumCacheFiles = 64
     /// How long Overpass is allowed to spend on one tile's graph, in seconds.
     ///
@@ -295,7 +293,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         let cached = CachedGraph(fetchedAt: clock(), graph: graph, format: Self.cacheFormat)
         memory[key] = cached
         try write(cached, for: key)
-        trimCache()
+        OverpassCache.trim(directory, keeping: Self.maximumCacheFiles)
     }
 
     private func failFetch(
@@ -432,7 +430,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
 
     private func isCurrent(_ cached: CachedGraph) -> Bool {
         cached.format == Self.cacheFormat
-            && clock().timeIntervalSince(cached.fetchedAt) <= Self.cacheLifetime
+            && clock().timeIntervalSince(cached.fetchedAt) <= OverpassCache.lifetime
     }
 
     private func write(
@@ -450,25 +448,6 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
             )
         } catch {
             throw TrailGraphProviderError.storage(error.localizedDescription)
-        }
-    }
-
-    private func trimCache() {
-        guard let files = try? FileManager.default.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: [.contentModificationDateKey],
-            options: [.skipsHiddenFiles]
-        ), files.count > Self.maximumCacheFiles else { return }
-        let mapped = files.map { url in
-            let date = (try? url.resourceValues(
-                forKeys: [.contentModificationDateKey]
-            ).contentModificationDate) ?? .distantPast
-            return (url, date)
-        }
-        let doomed = mapped
-            .min(count: files.count - Self.maximumCacheFiles) { $0.1 < $1.1 }
-        for (url, _) in doomed {
-            try? FileManager.default.removeItem(at: url)
         }
     }
 

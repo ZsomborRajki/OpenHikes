@@ -55,7 +55,6 @@
 //  ranked for a trail they no longer have.
 //
 
-import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -79,19 +78,11 @@ nonisolated extension TrailPlaceOSM {
 /// The on-disk half of what a place search found.
 ///
 /// A value rather than an actor, for the reason ``CuratedTrailStore`` is one:
-/// every caller is already off the main actor when it gets here, and an actor
-/// would add a hop to each read for nothing. Nothing here touches the main
-/// actor — see the repository instructions on disk work.
+/// every caller is already off the main actor when it gets here. How the
+/// directory behaves — expiry, the re-stamp on use, the trim — is
+/// ``OverpassFileStore``'s, and is the same for every OpenStreetMap cache this
+/// app keeps.
 nonisolated struct TrailPointStore: Sendable {
-    /// How long a stored place is trusted, in seconds.
-    ///
-    /// The thirty days ``CuratedTrailStore`` and ``OverpassTrailGraphProvider``
-    /// both give OpenStreetMap geometry, for the same reason: a spring moves
-    /// when somebody maps it differently, not when the hiker walks past it. A
-    /// day would throw away the point of having this at all; forever would
-    /// keep offering a hut that has been demolished.
-    static let lifetime: TimeInterval = 30 * 24 * 60 * 60
-
     /// How many places are kept. See this file's header for the arithmetic.
     static let maximumFiles = 1200
 
@@ -108,63 +99,43 @@ nonisolated struct TrailPointStore: Sendable {
             .appendingPathComponent("TrailPoints", isDirectory: true)
     }
 
-    /// One element, and when it was fetched.
-    private struct StoredPlace: Codable {
+    /// One element, and when it was fetched — the file format.
+    ///
+    /// Internal rather than private, and only because the compiler needs it:
+    /// a `private` type as the generic argument of ``files`` crashes Swift
+    /// 6.4's IRGen ("Global is external, but doesn't have external or weak
+    /// linkage") when the file is compiled in a batch with its neighbours.
+    nonisolated struct StoredPlace: OverpassFileEntry {
         let fetchedAt: Date
         let place: TrailPlace
+
+        var value: TrailPlace { place }
+
+        init(fetchedAt: Date, value: TrailPlace) {
+            self.fetchedAt = fetchedAt
+            place = value
+        }
     }
 
-    private let directory: URL
-    private let clock: @Sendable () -> Date
+    private let files: OverpassFileStore<StoredPlace>
 
     init(directory: URL, clock: @escaping @Sendable () -> Date) {
-        self.directory = directory
-        self.clock = clock
+        files = OverpassFileStore(directory: directory, maximumFiles: Self.maximumFiles, clock: clock)
     }
 }
 
-// MARK: - Writing a search down
-
 nonisolated extension TrailPointStore {
-    /// Writes a whole search down, and trims **once**.
+    /// Writes a whole search down, and trims once — a search is some hundreds
+    /// of elements, and a trim per element would read a directory of twelve
+    /// hundred files hundreds of times for one tap.
     ///
-    /// The plural is the one that matters, because the caller is plural: a
-    /// search is some hundreds of elements, and a per-element trim would
-    /// enumerate a directory of twelve hundred files hundreds of times for one
-    /// tap. The trim only has to be right about the ceiling after the batch,
-    /// not during it.
-    ///
-    /// Failure is silent and that is deliberate: this is a cache, the caller
-    /// already has the answer in hand, and a hiker drawing a trail has nothing
-    /// to do about a full disk. The next search asks Overpass again, which is
-    /// what would have happened anyway.
     /// Places with no ``TrailPlace/osm`` have nowhere to be filed and are skipped.
     func save(_ found: [TrailPlace]) {
-        guard !found.isEmpty,
-              (try? FileManager.default.createDirectory(
-                  at: directory,
-                  withIntermediateDirectories: true
-              )) != nil
-        else { return }
-        let now = clock()
-        for place in found {
-            guard let osm = place.osm else { continue }
-            let stored = StoredPlace(fetchedAt: now, place: place)
-            guard let data = try? JSONEncoder().encode(stored) else { continue }
-            let url = fileURL(for: osm)
-            try? data.write(to: url, options: .atomic)
-            // Stamped from the same clock a read stamps with, so the eviction
-            // order is one clock's opinion rather than a mixture of this one's
-            // and the file system's.
-            touch(url)
-        }
-        trim()
+        files.save(found.compactMap { place in
+            place.osm.map { (name: $0.fileNameStem, value: place) }
+        })
     }
-}
 
-// MARK: - What is already here, near there
-
-nonisolated extension TrailPointStore {
     /// Stored places standing within `area`, nearest its centre first.
     ///
     /// **This is what a refused search draws, and it does not claim to be the
@@ -173,90 +144,7 @@ nonisolated extension TrailPointStore {
     /// which of these are worth a pin is decided against the drawing
     /// afterwards, by ``TrailPointRanking``, which is why the caller asks for
     /// more of them than it will draw.
-    ///
-    /// Every file is read, because nothing here indexes them. That is the cost
-    /// this cache deliberately does not pay up front, and it is paid on the one
-    /// path where the alternative is a round trip that is not going to be
-    /// answered.
     func places(near area: CommunitySearchArea, limit: Int) -> [TrailPlace] {
-        guard limit > 0,
-              let files = try? FileManager.default.contentsOfDirectory(
-                  at: directory,
-                  includingPropertiesForKeys: nil,
-                  options: [.skipsHiddenFiles]
-              )
-        else { return [] }
-
-        let centre = area.coordinate
-        // One reading of the clock for the whole pass rather than one per
-        // file: twelve hundred of them answer the same question, and a pass
-        // that straddled a tick would age two files differently for no reason
-        // anybody could see.
-        let now = clock()
-        let within = files.compactMap { url -> (url: URL, place: TrailPlace, distance: Double)? in
-            guard let data = try? Data(contentsOf: url),
-                  let stored = try? JSONDecoder().decode(StoredPlace.self, from: data),
-                  now.timeIntervalSince(stored.fetchedAt) <= Self.lifetime
-            else { return nil }
-            let distance = RouteGeometry.distanceMeters(
-                from: centre,
-                to: stored.place.clCoordinate
-            )
-            guard distance <= area.radiusMeters else { return nil }
-            return (url: url, place: stored.place, distance: distance)
-        }
-        // `min(count:)` rather than a full sort and a `prefix`, which is the
-        // same question ``trim()`` asks below and is worth asking the same
-        // way: twelve hundred files are read to keep a couple of hundred.
-        let nearest = within.min(count: limit) { $0.distance < $1.distance }
-        // Re-stamped, for the reason ``CuratedTrailStore`` re-stamps a hit:
-        // without it the places a hiker keeps coming back to are the oldest
-        // files in the directory and the first trim takes exactly those. The
-        // ones that were read and rejected for being in another valley are
-        // left alone — a file this opened and did not offer is not a place
-        // anybody used.
-        for entry in nearest { touch(entry.url) }
-        return nearest.map(\.place)
-    }
-}
-
-// MARK: - Keeping the directory bounded
-
-nonisolated private extension TrailPointStore {
-    func fileURL(for element: TrailPlaceOSM) -> URL {
-        directory.appendingPathComponent("\(element.fileNameStem).json")
-    }
-
-    /// Moves `url` to the newest end of the eviction order.
-    func touch(_ url: URL) {
-        try? FileManager.default.setAttributes(
-            [.modificationDate: clock()],
-            ofItemAtPath: url.path
-        )
-    }
-
-    /// Drops the least recently used files once there are more than
-    /// ``maximumFiles``.
-    ///
-    /// The same shape ``CuratedTrailStore/trim()`` uses, against the same
-    /// `.contentModificationDateKey` — and here that key means *last written
-    /// or last offered*, because ``places(near:limit:)`` re-stamps what it
-    /// hands back.
-    func trim() {
-        guard let files = try? FileManager.default.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: [.contentModificationDateKey],
-            options: [.skipsHiddenFiles]
-        ), files.count > Self.maximumFiles else { return }
-        let dated = files.map { url in
-            let date = (try? url.resourceValues(
-                forKeys: [.contentModificationDateKey]
-            ).contentModificationDate) ?? .distantPast
-            return (url: url, date: date)
-        }
-        let doomed = dated.min(count: files.count - Self.maximumFiles) { $0.date < $1.date }
-        for (url, _) in doomed {
-            try? FileManager.default.removeItem(at: url)
-        }
+        files.values(near: area, limit: limit, at: \.clCoordinate)
     }
 }
