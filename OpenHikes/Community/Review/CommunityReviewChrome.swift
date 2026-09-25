@@ -85,15 +85,7 @@ struct CommunityReviewChrome: ViewModifier {
             } message: {
                 Text(declineWarning)
             }
-            .alert(
-                "Couldn't finish",
-                isPresented: $decisionFailure.isPresent(),
-                presenting: decisionFailure
-            ) { _ in
-                Button("OK", role: .cancel) { decisionFailure = nil }
-            } message: { failure in
-                Text(failure.recoverySuggestion ?? failure.localizedDescription)
-            }
+            .communityFailureAlert("Couldn't finish", failure: $decisionFailure)
     }
 }
 
