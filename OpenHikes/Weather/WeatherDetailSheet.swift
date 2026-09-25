@@ -99,7 +99,6 @@ private struct WeatherDetailSheetModifier: ViewModifier {
 }
 
 struct WeatherDetailView: View {
-    private static let markHeight: CGFloat = 18
     private static let headerSpacing: CGFloat = 12
     /// Between an alert's headline and the authority that issued it.
     private static let alertRowSpacing: CGFloat = 2
@@ -491,7 +490,7 @@ struct WeatherDetailView: View {
                     image
                         .resizable()
                         .scaledToFit()
-                        .frame(maxHeight: Self.markHeight)
+                        .frame(maxHeight: AppleWeatherAttribution.markHeight)
                 } placeholder: {
                     // Deliberately nothing: the wording below already carries
                     // the attribution, so a spinner here would only advertise
