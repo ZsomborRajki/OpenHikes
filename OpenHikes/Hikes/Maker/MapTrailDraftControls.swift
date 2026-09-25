@@ -135,7 +135,8 @@ extension MapView {
     /// makes sharing the slot safe rather than merely tidy.
     ///
     /// Sharing the *constraints* is not possible, because a constraint belongs
-    /// to one view, so the pair is built again here against the same anchors.
+    /// to one view, so ``placeInCreditLineSlot(_:on:_:alignedTo:)`` builds this
+    /// pill a pair of its own against the same anchors.
     /// ``MapView/Coordinator/applyCreditLineClearance()`` activates whichever
     /// of each pair the current provider calls for.
     func addTrailDraftControls(
@@ -147,31 +148,17 @@ extension MapView {
             onDraw: { [trailMaker] in trailMaker.requestOpen() },
             onRecord: { [recordingEntry] in recordingEntry.requestRecording() }
         )
-        controls.translatesAutoresizingMaskIntoConstraints = false
         // Starts out of the way, for the reason the camera pill does:
         // `observeTrailDraftControls` decides on its first pass whether there
         // is anything to offer, and a pill that flashed in before it answered
         // would be visible over a screen that is already pushed.
-        controls.isHidden = true
-        controls.alpha = 0
-        mapView.addSubview(controls)
+        coordinator.trailDraftClearance = placeInCreditLineSlot(
+            controls,
+            on: mapView,
+            coordinator,
+            alignedTo: guide
+        )
         coordinator.trailDraftControls = controls
-
-        guard let attribution = coordinator.attributionView else { return }
-        coordinator.trailDraftAboveCreditLine = controls.bottomAnchor.constraint(
-            equalTo: attribution.topAnchor,
-            constant: -Self.creditLineSpacing
-        )
-        coordinator.trailDraftWithoutCreditLine = controls.bottomAnchor.constraint(
-            equalTo: attribution.bottomAnchor
-        )
-
-        NSLayoutConstraint.activate([
-            controls.leadingAnchor.constraint(
-                equalTo: guide.leadingAnchor,
-                constant: Self.controlInset
-            ),
-        ])
         coordinator.applyCreditLineClearance()
     }
 }

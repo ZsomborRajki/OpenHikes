@@ -463,30 +463,16 @@ struct MapView: MapViewRepresentable, Equatable {
             onLibrary: { [photoCapture] in photoCapture.requestLibrary() },
             onAddPlace: { [photoCapture] in photoCapture.requestPlace() }
         )
-        controls.translatesAutoresizingMaskIntoConstraints = false
         // Starts out of the way: `observePhotoControls` decides on the first
         // pass whether there is anything to photograph, and a pill that
         // flashed in before it answered would be visible on the search screen.
-        controls.isHidden = true
-        controls.alpha = 0
-        mapView.addSubview(controls)
+        coordinator.photoControlsClearance = placeInCreditLineSlot(
+            controls,
+            on: mapView,
+            coordinator,
+            alignedTo: guide
+        )
         coordinator.photoControls = controls
-
-        guard let attribution = coordinator.attributionView else { return }
-        coordinator.photoControlsAboveCreditLine = controls.bottomAnchor.constraint(
-            equalTo: attribution.topAnchor,
-            constant: -Self.creditLineSpacing
-        )
-        coordinator.photoControlsWithoutCreditLine = controls.bottomAnchor.constraint(
-            equalTo: attribution.bottomAnchor
-        )
-
-        NSLayoutConstraint.activate([
-            controls.leadingAnchor.constraint(
-                equalTo: guide.leadingAnchor,
-                constant: Self.controlInset
-            ),
-        ])
         coordinator.applyCreditLineClearance()
     }
     #endif
