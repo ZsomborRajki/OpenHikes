@@ -12,8 +12,8 @@
 //  Follow This Trail on. This is the way to start one without waiting for
 //  that: before the hiker is on the route, with following off, or straight
 //  after an End. Once a walk is under way on this trail it is its Pause and
-//  Resume, beside the fuller ``WalkControls`` group further down, which is
-//  still where End lives.
+//  Resume — the only one there is. ``WalkControls`` further down carries the
+//  phase, the clock and End and Save Hike, and no second Pause (#679).
 //
 //  Draws nothing while another trail holds the walk — ``WalkControls`` names
 //  that one instead — nor on a recording's own draft, which never gets a
@@ -23,6 +23,7 @@
 //
 
 import OpenHikesData
+import OpenHikesShared
 import SwiftUI
 
 struct WalkToggleButton: View {
@@ -57,5 +58,71 @@ struct WalkToggleButton: View {
         }
         .tint(hike.tintOpaque)
         .walkPhaseRefusalAlert($refusedPhase)
+    }
+}
+
+extension TrailWalkPhase {
+    /// The Pause or Resume a walk in this phase offers.
+    var toggleTitle: LocalizedStringKey {
+        switch self {
+        case .following: "Pause Hike"
+        case .paused: "Resume Hike"
+        }
+    }
+
+    var toggleSymbol: String {
+        switch self {
+        case .following: "pause.fill"
+        case .paused: "play.fill"
+        }
+    }
+}
+
+extension TrailWalkSession {
+    /// Pauses a following walk or resumes a paused one — the tap behind the
+    /// bar's ``WalkToggleButton``.
+    ///
+    /// - Returns: the phase the tap asked for when the store refused it, for
+    ///   ``WalkPhaseRefusalAlert`` to say so; `nil` when it was written down.
+    ///   A change that *was* written down says nothing here: the phase moved,
+    ///   and ``WalkControls``' `sensoryFeedback` has already answered it.
+    func togglePhase(from phase: TrailWalkPhase) -> TrailWalkPhase? {
+        let changed = switch phase {
+        case .following: pause()
+        case .paused: resume()
+        }
+        guard !changed else { return nil }
+        HapticMoment.walkFailed.play()
+        return phase == .following ? .paused : .following
+    }
+}
+
+/// Says so when a Pause or Resume was not written down.
+///
+/// Without it a refused Pause is a button that does nothing: the walk is
+/// deliberately left following, because that is what the sidecar still says,
+/// and the row above goes on reading Hike Active.
+private struct WalkPhaseRefusalAlert: ViewModifier {
+    @Binding var refused: TrailWalkPhase?
+
+    func body(content: Content) -> some View {
+        content.alert(
+            "Could not change this hike",
+            isPresented: Binding(get: { refused != nil }, set: { if !$0 { refused = nil } })
+        ) {
+            Button("OK", role: .cancel) { /* no-op */ }
+        } message: {
+            Text(
+                refused == .paused
+                    ? "Pausing it could not be saved, so the hike is still under way. Try pausing it again."
+                    : "Resuming it could not be saved, so the hike is still paused. Try resuming it again."
+            )
+        }
+    }
+}
+
+extension View {
+    func walkPhaseRefusalAlert(_ refused: Binding<TrailWalkPhase?>) -> some View {
+        modifier(WalkPhaseRefusalAlert(refused: refused))
     }
 }
