@@ -44,6 +44,16 @@ nonisolated extension TrailPlace {
     /// built from a symbol and a distance rather than from a name.
     var displayName: String {
         if !name.isEmpty { return name }
-        return symbol?.label ?? String(localized: "Place")
+        return Self.unnamedName(for: symbol)
+    }
+
+    /// What a place of `kind` is called when nobody has named it: the word for
+    /// what it is, or simply *Place*.
+    ///
+    /// Also what every form that makes or edits a place shows in its empty
+    /// name field. The prompt is a promise — *leave this blank and it will be
+    /// called this* — which holds only while the two are one rule.
+    static func unnamedName(for kind: TrailPlaceSymbol?) -> String {
+        kind?.label ?? String(localized: "Place")
     }
 }
