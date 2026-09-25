@@ -3,8 +3,8 @@
 //  OpenHikesUITests
 //
 //  The settings screen and what it governs: which tile provider is in use and
-//  what that provider is allowed to do, the two toggles that outlive the
-//  screen they are set on, and the device reports iOS files against the app.
+//  what that provider is allowed to do, and the two toggles that outlive the
+//  screen they are set on.
 //
 
 import XCTest
@@ -131,54 +131,6 @@ nonisolated final class SettingsUITests: XCTestCase {
         )
     }
 
-    /// The device-report screens, seeded because MetricKit never delivers on a
-    /// Simulator — `mxSignpost` is inert there, so these three screens have
-    /// been unreachable from automation since they shipped.
-    ///
-    /// Seeding writes through the real ``FieldMetricsStore`` into a directory
-    /// of this launch's own, so the reports are read back by the shipping
-    /// loader and no run inherits another's.
-    @MainActor
-    func testReadsExportsAndDeletesSeededFieldReports() {
-        let app = launchApp(arguments: ["--ui-test-seed-metrics=2"])
-
-        element("settings-button", in: app).tap()
-        let report = element("field-metrics-report-row", in: app)
-        XCTAssertTrue(
-            scrollIntoView(report, in: app),
-            "a seeded report should be listed under Device Reports"
-        )
-        report.tap()
-        XCTAssertTrue(
-            element("field-metrics-report-screen", in: app)
-                .waitForExistence(timeout: UITestTimeout.navigation),
-            "tapping a report should open it"
-        )
-        popScreen(in: app)
-
-        let export = element("field-metrics-export-link", in: app)
-        XCTAssertTrue(scrollIntoView(export, in: app))
-        export.tap()
-        XCTAssertTrue(
-            element("field-metrics-export-screen", in: app)
-                .waitForExistence(timeout: UITestTimeout.navigation)
-        )
-        XCTAssertTrue(
-            element("field-metrics-share-button", in: app)
-                .waitForExistence(timeout: Self.exportTimeout),
-            "the archive should finish preparing and offer itself to share"
-        )
-
-        element("field-metrics-delete-button", in: app).tap()
-        popScreen(in: app)
-        let gone = NSPredicate(format: "exists == false")
-        expectation(for: gone, evaluatedWith: report)
-        // The link out to the share screen is drawn only when there is
-        // something to share, so it going with them is the other half of it.
-        expectation(for: gone, evaluatedWith: export)
-        waitForExpectations(timeout: UITestTimeout.existence)
-    }
-
     /// The privacy policy, reached from Settings alone.
     ///
     /// App Review 5.1.1(i) fails a binary whose policy is not linked inside the
@@ -285,9 +237,6 @@ nonisolated final class SettingsUITests: XCTestCase {
             "a subscriber has Manage Subscription instead"
         )
     }
-
-    /// Writing the diagnostics archive is off-main and unhurried.
-    private static let exportTimeout: TimeInterval = 25
 
     /// The switch itself rather than the row it sits in.
     ///

@@ -695,9 +695,6 @@
     "Delete All" : {
 
     },
-    "Delete All Reports" : {
-
-    },
     "Delete All Saved Tiles" : {
 
     },
@@ -729,12 +726,6 @@
 
     },
     "Details" : {
-
-    },
-    "Device Reports" : {
-
-    },
-    "Diagnostics" : {
 
     },
     "Discard Changes" : {
@@ -818,9 +809,6 @@
     "ENE" : {
 
     },
-    "Energy" : {
-
-    },
     "ESE" : {
 
     },
@@ -876,9 +864,6 @@
 
     },
     "Give this trail a name, or leave it blank to keep the default." : {
-
-    },
-    "GPS Accuracy" : {
 
     },
     "Have a GPX file? Tap %@ to import it." : {
@@ -1091,13 +1076,7 @@
     "matched by both time and place" : {
 
     },
-    "Measured Activities" : {
-
-    },
     "measuring the climb" : {
-
-    },
-    "Memory and Storage" : {
 
     },
     "Moderate" : {
@@ -1594,9 +1573,6 @@
     "Places within %@ of the trail, from OpenStreetMap. Kinds turned off in the trail maker are left out." : {
 
     },
-    "Preparing…" : {
-
-    },
     "Press and hold the map to add a stop, or tap a grey route to take it instead. Press and hold a stop to drag it somewhere else." : {
 
     },
@@ -1739,9 +1715,6 @@
     "Replace the trail you're drawing?" : {
 
     },
-    "Report" : {
-
-    },
     "Report Hike" : {
 
     },
@@ -1758,9 +1731,6 @@
 
     },
     "Reset" : {
-
-    },
-    "Responsiveness" : {
 
     },
     "Restore Purchases" : {
@@ -1884,12 +1854,6 @@
 
     },
     "Share" : {
-
-    },
-    "Share Diagnostics" : {
-
-    },
-    "Share Diagnostics File" : {
 
     },
     "Share hike" : {
@@ -2058,9 +2022,6 @@
     "Tells the reviewer something is wrong with it" : {
 
     },
-    "Terminations" : {
-
-    },
     "Terms & Conditions" : {
 
     },
@@ -2116,9 +2077,6 @@
 
     },
     "Their places are on the map behind this sheet." : {
-
-    },
-    "There is nothing to share yet." : {
 
     },
     "These are the hikes from the last search that worked." : {

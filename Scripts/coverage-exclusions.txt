@@ -188,7 +188,6 @@ OpenHikes/Settings/AboutSection.swift
 OpenHikes/Settings/BackgroundTrackingSection.swift
 OpenHikes/Settings/BlockedHikersSection.swift
 OpenHikes/Settings/CloudSyncSection.swift
-OpenHikes/Settings/FieldMetricsSection.swift
 OpenHikes/Settings/SettingsView.swift
 OpenHikes/Tiles/Offline/OfflineStorageAlerts.swift
 OpenHikes/Tiles/TileAttributionView.swift

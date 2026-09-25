@@ -176,7 +176,7 @@ struct AppLaunchEnvironmentTests {
                 "OpenHikes",
                 "--ui-testing",
                 "--ui-test-seed-photos=8",
-                "--ui-test-seed-metrics=999",
+                "--ui-test-seed-hikes=999",
                 "--ui-test-seed-walks=HalfLoop",
             ]
         )
@@ -184,8 +184,8 @@ struct AppLaunchEnvironmentTests {
         #expect(configuration.seededPhotoCount == 8)
         #expect(configuration.seededWalkFixtureName == "HalfLoop")
         // Clamped rather than honoured: a scenario asking for a thousand
-        // reports is a typo, and the store would evict all but sixteen anyway.
-        #expect(configuration.seededMetricsReportCount == 8)
+        // hikes is a typo, and seeding them would be all the scenario did.
+        #expect(configuration.seededLibraryHikeCount == 12)
     }
 
     /// Absent and zero are different answers here, which is the whole reason
@@ -251,14 +251,14 @@ struct AppLaunchEnvironmentTests {
 
     /// Every test-only option is inert without `--ui-testing`, which is what
     /// stops a stray argument on a shipping launch from seeding a hiker's
-    /// diagnostics screen or faking their weather.
+    /// library or faking their weather.
     @Test("test-only seams stay off on a normal launch")
     func seamsIgnoredWithoutUITesting() {
         let configuration = AppLaunchEnvironment.Configuration(
             arguments: [
                 "OpenHikes",
                 "--ui-test-seed-photos=8",
-                "--ui-test-seed-metrics=2",
+                "--ui-test-seed-hikes=2",
                 "--ui-test-fail-first-save",
                 "--ui-test-lose-import-selection",
                 "--ui-test-weather",
@@ -267,7 +267,7 @@ struct AppLaunchEnvironmentTests {
         )
 
         #expect(configuration.seededPhotoCount == 0)
-        #expect(configuration.seededMetricsReportCount == 0)
+        #expect(configuration.seededLibraryHikeCount == 0)
         #expect(!configuration.failsFirstSave)
         #expect(!configuration.losesImportSelection)
         #expect(!configuration.stubsWeather)

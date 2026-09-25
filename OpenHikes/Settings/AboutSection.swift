@@ -105,13 +105,6 @@ struct AboutSection: View {
             // said it nowhere: `Bundle.main` was read for a version in exactly
             // one place and it was the tile requests' User-Agent.
             //
-            // The diagnostics screen looks like it answers this and does not
-            // — its "App version" row is `report.appVersion`, off a stored
-            // MetricKit payload, so it says which build *crashed* and shows
-            // nothing at all on a fresh install. This is the running one, in
-            // the spelling that screen uses for a report, so the two read the
-            // same way.
-            //
             // It is worth a row now rather than later because #340 made a
             // version map to a commit: an archived build is tagged
             // `v<marketing>-<build>`, which is only useful to somebody who can

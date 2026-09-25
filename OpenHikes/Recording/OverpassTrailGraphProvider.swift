@@ -189,12 +189,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
                 .appendingPathComponent("OpenHikes-TrailGraphs", isDirectory: true)
         self.endpoint = endpoint
         self.clock = clock
-        // Timed, because this is the app's only unavoidable radio wake-up
-        // during a hike and wall time is the least interesting thing about
-        // it. What the field report adds is the CPU spent decoding the
-        // response and the bytes it wrote — on a cellular connection the app
-        // did not choose.
-        self.transport = transport ?? OverpassRequest.liveTransport(timing: .trailGraphPrefetch)
+        self.transport = transport ?? OverpassRequest.liveTransport()
     }
 
     nonisolated func region(

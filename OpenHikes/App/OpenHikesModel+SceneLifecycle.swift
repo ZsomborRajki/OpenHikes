@@ -75,11 +75,6 @@ extension OpenHikesModel {
         // `hikeRecorder`'s business rather than the scene's.
         locationManager.stop()
         hikeRecorder.sceneWillResignActive()
-        // Backstop: a launch whose map never appeared — a failed store, an
-        // error screen — would otherwise leave the extended launch task open
-        // for the life of the process, and MetricKit reports nothing for a
-        // measurement that never ends.
-        LaunchMeasurement.finish()
         autoSaveController.sceneWillResignActive {
             try container.mainContext.save()
         }
