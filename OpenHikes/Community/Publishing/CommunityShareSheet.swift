@@ -390,44 +390,27 @@ private extension CommunityShareSheet {
     /// consent mean anything is that the rules were in front of them and
     /// reachable — which a `Link` is and a modal they have to dismiss is not.
     var reviewSection: some View {
-        Section {
-            CommunityFootnoteLabel(
-                text: Text("Every community hike is checked by a person before anyone else can see it."),
-                systemImage: "checkmark.shield",
-                tint: AnyShapeStyle(.tint)
-            )
-        } footer: {
-            VStack(alignment: .leading, spacing: 6) {
-                // What the list is *for*, said before what it forbids.
-                //
-                // The three rules `CommunityPublishingEligibility` enforces
-                // are the mechanical half of this, and a hiker meets them by
-                // not being refused. This is the half no program can check and
-                // a reviewer decides: that the list reads like somebody local
-                // pointing at walks worth doing, rather than like an export of
-                // everything anybody ever recorded.
-                Text("""
-                Community hikes are walks worth someone else's day out — a whole route, \
-                walked by you, that isn't already on the list.
-                """)
-                Text("""
-                Share only a route, photos and notes that are yours to publish. A hike that \
-                starts at your front door shows where you live.
-                """)
-                // The frame is what makes it line up. A `Link`'s label is
-                // sized to its own text and centred inside whatever width it
-                // is given, while the two paragraphs above fill the footer —
-                // so the one line that is shorter than the column sat in the
-                // middle of it, out of step with everything around it (#389).
-                // Filling the width and aligning leading puts it back on the
-                // same edge as the sentences it belongs to.
-                Link(destination: MapPurchaseLinks.termsAndConditions) {
-                    Text("By sharing, you agree to the Terms & Conditions.")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .multilineTextAlignment(.leading)
-                }
-                .accessibilityIdentifier("community-terms-link")
-            }
+        CommunityTermsSection(
+            reviewNotice: Text("Every community hike is checked by a person before anyone else can see it."),
+            agreement: Text("By sharing, you agree to the Terms & Conditions."),
+            termsIdentifier: "community-terms-link"
+        ) {
+            // What the list is *for*, said before what it forbids.
+            //
+            // The three rules `CommunityPublishingEligibility` enforces are
+            // the mechanical half of this, and a hiker meets them by not
+            // being refused. This is the half no program can check and a
+            // reviewer decides: that the list reads like somebody local
+            // pointing at walks worth doing, rather than like an export of
+            // everything anybody ever recorded.
+            Text("""
+            Community hikes are walks worth someone else's day out — a whole route, \
+            walked by you, that isn't already on the list.
+            """)
+            Text("""
+            Share only a route, photos and notes that are yours to publish. A hike that \
+            starts at your front door shows where you live.
+            """)
         }
     }
 

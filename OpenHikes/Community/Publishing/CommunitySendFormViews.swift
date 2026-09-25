@@ -6,8 +6,8 @@
 //
 //  ``CommunityShareSheet`` and ``CommunityPhotoShareSheet`` are deliberately
 //  different screens — one hands over a route and the other adds pictures to
-//  somebody else's — and most of what they contain is their own. Three things
-//  are not, and all three are places where two spellings would be a bug rather
+//  somebody else's — and most of what they contain is their own. Four things
+//  are not, and all four are places where two spellings would be a bug rather
 //  than an inconsistency:
 //
 //  **The credit.** Both publish under the same
@@ -20,6 +20,11 @@
 //  same disk — see ``CommunitySharePhotoTally``, which both forms already
 //  share — and the row that reports it carries an accessibility fix that has
 //  to travel with it.
+//
+//  **The terms.** Both end on the same promise — a person checks what is sent
+//  before anyone else sees it — and the same link to the rules sending it
+//  agrees to, which carries an alignment fix of its own. What each form says
+//  its rules are is its own.
 //
 //  **The toolbar.** *Cancel* becomes *Done* once a send has landed, the
 //  confirmation is replaced by a spinner while one is in flight, and neither
@@ -135,6 +140,49 @@ struct CommunitySendToolbar: ToolbarContent {
                 Button(confirmTitle, action: confirm)
                     .accessibilityIdentifier(confirmIdentifier)
                     .disabled(!canConfirm)
+            }
+        }
+    }
+}
+
+/// That a person looks at what is sent before anyone else can see it, the
+/// rules it is sent under, and the terms that make sending it an agreement.
+///
+/// Stated beside the send button rather than gated behind a checkbox — see
+/// ``CommunityShareSheet``'s review section for the argument. The rules are
+/// each form's own paragraphs; the promise above them and the link below them
+/// are the same on both.
+struct CommunityTermsSection<Rules: View>: View {
+    /// "Every … is checked by a person before anyone else can see it."
+    let reviewNotice: Text
+    /// "By …, you agree to the Terms & Conditions."
+    let agreement: Text
+    let termsIdentifier: String
+    @ViewBuilder var rules: Rules
+
+    var body: some View {
+        Section {
+            CommunityFootnoteLabel(
+                text: reviewNotice,
+                systemImage: "checkmark.shield",
+                tint: AnyShapeStyle(.tint)
+            )
+        } footer: {
+            VStack(alignment: .leading, spacing: 6) {
+                rules
+                // The frame is what makes it line up. A `Link`'s label is
+                // sized to its own text and centred inside whatever width it
+                // is given, while the paragraphs above fill the footer — so
+                // the one line that is shorter than the column sat in the
+                // middle of it, out of step with everything around it (#389).
+                // Filling the width and aligning leading puts it back on the
+                // same edge as the sentences it belongs to.
+                Link(destination: MapPurchaseLinks.termsAndConditions) {
+                    agreement
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.leading)
+                }
+                .accessibilityIdentifier(termsIdentifier)
             }
         }
     }
