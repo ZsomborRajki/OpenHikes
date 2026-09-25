@@ -35,13 +35,14 @@ nonisolated struct SceneLifecycleGate: Sendable {
     ///
     /// `.inactive` on the way *out* resigns, because it is the earliest moment
     /// the app is certain it is losing the foreground and therefore where a
-    /// save belongs. `.background` resigns too, because it is the last point a
-    /// measured run can count on — UI automation backgrounds the app and only
-    /// then terminates it, so dropping that one would lose the tail of every
-    /// performance scenario. The `.inactive` step of *returning* is the
-    /// redundant one: it arrives immediately before the app becomes active
-    /// again and asks the recorder, the auto-save controller and the tile
-    /// store to resign a foreground the app is in the act of regaining.
+    /// save belongs. `.background` resigns too, because it is the last point
+    /// the app can count on before it is suspended or killed — UI automation
+    /// backgrounds the app and only then terminates it, so dropping that one
+    /// would lose whatever changed after the `.inactive` save. The `.inactive`
+    /// step of *returning* is the redundant one: it arrives immediately before
+    /// the app becomes active again and asks the recorder, the auto-save
+    /// controller and the tile store to resign a foreground the app is in the
+    /// act of regaining.
     mutating func event(for phase: ScenePhase) -> SceneLifecycleEvent {
         switch phase {
         case .active:

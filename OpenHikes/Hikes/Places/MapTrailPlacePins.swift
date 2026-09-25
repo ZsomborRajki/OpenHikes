@@ -307,7 +307,7 @@ extension MapView.Coordinator {
     /// pins, a few times a session.
     ///
     /// The guard compares every drawn pin against every wanted row, because a
-    /// place can change its glyph, its heading and its callout without moving.
+    /// place can change its glyph, its heading and its name without moving.
     private func applyPlaceAnnotations(
         _ rows: [TrailPlaceRow],
         belongsToDraft: Bool,
@@ -326,8 +326,9 @@ extension MapView.Coordinator {
         if !drawn.isEmpty {
             mapView.removeAnnotations(drawn)
             self[keyPath: storage] = []
-            // One of them may have been the open callout — the tidy-up
-            // ``applyPhotoPins(_:on:)`` documents, for the same reason.
+            // The tidy-up every removal of annotations makes — see
+            // ``refreshOpenCallout(on:)`` — though a place pin draws no
+            // callout of its own.
             refreshOpenCallout(on: mapView)
         }
         guard !rows.isEmpty else { return }

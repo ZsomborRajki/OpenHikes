@@ -741,7 +741,8 @@ private extension WeatherDetailView {
 /// `WeatherDetailView` sits at `type_body_length`'s 300 lines, and an
 /// extension is the way out that keeps the code where a reader looks for it —
 /// the rule excludes extensions deliberately, and this one is four members
-/// about one section. See the *Lint* section of the instructions file.
+/// about one section — see `excluded_types` under `type_body_length` in
+/// `.swiftlint.yml`.
 extension WeatherDetailView {
     /// The day strip's own measurements, named for the reason
     /// ``HourStrip``'s are.

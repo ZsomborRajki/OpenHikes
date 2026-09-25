@@ -8,13 +8,13 @@
 //  tiles thoroughly. What isn't covered is the object itself — a deleted
 //  `Hike` that other parts of the app are still holding a reference to.
 //
-//  `OpenHikesView` holds two: `selectedHike`, and `navigationPath`, typed
-//  `[SheetRoute]` rather than `NavigationPath` so a widget tap can inspect
-//  it. `MapSheet.delete(_:among:)` clears both, and these tests pin that
-//  rule: a hike left in the path would be handed straight to
-//  `HikeDetailView` by `navigationDestination(for: SheetRoute.self)`, which
-//  reads `hike.title`, `hike.route`, `hike.tint` and builds a
-//  `RouteProfile` from them.
+//  `OpenHikesView` holds two: `selectedHike`, and the sheet's path
+//  (`SheetPresentation.path`), typed `[SheetRoute]` rather than
+//  `NavigationPath` so a widget tap can inspect it.
+//  `MapSheet.delete(_:among:)` clears both, and these tests pin that rule: a
+//  hike left in the path would be handed straight to `HikeDetailView` by
+//  `navigationDestination(for: SheetRoute.self)`, which reads `hike.title`,
+//  `hike.route`, `hike.tint` and builds a `RouteProfile` from them.
 //
 
 import Foundation

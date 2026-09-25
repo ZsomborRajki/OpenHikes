@@ -99,9 +99,9 @@ struct SpeedFormatTests {
         #expect(fraction == "0" || fraction == "1", "expected one fraction digit in \"\(text)\"")
     }
 
-    /// The same answer ``HikeFormat/length(_:)`` gives, and for the same
-    /// reason: an average over a zero duration is an infinity, and "∞ mph"
-    /// on a stat tile reads as though something had been measured.
+    /// The same answer ``HikeFormat/elevation(_:locale:)`` gives, and for the
+    /// same reason: an average over a zero duration is an infinity, and "∞
+    /// mph" on a stat tile reads as though something had been measured.
     @Test("a speed that isn't a number reads as absent", arguments: [
         Double.infinity, -.infinity, .nan,
     ])

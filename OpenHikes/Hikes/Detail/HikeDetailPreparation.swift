@@ -37,8 +37,7 @@ nonisolated enum HikeDetailPreparation {
             "Hike detail route preparation must stay off the main thread"
         )
         // The single route-sized walk behind every number and the elevation
-        // chart. Timed so opening a long hike can be told apart from drawing
-        // one that was already prepared.
+        // chart.
         var statistics = HikeRouteStatistics.Builder(distanceMeters: distanceMeters)
         let profile = try RouteProfile.cancellable(route: route) { point, segmentMeters in
             statistics.consume(point, segmentMeters: segmentMeters)

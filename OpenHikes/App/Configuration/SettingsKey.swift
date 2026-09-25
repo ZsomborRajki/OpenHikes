@@ -109,8 +109,8 @@ nonisolated enum SettingsKey {
     /// hiker's most sensitive store and the app has no business writing to it
     /// because they recorded a walk.
     ///
-    /// Deliberately not synced through ``SyncedSettings``: authorization is
-    /// per-device, and a second phone that has never been granted Health
+    /// Deliberately not synced through ``SyncedSettingsMirror``: authorization
+    /// is per-device, and a second phone that has never been granted Health
     /// access would show the switch on and write nothing.
     static let savesHikesToHealth = "settings.savesHikesToHealth"
     /// The name a hiker's shared hikes are published under, as they last
@@ -121,49 +121,52 @@ nonisolated enum SettingsKey {
     /// discoverability prompt about the hiker's Apple Account and hands back
     /// a name they never chose to attach to a trail. This is the one they did.
     ///
-    /// Deliberately not synced through ``SyncedSettings``. It travels on the
-    /// submission itself, and a value that mirrored as well would be a second
-    /// copy of the same fact that could disagree with what was published.
+    /// Deliberately not synced through ``SyncedSettingsMirror``. It travels on
+    /// the submission itself, and a value that mirrored as well would be a
+    /// second copy of the same fact that could disagree with what was
+    /// published.
     static let communityAuthorName = "community.authorName"
     /// The people this device has blocked, JSON-encoded — see
     /// ``CommunityBlockList``, which owns the shape and the reasoning.
     ///
-    /// Deliberately not synced through ``SyncedSettings``, for the reason
-    /// browsing needs no account in the first place: a block has to work on a
-    /// signed-out phone, and a value that only travelled for hikers with
-    /// iCloud on would be a feature that quietly exists for some of them. The
-    /// cost is that the list does not follow the hiker to a new phone, which
-    /// is the smaller half — they can block again, and the alternative is a
-    /// block that does not work at all where there is nothing to sync with.
+    /// Deliberately not synced through ``SyncedSettingsMirror``, for the
+    /// reason browsing needs no account in the first place: a block has to
+    /// work on a signed-out phone, and a value that only travelled for hikers
+    /// with iCloud on would be a feature that quietly exists for some of them.
+    /// The cost is that the list does not follow the hiker to a new phone,
+    /// which is the smaller half — they can block again, and the alternative
+    /// is a block that does not work at all where there is nothing to sync
+    /// with.
     static let communityBlockedAuthors = "community.blockedAuthors"
     /// The places the trail maker's stop search was used to pick, newest
     /// first, JSON-encoded — see ``TrailStopRecents``, which owns the shape.
     ///
-    /// Deliberately not synced through ``SyncedSettings``: it is a convenience
-    /// of this device's search field, and it never leaves the phone.
+    /// Deliberately not synced through ``SyncedSettingsMirror``: it is a
+    /// convenience of this device's search field, and it never leaves the
+    /// phone.
     static let trailStopRecents = "maker.recentStops"
     /// The kinds of place the trail maker's *Search this area* has been told
     /// to leave out, as ``TrailPlaceSymbol`` raw values — see
     /// ``TrailPlaceFilter``, which owns why it is the switched-off ones that
     /// are stored.
     ///
-    /// Deliberately not synced through ``SyncedSettings``, for the reason
-    /// ``trailStopRecents`` is not: it is about this device's map.
+    /// Deliberately not synced through ``SyncedSettingsMirror``, for the
+    /// reason ``trailStopRecents`` is not: it is about this device's map.
     static let trailPlaceHiddenSymbols = "maker.hiddenPlaceSymbols"
     /// Whether the switch beside the maker's *Search This Area* heading has
     /// taken the drawing's places off the map and out of its save — see
     /// ``TrailPlaceFilter/placesShown``. The *off* position is stored, so a
     /// missing key shows them.
     ///
-    /// Deliberately not synced through ``SyncedSettings``, for the reason
-    /// ``trailStopRecents`` is not: it is about this device's map.
+    /// Deliberately not synced through ``SyncedSettingsMirror``, for the
+    /// reason ``trailStopRecents`` is not: it is about this device's map.
     static let trailPlacesHidden = "maker.placesHidden"
     /// Whether the switch beside a saved hike's *Places* heading has taken
     /// its places off the map — see ``TrailPlacePinController/showsPins``.
     /// The *off* position is stored, so a missing key draws them.
     ///
-    /// Deliberately not synced through ``SyncedSettings``, for the reason
-    /// ``trailStopRecents`` is not: it is about this device's map.
+    /// Deliberately not synced through ``SyncedSettingsMirror``, for the
+    /// reason ``trailStopRecents`` is not: it is about this device's map.
     static let trailPlacePinsHidden = "places.pinsHidden"
 }
 

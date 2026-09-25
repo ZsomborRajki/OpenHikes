@@ -30,7 +30,7 @@
 //  bigger win than the Siri phrasing: it costs a conformance and a donation,
 //  and it means a hiker who searches their phone for a trail name finds the
 //  walk they did on it. The donation is a launch sweep — see
-//  ``OpenHikesModel/indexHikesForSpotlight(in:)``.
+//  `HikeSpotlightIndex.donate(from:)`, run from the app's `init()`.
 //
 //  ## Why neither type says `nonisolated`
 //

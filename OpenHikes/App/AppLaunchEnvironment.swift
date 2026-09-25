@@ -327,15 +327,15 @@ nonisolated enum AppLaunchEnvironment {
 
     /// How many synthetic photos to attach to the hike a launch imports.
     ///
-    /// The photo pipeline is the one part of the app a UI test cannot reach
-    /// on its own: the camera is unavailable on the Simulator and the library
-    /// picker is a system process. Without seeding, every scenario measures a
-    /// hike with an empty gallery — which is how the photo feature shipped
+    /// The photo pipeline is the one part of the app a UI test cannot reach on
+    /// its own: the camera is unavailable on the Simulator and the library
+    /// picker is a system process. Without seeding, every test sees a hike
+    /// with an empty gallery — which is how the photo feature once shipped
     /// without appearing in a single performance number.
     ///
-    /// These go through ``HikePhotoImport``, so what is measured afterwards is
-    /// the real store, the real files on disk and the real decode path; only
-    /// the pixels are invented.
+    /// These go through ``HikePhotoImport``, so what a test reads afterwards
+    /// is the real store, the real files on disk and the real decode path;
+    /// only the pixels are invented.
     static let seededPhotoCount = configuration.seededPhotoCount
     /// How many plain hikes to put in the library before anything else runs.
     ///

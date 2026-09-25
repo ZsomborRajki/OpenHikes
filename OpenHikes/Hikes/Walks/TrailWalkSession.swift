@@ -311,7 +311,7 @@ final class TrailWalkSession {
 
     /// - Returns: whether the match closed the walk. Both callers publish the
     ///   fix they just fed in, and a fix that completed a walk must not be
-    ///   published: with the record cleared, `publishes(_:)` says yes and
+    ///   published: with the record cleared, `publishes(hikeID:)` says yes and
     ///   `payload(for:)` says nothing, so the write would start a fresh plain
     ///   follow over the finished panel ``walkDidEnd(final:)`` just queued.
     @discardableResult private func recordMatch(hikeID: UUID, distance: Double, at now: Date) -> Bool {

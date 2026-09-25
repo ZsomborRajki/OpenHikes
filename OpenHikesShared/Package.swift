@@ -1,18 +1,21 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-/// Platforms track the app rather than trailing it. The app ships iOS 26.0
-/// only, so a shared target that still claimed iOS 18 would be refusing every
-/// API added since — silently, as an unavailability error at the one call site
-/// that reached for one. watchOS is named because `OpenHikesWatch` genuinely
-/// builds against it and reads the payloads, the trail glyph and the
-/// formatters from here; the three files that are iOS-only concerns —
-/// the Control Center intent, the widget's configuration intent and the
-/// Spotlight-indexed entity behind it — say so with `#if`. macOS and visionOS
-/// are named at the same level for a weaker reason: nothing builds them today
-/// (see the `canImport` guards in the sources), but if one ever does it
-/// should start where the app already is. `swift test` runs the suite on the
-/// macOS host, which CI pins to the `xcode-27` runner image.
+/// Platforms track the app rather than trailing it, as closely as the CodeQL
+/// build allows: the phone targets deploy to iOS 27.0, but CodeQL still builds
+/// the app on Xcode 26.6 with `IPHONEOS_DEPLOYMENT_TARGET=26.0` (see
+/// `codeql.yml`), and the watch app deploys to watchOS 26.0. A shared target
+/// that claimed anything older — iOS 18, say — would be refusing every API
+/// added since, silently, as an unavailability error at the one call site that
+/// reached for one. watchOS is named because `OpenHikesWatch` genuinely builds
+/// against it and reads the payloads, the trail glyph and the formatters from
+/// here; what is iOS-only says so with `#if` — the Live Activity's ActivityKit
+/// conformance and its buttons, the Spotlight half of `HikeEntity`, and the
+/// UIKit haptics. macOS and visionOS are named at the same level for a weaker
+/// reason: nothing builds them today (see the `canImport` guards in the
+/// sources), but if one ever does it should start where the app already is.
+/// `swift test` runs the suite on the macOS host, which CI pins to the
+/// `xcode-27` runner image.
 let package = Package(
     name: "OpenHikesShared",
     platforms: [

@@ -44,8 +44,7 @@ nonisolated extension OfflineTileDownloader {
             "Offline-download planning must stay off the main thread"
         )
         // The one thing that runs before a download commits to any network
-        // traffic, so a trace can tell "the tap did nothing for two seconds"
-        // apart from "the tile server was slow".
+        // traffic.
         var coordinates: [CLLocationCoordinate2D] = []
         coordinates.reserveCapacity(route.count)
         for (index, point) in route.enumerated() {

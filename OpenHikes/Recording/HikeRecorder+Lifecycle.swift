@@ -196,13 +196,6 @@ extension HikeRecorder {
             return
         }
         guard phase == .waitingForFix || phase == .recording else { return }
-        // Counted before any policy runs, but after the phase guard above, so
-        // the report can show the whole funnel: what this manager delivered
-        // (`RecordingFixDelivered`), what reached a live recording, what
-        // survived the quality gate, and what the recording kept. A wide gap
-        // between the first and the last is radio energy spent on fixes the
-        // app was always going to discard, and the distance filter is what
-        // closes it.
         if LocationFixPolicy.accepts(
             location,
             maximumAge: LocationFixPolicy.foregroundMaximumAge,
@@ -509,7 +502,6 @@ extension HikeRecorder: CLLocationManagerDelegate {
         didUpdateLocations locations: [CLLocation]
     ) {
         let ordered = locations.sorted { $0.timestamp < $1.timestamp }
-        // The head of the *recorder's* funnel, marked here rather than left to
         // Synchronous on the main actor rather than a task per delivery. The
         // sort above only orders a batch *within itself*; it is `onMainActor`
         // that keeps two consecutive batches from arriving out of order and

@@ -54,10 +54,10 @@ public enum HikeActivityControlAction: String, Sendable {
 
 /// Why a tap could not do what it said, in the words the panel will use.
 ///
-/// A closed set rather than a message, because the panel is 4 KB of budget
-/// and a sentence written in the app would have to cross the wire on every
-/// update. The widget spells these — see `HikeActivityNoticeText`.
-/// The cases are alphabetical rather than in order of severity, which
+/// A closed set rather than a message, because the panel is 4 KB of budget and
+/// a sentence written in the app would have to cross the wire on every update.
+/// The widget spells these — see `HikeActivityControls.wording(for:)`. The
+/// cases are alphabetical rather than in order of severity, which
 /// `sorted_enum_cases` requires and nothing here minds — no code compares two
 /// of these. The raw values are written out for the reason
 /// ``WeatherUVCategory``'s are: one of these crosses the wire into an

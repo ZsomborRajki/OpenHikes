@@ -1026,7 +1026,7 @@ private extension CommunityHikeView {
         } catch is CancellationError {
             // The screen has gone. There is nothing to report a failure on and
             // nothing the hiker could do about it — the same call
-            // ``CommunityBrowser/perform(_:describing:about:matching:_:)``
+            // ``CommunityBrowser/perform(_:describing:about:matching:from:_:)``
             // makes, and leaving the phase alone is what keeps a screen that
             // is on its way back from a push showing *Loading route…* rather
             // than an error nobody caused.

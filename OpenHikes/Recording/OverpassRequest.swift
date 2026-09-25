@@ -4,13 +4,15 @@
 //
 //  How this app asks Overpass anything, in one place.
 //
-//  There are two callers and they are unrelated — ``OverpassTrailGraphProvider``
-//  fetching the walking graph a recording is matched against, and
-//  ``CuratedTrailSource`` fetching the waymarked routes the community list
-//  offers. What they share is not logic but *manners*: the same identifying
+//  There are three callers and they are unrelated —
+//  ``OverpassTrailGraphProvider`` fetching the walking graph a recording is
+//  matched against, ``CuratedTrailSource`` fetching the waymarked routes the
+//  community list offers, and ``TrailPointSource`` fetching the places along a
+//  trail. What they share is not logic but *manners*: the same identifying
 //  `User-Agent`, the same form encoding, the same arithmetic behind how long
 //  to wait, the same reading of a `429` and its `Retry-After` — and the same
-//  reading of the failure that arrives dressed as a success, see ``abort(_:)``.
+//  reading of the failure that arrives dressed as a success, see
+//  ``abort(_:)``.
 //
 //  Those are the half a volunteer-run API notices, and the half that would
 //  drift silently if it were written twice. A second copy that forgot the

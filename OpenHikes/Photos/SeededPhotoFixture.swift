@@ -4,18 +4,18 @@
 //
 //  Photos for a hike that no one photographed.
 //
-//  The gallery, the thumbnail decode and the viewer are the newest expensive
-//  thing in the app and the only part of it UI automation cannot reach: the
-//  Simulator has no camera, and the library picker is a system process a test
-//  is not allowed to drive. So every performance scenario measured a hike with
-//  an empty strip, and the photo pipeline shipped without appearing in a
-//  single number.
+//  The gallery, the thumbnail decode and the viewer are the part of the app UI
+//  automation cannot otherwise reach: the Simulator has no camera, and the
+//  library picker is a system process a test is not allowed to drive. So every
+//  scenario of the since-retired performance harness measured a hike with an
+//  empty strip, and the photo pipeline shipped without appearing in a single
+//  number.
 //
 //  This closes that hole from the app side, behind `--ui-test-seed-photos=N`.
 //  What it fakes is the pixels and nothing else: the bytes go through
 //  ``HikePhotoImport``, so they are written by the real ``HikePhotoStore``,
 //  land as real files, and are read back by the real ImageIO decode path the
-//  strip uses. A scenario that opens the detail screen afterwards is measuring
+//  strip uses. A test that opens the detail screen afterwards is exercising
 //  the shipping code.
 //
 //  The drawing matters more than it looks. A flat fill compresses to a few

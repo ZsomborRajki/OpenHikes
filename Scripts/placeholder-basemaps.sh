@@ -9,8 +9,8 @@
 # This renders the placeholder's four basemaps ahead of time — the two shapes
 # and the two appearances, exactly the set the renderer produces — and checks
 # them into the widget's asset catalogue, where `TrailWidgetPlaceholderBasemaps`
-# reads them back through the `imageData:` seam `TrailMapView` already has for
-# previews and tests.
+# names them and `TrailWidgetBasemapImages` reads them back through the
+# `imageData:` seam `TrailMapView` already has for previews and tests.
 #
 # It is a *development* tool and is in no gate. Re-run it when the placeholder
 # route in `TrailWidgetPlaceholder.swift` moves — `placeholderBasemapsFrameTheTrail`

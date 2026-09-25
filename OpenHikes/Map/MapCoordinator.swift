@@ -338,7 +338,7 @@ extension MapView {
         /// The same, for the *Search this area* pill's visibility.
         var isObservingAreaPrompt = false
         /// Whether a callout is open, which the pill has to get out of the way
-        /// of — see `withdrawAreaSearchForCallout(on:)`.
+        /// of — see `withdrawAreaSearchForCallout(open:)`.
         var hasOpenCallout = false
         /// Whether the trail maker has the strip at the top of the map, which
         /// is the one exclusion in this feature that does not fall out of an

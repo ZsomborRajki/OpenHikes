@@ -333,10 +333,9 @@ public extension Hike {
     /// back several assets at once and out of order, and there is no second
     /// place for the order to be got wrong if there is no stored order.
     var orderedPhotos: [HikePhoto] {
-        // Marked because this is a full sort behind a computed property, and a
-        // computed property is invisible at its call sites: the viewer used to
-        // read it six times per body pass without any of them looking like
-        // work. A count that outruns `PhotoViewerBody` is the shape to catch.
+        // A full sort behind a computed property, and a computed property is
+        // invisible at its call sites: the viewer used to read it six times
+        // per body pass without any of them looking like work.
         photos.sorted { lhs, rhs in
             // The timestamps are compared first and the identifiers only on a
             // tie. `UUID.uuidString` allocates a 36-character string, and

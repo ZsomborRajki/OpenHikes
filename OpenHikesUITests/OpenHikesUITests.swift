@@ -425,7 +425,8 @@ nonisolated final class OpenHikesUITests: XCTestCase {
 
 /// The day strip's test, in a same-file extension rather than in the class
 /// above, which sits at `type_body_length`'s 300 lines. The rule excludes
-/// extensions deliberately; see the *Lint* section of the instructions file.
+/// extensions deliberately — see `excluded_types` under `type_body_length` in
+/// `.swiftlint.yml`.
 extension OpenHikesUITests {
     /// The week the sheet was carrying all along.
     ///

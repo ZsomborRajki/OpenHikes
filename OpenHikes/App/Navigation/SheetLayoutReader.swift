@@ -12,10 +12,10 @@
 //  whenever SwiftUI thinks the value *may* have moved, and the scene
 //  transitions a backgrounded recording goes through are one of those times.
 //  Measured, with the read in `OpenHikesView`: one extra root body pass per
-//  scene transition, which `testBackgroundRecordingCostsNothingPerFix` fails on
-//  by exactly that one, plus the map update pass and the tile requests that
-//  follow it — 250-odd of them in an offline browse that is budgeted for none.
-//  The whole of it went away when the read moved here.
+//  scene transition — which the since-retired performance suite's background
+//  recording test failed on by exactly that one — plus the map update pass and
+//  the tile requests that follow it: 250-odd of them in an offline browse that
+//  is budgeted for none. The whole of it went away when the read moved here.
 //
 //  A `View` of its own because that is the only render boundary SwiftUI has: a
 //  helper `func`, a computed `var` and an `.overlay` closure are all inlined

@@ -4,12 +4,13 @@
 //
 //  How big a photograph is drawn when it is one of several.
 //
-//  Three screens lay out the same thumbnails: the hike's own gallery strip,
-//  the strip on the share form that decides which of them go, and the grid the
-//  discovery sheet offers. They agreed about the corner radius and the gap by
-//  hand, and about the tile size in a comment — ``CommunitySharePhotoStrip``
-//  said it was drawing "the same 76-point tile the hike's own gallery draws",
-//  which was true and was not checkable.
+//  Several screens lay out the same thumbnails: the hike's own gallery strip,
+//  the strip on the share form that decides which of them go, a place's strip
+//  and the one *Add Place* stages, and the grid the discovery sheet offers.
+//  The first three agreed about the corner radius and the gap by hand, and
+//  about the tile size in a comment — ``CommunitySharePhotoStrip`` said it was
+//  drawing "the same 76-point tile the hike's own gallery draws", which was
+//  true and was not checkable.
 //
 //  It matters most between the two strips, and for the reason that comment
 //  gave: they are the same row of the same photographs, one of them with

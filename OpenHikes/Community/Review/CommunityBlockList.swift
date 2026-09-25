@@ -25,7 +25,7 @@
 //  person's opinion rather than a fact about the hike.
 //
 //  What that costs is a list that does not follow the hiker to a new phone.
-//  Deliberately not synced through ``SyncedSettings``: see
+//  Deliberately not synced through ``SyncedSettingsMirror``: see
 //  ``SettingsKey/communityBlockedAuthors``.
 //
 //  ## Why it is keyed on `authorID` and not on a name
@@ -147,10 +147,11 @@ final class CommunityBlockList {
         // not have.
         //
         // A curated route reaches here by a different road and gets the same
-        // refusal: ``CommunityOrigin/openStreetMap(relationID:)`` has no author
-        // to name, so ``CommunityListing/blockableAuthorID`` is `nil`. The
-        // screen does not offer the action at all — see ``CommunityHikeView``
-        // — and this is the guard behind that rather than instead of it.
+        // refusal: ``CommunityOrigin/openStreetMap(relationID:facts:)`` has no
+        // author to name, so ``CommunityListing/blockableAuthorID`` is `nil`.
+        // The screen does not offer the action at all — see
+        // ``CommunityHikeView`` — and this is the guard behind that rather
+        // than instead of it.
         guard let authorID = listing.blockableAuthorID, !authorID.isEmpty else {
             Self.logger.error(
                 "Refused to block listing \(listing.id, privacy: .public): it names no author."

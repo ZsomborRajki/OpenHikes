@@ -171,9 +171,9 @@ struct MapSheetHikes: View, Equatable {
         // themselves changed.
         //
         // This is where SwiftData's `@Query` lands, and a query has no
-        // per-property granularity: any write to any `Hike` re-runs it. The
-        // mark is how a recording that writes to its draft hike per fix would
-        // show up — as this body ticking at fix rate.
+        // per-property granularity: any write to any `Hike` re-runs it, so a
+        // recording that wrote to its draft hike per fix would re-run this
+        // body at fix rate.
         let matchingHikes = isSearchFocused ? hikeSearch.rankedHikes(matching: searchText, in: hikes) : []
         // A focused field with nothing typed in it is not a search — but a
         // focused field with something typed in it is one whether or not

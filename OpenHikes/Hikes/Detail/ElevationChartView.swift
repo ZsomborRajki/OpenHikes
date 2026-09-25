@@ -113,9 +113,8 @@ struct ElevationChartView: View, Equatable {
     var body: some View {
         // Live follow is *meant* to invalidate this body (and the progress
         // row) once per published fix — at most once a second, and only while
-        // the hiker is moving. That rate is the reference every other body's
-        // rate is judged against: anything else moving at it is following
-        // location it was supposed to be insulated from.
+        // the hiker is moving. Any other body re-running at that rate is
+        // following location it was supposed to be insulated from.
         let domain = elevationDomain(profile, plotWidth: plotWidth)
         let trackerSample = profile.sample(atDistance: tracker.trackerDistance)
         let liveSample = tracker.liveTrackerDistance.flatMap { profile.sample(atDistance: $0) }
@@ -465,8 +464,6 @@ struct ElevationChartView: View, Equatable {
 struct ElevationPlaceholderView: View {
     private static let tintOpacity = 0.12
     private static let height: CGFloat = 180
-    /// The same shape the graph this replaces carries — see
-    /// ``ElevationChartView``'s `plotCornerRadius`.
     private static let cornerRadius: CGFloat = 16
 
     let tint: Color

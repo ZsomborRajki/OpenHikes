@@ -6,12 +6,13 @@
 //  subscribed → lapsed, and what each transition leaves behind for the next
 //  cold launch to read.
 //
-//  Driven entirely through the injected `currentEntitlements` closure, which is
-//  why that seam exists. Nothing here reaches StoreKit: `purchase()` ends in
-//  `Product.purchase()`, which a hosted unit bundle cannot answer without a
-//  StoreKit test session, and a test that waited on the real App Store would be
-//  measuring the network. ``MapEntitlementStoreRestoreTests`` covers the
-//  restore path through the second seam beside that one.
+//  Driven entirely through the injected `currentEntitlements` closure, which
+//  is why that seam exists. Nothing here reaches StoreKit: a purchase happens
+//  inside the paywall's `SubscriptionStoreView`, which a hosted unit bundle
+//  cannot drive or answer without a StoreKit test session, and a test that
+//  waited on the real App Store would be measuring the network.
+//  ``MapEntitlementStoreRestoreTests`` covers the restore path through the
+//  second seam beside that one.
 //
 //  ``MapEntitlement`` is process-wide and shared with every other suite in this
 //  bundle, so each test here restores it — see ``restoreProcessEntitlement()``.
@@ -42,10 +43,10 @@
 //     is called through an injectable closure rather than directly. The real
 //     one is unreachable from here; every branch above it is covered by
 //     ``MapEntitlementStoreRestoreTests`` through that seam.
-//  4. `start()` and `loadProduct()` do resolve through the seam above, and are
-//     covered by ``MapEntitlementStoreLaunchTests`` rather than here — they are
-//     the only tests in the bundle that reach StoreKit for real, so that suite
-//     carries a time limit and its header explains what it cannot clean up.
+//  4. `start()` does resolve through the seam above, and is covered by
+//     ``MapEntitlementStoreLaunchTests`` rather than here — those are the only
+//     tests in the bundle that reach StoreKit for real, so that suite carries
+//     a time limit and its header explains what it cannot clean up.
 //
 
 import Foundation

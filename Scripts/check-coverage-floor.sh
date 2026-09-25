@@ -21,7 +21,7 @@
 # syntax error in it surfaces as a failed job on the pull request that had
 # nothing to do with it. Every program this repository runs is parse-checked by
 # the `quality` job and covered by `Scripts/run-script-tests.sh`, and this one
-# can fail a merge.
+# can fail the workflow.
 #
 # Exit status:
 #   0  at or above the floor

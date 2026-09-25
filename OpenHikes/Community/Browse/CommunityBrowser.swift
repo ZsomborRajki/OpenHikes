@@ -520,11 +520,12 @@ final class CommunityBrowser {
     /// question's rather than the transport's.
     func searchVisibleArea() {
         // A second question while the first is unanswered buys nothing and
-        // costs an Overpass listing pass: ``perform(_:describing:about:matching:from:)``
-        // awaits the task it supersedes before starting, so a tap during a
-        // search cannot arrive sooner — it can only queue another one. The
-        // pill is dimmed and spinning while this is true, so a tap that gets
-        // here at all is a race rather than an instruction.
+        // costs an Overpass listing pass:
+        // ``perform(_:describing:about:matching:from:_:)`` awaits the task it
+        // supersedes before starting, so a tap during a search cannot arrive
+        // sooner — it can only queue another one. The pill is dimmed and
+        // spinning while this is true, so a tap that gets here at all is a
+        // race rather than an instruction.
         guard isBrowsing, !isSearching else { return }
         if let offeredArea {
             commit(offeredArea, from: .withCuratedTrails)
@@ -913,8 +914,8 @@ final class CommunityBrowser {
     ///
     /// The name lands in ``pendingName`` and reaches ``areaName`` only when
     /// the rows it describes are the rows on screen — either here, if the
-    /// results got back first, or in ``accept(_:answering:about:)`` if they
-    /// have not.
+    /// results got back first, or in
+    /// ``accept(_:answering:about:matching:from:)`` if they have not.
     ///
     /// It used to clear ``areaName`` up front and publish straight into it,
     /// on the reasoning that the old name described somewhere the list was no

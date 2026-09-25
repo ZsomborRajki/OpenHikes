@@ -109,10 +109,10 @@ extension MapView.Coordinator {
 
     /// Takes hold of whichever point is under `point`.
     ///
-    /// - Returns: whether one was. Split from the handler above for the reason
-    ///   ``addTrailDraftWaypoint(at:in:)`` is: a recognizer's state and
-    ///   location are set by the touch system and cannot be driven by a suite,
-    ///   so the half worth asserting on has to be reachable without one.
+    /// - Returns: whether one was. Split from the handler above because a
+    ///   recognizer's state and location are set by the touch system and
+    ///   cannot be driven by a suite, so the half worth asserting on has to be
+    ///   reachable without one.
     @discardableResult func beginTrailDraftDrag(at point: CGPoint, in mapView: MKMapView) -> Bool {
         guard let controller = trailDraftController,
               let index = trailDraftWaypointIndex(at: point, in: mapView),

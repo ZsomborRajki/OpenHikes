@@ -4,7 +4,7 @@
 //
 //  When the app may spend a WeatherKit request, and on what.
 //
-//  This replaced ``WeatherPollState``, which keyed everything on a ~1.1 km
+//  This replaced `WeatherPollState`, which keyed everything on a ~1.1 km
 //  lat/lon grid derived from the hiker's position. The grid was only ever a
 //  proxy for "has the subject changed", and a bad one: its keys flipped back
 //  and forth underneath a hiker standing on a boundary, which needed an

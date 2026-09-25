@@ -149,7 +149,7 @@ echo "Building the index into $derived_data. This takes minutes on a cold folder
 
 # Periphery's own build, as 3.8.0 runs it, pointed at this checkout's folder.
 # The settings after `build-for-testing` are the ones Periphery adds to turn
-# indexing on and signing off. The last three are this project's:
+# indexing on and signing off. The last two are this project's:
 #
 #   - `-skipPackagePluginValidation`, because a fresh derived-data folder
 #     re-resolves packages and hits the SwiftLintPlugins fingerprint check that

@@ -33,7 +33,7 @@ struct HikeWalkHistory: View {
     }
 
     var body: some View {
-        // Where a walk ending lands: this body, and not `HikeDetailBody`.
+        // Where a walk ending lands: this body, and not `HikeDetailView`'s.
         Group {
             if walks.isEmpty {
                 emptyState

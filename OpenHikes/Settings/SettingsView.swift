@@ -34,13 +34,13 @@ struct SettingsView: View {
     /// render — so the query was an input this screen did not want.
     ///
     /// Measured both ways before the change was kept, and it is worth being
-    /// straight about the result: the `settings` scenario reads the same 2
-    /// `SettingsBody` passes for Clear Cache with the query and without it,
-    /// because that action's writes land in one transaction and SwiftData
-    /// coalesces them into a single invalidation that the explicit state
-    /// changes were already paying for. What the fetch removes is the *shape*
-    /// — an unbounded number of invalidation sources, none of them visible at
-    /// this screen — not a number anything currently reproduces.
+    /// straight about the result: Clear Cache cost the same two body passes of
+    /// this screen with the query and without it, because that action's writes
+    /// land in one transaction and SwiftData coalesces them into a single
+    /// invalidation that the explicit state changes were already paying for.
+    /// What the fetch removes is the *shape* — an unbounded number of
+    /// invalidation sources, none of them visible at this screen — not a
+    /// number anything currently reproduces.
     ///
     /// A fetch is also the more correct of the two. Every caller wants a
     /// snapshot at the moment it acts, and a fetch taken then cannot be a pass
@@ -111,12 +111,12 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        // This screen is an eight-section `Form` in one body, so every input it
-        // takes costs all of it. The mark is how an input that follows a
-        // *hike* would show up — a recording writing to its draft per fix, or
-        // auto-save folding tile keys in every couple of seconds — since
-        // neither of those is visible by reading the body, which mentions no
-        // hike at all.
+        // This screen is a `Form` of a dozen sections in one body, so every
+        // input it takes costs all of it. An input that follows a *hike* — a
+        // recording writing to its draft per fix, or auto-save folding tile
+        // keys in every couple of seconds — would be the expensive one, and
+        // neither is visible by reading the body, which mentions no hike at
+        // all.
         NavigationStack {
             Form {
                 CloudSyncSection(sync: cloudSync)

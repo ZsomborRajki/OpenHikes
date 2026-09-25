@@ -546,9 +546,10 @@ extension SharedStore {
     }
 
     /// Deletes exactly `fileNames`, for a render that wrote images and then
-    /// abandoned them. The counterpart to ``pruneBasemapImages(keeping:)``:
-    /// naming what to remove rather than what to keep is what makes it safe to
-    /// call while another render may be writing files of its own.
+    /// abandoned them. The counterpart to
+    /// ``pruneBasemapImages(supersededBy:)``: naming what to remove rather
+    /// than what to keep is what makes it safe to call while another render
+    /// may be writing files of its own.
     public static func removeBasemapImages(named fileNames: Set<String>) {
         guard let directory = basemapDirectoryURL else { return }
         for imageName in fileNames {

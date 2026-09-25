@@ -177,15 +177,11 @@ jobs:
 
       # Parsing is not behaviour. Scripts/run-ui-tests.sh decides which
       # simulator a run lands on and which tests it selects, and no suite in
-      # this repository can cover it — it is what runs the suites.
-      # Scripts/simulate-hike.sh is the other program here that drives a
-      # simulator, and the step above is the only thing that had ever read it:
-      # its validators are what stand between a typo and a playback loop that
-      # divides by zero. The two CI gate scripts are covered for a plainer
-      # reason: one of them can fail a merge, and the other is the only thing
-      # that would notice a sanitized suite silently not running. These cases
-      # run them for real against a stubbed xcrun and xcodebuild, so nothing is
-      # built and no simulator is touched.
+      # this repository can cover it — it is what runs the suites. It and the
+      # other scripts are run for real here, against stubbed xcrun, xcodebuild,
+      # swiftlint and periphery or against fixtures the harness writes, so
+      # nothing is built and no simulator is touched. The harness's header
+      # says why each script is on its list.
       - name: Run script smoke tests
         run: Scripts/run-script-tests.sh
 
@@ -496,7 +492,7 @@ jobs:
           # it was the first time.
           #
           # The fixture names are read off the folder instead of being listed
-          # here, because the next fixture is a fifth file in that folder and
+          # here, because the next fixture is one more file in that folder and
           # would otherwise ship unchecked. A synchronized group copies them
           # flat into the bundle root, so the basename is the whole path.
           # A list built by scanning is a list that can come back empty, and an
@@ -764,7 +760,7 @@ jobs:
       # the 65 suites, so adding a nested suite moves this number with no
       # change to the list at all.
       #
-      # Tests are a floor for the reason the comment above gives: 700 run
+      # Tests are a floor for the reason the comment above gives: some 700 run
       # today, and 659 sits far enough below that removing a test does not
       # turn the build red on its own, while a suite emptied out under a name
       # that still resolves does. Raise it when the measured number rises.
@@ -875,12 +871,12 @@ jobs:
       # what individual controls promise.
       # `--device "$IOS_SIMULATOR"` rather than the script's own default, and
       # that is the coupling this makes explicit rather than a flag for its own
-      # sake: the step above boots `$IOS_SIMULATOR`, and until this was passed
-      # the two agreed only because the script's default happened to spell the
-      # same device. It does not any more — the default names the simulator
-      # this repository's documented commands name, which is an iOS 27 device
-      # the runner image has never had — so the job that boots one device and
-      # tested on whatever the script picked now says which one it means.
+      # sake: the step above boots `$IOS_SIMULATOR`, and without this the two
+      # agree only because the script's default happens to spell the same
+      # device. They have not always — while this job ran on `macos-26` the
+      # default named an iOS 27 device that image never had — so the job that
+      # boots one device says which one it means rather than trusting that
+      # coincidence.
       - name: Run the accessibility audits
         run: |
           mkdir -p TestResults

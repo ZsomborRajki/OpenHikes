@@ -7,13 +7,13 @@
 //
 //  The maker draws in the accent colour, which has a dark variant — a bright
 //  green meant for dark surfaces. Over the raster tiles the map is forced
-//  light (see `MapView.updateTileOverlay`), because every one of them draws a
-//  light page at every hour, and the UIKit chrome on the map follows that: the
-//  tracking glyph and the travel-time bubble come out the deep green. The
-//  polyline renderers and the pins' layers did not. A renderer's stroke and a
-//  layer's `CGColor` are resolved against whatever appearance is current when
-//  they are drawn, which is the app's, so a dark-mode phone drew the neon
-//  line over light OpenStreetMap tiles next to a deep-green button.
+//  light (see `MapView.applyTileSource(to:_:)`), because every one of them
+//  draws a light page at every hour, and the UIKit chrome on the map follows
+//  that: the tracking glyph and the travel-time bubble come out the deep
+//  green. The polyline renderers and the pins' layers did not. A renderer's
+//  stroke and a layer's `CGColor` are resolved against whatever appearance is
+//  current when they are drawn, which is the app's, so a dark-mode phone drew
+//  the neon line over light OpenStreetMap tiles next to a deep-green button.
 //
 //  So each of them is resolved against the map view's own traits here, and
 //  redrawn when those traits change. One registration covers both ways that

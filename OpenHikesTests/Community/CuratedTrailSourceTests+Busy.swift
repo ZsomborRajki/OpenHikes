@@ -158,7 +158,7 @@ extension CuratedTrailSourceTests {
     /// The other half of *busy*, and the half that never reaches an HTTP
     /// status: a query the server abandoned answers `200` with a `remark`. The
     /// retry is wrapped around the decode for exactly this — see
-    /// ``CuratedTrailSource/retryingWhenBusy(_:)``.
+    /// `OverpassConversation.retryingWhenBusy(_:)`.
     @Test("an abandoned query is asked once more too")
     func anAbandonedQueryIsRetried() async throws {
         let pauses = PauseLog()

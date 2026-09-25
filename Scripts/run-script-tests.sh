@@ -17,7 +17,7 @@
 # divides by zero — an untested flag rots into a no-op that still exits 0.
 #
 # The two CI gate programs are here for a plainer reason. Scripts/
-# check-coverage-floor.sh can fail a merge, and Scripts/
+# check-coverage-floor.sh can fail the workflow, and Scripts/
 # check-sanitized-selection.sh is the only thing that would notice a sanitized
 # suite that silently did not run — `xcodebuild` drops an `-only-testing:`
 # identifier that resolves to nothing without a warning and still exits 0.

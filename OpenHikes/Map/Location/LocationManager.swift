@@ -345,9 +345,9 @@ final class LocationManager: NSObject {
         let now = clock()
         if let lastPublished, now.timeIntervalSince(lastPublished) < Self.minimumPublishInterval { return }
         lastPublished = now
-        // Marks only the publishes that survive both filters above, so the
-        // rate here is the rate every downstream body is allowed to move at.
-        // Anything re-rendering faster than this is following something else.
+        // Only the publishes that survive both filters above get here, so this
+        // is the rate every downstream body is allowed to move at. Anything
+        // re-rendering faster than this is following something else.
         coordinate = next
         if !hasFix { hasFix = true }
     }
@@ -395,11 +395,10 @@ final class LocationManager: NSObject {
 extension LocationManager: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        // The other end of the funnel `LocationPublished` closes. The ratio
-        // between the two is how much of the location daemon's delivery rate
-        // the throttle is absorbing — and a delivery this app throws away is
-        // still a fix the GPS spent energy producing, which is what the
-        // distance filter, not the throttle, is there to prevent.
+        // Every delivery reaches `publish`, whose throttle may drop it — and a
+        // delivery this app throws away is still a fix the GPS spent energy
+        // producing, which is what the distance filter, not the throttle, is
+        // there to prevent.
         onMainActor { [weak self] in self?.publish(location) }
     }
 
