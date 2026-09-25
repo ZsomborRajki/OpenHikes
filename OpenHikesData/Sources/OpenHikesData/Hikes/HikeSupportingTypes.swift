@@ -163,6 +163,28 @@ nonisolated public struct RouteCoordinate: Codable, Hashable, Sendable {
     public var isPauseBoundary: Bool { boundary == .paused }
 }
 
+nonisolated public extension [RouteCoordinate] {
+    /// The route as Core Location coordinates, for the tile work that plans
+    /// against them — throwing as soon as the task doing it is cancelled.
+    ///
+    /// A stored route can be tens of thousands of points, and the callers are
+    /// all work a hiker can walk away from: an offline download being planned,
+    /// the storage a hike's tiles take being measured, and auto-save's
+    /// corridor being built for a hike that is no longer selected. So the
+    /// conversion checks in every 255 points rather than finishing a route
+    /// nobody is waiting for. Outside a task `Task.isCancelled` is always
+    /// `false`, and a synchronous caller never sees the throw.
+    func clCoordinates() throws(CancellationError) -> [CLLocationCoordinate2D] {
+        var coordinates: [CLLocationCoordinate2D] = []
+        coordinates.reserveCapacity(count)
+        for (index, point) in enumerated() {
+            if index.isMultiple(of: 255), Task.isCancelled { throw CancellationError() }
+            coordinates.append(point.clCoordinate)
+        }
+        return coordinates
+    }
+}
+
 nonisolated public enum RouteGeometry {
     /// Mean earth radius, for the great-circle work below. Deliberately not
     /// the figure ``metersPerDegreeLatitude`` is rounded from: a distance
