@@ -328,15 +328,9 @@ private extension MapSheetHikes {
                 // The way out of reorder mode, and the only one: while it is
                 // on, a row's tap belongs to the list rather than to the hike,
                 // so a hiker who cannot leave cannot open anything either.
-                Button {
-                    withAnimation { editMode = .inactive }
-                } label: {
-                    Label("Done Reordering", systemImage: "checkmark")
-                        .font(.footnote.weight(.semibold))
+                DoneReorderingButton(identifier: "hike-order-done-button") {
+                    editMode = .inactive
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.tint)
-                .accessibilityIdentifier("hike-order-done-button")
             } else {
                 sortMenu
             }
