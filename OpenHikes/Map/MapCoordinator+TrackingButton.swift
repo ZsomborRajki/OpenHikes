@@ -339,8 +339,8 @@ extension MapView {
         glass.contentView.addSubview(refused)
 
         NSLayoutConstraint.activate([
-            glass.widthAnchor.constraint(equalToConstant: MapPhotoControlsView.controlSize),
-            glass.heightAnchor.constraint(equalToConstant: MapPhotoControlsView.controlSize),
+            glass.widthAnchor.constraint(equalToConstant: MapGlassPill.controlSize),
+            glass.heightAnchor.constraint(equalToConstant: MapGlassPill.controlSize),
             tracking.centerXAnchor.constraint(equalTo: glass.contentView.centerXAnchor),
             tracking.centerYAnchor.constraint(equalTo: glass.contentView.centerYAnchor),
             refused.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor),
