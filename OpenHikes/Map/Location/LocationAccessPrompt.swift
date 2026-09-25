@@ -21,9 +21,6 @@
 //
 
 import SwiftUI
-#if canImport(UIKit)
-import UIKit
-#endif
 
 /// Which location grant is missing, from the point of view of the thing that
 /// could not happen without it.
@@ -103,24 +100,13 @@ final class LocationAccessPrompt {
 
 extension View {
     /// Presents ``LocationAccessNeed``'s wording, with the one button that can
-    /// do anything about it.
-    ///
-    /// *Open Settings* is a `Link` rather than a `Button` for the reason
-    /// ``PhotoCaptureAlerts`` makes it one: an alert button that runs
-    /// `UIApplication.open` dismisses first and leaves without a trace if the
-    /// URL fails, while a `Link` is inert when there is nowhere to go — and on
-    /// the platforms where there is no Settings app to open, it is simply not
-    /// built.
+    /// do anything about it — see ``OpenSettingsLink``.
     func locationAccessAlert(
         _ need: LocationAccessNeed,
         isPresented: Binding<Bool>
     ) -> some View {
         alert(need.title, isPresented: isPresented) {
-            #if os(iOS)
-            if let settings = URL(string: UIApplication.openSettingsURLString) {
-                Link("Open Settings", destination: settings)
-            }
-            #endif
+            OpenSettingsLink.link
             Button("Not Now", role: .cancel) { /* dismiss */ }
         } message: {
             Text(need.message)
