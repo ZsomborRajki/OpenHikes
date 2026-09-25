@@ -54,20 +54,22 @@ nonisolated final class WalkUITests: XCTestCase {
         XCTAssertTrue(pill.waitForNonExistence(timeout: UITestTimeout.existence))
         expectPhase(phase, contains: "Active")
 
-        scrollToTap(app.buttons["walk-controls-toggle"], in: app)
+        let toggle = app.buttons["walk-toggle"]
+        toggle.tap()
         expectPhase(phase, contains: "Paused")
         XCTAssertFalse(
             app.buttons["Pause"].exists,
             "the recording's own Pause must not appear on a hike screen"
         )
 
-        app.buttons["walk-controls-toggle"].tap()
+        toggle.tap()
         expectPhase(phase, contains: "Active")
     }
 
     /// The navigation bar's Start begins a walk off the route, where no fix could,
-    /// and becomes its Pause — with the controls group under the progress row
-    /// appearing beside it, and no pill announcing a start the hiker asked for.
+    /// and becomes its Pause — the only one on the screen (#679) — with End in
+    /// the controls group under the progress row, and no pill announcing a
+    /// start the hiker asked for.
     @MainActor
     func testStartingAWalkByHandTurnsTheButtonIntoPause() {
         let app = makeApp(arguments: [
@@ -93,6 +95,11 @@ nonisolated final class WalkUITests: XCTestCase {
         expectPhase(phase, contains: "Active")
         expectLabel(toggle, contains: "Pause Hike")
         XCTAssertTrue(element("walk-controls", in: app).exists, "End is still in the controls group")
+        XCTAssertEqual(
+            app.buttons.matching(NSPredicate(format: "label == %@", "Pause Hike")).count,
+            1,
+            "Pause is the bar's alone; the controls group carries none of its own"
+        )
         XCTAssertFalse(element("walk-started-pill", in: app).exists)
 
         toggle.tap()
@@ -135,7 +142,7 @@ nonisolated final class WalkUITests: XCTestCase {
             )
         }
 
-        scrollToTap(app.buttons["End Hike"], in: app)
+        scrollToTap(app.buttons["End and Save Hike"], in: app)
         confirmEndWalk(in: app)
         XCTAssertTrue(
             app.navigationBars["Hike Summary"].waitForExistence(timeout: UITestTimeout.navigation)
@@ -216,7 +223,7 @@ nonisolated final class WalkUITests: XCTestCase {
             app.buttons["Stop"].waitForExistence(timeout: UITestTimeout.navigation)
         )
         XCTAssertFalse(element("walk-controls", in: app).exists)
-        XCTAssertFalse(app.buttons["End Hike"].exists)
+        XCTAssertFalse(app.buttons["End and Save Hike"].exists)
 
         popScreen(in: app)
         let walked = awaitHikeRow(titled: UITestFixture.importedHikeTitle, in: app)
@@ -285,14 +292,13 @@ nonisolated final class WalkUITests: XCTestCase {
             "reopening must preserve both coverage and remaining distance"
         )
 
-        XCTAssertTrue(scrollUntilVisible(app.buttons["walk-controls-toggle"], in: app))
-        app.buttons["walk-controls-toggle"].tap()
+        let toggle = app.buttons["walk-toggle"]
+        toggle.tap()
         expectPhase(phase, contains: "Paused")
         scrollToTap(follow, in: app)
         expectPhase(phase, contains: "Paused")
         scrollToTap(follow, in: app)
-        XCTAssertTrue(scrollUntilVisible(app.buttons["walk-controls-toggle"], in: app))
-        app.buttons["walk-controls-toggle"].tap()
+        toggle.tap()
         expectPhase(phase, contains: "Active")
         XCTAssertEqual(follow.value as? String, "0", "Resume must preserve the display preference")
     }
@@ -314,7 +320,7 @@ nonisolated final class WalkUITests: XCTestCase {
         openHikeDetail(in: app)
         let phase = element("walk-phase", in: app)
         XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.trace))
-        scrollToTap(app.buttons["End Hike"], in: app)
+        scrollToTap(app.buttons["End and Save Hike"], in: app)
         confirmEndWalk(in: app)
         XCTAssertTrue(phase.waitForNonExistence(timeout: UITestTimeout.navigation))
 
@@ -346,7 +352,7 @@ nonisolated final class WalkUITests: XCTestCase {
     /// that raised it, so it has to be found inside the presentation.
     @MainActor
     private func confirmEndWalk(in app: XCUIApplication) {
-        let title = "End Hike"
+        let title = "End and Save Hike"
         for container in [app.sheets, app.alerts] {
             let presented = container.firstMatch
             guard presented.waitForExistence(timeout: UITestTimeout.navigation)

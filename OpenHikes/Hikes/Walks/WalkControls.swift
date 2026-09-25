@@ -2,24 +2,27 @@
 //  WalkControls.swift
 //  OpenHikes
 //
-//  Pause, Resume and End for the walk under way, under the progress bar of
-//  the hike being walked — the walk's counterpart of `RecordingCard`'s
-//  controls, with the route's own tint rather than recording red.
+//  The walk under way, under the progress bar of the hike being walked: its
+//  phase and clock, and End and Save Hike.
+//
+//  Pause and Resume are not here. They are the navigation bar's
+//  ``WalkToggleButton``, which is on screen at every detent, and a second
+//  copy of them in the scroll view was one button too many (#679). End is
+//  drawn like *Find Photos of This Hike* — a section's own action, leading
+//  aligned — and says in its title that ending keeps the walk as a record.
 //
 //  The controls exist only once there is a walk to control: opening a trail
 //  is not walking it, and this draws nothing until the first matched fix or
-//  the navigation bar's Start — ``WalkToggleButton`` — has started one. That
-//  button's Pause and Resume carry the same titles as the ones here, so the
-//  two are found by identifier: `walk-toggle` up there, `walk-controls-toggle`
-//  here. On any *other* trail's detail while a walk is under way, it draws
-//  the one-line notice naming the walk in progress instead.
+//  the navigation bar's Start has started one. On any *other* trail's detail
+//  while a walk is under way, it draws the one-line notice naming the walk in
+//  progress instead.
 //
 //  Reads the session's coarse properties — which hike, which phase — and
 //  nothing that moves per fix, so a fix that extends coverage redraws the
 //  progress row beside this and not this. `walk-phase` and `walk-controls`
 //  are distinct from `recording-phase` on purpose, as are the button titles:
-//  the recording's *Pause* must never be found by a test looking for the
-//  walk's, and vice versa.
+//  the recording's *Stop* must never be found by a test looking for the
+//  walk's End, and vice versa.
 //
 
 import OpenHikesData
@@ -27,9 +30,6 @@ import OpenHikesShared
 import SwiftUI
 
 struct WalkControls: View {
-    /// How close the two glass controls have to come before they merge.
-    private static let controlGlassSpacing: CGFloat = 8
-
     let hike: Hike
     let session: TrailWalkSession
     let onOpenWalk: (HikeWalk) -> Void
@@ -39,16 +39,13 @@ struct WalkControls: View {
     /// controls are still on screen — this is what says so, rather than
     /// letting a refusal read as a walk too short to keep.
     @State private var showEndRefusal = false
-    /// The phase a tap asked for and the store refused — see
-    /// ``WalkPhaseRefusalAlert``.
-    @State private var refusedPhase: TrailWalkPhase?
 
     var body: some View {
         Group {
             if session.walkedHikeID == hike.id, let phase = session.phase {
-                VStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 12) {
                     WalkPhaseRow(session: session, phase: phase, tint: hike.tintOpaque)
-                    controls(for: phase)
+                    endButton
                 }
             } else if session.walkedHikeID != nil {
                 Text("A hike is in progress on \(session.walkedHikeTitle). End it there to walk this trail.")
@@ -63,7 +60,7 @@ struct WalkControls: View {
             isPresented: $showEndConfirmation,
             titleVisibility: .visible
         ) {
-            Button("End Hike", role: .destructive) {
+            Button("End and Save Hike", role: .destructive) {
                 let end = session.end()
                 // From the outcome rather than from the phase going absent:
                 // kept, dropped and refused are three different pieces of news
@@ -84,7 +81,6 @@ struct WalkControls: View {
         } message: {
             Text("Its record could not be saved, so the hike is still under way. Try ending it again.")
         }
-        .walkPhaseRefusalAlert($refusedPhase)
         // A walk that reached the end on its own has no tap to push its
         // summary from; this is what does it. A tapped End pushed from its
         // own action above, so only the automatic case is answered here.
@@ -113,99 +109,17 @@ struct WalkControls: View {
         }
     }
 
-    @ViewBuilder
-    private func controls(for phase: TrailWalkPhase) -> some View {
-        // Two `.glass` buttons side by side, in one container so they blend
-        // as they meet — the recording's pair, in the route's tint.
-        GlassStack(spacing: Self.controlGlassSpacing) {
-            HStack {
-                Button(phase.toggleTitle, systemImage: phase.toggleSymbol) {
-                    refusedPhase = session.togglePhase(from: phase)
-                }
-                .glassButtonStyle()
-                // The bar's Start / Pause carries the same title, so the
-                // two are told apart by identifier — see ``WalkToggleButton``.
-                .accessibilityIdentifier("walk-controls-toggle")
-
-                Button("End Hike", systemImage: "stop.fill") {
-                    showEndConfirmation = true
-                }
-                .glassButtonStyle()
-                // On the leaf rather than the stack: an identifier on a
-                // container is pushed onto every descendant, and the buttons
-                // are found by their own titles.
-                .accessibilityIdentifier("walk-controls")
-            }
+    /// Drawn the way *Find Photos of This Hike* is, in the app's accent
+    /// rather than the route's tint, so the two section actions on this
+    /// screen read as one kind of control.
+    private var endButton: some View {
+        Button("End and Save Hike", systemImage: "stop.fill") {
+            showEndConfirmation = true
         }
-        .tint(hike.tintOpaque)
-        .frame(maxWidth: .infinity)
-    }
-
-}
-
-extension TrailWalkPhase {
-    /// The Pause or Resume a walk in this phase offers.
-    var toggleTitle: LocalizedStringKey {
-        switch self {
-        case .following: "Pause Hike"
-        case .paused: "Resume Hike"
-        }
-    }
-
-    var toggleSymbol: String {
-        switch self {
-        case .following: "pause.fill"
-        case .paused: "play.fill"
-        }
-    }
-}
-
-extension TrailWalkSession {
-    /// Pauses a following walk or resumes a paused one — the tap behind both
-    /// ``WalkControls`` and the bar's ``WalkToggleButton``.
-    ///
-    /// - Returns: the phase the tap asked for when the store refused it, for
-    ///   ``WalkPhaseRefusalAlert`` to say so; `nil` when it was written down.
-    ///   A change that *was* written down says nothing here: the phase moved,
-    ///   and ``WalkControls``' `sensoryFeedback` has already answered it.
-    func togglePhase(from phase: TrailWalkPhase) -> TrailWalkPhase? {
-        let changed = switch phase {
-        case .following: pause()
-        case .paused: resume()
-        }
-        guard !changed else { return nil }
-        HapticMoment.walkFailed.play()
-        return phase == .following ? .paused : .following
-    }
-}
-
-/// Says so when a Pause or Resume was not written down.
-///
-/// Without it a refused Pause is a button that does nothing: the walk is
-/// deliberately left following, because that is what the sidecar still says,
-/// and the row above goes on reading Hike Active.
-private struct WalkPhaseRefusalAlert: ViewModifier {
-    @Binding var refused: TrailWalkPhase?
-
-    func body(content: Content) -> some View {
-        content.alert(
-            "Could not change this hike",
-            isPresented: Binding(get: { refused != nil }, set: { if !$0 { refused = nil } })
-        ) {
-            Button("OK", role: .cancel) { /* no-op */ }
-        } message: {
-            Text(
-                refused == .paused
-                    ? "Pausing it could not be saved, so the hike is still under way. Try pausing it again."
-                    : "Resuming it could not be saved, so the hike is still paused. Try resuming it again."
-            )
-        }
-    }
-}
-
-extension View {
-    func walkPhaseRefusalAlert(_ refused: Binding<TrailWalkPhase?>) -> some View {
-        modifier(WalkPhaseRefusalAlert(refused: refused))
+        .sectionActionButtonStyle()
+        // On the leaf rather than the stack: an identifier on a container is
+        // pushed onto every descendant, and the phase row is found by its own.
+        .accessibilityIdentifier("walk-controls")
     }
 }
 
