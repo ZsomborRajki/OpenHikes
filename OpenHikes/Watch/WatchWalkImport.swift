@@ -25,8 +25,9 @@
 //  it will offer again on the next connection, which is the behaviour that
 //  makes the queue safe — so this has to recognise the second arrival rather
 //  than merely hope for one. ``HikeLocalState/watchSessionID`` is the ledger,
-//  and ``existingHike(for:in:)`` is the check; a repeat costs one fetch and
-//  sends another receipt.
+//  and ``existingHike(for:in:ledger:)`` is the check; a repeat costs one
+//  fetch and sends another receipt. A check that could not be made is not a
+//  check that found nothing: the walk is refused, and stays on the watch.
 //
 //  ## Whose figures win
 //
@@ -92,17 +93,36 @@ nonisolated enum WatchWalkImport {
     ///   its own. There is no sequence of taps that makes a store say no, and
     ///   this is the one failure whose whole point is what it does *not* leave
     ///   behind: an unsaved walk must keep its place on the watch's queue.
+    /// - Parameter ledger: the two reads that decide whether this walk is
+    ///   already here, as a seam for the same reason — see ``Ledger``.
     @concurrent
     static func store(
         _ walk: WatchRecordedWalk,
         in container: ModelContainer,
+        ledger: Ledger = .store,
         save: @Sendable (ModelContext) throws -> Void = { try $0.save() }
     ) async -> WatchWalkImportOutcome {
         assertOffMainThread("Serializing a watch recording must stay off the main thread")
         guard walk.isWorthKeeping else { return .refused(.tooShort) }
 
         let context = ModelContext(container)
-        if let existing = existingHike(for: walk.sessionID, in: context) {
+        let existing: UUID?
+        do {
+            existing = try existingHike(for: walk.sessionID, in: context, ledger: ledger)
+        } catch {
+            // Not the same answer as "no match": a read that failed says
+            // nothing about whether this walk is already a hike, and saving it
+            // anyway is how a redelivery becomes a duplicate. Refused, so the
+            // watch keeps it and offers it again.
+            logger.error(
+                """
+                Could not check whether a walk from the watch was already saved: \
+                \(error.localizedDescription, privacy: .public)
+                """
+            )
+            return .refused(.notSaved)
+        }
+        if let existing {
             logger.debug("A walk from the watch arrived again and is already saved")
             return .alreadyImported(existing)
         }
@@ -157,23 +177,48 @@ nonisolated enum WatchWalkImport {
 
     /// The hike an earlier arrival of this recording became, if there was one.
     ///
-    /// A fetch on the sidecar store rather than on `Hike`, because that is
-    /// where the fact lives — see ``HikeLocalState/watchSessionID``. The
-    /// sidecar can outlive its hike for as long as a delete is in flight, so
-    /// the row is resolved back to a real hike rather than trusted.
+    /// Throws rather than answering `nil` when either read fails, because the
+    /// caller does something irreversible with `nil`: it inserts a new hike.
+    /// The sidecar can outlive its hike for as long as a delete is in flight,
+    /// so the row is resolved back to a real hike rather than trusted.
     private static func existingHike(
         for sessionID: UUID,
-        in context: ModelContext
-    ) -> UUID? {
-        var descriptor = FetchDescriptor<HikeLocalState>(
-            predicate: #Predicate { $0.watchSessionID == sessionID }
+        in context: ModelContext,
+        ledger: Ledger
+    ) throws -> UUID? {
+        guard let hikeID = try ledger.recordedHikeID(sessionID, context) else { return nil }
+        return try ledger.hikeExists(hikeID, context) ? hikeID : nil
+    }
+
+    /// The two reads behind ``existingHike(for:in:ledger:)``.
+    ///
+    /// A seam for the reason `save` is one: nothing makes a `ModelContext`
+    /// throw on demand, and the failing read is the branch whose whole point
+    /// is what it does *not* do — insert a second copy of a walk this phone
+    /// may already have.
+    nonisolated struct Ledger: Sendable {
+        /// The hike the sidecar says a session became, if it says one did.
+        ///
+        /// A fetch on ``HikeLocalState`` rather than on `Hike`, because that
+        /// is where the fact lives — see ``HikeLocalState/watchSessionID``.
+        var recordedHikeID: @Sendable (_ sessionID: UUID, ModelContext) throws -> UUID?
+        /// Whether a hike with this id is still in the store.
+        var hikeExists: @Sendable (_ hikeID: UUID, ModelContext) throws -> Bool
+
+        static let store = Self(
+            recordedHikeID: { sessionID, context in
+                var descriptor = FetchDescriptor<HikeLocalState>(
+                    predicate: #Predicate { $0.watchSessionID == sessionID }
+                )
+                descriptor.fetchLimit = 1
+                return try context.fetch(descriptor).first?.hikeID
+            },
+            hikeExists: { hikeID, context in
+                var descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
+                descriptor.fetchLimit = 1
+                return try context.fetchCount(descriptor) > 0
+            }
         )
-        descriptor.fetchLimit = 1
-        guard let state = try? context.fetch(descriptor).first else { return nil }
-        let hikeID = state.hikeID
-        var hikes = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
-        hikes.fetchLimit = 1
-        return (try? context.fetch(hikes).first)?.id
     }
 
     /// The walk's length, summed along the saved line.
