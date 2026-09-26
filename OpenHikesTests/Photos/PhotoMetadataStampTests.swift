@@ -21,6 +21,7 @@ import CoreLocation
 import Foundation
 import ImageIO
 @testable import OpenHikes
+import RealModule
 import Testing
 
 #if canImport(UIKit)
@@ -242,7 +243,7 @@ struct PhotoMetadataStampTests {
     /// that never arrived cannot pass.
     nonisolated private static func isClose(_ value: Any?, to expected: Double) -> Bool {
         guard let degrees = value as? Double else { return false }
-        return abs(degrees - expected) < coordinateTolerance
+        return degrees.isApproximatelyEqual(to: expected, absoluteTolerance: coordinateTolerance)
     }
 
     nonisolated private static func properties(of data: Data) -> [CFString: Any] {

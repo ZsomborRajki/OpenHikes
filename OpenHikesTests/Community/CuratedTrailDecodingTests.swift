@@ -33,6 +33,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Curated trail decoding")
@@ -316,8 +317,8 @@ struct CuratedTrailDecodingTests {
     }
 
     private static func isSame(_ point: RouteCoordinate, as coordinate: CLLocationCoordinate2D) -> Bool {
-        abs(point.latitude - coordinate.latitude) < coordinateTolerance
-            && abs(point.longitude - coordinate.longitude) < coordinateTolerance
+        point.latitude.isApproximatelyEqual(to: coordinate.latitude, absoluteTolerance: coordinateTolerance)
+            && point.longitude.isApproximatelyEqual(to: coordinate.longitude, absoluteTolerance: coordinateTolerance)
     }
 
     private static func isMalformed(_ error: TrailGraphProviderError) -> Bool {
@@ -419,7 +420,9 @@ extension CuratedTrailDecodingTests {
         #expect(line.count == Self.wholeChainPoints, "four three-point ways sharing three points")
         #expect(Self.isSame(start, as: Self.trailhead))
         #expect(Self.isSame(end, as: Self.summit))
-        #expect(abs(trail.distanceMeters - Self.legMeters * 4) < Self.lengthTolerance)
+        #expect(
+            trail.distanceMeters.isApproximatelyEqual(to: Self.legMeters * 4, absoluteTolerance: Self.lengthTolerance)
+        )
     }
 
     /// A way drawn in the opposite direction to its neighbours is the ordinary
@@ -450,7 +453,9 @@ extension CuratedTrailDecodingTests {
         #expect(line.count == Self.threeWayPoints)
         #expect(Self.isSame(start, as: Self.trailhead))
         #expect(Self.isSame(end, as: Self.hut))
-        #expect(abs(trail.distanceMeters - Self.legMeters * 3) < Self.lengthTolerance)
+        #expect(
+            trail.distanceMeters.isApproximatelyEqual(to: Self.legMeters * 3, absoluteTolerance: Self.lengthTolerance)
+        )
     }
 
     /// A run is grown from an arbitrary seed, and the way that happens to come
@@ -502,10 +507,14 @@ extension CuratedTrailDecodingTests {
 
         #expect(line.count == Self.twoWayPoints, "two ways, and nothing from the other three members")
         #expect(
-            !line.contains { abs($0.latitude - Self.strayLatitude) < Self.coordinateTolerance },
+            !line.contains { point in
+                point.latitude.isApproximatelyEqual(to: Self.strayLatitude, absoluteTolerance: Self.coordinateTolerance)
+            },
             "a single coordinate is not a line and must not be drawn as one"
         )
-        #expect(abs(trail.distanceMeters - Self.legMeters * 2) < Self.lengthTolerance)
+        #expect(
+            trail.distanceMeters.isApproximatelyEqual(to: Self.legMeters * 2, absoluteTolerance: Self.lengthTolerance)
+        )
     }
 
     // MARK: - The geometry pass: what is drawn and what is refused
@@ -533,10 +542,17 @@ extension CuratedTrailDecodingTests {
 
         #expect(line.count == Self.threeWayPoints)
         #expect(
-            !line.contains { abs($0.longitude - Self.strandedMeridian) < Self.coordinateTolerance },
+            !line.contains { point in
+                point.longitude.isApproximatelyEqual(
+                    to: Self.strandedMeridian,
+                    absoluteTolerance: Self.coordinateTolerance
+                )
+            },
             "the piece that does not join is left out rather than drawn across the gap"
         )
-        #expect(abs(trail.distanceMeters - Self.legMeters * 3) < Self.lengthTolerance)
+        #expect(
+            trail.distanceMeters.isApproximatelyEqual(to: Self.legMeters * 3, absoluteTolerance: Self.lengthTolerance)
+        )
     }
 
     /// And the relation nobody has finished mapping. Three pieces, none
@@ -622,7 +638,9 @@ extension CuratedTrailDecodingTests {
         #expect(line.count == Self.threeWayPoints)
         #expect(Self.isSame(start, as: Self.trailhead))
         #expect(Self.isSame(end, as: Self.hut), "the hut, not the summit the variant reaches")
-        #expect(abs(trail.distanceMeters - Self.legMeters * 3) < Self.lengthTolerance)
+        #expect(
+            trail.distanceMeters.isApproximatelyEqual(to: Self.legMeters * 3, absoluteTolerance: Self.lengthTolerance)
+        )
     }
 
     /// The other half of the cost, and the quieter one. Two `approach` spurs
@@ -686,7 +704,9 @@ extension CuratedTrailDecodingTests {
         let trail = try #require(trails[Self.relationID])
 
         #expect(Self.northwards(trail.route).count == Self.threeWayPoints)
-        #expect(abs(trail.distanceMeters - Self.legMeters * 3) < Self.lengthTolerance)
+        #expect(
+            trail.distanceMeters.isApproximatelyEqual(to: Self.legMeters * 3, absoluteTolerance: Self.lengthTolerance)
+        )
     }
 
     // MARK: - What an overloaded server sends

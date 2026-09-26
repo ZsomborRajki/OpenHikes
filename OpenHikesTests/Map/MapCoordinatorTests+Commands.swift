@@ -27,6 +27,7 @@ import Foundation
 import MapKit
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 extension MapCoordinatorTests {
@@ -91,8 +92,11 @@ extension MapCoordinatorTests {
         ))
         await settle()
 
-        #expect(abs(map.region.center.latitude - 40.71) < 0.05, "the newest region is the one the user asked for")
-        #expect(abs(map.region.center.longitude + 74.00) < 0.05)
+        #expect(
+            map.region.center.latitude.isApproximatelyEqual(to: 40.71, absoluteTolerance: 0.05),
+            "the newest region is the one the user asked for"
+        )
+        #expect(map.region.center.longitude.isApproximatelyEqual(to: -74.00, absoluteTolerance: 0.05))
     }
 
     /// And the commands stay independent under coalescing too: a run of

@@ -11,6 +11,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 nonisolated private let metersPerDegreeLongitude = 74_933.0
@@ -116,12 +117,12 @@ struct TrailSurfaceAnalyzerTests {
                 .sorted { $0.displayOrder < $1.displayOrder } == [.paved, .gravel]
         )
         #expect(
-            abs(breakdown.meters(for: .gravel) - breakdown.meters(for: .paved)) < 1
+            breakdown.meters(for: .gravel).isApproximatelyEqual(to: breakdown.meters(for: .paved), absoluteTolerance: 1)
         )
         for share in breakdown.shares {
-            #expect(abs(share.fraction - 0.5) < 0.02)
+            #expect(share.fraction.isApproximatelyEqual(to: 0.5, absoluteTolerance: 0.02))
         }
-        #expect(abs(breakdown.surveyedFraction - 1) < 1e-9)
+        #expect(breakdown.surveyedFraction.isApproximatelyEqual(to: 1, absoluteTolerance: 1e-9))
     }
 
     @Test("distance with no way beneath it is unmapped, not snapped")
@@ -281,7 +282,7 @@ struct TrailSurfaceAnalyzerTests {
         let paved = try #require(
             breakdown.shares.first { $0.category == .paved }
         )
-        #expect(abs(paved.fraction - 0.2) < 0.05)
-        #expect(abs(breakdown.totalMeters - 1000) < 5)
+        #expect(paved.fraction.isApproximatelyEqual(to: 0.2, absoluteTolerance: 0.05))
+        #expect(breakdown.totalMeters.isApproximatelyEqual(to: 1000, absoluteTolerance: 5))
     }
 }

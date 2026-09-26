@@ -7,6 +7,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 /// The arithmetic a curated search does before it asks OpenStreetMap anything.
@@ -77,11 +78,6 @@ struct CuratedTrailQueryTests {
             north: latitude + latitudeSpan,
             east: longitude + longitudeSpan
         )
-    }
-
-    /// Whether two measurements agree closely enough to be the same statement.
-    private static func isClose(_ lhs: Double, _ rhs: Double, within tolerance: Double) -> Bool {
-        abs(lhs - rhs) <= tolerance
     }
 
     /// The relation ids a geometry query names, read back out of the query.
@@ -166,8 +162,8 @@ struct CuratedTrailQueryTests {
             from: area.coordinate,
             to: CLLocationCoordinate2D(latitude: area.latitude, longitude: box.east)
         )
-        #expect(Self.isClose(northEdge, area.radiusMeters, within: edgeTolerance))
-        #expect(Self.isClose(eastEdge, area.radiusMeters, within: edgeTolerance))
+        #expect(northEdge.isApproximatelyEqual(to: area.radiusMeters, absoluteTolerance: edgeTolerance))
+        #expect(eastEdge.isApproximatelyEqual(to: area.radiusMeters, absoluteTolerance: edgeTolerance))
 
         // An inscribed box would put this corner *on* the circle, at exactly
         // the radius. This one is a diagonal out from it.
@@ -176,7 +172,7 @@ struct CuratedTrailQueryTests {
             to: CLLocationCoordinate2D(latitude: box.north, longitude: box.east)
         )
         #expect(corner > area.radiusMeters)
-        #expect(Self.isClose(corner, area.radiusMeters * sqrt(2), within: area.radiusMeters / 50))
+        #expect(corner.isApproximatelyEqual(to: area.radiusMeters * sqrt(2), absoluteTolerance: area.radiusMeters / 50))
     }
 
     /// A degree of longitude is 111 km at the equator and 56 km at 60°N, so
@@ -195,13 +191,13 @@ struct CuratedTrailQueryTests {
         // Latitude is unaffected: a degree north is a degree north anywhere.
         let equatorHeight = equator.north - equator.south
         let nordicHeight = nordic.north - nordic.south
-        #expect(Self.isClose(nordicHeight, equatorHeight, within: equatorHeight / 10_000))
+        #expect(nordicHeight.isApproximatelyEqual(to: equatorHeight, absoluteTolerance: equatorHeight / 10_000))
 
         let equatorWidth = equator.east - equator.west
         let nordicWidth = nordic.east - nordic.west
         #expect(nordicWidth > equatorWidth)
         // cos 60° is exactly a half, so the box is exactly twice as wide.
-        #expect(Self.isClose(nordicWidth, 2 * equatorWidth, within: equatorWidth / 100))
+        #expect(nordicWidth.isApproximatelyEqual(to: 2 * equatorWidth, absoluteTolerance: equatorWidth / 100))
     }
 
     // MARK: - Which routes are day hikes
@@ -238,8 +234,8 @@ struct CuratedTrailQueryTests {
         let alpine = Self.box(diagonalMeters: 19_000)
         let nordic = Self.box(diagonalMeters: 19_000, at: 60, longitude: 10.75)
 
-        #expect(Self.isClose(CuratedTrailQuery.spanMeters(of: alpine), 19_000, within: 20))
-        #expect(Self.isClose(CuratedTrailQuery.spanMeters(of: nordic), 19_000, within: 20))
+        #expect(CuratedTrailQuery.spanMeters(of: alpine).isApproximatelyEqual(to: 19_000, absoluteTolerance: 20))
+        #expect(CuratedTrailQuery.spanMeters(of: nordic).isApproximatelyEqual(to: 19_000, absoluteTolerance: 20))
         #expect(CuratedTrailQuery.isDayHike(box: alpine))
         #expect(CuratedTrailQuery.isDayHike(box: nordic))
 
@@ -268,8 +264,8 @@ struct CuratedTrailQueryTests {
     func centreIsTheBoxMidpoint() {
         let box = CuratedTrailQuery.BoundingBox(south: 47.5, west: 12.8, north: 47.7, east: 13)
         let centre = CuratedTrailQuery.centre(of: box)
-        #expect(Self.isClose(centre.latitude, 47.6, within: Self.coordinateTolerance))
-        #expect(Self.isClose(centre.longitude, 12.9, within: Self.coordinateTolerance))
+        #expect(centre.latitude.isApproximatelyEqual(to: 47.6, absoluteTolerance: Self.coordinateTolerance))
+        #expect(centre.longitude.isApproximatelyEqual(to: 12.9, absoluteTolerance: Self.coordinateTolerance))
     }
 
     /// Overpass's `bb` is a plain minimum and maximum over the members'
@@ -288,10 +284,10 @@ struct CuratedTrailQueryTests {
             east: 179.99
         )
         let centre = CuratedTrailQuery.centre(of: box)
-        #expect(Self.isClose(centre.latitude, 66.005, within: Self.coordinateTolerance))
+        #expect(centre.latitude.isApproximatelyEqual(to: 66.005, absoluteTolerance: Self.coordinateTolerance))
         // Either spelling of the line: −180 and 180 are the same meridian, and
         // ``CuratedTrailQuery`` normalises into −180...180.
-        #expect(Self.isClose(abs(centre.longitude), 180, within: 0.01))
+        #expect(abs(centre.longitude).isApproximatelyEqual(to: 180, absoluteTolerance: 0.01))
     }
 
     /// The width the filter reads is the short way round, which is what makes
@@ -325,11 +321,12 @@ struct CuratedTrailQueryTests {
     @Test("an ordinary box is read exactly as it was before")
     func ordinaryBoxKeepsItsWidth() {
         let box = CuratedTrailQuery.BoundingBox(south: 47.5, west: 12.8, north: 47.7, east: 13)
-        #expect(Self.isClose(
-            CuratedTrailQuery.longitudeSpanDegrees(of: box),
-            0.2,
-            within: Self.coordinateTolerance
-        ))
+        #expect(
+            CuratedTrailQuery.longitudeSpanDegrees(of: box).isApproximatelyEqual(
+                to: 0.2,
+                absoluteTolerance: Self.coordinateTolerance
+            )
+        )
     }
 
     // MARK: - The two queries
@@ -392,7 +389,7 @@ struct CuratedTrailQueryTests {
         let whole = try #require(CuratedTrailQuery.circumscribingBox(
             for: Self.area(latitude: 60, longitude: 179.8, radiusMeters: 40_000)
         ))
-        #expect(Self.isClose(span, whole.east - whole.west, within: 1e-9))
+        #expect(span.isApproximatelyEqual(to: whole.east - whole.west, absoluteTolerance: 1e-9))
     }
 
     @Test("a search crossing the date line westwards asks about both sides")
@@ -432,8 +429,8 @@ struct CuratedTrailQueryTests {
             for: Self.area(latitude: 47.63, longitude: 12.98)
         ))
 
-        #expect(Self.isClose(wrapped.west, plain.west, within: 1e-9))
-        #expect(Self.isClose(wrapped.east, plain.east, within: 1e-9))
+        #expect(wrapped.west.isApproximatelyEqual(to: plain.west, absoluteTolerance: 1e-9))
+        #expect(wrapped.east.isApproximatelyEqual(to: plain.east, absoluteTolerance: 1e-9))
     }
 
     /// Two boxes, and still **one** request: Overpass takes a union of

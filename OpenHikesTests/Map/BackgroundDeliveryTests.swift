@@ -12,6 +12,7 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 import SwiftData
 import Testing
 
@@ -166,7 +167,7 @@ final class BackgroundDeliveryTests {
         let snapshot = try #require(SharedStore.load())
         #expect(snapshot.hikeID == hike.id, "the selection came from defaults, not from memory")
         let live = try #require(snapshot.liveFix)
-        #expect(abs(live.distanceAlongRouteMeters - profile.distances[3]) < 1)
+        #expect(live.distanceAlongRouteMeters.isApproximatelyEqual(to: profile.distances[3], absoluteTolerance: 1))
     }
 
     /// Off the trail, the widget shows the trail's length rather than a
@@ -287,7 +288,7 @@ final class BackgroundDeliveryTests {
         await deliver(fix(at: profile.coordinates[3]))
 
         let persisted = defaults.object(forKey: SettingsKey.lastMatchedDistance) as? Double
-        #expect(abs(try #require(persisted) - profile.distances[3]) < 1)
+        #expect((try #require(persisted)).isApproximatelyEqual(to: profile.distances[3], absoluteTolerance: 1))
     }
 
     // MARK: The boundary an End leaves behind

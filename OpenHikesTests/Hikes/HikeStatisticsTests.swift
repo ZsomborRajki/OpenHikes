@@ -14,6 +14,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftData
 import Testing
 
@@ -151,7 +152,7 @@ struct HikeStatisticsTests {
         let stats = hike.routeStatistics
         let speed = try #require(stats.averageSpeed).converted(to: .metersPerSecond).value
         let expected = hike.distanceMeters / (try #require(stats.duration))
-        #expect(abs(speed - expected) < 1e-9)
+        #expect(speed.isApproximatelyEqual(to: expected, absoluteTolerance: 1e-9))
     }
 
     /// A GPX whose stamps only start partway in used to divide the whole
@@ -177,7 +178,7 @@ struct HikeStatisticsTests {
         let speed = try #require(stats.averageSpeed).converted(to: .metersPerSecond).value
         #expect(try #require(stats.duration) == 111)
         #expect(
-            abs(speed - timedMeters / 111) < 1e-6,
+            speed.isApproximatelyEqual(to: timedMeters / 111, absoluteTolerance: 1e-6),
             """
             \(speed) m/s over the leg the clock covers, which was walked at \
             \(timedMeters / 111) m/s. Dividing the whole route by the timed \
@@ -187,7 +188,7 @@ struct HikeStatisticsTests {
         // Both rows are the one distance seen through two clocks, so the
         // moving row takes the same cut. Nothing here is a stop.
         let moving = try #require(stats.movingAverageSpeed).converted(to: .metersPerSecond).value
-        #expect(abs(moving - speed) < 1e-6)
+        #expect(moving.isApproximatelyEqual(to: speed, absoluteTolerance: 1e-6))
     }
 
     /// The mirror image: a recorder whose clock stops before the walk does.
@@ -207,7 +208,7 @@ struct HikeStatisticsTests {
             to: route[1].clCoordinate
         )
         let speed = try #require(stats.averageSpeed).converted(to: .metersPerSecond).value
-        #expect(abs(speed - timedMeters / 111) < 1e-6)
+        #expect(speed.isApproximatelyEqual(to: timedMeters / 111, absoluteTolerance: 1e-6))
     }
 
     /// An interior gap is not a coverage gap: the elapsed clock spans the
@@ -225,7 +226,7 @@ struct HikeStatisticsTests {
         let hike = Fixture.hike(in: context, route: route)
         let stats = hike.routeStatistics
         let speed = try #require(stats.averageSpeed).converted(to: .metersPerSecond).value
-        #expect(abs(speed - hike.distanceMeters / 333) < 1e-6)
+        #expect(speed.isApproximatelyEqual(to: hike.distanceMeters / 333, absoluteTolerance: 1e-6))
     }
 
     /// Max speed is per-segment, so a single fast stretch has to surface even
@@ -242,7 +243,7 @@ struct HikeStatisticsTests {
         let stats = Fixture.hike(in: context, route: route).routeStatistics
         let fastest = try #require(stats.maxSpeed).converted(to: .metersPerSecond).value
         let average = try #require(stats.averageSpeed).converted(to: .metersPerSecond).value
-        #expect(abs(fastest - 3.7) < 0.1)
+        #expect(fastest.isApproximatelyEqual(to: 3.7, absoluteTolerance: 0.1))
         #expect(fastest > average)
     }
 
@@ -265,7 +266,7 @@ struct HikeStatisticsTests {
         #expect(fastest <= RecordingFixPolicy.maximumSpeed)
         // The surviving segment, reported as itself rather than capped at the
         // ceiling — a clamp would invent a second number that looks measured.
-        #expect(abs(fastest - 1.11) < 0.1)
+        #expect(fastest.isApproximatelyEqual(to: 1.11, absoluteTolerance: 0.1))
     }
 
     /// A track made entirely of implausible legs has no fastest segment to
@@ -299,7 +300,7 @@ struct HikeStatisticsTests {
         let stats = Fixture.hike(in: context, route: route).routeStatistics
         let fastest = try #require(stats.maxSpeed).converted(to: .metersPerSecond).value
         #expect(fastest.isFinite)
-        #expect(abs(fastest - 1.11) < 0.1)
+        #expect(fastest.isApproximatelyEqual(to: 1.11, absoluteTolerance: 0.1))
     }
 
     /// Timestamps that advance while the position doesn't (a paused

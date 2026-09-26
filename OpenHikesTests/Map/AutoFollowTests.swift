@@ -15,6 +15,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Auto-follow anchor")
@@ -98,7 +99,7 @@ struct FollowAnchorTests {
         anchor = FollowAnchor.matched(at: walkingMatch.distanceAlongRoute, course: Self.walkingBack, from: anchor)
 
         #expect(walkingMatch.distanceAlongRoute > total / 2, "corrected onto the return leg")
-        #expect(abs(walkingMatch.distanceAlongRoute - profile.distances[30]) < 1)
+        #expect(walkingMatch.distanceAlongRoute.isApproximatelyEqual(to: profile.distances[30], absoluteTolerance: 1))
         let progress = try #require(profile.fractionComplete(atDistance: walkingMatch.distanceAlongRoute))
         #expect(progress > 0.5, "and the percentage counts up rather than down")
         #expect(anchor.isCourseConfirmed, "so the correction can't be undone by the next pause")

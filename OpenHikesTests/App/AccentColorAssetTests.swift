@@ -25,6 +25,7 @@
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftUI
 import Testing
 #if canImport(UIKit)
@@ -79,9 +80,9 @@ struct AccentColorAssetTests {
         accent.getRed(&red, green: &green, blue: &blue, alpha: nil)
         expected.getRed(&wantRed, green: &wantGreen, blue: &wantBlue, alpha: nil)
 
-        #expect(abs(red - wantRed) < 0.002)
-        #expect(abs(green - wantGreen) < 0.002)
-        #expect(abs(blue - wantBlue) < 0.002)
+        #expect(red.isApproximatelyEqual(to: wantRed, absoluteTolerance: 0.002))
+        #expect(green.isApproximatelyEqual(to: wantGreen, absoluteTolerance: 0.002))
+        #expect(blue.isApproximatelyEqual(to: wantBlue, absoluteTolerance: 0.002))
     }
 
     /// The assertion that would have caught the original bug, in both

@@ -12,6 +12,7 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 import Testing
 
 @MainActor
@@ -48,7 +49,7 @@ struct TrailDraftClimbTimeTests {
             descentMeters: 100
         )
 
-        #expect(abs(draft.travelTime(climb: climb) - expected) < 0.001)
+        #expect(draft.travelTime(climb: climb).isApproximatelyEqual(to: expected, absoluteTolerance: 0.001))
         #expect(draft.travelTime(climb: climb) > draft.travelTime * 2, "the climb dominates this line")
     }
 

@@ -8,6 +8,7 @@
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Hike detail workload")
@@ -69,7 +70,7 @@ struct HikeDetailWorkloadTests {
         // index, which is the whole point of sharing it.
         for index in 1..<route.count {
             let step = profile.distances[index] - profile.distances[index - 1]
-            #expect(abs(visited[index] - step) < 1e-9)
+            #expect(visited[index].isApproximatelyEqual(to: step, absoluteTolerance: 1e-9))
         }
     }
 

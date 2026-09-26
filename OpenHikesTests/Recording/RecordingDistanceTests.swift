@@ -9,6 +9,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @Suite("Recording distance")
@@ -92,7 +93,7 @@ struct RecordingDistanceTests {
         )
 
         #expect(accumulator.isStationary)
-        #expect(abs(accumulator.distanceMeters - 100) < 2)
+        #expect(accumulator.distanceMeters.isApproximatelyEqual(to: 100, absoluteTolerance: 2))
     }
 
     @Test("average speed ignores the time a pause took out of the hike")
@@ -120,7 +121,7 @@ struct RecordingDistanceTests {
 
         #expect(accumulator.recordedDuration == 120)
         let speed = accumulator.averageSpeedMetersPerSecond ?? 0
-        #expect(abs(speed - 1.85) < 0.05)
+        #expect(speed.isApproximatelyEqual(to: 1.85, absoluteTolerance: 0.05))
     }
 
     @Test("the first point after resume does not bridge the paused gap")
@@ -158,7 +159,7 @@ struct RecordingDistanceTests {
             startedAt: start
         )
 
-        #expect(abs(prepared.distanceMeters - 222) < 5)
+        #expect(prepared.distanceMeters.isApproximatelyEqual(to: 222, absoluteTolerance: 5))
     }
 
     @Test("resume clears the pre-pause motion-stationary window")

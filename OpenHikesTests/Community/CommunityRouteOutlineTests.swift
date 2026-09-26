@@ -17,6 +17,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 /// The thinned, encoded form of a published route.
@@ -131,8 +132,12 @@ struct CommunityRouteOutlineTests {
 
         #expect(decoded.count == original.count)
         for (point, source) in zip(decoded, original) {
-            #expect(abs(point.latitude - source.latitude) < Self.precisionTolerance)
-            #expect(abs(point.longitude - source.longitude) < Self.precisionTolerance)
+            #expect(
+                point.latitude.isApproximatelyEqual(to: source.latitude, absoluteTolerance: Self.precisionTolerance)
+            )
+            #expect(
+                point.longitude.isApproximatelyEqual(to: source.longitude, absoluteTolerance: Self.precisionTolerance)
+            )
         }
     }
 
@@ -151,8 +156,12 @@ struct CommunityRouteOutlineTests {
 
         #expect(decoded.count == original.count)
         for (point, source) in zip(decoded, original) {
-            #expect(abs(point.latitude - source.latitude) < Self.precisionTolerance)
-            #expect(abs(point.longitude - source.longitude) < Self.precisionTolerance)
+            #expect(
+                point.latitude.isApproximatelyEqual(to: source.latitude, absoluteTolerance: Self.precisionTolerance)
+            )
+            #expect(
+                point.longitude.isApproximatelyEqual(to: source.longitude, absoluteTolerance: Self.precisionTolerance)
+            )
         }
     }
 
@@ -236,8 +245,15 @@ struct CommunityRouteOutlineTests {
         let outline = CommunityRouteOutline.simplified(eastward + northward)
 
         #expect(outline.count == 3, "a start, the corner and an end is the whole shape")
-        #expect(abs(outline[1].latitude - Self.startLatitude) < Self.precisionTolerance)
-        #expect(abs(outline[1].longitude - (Self.startLongitude + 199 * Self.step)) < Self.precisionTolerance)
+        #expect(
+            outline[1].latitude.isApproximatelyEqual(to: Self.startLatitude, absoluteTolerance: Self.precisionTolerance)
+        )
+        #expect(
+            outline[1].longitude.isApproximatelyEqual(
+                to: Self.startLongitude + 199 * Self.step,
+                absoluteTolerance: Self.precisionTolerance
+            )
+        )
     }
 
     /// A route already inside the budget is left alone: there is nothing to

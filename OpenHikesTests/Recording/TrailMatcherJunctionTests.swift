@@ -26,6 +26,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Trail matcher junctions")
@@ -130,7 +131,7 @@ struct TrailMatcherJunctionTests {
         #expect(result.ambiguousLegCount == 0)
         // Every drawn coordinate is on the upper trail. A metre of tolerance
         // still excludes the lower trail 10 m away and the junction 5 m south.
-        #expect(result.points.allSatisfy { abs($0.latitude - 47.63009) < 0.00001 })
+        #expect(result.points.allSatisfy { $0.latitude.isApproximatelyEqual(to: 47.63009, absoluteTolerance: 0.00001) })
         #expect(result.didMoveRoute)
     }
 
@@ -152,7 +153,7 @@ struct TrailMatcherJunctionTests {
         #expect(result.matchedTrailName == "Lower Trail")
         #expect(result.currentTrail?.name == "Lower Trail")
         #expect(result.matchedLegCount == 4)
-        #expect(result.points.allSatisfy { abs($0.latitude - 47.63000) < 0.00001 })
+        #expect(result.points.allSatisfy { $0.latitude.isApproximatelyEqual(to: 47.63000, absoluteTolerance: 0.00001) })
     }
 
     // MARK: - Y fork
@@ -309,10 +310,10 @@ struct TrailMatcherJunctionTests {
         let transition = try #require(scored)
 
         #expect(transition.coordinates.contains { coordinate in
-            abs(coordinate.latitude - 47.6309) < 0.000001
-                && abs(coordinate.longitude - 12.8600) < 0.000001
+            coordinate.latitude.isApproximatelyEqual(to: 47.6309, absoluteTolerance: 0.000001)
+                && coordinate.longitude.isApproximatelyEqual(to: 12.8600, absoluteTolerance: 0.000001)
         })
-        #expect(abs(transition.distanceMeters - 46.35) < 1.5)
+        #expect(transition.distanceMeters.isApproximatelyEqual(to: 46.35, absoluteTolerance: 1.5))
         #expect(transition.trailNames.sorted() == ["East Zag", "West Zag"])
     }
 
@@ -354,7 +355,7 @@ struct TrailMatcherJunctionTests {
         // Geometry is untouched by the disclosure: the default drawing still
         // stops short of the apex, and nothing has been moved onto a trail.
         let highest = try #require(result.points.map(\.latitude).max())
-        #expect(abs(highest - 47.630765) < 0.000001)
+        #expect(highest.isApproximatelyEqual(to: 47.630765, absoluteTolerance: 0.000001))
         #expect(result.matchedLegCount == 3)
         #expect(!result.didMoveRoute)
         // Legs 2 and 3 span the turn and name no trail at all.
@@ -376,11 +377,11 @@ struct TrailMatcherJunctionTests {
         let alternative = try #require(ambiguity.alternatives.first)
         // What is offered is the apex itself, over both arms of the hairpin.
         #expect(alternative.points.contains { drawn in
-            abs(drawn.latitude - 47.6309) < 0.000001
-                && abs(drawn.longitude - 12.8600) < 0.000001
+            drawn.latitude.isApproximatelyEqual(to: 47.6309, absoluteTolerance: 0.000001)
+                && drawn.longitude.isApproximatelyEqual(to: 12.8600, absoluteTolerance: 0.000001)
         })
         #expect(alternative.trailNames == ["East Zag", "West Zag"])
-        #expect(abs(alternative.distanceMeters - 46.35) < 1.5)
+        #expect(alternative.distanceMeters.isApproximatelyEqual(to: 46.35, absoluteTolerance: 1.5))
 
         // And the review screen presents it as a real choice: keep the GPS
         // line that is drawn today, or take the trail round the corner.

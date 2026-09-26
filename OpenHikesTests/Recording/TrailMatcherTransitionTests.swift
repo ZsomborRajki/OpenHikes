@@ -23,6 +23,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Trail matcher transition scoring")
@@ -148,7 +149,7 @@ struct TrailMatcherTransitionTests {
         let expectedLength = row.arm == "Direct" ? Self.directMeters : Self.detourMeters
         #expect(transition.trailNames.contains(row.arm))
         #expect(!transition.trailNames.contains(row.other))
-        #expect(abs(transition.distanceMeters - expectedLength) < 1.5)
+        #expect(transition.distanceMeters.isApproximatelyEqual(to: expectedLength, absoluteTolerance: 1.5))
         // The walk starts on the stem and ends on the tail whichever arm it
         // took, so naming those does not distinguish the answer — the arm does.
         #expect(transition.trailNames.contains("Stem"))
@@ -175,7 +176,7 @@ struct TrailMatcherTransitionTests {
         let runnerUp = try #require(
             transition.alternatives.first { $0.trailNames.contains("Detour") }
         )
-        #expect(abs(runnerUp.distanceMeters - Self.detourMeters) < 1.5)
+        #expect(runnerUp.distanceMeters.isApproximatelyEqual(to: Self.detourMeters, absoluteTolerance: 1.5))
     }
 
     /// A dense transition asks for one path per endpoint pair, so the long arm
@@ -199,7 +200,7 @@ struct TrailMatcherTransitionTests {
 
         #expect(transition.trailNames.contains("Direct"))
         #expect(!transition.trailNames.contains("Detour"))
-        #expect(abs(transition.distanceMeters - Self.directMeters) < 1.5)
+        #expect(transition.distanceMeters.isApproximatelyEqual(to: Self.directMeters, absoluteTolerance: 1.5))
         #expect(transition.alternatives.isEmpty)
         #expect(transition.likelihoodMargin == .infinity)
     }
@@ -290,7 +291,7 @@ struct TrailMatcherTransitionTests {
             parameters: parameters(expected: 120, maximum: 130, isSparse: false)
         )
         let transition = try #require(allowed)
-        #expect(abs(transition.distanceMeters - length * 0.8) < 0.001)
+        #expect(transition.distanceMeters.isApproximatelyEqual(to: length * 0.8, absoluteTolerance: 0.001))
         #expect(transition.trailNames == ["Direct"])
     }
 
@@ -359,7 +360,7 @@ struct TrailMatcherTransitionTests {
 
         #expect(transition.likelihoodMargin > 0.03)
         #expect(transition.likelihoodMargin < 0.14)
-        #expect(abs(transition.distanceMeters - Self.shallowMeters) < 1.5)
+        #expect(transition.distanceMeters.isApproximatelyEqual(to: Self.shallowMeters, absoluteTolerance: 1.5))
         #expect(transition.trailNames.contains("Shallow"))
     }
 
@@ -393,7 +394,7 @@ struct TrailMatcherTransitionTests {
         )
         let transition = try #require(scored)
 
-        #expect(abs(transition.distanceMeters - length * 0.5) < 0.001)
+        #expect(transition.distanceMeters.isApproximatelyEqual(to: length * 0.5, absoluteTolerance: 0.001))
         #expect(transition.trailNames == ["Direct"])
     }
 }

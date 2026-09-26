@@ -20,6 +20,7 @@
 //
 
 import CoreLocation
+import RealModule
 import Testing
 
 @testable import OpenHikes
@@ -83,7 +84,7 @@ struct RecordingTraceTests {
 
         #expect(trace.revision != settled)
         #expect(trace.tail.count == 1)
-        #expect(abs(trace.tail[0].latitude - 47.6305) < 0.000001)
+        #expect(trace.tail[0].latitude.isApproximatelyEqual(to: 47.6305, absoluteTolerance: 0.000001))
     }
 
     /// The stable prefix of `tail` is cached across rebuilds, so the case that
@@ -119,9 +120,9 @@ struct RecordingTraceTests {
         ))
 
         #expect(trace.tail.count == 3)
-        #expect(abs(trace.tail[0].latitude - 47.6300) < 0.000001)
-        #expect(abs(trace.tail[1].latitude - 47.6320) < 0.000001)
-        #expect(abs(trace.tail[2].latitude - 47.6330) < 0.000001)
+        #expect(trace.tail[0].latitude.isApproximatelyEqual(to: 47.6300, absoluteTolerance: 0.000001))
+        #expect(trace.tail[1].latitude.isApproximatelyEqual(to: 47.6320, absoluteTolerance: 0.000001))
+        #expect(trace.tail[2].latitude.isApproximatelyEqual(to: 47.6330, absoluteTolerance: 0.000001))
     }
 
     /// `reset()` and `replace(with:)` empty the tail without going through
@@ -146,7 +147,7 @@ struct RecordingTraceTests {
             provisional: true
         )
         #expect(trace.tail.count == 1)
-        #expect(abs(trace.tail[0].latitude - 47.6400) < 0.000001)
+        #expect(trace.tail[0].latitude.isApproximatelyEqual(to: 47.6400, absoluteTolerance: 0.000001))
     }
 
     /// A recorder standing still keeps delivering fixes, and every one of them
@@ -186,8 +187,8 @@ struct RecordingTraceTests {
         )
 
         #expect(trace.tail.count == 2)
-        #expect(abs(trace.tail[0].latitude - 47.6300) < 0.000001)
-        #expect(abs(trace.tail[1].latitude - 47.6310) < 0.000001)
+        #expect(trace.tail[0].latitude.isApproximatelyEqual(to: 47.6300, absoluteTolerance: 0.000001))
+        #expect(trace.tail[1].latitude.isApproximatelyEqual(to: 47.6310, absoluteTolerance: 0.000001))
     }
 
 }

@@ -10,6 +10,7 @@
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftData
 import Testing
 
@@ -53,7 +54,7 @@ extension HikeRecorderTests {
         // The length the summary compares back against the route it draws —
         // see ``PreparedRecording/routeLengthMeters``.
         let profileLength = RouteProfile(route: hike.route).totalDistanceMeters
-        #expect(abs(walk.routeDistanceMeters - profileLength) < 0.01)
+        #expect(walk.routeDistanceMeters.isApproximatelyEqual(to: profileLength, absoluteTolerance: 0.01))
     }
 
     /// The row and the finalized hike are one commit. A store that refuses it

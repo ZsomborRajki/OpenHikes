@@ -22,6 +22,7 @@ import CoreLocation
 import Foundation
 import MapKit
 @testable import OpenHikes
+import RealModule
 import Testing
 
 extension MapCoordinatorTests {
@@ -89,8 +90,8 @@ extension MapCoordinatorTests {
             completer.region,
             "the settle that feeds the community list must feed place search too"
         )
-        #expect(abs(stored.center.latitude - map.region.center.latitude) < 0.001)
-        #expect(abs(stored.center.longitude - map.region.center.longitude) < 0.001)
+        #expect(stored.center.latitude.isApproximatelyEqual(to: map.region.center.latitude, absoluteTolerance: 0.001))
+        #expect(stored.center.longitude.isApproximatelyEqual(to: map.region.center.longitude, absoluteTolerance: 0.001))
         #endif
     }
 }

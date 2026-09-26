@@ -21,6 +21,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesShared
+import RealModule
 import SwiftData
 import Testing
 
@@ -80,7 +81,7 @@ final class WatchRecordingMirrorTests {
         // adjacent calls however the injected clock is frozen. What is being
         // asserted is that the watch is handed that number rather than zero
         // or a different one, which a second of slack cannot hide.
-        #expect(abs(reading.elapsedSeconds - report.elapsed) < 1)
+        #expect(reading.elapsedSeconds.isApproximatelyEqual(to: report.elapsed, absoluteTolerance: 1))
     }
 
     @Test("a reading that says nothing new is not sent again")

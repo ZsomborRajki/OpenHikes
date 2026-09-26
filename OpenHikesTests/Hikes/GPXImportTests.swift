@@ -14,6 +14,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("GPX import")
@@ -58,8 +59,8 @@ struct GPXImportTests {
     func loadsTrackPoints() throws {
         let track = try GPXImport.load(from: try gpxFile(Self.fullTrack))
         #expect(track.points.count == 3)
-        #expect(abs(track.points[0].coordinate.latitude - 47.63) < 1e-9)
-        #expect(abs(track.points[0].coordinate.longitude - 12.86) < 1e-9)
+        #expect(track.points[0].coordinate.latitude.isApproximatelyEqual(to: 47.63, absoluteTolerance: 1e-9))
+        #expect(track.points[0].coordinate.longitude.isApproximatelyEqual(to: 12.86, absoluteTolerance: 1e-9))
         #expect(track.points.map(\.elevation) == [600, 620, 610])
         #expect(track.points.allSatisfy { $0.time != nil })
     }
@@ -136,7 +137,7 @@ struct GPXImportTests {
         """
         let track = try GPXImport.load(from: try gpxFile(xml))
         // ~111 m out and ~111 m back: an out-and-back is twice the span, not zero.
-        #expect(abs(track.distanceMeters - 222) < 5)
+        #expect(track.distanceMeters.isApproximatelyEqual(to: 222, absoluteTolerance: 5))
     }
 
     @Test("a single point has no length to speak of")
@@ -228,8 +229,8 @@ struct GPXImportTests {
         let track = try GPXImport.load(from: try gpxFile(xml))
         #expect(track.points.count == 2)
         for point in track.points {
-            #expect(abs(point.coordinate.latitude) < 85)
-            #expect(abs(point.coordinate.longitude) <= 180)
+            #expect(point.coordinate.latitude.isApproximatelyEqual(to: 0, absoluteTolerance: 85))
+            #expect(point.coordinate.longitude.isApproximatelyEqual(to: 0, absoluteTolerance: 180))
         }
     }
 
@@ -360,7 +361,7 @@ struct GPXImportTests {
         let track = try GPXImport.load(from: try gpxFile(Self.fullTrack))
         let profile = RouteProfile(route: track.route)
         #expect(profile.samples.count == track.points.count)
-        #expect(abs((profile.distances.last ?? 0) - track.distanceMeters) < 0.001)
+        #expect((profile.distances.last ?? 0).isApproximatelyEqual(to: track.distanceMeters, absoluteTolerance: 0.001))
         let range = try #require(profile.elevationRange)
         #expect(range == 600...620)
     }

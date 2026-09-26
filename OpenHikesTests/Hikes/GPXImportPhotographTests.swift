@@ -22,6 +22,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("GPX photo waypoints on the way in")
@@ -86,8 +87,12 @@ struct GPXImportPhotographTests {
 
         #expect(track.photographs.count == 1)
         let photograph = try #require(track.photographs.first)
-        #expect(abs(photograph.coordinate.latitude - Self.photographLatitude) < 1e-9)
-        #expect(abs(photograph.coordinate.longitude - Self.photographLongitude) < 1e-9)
+        #expect(
+            photograph.coordinate.latitude.isApproximatelyEqual(to: Self.photographLatitude, absoluteTolerance: 1e-9)
+        )
+        #expect(
+            photograph.coordinate.longitude.isApproximatelyEqual(to: Self.photographLongitude, absoluteTolerance: 1e-9)
+        )
         #expect(photograph.elevation == 930.0)
     }
 

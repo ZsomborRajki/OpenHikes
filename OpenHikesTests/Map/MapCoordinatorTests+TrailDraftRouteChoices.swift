@@ -15,6 +15,7 @@ import Foundation
 import MapKit
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 extension MapCoordinatorTests {
@@ -166,7 +167,7 @@ extension MapCoordinatorTests {
         // route, three quarters of the way up it, where the bubble is that much
         // nearer the middle stop's pin and loses the collision with it.
         let route = try #require(times.first { $0.choice == nil })
-        #expect(abs(route.coordinate.latitude - Valley.latitude) < 1e-6)
+        #expect(route.coordinate.latitude.isApproximatelyEqual(to: Valley.latitude, absoluteTolerance: 1e-6))
         let alternative = try #require(times.first { $0.choice != nil })
         #expect(alternative.travelTime == Valley.detourTime + Valley.secondTime)
         #endif

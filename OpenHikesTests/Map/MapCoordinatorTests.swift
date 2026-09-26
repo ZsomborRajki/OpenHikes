@@ -20,6 +20,7 @@ import Foundation
 import MapKit
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftUI
 import Testing
 
@@ -627,7 +628,7 @@ extension MapCoordinatorTests {
         highlight.move(to: CLLocationCoordinate2D(latitude: 37.3360, longitude: -122.0300))
         await settle()
         #expect(coordinator.highlightAnnotation === annotation, "the same dot, moved")
-        #expect(abs(annotation.coordinate.latitude - 37.3360) < 1e-9)
+        #expect(annotation.coordinate.latitude.isApproximatelyEqual(to: 37.3360, absoluteTolerance: 1e-9))
         #expect(map.annotations.filter { $0 is MKPointAnnotation }.count == 1)
     }
 

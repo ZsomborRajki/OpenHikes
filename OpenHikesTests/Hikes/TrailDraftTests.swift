@@ -17,6 +17,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @MainActor
@@ -68,7 +69,7 @@ struct TrailDraftTests {
             from: Self.coordinate(Line.south),
             to: Self.coordinate(Line.north)
         )
-        #expect(abs(draft.distanceMeters - expected) < 0.001)
+        #expect(draft.distanceMeters.isApproximatelyEqual(to: expected, absoluteTolerance: 0.001))
     }
 
     /// The header's figure is the sum of the legs the rows are measured

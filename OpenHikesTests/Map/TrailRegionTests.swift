@@ -9,6 +9,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @Suite("Trail region")
@@ -63,7 +64,7 @@ struct TrailRegionTests {
         let point = CLLocationCoordinate2D(latitude: 47.4979, longitude: 19.0402)
         let region = try #require(TrailRegion(route: [point], slackMeters: 5000))
 
-        #expect(abs(region.radiusMeters - 5000) < 1)
+        #expect(region.radiusMeters.isApproximatelyEqual(to: 5000, absoluteTolerance: 1))
         #expect(distance(region.center, point) < 1)
     }
 
@@ -80,7 +81,10 @@ struct TrailRegionTests {
         ]
         let region = try #require(TrailRegion(route: route, slackMeters: 1000))
 
-        #expect(abs(abs(region.longitude) - 180) < 0.05, "centred on the date line, not on Africa")
+        #expect(
+            abs(region.longitude).isApproximatelyEqual(to: 180, absoluteTolerance: 0.05),
+            "centred on the date line, not on Africa"
+        )
         for point in route {
             #expect(distance(region.center, point) <= region.radiusMeters)
         }

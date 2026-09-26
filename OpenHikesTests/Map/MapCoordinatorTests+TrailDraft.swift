@@ -28,6 +28,7 @@ import Foundation
 import MapKit
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 extension MapCoordinatorTests {
@@ -205,8 +206,18 @@ extension MapCoordinatorTests {
         #expect(trailMaker.selection == .droppedPin)
         let spot = trailMaker.droppedPin
         let expected = map.convert(point, toCoordinateFrom: map)
-        #expect(abs((spot?.latitude ?? 0) - expected.latitude) < Ridge.coordinateTolerance)
-        #expect(abs((spot?.longitude ?? 0) - expected.longitude) < Ridge.coordinateTolerance)
+        #expect(
+            expected.latitude.isApproximatelyEqual(
+                to: spot?.latitude ?? 0,
+                absoluteTolerance: Ridge.coordinateTolerance
+            )
+        )
+        #expect(
+            expected.longitude.isApproximatelyEqual(
+                to: spot?.longitude ?? 0,
+                absoluteTolerance: Ridge.coordinateTolerance
+            )
+        )
         await settle(until: "the dropped pin to be drawn") {
             coordinator.trailDraftDroppedPin != nil
         }
@@ -263,7 +274,7 @@ extension MapCoordinatorTests {
         trailMaker.addStop(at: spot.clCoordinate, preferringLeg: spot.leg)
 
         let waypoint = try #require(trailMaker.draft.waypoints.first)
-        #expect(abs(waypoint.latitude - spot.latitude) < Ridge.coordinateTolerance)
+        #expect(waypoint.latitude.isApproximatelyEqual(to: spot.latitude, absoluteTolerance: Ridge.coordinateTolerance))
         // Spent, and taken off the map: a pin left standing over the point it
         // has just become is two pins on one spot.
         await settle(until: "the dropped pin to be taken down") {

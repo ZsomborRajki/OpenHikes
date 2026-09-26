@@ -18,6 +18,7 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 import SwiftData
 import Testing
 
@@ -99,7 +100,7 @@ final class TrailWalkActivityTests {
         #expect(state.runState == .running)
         // The walk began on the first match, a minute in; two more minutes
         // of matches followed.
-        #expect(abs(state.elapsedSeconds - 120) < 1)
+        #expect(state.elapsedSeconds.isApproximatelyEqual(to: 120, absoluteTolerance: 1))
         let stored = try #require(SharedStore.load())
         #expect(stored.walk?.coveredFraction == session.coveredFraction)
         #expect(stored.statusText.contains("walked"))

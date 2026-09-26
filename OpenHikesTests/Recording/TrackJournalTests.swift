@@ -5,6 +5,7 @@
 
 import Foundation
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @Suite("Track journal")
@@ -93,7 +94,7 @@ struct TrackJournalTests {
         let session = try #require(try await journal.loadSession())
         #expect(session.metadata.sessionID == sessionID)
         #expect(session.points.count == 12)
-        #expect(abs(session.points[7].latitude - point(7).latitude) < 1e-12)
+        #expect(session.points[7].latitude.isApproximatelyEqual(to: point(7).latitude, absoluteTolerance: 1e-12))
         #expect(session.points[5].flags.contains(.resumed))
         #expect(session.points[7].elevation == 607)
 
@@ -239,13 +240,18 @@ struct TrackJournalTests {
             recovered.points,
             [point(0), point(1), point(2)]
         ) {
-            #expect(abs(actual.latitude - expected.latitude) < 1e-12)
-            #expect(abs(actual.longitude - expected.longitude) < 1e-12)
+            #expect(actual.latitude.isApproximatelyEqual(to: expected.latitude, absoluteTolerance: 1e-12))
+            #expect(actual.longitude.isApproximatelyEqual(to: expected.longitude, absoluteTolerance: 1e-12))
             #expect(actual.timestamp == expected.timestamp)
             #expect(actual.elevation == expected.elevation)
-            #expect(abs(actual.horizontalAccuracy - expected.horizontalAccuracy) < 0.001)
-            #expect(abs((actual.course ?? 0) - (expected.course ?? 0)) < 0.001)
-            #expect(abs((actual.speed ?? 0) - (expected.speed ?? 0)) < 0.001)
+            #expect(
+                actual.horizontalAccuracy.isApproximatelyEqual(
+                    to: expected.horizontalAccuracy,
+                    absoluteTolerance: 0.001
+                )
+            )
+            #expect((actual.course ?? 0).isApproximatelyEqual(to: expected.course ?? 0, absoluteTolerance: 0.001))
+            #expect((actual.speed ?? 0).isApproximatelyEqual(to: expected.speed ?? 0, absoluteTolerance: 0.001))
             #expect(actual.flags == expected.flags)
         }
     }

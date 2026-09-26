@@ -17,6 +17,7 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 import SwiftData
 import Testing
 
@@ -39,8 +40,8 @@ extension HikeRecorderTests {
 
         #expect(elevation.stopCount >= 2)
         #expect(hike.route.count == 2)
-        #expect(abs((hike.route[0].elevation ?? 0) - 600) < 0.01)
-        #expect(abs((hike.route[1].elevation ?? 0) - 609.8) < 0.01)
+        #expect((hike.route[0].elevation ?? 0).isApproximatelyEqual(to: 600, absoluteTolerance: 0.01))
+        #expect((hike.route[1].elevation ?? 0).isApproximatelyEqual(to: 609.8, absoluteTolerance: 0.01))
     }
 
     @Test("motion activity preserves a non-pedestrian segment")
@@ -81,7 +82,7 @@ extension HikeRecorderTests {
         }
         #expect(recorder.stats.currentTrail?.name == "Matched Path")
         #expect(recorder.trace.tail.allSatisfy { coord in
-            abs(coord.longitude - 12.8599) < 0.00001
+            coord.longitude.isApproximatelyEqual(to: 12.8599, absoluteTolerance: 0.00001)
         })
 
         // A moved route is reviewed before it is stored; keeping the default
@@ -95,10 +96,10 @@ extension HikeRecorderTests {
         #expect(hike.rawRoute.count == 2)
         #expect(hike.route.count == 2)
         #expect(hike.route.allSatisfy { coord in
-            abs(coord.longitude - 12.8599) < 0.00001
+            coord.longitude.isApproximatelyEqual(to: 12.8599, absoluteTolerance: 0.00001)
         })
         #expect(hike.rawRoute.allSatisfy { coord in
-            abs(coord.longitude - 12.86) < 0.00001
+            coord.longitude.isApproximatelyEqual(to: 12.86, absoluteTolerance: 0.00001)
         })
     }
 
@@ -150,13 +151,13 @@ extension HikeRecorderTests {
         await settleDelegateHop(until: "the delayed match to catch up with every fix") {
             recorder.stats.currentTrail?.name == "Live Path"
                 && recorder.trace.tail.allSatisfy { coord in
-                    abs(coord.longitude - 12.8599) < 0.00001
+                    coord.longitude.isApproximatelyEqual(to: 12.8599, absoluteTolerance: 0.00001)
                 }
         }
 
         #expect(recorder.stats.currentTrail?.name == "Live Path")
         #expect(recorder.trace.tail.allSatisfy { coord in
-            abs(coord.longitude - 12.8599) < 0.00001
+            coord.longitude.isApproximatelyEqual(to: 12.8599, absoluteTolerance: 0.00001)
         })
         await recorder.discard()
     }

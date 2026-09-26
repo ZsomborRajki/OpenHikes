@@ -16,6 +16,7 @@
 
 import Foundation
 @testable import OpenHikes
+import RealModule
 import Testing
 
 extension HikeRecorderTests {
@@ -111,7 +112,7 @@ extension HikeRecorderTests {
         #expect(!recorder.stats.isStationary)
         let speed = recorder.stats.recentSpeedMetersPerSecond
         #expect(speed != nil)
-        #expect(abs((speed ?? 0) - 1.4) < 0.1)
+        #expect((speed ?? 0).isApproximatelyEqual(to: 1.4, absoluteTolerance: 0.1))
         await recorder.discard()
     }
 

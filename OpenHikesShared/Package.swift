@@ -16,6 +16,12 @@ import PackageDescription
 /// sources), but if one ever does it should start where the app already is.
 /// `swift test` runs the suite on the macOS host, which CI pins to the
 /// `xcode-27` runner image.
+///
+/// swift-numerics is the one external dependency, and only the test target
+/// links it, for `isApproximatelyEqual(to:absoluteTolerance:)`: the library
+/// the app, widgets and watch link still depends on nothing. It is the version
+/// swift-algorithms already resolves for the app and `OpenHikesData`, named by
+/// the same URL so the three pin one checkout.
 let package = Package(
     name: "OpenHikesShared",
     platforms: [
@@ -27,11 +33,17 @@ let package = Package(
     products: [
         .library(name: "OpenHikesShared", targets: ["OpenHikesShared"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-numerics.git", from: "1.1.1")
+    ],
     targets: [
         .target(name: "OpenHikesShared", swiftSettings: .shared),
         .testTarget(
             name: "OpenHikesSharedTests",
-            dependencies: ["OpenHikesShared"],
+            dependencies: [
+                "OpenHikesShared",
+                .product(name: "RealModule", package: "swift-numerics")
+            ],
             swiftSettings: .shared
         )
     ]

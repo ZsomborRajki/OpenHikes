@@ -25,6 +25,7 @@
 import Foundation
 import MapKit
 @testable import OpenHikes
+import RealModule
 import Testing
 
 extension MapCoordinatorTests {
@@ -47,7 +48,7 @@ extension MapCoordinatorTests {
         #expect(credit.frame.maxY < sheetTop, "the line is above the sheet's edge")
         #expect(sheetTop - credit.frame.maxY < 24, "and it is on that edge, not adrift of it")
         #expect(
-            abs(credit.frame.maxY - button.frame.maxY) < 1,
+            credit.frame.maxY.isApproximatelyEqual(to: button.frame.maxY, absoluteTolerance: 1),
             "the line and the tracking button are one row"
         )
         #endif
@@ -86,7 +87,10 @@ extension MapCoordinatorTests {
         layOut(map)
 
         #expect(
-            abs(credit.frame.minY - pill.frame.maxY - MapView.creditLineSpacing) < 1,
+            (credit.frame.minY - pill.frame.maxY).isApproximatelyEqual(
+                to: MapView.creditLineSpacing,
+                absoluteTolerance: 1
+            ),
             "the pill is not sitting on the credit line"
         )
         #endif
@@ -118,7 +122,12 @@ extension MapCoordinatorTests {
 
         #expect(credit.frame.height > oneRow, "the credit did not wrap")
         #expect(pill.frame.maxY < pillAboveOneRow, "the pill stayed where the shorter line was")
-        #expect(abs(credit.frame.minY - pill.frame.maxY - MapView.creditLineSpacing) < 1)
+        #expect(
+            (credit.frame.minY - pill.frame.maxY).isApproximatelyEqual(
+                to: MapView.creditLineSpacing,
+                absoluteTolerance: 1
+            )
+        )
         #endif
     }
 
@@ -140,7 +149,7 @@ extension MapCoordinatorTests {
 
         #expect(credit.isHidden)
         #expect(
-            abs(pill.frame.maxY - button.frame.maxY) < 1,
+            pill.frame.maxY.isApproximatelyEqual(to: button.frame.maxY, absoluteTolerance: 1),
             "without a line to clear, the pill is level with the tracking button"
         )
         #endif
@@ -168,7 +177,12 @@ extension MapCoordinatorTests {
 
         #expect(!credit.isHidden)
         #expect(pill.frame.maxY < withoutCredit, "the pill did not make room for the line")
-        #expect(abs(credit.frame.minY - pill.frame.maxY - MapView.creditLineSpacing) < 1)
+        #expect(
+            (credit.frame.minY - pill.frame.maxY).isApproximatelyEqual(
+                to: MapView.creditLineSpacing,
+                absoluteTolerance: 1
+            )
+        )
         #endif
     }
 
