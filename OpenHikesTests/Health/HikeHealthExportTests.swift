@@ -91,12 +91,61 @@ struct HikeHealthExportTests {
         let request = try #require(harness.writer.written.first)
         #expect(request.startedAt == Self.startedAt)
         #expect(request.distanceMeters == Harness.distanceMeters)
-        // The recording's own elapsed time, not the wall clock: a paused lunch
-        // must not be exported as an hour of hiking.
+        // When the hiker pressed Stop, which the journal holds.
         #expect(
             request.endedAt == Self.startedAt.addingTimeInterval(Harness.recordedSeconds)
         )
         #expect(request.route.count == Harness.routePointCount)
+    }
+
+    /// Issue #721: 09:00 start, a pause from 10:00 to 11:00, Stop at 12:00.
+    /// The workout used to end at 11:00 — start plus the two hours walked —
+    /// with the last hour of its own route after it.
+    @Test("a walk with a long pause keeps its real end, and the pause is taken out")
+    func aLongPauseKeepsTheRealEnd() async throws {
+        let hour: TimeInterval = 3600
+        let harness = try harness(savesToHealth: .on)
+        let route = Harness.route(
+            from: Self.startedAt,
+            at: [0, hour, 2 * hour, 3 * hour],
+            resumingAt: 2
+        )
+        let stoppedAt = Self.startedAt.addingTimeInterval(3 * hour)
+
+        _ = try harness.persist(route: route, stoppedAt: stoppedAt)
+        await harness.settle()
+
+        let request = try #require(harness.writer.written.first)
+        #expect(request.startedAt == Self.startedAt)
+        #expect(request.endedAt == stoppedAt)
+        #expect(request.pauses == [DateInterval(start: Self.startedAt.addingTimeInterval(hour), duration: hour)])
+        #expect(Self.activeSeconds(of: request) == 2 * hour)
+        #expect(request.route.allSatisfy { point in
+            point.timestamp.map { (request.startedAt...request.endedAt).contains($0) } ?? true
+        })
+    }
+
+    @Test("a walk stopped while paused ends at Stop, paused to the end")
+    func stoppingWhilePausedEndsAtStop() async throws {
+        let hour: TimeInterval = 3600
+        let harness = try harness(savesToHealth: .on)
+        let route = Harness.route(from: Self.startedAt, at: [0, 1800, hour], resumingAt: nil)
+        let stoppedAt = Self.startedAt.addingTimeInterval(2 * hour)
+
+        _ = try harness.persist(route: route, stoppedAt: stoppedAt)
+        await harness.settle()
+
+        let request = try #require(harness.writer.written.first)
+        #expect(request.endedAt == stoppedAt)
+        #expect(request.pauses == [DateInterval(start: Self.startedAt.addingTimeInterval(hour), end: stoppedAt)])
+        #expect(Self.activeSeconds(of: request) == hour)
+    }
+
+    /// What `HKWorkoutBuilder.elapsedTime(at:)` answers for this request once
+    /// its pauses are events.
+    private static func activeSeconds(of request: HikeWorkoutRequest) -> TimeInterval {
+        request.endedAt.timeIntervalSince(request.startedAt)
+            - request.pauses.reduce(0) { $0 + $1.duration }
     }
 
     /// Descent beside ascent, off the recording's own accumulator rather
@@ -304,23 +353,51 @@ struct HikeHealthExportTests {
             for _ in 0..<10 { await Task.yield() }
         }
 
+        /// The harness's own three points, a minute apart, and a journal
+        /// ending ``recordedSeconds`` plus the pause after the start.
         func persist(sessionID: UUID = UUID()) throws -> Hike {
-            try recorder.persist(
-                Self.session(id: sessionID, startedAt: startedAt, pausedSeconds: pausedSeconds),
-                prepared: prepared()
+            try persist(
+                route: Self.route(
+                    from: startedAt,
+                    at: (0..<Self.routePointCount).map { Double($0) * 60 },
+                    resumingAt: nil
+                ),
+                stoppedAt: startedAt.addingTimeInterval(Self.recordedSeconds + pausedSeconds),
+                sessionID: sessionID
             )
         }
 
-        private func prepared() -> PreparedRecording {
-            let route = (0..<Self.routePointCount).map { index in
+        func persist(
+            route: [RouteCoordinate],
+            stoppedAt: Date,
+            sessionID: UUID = UUID()
+        ) throws -> Hike {
+            try recorder.persist(
+                Self.session(id: sessionID, startedAt: startedAt, endedAt: stoppedAt),
+                prepared: prepared(route: route)
+            )
+        }
+
+        /// Points `offsets` seconds after `start`, the one at `resumingAt`
+        /// ending a pause — see ``RouteBoundary``.
+        static func route(
+            from start: Date,
+            at offsets: [TimeInterval],
+            resumingAt resumeIndex: Int?
+        ) -> [RouteCoordinate] {
+            offsets.enumerated().map { index, offset in
                 RouteCoordinate(
                     latitude: 47.63 + Double(index) * 0.001,
                     longitude: 12.86,
                     elevation: 600 + Double(index),
-                    timestamp: startedAt.addingTimeInterval(Double(index) * 60)
+                    timestamp: start.addingTimeInterval(offset),
+                    boundary: index == resumeIndex ? .paused : nil
                 )
             }
-            return PreparedRecording(
+        }
+
+        private func prepared(route: [RouteCoordinate]) -> PreparedRecording {
+            PreparedRecording(
                 route: route,
                 rawRoute: route,
                 distanceMeters: Self.distanceMeters,
@@ -335,10 +412,9 @@ struct HikeHealthExportTests {
         private static func session(
             id: UUID,
             startedAt: Date,
-            pausedSeconds: TimeInterval
+            endedAt: Date
         ) -> TrackJournalSession {
-            let endedAt = startedAt.addingTimeInterval(Self.recordedSeconds + pausedSeconds)
-            return TrackJournalSession(
+            TrackJournalSession(
                 metadata: TrackJournalMetadata(
                     sessionID: id,
                     startedAt: startedAt,
