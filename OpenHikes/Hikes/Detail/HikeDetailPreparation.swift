@@ -15,6 +15,34 @@ nonisolated struct HikeDetailPreparedContent: Sendable {
     let stats: [Stat]
 }
 
+/// The geometry the hike detail screen's route-derived work was built from,
+/// and so what its `.task(id:)`s are keyed on.
+///
+/// The hike's id alone is not enough. *Edit Route* keeps the id and replaces
+/// the line — see ``TrailDraftSave`` — and mirroring delivers that edit to a
+/// second device while this screen can be open there. Keyed on the id, the
+/// elevation profile, the statistics, the follow loop's matcher and the
+/// surface lookup all stayed on the old line until the screen was closed.
+///
+/// The route itself rather than a digest of it. A digest would walk the whole
+/// line on every body evaluation; `Array`'s `==` compares storage identity
+/// first and stops at the first differing point, so at worst it costs one
+/// comparison per point, only when the body is evaluated, and render
+/// isolation keeps that off the per-fix path. The distance is here as well
+/// because the statistics are built from it and a save sets it on its own.
+nonisolated struct HikeDetailRouteKey: Equatable, Sendable {
+    let hikeID: UUID
+    let route: [RouteCoordinate]
+    let distanceMeters: Double
+
+    @MainActor
+    init(_ hike: Hike) {
+        hikeID = hike.id
+        route = hike.route
+        distanceMeters = hike.distanceMeters
+    }
+}
+
 nonisolated enum HikeDetailPreparation {
     /// `@concurrent` rather than a detached task: this stays part of the
     /// caller's task, so `.task(id:)` tearing down the view cancels the

@@ -147,12 +147,15 @@ struct HikeDetailView: View {
     /// Where *Rename* scrolls to, so the field it opens is on screen.
     private static let headerAnchor = "hike-detail-header"
 
-    /// Built once per hike in `.task`, never in `init`. Scrubbing then resolves
+    /// Built once per line in `.task`, never in `init`. Scrubbing then resolves
     /// points in O(log n).
     @State private var profile: RouteProfile?
-    /// Stat tiles, computed once per hike with the route profile off the main
+    /// Stat tiles, computed once per line with the route profile off the main
     /// actor so navigation does not pay the route-sized work.
     @State private var statItems: [Stat] = []
+    /// The line ``profile`` and ``statItems`` were built from, so a restart
+    /// of the preparation task can tell a new line from the same one again.
+    @State private var preparedKey: HikeDetailRouteKey?
     /// Tracker/live-follow positions, isolated in a reference type — see
     /// ``TrackerState``. Drawn on the chart as two separate markers so a manual
     /// scrub and the live position can both be visible at once.
@@ -221,20 +224,35 @@ struct HikeDetailView: View {
         // On the container rather than on the Details face, so flipping to
         // History neither restarts the profile build nor stops the follow
         // loop: a walk keeps accruing while its hiker reads its history.
-        .task(id: hike.id) {
-            let route = hike.route
-            let distanceMeters = hike.distanceMeters
+        //
+        // Keyed on the line rather than the id — see ``HikeDetailRouteKey`` —
+        // so an edit that arrives while this screen is up cancels the old
+        // build and the old follow loop and starts both again on the new one.
+        .task(id: HikeDetailRouteKey(hike)) {
+            let key = HikeDetailRouteKey(hike)
+            // The handlers below match fixes against whatever `profile`
+            // holds, so a profile of the old line must not outlive the edit
+            // while the new one is built. Only when the line has changed:
+            // coming back from a pushed screen restarts this task too, and
+            // blanking the chart for that would be a flicker for nothing.
+            if preparedKey != key {
+                profile = nil
+            }
             let prepared: HikeDetailPreparedContent
             do throws(CancellationError) {
                 prepared = try await HikeDetailPreparation.prepare(
-                    route: route,
-                    distanceMeters: distanceMeters
+                    route: key.route,
+                    distanceMeters: key.distanceMeters
                 )
             } catch {
                 return
             }
+            // The build can finish just as a newer line cancels it, and must
+            // not then overwrite what the newer run is about to write.
+            guard !Task.isCancelled else { return }
             let built = prepared.profile
             profile = built
+            preparedKey = key
             statItems = prepared.stats
             // Place the tracker at the start of the track, on both graph and map.
             tracker.trackerDistance = 0
@@ -248,7 +266,9 @@ struct HikeDetailView: View {
             await backgroundTracker.waitForSelectionPublish()
             await followLocation(profile: built)
         }
-        .task(id: hike.id) {
+        // An edited line comes with its breakdowns cleared, so the same key
+        // that rebuilds the profile asks again for the new one.
+        .task(id: HikeDetailRouteKey(hike)) {
             await loadTrailBreakdowns()
         }
         // Toggling off should clear the live dot immediately, not wait for the
