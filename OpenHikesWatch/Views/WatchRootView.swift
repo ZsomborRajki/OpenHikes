@@ -28,7 +28,6 @@
 //  only reason this is not still a `NavigationLink { }`.
 //
 
-import OpenHikesShared
 import SwiftUI
 
 /// One trail, as somewhere to navigate to.
