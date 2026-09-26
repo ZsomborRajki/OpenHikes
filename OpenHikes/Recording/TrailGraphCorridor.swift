@@ -14,6 +14,7 @@
 //  — which is what a spotty recording looks like from the far side.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -51,16 +52,9 @@ nonisolated enum TrailGraphCorridor {
     static func coordinates(
         bridging points: [RecordingPoint]
     ) -> [CLLocationCoordinate2D] {
-        guard points.count > 1 else { return [] }
         var result: [CLLocationCoordinate2D] = []
-        for index in 1..<points.count
-        where TrailMatcher.isGap(from: points[index - 1], to: points[index]) {
-            result.append(
-                contentsOf: samples(
-                    from: points[index - 1].coordinate,
-                    to: points[index].coordinate
-                )
-            )
+        for (from, to) in points.adjacentPairs() where TrailMatcher.isGap(from: from, to: to) {
+            result.append(contentsOf: samples(from: from.coordinate, to: to.coordinate))
         }
         return result
     }

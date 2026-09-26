@@ -47,6 +47,7 @@
 //  landed.
 //
 
+import Algorithms
 import Foundation
 import OpenHikesData
 import OpenHikesShared
@@ -180,7 +181,7 @@ nonisolated enum HikeDeletion {
         // Read here for the reason the file names are: a deleted `@Model` has
         // nothing left to ask.
         let deletedIDs = hikes.map(\.id)
-        let context = hikes.compactMap(\.modelContext).first
+        let context = hikes.firstNonNil(\.modelContext)
         for hike in hikes {
             hike.deleteLocalState()
             hike.modelContext?.delete(hike)

@@ -42,6 +42,7 @@
 //  nothing.
 //
 
+import Algorithms
 import CoreGraphics
 
 /// Point-to-polyline distance in screen points, and the pick that follows
@@ -81,11 +82,8 @@ nonisolated enum RouteHitTest {
         guard let first = line.first else { return nil }
         guard line.count > 1 else { return hypot(point.x - first.x, point.y - first.y) }
         var nearest = CGFloat.greatestFiniteMagnitude
-        for index in 1..<line.count {
-            nearest = min(
-                nearest,
-                distance(from: point, toSegmentFrom: line[index - 1], to: line[index])
-            )
+        for (start, end) in line.adjacentPairs() {
+            nearest = min(nearest, distance(from: point, toSegmentFrom: start, to: end))
         }
         return nearest
     }

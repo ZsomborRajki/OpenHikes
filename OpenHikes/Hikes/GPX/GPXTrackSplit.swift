@@ -13,6 +13,7 @@
 //  part of, and the confirmation says how many were.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -122,7 +123,7 @@ nonisolated enum GPXTrackSplit {
     ) -> Double? {
         guard route.count > 1 else { return nil }
         var nearest = Double.infinity
-        for (start, end) in zip(route, route.dropFirst()) {
+        for (start, end) in route.adjacentPairs() {
             let projection = RouteGeometry.project(
                 coordinate,
                 onSegmentFrom: start.clCoordinate,
