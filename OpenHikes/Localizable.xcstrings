@@ -2109,6 +2109,9 @@
     "These are the hikes from the last search that worked." : {
 
     },
+    "These places couldn't be added." : {
+
+    },
     "They'll appear on this trail once they've been checked." : {
 
     },
@@ -2344,6 +2347,9 @@
 
     },
     "Your request opens in your mail app so you can send it. It carries the record names a reviewer needs, which this hike is the only place holding. The hike stays on this device either way — deleting it here would not take the shared copy down." : {
+
+    },
+    "Your selection wasn't lost. Check that the device has storage available, then tap Add again." : {
 
     },
     "Zoom" : {

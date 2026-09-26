@@ -26,6 +26,9 @@ struct HikePlaceSearchSheet: View {
     @Environment(\.dismiss)
     private var dismiss
     @State private var search = HikePlaceSearch()
+    /// Set when *Add*'s save was refused. The sheet stays up under it, with
+    /// the same places ticked, so tapping *Add* again is the retry.
+    @State private var refusal: HikePlaceSearchRefusal?
 
     var body: some View {
         NavigationStack {
@@ -40,16 +43,27 @@ struct HikePlaceSearchSheet: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Add") {
-                            search.add(to: hike, in: modelContext)
-                            dismiss()
+                            do throws(HikePlaceSearchRefusal) {
+                                try search.add(to: hike, in: modelContext)
+                                dismiss()
+                            } catch {
+                                refusal = error
+                            }
                         }
                         .disabled(!search.canAdd)
                         .accessibilityIdentifier("hike-place-search-add")
                     }
                 }
+                .alert(isPresented: showingRefusal, error: refusal) {
+                    Button("OK", role: .cancel) { /* dismisses */ }
+                }
         }
         .task { search.start(for: hike, source: source, showing: symbols) }
         .onDisappear { search.cancel() }
+    }
+
+    private var showingRefusal: Binding<Bool> {
+        Binding(get: { refusal != nil }, set: { if !$0 { refusal = nil } })
     }
 
     @ViewBuilder private var content: some View {
