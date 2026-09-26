@@ -400,9 +400,6 @@
     "Add more photos, or ask for yours to be taken down." : {
 
     },
-    "Add Photo" : {
-
-    },
     "Add Photos" : {
 
     },
@@ -443,13 +440,13 @@
         }
       }
     },
+    "Adding photos" : {
+
+    },
     "Adding to" : {
 
     },
     "Address" : {
-
-    },
-    "Adds the place, then opens it to take or add photos" : {
 
     },
     "Adds up everything you have hiked today." : {
@@ -1411,9 +1408,6 @@
 
     },
     "Opens the map licence in your browser" : {
-
-    },
-    "Opens the place" : {
 
     },
     "Opens the subscription screen, where purchases can also be restored." : {

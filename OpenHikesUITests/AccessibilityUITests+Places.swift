@@ -86,7 +86,7 @@ extension AccessibilityUITests {
 
     /// *Places Around Trail*, answered: the kind chips, *Within*, a list whose
     /// rows each carry an add button, and the pale pins on the map — then the
-    /// card a found place opens.
+    /// card a found place opens, before and after it is added.
     @MainActor
     func testPlacesAroundPassesAccessibilityAudit() throws {
         let app = openPlacesAround(scenario: "seeded")
@@ -105,10 +105,14 @@ extension AccessibilityUITests {
 
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Thumsee Kopf")).firstMatch
         scrollToTap(row, in: app)
-        XCTAssertTrue(
-            element("places-around-card-add", in: app).waitForExistence(timeout: UITestTimeout.navigation),
-            "a found place's row opens its card"
-        )
+        let cardAdd = element("places-around-card-add", in: app)
+        XCTAssertTrue(cardAdd.waitForExistence(timeout: UITestTimeout.navigation), "a found place's row opens its card")
+        try audit(app)
+
+        // Added, the same card becomes the place's: its camera, its library
+        // and its photo strip.
+        cardAdd.tap()
+        XCTAssertTrue(element("places-around-card-camera", in: app).waitForExistence(timeout: UITestTimeout.existence))
         try audit(app)
     }
 

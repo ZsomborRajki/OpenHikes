@@ -221,7 +221,7 @@ struct HikePlaceView: View {
 /// Its own view so the strip's `LazyHStack` and the thumbnails' decodes belong
 /// to it rather than to the whole screen — the shape ``HikePhotoSection``
 /// takes, and for its reasons.
-private struct HikePlacePhotoStrip: View {
+struct HikePlacePhotoStrip: View {
     let photos: [HikePhoto]
     let store: HikePhotoStore
     let onOpen: (HikePhoto) -> Void

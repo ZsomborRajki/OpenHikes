@@ -228,7 +228,8 @@ final class HikePlacesAroundSearch {
 
     /// Puts one found place on `hike` and saves it. Answers whether it went
     /// in; a refused save throws with the hike as it was — see
-    /// ``HikePlaceChange/add(_:to:in:save:)``.
+    /// ``HikePlaceChange/add(_:to:in:save:)``. A card open on it stays open,
+    /// and becomes the card of a place the hike has.
     @discardableResult func add(
         _ id: UUID,
         to hike: Hike,
@@ -236,9 +237,7 @@ final class HikePlacesAroundSearch {
         save: HikePlaceChange.Save = { try $0.save() }
     ) throws(HikePlaceRefusal) -> Bool {
         guard let place = row(id)?.place else { return false }
-        let added = try HikePlaceChange.add(place, to: hike, in: context, save: save)
-        if added, selection == id { selection = nil }
-        return added
+        return try HikePlaceChange.add(place, to: hike, in: context, save: save)
     }
 
     func cancel() {

@@ -9,8 +9,10 @@
 //  every place found — the hike's own at full strength, the rest pale — and the
 //  sheet carries the kind chips, how far off the line to look, and the same
 //  places as a list in two sections: what the line passes, and what is near
-//  it. A tap on a pale pin or a row opens the place's card; ⊕ adds it straight
-//  away. The hike's own rows open their own screen, as they do everywhere.
+//  it. ⊕ adds a place straight away, and a tap on any pin or row opens its
+//  card over the sheet — see ``HikePlaceAroundCard`` — whether or not the hike
+//  has it yet, so the map stays in view and nothing is pushed over this
+//  screen but *Add Place*.
 //
 //  A place that is not on the trail is still worth having on it: the hut up
 //  the side path the hiker walked to for lunch, the summit they took a
@@ -34,8 +36,8 @@ struct HikePlacesAroundView: View {
     var placePins: TrailPlacePinController?
     /// Brings the sheet down to its middle, so the map is in view.
     var onShowMap: () -> Void = { /* no-op default */ }
-    /// Opens one of the hike's places.
-    var onOpenPlace: (UUID) -> Void = { _ in /* no-op default */ }
+    /// Opens one of the hike's photographs, from a place's card.
+    var onOpenPhoto: (HikePhoto) -> Void = { _ in /* no-op default */ }
     /// Opens *Add Place* at a spot the hiker pressed on the map.
     var onAddPlace: (HikePlaceSpot) -> Void = { _ in /* no-op default */ }
 
@@ -71,9 +73,9 @@ struct HikePlacesAroundView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         // The hike's own places stay on the map beside the pale ones, and a
-        // tap on one opens it — the claim the hike's screen held, taken over
-        // while this one is on top.
-        .background(HikePlacePinClaim(hike: hike, controller: placePins, onOpen: onOpenPlace))
+        // tap on one opens its card — the claim the hike's screen held, taken
+        // over while this one is on top.
+        .background(HikePlacePinClaim(hike: hike, controller: placePins, onOpen: select))
         .onAppear(perform: attach)
         .onDisappear(perform: detach)
         .onChange(of: candidates, initial: true) { _, rows in
@@ -82,7 +84,12 @@ struct HikePlacesAroundView: View {
         .onChange(of: search.reach) { searchIfNeeded() }
         .onChange(of: filter.hidden) { searchIfNeeded() }
         .sheet(isPresented: isShowingCard) {
-            HikePlaceAroundCard(search: search, hike: hike, onAdd: add, onAddPhoto: addAndOpen)
+            HikePlaceAroundCard(search: search, hike: hike, onAdd: add) { photo in
+                // The card goes first: a push under a presented sheet lands
+                // behind it.
+                search.selection = nil
+                onOpenPhoto(photo)
+            }
         }
         .hikePlaceRefusalAlert($refusal)
         .accessibilityIdentifier("places-around-screen")
@@ -223,15 +230,15 @@ struct HikePlacesAroundView: View {
     }
 
     private func open(_ entry: TrailPlaceAroundEntry) {
-        if entry.isAdded {
-            onOpenPlace(entry.id)
-        } else {
-            // The card is about a spot on the map, so the map comes into
-            // view with it rather than staying under a full-height list.
-            search.selection = entry.id
-            onShowMap()
-            mapController.showPhotoSpot(entry.row.place.clCoordinate)
-        }
+        select(entry.id)
+        mapController.showPhotoSpot(entry.row.place.clCoordinate)
+    }
+
+    /// Opens a place's card. The card is about a spot on the map, so the map
+    /// comes into view with it rather than staying under a full-height list.
+    private func select(_ id: UUID) {
+        search.selection = id
+        onShowMap()
     }
 
     private func add(_ id: UUID) {
@@ -239,17 +246,6 @@ struct HikePlacesAroundView: View {
             if try search.add(id, to: hike, in: modelContext) {
                 HapticMoment.targetHit.play()
             }
-        } catch {
-            refusal = error
-        }
-    }
-
-    /// Adds the place and opens it, where its photographs are taken.
-    private func addAndOpen(_ id: UUID) {
-        do throws(HikePlaceRefusal) {
-            try search.add(id, to: hike, in: modelContext)
-            search.selection = nil
-            onOpenPlace(id)
         } catch {
             refusal = error
         }
@@ -270,7 +266,7 @@ private struct TrailPlaceAroundRow: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityHint(entry.isAdded ? Text("Opens the place") : Text("Shows the place's card"))
+            .accessibilityHint(Text("Shows the place's card"))
             if entry.isAdded {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title3)
@@ -291,96 +287,5 @@ private struct TrailPlaceAroundRow: View {
                 .accessibilityIdentifier("places-around-add")
             }
         }
-    }
-}
-
-/// Apple Maps' place card, for a place found around the trail and not on it
-/// yet: what it is, how far off the trail, and *Add*.
-///
-/// Presented from inside the screen, like the maker's card — see
-/// ``TrailPlaceSheet`` — with the map left live behind its smaller detents, so
-/// tapping the next pale pin moves the card to it.
-private struct HikePlaceAroundCard: View {
-    let search: HikePlacesAroundSearch
-    let hike: Hike
-    let onAdd: (UUID) -> Void
-    let onAddPhoto: (UUID) -> Void
-
-    @State private var detent: PresentationDetent = .medium
-
-    var body: some View {
-        Group {
-            if let id = search.selection, let row = search.row(id) {
-                card(row)
-            } else {
-                Color.clear.onAppear { search.selection = nil }
-            }
-        }
-        .presentationDetents([SheetPresentation.compactDetent, .medium, .large], selection: $detent)
-        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-        .presentationCompactAdaptation(.none)
-    }
-
-    private func card(_ row: TrailPlaceRow) -> some View {
-        let card = HikePlaceCard(row: row)
-        return VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
-            PlaceCardHeader {
-                TrailPlaceBadge(systemImage: card.systemImage, tint: card.tint)
-            } title: {
-                Text(card.title)
-                    .lineLimit(2)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityIdentifier("places-around-card-title")
-            } subtitle: {
-                Text([card.subtitle, TrailPlaceRowView.offTrail(row)].compactMap(\.self).joined(separator: " · "))
-            } trailing: {
-                Button("Close", systemImage: "xmark") { search.selection = nil }
-                    .glassButtonStyle()
-                    .placeCardControl()
-                    .accessibilityIdentifier("places-around-card-close")
-            }
-            actions(row, title: card.title)
-            TrailPlaceFactsAndLocation(
-                facts: card.facts,
-                coordinate: card.coordinate,
-                openStreetMapURL: card.openStreetMapURL
-            )
-        }
-        .padding(.horizontal)
-        .padding(.top, 20)
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("places-around-card")
-    }
-
-    private func actions(_ row: TrailPlaceRow, title: String) -> some View {
-        HStack(spacing: 8) {
-            Button { onAdd(row.id) } label: {
-                Label("Add", systemImage: "plus")
-                    .labelStyle(TrailPlaceActionLabelStyle())
-            }
-            .buttonStyle(.borderedProminent)
-            .accessibilityIdentifier("places-around-card-add")
-            Button { onAddPhoto(row.id) } label: {
-                Label("Add Photo", systemImage: "camera")
-                    .labelStyle(TrailPlaceActionLabelStyle())
-            }
-            .buttonStyle(.bordered)
-            .accessibilityHint(Text("Adds the place, then opens it to take or add photos"))
-            .accessibilityIdentifier("places-around-card-photo")
-            ShareLink(
-                item: TrailPlaceCoordinates.mapsURL(row.place.clCoordinate, named: title),
-                subject: Text(title),
-                message: Text([title, TrailPlaceCoordinates.text(row.place.clCoordinate)].joined(separator: "\n"))
-            ) {
-                Label("Share", systemImage: "square.and.arrow.up")
-                    .labelStyle(TrailPlaceActionLabelStyle())
-            }
-            .buttonStyle(.bordered)
-            .accessibilityIdentifier("places-around-card-share")
-        }
-        .buttonBorderShape(.roundedRectangle(radius: TrailPlaceActionLabelStyle.cornerRadius))
-        .fixedSize(horizontal: false, vertical: true)
     }
 }

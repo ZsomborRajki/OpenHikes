@@ -56,21 +56,38 @@ extension PlaceUITests {
     }
 
     @MainActor
-    func testPlacesAroundCardAddsAndOpensThePlace() {
+    func testPlacesAroundCardAddsThePlaceAndTakesItsPhotos() {
         let app = openPlacesAround()
         XCTAssertTrue(element("places-around-nearby", in: app).waitForExistence(timeout: UITestTimeout.navigation))
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", Self.nearbySummit)).firstMatch
         scrollToTap(row, in: app)
 
-        let photo = element("places-around-card-photo", in: app)
-        XCTAssertTrue(photo.waitForExistence(timeout: UITestTimeout.navigation), "a found place's row opens its card")
+        let add = element("places-around-card-add", in: app)
+        XCTAssertTrue(add.waitForExistence(timeout: UITestTimeout.navigation), "a found place's row opens its card")
         XCTAssertEqual(element("places-around-card-title", in: app).label, Self.nearbySummit)
-        photo.tap()
+        add.tap()
 
-        let title = element("hike-place-title", in: app)
-        XCTAssertTrue(title.waitForExistence(timeout: UITestTimeout.navigation), "Add Photo opens the place it added")
-        XCTAssertEqual(title.label, Self.nearbySummit)
-        XCTAssertTrue(element("hike-place-camera", in: app).exists, "where its photographs are taken")
+        XCTAssertTrue(
+            element("places-around-card-camera", in: app).waitForExistence(timeout: UITestTimeout.existence),
+            "once added, the same card takes the place's photographs"
+        )
+        XCTAssertTrue(element("places-around-card-library", in: app).exists)
+        XCTAssertFalse(element("hike-place-screen", in: app).exists, "and nothing was pushed over the screen")
+    }
+
+    @MainActor
+    func testAPlaceOnTheHikeOpensItsCardRatherThanAScreen() {
+        let app = openPlacesAround()
+        XCTAssertTrue(element("places-around-on-trail", in: app).waitForExistence(timeout: UITestTimeout.navigation))
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", PlaceFixture.ownPlace)).firstMatch
+        scrollToTap(row, in: app)
+
+        XCTAssertTrue(
+            element("places-around-card-camera", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "a place the hike has opens the card, with its camera"
+        )
+        XCTAssertEqual(element("places-around-card-title", in: app).label, PlaceFixture.ownPlace)
+        XCTAssertFalse(element("hike-place-screen", in: app).exists, "not the place's pushed screen")
     }
 
     @MainActor
