@@ -231,6 +231,7 @@ extension HikeDeletionTests {
             hikeID: hikeID,
             startedAt: startedAt,
             endedAt: startedAt.addingTimeInterval(hourSeconds),
+            pauses: [],
             distanceMeters: walkMeters,
             elevationGainMeters: nil,
             elevationLossMeters: nil,
