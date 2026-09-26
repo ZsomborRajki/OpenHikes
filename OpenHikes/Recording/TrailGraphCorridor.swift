@@ -94,15 +94,7 @@ nonisolated enum TrailGraphCorridor {
         provider: any TrailGraphProviding,
         limit: Int = maximumGapRegions
     ) -> [CLLocationCoordinate2D] {
-        var seen: Set<TrailGraphRegion> = []
-        var result: [CLLocationCoordinate2D] = []
-        for coordinate in coordinates {
-            guard let region = provider.region(containing: coordinate),
-                  seen.insert(region).inserted else { continue }
-            result.append(coordinate)
-            if result.count >= limit { break }
-        }
-        return result
+        provider.firstCoordinatePerRegion(in: coordinates, limit: limit)
     }
 }
 

@@ -6,6 +6,7 @@
 //  sent to Overpass; the recorded trace never leaves the device.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesShared
@@ -65,12 +66,12 @@ nonisolated extension TrailGraphProviding {
     func graph(
         covering coordinates: [CLLocationCoordinate2D]
     ) async throws -> TrailGraph? {
-        var requested: Set<TrailGraphRegion> = []
         var firstFailure: (any Error)?
-        for coordinate in coordinates {
-            guard let region = region(containing: coordinate),
-                  requested.insert(region).inserted else { continue }
-            guard requested.count <= Self.maximumPrefetchRegions else { break }
+        let requested = firstCoordinatePerRegion(
+            in: coordinates,
+            limit: Self.maximumPrefetchRegions
+        )
+        for coordinate in requested {
             do {
                 try await prefetch(around: coordinate)
             } catch {
@@ -81,6 +82,29 @@ nonisolated extension TrailGraphProviding {
         let graph = try await cachedGraph(covering: coordinates)
         if graph == nil, let firstFailure { throw firstFailure }
         return graph
+    }
+
+    /// The first coordinate in each distinct region `coordinates` fall in, in
+    /// first-seen order and capped at `limit`.
+    ///
+    /// The first one rather than any one because it is the one a request is
+    /// made around, and first-seen order because the cap keeps the start of the
+    /// route rather than an arbitrary sample of it. Each coordinate's region is
+    /// looked up once, a coordinate outside every region is skipped, and
+    /// nothing past the `limit`th region is looked up at all.
+    func firstCoordinatePerRegion(
+        in coordinates: [CLLocationCoordinate2D],
+        limit: Int
+    ) -> [CLLocationCoordinate2D] {
+        Array(
+            coordinates.lazy
+                .compactMap { coordinate in
+                    region(containing: coordinate).map { (coordinate: coordinate, region: $0) }
+                }
+                .uniqued(on: \.region)
+                .prefix(limit)
+                .map(\.coordinate)
+        )
     }
 }
 

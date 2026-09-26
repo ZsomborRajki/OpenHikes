@@ -112,6 +112,27 @@ struct TrailGraphCorridorTests {
         #expect(Set(regions).count == selected.count)
     }
 
+    @Test("each region is named by its first coordinate, in the order first seen")
+    func prefetchCoordinatesKeepTheFirstOfEachRegion() {
+        let provider = StubTrailGraphProvider(graph: .empty)
+        // The stub's regions are tenth-of-a-degree cells, so each pair below
+        // shares one and the pairs do not share with each other.
+        let east = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.95)
+        let eastAgain = CLLocationCoordinate2D(latitude: 47.64, longitude: 12.96)
+        let west = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.85)
+        let westAgain = CLLocationCoordinate2D(latitude: 47.64, longitude: 12.86)
+        // North of what Web Mercator can draw, so it is in no region at all.
+        let offTheMap = CLLocationCoordinate2D(latitude: 89.9, longitude: 12.9)
+
+        let selected = TrailGraphCorridor.prefetchCoordinates(
+            for: [offTheMap, east, west, eastAgain, offTheMap, westAgain],
+            provider: provider
+        )
+
+        #expect(selected.map(\.latitude) == [east.latitude, west.latitude])
+        #expect(selected.map(\.longitude) == [east.longitude, west.longitude])
+    }
+
     @Test("a region's neighbours surround it without repeating it")
     func neighbouringRegionsSurroundTheOriginal() throws {
         let provider = SlippyRegionProvider()
