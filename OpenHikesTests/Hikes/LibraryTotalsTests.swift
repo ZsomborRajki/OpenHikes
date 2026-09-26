@@ -31,6 +31,7 @@ struct LibraryTotalsTests {
         climb: Double? = 100,
         highest: Double? = 1000,
         clock: Bool = true,
+        clockLasting: TimeInterval = 3 * 3600,
         community: Bool = false
     ) -> LibraryHikeFacts {
         LibraryHikeFacts(
@@ -41,7 +42,7 @@ struct LibraryTotalsTests {
             climbMeters: climb,
             highestMeters: highest,
             movingSeconds: clock ? 3600 : nil,
-            clock: clock ? DateInterval(start: date, duration: 3 * 3600) : nil,
+            clock: clock ? DateInterval(start: date, duration: clockLasting) : nil,
             isFromCommunity: community
         )
     }
@@ -51,15 +52,16 @@ struct LibraryTotalsTests {
         on date: Date,
         covered: Double,
         of route: Double,
+        lasting: TimeInterval = 1800,
         recordingsOwn: Bool = false
     ) -> LibraryWalkFacts {
         LibraryWalkFacts(
             hikeID: hikeID,
             startedAt: date,
-            endedAt: date.addingTimeInterval(1800),
+            endedAt: date.addingTimeInterval(lasting),
             coveredMeters: covered,
             routeDistanceMeters: route,
-            activeSeconds: 1800,
+            activeSeconds: lasting,
             isRecordingsOwn: recordingsOwn
         )
     }
@@ -137,6 +139,79 @@ struct LibraryTotalsTests {
         )
         #expect(totals.allTime.distanceMeters == 19_000, "the recording, and the walk of the day before")
         #expect(totals.allTime.outings == 2)
+    }
+
+    // MARK: A recording over part of a walk
+
+    /// The four-hour, ten-kilometre walk of issue #696, with a recording of
+    /// the given clock laid over it.
+    private static func afternoon(
+        recordingAt offset: TimeInterval,
+        lasting: TimeInterval,
+        meters: Double = 500
+    ) -> LibraryTotals {
+        let trail = UUID()
+        let start = date(2026, 7).addingTimeInterval(12 * 3600)
+        return totals(
+            [
+                hike(on: date(2025, 1), meters: 10_000, id: trail, climb: 800, clock: false),
+                hike(on: start.addingTimeInterval(offset), meters: meters, clockLasting: lasting),
+            ],
+            [walk(of: trail, on: start, covered: 10_000, of: 10_000, lasting: 4 * 3600)]
+        )
+    }
+
+    private static func isClose(_ value: Double, to expected: Double) -> Bool {
+        abs(value - expected) < 1e-6
+    }
+
+    /// A ten-minute recording used to erase the whole ten kilometres.
+    @Test("a short recording inside a walk takes out only its own minutes")
+    func interiorOverlapKeepsTheRest() {
+        let totals = Self.afternoon(recordingAt: 3600, lasting: 600)
+        let walkShare = 230.0 / 240
+        #expect(Self.isClose(totals.allTime.distanceMeters, to: 500 + 10_000 * walkShare))
+        #expect(Self.isClose(totals.allTime.climbMeters, to: 100 + 800 * walkShare))
+        #expect(Self.isClose(totals.allTime.movingSeconds, to: 3600 + 4 * 3600 * walkShare))
+        #expect(totals.allTime.outings == 2)
+    }
+
+    @Test("a recording over either end of a walk takes out only the overlap", arguments: [-1800.0, 3.5 * 3600])
+    func endOverlapKeepsTheRest(offset: TimeInterval) {
+        // An hour's recording, half of it over the walk.
+        let totals = Self.afternoon(recordingAt: offset, lasting: 3600)
+        #expect(Self.isClose(totals.allTime.distanceMeters, to: 500 + 10_000 * 3.5 / 4))
+    }
+
+    @Test("a recording that misses the walk leaves all of it")
+    func disjointRecordingLeavesTheWalk() {
+        let totals = Self.afternoon(recordingAt: 5 * 3600, lasting: 3600)
+        #expect(totals.allTime.distanceMeters == 10_500)
+        #expect(totals.allTime.outings == 2)
+    }
+
+    /// Recorded start to finish: the walk is that afternoon's second copy.
+    @Test("a recording covering the whole walk leaves the walk out")
+    func fullOverlapDropsTheWalk() {
+        let totals = Self.afternoon(recordingAt: -600, lasting: 5 * 3600, meters: 10_400)
+        #expect(totals.allTime.distanceMeters == 10_400)
+        #expect(totals.allTime.outings == 1)
+    }
+
+    /// Two recordings over the same minutes take them out once.
+    @Test("overlapping recordings are merged before they take time out")
+    func overlappingClocksAreMerged() {
+        let trail = UUID()
+        let start = Self.date(2026, 7).addingTimeInterval(12 * 3600)
+        let totals = Self.totals(
+            [
+                Self.hike(on: Self.date(2025, 1), meters: 10_000, id: trail, clock: false),
+                Self.hike(on: start, meters: 0, clockLasting: 3600),
+                Self.hike(on: start.addingTimeInterval(1800), meters: 0, clockLasting: 3600),
+            ],
+            [Self.walk(of: trail, on: start, covered: 10_000, of: 10_000, lasting: 4 * 3600)]
+        )
+        #expect(Self.isClose(totals.allTime.distanceMeters, to: 10_000 * 2.5 / 4))
     }
 
     @Test("a trail saved from the community and walked counts its walk")

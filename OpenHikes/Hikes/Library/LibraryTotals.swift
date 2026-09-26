@@ -31,10 +31,15 @@
 //
 //  Following a trail and recording are independent — starting a recording
 //  leaves a walk under way alone — so one afternoon can leave both a
-//  recording and a walk along the trail it followed. A followed walk whose
-//  time overlaps a counted hike's clock is that afternoon's second copy, and
-//  is left out: the recording is the whole of it, the walk only the stretch
-//  that lay on the trail.
+//  recording and a walk along the trail it followed. Whatever part of a
+//  followed walk's time a counted hike's clock also covers is that
+//  afternoon's second copy, and is left out: the recording is the whole of
+//  it, the walk only the stretch that lay on the trail. The rest of the walk
+//  still counts, in proportion to the time left over — a ten-minute
+//  recording in the middle of a four-hour walk takes ten minutes out of it,
+//  not the four hours. A walk kept only by a figure for the whole of it
+//  cannot say which kilometres fell in which minutes, so the proportion is
+//  an even pace's; a walk wholly inside a recording is left out entirely.
 //
 //  A record is one outing, not one trail: the longest is the furthest anyone
 //  walked in one go, so a thirty-kilometre trail walked for two is a
@@ -186,23 +191,43 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
                 movingSeconds: hike.movingSeconds ?? 0
             )
         }
-        let followed = walks.filter { walk in
-            !walk.isRecordingsOwn
-                && !clocks.contains { walk.startedAt < $0.end && walk.endedAt > $0.start }
-        }
-        .map { walk in
-            let fraction = walk.routeDistanceMeters > 0
+        let followed = walks.compactMap { walk -> LibraryOuting? in
+            guard !walk.isRecordingsOwn else { return nil }
+            let share = unrecordedShare(of: walk, clocks: clocks)
+            guard share > 0 else { return nil }
+            let covered = walk.routeDistanceMeters > 0
                 ? min(1, max(0, walk.coveredMeters / walk.routeDistanceMeters))
                 : 0
             return LibraryOuting(
                 hikeID: walk.hikeID,
                 date: walk.startedAt,
-                distanceMeters: walk.coveredMeters,
-                climbMeters: (byID[walk.hikeID]?.climbMeters ?? 0) * fraction,
-                movingSeconds: walk.activeSeconds
+                distanceMeters: walk.coveredMeters * share,
+                climbMeters: (byID[walk.hikeID]?.climbMeters ?? 0) * covered * share,
+                movingSeconds: walk.activeSeconds * share
             )
         }
         return clocked + followed
+    }
+
+    /// The fraction of `walk`'s time no clock in `clocks` covers, from 0 to 1.
+    /// Overlapping clocks are merged first, so two recordings over the same
+    /// minutes take those minutes out once.
+    private static func unrecordedShare(of walk: LibraryWalkFacts, clocks: [DateInterval]) -> Double {
+        let length = walk.endedAt.timeIntervalSince(walk.startedAt)
+        guard length > 0 else { return 1 }
+        let overlaps = clocks.compactMap { clock -> (start: Date, end: Date)? in
+            let start = max(clock.start, walk.startedAt)
+            let end = min(clock.end, walk.endedAt)
+            return start < end ? (start, end) : nil
+        }
+        .sorted { $0.start < $1.start }
+        var recorded: TimeInterval = 0
+        var reach = walk.startedAt
+        for overlap in overlaps where overlap.end > reach {
+            recorded += overlap.end.timeIntervalSince(max(overlap.start, reach))
+            reach = overlap.end
+        }
+        return max(0, 1 - recorded / length)
     }
 
     private static func byID(_ hikes: [LibraryHikeFacts]) -> [UUID: LibraryHikeFacts] {
