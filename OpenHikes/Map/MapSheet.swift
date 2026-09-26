@@ -357,7 +357,7 @@ struct MapSheet: View {
             pendingSubmissionDestination(pending)
         case let .pendingPhotos(pending):
             pendingPhotosDestination(pending)
-        case .hike, .newPlace, .photo, .place, .recording, .routeStyle, .totals, .trailDraft, .walk:
+        case .hike, .newPlace, .photo, .place, .placesAround, .recording, .routeStyle, .totals, .trailDraft, .walk:
             EmptyView()
         }
     }
@@ -483,6 +483,9 @@ struct MapSheet: View {
     private func pushedScreen(for route: SheetRoute) -> some View {
         navigationDestinationView(for: route)
             .containerBackground(.clear, for: .navigation)
+            // How deep the screen is, which decides whose claim on the map's
+            // pins and camera pill is in force — see ``ScreenClaims``.
+            .environment(\.sheetDepth, (presentation.path.firstIndex(of: route) ?? 0) + 1)
     }
 
     @ViewBuilder
@@ -502,11 +505,11 @@ struct MapSheet: View {
                 photoCapture: photoCapture,
                 photoPins: photoPins,
                 placePins: placePins,
-                placeSearch: appModel.placeSearchScope,
                 communityTransport: appModel.communityTransport,
                 trailMaker: trailMaker,
                 onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
                 onOpenPlace: { placeID in openPlace(placeID, of: hike) },
+                onFindPlaces: { presentation.path.append(.placesAround(hike)) },
                 onOpenWalk: { walk in presentation.path.append(.walk(walk)) },
                 onZoomToRoute: presentation.makeRoomForTheMap,
                 isSheetCompact: presentation.isCompact,
@@ -514,10 +517,8 @@ struct MapSheet: View {
             )
         case .communityHike, .communityPhoto, .pendingSubmission, .pendingPhotos:
             communityDestination(for: route)
-        case let .place(hike, placeID):
-            placeDestination(placeID, of: hike)
-        case let .newPlace(hike, spot):
-            placeAdderDestination(at: spot, on: hike)
+        case .place, .newPlace, .placesAround:
+            placesDestination(for: route)
         case .trailDraft: trailDraftDestination
         case .recording: recordingDestination
         case .totals: LibraryTotalsView(onOpenHike: openRecord)

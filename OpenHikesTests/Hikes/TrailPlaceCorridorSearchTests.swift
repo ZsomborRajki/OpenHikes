@@ -2,7 +2,7 @@
 //  TrailPlaceCorridorSearchTests.swift
 //  OpenHikesTests
 //
-//  *Find Places Along Trail*: how a finished line is cut into questions, and
+//  *Places Around Trail*: how a finished line is cut into questions, and
 //  what is kept of the answers.
 //
 //  The two halves are separate on purpose. The cutting is geometry, and its
@@ -16,7 +16,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
-import SwiftData
+import RealModule
 import Testing
 
 @MainActor
@@ -249,74 +249,64 @@ struct TrailPlaceCorridorSearchTests {
         #expect(outcome.outage == nil)
     }
 
-    @Test("a search along a saved hike adds only the places left chosen")
-    func searchAddsChosenPlaces() async throws {
-        let context = try Fixture.modelContext()
-        let hike = Fixture.hike(in: context, route: Line.short)
-        let spring = Self.place(1, latitude: 47.605)
-        let car = Self.place(2, latitude: 47.61, symbol: .parking)
-        let search = HikePlaceSearch()
+    // MARK: Reaching past the line
 
-        await search.start(
-            for: hike,
-            source: AnsweringSource(answer: [spring, car]),
-            showing: Set(TrailPlaceSymbol.allCases)
-        ).value
-        search.toggle(car.id)
-        let added = try search.add(to: hike, in: context)
+    @Test("a wider reach keeps what stands off the line within it, and nothing past it")
+    func widerReachKeepsNearbyPlaces() throws {
+        let onTheLine = Self.place(1, latitude: 47.605)
+        let upTheSidePath = Self.place(2, latitude: 47.61, offEast: 400)
+        let acrossTheValley = Self.place(3, latitude: 47.615, offEast: 700)
 
-        #expect(added == 1)
-        #expect(hike.places.map(\.osm?.elementID) == [1])
+        let kept = TrailPlaceCorridorSearch.kept(
+            [acrossTheValley, upTheSidePath, onTheLine],
+            along: Line.short,
+            excluding: [],
+            reaching: 500
+        )
+
+        #expect(kept.map(\.place.osm?.elementID) == [1, 2])
+        let off = try #require(kept.last?.offRouteMeters)
+        #expect(off.isApproximatelyEqual(to: 400, absoluteTolerance: 5))
     }
 
-    @Test("a refused save keeps the choice, takes the places back, and Add again commits them once")
-    func refusedSaveCanBeRetried() async throws {
-        let context = try Fixture.modelContext()
-        let hike = Fixture.hike(in: context, route: Line.short)
-        try context.save()
-        let spring = Self.place(1, latitude: 47.605)
-        let hut = Self.place(2, latitude: 47.61, symbol: .shelter)
-        let search = HikePlaceSearch()
-        await search.start(
-            for: hike,
-            source: AnsweringSource(answer: [spring, hut]),
-            showing: Set(TrailPlaceSymbol.allCases)
-        ).value
-        // An edit of the hiker's own, pending in the same context: what a
-        // `rollback()` would have taken with it.
-        hike.title = "Renamed"
-        let saver = ScriptedModelContextSaver(failedSaveNumbers: [1])
+    @Test("a wider reach widens every circle so the band beside the line is asked about")
+    func widerReachWidensTheCircles() {
+        let route = Self.line(kilometres: 20)
+        let areas = TrailPlaceCorridorSearch.areas(along: route, reaching: 1000)
 
-        #expect(throws: HikePlaceSearchRefusal.notSaved) {
-            try search.add(to: hike, in: context, save: saver.save)
+        #expect(areas.allSatisfy { $0.radiusMeters <= TrailPointQuery.maximumRadiusMeters })
+        for point in route {
+            let metresPerDegree = RouteGeometry.metersPerDegreeLatitude * cos(point.latitude * .pi / 180)
+            let beside = RouteCoordinate(latitude: point.latitude, longitude: point.longitude + 1000 / metresPerDegree)
+            let covered = areas.contains { area in
+                RouteGeometry.distanceMeters(from: area.coordinate, to: beside.clCoordinate) <= area.radiusMeters
+            }
+            #expect(covered)
         }
-        #expect(hike.places.isEmpty)
-        #expect(search.chosen == [spring.id, hut.id])
-        #expect(search.canAdd)
-        #expect(hike.title == "Renamed")
-
-        let added = try search.add(to: hike, in: context, save: saver.save)
-
-        #expect(added == 2)
-        let reopened = ModelContext(context.container)
-        let stored = try reopened.fetch(FetchDescriptor<TrailPoint>())
-        #expect(stored.map(\.id).sorted() == [spring.id, hut.id].sorted())
     }
 
-    @Test("the sheet starts with everything found chosen, and a refusal with nothing is a failure")
-    func searchPhases() {
-        let search = HikePlaceSearch()
+    @Test("a search reaching past the line keeps what it reaches")
+    func searchReachesPastTheLine() async throws {
         let spring = Self.place(1, latitude: 47.605)
+        let hut = Self.place(2, latitude: 47.61, offEast: 400, symbol: .shelter)
+        let source = AnsweringSource(answer: [spring, hut])
 
-        search.receive(.init(rows: [TrailPlaceRow(place: spring, anchor: nil)], outage: nil))
-        #expect(search.chosen == [spring.id])
-        #expect(search.canAdd)
+        let narrow = try await TrailPlaceCorridorSearch.search(
+            along: Line.short,
+            excluding: [],
+            from: source,
+            showing: Set(TrailPlaceSymbol.allCases)
+        )
+        let wide = try await TrailPlaceCorridorSearch.search(
+            along: Line.short,
+            excluding: [],
+            from: source,
+            showing: Set(TrailPlaceSymbol.allCases),
+            reaching: 1000
+        )
 
-        search.toggle(spring.id)
-        #expect(search.canAdd == false)
-
-        search.receive(.init(rows: [], outage: .busy))
-        #expect(search.phase == .failed(.busy))
+        #expect(narrow.places.map(\.osm?.elementID) == [1])
+        #expect(wide.places.map(\.osm?.elementID) == [1, 2])
     }
 }
 

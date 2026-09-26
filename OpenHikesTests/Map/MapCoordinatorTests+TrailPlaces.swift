@@ -119,6 +119,42 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// *Places Around Trail*'s pale pins: the kind's balloon at half strength,
+    /// drawn beside the hike's own and opening the screen's card rather than
+    /// a place screen the hike does not have yet.
+    @Test("a place found around a hike is drawn pale and opens its card")
+    func candidatePinsArePaleAndOpenTheCard() async throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        let row = TrailPlaceRow(place: Self.spring, offRouteMeters: 400)
+        var selected: [UUID] = []
+        let token = placePins.around.attach(TrailPlacesAround.Handlers(
+            select: { selected.append($0) },
+            searchArea: { /* not asked */ },
+            dropPin: { _ in /* not asked */ }
+        ))
+        placePins.around.show([row], token: token)
+
+        await settle(until: "the found place to be pinned") {
+            !coordinator.placesAroundMap.annotations.isEmpty
+        }
+        let annotation = try #require(coordinator.placesAroundMap.annotations.first)
+        #expect(annotation.isCandidate)
+        let view = try #require(coordinator.mapView(map, viewFor: annotation) as? MKMarkerAnnotationView)
+        #expect(view.accessibilityIdentifier == "hike-place-candidate")
+        #expect(view.markerTintColor?.cgColor.alpha == TrailPlaceAnnotation.candidatePinAlpha)
+        #expect(coordinator.selectHikePlaceAnnotation(view, on: map))
+        #expect(selected == [row.id])
+
+        placePins.around.detach(token: token)
+        await settle(until: "the found place to be taken down") {
+            coordinator.placesAroundMap.annotations.isEmpty
+        }
+        #endif
+    }
+
     @Test("a pin whose screen has gone opens nothing")
     func detachedPinOpensNothing() {
         let row = TrailPlaceRow(place: Self.spring, anchor: nil)

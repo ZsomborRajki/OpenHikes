@@ -7,7 +7,7 @@
 //
 //  They are the densest forms the app has added since the community share
 //  form: a kind picker, a multi-line note, a photo strip with its own buttons,
-//  and a results list whose every row is a checkbox that starts ticked. That
+//  and a results list whose every row carries its own add button. That
 //  is where hit-area (#535) and unlabelled-glyph failures have turned up
 //  before, and every one of these screens was already driven by `PlaceUITests`
 //  — which does not run in CI — so each had working automation and nothing
@@ -84,30 +84,40 @@ extension AccessibilityUITests {
         try audit(app)
     }
 
-    /// *Find Places Along Trail*, answered: a list whose rows are checkboxes.
+    /// *Places Around Trail*, answered: the kind chips, *Within*, a list whose
+    /// rows each carry an add button, and the pale pins on the map — then the
+    /// card a found place opens.
     @MainActor
-    func testPlaceSearchSheetPassesAccessibilityAudit() throws {
-        let app = openPlaceSearch(scenario: "seeded")
+    func testPlacesAroundPassesAccessibilityAudit() throws {
+        let app = openPlacesAround(scenario: "seeded")
         XCTAssertTrue(
-            element("hike-place-search-list", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            element("places-around-nearby", in: app).waitForExistence(timeout: UITestTimeout.navigation),
             "the search should have answered before it is swept"
         )
-        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Lakeshore Hut")).firstMatch
-        XCTAssertTrue(row.exists)
+        let add = app.buttons["Add Lakeshore Hut"]
+        XCTAssertTrue(add.exists, "a found place's add button says which place it adds")
         XCTAssertTrue(
-            row.isSelected,
-            "a found place starts ticked, and the tick is decoration — the trait is what says so"
+            app.buttons["trail-place-kind-Summit"].isSelected,
+            "a kind switched on is a selected chip, and the fill is decoration — the trait is what says so"
         )
 
         try audit(app)
+
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Thumsee Kopf")).firstMatch
+        scrollToTap(row, in: app)
+        XCTAssertTrue(
+            element("places-around-card-add", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "a found place's row opens its card"
+        )
+        try audit(app)
     }
 
-    /// *Find Places Along Trail*, refused: the copy a hiker reads when
+    /// *Places Around Trail*, refused: the copy a hiker reads when
     /// OpenStreetMap cannot be reached, which nothing could put on screen
     /// before ``SeededTrailPointSource``.
     @MainActor
-    func testRefusedPlaceSearchPassesAccessibilityAudit() throws {
-        let app = openPlaceSearch(scenario: "refused")
+    func testRefusedPlacesAroundPassesAccessibilityAudit() throws {
+        let app = openPlacesAround(scenario: "refused")
         XCTAssertTrue(
             app.buttons["Try Again"].waitForExistence(timeout: UITestTimeout.navigation),
             "a refused search should say so and offer to ask again"
@@ -153,10 +163,10 @@ extension AccessibilityUITests {
         try audit(app)
     }
 
-    /// Opens the fixture hike's *Find Places Along Trail* against the named
+    /// Opens the fixture hike's *Places Around Trail* against the named
     /// stand-in.
     @MainActor
-    private func openPlaceSearch(scenario: String) -> XCUIApplication {
+    private func openPlacesAround(scenario: String) -> XCUIApplication {
         let app = launchApp(
             arguments: [
                 "--ui-test-import-gpx=\(PlaceFixture.gpxName)",

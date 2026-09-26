@@ -225,14 +225,24 @@ extension MapView.Coordinator {
 
     @objc func handleTrailDraftPinDrop(_ recognizer: UILongPressGestureRecognizer) {
         guard recognizer.state == .began, let mapView = recognizer.view as? MKMapView else { return }
-        dropTrailDraftPin(at: recognizer.location(in: mapView), in: mapView)
+        let point = recognizer.location(in: mapView)
+        // Outside the maker the same press is *Places Around Trail*'s: a place
+        // of the hiker's own, wherever they held — see ``TrailPlacesAround``.
+        guard trailDraftController?.isEditing == true else {
+            if placesAroundMap.around?.dropPin(at: mapView.convert(point, toCoordinateFrom: mapView)) == true {
+                HapticMoment.pinDropped.play()
+            }
+            return
+        }
+        dropTrailDraftPin(at: point, in: mapView)
     }
 
-    /// Whether a press at `point` may drop a pin: only while drawing, never on
-    /// one of the maker's stops — that press moves the stop — and never on a
-    /// view that has its own claim, a control or another pin.
+    /// Whether a press at `point` may drop a pin: only while drawing or while
+    /// *Places Around Trail* is up, never on one of the maker's stops — that
+    /// press moves the stop — and never on a view that has its own claim, a
+    /// control or another pin.
     func mayDropTrailDraftPin(at point: CGPoint, in mapView: MKMapView) -> Bool {
-        guard trailDraftController?.isEditing == true else { return false }
+        guard trailDraftController?.isEditing == true || placesAroundMap.around?.isActive == true else { return false }
         return trailDraftWaypointIndex(at: point, in: mapView) == nil
             && !isTapClaimed(at: point, in: mapView)
     }

@@ -2,11 +2,11 @@
 //  SeededTrailPointSource.swift
 //  OpenHikes
 //
-//  Three places on the Thumsee loop that nobody asked Overpass for.
+//  Four places on and near the Thumsee loop that nobody asked Overpass for.
 //
 //  ``OpenHikesModel/makeTrailPointSource()`` hands back `nil` for every launch
 //  running tests, and rightly: the real source reaches a volunteer-run public
-//  API. But that `nil` also removes *Find Places Along Trail* from a saved
+//  API. But that `nil` also removes *Places Around Trail* from a saved
 //  hike and *Mapped Here* from the recording screen's *Add Place*, so neither
 //  had ever been in front of an accessibility audit — and the refusal copy a
 //  hiker reads when Overpass says no was reachable by nothing at all.
@@ -32,7 +32,10 @@
 //    Both are more than 25 m from the fixture's *Boathouse*, which stands on
 //    the trailhead, so the search along the trail does not fold them into it.
 //  - One unnamed, so a row drawn from the kind alone is swept too.
-//  - One far enough along to be in the search sheet and not the recording one.
+//  - One far enough along to be in *Places Around Trail* and not the
+//    recording sheet.
+//  - One about 420 m off the line, so *Places Around Trail* has a row under
+//    *Nearby* and a pale pin that is not on the trail.
 //
 
 import Foundation
@@ -40,10 +43,10 @@ import OpenHikesData
 
 #if DEBUG
 
-/// A stand-in for Overpass with three places on the Thumsee loop.
+/// A stand-in for Overpass with four places on and near the Thumsee loop.
 nonisolated struct SeededTrailPointSource: TrailPointSourcing {
     enum Scenario: String, CaseIterable {
-        /// The three places below, whatever is asked.
+        /// The four places below, whatever is asked.
         case seeded = "seeded"
         /// Every search is refused, so the copy a hiker reads when Overpass
         /// cannot be reached is on screen.
@@ -61,15 +64,18 @@ nonisolated struct SeededTrailPointSource: TrailPointSourcing {
 
     /// Points of the fixture's own track, so the corridor search keeps them:
     /// the first two about 65 m and 110 m from the trailhead, the third a
-    /// kilometre on.
+    /// kilometre on. The fourth is off it, about 420 m east of the loop's
+    /// eastern edge.
     private static let carParkSpot = (latitude: 47.718823, longitude: 12.831149)
     private static let viewpointSpot = (latitude: 47.719219, longitude: 12.830877)
     private static let hutSpot = (latitude: 47.724008, longitude: 12.829098)
+    private static let summitSpot = (latitude: 47.7215, longitude: 12.841363)
     /// Element ids no real OpenStreetMap element has, so a seeded place can
     /// never be mistaken for a fetched one on a saved hike.
     private static let carParkID: Int64 = 9_100_001
     private static let viewpointID: Int64 = 9_100_002
     private static let hutID: Int64 = 9_100_003
+    private static let summitID: Int64 = 9_100_004
 
     static let places: [TrailPlace] = [
         TrailPlace(
@@ -105,6 +111,17 @@ nonisolated struct SeededTrailPointSource: TrailPointSourcing {
                     TrailPlaceFact(kind: .elevation, value: "540"),
                     TrailPlaceFact(kind: .openingHours, value: "May-Oct 10:00-18:00"),
                 ]
+            )
+        ),
+        TrailPlace(
+            latitude: summitSpot.latitude,
+            longitude: summitSpot.longitude,
+            name: "Thumsee Kopf",
+            symbol: .summit,
+            osm: TrailPlaceOSM(
+                elementType: "node",
+                elementID: summitID,
+                facts: [TrailPlaceFact(kind: .elevation, value: "712")]
             )
         ),
     ]

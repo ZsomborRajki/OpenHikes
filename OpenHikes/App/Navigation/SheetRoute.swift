@@ -52,6 +52,10 @@ enum SheetRoute: Hashable {
     /// does — a place removed from inside its screen must not invalidate the
     /// route showing it. See ``HikePlaceView``.
     case place(Hike, UUID)
+    /// *Places Around Trail*: what OpenStreetMap has on and around a hike's
+    /// line, on the map and in a list, to add to it. See
+    /// ``HikePlacesAroundView``.
+    case placesAround(Hike)
     case recording
     /// How a hike's line is drawn — see ``RouteStyleView``. Pushed over the
     /// hike's own screen, and popped with it when the hike is deleted.
@@ -91,6 +95,7 @@ enum SheetRoute: Hashable {
         case let .photo(hike, _): hike.id == hikeID
         case let .place(hike, _): hike.id == hikeID
         case let .newPlace(hike, _): hike.id == hikeID
+        case let .placesAround(hike): hike.id == hikeID
         case let .routeStyle(hike): hike.id == hikeID
         case let .walk(walk): walk.hikeID == hikeID
         // None of them shows a `Hike`, so none is popped by one being
@@ -136,8 +141,8 @@ enum SheetRoute: Hashable {
     var isCommunityPreview: Bool {
         switch self {
         case .communityHike, .communityPhoto: true
-        case .hike, .newPlace, .pendingPhotos, .pendingSubmission, .photo, .place, .recording, .routeStyle, .totals,
-            .trailDraft, .walk:
+        case .hike, .newPlace, .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .recording,
+            .routeStyle, .totals, .trailDraft, .walk:
             false
         }
     }
@@ -148,7 +153,7 @@ enum SheetRoute: Hashable {
     var prefersFullHeight: Bool {
         switch self {
         case .communityPhoto, .photo: true
-        case .communityHike, .hike, .newPlace, .pendingPhotos, .pendingSubmission, .place, .recording,
+        case .communityHike, .hike, .newPlace, .pendingPhotos, .pendingSubmission, .place, .placesAround, .recording,
             .routeStyle, .totals, .trailDraft, .walk:
             false
         }
@@ -160,12 +165,11 @@ enum SheetRoute: Hashable {
     // the two macro expansions refer to each other. The identities compared
     // are the ones the synthesis would have used.
     static func == (lhs: Self, rhs: Self) -> Bool {
-        switch (lhs, rhs) {
+        if lhs.isAboutPlaces || rhs.isAboutPlaces { return placeRoutesEqual(lhs, rhs) }
+        return switch (lhs, rhs) {
         case let (.hike(left), .hike(right)): left == right
         case let (.routeStyle(left), .routeStyle(right)): left == right
         case let (.photo(left, leftPhoto), .photo(right, rightPhoto)): left == right && leftPhoto == rightPhoto
-        case let (.place(left, leftPlace), .place(right, rightPlace)): left == right && leftPlace == rightPlace
-        case let (.newPlace(left, leftSpot), .newPlace(right, rightSpot)): left == right && leftSpot == rightSpot
         // The three that carry nothing are equal to themselves and to nothing
         // else, which is one rule rather than three.
         case (.recording, .recording), (.trailDraft, .trailDraft), (.totals, .totals): true
@@ -178,6 +182,25 @@ enum SheetRoute: Hashable {
             left.id == right.id && leftIndex == rightIndex
         case let (.pendingSubmission(left), .pendingSubmission(right)): left.id == right.id
         case let (.pendingPhotos(left), .pendingPhotos(right)): left.id == right.id
+        default: false
+        }
+    }
+
+    /// Whether this is one of the three routes about a hike's places.
+    private var isAboutPlaces: Bool {
+        switch self {
+        case .newPlace, .place, .placesAround: true
+        default: false
+        }
+    }
+
+    /// `==` for the three routes about a hike's places — split from `==` so
+    /// that switch stays inside the complexity limit.
+    private static func placeRoutesEqual(_ lhs: Self, _ rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case let (.place(left, leftPlace), .place(right, rightPlace)): left == right && leftPlace == rightPlace
+        case let (.newPlace(left, leftSpot), .newPlace(right, rightSpot)): left == right && leftSpot == rightSpot
+        case let (.placesAround(left), .placesAround(right)): left == right
         default: false
         }
     }
@@ -213,6 +236,9 @@ enum SheetRoute: Hashable {
             hasher.combine(10)
             hasher.combine(hike)
             hasher.combine(spot)
+        case let .placesAround(hike):
+            hasher.combine(13)
+            hasher.combine(hike)
         }
     }
 
@@ -241,7 +267,7 @@ enum SheetRoute: Hashable {
         case let .pendingPhotos(pending):
             hasher.combine(7)
             hasher.combine(pending.id)
-        case .hike, .newPlace, .photo, .place, .recording, .routeStyle, .totals, .trailDraft, .walk:
+        case .hike, .newPlace, .photo, .place, .placesAround, .recording, .routeStyle, .totals, .trailDraft, .walk:
             break
         }
     }

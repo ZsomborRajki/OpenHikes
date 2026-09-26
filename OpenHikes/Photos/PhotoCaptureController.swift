@@ -34,9 +34,6 @@ final class PhotoCaptureController {
     /// The screen a photo taken now would be filed under, and where on the
     /// trail it would be pinned.
     struct Subject {
-        /// Identifies the attachment, so a screen that goes away after its
-        /// replacement has already arrived doesn't detach the replacement.
-        let token: Int
         let hike: Hike
         /// The place on the trail a photo taken now is *of*, while that
         /// place's own screen is the one offering the pill — see
@@ -82,8 +79,12 @@ final class PhotoCaptureController {
     private(set) var libraryRequest = 0
     private(set) var placeRequest = 0
 
-    @ObservationIgnored private(set) var subject: Subject?
-    @ObservationIgnored private var nextToken = 0
+    /// Every screen's claim, the deepest in force — see ``ScreenClaims``. The
+    /// token identifies a claim, so a screen that goes away after its
+    /// replacement has already arrived doesn't withdraw the replacement.
+    @ObservationIgnored private var claims = ScreenClaims<Subject>()
+    /// The claim in force.
+    var subject: Subject? { claims.active?.payload }
     /// The one library import in flight, held so it can be cancelled — see
     /// ``runLibraryImport(_:)``.
     @ObservationIgnored private var importTask: Task<Void, Never>?
@@ -100,28 +101,28 @@ final class PhotoCaptureController {
     /// hike's identity — is what keeps a push from being cancelled by the
     /// `onDisappear` of the screen it replaced. The two can be the same hike:
     /// stopping a recording lands on that recording's detail screen.
+    ///
+    /// `depth` is how deep in the sheet's stack the screen is, and the
+    /// deepest claim is the one in force — see ``ScreenClaims``.
     @discardableResult func attach(
         to hike: Hike,
         place placeID: UUID? = nil,
         placeAnchor: (() -> CLLocationCoordinate2D?)? = nil,
+        depth: Int = 0,
         anchor: @escaping () -> CLLocationCoordinate2D?
     ) -> Int {
-        nextToken += 1
-        subject = Subject(
-            token: nextToken,
-            hike: hike,
-            placeID: placeID,
-            anchor: anchor,
-            placeAnchor: placeAnchor
+        let token = claims.attach(
+            Subject(hike: hike, placeID: placeID, anchor: anchor, placeAnchor: placeAnchor),
+            depth: depth
         )
         refreshAvailability()
-        return nextToken
+        return token
     }
 
-    /// Withdraws the pill, unless another screen has already claimed it.
+    /// Withdraws a screen's claim, handing the pill to the claim beneath, if
+    /// any.
     func detach(token: Int) {
-        guard subject?.token == token else { return }
-        subject = nil
+        claims.detach(token)
         refreshAvailability()
     }
 

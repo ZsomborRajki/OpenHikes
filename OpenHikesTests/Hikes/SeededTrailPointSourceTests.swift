@@ -41,22 +41,35 @@ struct SeededTrailPointSourceTests {
         }
     }
 
-    @Test("every seeded place is on the fixture's line and none is one it already holds")
+    @Test("three seeded places are on the fixture's line, one is near it, and none is one it holds")
     func seededPlacesSurviveTheCorridorSearch() async throws {
         let track = try fixture()
+        let source = SeededTrailPointSource(scenario: .seeded)
+        let everything = Set(TrailPlaceSymbol.allCases)
 
-        let outcome = try await TrailPlaceCorridorSearch.search(
+        let onTheLine = try await TrailPlaceCorridorSearch.search(
             along: track.route,
             excluding: track.places,
-            from: SeededTrailPointSource(scenario: .seeded),
-            showing: Set(TrailPlaceSymbol.allCases)
+            from: source,
+            showing: everything
+        )
+        let around = try await TrailPlaceCorridorSearch.search(
+            along: track.route,
+            excluding: track.places,
+            from: source,
+            showing: everything,
+            reaching: TrailPlaceReach.around.meters
         )
 
-        #expect(outcome.outage == nil)
+        #expect(onTheLine.outage == nil)
+        #expect(onTheLine.rows.count == 3)
+        let allOnTheLine = onTheLine.rows.allSatisfy(\.isOnTheLine)
+        #expect(allOnTheLine)
         #expect(
-            Set(outcome.rows.map(\.place.osm?.elementID))
+            Set(around.rows.map(\.place.osm?.elementID))
                 == Set(SeededTrailPointSource.places.map(\.osm?.elementID))
         )
+        #expect(around.rows.filter { !$0.isOnTheLine }.map(\.place.name) == ["Thumsee Kopf"])
     }
 
     @Test("a recording at the trailhead is offered more than one mapped place")

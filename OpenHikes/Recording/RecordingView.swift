@@ -68,9 +68,9 @@ struct RecordingView: View {
                 // The places added so far on this walk, each opening its own
                 // screen. Nothing at all until the first one.
                 if let hike = recorder.currentHike {
-                    HikePlaceSection(hike: hike, mapPins: placePins) { placeID in
+                    HikePlaceSection(hike: hike, mapPins: placePins, onOpen: { placeID in
                         onOpenPlace(hike, placeID)
-                    }
+                    })
                     .padding(.horizontal)
                     .background {
                         HikePlacePinClaim(hike: hike, controller: placePins) { placeID in
