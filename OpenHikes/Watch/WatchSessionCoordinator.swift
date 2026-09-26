@@ -14,7 +14,8 @@
 //    wins, which is what a list of trails is.
 //  * Answers a ``WatchTrailRequest`` with the trail's geometry.
 //  * Takes a ``WatchRecordedWalk`` and keeps it, then sends a receipt so the
-//    watch can let go of it.
+//    watch can let go of it — and writes it to Health, through
+//    ``WatchWalkHealthExport``, because the watch threw its own workout away.
 //  * Mirrors *this phone's* recording to the watch and performs the buttons
 //    the watch sends back, both through ``WatchRecordingMirror``.
 //
@@ -107,6 +108,9 @@ final class WatchSessionCoordinator: NSObject {
     /// twice — a lost receipt is the ordinary cause — and two arrivals land as
     /// two tasks that would both fetch before either inserted.
     @ObservationIgnored private var importsInFlight: Set<UUID> = []
+    /// The Health writer for a walk that arrives, or `nil` for a launch with
+    /// no Health store to write to — the same `nil` the recorder's writer is.
+    @ObservationIgnored private let healthExport: WatchWalkHealthExport?
 
     #if canImport(WatchConnectivity)
     @ObservationIgnored private var session: WCSession?
@@ -120,8 +124,9 @@ final class WatchSessionCoordinator: NSObject {
     @ObservationIgnored private var pendingCatalogue: SharedHikeCatalogue?
     #endif
 
-    init(container: ModelContainer) {
+    init(container: ModelContainer, healthExport: WatchWalkHealthExport? = nil) {
         self.container = container
+        self.healthExport = healthExport
         super.init()
     }
 
@@ -220,6 +225,10 @@ final class WatchSessionCoordinator: NSObject {
             // Republishing is what closes that, and is cheap: it is a list of
             // at most fifty rows replacing a list of at most fifty rows.
             await republishLibrary()
+            // Last, because it is the one step that can wait on a person: the
+            // first write asks for Health permission, and neither the receipt
+            // nor the watch's list should be held behind that prompt.
+            await healthExport?.export(walk, after: outcome)
         }
     }
 

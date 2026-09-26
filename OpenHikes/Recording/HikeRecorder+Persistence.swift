@@ -242,7 +242,7 @@ extension HikeRecorder {
         session: TrackJournalSession,
         prepared: PreparedRecording
     ) {
-        guard let workoutWriter, savesHikesToHealth else { return }
+        guard let workoutWriter, HikeWorkoutExport.isEnabled(in: defaults) else { return }
         let endedAt = prepared.startedAt.addingTimeInterval(prepared.recordedSeconds)
         let request = HikeWorkoutRequest(
             hikeID: hike.id,
@@ -259,30 +259,8 @@ extension HikeRecorder {
             route: prepared.route
         )
         Task { [container] in
-            do {
-                let workoutID = try await workoutWriter.write(request)
-                // Filed against the row only once the workout exists, so a
-                // stored identifier always names something — see
-                // ``HikeLocalState/healthWorkoutID``.
-                let state = HikeLocalState.forHike(request.hikeID, in: container.mainContext)
-                state.healthWorkoutID = workoutID
-                try container.mainContext.save()
-            } catch {
-                Self.logger.error(
-                    """
-                    Health export failed for \(request.hikeID, privacy: .private): \
-                    \(error.localizedDescription, privacy: .public)
-                    """
-                )
-            }
+            await HikeWorkoutExport.write(request, with: workoutWriter, filingInto: container)
         }
-    }
-
-    /// The hiker's switch, read at save time rather than captured, so turning
-    /// it off between one hike and the next takes effect on the next one.
-    private var savesHikesToHealth: Bool {
-        defaults.object(forKey: SettingsKey.savesHikesToHealth) as? Bool
-            ?? SettingsDefault.savesHikesToHealth
     }
 
     /// Finishes the draft this recording has been writing into, in the one

@@ -161,9 +161,10 @@ extension OpenHikesModel {
     /// by a feed, so neither wants a background context of its own.
     ///
     /// Unguarded by ``AppLaunchEnvironment/isRunningTests``, unlike
-    /// ``makeWatchLink(container:)``. A hosted suite gets whatever container
-    /// the host built, which for a test launch is in-memory, so there is
-    /// nothing here that could reach the developer's own disk — and UI
+    /// ``makeWatchLink(container:recorder:defaults:)``. A hosted suite gets
+    /// whatever container the host built, which for a test launch is
+    /// in-memory, so there is nothing here that could reach the developer's
+    /// own disk — and UI
     /// automation needs the maker to work for the same reason it needs the
     /// recorder to.
     ///
@@ -305,9 +306,25 @@ extension OpenHikesModel {
     /// mid-suite would be written into whatever store the host happened to
     /// build. There is nothing here a UI test can drive either: it would need
     /// a second device on the other end of the link.
-    static func makeWatchLink(container: ModelContainer) -> WatchSessionCoordinator? {
+    ///
+    /// Handed the recorder's own Health writer rather than a second one, so
+    /// a walk from the watch and a walk from this phone reach Health through
+    /// the same object and under the same `nil` — see ``makeWorkoutWriter()``.
+    static func makeWatchLink(
+        container: ModelContainer,
+        recorder: HikeRecorder,
+        defaults: UserDefaults
+    ) -> WatchSessionCoordinator? {
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
-        return WatchSessionCoordinator(container: container)
+        let healthExport = recorder.workoutWriter.map { writer in
+            WatchWalkHealthExport(
+                writer: writer,
+                container: container,
+                defaults: defaults,
+                weatherState: recorder.weatherState
+            )
+        }
+        return WatchSessionCoordinator(container: container, healthExport: healthExport)
     }
 }
 
