@@ -802,8 +802,19 @@ private extension HikeDetailView {
     }
 
     /// The no-match half of ``updateLiveFollow(profile:)``: clears the live dot
-    /// and tells the widget there is nothing to show.
-    private func clearLiveFollow(profile: RouteProfile) {
+    /// and tells the widget feed what became of the fix, which decides with
+    /// its own thresholds whether there is anything to show.
+    ///
+    /// - Parameter offRoute: the match for a fix that was found, but too far
+    ///   from the line to draw or to count towards the walk. Passed on rather
+    ///   than dropped, because how far off it fell is exactly what the
+    ///   off-trail reminder waits for, and the tracker applies its own
+    ///   thresholds to it. `nil` for a fix too inaccurate to match, which says
+    ///   nothing about where the hiker is — see ``OffTrailWatch``.
+    private func clearLiveFollow(
+        profile: RouteProfile,
+        offRoute: (distanceAlongRoute: Double, offRouteMeters: Double)? = nil
+    ) {
         // Guarded so a run of off-route fixes (nil already) doesn't write
         // `tracker` for nothing.
         if tracker.liveTrackerDistance != nil {
@@ -816,7 +827,7 @@ private extension HikeDetailView {
             backgroundTracker.publishLiveFix(
                 hike: hike,
                 profile: profile,
-                match: nil,
+                match: offRoute,
                 walk: walkSession.payload(for: hike.id)
             )
         }
@@ -852,7 +863,7 @@ private extension HikeDetailView {
             // Leaving the route is what rearms auto-start after an End: the
             // hiker is off this trail, so coming back to it is a new walk.
             walkSession.recordOffRoute(hikeID: hike.id)
-            clearLiveFollow(profile: profile)
+            clearLiveFollow(profile: profile, offRoute: match)
             return
         }
         followAnchor = .matched(at: match.distanceAlongRoute, course: fix.course, from: followAnchor)
