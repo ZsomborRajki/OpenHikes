@@ -176,7 +176,9 @@ nonisolated enum HikeDeletion {
         // takes the only record of this identifier with it, and after the
         // commit there is nothing left to ask. Spent after the save, so a
         // refusal leaves the workout beside the hike that is still in the
-        // list.
+        // list. A workout Health is still writing has no identifier here yet;
+        // ``HikeWorkoutExport/write(_:with:filingInto:)`` finds its hike gone
+        // when Health answers, and takes that one back itself.
         let workoutIDs = hikes.compactMap { $0.localState?.healthWorkoutID }
         // Read here for the reason the file names are: a deleted `@Model` has
         // nothing left to ask.
