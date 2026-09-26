@@ -41,6 +41,9 @@ struct RecordingPlaceSheet: View {
     @State private var name = ""
     @State private var symbol: TrailPlaceSymbol?
     @State private var note = ""
+    /// Set when adding's save was refused. The sheet stays up under it, with
+    /// what was typed, so adding again is the retry.
+    @State private var refusal: HikePlaceRefusal?
 
     var body: some View {
         NavigationStack {
@@ -57,6 +60,7 @@ struct RecordingPlaceSheet: View {
                     Button("Cancel", role: .cancel) { dismiss() }
                 }
             }
+            .hikePlaceRefusalAlert($refusal)
         }
         .task {
             guard let source else { return }
@@ -122,10 +126,18 @@ struct RecordingPlaceSheet: View {
     }
 
     /// Puts the place on the walk and opens it — or, for an OpenStreetMap
-    /// place the walk already has, opens the one it has.
+    /// place the walk already has, opens the one it has. A refused save
+    /// leaves the sheet up.
     private func add(_ place: TrailPlace) {
+        let added: Bool
+        do throws(HikePlaceRefusal) {
+            added = try HikePlaceChange.add(place, to: hike, in: modelContext)
+        } catch {
+            refusal = error
+            return
+        }
         dismiss()
-        guard hike.addPlace(place, in: modelContext) else {
+        guard added else {
             let held = hike.places.first { held in
                 guard let osm = place.osm, let other = held.osm else { return false }
                 return osm.isSameElement(as: other)
@@ -133,7 +145,6 @@ struct RecordingPlaceSheet: View {
             if let held { onAdded(held.id) }
             return
         }
-        try? modelContext.save()
         onAdded(place.id)
     }
 

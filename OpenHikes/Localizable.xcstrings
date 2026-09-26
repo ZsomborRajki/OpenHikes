@@ -557,6 +557,9 @@
     "Check access between the stops and the route" : {
 
     },
+    "Check that the device has storage available, then try again." : {
+
+    },
     "Check Whether It's Still Live" : {
 
     },
@@ -2145,6 +2148,12 @@
     "This photograph couldn’t be opened." : {
 
     },
+    "This place couldn't be added." : {
+
+    },
+    "This place couldn't be removed." : {
+
+    },
     "This route is mapped by OpenStreetMap contributors." : {
 
     },
@@ -2289,6 +2298,9 @@
     "What was this hike?" : {
 
     },
+    "What you entered wasn't lost. Check that the device has storage available, then try again." : {
+
+    },
     "What you're asking about" : {
 
     },
@@ -2326,6 +2338,9 @@
 
     },
     "You've already shared this hike. Sending it again adds a second copy for other hikers — it doesn't replace or update the first, and this app can't take that one down. Ask for it to be removed by reporting it from its own screen." : {
+
+    },
+    "Your changes to this place couldn't be saved." : {
 
     },
     "Your drawing wasn't lost. Check that the device has storage available, then save again." : {
