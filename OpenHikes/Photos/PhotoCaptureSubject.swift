@@ -103,6 +103,8 @@ private struct PhotoCaptureSubject: ViewModifier {
     let anchor: () -> CLLocationCoordinate2D?
 
     @State private var token: Int?
+    @Environment(\.sheetDepth)
+    private var depth
 
     func body(content: Content) -> some View {
         content
@@ -125,7 +127,10 @@ private struct PhotoCaptureSubject: ViewModifier {
 
     private func claim() {
         guard let controller, let hike else { return }
-        token = controller.attach(to: hike, place: place, placeAnchor: placeAnchor, anchor: anchor)
+        // A screen SwiftUI appears twice without a disappear between holds
+        // one claim, not two — see ``ScreenClaims``.
+        if let token { controller.detach(token: token) }
+        token = controller.attach(to: hike, place: place, placeAnchor: placeAnchor, depth: depth, anchor: anchor)
     }
 
     private func release() {

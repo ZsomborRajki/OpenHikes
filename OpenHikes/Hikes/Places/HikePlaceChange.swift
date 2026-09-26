@@ -14,7 +14,7 @@
 //  screen up with what the hiker entered so they can try again.
 //
 //  Undone by hand rather than through `ModelContext.rollback()`, for the
-//  reason ``HikePlaceSearch/add(to:in:save:)`` gives: the context is the
+//  reason ``TrailWalkSession`` gives: the context is the
 //  shared main one, and a rollback would also discard every other pending edit
 //  in it.
 //

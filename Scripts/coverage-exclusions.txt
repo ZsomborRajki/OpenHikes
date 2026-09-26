@@ -115,13 +115,24 @@
 #
 # Six arrived with the place overhaul on 2026-09-24, and they are the
 # ordinary case: `HikePlaceView` (a saved hike's place screen),
-# `HikePlaceEditor`, `HikePlaceSearchSheet` and `RecordingPlaceSheet` are
+# `HikePlaceEditor`, `HikePlaceSearchSheet` (since replaced, below) and
+# `RecordingPlaceSheet` are
 # screens; `TrailPlaceCardParts` is the rows both place cards are built from,
 # folded out of `TrailPlaceSheet`; `MapSheet+Places` is the sheet's
 # destination for the new route. What they decide stays measured, in files
 # of its own with suites of their own: `HikePlaceCard`,
-# `TrailPlaceCorridorSearch` (with `HikePlaceSearch`),
+# `TrailPlaceCorridorSearch`,
 # `NearbyPlaceSuggestions`, and the editing rules on `Hike` in `TrailPoint`.
+#
+# `HikePlacesAroundView` replaced `HikePlaceSearchSheet` on 2026-09-26, with
+# `HikePlaceAroundCard` the place card it raises over the sheet, and
+# `TrailPlaceKindChips` came out of it the same day as the kind chips it and
+# the maker's `TrailPlaceFilterSection` now share — body code, whose switching
+# is `TrailPlaceFilter`'s and measured there:
+# *Places Around Trail*, a screen and its card, entirely body code. What it
+# decides is `HikePlacesAroundSearch` and `TrailPlaceAroundListing`, and what
+# it tells the map is `TrailPlacesAround`, each measured with a suite of its
+# own.
 #
 # `HikePlaceAdder` followed the same day, *Add Place* from the camera pill: a
 # form, entirely body code. What it decides is `HikePlaceDraft` and what it
@@ -211,7 +222,9 @@ OpenHikes/Weather/WeatherDetailSheet.swift
 OpenHikes/Hikes/Places/HikePlaceView.swift
 OpenHikes/Hikes/Places/HikePlaceEditor.swift
 OpenHikes/Hikes/Places/HikePlaceAdder.swift
-OpenHikes/Hikes/Places/HikePlaceSearchSheet.swift
+OpenHikes/Hikes/Places/HikePlacesAroundView.swift
+OpenHikes/Hikes/Places/TrailPlaceKindChips.swift
+OpenHikes/Hikes/Places/HikePlaceAroundCard.swift
 OpenHikes/Hikes/Places/TrailPlaceCardParts.swift
 OpenHikes/Recording/RecordingPlaceSheet.swift
 OpenHikes/Map/MapSheet+Places.swift
