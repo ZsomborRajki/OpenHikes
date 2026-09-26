@@ -16,6 +16,11 @@ import PackageDescription
 /// sources), but if one ever does it should start where the app already is.
 /// `swift test` runs the suite on the macOS host, which CI pins to the
 /// `xcode-27` runner image.
+///
+/// No `dependencies:`, deliberately: every product that links this package
+/// and nothing else — the widget, the watch app, its complications — would
+/// carry a dependency whole. *Architecture* in the repository instructions has
+/// the measurement.
 let package = Package(
     name: "OpenHikesShared",
     platforms: [

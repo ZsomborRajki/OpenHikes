@@ -32,10 +32,10 @@ public struct TimestampIndex: Sendable {
     /// This is `timestamps.partitioningIndex { $0 >= timestamp }` written out
     /// by hand, and it stays that way deliberately. The app side of the same
     /// operation — ``RouteProfile``, ``MapState``, `HikePhotoTimeline` — uses
-    /// swift-algorithms, but this package declares no external dependencies at
-    /// all, and it is linked into the widget and Control Center extensions as
-    /// well as the app. A whole module in three binaries is not a fair price
-    /// for six lines whose behaviour is pinned by `TimestampIndexTests`.
+    /// swift-algorithms, but this package declares no dependencies; *Architecture*
+    /// in the repository instructions has what linking one here was measured to
+    /// cost the extensions and the watch. The behaviour is pinned by
+    /// `TimestampIndexTests`.
     private func lowerBound(for timestamp: Date) -> Int {
         var lower = timestamps.startIndex
         var upper = timestamps.endIndex
