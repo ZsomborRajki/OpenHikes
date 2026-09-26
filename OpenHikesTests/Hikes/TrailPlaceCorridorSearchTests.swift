@@ -16,6 +16,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import SwiftData
 import Testing
 
 @MainActor
@@ -262,10 +263,44 @@ struct TrailPlaceCorridorSearchTests {
             showing: Set(TrailPlaceSymbol.allCases)
         ).value
         search.toggle(car.id)
-        let added = search.add(to: hike, in: context)
+        let added = try search.add(to: hike, in: context)
 
         #expect(added == 1)
         #expect(hike.places.map(\.osm?.elementID) == [1])
+    }
+
+    @Test("a refused save keeps the choice, takes the places back, and Add again commits them once")
+    func refusedSaveCanBeRetried() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: Line.short)
+        try context.save()
+        let spring = Self.place(1, latitude: 47.605)
+        let hut = Self.place(2, latitude: 47.61, symbol: .shelter)
+        let search = HikePlaceSearch()
+        await search.start(
+            for: hike,
+            source: AnsweringSource(answer: [spring, hut]),
+            showing: Set(TrailPlaceSymbol.allCases)
+        ).value
+        // An edit of the hiker's own, pending in the same context: what a
+        // `rollback()` would have taken with it.
+        hike.title = "Renamed"
+        let saver = ScriptedModelContextSaver(failedSaveNumbers: [1])
+
+        #expect(throws: HikePlaceSearchRefusal.notSaved) {
+            try search.add(to: hike, in: context, save: saver.save)
+        }
+        #expect(hike.places.isEmpty)
+        #expect(search.chosen == [spring.id, hut.id])
+        #expect(search.canAdd)
+        #expect(hike.title == "Renamed")
+
+        let added = try search.add(to: hike, in: context, save: saver.save)
+
+        #expect(added == 2)
+        let reopened = ModelContext(context.container)
+        let stored = try reopened.fetch(FetchDescriptor<TrailPoint>())
+        #expect(stored.map(\.id).sorted() == [spring.id, hut.id].sorted())
     }
 
     @Test("the sheet starts with everything found chosen, and a refusal with nothing is a failure")

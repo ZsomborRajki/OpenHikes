@@ -256,6 +256,27 @@ nonisolated enum TrailPlaceCorridorSearch {
     }
 }
 
+/// Why *Find Places Along Trail*'s *Add* did not add.
+///
+/// Carries no diagnostic, for the reason ``TrailDraftRefusal/notSaved``
+/// carries none.
+enum HikePlaceSearchRefusal: LocalizedError, Equatable {
+    /// The store refused to keep the places.
+    case notSaved
+
+    var errorDescription: String? {
+        String(localized: "These places couldn't be added.")
+    }
+
+    // Says the choice is still there, because the obvious reading of a failed
+    // save is that it is gone.
+    var recoverySuggestion: String? {
+        String(
+            localized: "Your selection wasn't lost. Check that the device has storage available, then tap Add again."
+        )
+    }
+}
+
 /// Where a *Find Places Along Trail* asks, and which kinds it asks for.
 struct TrailPlaceSearchScope {
     let source: any TrailPointSourcing
@@ -336,19 +357,37 @@ final class HikePlaceSearch {
         if chosen.contains(id) { chosen.remove(id) } else { chosen.insert(id) }
     }
 
-    /// Adds the chosen places to `hike`, answering how many went in.
-    @discardableResult func add(to hike: Hike, in context: ModelContext) -> Int {
+    /// Adds the chosen places to `hike` and saves them, answering how many
+    /// went in.
+    ///
+    /// A refused save takes the added rows back out and throws, so the sheet
+    /// stays up with the same places ticked and *Add* can simply be tapped
+    /// again: a place that is only pending is not one the hiker has, and
+    /// closing the sheet over it would say it was. Taken back by hand rather
+    /// than through `ModelContext.rollback()`, for the reason
+    /// ``TrailWalkSession`` gives — and because a rollback would also discard
+    /// every other pending edit in the shared context.
+    @discardableResult func add(
+        to hike: Hike,
+        in context: ModelContext,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws(HikePlaceSearchRefusal) -> Int {
         guard case .found(let rows, _) = phase else { return 0 }
         let places = rows.map(\.place).filter { chosen.contains($0.id) }
         let added = hike.addPlaces(places, in: context)
+        guard !added.isEmpty else { return 0 }
         do {
-            try context.save()
+            try save(context)
         } catch {
-            // Left to the next autosave rather than taken back: the rows are
-            // on the hike, and a place is not a file that can be orphaned.
+            // A row's id is its place's — see ``TrailPoint``.
+            let addedIDs = Set(added.map(\.id))
+            let inserted = (hike.trailPoints ?? []).filter { addedIDs.contains($0.id) }
+            hike.trailPoints?.removeAll { addedIDs.contains($0.id) }
+            for row in inserted { context.delete(row) }
             Self.logger.error(
                 "Places found along a trail could not be saved: \(error.localizedDescription, privacy: .public)"
             )
+            throw .notSaved
         }
         return added.count
     }
