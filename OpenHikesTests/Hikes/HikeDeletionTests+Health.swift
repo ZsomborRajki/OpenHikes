@@ -149,4 +149,130 @@ extension HikeDeletionTests {
 
         #expect(writer.deleted == [workoutID])
     }
+
+    // MARK: - A deletion while the export is still being written
+
+    /// The race the deletion above cannot see: ``HikeDeletion`` removes the
+    /// workouts already filed when it runs, and one Health has not answered
+    /// for yet has no identifier to file. The export has to notice the hike
+    /// went while it was suspended, and take the workout back itself.
+    @Test("a workout Health finishes after its hike was deleted is taken back out")
+    func aWorkoutFinishedAfterDeletionIsRemoved() async throws {
+        let container = try Fixture.modelContainer()
+        let context = container.mainContext
+        let hike = Fixture.hike(in: context)
+        try context.save()
+        let hikeID = hike.id
+        let writer = HeldWorkoutWriter()
+
+        let export = Task {
+            await HikeWorkoutExport.write(
+                Self.request(for: hikeID),
+                with: writer,
+                filingInto: container
+            )
+        }
+        await writer.untilWriting()
+        try HikeDeletion.delete([hike], workouts: writer)
+        writer.finish()
+        await export.value
+
+        #expect(try context.fetch(FetchDescriptor<Hike>()).isEmpty)
+        #expect(
+            HikeLocalState.existing(for: hikeID, in: context) == nil,
+            "no sidecar comes back for a hike that is gone"
+        )
+        #expect(writer.deleted == [writer.workoutID])
+    }
+
+    /// The same suspension with nothing deleted under it, so the check above
+    /// is not simply refusing to file anything written slowly.
+    @Test("a slow write for a hike that is still here is filed as usual")
+    func aSlowWriteForALiveHikeIsFiled() async throws {
+        let container = try Fixture.modelContainer()
+        let context = container.mainContext
+        let hike = Fixture.hike(in: context)
+        try context.save()
+        let writer = HeldWorkoutWriter()
+
+        let export = Task {
+            await HikeWorkoutExport.write(
+                Self.request(for: hike.id),
+                with: writer,
+                filingInto: container
+            )
+        }
+        await writer.untilWriting()
+        writer.finish()
+        await export.value
+
+        let state = HikeLocalState.existing(for: hike.id, in: context)
+        #expect(state?.healthWorkoutID == writer.workoutID)
+        #expect(writer.deleted.isEmpty)
+    }
+
+    /// A store that could not say is not a store that said "gone": taking the
+    /// workout out on a failed fetch would delete a walk from Health that is
+    /// still in the list.
+    @Test("a failed owner lookup is not read as a deleted hike")
+    func aFailedLookupIsNotADeletion() {
+        #expect(!HikeWorkoutExport.hikeIsGone { throw HikeWorkoutFailure.unavailable })
+        #expect(!HikeWorkoutExport.hikeIsGone { 1 })
+        #expect(HikeWorkoutExport.hikeIsGone { 0 })
+    }
+
+    /// Any walk will do: nothing here reads the figures back.
+    private static let startedAt = Date.distantPast
+    private static let hourSeconds: TimeInterval = 3600
+    private static let walkMeters = 5000.0
+
+    private static func request(for hikeID: UUID) -> HikeWorkoutRequest {
+        HikeWorkoutRequest(
+            hikeID: hikeID,
+            startedAt: startedAt,
+            endedAt: startedAt.addingTimeInterval(hourSeconds),
+            distanceMeters: walkMeters,
+            elevationGainMeters: nil,
+            elevationLossMeters: nil,
+            weather: nil,
+            route: []
+        )
+    }
+}
+
+/// A writer whose `write` stays suspended until the test lets it answer, so a
+/// deletion can land at a known point inside it — a handshake, not a race.
+@MainActor
+private final class HeldWorkoutWriter: HikeWorkoutWriting {
+    let workoutID = UUID()
+    private(set) var deleted: [UUID] = []
+    private var hasEntered = false
+    private var entered: CheckedContinuation<Void, Never>?
+    private var held: CheckedContinuation<Void, Never>?
+
+    func write(_ request: HikeWorkoutRequest) async -> UUID {
+        hasEntered = true
+        entered?.resume()
+        entered = nil
+        // Parked in the same main-actor turn as the resume above, so `held`
+        // is set before the test can reach `finish()`.
+        await withCheckedContinuation { held = $0 }
+        return workoutID
+    }
+
+    func delete(workoutID: UUID) {
+        deleted.append(workoutID)
+    }
+
+    /// Returns once `write` has been entered and is waiting.
+    func untilWriting() async {
+        guard !hasEntered else { return }
+        await withCheckedContinuation { entered = $0 }
+    }
+
+    /// Lets the held `write` answer with ``workoutID``.
+    func finish() {
+        held?.resume()
+        held = nil
+    }
 }
