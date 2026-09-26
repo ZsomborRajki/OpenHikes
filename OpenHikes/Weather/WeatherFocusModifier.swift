@@ -31,7 +31,7 @@ extension View {
     ///   - isRecording: whether a recording owns the badge right now.
     ///   - hiker: where the hiker is, asked only at the moment a recording
     ///     starts. A closure rather than a value so it is not read on every
-    ///     pass — the position changes at roughly 1 Hz, and this modifier must
+    ///     pass — the position changes with every fix, and this modifier must
     ///     not be a reason anything re-renders at that rate.
     func weatherFocus(
         _ focus: WeatherFocus,

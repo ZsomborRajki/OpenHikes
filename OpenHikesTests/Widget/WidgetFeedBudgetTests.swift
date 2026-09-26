@@ -7,8 +7,8 @@
 //  whether the feed is affordable rather than merely correct.
 //
 //  WidgetKit gives an app a finite number of timeline reloads per day and
-//  quietly throttles a widget that overruns it. `publishLiveFix` is fed from a
-//  once-a-second poll and defends itself with a 45-second interval, and that
+//  quietly throttles a widget that overruns it. `publishLiveFix` is fed on
+//  every published fix and defends itself with a 45-second interval, and that
 //  interval has an escape hatch — a change in on/off-route status publishes
 //  immediately, throttle or not — which is what these tests hold to a bound.
 //

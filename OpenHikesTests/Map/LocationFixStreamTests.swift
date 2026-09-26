@@ -16,7 +16,8 @@
 //  * nothing at all while the hiker stands still, which is the entire point
 //    of the change and the one property a timer can't have.
 //
-//  Both consumers iterate it at once, so the fan-out is pinned here too.
+//  More than one consumer can iterate it at once, so the fan-out is pinned
+//  here too.
 //
 
 import CoreLocation
@@ -39,11 +40,10 @@ struct LocationFixStreamTests {
         }
     }
 
-    private let clock = TestClock()
     private let manager: LocationManager
 
     init() {
-        manager = LocationManager(clock: clock.read)
+        manager = LocationManager()
     }
 
     /// Delivers a fix the way CoreLocation does.
@@ -116,8 +116,8 @@ struct LocationFixStreamTests {
     }
 
     /// Before any fix has arrived there is nothing to match against, and the
-    /// sequence says so rather than withholding an element — `pollWeather`
-    /// relies on being woken to re-read a position it may not have yet.
+    /// sequence says so rather than withholding an element — auto-follow
+    /// relies on being woken by the first fix rather than waiting for a second.
     @Test("a consumer that starts before the first fix is woken by it")
     func firstFixWakesAWaitingConsumer() async {
         let consumer = await startConsumer()
@@ -130,9 +130,10 @@ struct LocationFixStreamTests {
         #expect(consumer.log.latitudes == [nil, 47.63])
     }
 
-    /// The property the timers couldn't have. A hiker at a viewpoint keeps
-    /// producing fixes, and `LocationManager.publish` drops the ones that
-    /// repeat the last coordinate — so nothing downstream wakes at all.
+    /// The property the timers couldn't have. Core Location can hand over the
+    /// same place again — it sends a fresh first fix every time the feed
+    /// resumes — and `LocationManager.publish` drops a fix that repeats the
+    /// last coordinate, so nothing downstream wakes at all.
     @Test("standing still wakes nobody")
     func repeatedFixesDoNotWake() async {
         publish(latitude: 47.63)
@@ -140,15 +141,12 @@ struct LocationFixStreamTests {
         defer { consumer.task.cancel() }
         #expect(consumer.log.count == 1)
 
-        clock.advance(by: 5)
         publish(latitude: 47.63)
-        clock.advance(by: 5)
         publish(latitude: 47.63)
         // An element that never arrives is not something a condition can wait
         // for. So wait for one that must: a fix that really moved can only be
         // the consumer's *second* element if the two repeats above woke it
         // for nothing.
-        clock.advance(by: 5)
         publish(latitude: 47.64)
         await settle(consumer.log, untilCount: 2)
 
@@ -166,34 +164,31 @@ struct LocationFixStreamTests {
         let consumer = await startConsumer()
         defer { consumer.task.cancel() }
 
-        clock.advance(by: 1.1)
         publish(latitude: 47.64)
         await settle(consumer.log, untilCount: 2)
 
         #expect(consumer.log.latitudes == [47.63, 47.64])
     }
 
-    /// The weather poll and auto-follow iterate this at the same time whenever
-    /// a hike is open, so a fix has to reach both — an `AsyncStream` handed
-    /// out from a single stored continuation would have given it to whichever
-    /// one asked first.
+    /// Two consumers iterating this at the same time must each get the fix —
+    /// an `AsyncStream` handed out from a single stored continuation would
+    /// have given it to whichever one asked first.
     @Test("every consumer sees every fix")
     func fanOutReachesEveryConsumer() async {
         publish(latitude: 47.63)
-        let weather = await startConsumer()
-        let follow = await startConsumer()
+        let first = await startConsumer()
+        let second = await startConsumer()
         defer {
-            weather.task.cancel()
-            follow.task.cancel()
+            first.task.cancel()
+            second.task.cancel()
         }
 
-        clock.advance(by: 1.1)
         publish(latitude: 47.64)
-        await settle(weather.log, untilCount: 2)
-        await settle(follow.log, untilCount: 2)
+        await settle(first.log, untilCount: 2)
+        await settle(second.log, untilCount: 2)
 
-        #expect(weather.log.latitudes == [47.63, 47.64])
-        #expect(follow.log.latitudes == [47.63, 47.64])
+        #expect(first.log.latitudes == [47.63, 47.64])
+        #expect(second.log.latitudes == [47.63, 47.64])
     }
 
     /// A fix the policy rejects — here, one dated well in the past — never

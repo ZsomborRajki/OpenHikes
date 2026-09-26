@@ -88,9 +88,9 @@ extension ObservationCostTests {
     /// …but `CLLocationCoordinate2D` is not `Equatable`, so Observation has
     /// no way to tell an unchanged position from a new one and notifies on
     /// every assignment. That is why the two coordinate-typed publishers —
-    /// `RouteHighlight` and `LocationManager`, the two written most often
-    /// (drag frequency and 1 Hz respectively) — compare before assigning
-    /// instead of leaving it to the runtime.
+    /// `RouteHighlight` and `LocationManager`, written at drag frequency and
+    /// on every fix respectively — compare before assigning instead of
+    /// leaving it to the runtime.
     @Test("an equal write to a coordinate notifies anyway")
     func equalCoordinateWriteIsNotFiltered() async {
         let publisher = CoordinatePublisher()

@@ -28,10 +28,10 @@ struct MapView: MapViewRepresentable, Equatable {
 
     /// Source of the user's live location. Observed directly by the map (not
     /// via SwiftUI), the same technique `highlight`/`sheetMetrics` use, so the
-    /// publishes that drive it (at most one a second, and none at all while
-    /// the user stands still — see `LocationManager`) never re-render any
-    /// view. The map centers on the user's first fix, once, while no route is
-    /// selected — see `Coordinator.observeLocation`.
+    /// publishes that drive it (none at all while the user stands still — see
+    /// `LocationManager`) never re-render any view. The map centers on the
+    /// user's first fix, once, while no route is selected — see
+    /// `Coordinator.observeLocation`.
     var locationManager: LocationManager
 
     /// An imported/selected route to draw and zoom to. Draws a line and fits the map to it.

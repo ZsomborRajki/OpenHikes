@@ -122,27 +122,23 @@ final class LocationManager: NSObject {
     ///
     /// The low-frequency half of ``coordinate``: written once, from `false`
     /// to `true`, so a SwiftUI body can decide whether to *offer* something at
-    /// the hiker's position without enrolling in the once-a-second fix feed.
-    /// Observation registers per property, so reading this reads nothing else.
-    /// The coordinate itself is read in the action that uses it.
+    /// the hiker's position without enrolling in the fix feed. Observation
+    /// registers per property, so reading this reads nothing else. The
+    /// coordinate itself is read in the action that uses it.
     private(set) var hasFix = false
 
     /// What CoreLocation currently allows this app, as the app's own
     /// observable state.
     ///
-    /// Observable because a refusal used to be invisible. Every branch below
-    /// reads the status straight off the source and returns quietly when it
-    /// is `.denied`, so an app whose hiker had said no simply had no location
-    /// for the rest of the install and said so nowhere: the "my location"
-    /// button spun and gave up, the background-tracking switch turned on and
-    /// armed nothing. Nothing could tell them because nothing kept the
-    /// answer. Reported by the user 2026-09-20.
+    /// Kept rather than read off the source when needed, because a refusal
+    /// nothing holds is a refusal nothing can show: the map's location button
+    /// and the background-tracking switch both have to be able to say why
+    /// they cannot work.
     ///
     /// Low-frequency in a way ``coordinate`` is not — it changes when the
-    /// hiker answers a prompt or visits Settings, which is a handful of times
-    /// in the life of an install — so a SwiftUI body may read it. Observation
-    /// registers per property, so reading this one does not enrol the reader
-    /// in the once-a-second fix feed beside it.
+    /// hiker answers a prompt or visits Settings — so a SwiftUI body may read
+    /// it. Observation registers per property, so reading this one does not
+    /// enrol the reader in the fix feed beside it.
     private(set) var authorizationStatus: CLAuthorizationStatus
 
     /// Whether the hiker has refused this app location outright.
@@ -172,51 +168,26 @@ final class LocationManager: NSObject {
     @ObservationIgnored private var latestLocation: CLLocation?
 
     @ObservationIgnored private let manager: any ForegroundLocationSource
-    /// CLLocationManager can deliver updates far more often than once a second;
-    /// `coordinate` is `@Observable`, so every write can re-render anything
-    /// reading it (this app's map centering, the elevation graph's auto-follow).
-    /// Throttled here so downstream consumers only ever see ~1 update/sec.
-    private var lastPublished: Date?
     private static let baselineDesiredAccuracy = kCLLocationAccuracyNearestTenMeters
+    /// What limits this feed's rate: Core Location delivers only once the
+    /// hiker has moved this far from the last fix, so standing still produces
+    /// nothing and walking a fix every twenty seconds or so.
     private static let baselineDistanceFilter: CLLocationDistance = 25
-    private static let minimumPublishInterval: TimeInterval = 1
-    /// Authorization callbacks can arrive as soon as the delegate is assigned.
-    /// Only start hardware updates after the owning view has called `start()`.
-    private var updatesRequested = false
-    /// Whether the receiver is currently running, as distinct from whether the
-    /// screen wants it to. ``stop()`` clears this and leaves
-    /// ``updatesRequested`` alone, which is what lets ``resume()`` tell "the
-    /// map is back" from "the map has never appeared" — the second of which
-    /// must not turn anything on, because `start()` is also where the
+    /// Set by ``start()``: the map has appeared and wants a feed. Nothing turns
+    /// the receiver on before that, because `start()` is also where the
     /// authorization prompt comes from.
+    private var updatesRequested = false
+    /// Whether the receiver is running, so ``reconcile()`` calls CoreLocation
+    /// only when its answer changes.
     private var isUpdating = false
-    /// Whether the scene is in front of the hiker.
-    ///
-    /// Tracked because the authorization callback is not a foreground event.
-    /// Granting access happens in *Settings*, which means this app is in the
-    /// background when the answer arrives — and the callback below used to
-    /// call `beginUpdates()` on it regardless, turning the GPS on behind a
-    /// screen nobody was looking at and leaving it on until the next resign.
-    /// That is the same standing request ``stop()`` exists to prevent, let
-    /// back in through the one door that cannot be seen from the front.
-    ///
-    /// Nothing is lost by refusing there. The hiker comes back to an app that
-    /// now has the grant, ``resume()`` runs on the way in, and its guard
-    /// passes for the first time — so the feed starts a moment later, on the
-    /// frame where it is first worth anything.
+    /// Whether the scene is in front of the hiker. The authorization callback
+    /// cannot stand in for this: a grant made in Settings arrives while this
+    /// app is in the background.
     @ObservationIgnored private var isForeground = true
-    /// Reads the current time for the throttle above. Injectable so a test can
-    /// step across the one-second window instead of sleeping through it —
-    /// which is both slower and, being a race against a real clock, flakier.
-    @ObservationIgnored private let clock: @Sendable () -> Date
 
-    init(
-        manager: (any ForegroundLocationSource)? = nil,
-        clock: @escaping @Sendable () -> Date = { Date() }
-    ) {
+    init(manager: (any ForegroundLocationSource)? = nil) {
         let source = manager ?? CLLocationManager()
         self.manager = source
-        self.clock = clock
         // Read before the delegate is assigned, so the property is truthful
         // from the first body that reads it rather than from the first
         // callback. CoreLocation does deliver one on assignment, but a view
@@ -234,84 +205,65 @@ final class LocationManager: NSObject {
     func start() {
         updatesRequested = true
         isForeground = true
-        let status = manager.foregroundAuthorizationStatus
-        record(status)
-        if status == .notDetermined {
+        reconcile()
+        if authorizationStatus == .notDetermined {
             manager.requestWhenInUseAuthorization()
-        } else if Self.isAuthorized(status) {
-            beginUpdates()
         }
     }
 
     /// Stops the receiver without forgetting that the screen wants it.
     ///
-    /// Called when the scene resigns the foreground, and the reason it has to
-    /// be called at all is that nothing else will. A `CLLocationManager` stops
-    /// when it is deallocated, and this one is never deallocated: it belongs to
-    /// the app model, which lives for the process. So an app that had ever
-    /// shown its map kept a standing request for location from launch until
-    /// the process died — measured on 2026-09-17, where MapKit's own manager
-    /// issued `stopUpdatingLocation` on the way to the background and this
-    /// one issued nothing at all.
-    ///
-    /// Nothing is lost by stopping. Everything downstream of this feed is on
-    /// screen — the map's centring, the elevation graph's auto-follow, the
-    /// weather poll, the widget's live fix, all of which run from
-    /// ``fixes`` — and the two feeds that are *meant* to outlive the
-    /// foreground are other objects entirely: the recorder's own manager, and
-    /// ``BackgroundTrailTracker``'s significant-change delivery.
+    /// Called when the scene resigns the foreground, and nothing else would
+    /// end the request: a `CLLocationManager` stops when it is deallocated,
+    /// and this one belongs to the app model, which lives for the process.
+    /// Nothing is lost by stopping. Everything this feed drives is on screen,
+    /// from the map's first-fix centring to the hike detail's auto-follow, and
+    /// the feeds meant to outlive the foreground are other objects: the
+    /// recorder's own manager, and ``BackgroundTrailTracker``'s
+    /// significant-change delivery.
     func stop() {
-        // Ahead of the guard below, and not inside it: a scene that resigns
-        // with nothing running has still resigned, and the authorization
-        // callback has to know that whether or not there was a feed to end.
         isForeground = false
-        guard isUpdating else { return }
-        isUpdating = false
-        manager.stopUpdatingLocation()
+        reconcile()
     }
 
-    /// Starts the receiver again after ``stop()``, and only then.
+    /// Starts the receiver again after ``stop()``, if ``start()`` has asked for
+    /// it and access is granted.
     ///
-    /// The guard is the whole of it: a scene becoming active on a launch whose
-    /// map has not appeared yet has asked for nothing, and turning updates on
-    /// there would put the authorization alert in front of a hiker one step
-    /// earlier than ``start()``'s caller decided to.
+    /// Re-reads the grant on the way in, because a trip to Settings is how a
+    /// refusal gets reversed, so the map's button is right on the first frame
+    /// back rather than whenever the callback lands. Never prompts: the scene
+    /// can become active before the map has appeared, and until then nobody
+    /// has decided to ask.
     func resume() {
         isForeground = true
+        reconcile()
+    }
+
+    /// Brings the receiver in line with the one rule this feed follows: it runs
+    /// while the map has asked for it, the scene is in front, and access is
+    /// granted.
+    ///
+    /// Every entry point — ``start()``, ``stop()``, ``resume()`` and the
+    /// authorization callback — changes its own input and calls this, rather
+    /// than deciding for itself. Deciding separately is how a grant made in
+    /// Settings once started the GPS behind a backgrounded app: that path
+    /// checked every condition but the foreground one.
+    ///
+    /// Records the grant on every call, whatever else happens, so a refusal
+    /// reaches the screen that has to say so. A write of the value already
+    /// there notifies nobody, because `CLAuthorizationStatus` is `Equatable`
+    /// (see *Render isolation, in practice*).
+    private func reconcile() {
         let status = manager.foregroundAuthorizationStatus
-        // Re-read on the way in because the grant may have changed while the
-        // app was away — a trip to Settings is exactly how a refusal gets
-        // reversed, and the callback that reported it arrived to a background
-        // app. This is the write that lets the button and its alert notice.
-        record(status)
-        guard updatesRequested, Self.isAuthorized(status) else { return }
-        beginUpdates()
-    }
-
-    /// Asks the receiver for delivery, at most once per stop.
-    ///
-    /// Idempotent because its three callers are: the view's `onAppear`, which
-    /// SwiftUI may run more than once for one screen; an authorization change,
-    /// which arrives whenever the hiker visits Settings; and the scene coming
-    /// forward, which happens after every interruption.
-    private func beginUpdates() {
-        guard !isUpdating else { return }
-        isUpdating = true
-        manager.startUpdatingLocation()
-    }
-
-    /// Records the grant, and only when it has actually changed.
-    ///
-    /// The dedupe is the point. Three callers write this — `start()`,
-    /// `resume()` and the delegate — and `resume()` runs on *every* return to
-    /// the foreground, which for a hiker checking the map at a junction is
-    /// several times an hour. `authorizationStatus` is observable, and
-    /// Observation does not compare before it notifies, so without this each
-    /// one of those would wake the map's capsule observation to re-decide a
-    /// question whose answer has not moved since the install was set up.
-    private func record(_ status: CLAuthorizationStatus) {
-        guard status != authorizationStatus else { return }
         authorizationStatus = status
+        let shouldUpdate = updatesRequested && isForeground && Self.isAuthorized(status)
+        guard shouldUpdate != isUpdating else { return }
+        isUpdating = shouldUpdate
+        if shouldUpdate {
+            manager.startUpdatingLocation()
+        } else {
+            manager.stopUpdatingLocation()
+        }
     }
 
     private static func isAuthorized(_ status: CLAuthorizationStatus) -> Bool {
@@ -333,23 +285,13 @@ final class LocationManager: NSObject {
 
         let next = location.coordinate
         // `CLLocationCoordinate2D` isn't `Equatable`, so Observation can't tell
-        // a repeat fix from a new one and treats the same place as news. A
-        // hiker standing still at a viewpoint would otherwise wake every
-        // observer once a second for as long as the app is open. Nothing
-        // downstream wants that heartbeat: auto-follow and the weather poll
-        // are driven by ``fixes``, which carries only what survives this
-        // filter, and the map only uses it to centre on the very first fix.
+        // a repeat fix from a new one and would wake every observer for the
+        // same place. The distance filter keeps a hiker standing still from
+        // producing fixes at all, but Core Location sends a fresh first fix
+        // each time `resume()` restarts it, and that one can repeat the last.
         if let coordinate, coordinate.latitude == next.latitude, coordinate.longitude == next.longitude { return }
-        // Only an actual publish restarts the throttle window, so the first
-        // step after standing still reaches the map straight away.
-        let now = clock()
-        if let lastPublished, now.timeIntervalSince(lastPublished) < Self.minimumPublishInterval { return }
-        lastPublished = now
-        // Only the publishes that survive both filters above get here, so this
-        // is the rate every downstream body is allowed to move at. Anything
-        // re-rendering faster than this is following something else.
         coordinate = next
-        if !hasFix { hasFix = true }
+        hasFix = true
     }
 
     /// Returns a current fix only when its uncertainty is narrow enough for
@@ -374,16 +316,15 @@ final class LocationManager: NSObject {
     }
 
     /// ``coordinate`` as an async sequence: the fix current when iteration
-    /// starts, then one element per accepted publish.
+    /// starts, then the latest one each time a new fix is published. Fixes
+    /// published before a consumer gets to run reach it as one element, the
+    /// newest.
     ///
-    /// What matters here is what it *doesn't* emit. `publish(_:)` above
-    /// already throttles to one update a second and already drops a fix that
-    /// repeats the last coordinate, so a hiker standing at a viewpoint — or a
-    /// phone in a pocket with the screen off — produces no elements at all.
-    /// The weather poll and the hike detail's auto-follow each used to run
-    /// their own 1 Hz `Task.sleep` loop to discover that for themselves, and
-    /// so kept waking through every rest stop to decide they had nothing to
-    /// do. Both now wake only when a fix really arrives.
+    /// What matters here is what it *doesn't* emit. The distance filter keeps
+    /// a hiker standing still — or a phone in a pocket — from producing
+    /// fixes, and ``publish(_:)`` drops one that repeats the last coordinate,
+    /// so the hike detail's auto-follow wakes only when the hiker has moved
+    /// rather than on a timer through every rest stop.
     ///
     /// Consumers stay on the main actor: the sequence inherits the isolation
     /// of whoever asks for it, and this is main-actor state.
@@ -395,26 +336,12 @@ final class LocationManager: NSObject {
 extension LocationManager: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        // Every delivery reaches `publish`, whose throttle may drop it — and a
-        // delivery this app throws away is still a fix the GPS spent energy
-        // producing, which is what the distance filter, not the throttle, is
-        // there to prevent.
         onMainActor { [weak self] in self?.publish(location) }
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        onMainActor { [weak self] in
-            guard let self else { return }
-            let status = self.manager.foregroundAuthorizationStatus
-            // Recorded whatever the scene is doing: this is the only place a
-            // refusal is ever heard, and the screen that has to say so may be
-            // built long after it arrives.
-            record(status)
-            // Acted on only in front. See ``isForeground`` — a grant answered
-            // in Settings reaches a backgrounded app, and starting the GPS
-            // there is the standing request ``stop()`` exists to end.
-            guard updatesRequested, isForeground, Self.isAuthorized(status) else { return }
-            beginUpdates()
-        }
+        // Recorded whatever the scene is doing, and acted on only in front —
+        // both are `reconcile()`'s to decide.
+        onMainActor { [weak self] in self?.reconcile() }
     }
 }

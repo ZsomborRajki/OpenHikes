@@ -200,7 +200,7 @@ struct OpenHikesView: View {
         // and so moves a handful of times per session — everything
         // high-frequency is passed by reference and read inside MapKit
         // instead. `locationManager.coordinate` in particular is deliberately
-        // *not* an input, so this body re-running at the ~1 Hz fix rate means
+        // *not* an input, so this body re-running at the fix rate means
         // something upstream has started reading it, and neither is
         // `weatherFocus.subject`: the badge's subject reaches this body only
         // through the state above, which is written once per focus rather than

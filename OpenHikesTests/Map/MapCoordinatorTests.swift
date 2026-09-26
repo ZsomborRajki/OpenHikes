@@ -59,17 +59,16 @@ struct MapCoordinatorTests {
     /// `MapCoordinatorTests+LocationAccess.swift`.
     let locationAccessPrompt = LocationAccessPrompt()
     private let routeStyle = RouteStyle()
-    /// Driven by a clock the test owns: `LocationManager` publishes at most
-    /// once a second, and `SheetMetrics` tells a resting sheet from a moving
-    /// one by the gap between reports, so both would otherwise depend on how
-    /// long the preceding assertions took.
+    /// Driven by a clock the test owns: `SheetMetrics` tells a resting sheet
+    /// from a moving one by the gap between reports, so it would otherwise
+    /// depend on how long the preceding assertions took.
     let clock = TestClock()
     /// Internal, like `clock` above, so the centring tests get their own file
     /// — see `MapCoordinatorTests+Recentering.swift`.
     let locationManager: LocationManager
 
     init() {
-        locationManager = LocationManager(clock: clock.read)
+        locationManager = LocationManager()
         sheetMetrics = SheetMetrics(clock: clock.read)
         recordingEntry = RecordingEntry(
             isLive: { [recordingState] in recordingState.isLive },

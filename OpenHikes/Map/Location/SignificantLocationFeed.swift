@@ -7,7 +7,7 @@
 //
 //  A third location feed, and the reason there are three is that they answer
 //  three different questions. ``LocationManager`` answers "where are they
-//  now", continuously, for the map and the recorder, and costs the GPS to do
+//  now", continuously, for the map and auto-follow, and costs the GPS to do
 //  it. ``BackgroundTrailTracker`` answers "have they reached a point on the
 //  followed trail" while the app is suspended, which is why it is the one that
 //  asks for Always authorization. This answers "have they moved far enough
@@ -52,7 +52,7 @@ final class SignificantLocationFeed: NSObject {
     @ObservationIgnored private var isMonitoring = false
 
     /// `nil` composes the real `CLLocationManager`, matching
-    /// ``LocationManager/init(manager:clock:)``: a launch that must not have a
+    /// ``LocationManager/init(manager:)``: a launch that must not have a
     /// location stack passes ``DormantLocationSource`` instead, and one that
     /// may passes nothing.
     init(monitor: (any SignificantLocationMonitor)? = nil) {
