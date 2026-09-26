@@ -12,7 +12,8 @@
 //  * Publishes the hiker's library as the session's *application context*, so
 //    a watch that wakes up out of range still has a list of trails. Latest
 //    wins, which is what a list of trails is.
-//  * Answers a ``WatchTrailRequest`` with the trail's geometry.
+//  * Answers a ``WatchTrailRequest`` with the trail's geometry, unless the
+//    watch already holds that revision of it.
 //  * Takes a ``WatchRecordedWalk`` and keeps it, then sends a receipt so the
 //    watch can let go of it — and writes it to Health, through
 //    ``WatchWalkHealthExport``, because the watch threw its own workout away.
@@ -189,7 +190,8 @@ final class WatchSessionCoordinator: NSObject {
 
     // MARK: Answering the watch
 
-    private func sendTrail(_ hikeID: UUID) {
+    private func sendTrail(_ request: WatchTrailRequest) {
+        let hikeID = request.hikeID
         Task { [container] in
             let input = await MainActor.run { () -> HikeRouteInput? in
                 let context = ModelContext(container)
@@ -202,6 +204,10 @@ final class WatchSessionCoordinator: NSObject {
                 return HikeRouteInput(hike: hike)
             }
             guard let input, let package = await WatchTrailPackaging.package(from: input) else { return }
+            // The watch already holds exactly this, and asked to find out
+            // whether the route had been edited since. It had not, so there is
+            // nothing to send: the copy it has stays the one it draws.
+            guard request.needs(package) else { return }
             await MainActor.run { self.send(package) }
         }
     }
@@ -471,7 +477,7 @@ nonisolated extension WatchSessionCoordinator: WCSessionDelegate {
             switch kind {
             case .trailRequest:
                 let request = try WatchLink.trailRequest(from: message)
-                onMainActor { [weak self] in self?.sendTrail(request.hikeID) }
+                onMainActor { [weak self] in self?.sendTrail(request) }
             case .libraryRequest:
                 // A watch with no list, asking. Answered with a real sweep
                 // rather than the App Group's copy, for the reason

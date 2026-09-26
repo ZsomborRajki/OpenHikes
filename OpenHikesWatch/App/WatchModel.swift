@@ -158,15 +158,15 @@ final class WatchModel {
 
     /// Asks the phone for a trail, and shows the one already held if it is
     /// this one.
+    ///
+    /// Asked even when it is — a trail edited on the phone would otherwise be
+    /// the old route on this watch for good, since the package is persisted.
+    /// The request names the revision held, so the phone answers only if the
+    /// route has changed and the held copy is drawn and matched against in the
+    /// meantime, in or out of range.
     func selectTrail(_ hikeID: UUID) {
-        if trail?.hikeID == hikeID {
-            // Already here. Asking again would cost a transfer for geometry
-            // that does not change; a trail whose route was edited on the
-            // phone arrives with the next digest-driven request instead.
-            return
-        }
-        follow.clear()
-        link.requestTrail(hikeID)
+        if trail?.hikeID != hikeID { follow.clear() }
+        link.requestTrail(hikeID, holding: trail)
     }
 
     /// Starts the live position feed for a trail being followed without a
@@ -303,6 +303,15 @@ final class WatchModel {
             guard digest.sentAt >= library.sentAt else { return }
             library = digest
             store.save(digest)
+            // A new list is the phone saying its library changed, and the
+            // trail held here may be what changed. Asking costs one small
+            // request and nothing comes back unless it did — see
+            // ``selectTrail(_:)``. A trail no longer on the list is left
+            // alone: it may have been deleted, and a hiker following it
+            // still has the line.
+            if let trail, digest.hikes.contains(where: { $0.id == trail.hikeID }) {
+                link.requestTrail(trail.hikeID, holding: trail)
+            }
         case .trail(let package):
             trail = package
             tracker = WatchRouteTracker(package)
