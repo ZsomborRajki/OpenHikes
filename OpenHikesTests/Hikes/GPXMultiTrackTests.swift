@@ -128,6 +128,64 @@ struct GPXMultiTrackTests {
         #expect(assigned[0].map(\.longitude) == [near.longitude])
     }
 
+    /// A line across ±180° is a few hundred metres long, not a span that
+    /// stops short of the antimeridian it runs through. Either way round, a
+    /// waypoint on it at +180° or -180° is kept, and one beyond the touching
+    /// distance on either side is not.
+    @Test(
+        "a route across the antimeridian keeps the waypoints on it",
+        arguments: [(179.99, -179.99), (-179.99, 179.99)]
+    )
+    func antimeridianKeepsWhatTheLineWould(from west: Double, to east: Double) {
+        let route = [
+            RouteCoordinate(latitude: 0, longitude: west),
+            RouteCoordinate(latitude: 0, longitude: east),
+        ]
+        let onTheLine = [180.0, -180.0, 179.995, -179.995]
+            .map { CLLocationCoordinate2D(latitude: 0, longitude: $0) }
+        // 80 m past each end, where a degree of longitude is about 111.3 km.
+        let beyond = [179.99 - 80 / 111_300, -179.99 + 80 / 111_300]
+            .map { CLLocationCoordinate2D(latitude: 0, longitude: $0) }
+        let assigned = GPXTrackSplit.assign(onTheLine + beyond, at: { $0 }, to: [route])
+        #expect(assigned[0].map(\.longitude) == onTheLine.map(\.longitude))
+    }
+
+    /// A route that ends just short of the antimeridian touches a waypoint
+    /// just past it, on the far side of ±180°.
+    @Test("a waypoint across the antimeridian from a route's end is still kept")
+    func waypointAcrossTheAntimeridianIsKept() {
+        let route = [
+            RouteCoordinate(latitude: 0, longitude: 179.98),
+            RouteCoordinate(latitude: 0, longitude: 179.9998),
+        ]
+        // 30 m east of the end, past -180°.
+        let across = CLLocationCoordinate2D(latitude: 0, longitude: -180 + 30 / 111_300 - 0.0002)
+        let assigned = GPXTrackSplit.assign([across], at: { $0 }, to: [route])
+        #expect(assigned[0].count == 1)
+    }
+
+    /// Two tracks either side of the antimeridian, and a waypoint on each:
+    /// the nearer one still wins, so the box does not send everything to the
+    /// first route that spans ±180°.
+    @Test("across the antimeridian a waypoint still goes to the nearer track")
+    func antimeridianKeepsNearestTrack() {
+        let crossing = [
+            RouteCoordinate(latitude: 10, longitude: 179.99),
+            RouteCoordinate(latitude: 10, longitude: -179.99),
+        ]
+        let elsewhere = [
+            RouteCoordinate(latitude: 10.01, longitude: 179.99),
+            RouteCoordinate(latitude: 10.01, longitude: -179.99),
+        ]
+        let onCrossing = CLLocationCoordinate2D(latitude: 10, longitude: 180)
+        let onElsewhere = CLLocationCoordinate2D(latitude: 10.01, longitude: -180)
+        let assigned = GPXTrackSplit.assign(
+            [onCrossing, onElsewhere], at: { $0 }, to: [crossing, elsewhere]
+        )
+        #expect(assigned[0].map(\.latitude) == [10])
+        #expect(assigned[1].map(\.latitude) == [10.01])
+    }
+
     /// The one-track answer is unchanged, `load` included.
     @Test("a one-track file is exactly what it always was")
     func oneTrackIsUnchanged() throws {
