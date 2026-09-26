@@ -14,6 +14,7 @@
 
 import Algorithms
 import Foundation
+import OpenHikesShared
 
 /// The four numbers a walk is decided by. Proposals pinned by
 /// `TrailWalkCoverageTests` and `TrailWalkSessionTests` rather than
@@ -83,6 +84,15 @@ nonisolated public enum TrailWalkEndReason: String, Codable, Hashable, Sendable 
     /// existed, and a History list that also holds the follows made along the
     /// saved hike afterwards has to be able to say which row is the original.
     case recorded = "recorded"
+    /// The hike's route was edited under the walk — here, or on the hiker's
+    /// other device — so the line it was measured along no longer exists.
+    ///
+    /// Ended rather than carried over: the coverage is intervals along the
+    /// *old* line, and neither its length nor its metres mean anything on a
+    /// new one where a stop moved. Carried over, they finished a walk at the
+    /// old end, halfway along an extended route. See
+    /// ``TrailWalkRecord/routeRevision``.
+    case routeChanged = "routeChanged"
 }
 
 /// Whether a walk is accruing coverage or deliberately not.
@@ -264,11 +274,23 @@ nonisolated public struct TrailWalkRecord: Codable, Equatable, Sendable {
     /// The route's length *at the time of the walk*: a route re-imported or
     /// edited later must not rewrite history.
     public var routeDistanceMeters: Double
+    /// Which line the walk is along — ``routeRevision(of:)`` of the hike's
+    /// route when the walk began — so an edit made under it can be noticed.
+    ///
+    /// Every distance in ``coverage`` is a distance along *that* line, and
+    /// ``routeDistanceMeters`` alone cannot say whether it is still the one
+    /// the matches are measured on: moving a stop can leave the length alone
+    /// and still move every metre after it.
+    ///
+    /// Optional because a record written before this existed decodes without
+    /// it; ``TrailWalkSession`` stamps one with the route it finds at launch.
+    public var routeRevision: String?
 
-    public init(hikeID: UUID, routeDistanceMeters: Double, startedAt: Date) {
+    public init(hikeID: UUID, routeDistanceMeters: Double, startedAt: Date, routeRevision: String? = nil) {
         self.hikeID = hikeID
         self.routeDistanceMeters = routeDistanceMeters
         self.startedAt = startedAt
+        self.routeRevision = routeRevision
         coverage = TrailWalkCoverage()
         bankedActiveSeconds = 0
         phaseID = TrailWalkPhase.following.rawValue
@@ -343,5 +365,35 @@ nonisolated public struct TrailWalkRecord: Codable, Equatable, Sendable {
     /// Whether a walk found still open at launch is too old to adopt.
     public func isStale(at now: Date) -> Bool {
         now.timeIntervalSince(lastActivityAt) > TrailWalkPolicy.staleAtLaunchAfter
+    }
+
+    /// Whether `route` is still the line this walk is along. A record with no
+    /// revision says yes: there is nothing to tell an edit from.
+    public func isAlong(_ route: [RouteCoordinate]) -> Bool {
+        guard let routeRevision else { return true }
+        return routeRevision == Self.routeRevision(of: route)
+    }
+
+    /// This record, taken to be along `route` if it does not say which line
+    /// it is along. The one it already names is kept.
+    public func stamped(along route: [RouteCoordinate]) -> Self {
+        guard routeRevision == nil else { return self }
+        var stamped = self
+        stamped.routeRevision = Self.routeRevision(of: route)
+        return stamped
+    }
+
+    /// The line `route` draws, as a stable hash of its coordinates.
+    ///
+    /// Positions only. A height filled in or a timestamp dropped leaves every
+    /// distance along the route where it was, and ending a walk over one
+    /// would end it for an edit that changed nothing it measures.
+    public static func routeRevision(of route: [RouteCoordinate]) -> String {
+        var hasher = StableHasher()
+        for point in route {
+            hasher.combine(point.latitude)
+            hasher.combine(point.longitude)
+        }
+        return String(hasher.value, radix: 16)
     }
 }

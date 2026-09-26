@@ -244,6 +244,7 @@ final class TrailWalkSession {
         let now = clock()
         let matchedAt = timestamp ?? now
         discardWalkIfHikeGone()
+        endIfRouteChanged()
         // Asked of the clock rather than of the fix: whether anything has been
         // seen for six hours is a question about now, and a walk must not
         // outlive its bound because the fix that closed it was taken early.
@@ -262,6 +263,7 @@ final class TrailWalkSession {
     /// - Returns: whether this fix ended the walk, as above.
     @discardableResult func recordBackgroundMatch(hikeID: UUID, distance: Double, at timestamp: Date) -> Bool {
         discardWalkIfHikeGone()
+        endIfRouteChanged()
         endIfAbandoned(at: clock())
         return recordMatch(hikeID: hikeID, distance: distance, at: timestamp)
     }
@@ -381,11 +383,7 @@ final class TrailWalkSession {
 
     private func startIfEligible(hike: Hike, profile: RouteProfile, at now: Date) {
         guard canStart(hike), profile.totalDistanceMeters > 0 else { return }
-        let started = TrailWalkRecord(
-            hikeID: hike.id,
-            routeDistanceMeters: profile.totalDistanceMeters,
-            startedAt: now
-        )
+        let started = Self.record(starting: hike, profile: profile, at: now)
         adopt(started, hike: hike)
         walkedProfile = profile
         startNotice = TrailWalkStartNotice(hikeID: hike.id, title: hike.displayTitle)
@@ -397,7 +395,10 @@ final class TrailWalkSession {
     }
 
     private func adopt(_ walk: TrailWalkRecord, hike: Hike) {
-        record = walk
+        // A record from before revisions were kept is taken to be along the
+        // line it finds, which is the best evidence there is. Stamped in
+        // memory; the next write carries it.
+        record = walk.stamped(along: hike.route)
         walkedHike = hike
         endedHikeID = nil
         lastEndedWalk = nil
@@ -630,6 +631,12 @@ final class TrailWalkSession {
             }
             adopt(open, hike: hike)
             tracker?.walkDidStart(hikeID: hike.id)
+            // Edited on the other device while this one was not running, so
+            // the mirrored route is already the new line. After the start
+            // rather than instead of it: the widget and the Lock Screen still
+            // show the walk the last launch left them, and it is the end that
+            // takes it down.
+            endIfRouteChanged(at: now)
         }
     }
 
@@ -700,12 +707,9 @@ extension TrailWalkSession {
         let now = clock()
         discardWalkIfHikeGone()
         endIfAbandoned(at: now)
+        endIfRouteChanged()
         guard canStartByHand(hike), profile.totalDistanceMeters > 0 else { return false }
-        let started = TrailWalkRecord(
-            hikeID: hike.id,
-            routeDistanceMeters: profile.totalDistanceMeters,
-            startedAt: now
-        )
+        let started = Self.record(starting: hike, profile: profile, at: now)
         adopt(started, hike: hike)
         walkedProfile = profile
         persist(started, at: now)
@@ -715,6 +719,44 @@ extension TrailWalkSession {
         // Lock Screen should say the walk is on from the tap.
         publishState()
         return true
+    }
+}
+
+// MARK: - Route edits
+
+extension TrailWalkSession {
+    /// Ends a walk whose hike's route is no longer the line it was started
+    /// along — see ``TrailWalkEndReason/routeChanged``.
+    ///
+    /// Asked of the hike rather than of the profile a caller hands in,
+    /// because an edit arrives by three roads and only one of them brings a
+    /// profile: the detail's follow loop rebuilds its own, the background
+    /// feed matches against the line it was armed with, and an edit mirrored
+    /// from the hiker's other device tells nobody. What they share is the
+    /// hike, which is where the edit landed. Checked on every fix, on every
+    /// return to the foreground, at launch, and whenever the hike's screen
+    /// builds its line — which is where the maker's save lands — so the
+    /// walk's controls do not go on showing a fraction of a line the screen
+    /// no longer draws.
+    ///
+    /// An ordinary end otherwise, and kept as one: the row it leaves is the
+    /// walk along the old line, with the old line's length — what
+    /// ``TrailWalkRecord/routeDistanceMeters`` is kept for — and the next
+    /// walk waits for what an End waits for. A hiker still on the trail who
+    /// wants the new line walked taps Start, which does not wait.
+    func endIfRouteChanged(at now: Date? = nil) {
+        guard let record, let walkedHike, walkedHike.isAttached, !record.isAlong(walkedHike.route) else { return }
+        finish(reason: .routeChanged, at: now ?? clock())
+    }
+
+    /// A walk beginning now along `hike`, measured along the line it has now.
+    private static func record(starting hike: Hike, profile: RouteProfile, at now: Date) -> TrailWalkRecord {
+        TrailWalkRecord(
+            hikeID: hike.id,
+            routeDistanceMeters: profile.totalDistanceMeters,
+            startedAt: now,
+            routeRevision: TrailWalkRecord.routeRevision(of: hike.route)
+        )
     }
 }
 

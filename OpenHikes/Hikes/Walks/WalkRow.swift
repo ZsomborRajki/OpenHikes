@@ -69,6 +69,7 @@ struct WalkRow: View {
         case .reachedEnd: "Completed"
         case .abandoned: "Left open"
         case .recorded: "Recorded"
+        case .routeChanged: "Route changed"
         case .ended, nil: "Ended"
         }
     }
