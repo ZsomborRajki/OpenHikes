@@ -13,9 +13,10 @@
 //    latest-wins and delivered whenever the watch next wakes. That is exactly
 //    what a list of trails is: there is one current answer, an older one is
 //    worthless, and nobody needs the ones in between.
-//  * **A trail request** goes out as a message when the phone is reachable and
-//    as a user-info transfer when it is not, so tapping a trail out of range
-//    is a request that arrives later rather than a tap that does nothing.
+//  * **A trail request** goes out as a user-info transfer, so tapping a trail
+//    out of range is a request that arrives later rather than a tap that does
+//    nothing. A newer one replaces any still queued, and each names the
+//    revision already held so an unchanged trail is not sent twice.
 //  * **The trail package** comes back as a user-info transfer. It is tens of
 //    kilobytes, which is past what an interactive message is for, and it must
 //    survive the app being backgrounded while it crosses.
@@ -121,8 +122,21 @@ final class PhoneLink: NSObject {
     /// the moment the phone goes out of range — which on a walk is most of the
     /// time. Queued, tapping a trail out of range is a trail that arrives
     /// later rather than a button that did nothing.
-    func requestTrail(_ hikeID: UUID) {
-        transfer { try WatchLink.message(WatchTrailRequest(hikeID: hikeID)) }
+    ///
+    /// - Parameter held: the trail this watch already has, which may be a
+    ///   different one. Named in the request so the phone can stay silent
+    ///   when the route has not changed — see ``WatchTrailRequest/heldRevision``.
+    func requestTrail(_ hikeID: UUID, holding held: WatchTrailPackage?) {
+        // Latest wins, the way it does for the library. The watch holds one
+        // trail, so a request still queued from an earlier tap asks for
+        // something that will be replaced the moment it lands — and a hiker
+        // who opened the same trail five times out of range would otherwise
+        // be answered five times with the same package when the phone is back.
+        for outstanding in session?.outstandingUserInfoTransfers ?? []
+        where WatchLink.kind(of: outstanding.userInfo) == .trailRequest {
+            outstanding.cancel()
+        }
+        transfer { try WatchLink.message(WatchTrailRequest(hikeID: hikeID, holding: held)) }
     }
 
     /// Sends a finished walk. Guaranteed delivery, and the receipt is what
