@@ -3,8 +3,8 @@
 //  OpenHikesWatch
 //
 //  Everything the watch keeps between launches: the hiker's list of trails,
-//  the trail it was last handed, and any finished walks the phone has not
-//  confirmed yet.
+//  the trail it was last handed, any finished walks the phone has not
+//  confirmed yet, and the journal of a recording still in progress.
 //
 //  ## Why the watch stores anything at all
 //
@@ -97,6 +97,17 @@ struct WatchStore: Sendable {
 
     func save(_ package: WatchTrailPackage) {
         write(package, to: trailURL)
+    }
+
+    // MARK: The recording in progress
+
+    /// Where a recording writes itself down as it goes, so a process that
+    /// dies mid-walk leaves the walk behind — see ``WatchRecoveredRecording``.
+    ///
+    /// Beside the outbound queue rather than in it: a journal is not a walk
+    /// the phone may be sent, and ``queuedWalks()`` must never read one.
+    var recordingJournal: WatchRecordingJournalFile {
+        WatchRecordingJournalFile(url: directory.appendingPathComponent("recording.jsonl"))
     }
 
     // MARK: Walks waiting for the phone

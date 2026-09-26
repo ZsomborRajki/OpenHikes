@@ -46,10 +46,19 @@
         }
       }
     },
+    "A walk was interrupted — see Record" : {
+
+    },
     "Asking your iPhone for your trails…" : {
 
     },
     "Bring your iPhone nearby, with OpenHikes installed, to send your trails over." : {
+
+    },
+    "Continue" : {
+
+    },
+    "Discard" : {
 
     },
     "Done" : {
@@ -112,6 +121,9 @@
     "Recording" : {
 
     },
+    "Recording stopped at %@. Everything before then is kept." : {
+
+    },
     "Records on this watch, with or without your iPhone. The walk goes to your iPhone when it's back in range." : {
 
     },
@@ -119,6 +131,9 @@
 
     },
     "Resume recording" : {
+
+    },
+    "Save Walk" : {
 
     },
     "Sent to your iPhone." : {
@@ -152,6 +167,9 @@
 
     },
     "Waiting for your iPhone. It'll go across on its own." : {
+
+    },
+    "Walk Interrupted" : {
 
     },
     "Walk Kept" : {

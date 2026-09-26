@@ -101,6 +101,8 @@ struct WatchRecordingView: View {
                 controls
             case .saved(let walk):
                 saved(walk)
+            case .interrupted(let recovered):
+                interrupted(recovered)
             case .failed(let message):
                 failed(message)
             }
@@ -183,6 +185,35 @@ struct WatchRecordingView: View {
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
             Button("Done") { model.recorder.acknowledge() }
+        }
+    }
+
+    /// A walk the last process never finished, and the three things that
+    /// can become of it.
+    ///
+    /// The time it stopped is said, because what is kept ends there: nothing
+    /// was recorded while the watch was not running, and a Continue picks up
+    /// from where the hiker is now rather than drawing a line across the gap.
+    private func interrupted(_ recovered: WatchRecoveredRecording) -> some View {
+        VStack(spacing: 6) {
+            Label("Walk Interrupted", systemImage: "exclamationmark.arrow.circlepath")
+                .foregroundStyle(.orange)
+            Text(WidgetFormat.length(meters: recovered.accumulator.distanceMeters))
+                .font(.title3.monospacedDigit())
+            Text("Recording stopped at \(recovered.lastRecordedAt, style: .time). Everything before then is kept.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button {
+                Task { await model.continueInterruptedRecording() }
+            } label: {
+                Label("Continue", systemImage: "play.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .tint(.green)
+            .disabled(model.isPhoneRecording)
+            Button("Save Walk") { model.saveInterruptedRecording() }
+            Button("Discard", role: .destructive) { model.discardInterruptedRecording() }
         }
     }
 

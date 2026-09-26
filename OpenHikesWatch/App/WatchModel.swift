@@ -263,6 +263,25 @@ final class WatchModel {
         if isFollowing { recorder.startFollowingFeed() }
     }
 
+    /// Carries on recording a walk the last process never finished.
+    ///
+    /// Refused while the phone is recording, for the reason
+    /// ``startRecording(alongTrail:)`` is: carrying on is starting again.
+    func continueInterruptedRecording() async {
+        guard !isPhoneRecording else { return }
+        await recorder.continueInterrupted()
+    }
+
+    /// Keeps a walk the last process never finished, as it stood. A walk kept
+    /// goes through ``walkQueued(_:)`` like any other.
+    func saveInterruptedRecording() {
+        recorder.saveInterrupted()
+    }
+
+    func discardInterruptedRecording() {
+        recorder.discardInterrupted()
+    }
+
     /// Offers a walk the recorder has just put on the disk queue.
     ///
     /// The hook rather than ``stopRecording()``'s own return value, because a
