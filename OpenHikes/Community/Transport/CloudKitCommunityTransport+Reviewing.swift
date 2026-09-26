@@ -27,6 +27,7 @@
 //  removed.
 //
 
+import Algorithms
 import CloudKit
 import CoreLocation
 import Foundation
@@ -147,13 +148,7 @@ nonisolated extension CloudKitCommunityTransport {
     /// was retried — and `records(for:)` is keyed by ID, so a duplicate would
     /// cost a slot in the batch and buy nothing.
     private static func referencedIDs(in notices: [CKRecord], field: String) -> [CKRecord.ID] {
-        var seen: Set<CKRecord.ID> = []
-        return notices.compactMap { notice in
-            guard let reference = notice[field] as? CKRecord.Reference,
-                  seen.insert(reference.recordID).inserted
-            else { return nil }
-            return reference.recordID
-        }
+        Array(notices.compactMap { ($0[field] as? CKRecord.Reference)?.recordID }.uniqued())
     }
 
     /// The hike half of one look at the queue.

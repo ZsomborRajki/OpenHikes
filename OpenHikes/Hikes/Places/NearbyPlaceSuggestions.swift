@@ -21,6 +21,7 @@
 //  nowhere but this sheet, which is the honest limit of doing it offline.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import Observation
@@ -65,8 +66,7 @@ nonisolated enum NearbyPlaceSuggestions {
                 guard distance <= matchRadiusMeters else { return nil }
                 return (place, distance)
             }
-            .sorted { $0.distance < $1.distance }
-            .prefix(maximumSuggestions)
+            .min(count: maximumSuggestions) { $0.distance < $1.distance }
             .map(\.place)
     }
 

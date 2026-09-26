@@ -35,6 +35,7 @@
 //  never throws away what did arrive.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import Observation
@@ -126,7 +127,7 @@ nonisolated enum TrailPlaceCorridorSearch {
     private static func densified(_ route: [RouteCoordinate], step: Double) -> [RouteCoordinate] {
         guard step > 0 else { return route }
         var result: [RouteCoordinate] = [route[0]]
-        for (from, to) in zip(route, route.dropFirst()) {
+        for (from, to) in route.adjacentPairs() {
             let length = RouteGeometry.distanceMeters(from: from.clCoordinate, to: to.clCoordinate)
             let pieces = Int((length / step).rounded(.up))
             if pieces > 1 {

@@ -38,6 +38,7 @@
 //  log line that would explain a discrepancy.
 //
 
+import Algorithms
 import Foundation
 import OpenHikesData
 import OpenHikesShared
@@ -185,14 +186,8 @@ nonisolated enum WatchWalkImport {
     /// them.
     private static func measuredDistance(of route: [RouteCoordinate]) -> Double {
         var total = 0.0
-        var previous: RouteCoordinate?
-        for point in route {
-            defer { previous = point }
-            guard let previous, point.boundary != .paused else { continue }
-            total += RouteGeometry.distanceMeters(
-                from: previous.clCoordinate,
-                to: point.clCoordinate
-            )
+        for (previous, point) in route.adjacentPairs() where point.boundary != .paused {
+            total += RouteGeometry.distanceMeters(from: previous.clCoordinate, to: point.clCoordinate)
         }
         return total
     }

@@ -27,6 +27,7 @@
 //  same one the widget's snapshot starts from.
 //
 
+import Algorithms
 import Foundation
 import OpenHikesData
 import OpenHikesShared
@@ -86,19 +87,15 @@ nonisolated enum WatchTrailPackaging {
         let lossMeters: Double?
 
         init(of route: [RouteCoordinate]) {
+            let elevations = route.compactMap(\.elevation).filter(\.isFinite)
             var gain = 0.0
             var loss = 0.0
-            var previous: Double?
-            var sawAny = false
-            for elevation in route.compactMap(\.elevation) where elevation.isFinite {
-                sawAny = true
-                defer { previous = elevation }
-                guard let last = previous else { continue }
+            for (last, elevation) in elevations.adjacentPairs() {
                 let change = elevation - last
                 if change > 0 { gain += change } else { loss -= change }
             }
-            gainMeters = sawAny ? gain : nil
-            lossMeters = sawAny ? loss : nil
+            gainMeters = elevations.isEmpty ? nil : gain
+            lossMeters = elevations.isEmpty ? nil : loss
         }
     }
 }
