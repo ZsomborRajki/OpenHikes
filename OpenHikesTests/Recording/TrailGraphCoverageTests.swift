@@ -101,6 +101,22 @@ struct TrailGraphCoverageTests {
         #expect(await recorder.count == 2)
     }
 
+    @Test("assembling a route's graph stops at the region cap, from the route's start")
+    func graphCoveringStopsAtTheRegionCap() async throws {
+        let provider = StubTrailGraphProvider(graph: .empty)
+        let cap = StubTrailGraphProvider.maximumPrefetchRegions
+        // Every coordinate its own region, twice the cap of them, and the
+        // whole route walked twice so the second lap repeats every region.
+        let lap = (0..<(cap * 2)).map { step in
+            CLLocationCoordinate2D(latitude: 47.63, longitude: 12.0 + Double(step) * 0.5)
+        }
+
+        _ = try await provider.graph(covering: lap + lap)
+
+        let expected = lap.prefix(cap).compactMap(provider.region(containing:))
+        #expect(await provider.prefetches() == expected)
+    }
+
     @Test("a region that fails still yields the rest of the route's graph")
     func partialFailureStillReturnsWhatDownloaded() async throws {
         let directory = Self.makeDirectory("partial")
