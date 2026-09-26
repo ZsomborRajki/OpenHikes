@@ -44,10 +44,16 @@ struct TrailPlaceFactsAndLocation: View {
             .textSelection(.enabled)
             .accessibilityIdentifier("trail-place-coordinates")
             if let openStreetMapURL {
+                // The row's height and hit shape inside the label, where the
+                // link's accessibility frame is measured: outside it, the
+                // frame stayed one text line tall, a 19 pt target the audit
+                // reports on the card that shows this row at the middle
+                // detent.
                 Link(destination: openStreetMapURL) {
                     Label("View on OpenStreetMap", systemImage: "arrow.up.right.square")
+                        .trailPlaceRow()
+                        .contentShape(.rect)
                 }
-                .trailPlaceRow()
                 .accessibilityIdentifier("trail-place-osm-link")
             }
         }

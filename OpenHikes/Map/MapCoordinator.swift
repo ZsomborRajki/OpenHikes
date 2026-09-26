@@ -244,6 +244,9 @@ extension MapView {
         var hikePlaceAnnotations: [TrailPlaceAnnotation] = []
         var isObservingHikePlaces = false
         weak var hikePlaceController: TrailPlacePinController?
+        /// *Places Around Trail*'s half of the map: its pale pins and its
+        /// pill. See `TrailPlacesAround.swift`.
+        var placesAroundMap = PlacesAroundMapState()
 
         #if canImport(UIKit)
         /// The maker's own *Search this area*. A second instance of the
@@ -815,7 +818,8 @@ extension MapView.Coordinator {
         guard view.annotation is MKUserLocation else {
             // The maker's own pins open its place sheet rather than a callout —
             // see `MapTrailDraftSelection.swift` — and a saved hike's places
-            // open the place's screen.
+            // open the place's screen — or, for one found around it, its card
+            // on *Places Around Trail*.
             if selectTrailDraftAnnotation(view, on: mapView) || selectHikePlaceAnnotation(view, on: mapView) { return }
             // `canShowCallout` because a selection is not a callout: the route
             // highlight's own dots are selectable and draw nothing, and a tap
@@ -873,6 +877,8 @@ extension MapView.Coordinator {
         // reaches the network here either: it is a comparison, and a tap is
         // what spends a request. See ``TrailPointFinder/regionDidSettle(_:)``.
         trailDraftController?.finder.regionDidSettle(mapView.region)
+        // And *Places Around Trail*'s, on the same terms.
+        placesAroundMap.around?.finder.regionDidSettle(mapView.region)
         // And place search, which asked the one location question in the app
         // that was never told where the hiker was.
         searchCompleter?.regionDidSettle(mapView.region)

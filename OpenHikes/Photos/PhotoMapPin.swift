@@ -132,14 +132,17 @@ final class PhotoMapPinController {
     /// pins at its own sandbox rather than at the app's photo directory.
     @ObservationIgnored let store: HikePhotoStore
 
-    @ObservationIgnored private var openPhoto: ((UUID) -> Void)?
-    @ObservationIgnored private var activeToken: Int?
+    /// What one screen's claim says: its pins, kept apart from ``pins`` so a
+    /// screen that is being navigated away from can have them taken off the
+    /// map and put back without re-deriving them, and where a tap goes.
+    private struct Claim {
+        var pins: [PhotoMapPin]
+        let openPhoto: (UUID) -> Void
+    }
+
+    /// Every screen's claim, the deepest in force — see ``ScreenClaims``.
+    @ObservationIgnored private var claims = ScreenClaims<Claim>()
     @ObservationIgnored private var nextSelectionToken = 0
-    @ObservationIgnored private var nextToken = 0
-    /// What the claiming screen last published, kept apart from ``pins`` so a
-    /// screen that is being navigated away from can have its pins taken off the
-    /// map and put back without re-deriving them.
-    @ObservationIgnored private var claimed: [PhotoMapPin] = []
     /// See ``setHostScreenPresent(_:)``.
     @ObservationIgnored private var hasHostScreen = true
 
@@ -154,30 +157,31 @@ final class PhotoMapPinController {
     /// SwiftUI presents the incoming screen before it tears the outgoing one
     /// down, so a release checked against anything else would cancel the
     /// screen that had already replaced it.
+    ///
+    /// `depth` is how deep in the sheet's stack the screen is, and the
+    /// deepest claim is the one drawn — see ``ScreenClaims``.
     @discardableResult func attach(
         _ photos: [HikePhoto],
+        depth: Int = 0,
         onOpen: @escaping (UUID) -> Void
     ) -> Int {
-        nextToken += 1
-        activeToken = nextToken
-        openPhoto = onOpen
-        apply(PhotoMapPin.pins(for: photos))
-        return nextToken
+        let token = claims.attach(Claim(pins: PhotoMapPin.pins(for: photos), openPhoto: onOpen), depth: depth)
+        publish()
+        return token
     }
 
-    /// Redraws the pins of a screen that already holds the claim — a photo
-    /// taken, imported or deleted while it is up.
+    /// Redraws the pins of a screen that holds a claim — a photo taken,
+    /// imported or deleted while it is up.
     func update(_ photos: [HikePhoto], token: Int) {
-        guard activeToken == token else { return }
-        apply(PhotoMapPin.pins(for: photos))
+        guard claims.update(token, { $0.pins = PhotoMapPin.pins(for: photos) }) else { return }
+        publish()
     }
 
-    /// Withdraws the pins, unless another screen has already claimed them.
+    /// Withdraws a screen's pins, handing the map to the claim beneath, if
+    /// any.
     func detach(token: Int) {
-        guard activeToken == token else { return }
-        activeToken = nil
-        openPhoto = nil
-        apply([])
+        claims.detach(token)
+        publish()
     }
 
     /// Opens the gallery at the tapped pin's photo, if a screen is still
@@ -185,7 +189,7 @@ final class PhotoMapPinController {
     /// dropped rather than pushed onto whatever is on screen now.
     func open(_ photoID: UUID) {
         guard hasHostScreen else { return }
-        openPhoto?(photoID)
+        claims.active?.payload.openPhoto(photoID)
     }
 
     /// Asks the map to open a photo's pin, so a hiker sent to the map from the
@@ -218,13 +222,8 @@ final class PhotoMapPinController {
     /// Publishes only a genuine change, so a redraw that produces the same
     /// pins never wakes the map — the same guard, for the same reason, as
     /// ``RouteHighlight/move(to:)``.
-    private func apply(_ updated: [PhotoMapPin]) {
-        claimed = updated
-        publish()
-    }
-
     private func publish() {
-        let visible = hasHostScreen ? claimed : []
+        let visible = hasHostScreen ? claims.active?.payload.pins ?? [] : []
         guard visible != pins else { return }
         pins = visible
     }
@@ -304,6 +303,8 @@ private struct PhotoMapPinsModifier: ViewModifier {
     let onOpen: (UUID) -> Void
 
     @State private var token: Int?
+    @Environment(\.sheetDepth)
+    private var depth
 
     func body(content: Content) -> some View {
         content
@@ -324,7 +325,10 @@ private struct PhotoMapPinsModifier: ViewModifier {
 
     private func claim() {
         guard let controller else { return }
-        token = controller.attach(photos, onOpen: onOpen)
+        // A screen SwiftUI appears twice without a disappear between holds
+        // one claim, not two — see ``ScreenClaims``.
+        if let token { controller.detach(token: token) }
+        token = controller.attach(photos, depth: depth, onOpen: onOpen)
     }
 
     private func release() {

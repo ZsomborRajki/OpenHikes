@@ -308,7 +308,7 @@ nonisolated enum AppLaunchEnvironment {
     ///
     /// The same shape as ``communityScenarioName`` and for the same reason one
     /// service over: a launch running tests gets no place source at all, so
-    /// *Find Places Along Trail* and the recording sheet's *Mapped Here* are
+    /// *Places Around Trail* and the recording sheet's *Mapped Here* are
     /// absent from every suite unless a scenario names this. See
     /// ``SeededTrailPointSource``.
     static let trailPointScenarioName = configuration.trailPointScenarioName

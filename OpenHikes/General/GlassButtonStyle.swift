@@ -41,7 +41,7 @@ extension View {
     }
 
     /// A section's own "go and find more" action — *Find Photos of This Hike*,
-    /// *Find Places Along Trail* — drawn once so the two cannot drift apart.
+    /// *Places Around Trail* — drawn once so the two cannot drift apart.
     ///
     /// A capsule rather than a borderless row, because the rows above it in a
     /// section open something and this starts something; not full width and

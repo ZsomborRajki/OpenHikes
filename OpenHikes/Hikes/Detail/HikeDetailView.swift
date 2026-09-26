@@ -49,9 +49,6 @@ struct HikeDetailView: View {
     /// Draws this hike's marked places on the map while this screen is up.
     /// See ``TrailPlacePinController``.
     var placePins: TrailPlacePinController?
-    /// Where *Find Places Along Trail* asks, and which kinds it asks for. See
-    /// ``HikePlaceSection``.
-    var placeSearch: TrailPlaceSearchScope?
     /// How this hike is offered to the community, or `nil` for a launch that
     /// must not reach CloudKit — see
     /// ``OpenHikesModel/makeCommunityTransport()``. Taken as a dependency
@@ -65,6 +62,8 @@ struct HikeDetailView: View {
     var onOpenPhoto: (HikePhoto) -> Void = { _ in /* no-op default */ }
     /// Pushes one of this hike's places. See ``HikePlaceView``.
     var onOpenPlace: (UUID) -> Void = { _ in /* no-op default */ }
+    /// Opens *Places Around Trail*, from the *Places* section.
+    var onFindPlaces: () -> Void = { /* no-op default */ }
     /// Pushes a finished walk's summary — from the History segment's rows,
     /// and from End.
     var onOpenWalk: (HikeWalk) -> Void = { _ in /* no-op default */ }
@@ -656,7 +655,7 @@ private extension HikeDetailView {
     /// Its own view for the reason every other section here is one — see
     /// ``HikePlaceSection``.
     private var placeSection: some View {
-        HikePlaceSection(hike: hike, mapPins: placePins, search: placeSearch, onOpen: onOpenPlace)
+        HikePlaceSection(hike: hike, mapPins: placePins, onFindPlaces: onFindPlaces, onOpen: onOpenPlace)
     }
 
     // MARK: Trail data

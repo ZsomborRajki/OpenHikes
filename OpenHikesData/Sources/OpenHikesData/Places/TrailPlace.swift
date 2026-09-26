@@ -342,12 +342,25 @@ nonisolated public struct TrailPlaceRow: Equatable, Identifiable, Sendable {
     /// `nil` for a place that has no line to be measured against, or one too
     /// far off it to be described by — see ``TrailPlaceAnchor``.
     public var anchor: TrailPlaceAnchor?
+    /// How far off the line the place is, kept when ``anchor`` is dropped for
+    /// sitting too far off to be described by it. A place a kilometre up a
+    /// side valley is not *at 4.1 km*, but it is still *1 km off the trail*,
+    /// which is what *Places Around Trail* sorts its list into and filters by.
+    /// `nil` only where there is no line to measure against.
+    public var offRouteMeters: Double?
 
     public var id: UUID { place.id }
 
-    public init(place: TrailPlace, anchor: TrailPlaceAnchor? = nil) {
+    public init(place: TrailPlace, anchor: TrailPlaceAnchor? = nil, offRouteMeters: Double? = nil) {
         self.place = place
         self.anchor = anchor
+        self.offRouteMeters = offRouteMeters ?? anchor?.offRouteMeters
+    }
+
+    /// Whether a hiker walking the line passes it — the maker's save rule,
+    /// ``TrailPlaceAnchor/touchedOffRouteMeters``.
+    public var isOnTheLine: Bool {
+        offRouteMeters.map { $0 <= TrailPlaceAnchor.touchedOffRouteMeters } ?? false
     }
 }
 
@@ -468,7 +481,8 @@ nonisolated public enum TrailPlaceOrder {
                 // line, but a figure nobody should read is worse than none.
                 return TrailPlaceRow(
                     place: indexed.element,
-                    anchor: anchor?.describesTheRoute == true ? anchor : nil
+                    anchor: anchor?.describesTheRoute == true ? anchor : nil,
+                    offRouteMeters: anchor?.offRouteMeters
                 )
             }
     }

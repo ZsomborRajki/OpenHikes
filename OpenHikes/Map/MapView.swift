@@ -239,6 +239,8 @@ struct MapView: MapViewRepresentable, Equatable {
         // this first pass rather than waiting for a navigation that will not
         // come.
         coordinator.observeTrailPointSearch(trailMaker)
+        // And *Places Around Trail*'s pale pins and pill, for the same reason.
+        coordinator.observePlacesAround(placePins.around, on: mapView)
 
         return mapView
     }
@@ -355,6 +357,8 @@ struct MapView: MapViewRepresentable, Equatable {
         // The maker's own, in the same strip. Only one of the two is ever
         // visible — see `MapTrailPointSearchControl.swift`.
         addTrailPointSearchControl(to: mapView, coordinator, alignedTo: guide)
+        // And *Places Around Trail*'s, the third — see `TrailPlacesAround.swift`.
+        addPlacesAroundSearchControl(to: mapView, coordinator, alignedTo: guide)
         // Replaces the placeholders above with real positions as soon as the
         // map has a height to measure against.
         coordinator.applySheetTop(on: mapView)

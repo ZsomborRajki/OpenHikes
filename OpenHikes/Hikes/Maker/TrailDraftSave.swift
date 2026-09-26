@@ -315,7 +315,7 @@ enum TrailDraftSave {
     ///
     /// An edit can stay open for days — the back button keeps it, and so does
     /// a relaunch — while the hike's screen goes on taking places: *Add
-    /// Place*, *Find Places Along Trail*, a rename, a note, a removal, or any
+    /// Place*, *Places Around Trail*, a rename, a note, a removal, or any
     /// of those arriving from the hiker's other device. The drawing holds a
     /// copy taken when it opened, so saving that copy as it stood would delete
     /// what was added since, photographs unfiled, and put back what was

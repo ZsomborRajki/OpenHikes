@@ -16,10 +16,11 @@
 //  changed. The route itself is still not editable here; the places along it
 //  are the part of a finished trail a hiker adds to.
 //
-//  *Find Places Along Trail* asks OpenStreetMap what the line passes, for a
-//  trail that never went through the maker's *Search this area* — a recorded
-//  walk, an imported file, a hike saved from somebody else. See
-//  ``TrailPlaceCorridorSearch``.
+//  *Places Around Trail* asks OpenStreetMap what is on and around the line,
+//  for a trail that never went through the maker's *Search this area* — a
+//  recorded walk, an imported file, a hike saved from somebody else — and
+//  pushes a screen of its own, with the places on the map. See
+//  ``HikePlacesAroundView``.
 //
 //  The switch beside the heading takes every saved hike's places off the map
 //  and deletes none of them — see ``TrailPlacePinController/showsPins``. The
@@ -44,17 +45,18 @@ struct HikePlaceSection: View {
     /// section — see ``HikePlacePinClaim``. `nil` in a preview, and in a test
     /// that has no map, and then there is no switch.
     var mapPins: TrailPlacePinController?
-    /// Where *Find Places Along Trail* asks, or `nil` for a launch that must
-    /// not ask anything — see ``OpenHikesModel/makeTrailPointSource()``.
-    var search: TrailPlaceSearchScope?
+    /// Opens *Places Around Trail*, or `nil` where it is not offered — the
+    /// recording screen, which has *Add Place* instead.
+    var onFindPlaces: (() -> Void)?
     /// Opens one place's screen.
     var onOpen: (UUID) -> Void = { _ in /* no-op default */ }
 
-    @State private var isSearching = false
-
+    /// Whether *Places Around Trail* can ask anything: a line to ask about,
+    /// and a launch that may ask OpenStreetMap — see
+    /// ``OpenHikesModel/makeTrailPointSource()``.
     private var canSearch: Bool {
-        guard let search, hike.isAttached else { return false }
-        return hike.pointCount > 1 && !hike.isRecording && !search.symbols.isEmpty
+        guard onFindPlaces != nil, mapPins?.around.finder.isAvailable == true, hike.isAttached else { return false }
+        return hike.pointCount > 1 && !hike.isRecording
     }
 
     @ViewBuilder var body: some View {
@@ -97,15 +99,15 @@ struct HikePlaceSection: View {
                     .placeCardGroup()
                     .accessibilityIdentifier("hike-places")
                 }
-                if let search, canSearch {
-                    Button("Find Places Along Trail", systemImage: "magnifyingglass") {
-                        isSearching = true
-                    }
-                    .sectionActionButtonStyle()
-                    .accessibilityIdentifier("hike-place-search")
-                    .sheet(isPresented: $isSearching) {
-                        HikePlaceSearchSheet(hike: hike, source: search.source, symbols: search.symbols)
-                    }
+                if canSearch, let onFindPlaces {
+                    // A closure onto the sheet's path, as every place screen
+                    // is pushed, rather than a `NavigationLink(value:)`: a
+                    // screen pushed over one a value link had pushed made
+                    // SwiftUI appear the hike's screen underneath again, whose
+                    // claims then took the map's pins and camera pill back.
+                    Button("Places Around Trail", systemImage: "magnifyingglass", action: onFindPlaces)
+                        .sectionActionButtonStyle()
+                        .accessibilityIdentifier("hike-place-search")
                 }
             }
         }
@@ -197,6 +199,11 @@ struct TrailPlaceRowView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(place.displayName)
+                if let offTrail = Self.offTrail(row) {
+                    Text(offTrail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 if !place.note.isEmpty {
                     Text(place.note)
                         .font(.caption)
@@ -222,6 +229,14 @@ struct TrailPlaceRowView: View {
         // follows — see ``HikeRow``.
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("trail-place-row")
+    }
+
+    /// How far off the line a place stands, for one a hiker walking it does
+    /// not pass — the hut up the side path, the summit across the valley.
+    /// `nil` for a place on the line, where saying so would be noise.
+    static func offTrail(_ row: TrailPlaceRow) -> String? {
+        guard let meters = row.offRouteMeters, !row.isOnTheLine else { return nil }
+        return String(localized: "\(length(meters)) off trail")
     }
 
     private static func length(_ meters: Double) -> String {

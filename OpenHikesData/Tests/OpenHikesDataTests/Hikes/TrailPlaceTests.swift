@@ -95,6 +95,11 @@ struct TrailPlaceTests {
 
         #expect(ordered.count == 1)
         #expect(ordered[0].anchor == nil, "a figure nobody should read is worse than none")
+        // How far *off* it is still holds, and is what *Places Around Trail*
+        // sorts and filters by.
+        let off = ordered[0].offRouteMeters ?? 0
+        #expect(off > 900 && off < 1100)
+        #expect(!ordered[0].isOnTheLine)
     }
 
     /// Marking a place before drawing anything is a reasonable thing to do

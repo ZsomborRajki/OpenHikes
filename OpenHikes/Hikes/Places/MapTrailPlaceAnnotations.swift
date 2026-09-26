@@ -51,6 +51,10 @@ final class TrailPlaceAnnotation: NSObject, MKAnnotation {
     /// Whether this is where a place about to be added would stand, rather
     /// than a place the hike has. Opens nothing. See ``HikePlaceAdder``.
     let isPlaceholder: Bool
+    /// Whether this is a place found around a saved hike and not on it yet,
+    /// drawn pale. Opens its card on *Places Around Trail* — see
+    /// ``TrailPlacesAround``.
+    let isCandidate: Bool
 
     @objc var title: String? { place.displayName }
 
@@ -70,13 +74,18 @@ final class TrailPlaceAnnotation: NSObject, MKAnnotation {
         return parts.joined(separator: " · ")
     }
 
-    init(row: TrailPlaceRow, belongsToDraft: Bool, isPlaceholder: Bool = false) {
+    init(row: TrailPlaceRow, belongsToDraft: Bool, isPlaceholder: Bool = false, isCandidate: Bool = false) {
         place = row.place
         coordinate = row.place.clCoordinate
         anchor = row.anchor
         self.belongsToDraft = belongsToDraft
         self.isPlaceholder = isPlaceholder
+        self.isCandidate = isCandidate
     }
+
+    /// How strongly a place that could be added is drawn — see
+    /// ``isCandidate``.
+    static let candidatePinAlpha: CGFloat = 0.5
 
     func matches(_ row: TrailPlaceRow, belongsToDraft: Bool) -> Bool {
         place == row.place && anchor == row.anchor && self.belongsToDraft == belongsToDraft
@@ -116,16 +125,24 @@ extension MapView.Coordinator {
         )
         #if os(iOS)
         view.glyphImage = UIImage(systemName: annotation.place.systemImageName)
-        view.displayPriority = .required
-        view.markerTintColor = UIColor(annotation.place.tint)
+        // A place that could be added is the same balloon at half strength,
+        // as Apple Maps draws a search's results beside a hiker's saved
+        // places — and it gives way when the map is crowded, where the
+        // hike's own never do.
+        let tint = UIColor(annotation.place.tint)
+        view.markerTintColor = annotation.isCandidate
+            ? tint.withAlphaComponent(TrailPlaceAnnotation.candidatePinAlpha)
+            : tint
+        view.displayPriority = annotation.isCandidate ? .defaultHigh : .required
         view.accessibilityIdentifier = switch (annotation.belongsToDraft, annotation.isPlaceholder) {
         case (true, _): "trail-draft-place"
         case (false, true): "hike-place-placeholder"
-        case (false, false): "hike-place"
+        case (false, false): annotation.isCandidate ? "hike-place-candidate" : "hike-place"
         }
         #endif
-        // The pin a hiker is placing stands in front of the ones already there.
-        view.zPriority = annotation.isPlaceholder ? .max : .defaultUnselected
+        // The pin a hiker is placing stands in front of the ones already
+        // there, and the ones not on the trail stand behind them.
+        view.zPriority = annotation.isPlaceholder ? .max : annotation.isCandidate ? .min : .defaultUnselected
         // Neither kind shows a callout: the drawing's opens the place sheet
         // and a saved hike's opens the place's screen — see
         // ``selectHikePlaceAnnotation(_:on:)``.
@@ -135,8 +152,12 @@ extension MapView.Coordinator {
 
     /// A tap on one of a saved hike's place pins, which opens that place's
     /// screen. Answers whether it was one.
+    ///
+    /// A pale pin — a place found around the hike and not on it — opens its
+    /// card on *Places Around Trail* instead. See ``TrailPlacesAround``.
     func selectHikePlaceAnnotation(_ view: MKAnnotationView, on mapView: MKMapView) -> Bool {
         guard let place = view.annotation as? TrailPlaceAnnotation, !place.belongsToDraft else { return false }
+        guard !place.isCandidate else { return selectPlaceCandidateAnnotation(place, on: mapView) }
         // Deselected at once, as the maker's pins are: an annotation left
         // selected swallows the next tap on it.
         mapView.deselectAnnotation(place, animated: false)

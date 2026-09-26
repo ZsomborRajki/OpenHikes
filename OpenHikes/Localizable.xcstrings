@@ -50,6 +50,9 @@
     "%@ of the trail not walked" : {
 
     },
+    "%@ off trail" : {
+
+    },
     "%@, %@" : {
       "localizations" : {
         "en" : {
@@ -376,6 +379,9 @@
     "Add" : {
 
     },
+    "Add %@" : {
+
+    },
     "Add %lld" : {
 
     },
@@ -392,6 +398,9 @@
 
     },
     "Add more photos, or ask for yours to be taken down." : {
+
+    },
+    "Add Photo" : {
 
     },
     "Add Photos" : {
@@ -440,10 +449,10 @@
     "Address" : {
 
     },
-    "Adds up everything you have hiked today." : {
+    "Adds the place, then opens it to take or add photos" : {
 
     },
-    "Alpine huts, wilderness huts and shelters" : {
+    "Adds up everything you have hiked today." : {
 
     },
     "Also Save to Photos" : {
@@ -836,9 +845,6 @@
     "Find Photos of This Hike" : {
 
     },
-    "Find Places Along Trail" : {
-
-    },
     "Finding a path…" : {
 
     },
@@ -944,6 +950,9 @@
 
     },
     "Hours" : {
+
+    },
+    "Huts" : {
 
     },
     "iCloud" : {
@@ -1067,7 +1076,7 @@
     "Location access is off" : {
 
     },
-    "Looking along the trail…" : {
+    "Looking around the trail…" : {
 
     },
     "Looking for community hikes…" : {
@@ -1146,6 +1155,9 @@
 
     },
     "Near Here" : {
+
+    },
+    "Nearby" : {
 
     },
     "New Place" : {
@@ -1262,10 +1274,10 @@
     "Notes about this hike" : {
 
     },
-    "Nothing Else Mapped" : {
+    "Nothing in your photo library was taken while you were out on this hike — or everything that was is already here." : {
 
     },
-    "Nothing in your photo library was taken while you were out on this hike — or everything that was is already here." : {
+    "Nothing Mapped" : {
 
     },
     "Nothing mapped here — try another area" : {
@@ -1314,6 +1326,15 @@
 
     },
     "On the Trail" : {
+
+    },
+    "On this hike" : {
+
+    },
+    "On This Trail" : {
+
+    },
+    "On Trail" : {
 
     },
     "Open Hike" : {
@@ -1392,13 +1413,16 @@
     "Opens the map licence in your browser" : {
 
     },
+    "Opens the place" : {
+
+    },
     "Opens the subscription screen, where purchases can also be restored." : {
 
     },
     "Opens the trail, where the hike can be paused or ended." : {
 
     },
-    "OpenStreetMap has nothing more on this trail's line." : {
+    "OpenStreetMap has nothing of these kinds this close to the trail." : {
 
     },
     "OpenStreetMap is busy · try again" : {
@@ -1450,9 +1474,6 @@
 
     },
     "Pausing it could not be saved, so the hike is still under way. Try pausing it again." : {
-
-    },
-    "Peaks and saddles" : {
 
     },
     "Pending Review (%lld)" : {
@@ -1588,13 +1609,13 @@
     "Places" : {
 
     },
-    "Places Along Trail" : {
-
-    },
     "Places are hidden from the map and won't be saved with this trail. Turn this on to show them and search for more." : {
 
     },
-    "Places within %@ of the trail, from OpenStreetMap. Kinds turned off in the trail maker are left out." : {
+    "Places Around Trail" : {
+
+    },
+    "Places from OpenStreetMap. Press and hold the map to add a place of your own anywhere, on the trail or off it." : {
 
     },
     "Press and hold the map to add a stop, or tap a grey route to take it instead. Press and hold a stop to drag it somewhere else." : {
@@ -1916,9 +1937,6 @@
     "Shelter" : {
 
     },
-    "Shelters and Huts" : {
-
-    },
     "Show on Lock Screen" : {
 
     },
@@ -1937,6 +1955,9 @@
     "Shows the map licences you can open" : {
 
     },
+    "Shows the place's card" : {
+
+    },
     "Some photos couldn’t be added. Try adding them again." : {
 
     },
@@ -1950,9 +1971,6 @@
 
     },
     "Sources marked “Needs API key” aren't available in this build." : {
-
-    },
-    "Springs, waterfalls and drinking water" : {
 
     },
     "SSE" : {
@@ -2110,9 +2128,6 @@
 
     },
     "These are the hikes from the last search that worked." : {
-
-    },
-    "These places couldn't be added." : {
 
     },
     "They'll appear on this trail once they've been checked." : {
@@ -2310,6 +2325,9 @@
     "What's wrong" : {
 
     },
+    "Within" : {
+
+    },
     "WNW" : {
 
     },
@@ -2362,9 +2380,6 @@
 
     },
     "Your request opens in your mail app so you can send it. It carries the record names a reviewer needs, which this hike is the only place holding. The hike stays on this device either way — deleting it here would not take the shared copy down." : {
-
-    },
-    "Your selection wasn't lost. Check that the device has storage available, then tap Add again." : {
 
     },
     "Zoom" : {

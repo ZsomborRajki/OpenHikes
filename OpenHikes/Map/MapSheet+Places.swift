@@ -14,6 +14,41 @@ import OpenHikesData
 import SwiftUI
 
 extension MapSheet {
+    /// The three screens about a hike's places: one place, *Add Place*, and
+    /// *Places Around Trail*. A switch of its own so the sheet's list of
+    /// destinations stays one the linter allows.
+    @ViewBuilder
+    func placesDestination(for route: SheetRoute) -> some View {
+        switch route {
+        case let .place(hike, placeID):
+            placeDestination(placeID, of: hike)
+        case let .newPlace(hike, spot):
+            placeAdderDestination(at: spot, on: hike)
+        case let .placesAround(hike):
+            placesAroundDestination(of: hike)
+        case .communityHike, .communityPhoto, .hike, .pendingPhotos, .pendingSubmission, .photo, .recording,
+            .routeStyle, .totals, .trailDraft, .walk:
+            EmptyView()
+        }
+    }
+
+    /// *Places Around Trail*. A press on the map opens *Add Place* at that
+    /// spot, over this screen, so back from the new place returns here.
+    func placesAroundDestination(of hike: Hike) -> some View {
+        HikePlacesAroundView(
+            hike: hike,
+            around: placePins.around,
+            mapController: mapController,
+            placePins: placePins,
+            onShowMap: presentation.makeRoomForTheMap,
+            onOpenPlace: { placeID in presentation.path.append(.place(hike, placeID)) },
+            onAddPlace: { spot in
+                presentation.path.append(.newPlace(hike, spot))
+                presentation.makeRoomForTheMap()
+            }
+        )
+    }
+
     /// One of a hike's places.
     func placeDestination(_ placeID: UUID, of hike: Hike) -> some View {
         HikePlaceView(

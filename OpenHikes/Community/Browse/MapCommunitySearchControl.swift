@@ -159,6 +159,11 @@ final class MapAreaSearchView: UIView {
             notice: "trail-draft-search-notice",
             dismiss: "trail-draft-search-notice-dismiss"
         )
+        static let placesAround = Self(
+            button: "places-around-search-this-area",
+            notice: "places-around-search-notice",
+            dismiss: "places-around-search-notice-dismiss"
+        )
     }
 
     private static let symbolPointSize: CGFloat = 15
@@ -646,6 +651,8 @@ extension MapView.Coordinator {
         // `MapTrailPointSearchControl.swift`. One flag, because there is one
         // answer: a callout is open or it is not.
         applyTrailPointSearchVisibility(animated: true)
+        // And *Places Around Trail*'s, the third in the strip.
+        applyPlacesAroundSearchVisibility(animated: true)
     }
 
     /// Asks the map itself whether a callout is still up, rather than waiting
@@ -691,6 +698,15 @@ extension MapView.Coordinator {
         applyAreaSearchVisibility(animated: true)
     }
 
+    /// Takes the *Community* tab's pill off the map while *Places Around
+    /// Trail* is up, by the maker's rule above and for its reason: the screen
+    /// the hiker is on has the strip.
+    func withdrawAreaSearchForPlacesAround(_ browsing: Bool) {
+        guard placesAroundMap.isBrowsing != browsing else { return }
+        placesAroundMap.isBrowsing = browsing
+        applyAreaSearchVisibility(animated: true)
+    }
+
     private func applyAreaSearchVisibility(animated: Bool) {
         #if os(iOS)
         guard let areaSearchControl else { return }
@@ -703,7 +719,9 @@ extension MapView.Coordinator {
         // ``withdrawAreaSearchForCallout(open:)``.
         // ...and not while the trail maker has the same strip — see
         // ``withdrawAreaSearchForDrawing(_:)``.
+        // ...or *Places Around Trail* — see ``withdrawAreaSearchForPlacesAround(_:)``.
         let visible = community?.isBrowsing == true && !hasOpenCallout && !isDrawingTrail
+            && !placesAroundMap.isBrowsing
         // Above the ceiling it stays put and stops answering. `zoomIn` has
         // something to say and nothing to do; the list's footer says it, and
         // a pill that disappeared at a zoom level would be reporting policy by

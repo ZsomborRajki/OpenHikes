@@ -177,6 +177,18 @@ extension OpenHikesModel {
     /// honour in Hiking mode. Other modes use Apple Maps directions, and
     /// Hiking asks the Walking router — the same instance, so the same cache
     /// — for a leg the graph cannot join.
+    /// The open hike's place pins, and *Places Around Trail*'s half of the
+    /// map, which asks through the maker's source and switches — one gate on
+    /// Overpass and one set of kinds for every place search.
+    static func makePlacePins(defaults: UserDefaults, maker: TrailDraftController) -> TrailPlacePinController {
+        TrailPlacePinController(
+            defaults: defaults,
+            around: TrailPlacesAround(
+                finder: TrailPointFinder(source: maker.finder.source, filter: maker.finder.filter)
+            )
+        )
+    }
+
     static func makeTrailMaker(
         container: ModelContainer,
         graph trailGraphProvider: (any TrailGraphProviding)?,

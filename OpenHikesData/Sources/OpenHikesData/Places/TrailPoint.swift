@@ -162,7 +162,11 @@ extension Hike {
     public func placeRow(id: UUID) -> TrailPlaceRow? {
         guard isAttached, let place = trailPoints?.first(where: { $0.id == id })?.place else { return nil }
         let anchor = TrailPlaceOrder.anchors(of: [place], along: route)[id]
-        return TrailPlaceRow(place: place, anchor: anchor?.describesTheRoute == true ? anchor : nil)
+        return TrailPlaceRow(
+            place: place,
+            anchor: anchor?.describesTheRoute == true ? anchor : nil,
+            offRouteMeters: anchor?.offRouteMeters
+        )
     }
 
     /// Replaces this hike's places with `places`, which is what a save and an
@@ -208,7 +212,7 @@ extension Hike {
     /// element only**, so an answer that names one spring twice adds it once
     /// while the hut and the spring beside it both go in. The distance rule is
     /// for what the hike held before, not for `places` among themselves:
-    /// *Find Places Along Trail* lists every place it found as a row of its
+    /// *Places Around Trail* lists every place it found as a row of its
     /// own, and a ticked row that quietly failed to arrive would be the list
     /// saying one thing and the hike another.
     @discardableResult public func addPlaces(

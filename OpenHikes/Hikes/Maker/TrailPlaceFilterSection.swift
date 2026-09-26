@@ -2,8 +2,8 @@
 //  TrailPlaceFilterSection.swift
 //  OpenHikes
 //
-//  What the maker's *Search this area* pill does, and a switch for each kind
-//  of place it looks for.
+//  What the maker's *Search this area* pill does, and a chip for each kind of
+//  place it looks for — the same chips as *Places Around Trail*.
 //
 //  The pill is on the map and says two words. This is where it is explained,
 //  under *Follow Paths*, and where a hiker who never wants parking pins says
@@ -11,8 +11,8 @@
 //
 //  The switch beside the heading is the one above the kinds: off hides the
 //  trail's places, withdraws the pill and keeps them out of the save — see
-//  ``TrailPlaceFilter/placesShown``. The kinds' rows go with it, because
-//  there is nothing left for them to choose between.
+//  ``TrailPlaceFilter/placesShown``. The chips go with it, because there is
+//  nothing left for them to choose between.
 //
 //  Its own `View` for the reason ``TrailDraftSnapToggle`` is one: a `Toggle`
 //  declared in ``TrailDraftView``'s body would make every flip of a switch a
@@ -29,35 +29,15 @@ struct TrailPlaceFilterSection: View {
         let filter = maker.finder.filter
         let placesShown = filter.placesShown
         Section {
-            ForEach(placesShown ? TrailPointQuery.searchableSymbols : [], id: \.self) { symbol in
-                Toggle(isOn: Binding(
-                    get: { filter.shows(symbol) },
-                    set: { shows in maker.setShowsPlaces(shows, of: symbol) }
-                )) {
-                    Label {
-                        VStack(alignment: .leading, spacing: Self.subtitleSpacing) {
-                            Text(Self.title(of: symbol))
-                            if let detail = Self.detail(of: symbol) {
-                                Text(detail)
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    } icon: {
-                        // The pin's own glyph on the pin's own colour, so the
-                        // row names the thing on the map it switches. A fixed
-                        // point size, as ``TrailListRowGlyph`` uses, because
-                        // the circle is fixed: a text style grew the glyph
-                        // past its edge at the larger accessibility sizes,
-                        // white on a white row. The title beside it scales.
-                        Image(systemName: symbol.systemImageName)
-                            .font(.system(size: Self.glyphSize, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: Self.iconSize, height: Self.iconSize)
-                            .background(symbol.tint, in: .circle)
-                    }
+            // The same chips as *Places Around Trail*, because it is the same
+            // app-wide choice — see ``TrailPlaceKindChips``. Here a kind
+            // switched off also leaves the drawing.
+            if placesShown {
+                TrailPlaceKindChips(filter: filter) { symbol, shows in
+                    maker.setShowsPlaces(shows, of: symbol)
                 }
-                .accessibilityIdentifier("trail-place-filter-\(symbol.rawValue)")
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
             }
         } header: {
             // A title in the header's own style, and the explanation under it
@@ -104,41 +84,6 @@ struct TrailPlaceFilterSection: View {
         }
     }
 
-    /// Between a row's title and the line under it.
+    /// Between the header's title and the explanation under it.
     private static let subtitleSpacing: CGFloat = 2
-
-    /// The coloured circle behind a row's glyph — Settings' row-icon size.
-    private static let iconSize: CGFloat = 28
-
-    /// The glyph inside that circle: footnote's size at the default text size.
-    private static let glyphSize: CGFloat = 13
-
-    /// What a row is called: the plural of what the pin says.
-    ///
-    /// Not ``TrailPlaceSymbol/label``, which names one pin — *Shelter* — where
-    /// a switch is about all of them.
-    private static func title(of symbol: TrailPlaceSymbol) -> String {
-        switch symbol {
-        case .camp: String(localized: "Campsites")
-        case .parking: String(localized: "Parking")
-        case .shelter: String(localized: "Shelters and Huts")
-        case .summit: String(localized: "Summits")
-        case .viewpoint: String(localized: "Viewpoints")
-        case .water: String(localized: "Water")
-        // Nothing is searched for as either, so neither is ever a row — see
-        // ``TrailPointQuery/searchableSymbols``.
-        case .caution, .junction: symbol.label
-        }
-    }
-
-    /// What a row covers, where the title alone would leave a hiker guessing
-    /// which of OpenStreetMap's kinds it switches — ``TrailPointQuery/kinds``.
-    private static func detail(of symbol: TrailPlaceSymbol) -> String? {
-        switch symbol {
-        case .shelter: String(localized: "Alpine huts, wilderness huts and shelters")
-        case .summit: String(localized: "Peaks and saddles")
-        case .water: String(localized: "Springs, waterfalls and drinking water")
-        case .camp, .caution, .junction, .parking, .viewpoint: nil
-        }
-    }
 }

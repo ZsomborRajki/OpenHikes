@@ -51,22 +51,23 @@ final class TrailPlacePinController {
     /// view.
     private(set) var rows: [TrailPlaceRow] = []
 
-    @ObservationIgnored private var activeToken: Int?
-    @ObservationIgnored private var nextToken = 0
-    /// What the claiming screen last published, kept apart from ``rows`` so a
+    /// What one screen's claim says: its places, kept apart from ``rows`` so a
     /// screen being navigated away from can have its pins taken off the map
-    /// and put back without re-deriving them.
-    @ObservationIgnored private var claimed: [TrailPlaceRow] = []
-    /// A place that is not on the hike yet — the one ``HikePlaceAdder`` is
-    /// about to add — drawn where it would stand. Kept apart from
-    /// ``claimed`` because the show-places switch does not hide it: the
-    /// hiker who is placing a pin has asked to see that one.
-    @ObservationIgnored private var placeholder: TrailPlaceRow?
+    /// and put back without re-deriving them; a place not on the hike yet —
+    /// the one ``HikePlaceAdder`` is about to add — drawn where it would
+    /// stand, and kept apart because the show-places switch does not hide it;
+    /// and what a tap on one of the pins does — see ``open(_:)``.
+    private struct Claim {
+        var rows: [TrailPlaceRow]
+        var placeholder: TrailPlaceRow?
+        var opener: ((UUID) -> Void)?
+    }
+
+    /// Every screen's claim, the deepest in force — see ``ScreenClaims``.
+    @ObservationIgnored private var claims = ScreenClaims<Claim>()
     /// Which of ``rows`` is the placeholder, so the map can mark its pin as
     /// one. Written before ``rows``, whose change is what the map observes.
     @ObservationIgnored private(set) var placeholderID: UUID?
-    /// What a tap on one of the claimed pins does. See ``open(_:)``.
-    @ObservationIgnored private var opener: ((UUID) -> Void)?
     /// See ``setHostScreenPresent(_:)``.
     @ObservationIgnored private var hasHostScreen = true
     /// Whether the hiker wants saved hikes' places on the map at all.
@@ -78,8 +79,15 @@ final class TrailPlacePinController {
     /// one.
     @ObservationIgnored private let defaults: UserDefaults?
 
-    init(defaults: UserDefaults? = nil) {
+    /// *Places Around Trail*'s half of the map: the places found near the
+    /// hike and not on it, its *Search This Area* and its press — see
+    /// ``TrailPlacesAround``. Here because it is the same map layer, drawn for
+    /// the same hike's screens.
+    @ObservationIgnored let around: TrailPlacesAround
+
+    init(defaults: UserDefaults? = nil, around: TrailPlacesAround = TrailPlacesAround()) {
         self.defaults = defaults
+        self.around = around
         // What is stored is the switch turned *off*, so an empty store is the
         // default: places are drawn.
         showsPins = !(defaults?.bool(forKey: SettingsKey.trailPlacePinsHidden) ?? false)
@@ -89,22 +97,24 @@ final class TrailPlacePinController {
 
     /// Claims the map's place pins for a screen, returning the token that has
     /// to be handed back to withdraw them.
+    ///
+    /// `depth` is how deep in the sheet's stack the screen is, and the
+    /// deepest claim is the one drawn — see ``ScreenClaims``.
     @discardableResult func attach(
         _ rows: [TrailPlaceRow],
         placeholder: TrailPlaceRow? = nil,
+        depth: Int = 0,
         onOpen: ((UUID) -> Void)? = nil
     ) -> Int {
-        nextToken += 1
-        activeToken = nextToken
-        opener = onOpen
-        apply(rows, placeholder: placeholder)
-        return nextToken
+        let token = claims.attach(Claim(rows: rows, placeholder: placeholder, opener: onOpen), depth: depth)
+        publish()
+        return token
     }
 
     /// Opens the place a pin stands for, on the screen that drew it. Answers
     /// whether anything could — a pin whose screen has gone opens nothing.
     @discardableResult func open(_ placeID: UUID) -> Bool {
-        guard activeToken != nil, hasHostScreen, showsPins, let opener, placeID != placeholderID,
+        guard hasHostScreen, showsPins, let opener = claims.active?.payload.opener, placeID != placeholderID,
               rows.contains(where: { $0.id == placeID }) else { return false }
         opener(placeID)
         return true
@@ -113,16 +123,18 @@ final class TrailPlacePinController {
     /// Redraws the pins of a screen that already holds the claim — a place
     /// arriving from another device while the hike is open.
     func update(_ rows: [TrailPlaceRow], token: Int, placeholder: TrailPlaceRow? = nil) {
-        guard activeToken == token else { return }
-        apply(rows, placeholder: placeholder)
+        guard claims.update(token, { claim in
+            claim.rows = rows
+            claim.placeholder = placeholder
+        }) else { return }
+        publish()
     }
 
-    /// Withdraws the pins, unless another screen has already claimed them.
+    /// Withdraws a screen's pins, handing the map to the claim beneath, if
+    /// any.
     func detach(token: Int) {
-        guard activeToken == token else { return }
-        activeToken = nil
-        opener = nil
-        apply([], placeholder: nil)
+        claims.detach(token)
+        publish()
     }
 
     /// Takes the pins off the map for as long as the sheet has no screen
@@ -144,13 +156,9 @@ final class TrailPlacePinController {
         publish()
     }
 
-    private func apply(_ updated: [TrailPlaceRow], placeholder: TrailPlaceRow?) {
-        claimed = updated
-        self.placeholder = placeholder
-        publish()
-    }
-
     private func publish() {
+        let claimed = claims.active?.payload.rows ?? []
+        let placeholder = claims.active?.payload.placeholder
         guard hasHostScreen else {
             placeholderID = nil
             if !rows.isEmpty { rows = [] }
@@ -207,10 +215,17 @@ private struct TrailPlacePinsModifier: ViewModifier {
     let onOpen: ((UUID) -> Void)?
 
     @State private var token: Int?
+    @Environment(\.sheetDepth)
+    private var depth
 
     func body(content: Content) -> some View {
         content
-            .onAppear { token = controller?.attach(rows, placeholder: placeholder, onOpen: onOpen) }
+            .onAppear {
+                // A screen SwiftUI appears twice without a disappear between
+                // holds one claim, not two — see ``ScreenClaims``.
+                if let token { controller?.detach(token: token) }
+                token = controller?.attach(rows, placeholder: placeholder, depth: depth, onOpen: onOpen)
+            }
             .onChange(of: rows) { _, updated in
                 guard let token else { return }
                 controller?.update(updated, token: token, placeholder: placeholder)

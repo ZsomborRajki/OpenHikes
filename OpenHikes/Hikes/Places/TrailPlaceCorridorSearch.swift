@@ -2,18 +2,21 @@
 //  TrailPlaceCorridorSearch.swift
 //  OpenHikes
 //
-//  Finding the OpenStreetMap places a finished trail passes — for a hike that
-//  was recorded, imported, or saved from somebody else, none of which went
-//  through the maker's *Search this area*.
+//  Finding the OpenStreetMap places on and around a finished trail — for a
+//  hike that was recorded, imported, or saved from somebody else, none of
+//  which went through the maker's *Search this area*. See
+//  ``HikePlacesAroundView``.
 //
-//  ## The same answer the maker's save keeps
+//  ## As far off the line as the hiker asks
 //
-//  A drawn trail keeps only the places its line passes
-//  (``TrailPlaceOrder/touched(_:along:)``, 50 m), and this answers the same
-//  question about any other trail — so a recorded walk and a drawn one end up
-//  with the same kind of places, by the same rule. What the maker offers while
-//  a route is still being decided (the summit across the valley) is not
-//  offered here, because the route is decided.
+//  At its narrowest this is the maker's save question — what the line passes,
+//  ``TrailPlaceAnchor/touchedOffRouteMeters`` — so a recorded walk and a drawn
+//  one can end up with the same places by the same rule. *Places Around
+//  Trail* asks further out than that, a kilometre at most, because a place off
+//  the trail is still one a hiker may want on it: the hut up the side path
+//  they walked to for lunch, the summit they photographed from the ridge. The
+//  reach widens every stretch's circle by as much — see
+//  ``marginMeters(reaching:)`` — and keeps what falls within it.
 //
 //  ## Asked in pieces along the line, one at a time
 //
@@ -38,10 +41,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
-import Observation
 import OpenHikesData
-import os
-import SwiftData
 
 nonisolated enum TrailPlaceCorridorSearch {
     /// The widest stretch of line asked about at once, in metres of radius.
@@ -81,11 +81,18 @@ nonisolated enum TrailPlaceCorridorSearch {
     /// between them. A line that needs more than ``maximumAreas`` stretches is
     /// cut again with a wider radius, up to the query's own ceiling; one that
     /// still needs more at the ceiling keeps the first ``maximumAreas``.
-    static func areas(along route: [RouteCoordinate]) -> [CommunitySearchArea] {
+    ///
+    /// `reach` is how far off the line a place may stand and still be wanted,
+    /// and widens every circle by that much — see ``marginMeters(reaching:)``.
+    static func areas(
+        along route: [RouteCoordinate],
+        reaching reach: Double = TrailPlaceAnchor.touchedOffRouteMeters
+    ) -> [CommunitySearchArea] {
         guard route.count > 1 else { return [] }
-        var radius = stretchRadiusMeters
+        let margin = marginMeters(reaching: reach)
+        var radius = stretchRadiusMeters + margin - marginMeters
         while true {
-            let cut = areas(along: route, radius: radius)
+            let cut = areas(along: route, radius: radius, margin: margin)
             let ceiling = TrailPointQuery.maximumRadiusMeters
             if cut.count <= maximumAreas || radius >= ceiling {
                 return Array(cut.prefix(maximumAreas))
@@ -94,22 +101,33 @@ nonisolated enum TrailPlaceCorridorSearch {
         }
     }
 
-    private static func areas(along route: [RouteCoordinate], radius: Double) -> [CommunitySearchArea] {
+    /// How far past the line a stretch's circle reaches for places up to
+    /// `reach` off it: ``marginMeters`` beyond the reach, for the hut answered
+    /// as the centre of its building.
+    static func marginMeters(reaching reach: Double) -> Double {
+        max(reach, TrailPlaceAnchor.touchedOffRouteMeters) - TrailPlaceAnchor.touchedOffRouteMeters + marginMeters
+    }
+
+    private static func areas(
+        along route: [RouteCoordinate],
+        radius: Double,
+        margin: Double
+    ) -> [CommunitySearchArea] {
         var result: [CommunitySearchArea] = []
         var box = Box(route[0])
-        for point in densified(route, step: radius - marginMeters).dropFirst() {
+        for point in densified(route, step: radius - margin).dropFirst() {
             var grown = box
             grown.include(point)
-            if grown.radiusMeters + marginMeters <= radius {
+            if grown.radiusMeters + margin <= radius {
                 box = grown
             } else {
-                result.append(box.area(margin: marginMeters))
+                result.append(box.area(margin: margin))
                 var next = Box(box.last)
                 next.include(point)
                 box = next
             }
         }
-        result.append(box.area(margin: marginMeters))
+        result.append(box.area(margin: margin))
         return result
     }
 
@@ -157,11 +175,12 @@ nonisolated enum TrailPlaceCorridorSearch {
         along route: [RouteCoordinate],
         excluding held: [TrailPlace],
         from source: any TrailPointSourcing,
-        showing symbols: Set<TrailPlaceSymbol>
+        showing symbols: Set<TrailPlaceSymbol>,
+        reaching reach: Double = TrailPlaceAnchor.touchedOffRouteMeters
     ) async throws -> Outcome {
         var found: [TrailPlace] = []
         var outage: CuratedTrailOutage?
-        for area in areas(along: route) {
+        for area in areas(along: route, reaching: reach) {
             try Task.checkCancellation()
             do {
                 found += try await source.places(near: area, showing: symbols)
@@ -172,31 +191,29 @@ nonisolated enum TrailPlaceCorridorSearch {
             }
         }
         let wanted = found.filter { place in place.symbol.map(symbols.contains) ?? true }
-        return Outcome(rows: kept(wanted, along: route, excluding: held), outage: outage)
+        return Outcome(rows: kept(wanted, along: route, excluding: held, reaching: reach), outage: outage)
     }
 
-    /// Of `found`, one of each element, the ones the line passes and the hike
-    /// does not already hold, in walking order.
+    /// Of `found`, one of each element, the ones within `reach` of the line
+    /// that the hike does not already hold, in walking order.
     ///
     /// One of each first, because neighbouring stretches overlap by design and
     /// both answer for the hut on their shared edge.
     static func kept(
         _ found: [TrailPlace],
         along route: [RouteCoordinate],
-        excluding held: [TrailPlace]
+        excluding held: [TrailPlace],
+        reaching reach: Double = TrailPlaceAnchor.touchedOffRouteMeters
     ) -> [TrailPlaceRow] {
         var seen: Set<String> = []
         let unique = found.filter { place in
             guard let osm = place.osm else { return true }
             return seen.insert("\(osm.elementType)/\(osm.elementID)").inserted
         }
-        let touched = TrailPlaceOrder.touched(unique, along: route)
-        let heldElements = Set(held.compactMap(\.osm).map { "\($0.elementType)/\($0.elementID)" })
-        let fresh = TrailPointRanking.excluding(held, from: touched).filter { place in
-            guard let osm = place.osm else { return true }
-            return !heldElements.contains("\(osm.elementType)/\(osm.elementID)")
+        let fresh = TrailPlaceHolding.unheld(unique, by: held)
+        return TrailPlaceOrder.ordered(fresh, along: route).filter { row in
+            row.offRouteMeters.map { $0 <= max(reach, TrailPlaceAnchor.touchedOffRouteMeters) } ?? false
         }
-        return TrailPlaceOrder.ordered(fresh, along: route)
     }
 
     /// A stretch's bounding box, in degrees.
@@ -257,144 +274,16 @@ nonisolated enum TrailPlaceCorridorSearch {
     }
 }
 
-/// Why *Find Places Along Trail*'s *Add* did not add.
-///
-/// Carries no diagnostic, for the reason ``TrailDraftRefusal/notSaved``
-/// carries none.
-enum HikePlaceSearchRefusal: LocalizedError, Equatable {
-    /// The store refused to keep the places.
-    case notSaved
-
-    var errorDescription: String? {
-        String(localized: "These places couldn't be added.")
-    }
-
-    // Says the choice is still there, because the obvious reading of a failed
-    // save is that it is gone.
-    var recoverySuggestion: String? {
-        String(
-            localized: "Your selection wasn't lost. Check that the device has storage available, then tap Add again."
-        )
-    }
-}
-
-/// Where a *Find Places Along Trail* asks, and which kinds it asks for.
-struct TrailPlaceSearchScope {
-    let source: any TrailPointSourcing
-    /// The maker's switches — see ``TrailPlaceFilter`` — which are app-wide.
-    let symbols: Set<TrailPlaceSymbol>
-}
-
-/// One *Find Places Along Trail*, for the sheet that asks it.
-///
-/// A reference type the sheet owns, so the search outlives a body pass and is
-/// cancelled with the sheet — see ``cancel()``.
-@MainActor
-@Observable
-final class HikePlaceSearch {
-    enum Phase: Equatable {
-        case searching
-        case found([TrailPlaceRow], outage: CuratedTrailOutage?)
-        case failed(CuratedTrailOutage)
-    }
-
-    private static let logger = Logger(subsystem: "OpenHikes", category: "Places")
-
-    private(set) var phase = Phase.searching
-    /// The found places the hiker is keeping. All of them, to begin with.
-    var chosen: Set<UUID> = []
-
-    @ObservationIgnored private var task: Task<Void, Never>?
-
-    nonisolated deinit { /* intentionally empty */ }
-
-    /// Whether *Add* has anything to add.
-    var canAdd: Bool {
-        guard case .found(let rows, _) = phase else { return false }
-        return rows.contains { chosen.contains($0.id) }
-    }
-
-    /// Asks about `hike`'s line. Answers the search, which a test awaits
-    /// rather than yielding until the phase moves.
-    @discardableResult func start(
-        for hike: Hike,
-        source: any TrailPointSourcing,
-        showing symbols: Set<TrailPlaceSymbol>
-    ) -> Task<Void, Never> {
-        task?.cancel()
-        phase = .searching
-        let route = hike.route
-        let held = hike.places
-        let search = Task { [weak self] in
-            let outcome: TrailPlaceCorridorSearch.Outcome
-            do {
-                outcome = try await TrailPlaceCorridorSearch.search(
-                    along: route,
-                    excluding: held,
-                    from: source,
-                    showing: symbols
-                )
-            } catch {
-                return
-            }
-            guard let self, !Task.isCancelled else { return }
-            receive(outcome)
+/// Which found places a hike does not already have: not the same
+/// OpenStreetMap element, and not within ``TrailPointRanking/alreadyMarkedMeters``
+/// of a place it holds — the rule ``Hike/addPlaces(_:in:now:)`` applies.
+nonisolated enum TrailPlaceHolding {
+    static func unheld(_ found: [TrailPlace], by held: [TrailPlace]) -> [TrailPlace] {
+        guard !held.isEmpty else { return found }
+        let heldElements = Set(held.compactMap(\.osm).map { "\($0.elementType)/\($0.elementID)" })
+        return TrailPointRanking.excluding(held, from: found).filter { place in
+            guard let osm = place.osm else { return true }
+            return !heldElements.contains("\(osm.elementType)/\(osm.elementID)")
         }
-        task = search
-        return search
-    }
-
-    func receive(_ outcome: TrailPlaceCorridorSearch.Outcome) {
-        if outcome.rows.isEmpty, let outage = outcome.outage {
-            Self.logger.info("A search along a trail was refused: \(String(describing: outage), privacy: .public)")
-            phase = .failed(outage)
-            return
-        }
-        chosen = Set(outcome.rows.map(\.id))
-        phase = .found(outcome.rows, outage: outcome.outage)
-    }
-
-    func toggle(_ id: UUID) {
-        if chosen.contains(id) { chosen.remove(id) } else { chosen.insert(id) }
-    }
-
-    /// Adds the chosen places to `hike` and saves them, answering how many
-    /// went in.
-    ///
-    /// A refused save takes the added rows back out and throws, so the sheet
-    /// stays up with the same places ticked and *Add* can simply be tapped
-    /// again: a place that is only pending is not one the hiker has, and
-    /// closing the sheet over it would say it was. Taken back by hand rather
-    /// than through `ModelContext.rollback()`, for the reason
-    /// ``TrailWalkSession`` gives — and because a rollback would also discard
-    /// every other pending edit in the shared context.
-    @discardableResult func add(
-        to hike: Hike,
-        in context: ModelContext,
-        save: (ModelContext) throws -> Void = { try $0.save() }
-    ) throws(HikePlaceSearchRefusal) -> Int {
-        guard case .found(let rows, _) = phase else { return 0 }
-        let places = rows.map(\.place).filter { chosen.contains($0.id) }
-        let added = hike.addPlaces(places, in: context)
-        guard !added.isEmpty else { return 0 }
-        do {
-            try save(context)
-        } catch {
-            // A row's id is its place's — see ``TrailPoint``.
-            let addedIDs = Set(added.map(\.id))
-            let inserted = (hike.trailPoints ?? []).filter { addedIDs.contains($0.id) }
-            hike.trailPoints?.removeAll { addedIDs.contains($0.id) }
-            for row in inserted { context.delete(row) }
-            Self.logger.error(
-                "Places found along a trail could not be saved: \(error.localizedDescription, privacy: .public)"
-            )
-            throw .notSaved
-        }
-        return added.count
-    }
-
-    func cancel() {
-        task?.cancel()
-        task = nil
     }
 }
