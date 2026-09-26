@@ -32,9 +32,6 @@ extension MapCoordinatorTests {
         static let span: Double = 0.02
         static let south: Double = 37.3300
         static let north: Double = 37.3400
-        /// Off the line, so a point dragged here is unmistakably somewhere
-        /// else.
-        static let eastLongitude: Double = -122.0200
     }
 
     private static func drawnRegion() -> MKCoordinateRegion {

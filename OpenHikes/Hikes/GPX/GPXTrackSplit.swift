@@ -80,7 +80,7 @@ nonisolated enum GPXTrackSplit {
             var longitude = first.longitude
             var east = longitude
             west = longitude
-            for (start, end) in zip(route, route.dropFirst()) {
+            for (start, end) in route.adjacentPairs() {
                 longitude += RouteGeometry.normalizedLongitudeDelta(end.longitude - start.longitude)
                 west = min(west, longitude)
                 east = max(east, longitude)

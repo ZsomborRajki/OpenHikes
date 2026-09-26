@@ -191,20 +191,20 @@ public enum WatchRecordingRecovery: Sendable, Equatable {
 /// gap like any other. Everything else — the header, a pause, a resume — is
 /// written at once with whatever fixes are waiting, because each one changes
 /// what a recovery would do rather than merely how much of the line it has.
-public struct WatchRecordingJournalBuffer: Sendable, Equatable {
+struct WatchRecordingJournalBuffer: Sendable, Equatable {
     /// At most this many fixes wait.
-    public static let maximumPendingFixes = 12
+    static let maximumPendingFixes = 12
     /// And none waits longer than this, measured on the fixes' own clock.
-    public static let maximumPendingSeconds: TimeInterval = 30
+    static let maximumPendingSeconds: TimeInterval = 30
 
-    public private(set) var pending: [WatchRecordingJournalEntry] = []
+    private(set) var pending: [WatchRecordingJournalEntry] = []
     private var oldestPendingAt: Date?
 
-    public init() { /* nothing waiting */ }
+    init() { /* nothing waiting */ }
 
     /// Adds a line. Returns what is due to be written now — empty while fixes
     /// are still allowed to wait.
-    public mutating func add(_ entry: WatchRecordingJournalEntry, at date: Date) -> [WatchRecordingJournalEntry] {
+    mutating func add(_ entry: WatchRecordingJournalEntry, at date: Date) -> [WatchRecordingJournalEntry] {
         pending.append(entry)
         guard case .fix = entry else { return drain() }
         let oldest = oldestPendingAt ?? date
@@ -215,7 +215,7 @@ public struct WatchRecordingJournalBuffer: Sendable, Equatable {
     }
 
     /// Everything waiting, which the caller is now responsible for.
-    public mutating func drain() -> [WatchRecordingJournalEntry] {
+    mutating func drain() -> [WatchRecordingJournalEntry] {
         defer {
             pending = []
             oldestPendingAt = nil
