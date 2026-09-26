@@ -426,6 +426,9 @@ final class BackgroundTrailTracker: NSObject {
     /// Called from `HikeDetailView`'s auto-follow loop, which advances once per
     /// published fix. Throttled internally — does not write on every call.
     ///
+    /// - Parameter match: the fix's nearest point on the route, however far
+    ///   off it fell — this decides with its own thresholds whether that is
+    ///   on the trail — or `nil` for a fix that could not be matched at all.
     /// - Parameter walk: what the walk along this hike has recorded so far,
     ///   or `nil` when nothing is being walked. Written into the snapshot
     ///   beside the fix, so the widget and the Lock Screen read coverage and
@@ -441,6 +444,13 @@ final class BackgroundTrailTracker: NSObject {
         // retries rather than racing the initial snapshot.
         guard hike.id == trackedHikeID, selectionPublishTask == nil else { return }
 
+        let now = clock()
+        // Ahead of the throttle, which is the widget's reload budget and not
+        // the reminder's: the off-trail dwell is timed from the first fix past
+        // its threshold, and rejoining is what re-arms it, so a report held
+        // back 45 s would make the one late and could miss the other.
+        reportRouteDistance(hikeID: hike.id, offRouteMeters: match?.offRouteMeters, at: now)
+
         // Leaving the trail takes the wider threshold, rejoining it the normal
         // one, so noise around the follow distance doesn't read as a status
         // change in the first place.
@@ -448,7 +458,6 @@ final class BackgroundTrailTracker: NSObject {
         let threshold = wasOnRoute ? Self.offRouteExitMeters : RouteProfile.followMatchThresholdMeters
         let isOnRoute = (match?.offRouteMeters).map { $0 <= threshold } ?? false
 
-        let now = clock()
         if let last = lastForegroundPublish {
             let intervalElapsed = now.timeIntervalSince(last.date) >= Self.foregroundPublishInterval
             // A flip may bypass the interval, but not more often than
@@ -460,7 +469,6 @@ final class BackgroundTrailTracker: NSObject {
             if flipAllowed { lastStatusFlipPublish = now }
         }
         lastForegroundPublish = (now, isOnRoute)
-        reportRouteDistance(hikeID: hike.id, offRouteMeters: match?.offRouteMeters, at: now)
 
         // Values, taken here because a `Hike` belongs to its context and
         // cannot leave the main actor. Everything the write path does with
