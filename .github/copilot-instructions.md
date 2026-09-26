@@ -418,6 +418,18 @@ disk refuses does not lose the walk either: the recorder holds it as
 than an OK, and Start is refused until one of them has happened —
 `WatchStoppedWalk` is the policy and its suite is the test.
 
+**Before Stop, the walk is journalled on the watch, and only there.** Until
+Stop the accumulator is the only copy, so `WatchRecorder` appends every kept
+fix, pause and resume to a journal on the watch's own disk. Fixes go in
+batches (`WatchRecordingJournalBuffer`), and pauses and resumes are written
+at once. The journal never crosses, so the ownership rule above is untouched;
+what crosses is still one finished walk. A launch that finds a journal asks
+HealthKit for the crashed workout session and carries on in it. Without one,
+the Record screen offers Continue, Save or Discard. Either way the outage is
+a pause, never a leg. The journal is removed only *after* the walk is on the
+outbound queue, and `WatchRecordingRecovery` recognises a crash between the
+two. Replay, the torn-tail cut and that rule are under `swift test`.
+
 **The watch matches against the trail itself.** `WatchRouteTracker` projects a
 fix onto the one polyline it was handed; it is not `TrailMatcher` and must not
 grow toward it. What it does share with the phone are the constants —

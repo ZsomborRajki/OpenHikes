@@ -38,6 +38,11 @@ extension WatchRecorder.Phase {
         // to an idle recorder, which is the whole reason the shared table has
         // a `finished` the phone never reaches.
         case .saved: .finished
+        // Found at launch rather than arrived at, so there is no moment to
+        // feel: the walk stopped with the last process, which nobody was
+        // holding. What the hiker does about it is felt as that — a resume
+        // as a start, a save as a finish.
+        case .interrupted: .idle
         // A walk that could not be written is news worth feeling as much as
         // a start that failed: it is still on the screen, and it is the one
         // outcome a hiker who pressed Stop and dropped their wrist has to go
