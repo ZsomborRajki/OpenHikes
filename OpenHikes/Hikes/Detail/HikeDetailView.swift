@@ -244,6 +244,10 @@ struct HikeDetailView: View {
             highlight.move(to: built.coordinate(atDistance: 0))
             refreshStoredBytes()
             autoSave.hikeSelectionChanged(to: hike)
+            // The maker's save lands here, and a hiker standing still sends
+            // no fix to notice the edit by: a walk along the old line must not
+            // be shown against the new one.
+            walkSession.endIfRouteChanged()
             // Keep the first live fix from racing the widget's initial trail snapshot.
             await backgroundTracker.waitForSelectionPublish()
             await followLocation(profile: built)
