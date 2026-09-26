@@ -25,13 +25,19 @@ Supporting documents, each owning its own facts:
 # Strict SwiftLint, the pinned version, the same script CI runs
 Scripts/lint.sh
 
-# Boot the simulator before any test command below
-xcrun simctl boot "iPhone 18 Pro" || true
-xcrun simctl bootstatus "iPhone 18 Pro" -b
+# Take a simulator from the pool, in the same shell command as the test that
+# uses it. It prints the UDID of an `OpenHikes Pool <n>` — an iPhone 18 Pro,
+# the device CI names — booted and ready, and the same session always gets
+# the same device back, so calling it again in the next shell is the way to
+# find it again rather than a second device.
+udid="$(Scripts/sim-pool.sh acquire)"
 
-# App and widget unit tests — the two bundles, and nothing else
+# App and widget unit tests — the two bundles, and nothing else — on that
+# device. `DerivedData` is relative, so it lands inside this checkout, which
+# gives every worktree a build of its own; git and SwiftLint both ignore it.
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
+  -destination "platform=iOS Simulator,id=$udid" \
+  -derivedDataPath DerivedData \
   -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
 
 # The standalone shared package
@@ -46,9 +52,13 @@ swift test --package-path OpenHikesData
 # leaves the three gates green.
 xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikesWatch \
   -destination 'generic/platform=watchOS Simulator'
+
+# Hand the simulator back once this session's testing is done
+Scripts/sim-pool.sh release
 ```
 
-**The boot is part of the test command, not a refinement of it.** A cold
+**The boot is part of the test command, not a refinement of it** — `acquire`
+does it, waiting on `simctl bootstatus -b` before it prints the UDID. A cold
 simulator fails with "Early unexpected exit, operation never finished
 bootstrapping" or "The test runner hung before establishing connection" —
 nearly six minutes of a red run that says nothing about the code, against
@@ -94,10 +104,17 @@ silently for as long as it is left to. So a run claims the simulator it
 resolved and refuses to start on one another run holds; `--device <name|udid>`
 gives this one its own device and `--derived-data <path>` its own build.
 
-**Get that device from the pool, never from `simctl create`:**
-`udid="$(Scripts/sim-pool.sh acquire)"` before a test command (repeating it is
-safe), and `Scripts/sim-pool.sh release` when the work is done. *Build and test*
-in the instructions file says how it picks, erases and frees a device.
+**Get that device from the pool, never from `simctl create`.** The commands
+above already do: `udid="$(Scripts/sim-pool.sh acquire)"`, then
+`-destination "platform=iOS Simulator,id=$udid"` for `xcodebuild` or
+`--device "$udid" --derived-data <path>` for `Scripts/run-ui-tests.sh`. Do not
+delete a pool device or boot one by name, and do not make a device of your own
+when `acquire` says the pool is full: `Scripts/sim-pool.sh status` names who
+holds each one, and an idle simulator left over from before the pool is
+`Scripts/sim-pool.sh adopt <name|udid>`'d into it rather than left to sit.
+`release` gives the device back; a session that ends without releasing frees it
+anyway. *Build and test* in the instructions file says how it picks, erases and
+frees a device.
 
 ## House rules an agent trips over first
 
