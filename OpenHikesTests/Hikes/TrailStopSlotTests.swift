@@ -16,6 +16,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @MainActor
@@ -157,7 +158,7 @@ struct TrailStopSlotTests {
         draft.addStop(Self.coordinate(Line.north))
         let expected = draft.distanceMeters / TrailTravelMode.hiking.paceMetersPerSecond
 
-        #expect(abs(draft.travelTime - expected) < 0.001)
+        #expect(draft.travelTime.isApproximatelyEqual(to: expected, absoluteTolerance: 0.001))
 
         draft.setTravelMode(.cycling)
         #expect(draft.travelTime < expected, "a bicycle is faster than boots")

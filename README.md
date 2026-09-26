@@ -177,7 +177,7 @@ OpenHikes is released under the [MIT License](LICENSE).
 
 That covers the source in this repository only. Map data and map tiles are not ours to license: OpenStreetMap data is © OpenStreetMap contributors and is published under the [Open Database License](https://www.openstreetmap.org/copyright), and the Stadia Maps and Thunderforest styles are used under their own terms. The app displays the credit each provider requires, which `OpenHikes/Tiles/TileAttribution.swift` is responsible for and its tests enforce. A fork that changes tile providers, or that redistributes cached tiles, takes on those obligations itself.
 
-Dependencies: `swift-algorithms`, `swift-collections` and `swift-async-algorithms` are Apache-2.0 licensed and ship inside the app; SwiftLint is a build-time plugin and is not linked into the binary.
+Dependencies: `swift-algorithms`, `swift-collections` and `swift-async-algorithms` are Apache-2.0 licensed and ship inside the app; `swift-numerics`, also Apache-2.0, is linked directly only by the test targets, and reaches the app solely as a dependency of `swift-algorithms`; SwiftLint is a build-time plugin and is not linked into the binary.
 
 ## Contact
 

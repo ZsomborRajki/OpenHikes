@@ -10,6 +10,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @Suite("Trail surface breakdown")
@@ -45,7 +46,7 @@ struct TrailSurfaceBreakdownTests {
         #expect(breakdown.meters(for: .paved) == 250)
         #expect(breakdown.meters(for: .rock) == 0)
         let total = breakdown.shares.reduce(0) { $0 + $1.fraction }
-        #expect(abs(total - 1) < 1e-9)
+        #expect(total.isApproximatelyEqual(to: 1, absoluteTolerance: 1e-9))
     }
 
     @Test("the surveyed fraction excludes both ways of not knowing")
@@ -58,7 +59,7 @@ struct TrailSurfaceBreakdownTests {
             ]
         )
 
-        #expect(abs(breakdown.surveyedFraction - 0.6) < 1e-9)
+        #expect(breakdown.surveyedFraction.isApproximatelyEqual(to: 0.6, absoluteTolerance: 1e-9))
     }
 
     @Test("zero-length categories are dropped, and nothing at all is empty")

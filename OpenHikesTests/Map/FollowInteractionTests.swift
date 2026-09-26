@@ -11,6 +11,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Auto-follow interaction")
@@ -67,7 +68,7 @@ struct FollowInteractionTests {
         let expected = try #require(
             profile.coordinate(atDistance: distance)
         )
-        #expect(abs(coordinate.latitude - expected.latitude) < 1e-9)
-        #expect(abs(coordinate.longitude - expected.longitude) < 1e-9)
+        #expect(coordinate.latitude.isApproximatelyEqual(to: expected.latitude, absoluteTolerance: 1e-9))
+        #expect(coordinate.longitude.isApproximatelyEqual(to: expected.longitude, absoluteTolerance: 1e-9))
     }
 }

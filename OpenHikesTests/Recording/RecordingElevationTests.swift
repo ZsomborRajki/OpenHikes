@@ -18,6 +18,7 @@
 
 import CoreLocation
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @Suite("Recording elevation")
@@ -69,7 +70,10 @@ struct RecordingElevationTests {
         filter.update(relativeAltitude: 100)
         let fusedElevation = filter.elevation(for: fix(altitude: 602, verticalAccuracy: 5, after: 20))
         let fused = try #require(fusedElevation)
-        #expect(abs(fused - 650.02) < 0.01, "the barometer's fifty metres, not GPS's one")
+        #expect(
+            fused.isApproximatelyEqual(to: 650.02, absoluteTolerance: 0.01),
+            "the barometer's fifty metres, not GPS's one"
+        )
     }
 
     @Test("barometric deltas shape the profile while GPS anchors drift slowly")
@@ -98,7 +102,7 @@ struct RecordingElevationTests {
         )
         let secondElevation = filter.elevation(for: noisyGPS)
         let second = try #require(secondElevation)
-        #expect(abs(second - 610.8) < 0.01)
+        #expect(second.isApproximatelyEqual(to: 610.8, absoluteTolerance: 0.01))
 
         filter.update(relativeAltitude: 20)
         let invalidGPS = CLLocation(
@@ -110,7 +114,7 @@ struct RecordingElevationTests {
         )
         let thirdElevation = filter.elevation(for: invalidGPS)
         let third = try #require(thirdElevation)
-        #expect(abs(third - 620.8) < 0.01)
+        #expect(third.isApproximatelyEqual(to: 620.8, absoluteTolerance: 0.01))
     }
 
     @Test("GPS altitude remains the fallback without a barometer")

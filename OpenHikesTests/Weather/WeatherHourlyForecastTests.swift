@@ -20,6 +20,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @Suite("Weather hourly forecast")
@@ -116,7 +117,7 @@ struct WeatherHourlyForecastTests {
 
         let restored = try #require(WeatherReadingStore(defaults: defaults).load())
         let hour = try #require(restored.snapshot.hourly.first)
-        #expect(abs(hour.temperature.converted(to: .celsius).value - 20) < 0.001)
+        #expect(hour.temperature.converted(to: .celsius).value.isApproximatelyEqual(to: 20, absoluteTolerance: 0.001))
     }
 
     /// The horizon is what stops a `UserDefaults` blob growing to the days of

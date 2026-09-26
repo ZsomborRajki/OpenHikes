@@ -10,6 +10,7 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 import Testing
 
 @Suite("Walk time left")
@@ -35,7 +36,7 @@ struct WalkTimeLeftTests {
         // inside the stretch rather than a rounding error either side of it.
         let turn = Self.profile.distances[30]
         let firstHalf = try #require(Self.profile.climb(from: 0, to: turn))
-        #expect(abs(firstHalf.gainMeters - 600) < 1)
+        #expect(firstHalf.gainMeters.isApproximatelyEqual(to: 600, absoluteTolerance: 1))
         #expect(firstHalf.lossMeters == 0)
         let reversed = try #require(Self.profile.climb(from: turn, to: 0))
         #expect(reversed.gainMeters == firstHalf.gainMeters, "the order the ends are given in does not matter")
@@ -61,7 +62,7 @@ struct WalkTimeLeftTests {
             ascentMeters: climb.gainMeters,
             descentMeters: climb.lossMeters
         )
-        #expect(abs(seconds - expected) < 0.001)
+        #expect(seconds.isApproximatelyEqual(to: expected, absoluteTolerance: 0.001))
     }
 
     /// A hiker taking twice the signposts' time over the climb is taken at
@@ -81,7 +82,7 @@ struct WalkTimeLeftTests {
             covered: covered,
             activeSeconds: signposts * 1.5
         ))
-        #expect(abs(factor - 1.5) < 0.001)
+        #expect(factor.isApproximatelyEqual(to: 1.5, absoluteTolerance: 0.001))
 
         let left = try #require(WalkTimeLeft.seconds(
             profile: Self.profile,
@@ -91,7 +92,7 @@ struct WalkTimeLeftTests {
             activeSeconds: signposts * 1.5
         ))
         let flatRest = WalkingTimeEstimate.seconds(distanceMeters: total / 2, ascentMeters: 0, descentMeters: 0)
-        #expect(abs(left - flatRest * 1.5) < 1)
+        #expect(left.isApproximatelyEqual(to: flatRest * 1.5, absoluteTolerance: 1))
     }
 
     /// A walk from the stored end back towards the start: at the turn, what
@@ -119,7 +120,7 @@ struct WalkTimeLeftTests {
             ascentMeters: firstHalf.lossMeters,
             descentMeters: firstHalf.gainMeters
         )
-        #expect(abs(seconds - expected) < 0.001)
+        #expect(seconds.isApproximatelyEqual(to: expected, absoluteTolerance: 0.001))
     }
 
     /// The same stretch walked down is quicker by the signposts than walked

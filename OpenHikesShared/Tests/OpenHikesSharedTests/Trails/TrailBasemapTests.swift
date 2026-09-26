@@ -13,6 +13,7 @@
 import CoreGraphics
 import Foundation
 @testable import OpenHikesShared
+import RealModule
 import Testing
 
 @Suite("Trail basemaps")
@@ -70,7 +71,7 @@ struct TrailBasemapTests {
     @Test("framing hits the requested shape", arguments: TrailBasemapVariant.allCases)
     func framedAspect(variant: TrailBasemapVariant) {
         let framed = Self.coverage.framed(toAspectRatio: variant.aspectRatio)
-        #expect(abs(framed.width / framed.height - variant.aspectRatio) < 1e-9)
+        #expect((framed.width / framed.height).isApproximatelyEqual(to: variant.aspectRatio, absoluteTolerance: 1e-9))
     }
 
     @Test("framing never crops the trail", arguments: TrailBasemapVariant.allCases)
@@ -340,7 +341,7 @@ struct TrailBasemapTests {
             pixelHeight: 360,
             visibleRect: rect
         )
-        #expect(abs(wide.aspectRatio - 760.0 / 360) < 1e-12)
+        #expect(wide.aspectRatio.isApproximatelyEqual(to: 760.0 / 360, absoluteTolerance: 1e-12))
 
         let broken = TrailBasemap(
             fileName: "b",
@@ -434,11 +435,13 @@ extension TrailBasemapTests {
             .init(latitude: 51.4800, longitude: 0.0060),
         ]
         let box = try #require(UnitMercatorRect(bounding: greenwich))
-        #expect(abs(box.originX - Mercator.unitX(longitude: -0.0050)) < 1e-15)
-        #expect(abs(box.width - (0.0110 / 360)) < 1e-12)
+        #expect(box.originX.isApproximatelyEqual(to: Mercator.unitX(longitude: -0.0050), absoluteTolerance: 1e-15))
+        #expect(box.width.isApproximatelyEqual(to: 0.0110 / 360, absoluteTolerance: 1e-12))
 
         let cupertino = try #require(UnitMercatorRect(bounding: Self.trail))
-        #expect(abs(cupertino.originX - Mercator.unitX(longitude: -122.0140)) < 1e-15)
-        #expect(abs(cupertino.width - (0.0120 / 360)) < 1e-12)
+        #expect(
+            cupertino.originX.isApproximatelyEqual(to: Mercator.unitX(longitude: -122.0140), absoluteTolerance: 1e-15)
+        )
+        #expect(cupertino.width.isApproximatelyEqual(to: 0.0120 / 360, absoluteTolerance: 1e-12))
     }
 }

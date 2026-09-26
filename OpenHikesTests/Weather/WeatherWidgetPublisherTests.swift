@@ -20,6 +20,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesShared
+import RealModule
 import Testing
 
 @Suite("Weather widget publishing")
@@ -239,7 +240,7 @@ struct WeatherWidgetPublisherTests {
             WeatherBadgeState.reading(snapshot, subject: subject).sharedReading
         )
 
-        #expect(abs(reading.temperatureCelsius - 20) < 0.001)
+        #expect(reading.temperatureCelsius.isApproximatelyEqual(to: 20, absoluteTolerance: 0.001))
         #expect(reading.capturedAt == Self.now, "the provider's clock, not this one")
     }
 

@@ -201,8 +201,8 @@ jobs:
       # compile errors across 8 test files, and the fix would be to ship the
       # test seams. The package has no such seams and no such constraint.
       #
-      # It costs seconds, not minutes, because the package is small and has no
-      # external dependencies.
+      # It costs seconds, not minutes, because the package is small and its
+      # one external dependency, swift-numerics, is linked by the tests alone.
       - name: Test shared package in Release
         run: |
           set -o pipefail
@@ -212,9 +212,10 @@ jobs:
 
       # The domain package, on the same terms: its suites are the app's that
       # needed nothing but the models, and here they run on the host with no
-      # simulator. Unlike `OpenHikesShared` it has external dependencies —
-      # swift-collections and swift-algorithms, pinned by its own
-      # Package.resolved to the versions the app resolves.
+      # simulator. Unlike `OpenHikesShared`, whose one dependency is test-only,
+      # its library has external dependencies — swift-collections and
+      # swift-algorithms, pinned by its own Package.resolved to the versions
+      # the app resolves.
       - name: Test data package
         run: |
           set -o pipefail

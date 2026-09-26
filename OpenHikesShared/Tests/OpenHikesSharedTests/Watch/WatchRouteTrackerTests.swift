@@ -5,6 +5,7 @@
 
 import Foundation
 @testable import OpenHikesShared
+import RealModule
 import Testing
 
 @Suite("Watch route tracker")
@@ -19,7 +20,7 @@ struct WatchRouteTrackerTests {
         let halfway = try #require(match)
         #expect(halfway.isOnTrail)
         #expect(halfway.offRouteMeters < 1)
-        #expect(abs(halfway.fractionComplete - 0.5) < 0.01)
+        #expect(halfway.fractionComplete.isApproximatelyEqual(to: 0.5, absoluteTolerance: 0.01))
     }
 
     @Test("Progress is reported on the trail's scale, not the decimated line's")
@@ -36,8 +37,8 @@ struct WatchRouteTrackerTests {
         )
         let middle = rescaled.advance(latitude: Fixture.latitude, longitude: Fixture.midpointLongitude)
         let halfway = try #require(middle)
-        #expect(abs(halfway.distanceAlongRouteMeters - lineLength * 1.5) < 1)
-        #expect(abs(halfway.remainingMeters - lineLength * 1.5) < 1)
+        #expect(halfway.distanceAlongRouteMeters.isApproximatelyEqual(to: lineLength * 1.5, absoluteTolerance: 1))
+        #expect(halfway.remainingMeters.isApproximatelyEqual(to: lineLength * 1.5, absoluteTolerance: 1))
         #expect(rescaled.trailLengthMeters == lineLength * 3)
     }
 
@@ -105,7 +106,7 @@ struct WatchRouteTrackerTests {
         // given anything to break the tie with. The outbound reading is the
         // conservative one — it under-reports progress rather than claiming a
         // hiker is nearly home.
-        #expect(abs(ambiguous.fractionComplete - 0.25) < 0.05)
+        #expect(ambiguous.fractionComplete.isApproximatelyEqual(to: 0.25, absoluteTolerance: 0.05))
     }
 
     @Test("Forgetting the position puts the next fix back on the whole trail")
@@ -129,7 +130,7 @@ struct WatchRouteTrackerTests {
             courseDegrees: Fixture.east
         )
         let afresh = try #require(restarted)
-        #expect(abs(afresh.fractionComplete - 0.25) < 0.05)
+        #expect(afresh.fractionComplete.isApproximatelyEqual(to: 0.25, absoluteTolerance: 0.05))
     }
 
     @Test("The trail's own height is interpolated along the segment, not the receiver's")
@@ -138,7 +139,7 @@ struct WatchRouteTrackerTests {
         let middle = tracker.advance(latitude: Fixture.latitude, longitude: Fixture.midpointLongitude)
         let halfway = try #require(middle)
         let elevation = try #require(halfway.trailElevationMeters)
-        #expect(abs(elevation - 800) < 5)
+        #expect(elevation.isApproximatelyEqual(to: 800, absoluteTolerance: 5))
     }
 
     @Test("The matched point follows distance along the line, not position in the array")
@@ -153,8 +154,8 @@ struct WatchRouteTrackerTests {
         let match = tracker.advance(latitude: Fixture.latitude, longitude: longitude)
         let halfway = try #require(match)
         #expect(halfway.isOnTrail)
-        #expect(abs(halfway.trailCoordinate.longitude - longitude) < 0.0005)
-        #expect(abs(halfway.trailCoordinate.latitude - Fixture.latitude) < 0.0005)
+        #expect(halfway.trailCoordinate.longitude.isApproximatelyEqual(to: longitude, absoluteTolerance: 0.0005))
+        #expect(halfway.trailCoordinate.latitude.isApproximatelyEqual(to: Fixture.latitude, absoluteTolerance: 0.0005))
     }
 
     @Test("A segment across the antimeridian puts the dot on the segment")
@@ -165,7 +166,7 @@ struct WatchRouteTrackerTests {
         #expect(onTheLine.isOnTrail)
         // Interpolating the longitudes the long way round lands on the prime
         // meridian instead — half a world from a segment 2 km long.
-        #expect(abs(abs(onTheLine.trailCoordinate.longitude) - 180) < 0.001)
+        #expect(abs(onTheLine.trailCoordinate.longitude).isApproximatelyEqual(to: 180, absoluteTolerance: 0.001))
     }
 
     @Test("A package with one point has no line, and says so rather than guessing")

@@ -11,6 +11,7 @@
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftData
 import Testing
 
@@ -196,7 +197,7 @@ struct HikePersistenceTests {
             #expect(reopened.furthestDistanceMeters == 1500)
             #expect(reopened.routeDistanceMeters == 2000)
             #expect(reopened.endReason == .reachedEnd)
-            #expect(abs(reopened.coveredFraction - 0.55) < 0.0001)
+            #expect(reopened.coveredFraction.isApproximatelyEqual(to: 0.55, absoluteTolerance: 0.0001))
 
             let hike = try #require(
                 try context.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })).first

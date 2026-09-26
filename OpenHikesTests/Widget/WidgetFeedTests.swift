@@ -17,6 +17,7 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 import SwiftData
 import Testing
 extension WidgetFeedSuites {
@@ -70,8 +71,8 @@ final class WidgetFeedTests {
         // The drawn line has to be the trail: same endpoints, same order.
         let first = try #require(snapshot.polyline.first)
         let last = try #require(snapshot.polyline.last)
-        #expect(abs(first.latitude - Fixture.ridgeRoute[0].latitude) < 1e-9)
-        #expect(abs(last.latitude - (Fixture.ridgeRoute.last?.latitude ?? 0)) < 1e-9)
+        #expect(first.latitude.isApproximatelyEqual(to: Fixture.ridgeRoute[0].latitude, absoluteTolerance: 1e-9))
+        #expect(last.latitude.isApproximatelyEqual(to: Fixture.ridgeRoute.last?.latitude ?? 0, absoluteTolerance: 1e-9))
         #expect(snapshot.polyline.count == Fixture.ridgeRoute.count)
 
         #expect(snapshot.elevationLowMeters == 100)
@@ -195,14 +196,16 @@ final class WidgetFeedTests {
 
         let snapshot = try #require(SharedStore.load())
         let fix = try #require(snapshot.liveFix)
-        #expect(abs(fix.distanceAlongRouteMeters - profile.distances[3]) < 1)
+        #expect(fix.distanceAlongRouteMeters.isApproximatelyEqual(to: profile.distances[3], absoluteTolerance: 1))
         #expect(fix.offRouteMeters < RouteProfile.followMatchThresholdMeters)
 
         let fraction = try #require(snapshot.fractionComplete)
         #expect(fraction > 0 && fraction < 1)
         #expect(snapshot.statusText.contains("%"))
         let remaining = try #require(snapshot.remainingDistanceMeters)
-        #expect(abs(remaining - (hike.distanceMeters - fix.distanceAlongRouteMeters)) < 1)
+        #expect(
+            remaining.isApproximatelyEqual(to: hike.distanceMeters - fix.distanceAlongRouteMeters, absoluteTolerance: 1)
+        )
     }
 
     /// The hiker's height comes off the same profile the match came from, so
@@ -222,7 +225,7 @@ final class WidgetFeedTests {
 
         let snapshot = try #require(SharedStore.load())
         let elevation = try #require(snapshot.liveFix?.elevationMeters)
-        #expect(abs(elevation - (Fixture.ridgeRoute[3].elevation ?? 0)) < 1)
+        #expect(elevation.isApproximatelyEqual(to: Fixture.ridgeRoute[3].elevation ?? 0, absoluteTolerance: 1))
         // And the hiker's own height then takes the third chip, behind the
         // climb and the length the corner always draws.
         #expect(snapshot.metrics(limit: 3).map(\.kind) == [.ascent, .length, .currentElevation])
@@ -251,7 +254,7 @@ final class WidgetFeedTests {
         let walk = try #require(snapshot.walk)
         #expect(walk.state == .active)
         #expect(walk.coveredFraction == session.coveredFraction)
-        #expect(abs(walk.furthestDistanceMeters - profile.distances[2]) < 1)
+        #expect(walk.furthestDistanceMeters.isApproximatelyEqual(to: profile.distances[2], absoluteTolerance: 1))
         #expect(snapshot.progressFraction == walk.coveredFraction)
         #expect(snapshot.statusText.contains("% walked"))
     }

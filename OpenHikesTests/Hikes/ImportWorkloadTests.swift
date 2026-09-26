@@ -16,6 +16,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftData
 import Testing
 
@@ -102,6 +103,8 @@ struct ImportWorkloadTests {
         #expect(profile.coordinates.count == 5000)
         #expect(try #require(profile.distances.last) > 0)
         #expect(profile.samples.count <= RouteProfile.plottedSampleBudget)
-        #expect(abs(try #require(profile.distances.last) - track.distanceMeters) < 1)
+        #expect(
+            (try #require(profile.distances.last)).isApproximatelyEqual(to: track.distanceMeters, absoluteTolerance: 1)
+        )
     }
 }

@@ -16,6 +16,7 @@
 
 import Foundation
 @testable import OpenHikesShared
+import RealModule
 import SwiftUI
 import Testing
 
@@ -90,8 +91,8 @@ struct TrailGlyphProjectionTests {
         let projected = try #require(project(stationary))
 
         for point in projected.points {
-            #expect(abs(point.x - Self.size.width / 2) < Self.tolerance)
-            #expect(abs(point.y - Self.size.height / 2) < Self.tolerance)
+            #expect(point.x.isApproximatelyEqual(to: Self.size.width / 2, absoluteTolerance: Self.tolerance))
+            #expect(point.y.isApproximatelyEqual(to: Self.size.height / 2, absoluteTolerance: Self.tolerance))
         }
     }
 
@@ -103,8 +104,8 @@ struct TrailGlyphProjectionTests {
         let projected = try #require(project([Coordinate(latitude: 0, longitude: 0)]))
 
         let point = try #require(projected.points.first)
-        #expect(abs(point.x - Self.size.width / 2) < Self.tolerance)
-        #expect(abs(point.y - Self.size.height / 2) < Self.tolerance)
+        #expect(point.x.isApproximatelyEqual(to: Self.size.width / 2, absoluteTolerance: Self.tolerance))
+        #expect(point.y.isApproximatelyEqual(to: Self.size.height / 2, absoluteTolerance: Self.tolerance))
     }
 
     // MARK: - The fit
@@ -123,11 +124,11 @@ struct TrailGlyphProjectionTests {
         let projected = try #require(project(wide))
         let box = bounds(of: projected.points)
 
-        #expect(abs(box.width - (Self.size.width - Self.inset * 2)) < Self.tolerance)
+        #expect(box.width.isApproximatelyEqual(to: Self.size.width - Self.inset * 2, absoluteTolerance: Self.tolerance))
         #expect(box.height < box.width)
-        #expect(abs(box.midX - Self.size.width / 2) < Self.tolerance)
-        #expect(abs(box.midY - Self.size.height / 2) < Self.tolerance)
-        #expect(abs(box.minX - Self.inset) < Self.tolerance)
+        #expect(box.midX.isApproximatelyEqual(to: Self.size.width / 2, absoluteTolerance: Self.tolerance))
+        #expect(box.midY.isApproximatelyEqual(to: Self.size.height / 2, absoluteTolerance: Self.tolerance))
+        #expect(box.minX.isApproximatelyEqual(to: Self.inset, absoluteTolerance: Self.tolerance))
     }
 
     @Test("a tall route fills the height and stays centred in the width")
@@ -140,11 +141,13 @@ struct TrailGlyphProjectionTests {
         let projected = try #require(project(tall))
         let box = bounds(of: projected.points)
 
-        #expect(abs(box.height - (Self.size.height - Self.inset * 2)) < Self.tolerance)
+        #expect(
+            box.height.isApproximatelyEqual(to: Self.size.height - Self.inset * 2, absoluteTolerance: Self.tolerance)
+        )
         #expect(box.width < box.height)
-        #expect(abs(box.midX - Self.size.width / 2) < Self.tolerance)
-        #expect(abs(box.midY - Self.size.height / 2) < Self.tolerance)
-        #expect(abs(box.minY - Self.inset) < Self.tolerance)
+        #expect(box.midX.isApproximatelyEqual(to: Self.size.width / 2, absoluteTolerance: Self.tolerance))
+        #expect(box.midY.isApproximatelyEqual(to: Self.size.height / 2, absoluteTolerance: Self.tolerance))
+        #expect(box.minY.isApproximatelyEqual(to: Self.inset, absoluteTolerance: Self.tolerance))
     }
 
     /// Uniform scale, both axes: the point of a fit-to-bounds projection is
@@ -169,7 +172,9 @@ struct TrailGlyphProjectionTests {
         let flatWidth = 1 * cosLat
         let flatHeight = 0.25
 
-        #expect(abs(box.width / box.height - flatWidth / flatHeight) < Self.tolerance)
+        #expect(
+            (box.width / box.height).isApproximatelyEqual(to: flatWidth / flatHeight, absoluteTolerance: Self.tolerance)
+        )
     }
 
     /// Screen y grows downward and latitude grows north, so the northernmost
@@ -199,8 +204,8 @@ struct TrailGlyphProjectionTests {
         let projected = try #require(project(route, inset: 0))
         let box = bounds(of: projected.points)
 
-        #expect(abs(box.minY) < Self.tolerance)
-        #expect(abs(box.maxY - Self.size.height) < Self.tolerance)
+        #expect(box.minY.isApproximatelyEqual(to: 0, absoluteTolerance: Self.tolerance))
+        #expect(box.maxY.isApproximatelyEqual(to: Self.size.height, absoluteTolerance: Self.tolerance))
     }
 
     /// `availableWidth`/`availableHeight` floor at 1, so an inset larger than
@@ -246,8 +251,8 @@ struct TrailGlyphProjectionTests {
         let first = try #require(projections.first)
         let second = try #require(projections.last)
         for (lhs, rhs) in zip(first, second) {
-            #expect(abs(lhs.x - rhs.x) < Self.tolerance)
-            #expect(abs(lhs.y - rhs.y) < Self.tolerance)
+            #expect(lhs.x.isApproximatelyEqual(to: rhs.x, absoluteTolerance: Self.tolerance))
+            #expect(lhs.y.isApproximatelyEqual(to: rhs.y, absoluteTolerance: Self.tolerance))
         }
     }
 
@@ -272,7 +277,7 @@ struct TrailGlyphProjectionTests {
         // cos(60°) is exactly half cos(0°), so the same longitude span has to
         // come out exactly half as wide relative to the latitude span.
         let ratio = try aspect(centredAt: 0) / aspect(centredAt: 60)
-        #expect(abs(ratio - 2) < 1e-3)
+        #expect(ratio.isApproximatelyEqual(to: 2, absoluteTolerance: 1e-3))
     }
 
     // MARK: - The live fix
@@ -292,8 +297,8 @@ struct TrailGlyphProjectionTests {
         let projected = try #require(project(route, liveFix: route[1]))
         let fixPoint = try #require(projected.liveFixPoint)
 
-        #expect(abs(fixPoint.x - projected.points[1].x) < Self.tolerance)
-        #expect(abs(fixPoint.y - projected.points[1].y) < Self.tolerance)
+        #expect(fixPoint.x.isApproximatelyEqual(to: projected.points[1].x, absoluteTolerance: Self.tolerance))
+        #expect(fixPoint.y.isApproximatelyEqual(to: projected.points[1].y, absoluteTolerance: Self.tolerance))
     }
 
     /// The fit is computed from the route alone, so a fix off the end of it

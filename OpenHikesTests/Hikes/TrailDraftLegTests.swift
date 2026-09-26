@@ -22,6 +22,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @MainActor
@@ -91,7 +92,7 @@ struct TrailDraftLegTests {
 
         #expect(leg.snap == .freehand)
         #expect(leg.coordinates == leg.ends.straightCoordinates)
-        #expect(abs(leg.distanceMeters - leg.ends.straightDistanceMeters) < 0.001)
+        #expect(leg.distanceMeters.isApproximatelyEqual(to: leg.ends.straightDistanceMeters, absoluteTolerance: 0.001))
     }
 
     // MARK: What the legs measure
@@ -107,7 +108,7 @@ struct TrailDraftLegTests {
         draft.beginRouting([ends])
         draft.apply(Self.detour(along: ends), to: ends)
 
-        #expect(abs(draft.distanceMeters - straight * 2) < 0.001)
+        #expect(draft.distanceMeters.isApproximatelyEqual(to: straight * 2, absoluteTolerance: 0.001))
         #expect(draft.distanceAlongLine(toWaypointAt: 1) == draft.distanceMeters)
     }
 
@@ -202,7 +203,7 @@ struct TrailDraftLegTests {
 
         #expect(draft.legs[0].snap == .freehand)
         #expect(draft.legs[0].coordinates == ends.straightCoordinates)
-        #expect(abs(draft.distanceMeters - ends.straightDistanceMeters) < 0.001)
+        #expect(draft.distanceMeters.isApproximatelyEqual(to: ends.straightDistanceMeters, absoluteTolerance: 0.001))
     }
 
     /// **Re-resolve, don't discard.** The points survive, so turning it back

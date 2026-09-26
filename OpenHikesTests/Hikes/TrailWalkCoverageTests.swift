@@ -14,6 +14,7 @@
 
 import Foundation
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Trail walk coverage")
@@ -44,8 +45,14 @@ struct TrailWalkCoverageTests {
             coverage.record(distance: profile.distances[index])
         }
         let fraction = try #require(coverage.fractionComplete(routeDistanceMeters: total))
-        #expect(abs(fraction - 0.5) < 0.03, "read \(fraction), position would have read 1.0")
-        #expect(abs(coverage.furthestDistanceMeters - total) < 1, "the furthest point is still the end")
+        #expect(
+            fraction.isApproximatelyEqual(to: 0.5, absoluteTolerance: 0.03),
+            "read \(fraction), position would have read 1.0"
+        )
+        #expect(
+            coverage.furthestDistanceMeters.isApproximatelyEqual(to: total, absoluteTolerance: 1),
+            "the furthest point is still the end"
+        )
     }
 
     /// Walking a section twice — wandering back to a viewpoint — adds nothing.

@@ -5,6 +5,7 @@
 
 import Foundation
 import OpenHikesShared
+import RealModule
 import Testing
 
 @Suite("Walking time estimate")
@@ -21,7 +22,7 @@ struct WalkingTimeEstimateTests {
         )
         // Vertical 3h20, horizontal 2h: 3h20 + 1h. A third of an hour is
         // not exact in binary, hence the tolerance.
-        #expect(abs(seconds - (4 * 3600 + 20 * 60)) < 0.001)
+        #expect(seconds.isApproximatelyEqual(to: 4 * 3600 + 20 * 60, absoluteTolerance: 0.001))
     }
 
     @Test("on the flat it is four kilometres an hour")

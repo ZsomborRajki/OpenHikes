@@ -20,6 +20,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftData
 import Testing
 
@@ -195,7 +196,7 @@ struct TrailDraftSaveTests {
         #expect(hike.title == "Ridge Loop")
         #expect(hike.route.count == 2)
         #expect(hike.date == madeOn)
-        #expect(abs(hike.distanceMeters - draft.distanceMeters) < 0.001)
+        #expect(hike.distanceMeters.isApproximatelyEqual(to: draft.distanceMeters, absoluteTolerance: 0.001))
         // Everything a hike from anywhere else has, and nothing a hike from
         // anywhere else lacks: the row is drawable and walkable the moment it
         // lands.

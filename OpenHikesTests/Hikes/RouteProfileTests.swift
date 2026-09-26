@@ -13,6 +13,7 @@
 import CoreLocation
 import Foundation
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Route profile")
@@ -41,7 +42,7 @@ struct RouteProfileTests {
                 .distance(from: CLLocation(latitude: a.latitude, longitude: a.longitude))
         }
         let total = try #require(profile.distances.last)
-        #expect(abs(total - expected) < expected * 0.005)
+        #expect(total.isApproximatelyEqual(to: expected, absoluteTolerance: expected * 0.005))
     }
 
     @Test("direct distance takes the short path across the antimeridian")
@@ -54,7 +55,7 @@ struct RouteProfileTests {
 
         #expect(direct > 5000)
         #expect(direct < 20_000)
-        #expect(abs(direct - coreLocation) < coreLocation * 0.005)
+        #expect(direct.isApproximatelyEqual(to: coreLocation, absoluteTolerance: coreLocation * 0.005))
     }
 
     @Test("stationary points keep cumulative distance finite")
@@ -87,7 +88,7 @@ struct RouteProfileTests {
         #expect(profile.samples.count == 2)
         #expect(profile.distances.count == 3)
         let last = try #require(profile.samples.last)
-        #expect(abs(last.distanceMeters - (profile.distances.last ?? 0)) < 0.001)
+        #expect(last.distanceMeters.isApproximatelyEqual(to: profile.distances.last ?? 0, absoluteTolerance: 0.001))
     }
 
     @Test("the elevation range spans the route's real low and high")
@@ -125,10 +126,10 @@ struct RouteProfileTests {
         let total = try #require(profile.distances.last)
 
         let start = try #require(profile.coordinate(atDistance: 0))
-        #expect(abs(start.latitude - Fixture.ridgeRoute[0].latitude) < 1e-9)
+        #expect(start.latitude.isApproximatelyEqual(to: Fixture.ridgeRoute[0].latitude, absoluteTolerance: 1e-9))
 
         let end = try #require(profile.coordinate(atDistance: total))
-        #expect(abs(end.latitude - (Fixture.ridgeRoute.last?.latitude ?? 0)) < 1e-9)
+        #expect(end.latitude.isApproximatelyEqual(to: Fixture.ridgeRoute.last?.latitude ?? 0, absoluteTolerance: 1e-9))
 
         // A scrub can't leave the track, however far the finger travels.
         #expect(profile.coordinate(atDistance: -5000)?.latitude == start.latitude)
@@ -140,9 +141,17 @@ struct RouteProfileTests {
         let profile = RouteProfile(route: Fixture.ridgeRoute)
         let midpointDistance = (profile.distances[1] + profile.distances[2]) / 2
         let midpoint = try #require(profile.coordinate(atDistance: midpointDistance))
-        #expect(abs(midpoint.latitude - (profile.coordinates[1].latitude + profile.coordinates[2].latitude) / 2) < 1e-9)
         #expect(
-            abs(midpoint.longitude - (profile.coordinates[1].longitude + profile.coordinates[2].longitude) / 2) < 1e-9
+            midpoint.latitude.isApproximatelyEqual(
+                to: (profile.coordinates[1].latitude + profile.coordinates[2].latitude) / 2,
+                absoluteTolerance: 1e-9
+            )
+        )
+        #expect(
+            midpoint.longitude.isApproximatelyEqual(
+                to: (profile.coordinates[1].longitude + profile.coordinates[2].longitude) / 2,
+                absoluteTolerance: 1e-9
+            )
         )
     }
 

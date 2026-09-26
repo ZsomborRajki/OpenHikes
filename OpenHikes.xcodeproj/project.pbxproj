@@ -24,6 +24,7 @@
 		F9B04203302D981D00E03D91 /* HeapModule in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04202302D981D00E03D91 /* HeapModule */; };
 		F9B04205302D981D00E03D91 /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04204302D981D00E03D91 /* OrderedCollections */; };
 		F9B04212302D981D00E03D91 /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04211302D981D00E03D91 /* Algorithms */; };
+		F9B04231302D981D00E03D91 /* RealModule in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04230302D981D00E03D91 /* RealModule */; };
 		F9B04465302DA28800E03D91 /* AsyncAlgorithms in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04221302D981D00E03D91 /* AsyncAlgorithms */; };
 /* End PBXBuildFile section */
 
@@ -244,6 +245,7 @@
 			files = (
 				AB000000000000000000000D /* OpenHikesShared in Frameworks */,
 				B20000000000000000000005 /* OpenHikesData in Frameworks */,
+				F9B04231302D981D00E03D91 /* RealModule in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -404,6 +406,7 @@
 			packageProductDependencies = (
 				AB000000000000000000000C /* OpenHikesShared */,
 				B20000000000000000000004 /* OpenHikesData */,
+				F9B04230302D981D00E03D91 /* RealModule */,
 			);
 			productName = OpenHikesTests;
 			productReference = AB0000000000000000000008 /* OpenHikesTests.xctest */;
@@ -563,6 +566,7 @@
 				F9B04193302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-collections" */,
 				F9B04210302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-algorithms" */,
 				F9B04220302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */,
+				F9B04232302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-numerics" */,
 				04A61451D23F435EBCB01C29 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -1475,6 +1479,14 @@
 				minimumVersion = 1.1.5;
 			};
 		};
+		F9B04232302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-numerics" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-numerics.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.1.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1566,6 +1578,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F9B04220302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */;
 			productName = AsyncAlgorithms;
+		};
+		F9B04230302D981D00E03D91 /* RealModule */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F9B04232302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-numerics" */;
+			productName = RealModule;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

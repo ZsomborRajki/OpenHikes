@@ -16,6 +16,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Moving time")
@@ -110,14 +111,17 @@ struct MovingTimeTests {
         // is equally slow to notice the walk resuming, so the two errors are
         // opposite and roughly cancel.
         #expect(
-            abs(moving - 1200) <= RecordingDistanceAccumulator.stationaryInterval * 2,
+            moving.isApproximatelyEqual(
+                to: 1200,
+                absoluteTolerance: RecordingDistanceAccumulator.stationaryInterval * 2
+            ),
             "expected about 1200 s of moving time, got \(moving)"
         )
         let elapsedAverage = try #require(stats.averageSpeed)
             .converted(to: .metersPerSecond).value
         let movingAverage = try #require(stats.movingAverageSpeed)
             .converted(to: .metersPerSecond).value
-        #expect(abs(movingAverage - Self.walkingSpeed) < 0.15)
+        #expect(movingAverage.isApproximatelyEqual(to: Self.walkingSpeed, absoluteTolerance: 0.15))
         #expect(movingAverage > elapsedAverage * 2)
     }
 
@@ -154,7 +158,10 @@ struct MovingTimeTests {
 
         let moving = try #require(Self.statistics(for: route).movingDuration)
         #expect(
-            abs(moving - 1200) <= RecordingDistanceAccumulator.stationaryInterval * 2,
+            moving.isApproximatelyEqual(
+                to: 1200,
+                absoluteTolerance: RecordingDistanceAccumulator.stationaryInterval * 2
+            ),
             "expected about 1200 s of walking either side of the pause, got \(moving)"
         )
 

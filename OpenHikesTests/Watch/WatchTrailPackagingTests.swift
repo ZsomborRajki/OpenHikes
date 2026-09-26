@@ -9,6 +9,7 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 import Testing
 
 @Suite("Packaging a trail for the watch")
@@ -53,7 +54,7 @@ struct WatchTrailPackagingTests {
         for point in package.points {
             let expected = Fixture.elevation(atLatitude: point.latitude)
             let actual = try #require(point.elevationMeters)
-            #expect(abs(actual - expected) < 0.001)
+            #expect(actual.isApproximatelyEqual(to: expected, absoluteTolerance: 0.001))
         }
     }
 
@@ -81,9 +82,9 @@ struct WatchTrailPackagingTests {
         // most of them; measuring after it would report a fraction of the
         // climb a hiker actually does.
         let gain = try #require(package.elevationGainMeters)
-        #expect(abs(gain - Fixture.sawtoothGainMeters) < 0.001)
+        #expect(gain.isApproximatelyEqual(to: Fixture.sawtoothGainMeters, absoluteTolerance: 0.001))
         let loss = try #require(package.elevationLossMeters)
-        #expect(abs(loss - Fixture.sawtoothLossMeters) < 0.001)
+        #expect(loss.isApproximatelyEqual(to: Fixture.sawtoothLossMeters, absoluteTolerance: 0.001))
     }
 
     @Test("a route with one point is a place, and is not sent")

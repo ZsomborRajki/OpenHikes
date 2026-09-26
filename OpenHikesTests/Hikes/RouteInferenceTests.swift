@@ -8,6 +8,7 @@
 import CoreLocation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Route inference")
@@ -112,7 +113,7 @@ struct RouteInferenceTests {
             from: CLLocationCoordinate2D(latitude: 47.64, longitude: 12.86),
             to: CLLocationCoordinate2D(latitude: 47.65, longitude: 12.86)
         )
-        #expect(abs(route.inferredDistanceMeters - expected) < 0.001)
+        #expect(route.inferredDistanceMeters.isApproximatelyEqual(to: expected, absoluteTolerance: 0.001))
     }
 
     @Test("statistics report the inferred share of a route's length")
@@ -130,7 +131,7 @@ struct RouteInferenceTests {
 
         let inferredDistance = try #require(statistics.inferredDistance)
         #expect(
-            abs(inferredDistance.value - route.inferredDistanceMeters) < 0.001
+            inferredDistance.value.isApproximatelyEqual(to: route.inferredDistanceMeters, absoluteTolerance: 0.001)
         )
     }
 

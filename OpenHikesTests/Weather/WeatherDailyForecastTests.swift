@@ -26,6 +26,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @Suite("Weather daily forecast")
@@ -186,8 +187,10 @@ struct WeatherDailyForecastTests {
 
         let restored = try #require(WeatherReadingStore(defaults: defaults).load())
         let day = try #require(restored.snapshot.days.first)
-        #expect(abs(day.highTemperature.converted(to: .celsius).value - 20) < 0.001)
-        #expect(abs(day.lowTemperature.converted(to: .celsius).value - 10) < 0.001)
+        #expect(
+            day.highTemperature.converted(to: .celsius).value.isApproximatelyEqual(to: 20, absoluteTolerance: 0.001)
+        )
+        #expect(day.lowTemperature.converted(to: .celsius).value.isApproximatelyEqual(to: 10, absoluteTolerance: 0.001))
     }
 
     /// The reading is filtered on the way *out* as well as on the way in,

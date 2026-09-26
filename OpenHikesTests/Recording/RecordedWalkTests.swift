@@ -7,6 +7,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 /// The row a saved recording leaves in its own History, and the two figures it
@@ -177,7 +178,7 @@ struct RecordedWalkTests {
         )
         let profileLength = RouteProfile(route: prepared.route).totalDistanceMeters
 
-        #expect(abs(prepared.routeLengthMeters - profileLength) < 0.01)
+        #expect(prepared.routeLengthMeters.isApproximatelyEqual(to: profileLength, absoluteTolerance: 0.01))
         #expect(
             prepared.routeLengthMeters > prepared.distanceMeters + 50,
             """
@@ -197,7 +198,7 @@ struct RecordedWalkTests {
                 prepared: prepared
             )
         )
-        #expect(abs(walk.routeDistanceMeters - profileLength) < 0.01)
+        #expect(walk.routeDistanceMeters.isApproximatelyEqual(to: profileLength, absoluteTolerance: 0.01))
         #expect(walk.coveredFraction == 1)
     }
 

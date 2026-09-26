@@ -14,6 +14,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftData
 import Testing
 
@@ -181,8 +182,10 @@ extension HikeRecorderTests {
             ) < 1
         )
         #expect(
-            abs(hike.distanceMeters - track.distanceMeters)
-                < track.distanceMeters * 0.15
+            hike.distanceMeters.isApproximatelyEqual(
+                to: track.distanceMeters,
+                absoluteTolerance: track.distanceMeters * 0.15
+            )
         )
         #expect(hike.rawRoute.isEmpty)
     }
@@ -325,7 +328,7 @@ extension HikeRecorderTests {
         source.deliver(fix(latitude: 47.641))
 
         let hike = try savedHike(from: await hikeRecorder.stop())
-        #expect(abs(hike.distanceMeters - 222) < 5)
+        #expect(hike.distanceMeters.isApproximatelyEqual(to: 222, absoluteTolerance: 5))
         #expect(hike.route.count == 4, "the drawn route remains continuous in v1")
     }
 

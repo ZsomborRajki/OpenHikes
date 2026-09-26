@@ -27,6 +27,7 @@
 import Foundation
 import Observation
 @testable import OpenHikes
+import RealModule
 import SwiftUI
 import Testing
 
@@ -186,7 +187,7 @@ struct TopEdgeReaderTests {
         await settle(window, until: { recorder.latest != before }, "the edge to follow the view")
 
         let after = try #require(recorder.latest)
-        #expect(abs((after - before) - displacement) < 0.5)
+        #expect((after - before).isApproximatelyEqual(to: displacement, absoluteTolerance: 0.5))
     }
 
     /// The one that matters for the render path. Widening the window changes

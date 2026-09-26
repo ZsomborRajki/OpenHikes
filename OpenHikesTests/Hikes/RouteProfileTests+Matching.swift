@@ -7,6 +7,7 @@ import CoreLocation
 import Foundation
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 import Testing
 
 extension RouteProfileTests {
@@ -20,7 +21,7 @@ extension RouteProfileTests {
         let match = try #require(profile.nearestPoint(to: target))
         #expect(match.offRouteMeters < 1)
         #expect(match.offRouteMeters <= RouteProfile.followMatchThresholdMeters)
-        #expect(abs(match.distanceAlongRoute - profile.distances[3]) < 0.001)
+        #expect(match.distanceAlongRoute.isApproximatelyEqual(to: profile.distances[3], absoluteTolerance: 0.001))
     }
 
     /// A fix that's near the trail but not on a vertex still has to match —
@@ -50,7 +51,7 @@ extension RouteProfileTests {
         )
 
         #expect(match.offRouteMeters < 1)
-        #expect(abs(match.distanceAlongRoute - total / 2) < 1)
+        #expect(match.distanceAlongRoute.isApproximatelyEqual(to: total / 2, absoluteTolerance: 1))
         #expect(match.offRouteMeters <= RouteProfile.followMatchThresholdMeters)
     }
 
@@ -82,8 +83,8 @@ extension RouteProfileTests {
         let resolved = try #require(profile.coordinate(atDistance: match.distanceAlongRoute))
 
         #expect(match.offRouteMeters < 10)
-        #expect(abs(match.distanceAlongRoute - total / 2) < 20)
-        #expect(abs(abs(resolved.longitude) - 180) < 0.01)
+        #expect(match.distanceAlongRoute.isApproximatelyEqual(to: total / 2, absoluteTolerance: 20))
+        #expect(abs(resolved.longitude).isApproximatelyEqual(to: 180, absoluteTolerance: 0.01))
     }
 
     /// Off the trail, the *caller* decides — the profile still returns its
@@ -152,7 +153,7 @@ extension RouteProfileTests {
         let profile = RouteProfile(route: Fixture.outAndBackRoute)
         let match = try #require(profile.nearestPoint(to: profile.coordinates[5]))
 
-        #expect(abs(match.distanceAlongRoute - profile.distances[5]) < 1)
+        #expect(match.distanceAlongRoute.isApproximatelyEqual(to: profile.distances[5], absoluteTolerance: 1))
         #expect(match.offRouteMeters < 1)
     }
 
@@ -170,7 +171,7 @@ extension RouteProfileTests {
         let expected = profile.distances[30]
 
         let walkingBack = try #require(profile.nearestPoint(to: onTheWayBack, heading: 180))
-        #expect(abs(walkingBack.distanceAlongRoute - expected) < 1)
+        #expect(walkingBack.distanceAlongRoute.isApproximatelyEqual(to: expected, absoluteTolerance: 1))
         #expect(walkingBack.distanceAlongRoute > total / 2, "on the return leg, so past halfway")
 
         // The same coordinate walked the other way is the outbound leg's.
@@ -198,10 +199,10 @@ extension RouteProfileTests {
         #expect(justWestOfNorth.distanceAlongRoute < total / 2)
         #expect(justEastOfNorth.distanceAlongRoute < total / 2)
         #expect(
-            abs(
-                justWestOfNorth.distanceAlongRoute
-                    - justEastOfNorth.distanceAlongRoute
-            ) < 1
+            justWestOfNorth.distanceAlongRoute.isApproximatelyEqual(
+                to: justEastOfNorth.distanceAlongRoute,
+                absoluteTolerance: 1
+            )
         )
     }
 
@@ -218,7 +219,10 @@ extension RouteProfileTests {
         let outbound = try #require(profile.fractionComplete(atDistance: out.distanceAlongRoute))
         let returning = try #require(profile.fractionComplete(atDistance: back.distanceAlongRoute))
 
-        #expect(abs((outbound + returning) - 1) < 0.02, "mirrored legs, so the two read as complements")
+        #expect(
+            (outbound + returning).isApproximatelyEqual(to: 1, absoluteTolerance: 0.02),
+            "mirrored legs, so the two read as complements"
+        )
         #expect(returning > 0.5 && outbound < 0.5)
     }
 
@@ -251,7 +255,7 @@ extension RouteProfileTests {
         let match = try #require(
             profile.nearestPoint(to: outbound, near: profile.distances[15], heading: 180)
         )
-        #expect(abs(match.distanceAlongRoute - profile.distances[15]) < 1)
+        #expect(match.distanceAlongRoute.isApproximatelyEqual(to: profile.distances[15], absoluteTolerance: 1))
         #expect(match.distanceAlongRoute < total / 2, "still on the way out")
     }
 
@@ -277,7 +281,7 @@ extension RouteProfileTests {
                 near: reference
             )
         )
-        #expect(abs(match.distanceAlongRoute - reference) < 1)
+        #expect(match.distanceAlongRoute.isApproximatelyEqual(to: reference, absoluteTolerance: 1))
     }
 
     @Test("an anchored match falls back globally after a large relocation")
@@ -298,10 +302,10 @@ extension RouteProfileTests {
             )
         )
         #expect(
-            abs(
-                match.distanceAlongRoute
-                    - profile.distances[targetIndex]
-            ) < RouteProfile.tieBreakToleranceMeters + 1
+            match.distanceAlongRoute.isApproximatelyEqual(
+                to: profile.distances[targetIndex],
+                absoluteTolerance: RouteProfile.tieBreakToleranceMeters + 1
+            )
         )
     }
 
@@ -316,7 +320,7 @@ extension RouteProfileTests {
 
         let match = try #require(profile.nearestPoint(to: onTheWayBack, near: profile.distances[24]))
 
-        #expect(abs(match.distanceAlongRoute - profile.distances[25]) < 1)
+        #expect(match.distanceAlongRoute.isApproximatelyEqual(to: profile.distances[25], absoluteTolerance: 1))
         #expect(match.distanceAlongRoute > total / 2, "past the turn, so on the return leg")
     }
 
@@ -330,7 +334,9 @@ extension RouteProfileTests {
         let quarterPoint = profile.coordinates[quarterIndex]
 
         let match = try #require(profile.nearestPoint(to: quarterPoint, near: total))
-        #expect(abs(match.distanceAlongRoute - profile.distances[quarterIndex]) < 1)
+        #expect(
+            match.distanceAlongRoute.isApproximatelyEqual(to: profile.distances[quarterIndex], absoluteTolerance: 1)
+        )
         #expect(match.offRouteMeters < 1)
     }
 
@@ -350,7 +356,7 @@ extension RouteProfileTests {
         let resolved = try #require(profile.coordinate(atDistance: match.distanceAlongRoute))
         let trueOffset = CLLocation(latitude: fix.latitude, longitude: fix.longitude)
             .distance(from: CLLocation(latitude: resolved.latitude, longitude: resolved.longitude))
-        #expect(abs(match.offRouteMeters - trueOffset) < 1)
+        #expect(match.offRouteMeters.isApproximatelyEqual(to: trueOffset, absoluteTolerance: 1))
     }
 
     // MARK: Progress (distance → fraction of the trail)
@@ -364,7 +370,7 @@ extension RouteProfileTests {
         #expect(profile.fractionComplete(atDistance: 0) == 0)
         #expect(profile.fractionComplete(atDistance: total) == 1)
         let half = try #require(profile.fractionComplete(atDistance: total / 2))
-        #expect(abs(half - 0.5) < 1e-9)
+        #expect(half.isApproximatelyEqual(to: 0.5, absoluteTolerance: 1e-9))
         #expect(profile.remainingDistanceMeters(atDistance: 0) == total)
         #expect(profile.remainingDistanceMeters(atDistance: total) == 0)
     }
@@ -422,10 +428,12 @@ extension RouteProfileTests {
 
         let app = try #require(profile.fractionComplete(atDistance: total * 0.42))
         let widget = try #require(snapshot.fractionComplete)
-        #expect(abs(app - widget) < 1e-9)
+        #expect(app.isApproximatelyEqual(to: widget, absoluteTolerance: 1e-9))
         #expect(
-            abs(profile.remainingDistanceMeters(atDistance: total * 0.42)
-                - (snapshot.remainingDistanceMeters ?? 0)) < 1e-9
+            profile.remainingDistanceMeters(atDistance: total * 0.42).isApproximatelyEqual(
+                to: snapshot.remainingDistanceMeters ?? 0,
+                absoluteTolerance: 1e-9
+            )
         )
     }
 
@@ -468,7 +476,7 @@ extension RouteProfileTests {
 
         #expect(match.distanceAlongRoute.isFinite)
         #expect(match.offRouteMeters.isFinite)
-        #expect(abs(match.distanceAlongRoute - total / 2) < 1)
-        #expect(abs(coordinate.latitude - midpoint.latitude) < 1e-6)
+        #expect(match.distanceAlongRoute.isApproximatelyEqual(to: total / 2, absoluteTolerance: 1))
+        #expect(coordinate.latitude.isApproximatelyEqual(to: midpoint.latitude, absoluteTolerance: 1e-6))
     }
 }

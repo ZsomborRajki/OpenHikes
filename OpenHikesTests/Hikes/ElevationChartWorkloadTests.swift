@@ -29,6 +29,7 @@
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftUI
 import Testing
 
@@ -84,8 +85,8 @@ struct ElevationChartWorkloadTests {
         let trueHigh = try #require(trueElevations.max())
         let range = try #require(profile.elevationRange)
 
-        #expect(abs(range.lowerBound - trueLow) < 1)
-        #expect(abs(range.upperBound - trueHigh) < 1)
+        #expect(range.lowerBound.isApproximatelyEqual(to: trueLow, absoluteTolerance: 1))
+        #expect(range.upperBound.isApproximatelyEqual(to: trueHigh, absoluteTolerance: 1))
     }
 
     /// The same guarantee for the population it was not holding for: a hike
@@ -117,8 +118,11 @@ struct ElevationChartWorkloadTests {
         let everySampleIsFinite = profile.samples.allSatisfy(\.elevation.isFinite)
         #expect(everySampleIsFinite, "none of them reach the chart")
         let range = try #require(profile.elevationRange)
-        #expect(abs(range.lowerBound - trueLow) < 1)
-        #expect(abs(range.upperBound - trueHigh) < 1, "the summit is still in the series the axis is built from")
+        #expect(range.lowerBound.isApproximatelyEqual(to: trueLow, absoluteTolerance: 1))
+        #expect(
+            range.upperBound.isApproximatelyEqual(to: trueHigh, absoluteTolerance: 1),
+            "the summit is still in the series the axis is built from"
+        )
     }
 
     /// `ElevationChartView.==` exists so the body stops re-evaluating when
@@ -155,7 +159,7 @@ struct ElevationChartWorkloadTests {
         let profile = RouteProfile(route: Self.longRoute)
         let totalDistance = try #require(profile.distances.last)
         let lastPlotted = try #require(profile.samples.last).distanceMeters
-        #expect(abs(lastPlotted - totalDistance) < 1)
+        #expect(lastPlotted.isApproximatelyEqual(to: totalDistance, absoluteTolerance: 1))
     }
 
     @Test("the first plotted sample starts at the beginning of the route")

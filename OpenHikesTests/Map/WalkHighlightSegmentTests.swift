@@ -23,6 +23,7 @@
 import CoreLocation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Walk highlight segments")
@@ -53,8 +54,8 @@ struct WalkHighlightSegmentTests {
         let drawnStart = try #require(stretch.first)
         let drawnEnd = try #require(stretch.last)
 
-        #expect(abs(drawnStart.latitude - expectedStart.latitude) < 1e-9)
-        #expect(abs(drawnEnd.latitude - expectedEnd.latitude) < 1e-9)
+        #expect(drawnStart.latitude.isApproximatelyEqual(to: expectedStart.latitude, absoluteTolerance: 1e-9))
+        #expect(drawnEnd.latitude.isApproximatelyEqual(to: expectedEnd.latitude, absoluteTolerance: 1e-9))
         // Interpolated rather than snapped: a fixture point at exactly 30% of
         // a six-point route would make the assertion above pass for free.
         #expect(!profile.distances.contains(lower))

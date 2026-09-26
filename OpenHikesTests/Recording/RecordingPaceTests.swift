@@ -15,6 +15,7 @@
 
 import Foundation
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @Suite("Recording pace and moving time")
@@ -132,7 +133,7 @@ struct RecordingPaceTests {
         walk(&accumulator, metersPerSecond: 1.4, seconds: 600)
 
         let speed = try #require(accumulator.recentSpeedMetersPerSecond)
-        #expect(abs(speed - 1.4) < 0.05)
+        #expect(speed.isApproximatelyEqual(to: 1.4, absoluteTolerance: 0.05))
     }
 
     /// The whole reason a live speed exists. An hour of strolling followed by
@@ -156,7 +157,7 @@ struct RecordingPaceTests {
 
         let live = try #require(accumulator.recentSpeedMetersPerSecond)
         let average = try #require(accumulator.averageSpeedMetersPerSecond)
-        #expect(abs(live - 2.0) < 0.1)
+        #expect(live.isApproximatelyEqual(to: 2.0, absoluteTolerance: 0.1))
         // The average barely noticed: an hour of ballast against six minutes
         // of news.
         #expect(average - averageWhileStrolling < 0.15)
@@ -178,7 +179,7 @@ struct RecordingPaceTests {
         )
 
         let speed = try #require(accumulator.recentSpeedMetersPerSecond)
-        #expect(abs(speed - 0.7) < 0.05)
+        #expect(speed.isApproximatelyEqual(to: 0.7, absoluteTolerance: 0.05))
     }
 
     /// A stationary window hands back the wander it accumulated, which leaves

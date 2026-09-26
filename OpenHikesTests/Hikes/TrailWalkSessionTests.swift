@@ -11,6 +11,7 @@
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftData
 import Testing
 
@@ -149,11 +150,11 @@ struct TrailWalkSessionTests {
         #expect(session.publishes(hikeID: hike.id))
         walk(session, hike: hike, profile: profile, from: 5, through: 8)
         #expect(session.activeSeconds() > beforePause)
-        #expect(abs(session.activeSeconds() - (beforePause + 4 * 60)) < 1)
+        #expect(session.activeSeconds().isApproximatelyEqual(to: beforePause + 4 * 60, absoluteTolerance: 1))
 
         let ended = try #require(session.end().walk)
         #expect(ended.endReason == .ended)
-        #expect(abs(ended.activeSeconds - (beforePause + 4 * 60)) < 1)
+        #expect(ended.activeSeconds.isApproximatelyEqual(to: beforePause + 4 * 60, absoluteTolerance: 1))
         #expect(session.walkedHikeID == nil)
         #expect(session.phase == nil)
         #expect(hike.walkInProgress == nil, "the column is cleared in the same save")

@@ -26,6 +26,7 @@ import Foundation
 import MapKit
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 extension MapCoordinatorTests {
@@ -188,7 +189,10 @@ extension MapCoordinatorTests {
         map.layoutIfNeeded()
         #expect(controls.frame.width == twoTall.width)
         #expect(controls.frame.height > twoTall.height)
-        #expect(abs(controls.frame.maxY - twoTall.maxY) < 1, "the pill grew upward from its pinned edge")
+        #expect(
+            controls.frame.maxY.isApproximatelyEqual(to: twoTall.maxY, absoluteTolerance: 1),
+            "the pill grew upward from its pinned edge"
+        )
 
         let order = Self.buttons(in: controls)
             .sorted { $0.convert($0.bounds, to: controls).midY < $1.convert($1.bounds, to: controls).midY }

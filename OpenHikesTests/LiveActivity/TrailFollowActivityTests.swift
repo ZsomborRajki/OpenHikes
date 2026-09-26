@@ -22,6 +22,7 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 import SwiftData
 import Testing
 
@@ -87,7 +88,7 @@ final class TrailFollowActivityTests {
 
         #expect(presenter.startedSubjects == [.following(hikeID: hike.id)])
         let state = try #require(presenter.startedStates.first)
-        #expect(abs(state.distanceMeters - profile.distances[3]) < 1)
+        #expect(state.distanceMeters.isApproximatelyEqual(to: profile.distances[3], absoluteTolerance: 1))
         #expect(state.offRouteMeters != nil)
     }
 

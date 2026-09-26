@@ -20,6 +20,7 @@
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("GPX places")
@@ -72,8 +73,8 @@ struct GPXPlaceRoundTripTests {
         #expect(restored.name == "Kühroint")
         #expect(restored.symbol == .shelter)
         #expect(restored.note == "Open in summer")
-        #expect(abs(restored.latitude - place.latitude) < 0.000001)
-        #expect(abs(restored.longitude - place.longitude) < 0.000001)
+        #expect(restored.latitude.isApproximatelyEqual(to: place.latitude, absoluteTolerance: 0.000001))
+        #expect(restored.longitude.isApproximatelyEqual(to: place.longitude, absoluteTolerance: 0.000001))
     }
 
     /// A place from OpenStreetMap keeps its element through a file, as the

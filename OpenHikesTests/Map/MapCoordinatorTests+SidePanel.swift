@@ -1,6 +1,7 @@
 import CoreLocation
 import MapKit
 @testable import OpenHikes
+import RealModule
 import Testing
 
 extension MapCoordinatorTests {
@@ -19,8 +20,12 @@ extension MapCoordinatorTests {
         let guide = try #require(constraint.firstItem as? UILayoutGuide)
         let safe = map.safeAreaLayoutGuide.layoutFrame
         let inset = MapSidePanelLayout.mapInset
-        #expect(abs(guide.layoutFrame.minX - (safe.minX + (rightToLeft ? 0 : inset))) < 1)
-        #expect(abs(guide.layoutFrame.maxX - (safe.maxX - (rightToLeft ? inset : 0))) < 1)
+        #expect(
+            guide.layoutFrame.minX.isApproximatelyEqual(to: safe.minX + (rightToLeft ? 0 : inset), absoluteTolerance: 1)
+        )
+        #expect(
+            guide.layoutFrame.maxX.isApproximatelyEqual(to: safe.maxX - (rightToLeft ? inset : 0), absoluteTolerance: 1)
+        )
         let credit = try #require(coordinator.attributionView)
         let tracking = try #require(coordinator.trackingButton)
         for control in [credit, tracking] {

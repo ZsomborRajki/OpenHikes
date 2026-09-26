@@ -17,6 +17,7 @@ import MapKit
 import Observation
 @testable import OpenHikes
 import OpenHikesShared
+import RealModule
 import Testing
 
 /// Stands in for ``HikeRecorder/isActive``: something observable a test can
@@ -57,11 +58,21 @@ extension MapCoordinatorTests {
         let recordFrame = record.convert(record.bounds, to: map)
 
         #expect(recordFrame.minY > makerFrame.maxY, "record is not below the maker")
-        #expect(abs(recordFrame.minX - makerFrame.minX) < 1, "the two are not one column")
+        #expect(
+            recordFrame.minX.isApproximatelyEqual(to: makerFrame.minX, absoluteTolerance: 1),
+            "the two are not one column"
+        )
         // The bottom of the pill is the record button, and the gap under it is
         // the one the slot gives every pill.
-        #expect(abs(pill.convert(pill.bounds, to: map).maxY - recordFrame.maxY) < 1)
-        #expect(abs(credit.frame.minY - recordFrame.maxY - MapView.creditLineSpacing) < 1)
+        #expect(
+            pill.convert(pill.bounds, to: map).maxY.isApproximatelyEqual(to: recordFrame.maxY, absoluteTolerance: 1)
+        )
+        #expect(
+            (credit.frame.minY - recordFrame.maxY).isApproximatelyEqual(
+                to: MapView.creditLineSpacing,
+                absoluteTolerance: 1
+            )
+        )
         #endif
     }
 

@@ -28,6 +28,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Trail leg router")
@@ -110,7 +111,7 @@ struct TrailLegRouterTests {
         )
         #expect(
             route.coordinates.allSatisfy { point in
-                abs(point.longitude - Path.longitude) < 0.0001
+                point.longitude.isApproximatelyEqual(to: Path.longitude, absoluteTolerance: 0.0001)
             },
             "every point of a leg along one line of longitude is on it"
         )
@@ -128,7 +129,7 @@ struct TrailLegRouterTests {
 
         let route = try #require(await router.route(ends))
 
-        #expect(abs(route.distanceMeters - ends.straightDistanceMeters) < 1)
+        #expect(route.distanceMeters.isApproximatelyEqual(to: ends.straightDistanceMeters, absoluteTolerance: 1))
     }
 
     /// Both taps projecting onto the same segment is its own branch — there
@@ -142,7 +143,7 @@ struct TrailLegRouterTests {
         let route = try #require(await router.route(ends))
 
         #expect(route.snap == .snapped)
-        #expect(abs(route.distanceMeters - ends.straightDistanceMeters) < 1)
+        #expect(route.distanceMeters.isApproximatelyEqual(to: ends.straightDistanceMeters, absoluteTolerance: 1))
     }
 
     // MARK: Not following one
@@ -161,7 +162,7 @@ struct TrailLegRouterTests {
             route.coordinates == ends.straightCoordinates,
             "an unroutable leg is the line the hiker drew, unchanged"
         )
-        #expect(abs(route.distanceMeters - ends.straightDistanceMeters) < 0.001)
+        #expect(route.distanceMeters.isApproximatelyEqual(to: ends.straightDistanceMeters, absoluteTolerance: 0.001))
     }
 
     /// One end on the path and one a kilometre and a half off it is still not
