@@ -98,6 +98,43 @@ struct GPXTrackChoiceTests {
         #expect(choice.question == nil)
     }
 
+    /// Each queued caller is resumed once, in turn, and once the queue has
+    /// drained the next caller is asked straight away rather than parked
+    /// behind a turn nobody holds. A continuation resumed twice traps, so the
+    /// stray answers at the end are what "exactly once" is checked by.
+    @Test("a drained queue hands the turn back free")
+    func aDrainedQueueFreesTheTurn() async {
+        let choice = GPXTrackChoice()
+        async let first = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A"]), unplacedWaypoints: 0)
+        await asked(choice)
+        async let second = choice.ask(fileName: "b.gpx", tracks: Self.tracks(["B"]), unplacedWaypoints: 0)
+        async let third = choice.ask(fileName: "c.gpx", tracks: Self.tracks(["C"]), unplacedWaypoints: 0)
+        async let fourth = choice.ask(fileName: "d.gpx", tracks: Self.tracks(["D"]), unplacedWaypoints: 0)
+        await settleDelegateHop(until: "three to queue behind the first") { choice.waitingCount == 3 }
+
+        var answered: [String] = []
+        for remaining in (0...3).reversed() {
+            await settleDelegateHop(until: "the next question") {
+                choice.question.map { !answered.contains($0.fileName) } ?? false
+            }
+            answered.append(choice.question?.fileName ?? "")
+            choice.cancel()
+            #expect(choice.waitingCount == max(remaining - 1, 0))
+        }
+        #expect(answered.first == "a.gpx")
+        #expect(Set(answered) == ["a.gpx", "b.gpx", "c.gpx", "d.gpx"])
+        #expect(await [first, second, third, fourth].allSatisfy(\.isEmpty))
+
+        choice.cancel()
+        choice.confirm()
+        async let next = choice.ask(fileName: "e.gpx", tracks: Self.tracks(["E"]), unplacedWaypoints: 0)
+        await asked(choice)
+        #expect(choice.waitingCount == 0)
+        #expect(choice.question?.fileName == "e.gpx")
+        choice.confirm()
+        #expect(await next == [0])
+    }
+
     /// The sheet's binding writes `nil` back as it closes after Import; that
     /// must not count as an answer to whatever is asked next.
     @Test("a cancel with nothing up answers nothing")
