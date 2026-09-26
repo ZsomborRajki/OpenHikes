@@ -152,6 +152,9 @@ final class WatchRecorder: NSObject {
     @ObservationIgnored private var accumulator = WatchWalkAccumulator()
     @ObservationIgnored private var sessionID = UUID()
     @ObservationIgnored private var startedAt = Date.now
+    /// Refuses fixes taken before this recording, or its current leg, began —
+    /// see ``WatchFixWindow``.
+    @ObservationIgnored private var window = WatchFixWindow(opensAt: .now)
     @ObservationIgnored private var trailHikeID: UUID?
     @ObservationIgnored private var trailTitle: String?
     @ObservationIgnored private var journal: WatchRecordingJournalWriter
@@ -196,6 +199,7 @@ final class WatchRecorder: NSObject {
         trailTitle = title
         sessionID = UUID()
         startedAt = .now
+        window = WatchFixWindow(opensAt: startedAt)
         accumulator = WatchWalkAccumulator()
         stats.reset()
 
@@ -225,7 +229,9 @@ final class WatchRecorder: NSObject {
     func resume() {
         guard phase == .paused else { return }
         session?.resume()
-        journaling { try $0.record(.resumed(.now), at: .now) }
+        let now = Date.now
+        window.reopen(at: now)
+        journaling { try $0.record(.resumed(now), at: now) }
         phase = .recording
         publishGlance()
     }
@@ -473,7 +479,10 @@ final class WatchRecorder: NSObject {
     // MARK: Fixes
 
     private func received(_ location: CLLocation) {
-        guard phase == .recording else { return }
+        // The window before anything else reads the fix: a cached one from
+        // before Start would otherwise be the first kept, and the gap from it
+        // to the next would be counted as walking.
+        guard phase == .recording, window.admits(location.timestamp) else { return }
         let elevation = location.verticalAccuracy > 0 ? location.altitude : nil
         let kept = accumulator.accept(
             latitude: location.coordinate.latitude,
@@ -651,6 +660,10 @@ extension WatchRecorder {
         // second interruption replays the same break.
         accumulator.pause()
         let now = Date.now
+        // Opened at the break rather than at the header's start: whatever the
+        // feed still holds from before the outage is ground nobody observed.
+        // A recovery that stays paused reopens it again at ``resume()``.
+        window = WatchFixWindow(opensAt: now)
         journaling { journal in
             try journal.record(.paused(now), at: now)
             if !paused { try journal.record(.resumed(now), at: now) }
