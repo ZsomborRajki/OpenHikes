@@ -94,6 +94,10 @@ final class HealthKitWorkoutWriter: HikeWorkoutWriting {
             device: .local()
         )
         try await builder.beginCollection(at: request.startedAt)
+        let events = Self.events(for: request)
+        if !events.isEmpty {
+            try await builder.addWorkoutEvents(events)
+        }
         try await builder.addSamples([distanceSample(for: request)])
         let metadata = Self.metadata(for: request)
         if !metadata.isEmpty {
@@ -137,6 +141,27 @@ final class HealthKitWorkoutWriter: HikeWorkoutWriting {
             of: HKQuantityType.workoutType(),
             predicate: HKQuery.predicateForObject(with: workoutID)
         )
+    }
+
+    /// A pause and a resume around each of the request's pauses, which is
+    /// what takes them out of `elapsedTime(at:)` and so out of the workout's
+    /// duration — see ``HikeWorkoutPauses``.
+    ///
+    /// No resume for a pause that runs to the end: that is a walk stopped
+    /// while paused, and a resume at the instant it ended would say it
+    /// started again.
+    private static func events(for request: HikeWorkoutRequest) -> [HKWorkoutEvent] {
+        request.pauses.flatMap { pause in
+            var events = [Self.event(.pause, at: pause.start)]
+            if pause.end < request.endedAt {
+                events.append(Self.event(.resume, at: pause.end))
+            }
+            return events
+        }
+    }
+
+    private static func event(_ type: HKWorkoutEventType, at date: Date) -> HKWorkoutEvent {
+        HKWorkoutEvent(type: type, dateInterval: DateInterval(start: date, duration: 0), metadata: nil)
     }
 
     /// The climb, the descent and the weather, each only when the request

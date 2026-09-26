@@ -25,9 +25,10 @@
 //  The saved hike's distance and line, for the reason ``WatchWalkImport``
 //  measures the track itself rather than taking the watch's total. The climb
 //  and descent are the watch's, off its own accumulator, the way a phone
-//  recording's come off the phone's. The end is the start plus the moving time
-//  the watch counted, so a paused lunch is not exported as an hour of hiking —
-//  the rule ``HikeWorkoutRequest/endedAt`` states.
+//  recording's come off the phone's. The end is when the hiker stopped, and
+//  the pauses are the saved line's, which carries the watch's own pause flags
+//  as ``RouteBoundary`` — so Health's duration is the moving time the watch
+//  counted without the workout ending early. See ``HikeWorkoutPauses``.
 //
 
 import Foundation
@@ -60,17 +61,23 @@ struct WatchWalkHealthExport {
         var descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
         descriptor.fetchLimit = 1
         guard let hike = try? container.mainContext.fetch(descriptor).first else { return nil }
+        let endedAt = HikeWorkoutPauses.end(
+            stoppedAt: walk.endedAt,
+            startedAt: walk.startedAt,
+            route: hike.route
+        )
         return HikeWorkoutRequest(
             hikeID: hikeID,
             startedAt: walk.startedAt,
-            endedAt: walk.startedAt.addingTimeInterval(walk.activeSeconds),
+            endedAt: endedAt,
+            pauses: HikeWorkoutPauses.pauses(in: hike.route, from: walk.startedAt, to: endedAt),
             distanceMeters: hike.distanceMeters,
             elevationGainMeters: walk.elevationGainMeters,
             elevationLossMeters: walk.elevationLossMeters,
             weather: HikeWorkoutWeather(
                 state: weatherState(),
                 walkFrom: walk.startedAt,
-                to: walk.endedAt
+                to: endedAt
             ),
             route: hike.route
         )

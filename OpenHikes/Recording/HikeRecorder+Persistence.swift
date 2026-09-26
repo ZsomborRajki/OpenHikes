@@ -233,28 +233,34 @@ extension HikeRecorder {
     /// barometer, and re-deriving them from route altitudes would be a second
     /// opinion that could only disagree with the figures the hike itself
     /// shows. The weather is read here, at save, and only kept if it is
-    /// about this walk — see ``HikeWorkoutWeather``. The walk it is measured
-    /// against ends when the hiker pressed Stop, not at start plus moving
-    /// time: a lunch stop longer than the badge's window would otherwise put
-    /// the reading taken just before Stop "after the walk", and refuse it.
+    /// about this walk — see ``HikeWorkoutWeather``.
+    ///
+    /// The workout ends when the hiker pressed Stop, and its pauses come off
+    /// the saved line — see ``HikeWorkoutPauses`` for why not off the
+    /// journal's own pause list.
     private func exportToHealth(
         _ hike: Hike,
         session: TrackJournalSession,
         prepared: PreparedRecording
     ) {
         guard let workoutWriter, HikeWorkoutExport.isEnabled(in: defaults) else { return }
-        let endedAt = prepared.startedAt.addingTimeInterval(prepared.recordedSeconds)
+        let endedAt = HikeWorkoutPauses.end(
+            stoppedAt: session.metadata.endedAt,
+            startedAt: prepared.startedAt,
+            route: prepared.route
+        )
         let request = HikeWorkoutRequest(
             hikeID: hike.id,
             startedAt: prepared.startedAt,
             endedAt: endedAt,
+            pauses: HikeWorkoutPauses.pauses(in: prepared.route, from: prepared.startedAt, to: endedAt),
             distanceMeters: prepared.distanceMeters,
             elevationGainMeters: accumulator.elevationGainMeters,
             elevationLossMeters: accumulator.elevationLossMeters,
             weather: HikeWorkoutWeather(
                 state: weatherState(),
                 walkFrom: prepared.startedAt,
-                to: session.metadata.endedAt ?? endedAt
+                to: endedAt
             ),
             route: prepared.route
         )

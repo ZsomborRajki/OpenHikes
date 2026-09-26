@@ -56,11 +56,15 @@ nonisolated struct HikeWorkoutRequest: Equatable, Sendable {
     /// filed against the right row.
     let hikeID: UUID
     let startedAt: Date
-    /// `startedAt` plus the recording's own elapsed time — see
-    /// ``PreparedRecording/recordedSeconds``, which counts the gaps between
-    /// saved points rather than the wall clock, so a paused lunch is not
-    /// exported as an hour of hiking.
+    /// When the hiker stopped — the wall clock, pauses and all — so every
+    /// point of ``route`` falls inside the workout. See
+    /// ``HikeWorkoutPauses/end(stoppedAt:startedAt:route:)``.
     let endedAt: Date
+    /// The stretches of `startedAt...endedAt` the walk was not recording,
+    /// written as pause and resume events so Health's duration is the moving
+    /// time the hike shows rather than the wall clock: a paused lunch is not
+    /// exported as an hour of hiking. See ``HikeWorkoutPauses``.
+    let pauses: [DateInterval]
     /// The figure the hike itself shows, with the stationary windows already
     /// retracted — ``PreparedRecording/distanceMeters``.
     let distanceMeters: Double

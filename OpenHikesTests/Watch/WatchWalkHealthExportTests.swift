@@ -37,15 +37,52 @@ struct WatchWalkHealthExportTests {
         let hike = try #require(try Fixture.hike(request.hikeID, in: harness.container.mainContext))
         #expect(outcome == .imported(hike.id))
         #expect(request.startedAt == walk.startedAt)
-        // The moving time, not the wall clock — the rule a phone recording's
-        // request keeps too.
-        #expect(request.endedAt == walk.startedAt.addingTimeInterval(walk.activeSeconds))
+        #expect(request.endedAt == walk.endedAt)
+        #expect(request.pauses.isEmpty)
         // The saved hike's figure, which is measured from the track, rather
         // than the watch's own total.
         #expect(request.distanceMeters == hike.distanceMeters)
         #expect(request.route.count == walk.fixes.count)
         #expect(request.elevationGainMeters == 120)
         #expect(request.elevationLossMeters == 80)
+    }
+
+    /// Issue #721: the workout used to end at start plus the moving time, an
+    /// hour before the hiker stopped. Two legs of 16 s and 8 s, a pause
+    /// between them, and a Stop pressed while paused again.
+    @Test("a paused walk keeps its real end, with the watch's moving time")
+    func aPausedWalkKeepsItsRealEnd() async throws {
+        let harness = try Harness(savesToHealth: .on)
+        let start = Fixture.start
+        let fixes = [0.0, 8, 16, 3616, 3624].enumerated().map { index, offset in
+            WatchRecordedFix(
+                latitude: Fixture.latitude + Double(index) * 0.0001,
+                longitude: Fixture.longitude,
+                timestamp: start.addingTimeInterval(offset),
+                horizontalAccuracy: 5,
+                resumesAfterPause: index == 3
+            )
+        }
+        let walk = WatchRecordedWalk(
+            sessionID: UUID(),
+            startedAt: start,
+            endedAt: start.addingTimeInterval(5000),
+            distanceMeters: 44,
+            activeSeconds: 24,
+            fixes: fixes
+        )
+
+        _ = await harness.arrive(walk)
+
+        let request = try #require(harness.writer.written.first)
+        #expect(request.startedAt == walk.startedAt)
+        #expect(request.endedAt == walk.endedAt)
+        #expect(request.pauses == [
+            DateInterval(start: start.addingTimeInterval(16), end: start.addingTimeInterval(3616)),
+            DateInterval(start: start.addingTimeInterval(3624), end: walk.endedAt),
+        ])
+        let paused = request.pauses.reduce(0) { $0 + $1.duration }
+        #expect(request.endedAt.timeIntervalSince(request.startedAt) - paused == walk.activeSeconds)
     }
 
     @Test("the workout identifier is filed against the hike the walk became")
