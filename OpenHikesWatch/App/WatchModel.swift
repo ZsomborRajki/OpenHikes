@@ -21,7 +21,9 @@
 //  anything is on screen: a hiker finishes a walk, the phone is out of range,
 //  and the walk has to go the moment it is back. ``PhoneLink`` reports
 //  reachability changes as deliveries for exactly this, and the drain is also
-//  run at launch, which covers the watch having been rebooted in between.
+//  run at launch, which covers the watch having been rebooted in between, and
+//  whenever the app comes to the front, which covers a phone that refused a
+//  walk and then stayed in range.
 //
 
 import CoreLocation
@@ -72,6 +74,10 @@ final class WatchModel {
     /// trail ends — ``WatchRecorder/stop()`` stops the receiver, and the
     /// screen that wanted it is still open.
     @ObservationIgnored private var isFollowing = false
+    /// Whether ``start()`` has run. `false` on a seeded launch, whose queue
+    /// count is the fixture's and must not be recounted from a disk it never
+    /// wrote.
+    @ObservationIgnored private var isStarted = false
 
     init(store: WatchStore = WatchStore()) {
         self.store = store
@@ -114,9 +120,21 @@ final class WatchModel {
 
     /// Starts the link and sends whatever is already waiting.
     func start() {
+        isStarted = true
         link.activate { [weak self] delivery in self?.apply(delivery) }
         drainQueue()
         askForLibraryIfEmpty()
+    }
+
+    /// The app came to the front: ask for a library it lacks, and offer any
+    /// walk the phone has not acknowledged whose wait has run out.
+    ///
+    /// The drain matters for a phone that refused a walk and never left
+    /// range — no reachability change will come to retry it, and a hiker
+    /// opening the app to look at a walk still waiting is the moment to.
+    func cameToFront() {
+        askForLibraryIfEmpty()
+        if isStarted { drainQueue() }
     }
 
     /// Asks the phone for the library, but only when there is nothing to show.
@@ -332,7 +350,8 @@ final class WatchModel {
         phoneRecording = recording
     }
 
-    /// Offers every queued walk again.
+    /// Offers every queued walk again, bar the ones ``PhoneLink`` holds back
+    /// as still crossing or not yet due a retry — see `WatchWalkDelivery`.
     ///
     /// Sending a walk the phone already has is safe by construction: the
     /// import is keyed on `sessionID` and recognises an arrival it has seen,

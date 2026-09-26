@@ -31,7 +31,9 @@
 //    `transferUserInfo` queues to disk in the system's own container and keeps
 //    trying across relaunches and reboots, which is the only guarantee worth
 //    having for the one payload that exists nowhere else. See ``WatchStore``
-//    for the half of that promise this app keeps itself.
+//    for the half of that promise this app keeps itself, and
+//    ``WatchWalkDelivery`` for when a walk the phone has not acknowledged is
+//    offered again.
 //
 //  ## Isolation
 //
@@ -80,17 +82,17 @@ final class PhoneLink: NSObject {
 
     @ObservationIgnored private var session: WCSession?
     @ObservationIgnored private var onDelivery: (@MainActor (PhoneDelivery) -> Void)?
-    /// Walks already handed to `WCSession`'s own queue in this process.
+    /// Which finished walks are crossing, and when an unacknowledged one is
+    /// due another offer.
     ///
     /// ``WatchStore``'s queue is what a walk lives on until the *phone* says
     /// it has it, so it is still there on every drain — and a drain runs on
     /// every reachability change, which on a walk is a phone going in and out
-    /// of a rucksack all afternoon. Without this, each one hands the same
-    /// multi-thousand-fix transfer to the system again beside the copies
-    /// already waiting. Not persisted deliberately: a relaunch loses
-    /// `WCSession`'s in-memory view of what is outstanding too, and re-sending
-    /// after one is exactly the retry the queue is for.
-    @ObservationIgnored private var walksInFlight: Set<UUID> = []
+    /// of a rucksack all afternoon. This is what stops each one handing the
+    /// same multi-thousand-fix transfer to the system again beside the copy
+    /// already crossing, while still letting a walk the phone refused, or
+    /// whose transfer failed, be offered again. See ``WatchWalkDelivery``.
+    @ObservationIgnored private var delivery = WatchWalkDelivery()
 
     /// Starts the session.
     ///
@@ -127,24 +129,55 @@ final class PhoneLink: NSObject {
 
     /// Sends a finished walk. Guaranteed delivery, and the receipt is what
     /// takes it off ``WatchStore``'s queue.
+    ///
+    /// A no-op for a walk already crossing, or one that went unacknowledged
+    /// too recently to be worth the whole payload again.
     func send(_ walk: WatchRecordedWalk) {
-        guard !walksInFlight.contains(walk.sessionID) else { return }
+        let sessionID = walk.sessionID
+        // The first offer in this process may find the last one's transfer
+        // still queued: `WCSession` keeps it across the relaunch this set
+        // did not survive. Adopted rather than duplicated, and its finish
+        // arrives here like any other.
+        if delivery.hasNeverOffered(sessionID), isCrossing(sessionID) {
+            delivery.handedOver(sessionID)
+            return
+        }
+        guard delivery.shouldOffer(sessionID, at: .now) else { return }
         // Marked only once the system has actually taken it. A build that
-        // threw was never handed over, and a walk recorded as outstanding on
+        // threw was never handed over, and a walk recorded as crossing on
         // the strength of an attempt that failed would sit on the disk queue
         // unoffered until the app was relaunched.
         guard transfer({ try WatchLink.message(walk) }) else { return }
-        walksInFlight.insert(walk.sessionID)
+        delivery.handedOver(sessionID)
     }
 
-    /// Forgets that a walk was ever sent, so a later drain offers it again.
+    /// Forgets that a walk was ever sent.
     ///
     /// Called when the phone's receipt takes it off the disk queue — at which
     /// point nothing will offer it again anyway — and that is the point: the
-    /// set is bounded by what is genuinely still waiting rather than growing
-    /// for the life of the process.
+    /// record is bounded by what is genuinely still waiting rather than
+    /// growing for the life of the process.
     func forget(_ sessionID: UUID) {
-        walksInFlight.remove(sessionID)
+        delivery.receiptArrived(sessionID)
+    }
+
+    /// Whether `WCSession` still holds a transfer of this walk.
+    ///
+    /// Decodes each queued walk to read its ID, which is why it is asked once
+    /// per walk per process rather than on every drain.
+    private func isCrossing(_ sessionID: UUID) -> Bool {
+        guard let session else { return false }
+        return session.outstandingUserInfoTransfers.contains { pending in
+            WatchLink.kind(of: pending.userInfo) == .recordedWalk
+                && (try? WatchLink.recordedWalk(from: pending.userInfo))?.sessionID == sessionID
+        }
+    }
+
+    /// `WCSession` is done with a walk's transfer, delivered or not, and no
+    /// receipt has taken it off the queue. See ``WatchWalkDelivery`` for why
+    /// both wait out the same growing delay.
+    private func walkTransferFinished(_ sessionID: UUID) {
+        delivery.transferFinished(sessionID, at: .now)
     }
 
     /// Asks the phone for the library, for a watch that has not been sent one.
@@ -246,7 +279,7 @@ final class PhoneLink: NSObject {
     /// could do with the `nil` except this.
     ///
     /// Answers whether the system took it, which is what ``send(_:)`` needs to
-    /// decide whether a walk is genuinely outstanding: `false` for a session
+    /// decide whether a walk is genuinely crossing: `false` for a session
     /// that was never started and for a payload that could not be encoded,
     /// which are the two ways nothing went.
     @discardableResult private func transfer(_ build: () throws -> [String: Any]) -> Bool {
@@ -301,6 +334,19 @@ nonisolated extension PhoneLink: WCSessionDelegate {
             self?.isReachable = reachable
             self?.onDelivery?(.reachabilityChanged(reachable))
         }
+    }
+
+    /// A walk's transfer ended. Delivered is not kept: the phone may have
+    /// refused to save it, which it says by withholding the receipt, so this
+    /// only ends the transfer and never touches the disk queue.
+    func session(_ session: WCSession, didFinish userInfoTransfer: WCSessionUserInfoTransfer, error: Error?) {
+        let userInfo = userInfoTransfer.userInfo
+        guard WatchLink.kind(of: userInfo) == .recordedWalk,
+              let sessionID = (try? WatchLink.recordedWalk(from: userInfo))?.sessionID else { return }
+        if let error {
+            Self.logger.error("A walk's transfer failed: \(error.localizedDescription, privacy: .public)")
+        }
+        onMainActor { [weak self] in self?.walkTransferFinished(sessionID) }
     }
 
     func session(_ session: WCSession, didReceiveApplicationContext context: [String: Any]) {
