@@ -122,7 +122,9 @@ nonisolated enum TrailPlaceCorridorSearch {
     /// than ``TrailPointQuery/maximumRadiusMeters``, which the query answers
     /// with nothing rather than an error, so the stretch would be skipped
     /// without a word. Straight lines between the two ends are enough: the
-    /// circle only has to hold the segment, not follow the ground.
+    /// circle only has to hold the segment, not follow the ground — but the
+    /// short way round, which ``RouteGeometry/interpolate(from:to:fraction:)``
+    /// takes, or a segment across ±180° is filled in across the whole world.
     private static func densified(_ route: [RouteCoordinate], step: Double) -> [RouteCoordinate] {
         guard step > 0 else { return route }
         var result: [RouteCoordinate] = [route[0]]
@@ -131,11 +133,12 @@ nonisolated enum TrailPlaceCorridorSearch {
             let pieces = Int((length / step).rounded(.up))
             if pieces > 1 {
                 for index in 1..<pieces {
-                    let fraction = Double(index) / Double(pieces)
-                    result.append(RouteCoordinate(
-                        latitude: from.latitude + (to.latitude - from.latitude) * fraction,
-                        longitude: from.longitude + (to.longitude - from.longitude) * fraction
-                    ))
+                    let point = RouteGeometry.interpolate(
+                        from: from.clCoordinate,
+                        to: to.clCoordinate,
+                        fraction: Double(index) / Double(pieces)
+                    )
+                    result.append(RouteCoordinate(latitude: point.latitude, longitude: point.longitude))
                 }
             }
             result.append(to)
@@ -196,12 +199,21 @@ nonisolated enum TrailPlaceCorridorSearch {
     }
 
     /// A stretch's bounding box, in degrees.
+    ///
+    /// Its longitudes are unwrapped from the stretch's first point: each new
+    /// point is placed the short way from the one before, so a stretch across
+    /// ±180° runs on past 180 rather than jumping back to -180 and spanning
+    /// the whole world. Only the centre is brought back into range. A stretch
+    /// is at most ``TrailPointQuery/maximumRadiusMeters`` wide, so the short
+    /// way is always the way the line went.
     private struct Box {
         var south: Double
         var west: Double
         var north: Double
         var east: Double
         var last: RouteCoordinate
+        /// `last`'s longitude in the box's unwrapped frame.
+        private var lastLongitude: Double
 
         init(_ point: RouteCoordinate) {
             south = point.latitude
@@ -209,18 +221,25 @@ nonisolated enum TrailPlaceCorridorSearch {
             west = point.longitude
             east = point.longitude
             last = point
+            lastLongitude = point.longitude
         }
 
         mutating func include(_ point: RouteCoordinate) {
+            let longitude = lastLongitude
+                + RouteGeometry.normalizedLongitudeDelta(point.longitude - last.longitude)
             south = min(south, point.latitude)
             north = max(north, point.latitude)
-            west = min(west, point.longitude)
-            east = max(east, point.longitude)
+            west = min(west, longitude)
+            east = max(east, longitude)
             last = point
+            lastLongitude = longitude
         }
 
         var centre: CLLocationCoordinate2D {
-            CLLocationCoordinate2D(latitude: (south + north) / 2, longitude: (west + east) / 2)
+            CLLocationCoordinate2D(
+                latitude: (south + north) / 2,
+                longitude: RouteGeometry.normalizedLongitude((west + east) / 2)
+            )
         }
 
         /// Half the box's diagonal: the circle about its centre that holds it.
