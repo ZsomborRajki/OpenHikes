@@ -17,13 +17,17 @@ import SwiftUI
 struct HikePlaceEditor: View {
     /// What the form says before the hiker changes anything.
     let place: TrailPlace
-    let onSave: (_ name: String, _ symbol: TrailPlaceSymbol?, _ note: String) -> Void
+    /// Saves the change. The form closes only once it has been kept.
+    let onSave: (_ name: String, _ symbol: TrailPlaceSymbol?, _ note: String) throws(HikePlaceRefusal) -> Void
 
     @Environment(\.dismiss)
     private var dismiss
     @State private var name = ""
     @State private var symbol: TrailPlaceSymbol?
     @State private var note = ""
+    /// Set when *Save* was refused. The form stays up under it, as the hiker
+    /// left it, so tapping *Save* again is the retry.
+    @State private var refusal: HikePlaceRefusal?
 
     var body: some View {
         NavigationStack {
@@ -49,12 +53,17 @@ struct HikePlaceEditor: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        onSave(name, symbol, note)
-                        dismiss()
+                        do throws(HikePlaceRefusal) {
+                            try onSave(name, symbol, note)
+                            dismiss()
+                        } catch {
+                            refusal = error
+                        }
                     }
                     .accessibilityIdentifier("hike-place-save")
                 }
             }
+            .hikePlaceRefusalAlert($refusal)
         }
         .onAppear {
             name = place.name

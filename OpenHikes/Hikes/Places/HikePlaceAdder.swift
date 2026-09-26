@@ -61,6 +61,9 @@ struct HikePlaceAdder: View {
     /// that did not make it is still up. The place's screen opens when the
     /// alert goes.
     @State private var addedID: UUID?
+    /// Set when *Add*'s save was refused. The form stays up under it, as it
+    /// was, so tapping *Add* again is the retry.
+    @State private var refusal: HikePlaceRefusal?
 
     var body: some View {
         ScrollView {
@@ -105,6 +108,7 @@ struct HikePlaceAdder: View {
         }
         .photoCapturePickers($capture, onCaptured: stage, onPicked: stage)
         .photoCaptureAlerts($capture)
+        .hikePlaceRefusalAlert($refusal)
         .onChange(of: capture.failure) { _, failure in
             guard failure == nil, let addedID else { return }
             onAdded(addedID)
@@ -209,12 +213,17 @@ struct HikePlaceAdder: View {
     }
 
     /// Puts the place on the hike, files every held photograph under it, and
-    /// opens it — after the alert, if a photograph did not make it.
+    /// opens it — after the alert, if a photograph did not make it. A refused
+    /// save leaves the form and its photographs as they were.
     private func add() {
-        guard !isAdding, stagingCount == 0 else { return }
+        guard !isAdding, stagingCount == 0, hike.isAttached else { return }
         let place = draft.place(at: spot)
-        guard hike.isAttached, hike.addPlace(place, in: modelContext) else { return }
-        try? modelContext.save()
+        do throws(HikePlaceRefusal) {
+            guard try HikePlaceChange.add(place, to: hike, in: modelContext) else { return }
+        } catch {
+            refusal = error
+            return
+        }
         isAdding = true
         let staged = photos
         let savesCaptures = savePhotosToLibrary

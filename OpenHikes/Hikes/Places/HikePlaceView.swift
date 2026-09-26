@@ -53,6 +53,9 @@ struct HikePlaceView: View {
     private var dismiss
     @State private var isEditing = false
     @State private var isConfirmingRemoval = false
+    /// Set when *Remove*'s save was refused. The place is back on the screen
+    /// under it, so removing again is the retry.
+    @State private var refusal: HikePlaceRefusal?
 
     var body: some View {
         Group {
@@ -106,10 +109,7 @@ struct HikePlaceView: View {
             }
         }
         .sheet(isPresented: $isEditing) {
-            HikePlaceEditor(place: card.place) { name, symbol, note in
-                hike.editPlace(id: placeID, name: name, symbol: symbol, note: note)
-                try? modelContext.save()
-            }
+            HikePlaceEditor(place: card.place, onSave: edit)
         }
         .confirmationDialog(
             "Remove \(card.title)?",
@@ -121,6 +121,7 @@ struct HikePlaceView: View {
         } message: {
             Text("Its photos stay in this hike's gallery.")
         }
+        .hikePlaceRefusalAlert($refusal)
         // A photograph taken now is of this place, pinned where it stands.
         .photoCaptureSubject(photoCapture, for: hike, place: placeID) { card.coordinate }
         .photoMapPins(photoPins, photos: hike.photos(ofPlace: placeID)) { photoID in
@@ -196,12 +197,22 @@ struct HikePlaceView: View {
         .accessibilityIdentifier("hike-place-remove")
     }
 
+    /// Saves the editor's answers. A refusal is the editor's to show: it
+    /// stays up with them.
+    private func edit(name: String, symbol: TrailPlaceSymbol?, note: String) throws(HikePlaceRefusal) {
+        try HikePlaceChange.edit(id: placeID, on: hike, name: name, symbol: symbol, note: note, in: modelContext)
+    }
+
     /// Takes the place off the hike. The screen closes itself once the card
     /// has nothing to show — see `body` — rather than here as well, which
-    /// would pop the screen underneath it too.
+    /// would pop the screen underneath it too. A refused save puts the place
+    /// back before the screen can see it gone, so it stays open.
     private func remove() {
-        hike.removePlace(id: placeID, in: modelContext)
-        try? modelContext.save()
+        do throws(HikePlaceRefusal) {
+            try HikePlaceChange.remove(id: placeID, from: hike, in: modelContext)
+        } catch {
+            refusal = error
+        }
     }
 }
 
