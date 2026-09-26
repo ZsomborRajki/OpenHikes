@@ -29,6 +29,7 @@
 //  previously enforced by two private constants only one of them could reach.
 //
 
+import OpenHikesShared
 import SwiftUI
 
 /// Where a route's colour comes from.
@@ -80,19 +81,6 @@ nonisolated enum RouteTint {
     /// in their last digit — which is exactly what consecutive OSM relation
     /// ids look like — well apart on the wheel.
     static func stable(for key: String) -> Color {
-        color(hue: Double(hash(key) % Self.hueSteps) / Double(Self.hueSteps))
-    }
-
-    /// FNV-1a, 64-bit. Wrapping arithmetic throughout, which is the algorithm
-    /// rather than an accommodation of it.
-    private static func hash(_ key: String) -> UInt64 {
-        let offsetBasis: UInt64 = 0xcbf2_9ce4_8422_2325
-        let prime: UInt64 = 0x0000_0100_0000_01b3
-        var hash = offsetBasis
-        for byte in key.utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* prime
-        }
-        return hash
+        color(hue: Double(StableHasher.hash(key) % Self.hueSteps) / Double(Self.hueSteps))
     }
 }

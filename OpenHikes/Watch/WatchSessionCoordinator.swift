@@ -12,9 +12,11 @@
 //  * Publishes the hiker's library as the session's *application context*, so
 //    a watch that wakes up out of range still has a list of trails. Latest
 //    wins, which is what a list of trails is.
-//  * Answers a ``WatchTrailRequest`` with the trail's geometry.
+//  * Answers a ``WatchTrailRequest`` with the trail's geometry, unless the
+//    watch already holds that revision of it.
 //  * Takes a ``WatchRecordedWalk`` and keeps it, then sends a receipt so the
-//    watch can let go of it.
+//    watch can let go of it — and writes it to Health, through
+//    ``WatchWalkHealthExport``, because the watch threw its own workout away.
 //  * Mirrors *this phone's* recording to the watch and performs the buttons
 //    the watch sends back, both through ``WatchRecordingMirror``.
 //
@@ -107,6 +109,9 @@ final class WatchSessionCoordinator: NSObject {
     /// twice — a lost receipt is the ordinary cause — and two arrivals land as
     /// two tasks that would both fetch before either inserted.
     @ObservationIgnored private var importsInFlight: Set<UUID> = []
+    /// The Health writer for a walk that arrives, or `nil` for a launch with
+    /// no Health store to write to — the same `nil` the recorder's writer is.
+    @ObservationIgnored private let healthExport: WatchWalkHealthExport?
 
     #if canImport(WatchConnectivity)
     @ObservationIgnored private var session: WCSession?
@@ -120,8 +125,9 @@ final class WatchSessionCoordinator: NSObject {
     @ObservationIgnored private var pendingCatalogue: SharedHikeCatalogue?
     #endif
 
-    init(container: ModelContainer) {
+    init(container: ModelContainer, healthExport: WatchWalkHealthExport? = nil) {
         self.container = container
+        self.healthExport = healthExport
         super.init()
     }
 
@@ -184,7 +190,8 @@ final class WatchSessionCoordinator: NSObject {
 
     // MARK: Answering the watch
 
-    private func sendTrail(_ hikeID: UUID) {
+    private func sendTrail(_ request: WatchTrailRequest) {
+        let hikeID = request.hikeID
         Task { [container] in
             let input = await MainActor.run { () -> HikeRouteInput? in
                 let context = ModelContext(container)
@@ -197,6 +204,10 @@ final class WatchSessionCoordinator: NSObject {
                 return HikeRouteInput(hike: hike)
             }
             guard let input, let package = await WatchTrailPackaging.package(from: input) else { return }
+            // The watch already holds exactly this, and asked to find out
+            // whether the route had been edited since. It had not, so there is
+            // nothing to send: the copy it has stays the one it draws.
+            guard request.needs(package) else { return }
             await MainActor.run { self.send(package) }
         }
     }
@@ -220,6 +231,10 @@ final class WatchSessionCoordinator: NSObject {
             // Republishing is what closes that, and is cheap: it is a list of
             // at most fifty rows replacing a list of at most fifty rows.
             await republishLibrary()
+            // Last, because it is the one step that can wait on a person: the
+            // first write asks for Health permission, and neither the receipt
+            // nor the watch's list should be held behind that prompt.
+            await healthExport?.export(walk, after: outcome)
         }
     }
 
@@ -462,7 +477,7 @@ nonisolated extension WatchSessionCoordinator: WCSessionDelegate {
             switch kind {
             case .trailRequest:
                 let request = try WatchLink.trailRequest(from: message)
-                onMainActor { [weak self] in self?.sendTrail(request.hikeID) }
+                onMainActor { [weak self] in self?.sendTrail(request) }
             case .libraryRequest:
                 // A watch with no list, asking. Answered with a real sweep
                 // rather than the App Group's copy, for the reason

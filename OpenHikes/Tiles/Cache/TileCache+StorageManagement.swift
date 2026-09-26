@@ -3,6 +3,7 @@
 //  OpenHikes
 //
 
+import Algorithms
 import Foundation
 import os
 import Synchronization
@@ -44,9 +45,8 @@ nonisolated extension TileCache {
         // Durable first, then skip any name already seen: one tile is one tile
         // however many tiers it managed to land in, and this number is what the
         // user reads as "how much space is this app using".
-        var counted = Set<String>()
-        for file in allTileFiles(in: durableDirectory) + allTileFiles(in: directory) {
-            guard counted.insert(file.lastPathComponent).inserted else { continue }
+        let files = allTileFiles(in: durableDirectory) + allTileFiles(in: directory)
+        for file in files.uniqued(on: \.lastPathComponent) {
             if claimedNames.contains(file.lastPathComponent) {
                 usage.claimed += fileSize(file)
             } else {

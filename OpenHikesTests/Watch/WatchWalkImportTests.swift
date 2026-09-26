@@ -78,6 +78,36 @@ struct WatchWalkImportTests {
         #expect(try Fixture.hikeCount(in: container) == 0)
     }
 
+    @Test(
+        "a redelivery whose ledger read fails is refused rather than saved again",
+        arguments: Fixture.LedgerRead.allCases
+    )
+    func aFailedLedgerReadIsNotAMiss(failing read: Fixture.LedgerRead) async throws {
+        let container = try Fixture.modelContainer()
+        let walk = Fixture.walk()
+        let first = await WatchWalkImport.store(walk, in: container)
+        let hikeID = try #require(first.importedHikeID)
+
+        let second = await WatchWalkImport.store(
+            walk,
+            in: container,
+            ledger: Fixture.ledger(failing: read)
+        )
+
+        // A read that failed is not a read that found nothing: the walk may
+        // well be here already, so it is refused, and the save that would
+        // otherwise follow is never reached.
+        #expect(second == .refused(.notSaved))
+        #expect(!second.deservesReceipt)
+        #expect(try Fixture.hikeCount(in: container) == 1)
+
+        // The control: once the store reads again, the same walk is
+        // recognised, and earns the receipt that lets the watch let go.
+        let third = await WatchWalkImport.store(walk, in: container)
+        #expect(third == .alreadyImported(hikeID))
+        #expect(try Fixture.hikeCount(in: container) == 1)
+    }
+
     @Test("the ground a pause covered is marked, and is not counted as walked")
     func aPauseIsNotWalked() async throws {
         let container = try Fixture.modelContainer()
@@ -136,6 +166,25 @@ struct WatchWalkImportTests {
         static let longitude = 12.90
 
         struct RefusedSave: Error {}
+        struct RefusedFetch: Error {}
+
+        /// Which of the ledger's two reads a test makes fail.
+        enum LedgerRead: CaseIterable, Sendable {
+            case sessionLookup
+            case hikeLookup
+        }
+
+        /// The store's own ledger, with one of its reads refused.
+        static func ledger(failing read: LedgerRead) -> WatchWalkImport.Ledger {
+            var ledger = WatchWalkImport.Ledger.store
+            switch read {
+            case .sessionLookup:
+                ledger.recordedHikeID = { _, _ in throw RefusedFetch() }
+            case .hikeLookup:
+                ledger.hikeExists = { _, _ in throw RefusedFetch() }
+            }
+            return ledger
+        }
 
         /// Steps of about 11 m due north, which is a walk rather than wander.
         static func walk(

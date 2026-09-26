@@ -77,6 +77,10 @@ final class WatchRecorder: NSObject {
         case paused
         /// Stopped, and the walk is on disk waiting for the phone.
         case saved(WatchRecordedWalk)
+        /// Stopped, and the walk could not be written. This is the only copy
+        /// of it, so nothing starts over it until ``retrySave()`` writes it or
+        /// ``discardUnsaved()`` throws it away — see ``WatchStoppedWalk``.
+        case unsaved(WatchRecordedWalk)
         /// A recording the last process never finished, found in its journal
         /// at launch and waiting for the hiker to say what becomes of it.
         case interrupted(WatchRecoveredRecording)
@@ -85,7 +89,7 @@ final class WatchRecorder: NSObject {
         var isActive: Bool {
             switch self {
             case .recording, .paused: true
-            case .idle, .preparing, .saved, .interrupted, .failed: false
+            case .idle, .preparing, .saved, .unsaved, .interrupted, .failed: false
             }
         }
 
@@ -98,9 +102,10 @@ final class WatchRecorder: NSObject {
             // and two taps before it resolves would otherwise start a second
             // `HKWorkoutSession`, leak the first unended and reset the
             // accumulator under a recording that was already running.
+            // `.unsaved` would reset it under a walk nothing else holds, and
             // `.interrupted` would start a journal over the only copy of a
             // walk the hiker has not answered for.
-            case .preparing, .recording, .paused, .interrupted: false
+            case .preparing, .recording, .paused, .unsaved, .interrupted: false
             }
         }
     }
@@ -230,7 +235,9 @@ final class WatchRecorder: NSObject {
     /// Returns `nil` for a recording with nothing in it, which is a hiker who
     /// started and stopped before their watch had a second fix — told so on
     /// the watch, where they can do something about it, rather than sent to
-    /// become a row they have to find and delete.
+    /// become a row they have to find and delete. Also `nil` for a walk the
+    /// disk refused, which stays in hand as ``Phase/unsaved(_:)`` for
+    /// ``retrySave()``.
     @discardableResult func stop() -> WatchRecordedWalk? {
         guard phase.isActive else { return nil }
         locations.stopUpdatingLocation()
@@ -238,51 +245,73 @@ final class WatchRecorder: NSObject {
         // Whatever happens to the walk below, nothing is being recorded now.
         glances.publish(.idle(at: .now))
 
-        guard let walk = accumulator.recordedWalk(
+        let walk = accumulator.recordedWalk(
             sessionID: sessionID,
             startedAt: startedAt,
             endedAt: .now,
             trailHikeID: trailHikeID,
             title: trailTitle
-        ) else {
+        )
+        return settle(WatchStoppedWalk.settle(walk, writing: store.enqueue))
+    }
+
+    /// Writes an unsaved walk again, and offers it to the phone once it is on
+    /// disk. The same walk under the same session ID, so however often this
+    /// is pressed the phone is sent one walk — and the journal it was
+    /// recorded into is the one a success lets go, never a new one.
+    @discardableResult func retrySave() -> WatchRecordedWalk? {
+        guard case .unsaved(let walk) = phase else { return nil }
+        return settle(WatchStoppedWalk.unsaved(walk).retried(writing: store.enqueue))
+    }
+
+    /// Throws away a walk that could not be written, which only the hiker
+    /// decides. Its journal goes with it, or the next launch would offer the
+    /// discarded walk back as an interrupted one.
+    func discardUnsaved() {
+        guard case .unsaved = phase else { return }
+        journal.close()
+        phase = .idle
+    }
+
+    /// The phase a stopped walk leaves behind, and what becomes of its journal.
+    ///
+    /// On disk before anything is told it exists — the ordering ``WatchStore``
+    /// exists for — so ``onWalkQueued`` is called for a saved walk and never
+    /// for an unsaved one.
+    private func settle(_ stopped: WatchStoppedWalk) -> WatchRecordedWalk? {
+        switch stopped {
+        case .tooShort:
             journal.close()
             phase = .failed("That walk was too short to keep.")
             return nil
-        }
-        return queue(walk)
-    }
-
-    /// Puts a finished walk on the outbound queue, and only then lets its
-    /// journal go.
-    private func queue(_ walk: WatchRecordedWalk) -> WatchRecordedWalk? {
-        // On disk before anything is told it exists — the ordering
-        // ``WatchStore`` exists for.
-        guard store.enqueue(walk) else {
+        case .unsaved(let walk):
             // The journal stays, with everything still waiting written out:
             // it is now the walk's only copy on disk, and a relaunch before
-            // the next Start offers it back as an interrupted recording.
+            // a retry offers it back as an interrupted recording.
             journaling { try $0.flush() }
-            phase = .failed("This watch is out of storage, so the walk couldn't be kept.")
+            phase = .unsaved(walk)
             return nil
+        case .saved(let walk):
+            // After the enqueue, never before. A process killed between the
+            // two leaves both, which ``WatchRecordingRecovery`` recognises;
+            // the other order would leave neither.
+            journal.close()
+            phase = .saved(walk)
+            onWalkQueued?(walk)
+            return walk
         }
-        // After the enqueue, never before. A process killed between the two
-        // leaves both, which ``WatchRecordingRecovery`` recognises; the other
-        // order would leave neither.
-        journal.close()
-        phase = .saved(walk)
-        onWalkQueued?(walk)
-        return walk
     }
 
     /// Clears a finished or failed recording once the hiker has seen it.
     ///
-    /// Never an interrupted one: that is the only copy of a walk, and what
-    /// becomes of it is ``continueInterrupted()``, ``saveInterrupted()`` or
+    /// Never an unsaved or interrupted one: each is the only copy of a walk,
+    /// and what becomes of it is ``retrySave()`` or ``discardUnsaved()``, or
+    /// ``continueInterrupted()``, ``saveInterrupted()`` or
     /// ``discardInterrupted()`` — a decision rather than an acknowledgement.
     func acknowledge() {
         switch phase {
         case .saved, .failed: phase = .idle
-        case .idle, .preparing, .recording, .paused, .interrupted: break
+        case .idle, .preparing, .recording, .paused, .unsaved, .interrupted: break
         }
     }
 
@@ -481,7 +510,7 @@ final class WatchRecorder: NSObject {
         let state: WatchGlance.State = switch phase {
         case .recording: .recording
         case .paused: .paused
-        case .idle, .preparing, .saved, .interrupted, .failed: .idle
+        case .idle, .preparing, .saved, .unsaved, .interrupted, .failed: .idle
         }
         glances.publish(
             WatchGlance(
@@ -560,12 +589,7 @@ extension WatchRecorder {
     /// Keeps an interrupted walk as it stood when the recording stopped.
     func saveInterrupted() {
         guard case .interrupted(let recovered) = phase else { return }
-        guard let walk = recovered.finishedWalk() else {
-            journal.close()
-            phase = .failed("That walk was too short to keep.")
-            return
-        }
-        _ = queue(walk)
+        _ = settle(WatchStoppedWalk.settle(recovered.finishedWalk(), writing: store.enqueue))
     }
 
     /// Throws an interrupted walk away, which only the hiker decides.

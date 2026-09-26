@@ -101,6 +101,8 @@ struct WatchRecordingView: View {
                 controls
             case .saved(let walk):
                 saved(walk)
+            case .unsaved(let walk):
+                UnsavedWalkPanel(walk: walk)
             case .interrupted(let recovered):
                 interrupted(recovered)
             case .failed(let message):
@@ -225,6 +227,45 @@ struct WatchRecordingView: View {
                 .font(.footnote)
                 .multilineTextAlignment(.center)
             Button("OK") { model.recorder.acknowledge() }
+        }
+    }
+}
+
+/// A stopped walk the watch could not write, and the only two ways out of it.
+///
+/// Retry rather than OK: this is the only copy of the walk, and an OK that
+/// cleared it — which is what this screen used to offer — threw it away on a
+/// tap that read as an acknowledgement. Discarding is offered too, because a
+/// watch that stays full has to be able to record again, but behind a
+/// confirmation of its own.
+private struct UnsavedWalkPanel: View {
+    let walk: WatchRecordedWalk
+
+    @Environment(WatchModel.self)
+    private var model
+    @State private var isConfirmingDiscard = false
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Label("Walk Not Saved", systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text(WidgetFormat.length(meters: walk.distanceMeters))
+                .font(.title3.monospacedDigit())
+            Text("This watch is out of storage. Free up some space, then try again.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Try Again") { model.retrySavingWalk() }
+            Button("Discard Walk", role: .destructive) { isConfirmingDiscard = true }
+        }
+        .confirmationDialog(
+            "Discard this walk?",
+            isPresented: $isConfirmingDiscard,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Walk", role: .destructive) { model.discardUnsavedWalk() }
+        } message: {
+            Text("It hasn't been saved anywhere, so it can't be recovered.")
         }
     }
 }

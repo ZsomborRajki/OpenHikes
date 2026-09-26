@@ -46,6 +46,7 @@
 //  wrong in the one place the hiker could see it.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -511,13 +512,9 @@ nonisolated enum CommunityImport {
     /// file's — see this file's header for why the listing's figure is not
     /// trusted.
     static func routeLength(of route: [RouteCoordinate]) -> Double {
-        guard route.count >= 2 else { return 0 }
         var total = 0.0
-        for index in 1..<route.count {
-            total += RouteGeometry.distanceMeters(
-                from: route[index - 1].clCoordinate,
-                to: route[index].clCoordinate
-            )
+        for (start, end) in route.adjacentPairs() {
+            total += RouteGeometry.distanceMeters(from: start.clCoordinate, to: end.clCoordinate)
         }
         return total
     }

@@ -43,7 +43,11 @@ extension WatchRecorder.Phase {
         // holding. What the hiker does about it is felt as that — a resume
         // as a start, a save as a finish.
         case .interrupted: .idle
-        case .failed: .failed
+        // A walk that could not be written is news worth feeling as much as
+        // a start that failed: it is still on the screen, and it is the one
+        // outcome a hiker who pressed Stop and dropped their wrist has to go
+        // back and look at.
+        case .unsaved, .failed: .failed
         }
     }
 }

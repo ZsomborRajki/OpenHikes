@@ -40,8 +40,6 @@ actor TrailBasemapRenderer {
         pinnedHikeIDs: SharedHikeCataloguePublisher.pinnedTrails
     )
     private static let jpegCompressionQuality: CGFloat = 0.9
-    private static let fnvOffsetBasis: UInt64 = 0xcbf2_9ce4_8422_2325
-    private static let fnvPrime: UInt64 = 0x100_0000_01b3
 
     /// Rendered at 2× rather than the device's own scale: a 3× image decodes
     /// to 2.25× the bytes inside a widget extension, which has a hard memory
@@ -392,15 +390,11 @@ actor TrailBasemapRenderer {
         variant: TrailBasemapVariant,
         appearance: TrailBasemapAppearance
     ) -> String {
-        var hash: UInt64 = Self.fnvOffsetBasis
+        var hasher = StableHasher()
         for value in [coverage.originX, coverage.originY, coverage.width, coverage.height] {
-            withUnsafeBytes(of: value.bitPattern.littleEndian) { bytes in
-                for byte in bytes {
-                    hash = (hash ^ UInt64(byte)) &* Self.fnvPrime
-                }
-            }
+            hasher.combine(value)
         }
-        return "\(hikeID.uuidString)-\(String(hash, radix: 36))-\(variant.rawValue)-\(appearance.rawValue).jpg"
+        return "\(hikeID.uuidString)-\(String(hasher.value, radix: 36))-\(variant.rawValue)-\(appearance.rawValue).jpg"
     }
 }
 

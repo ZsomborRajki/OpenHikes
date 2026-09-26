@@ -16,6 +16,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import SwiftData
 import Testing
 
 @MainActor
@@ -117,6 +118,73 @@ struct TrailPlaceCorridorSearchTests {
         #expect(TrailPlaceCorridorSearch.areas(along: [Line.short[0]]).isEmpty)
     }
 
+    // MARK: Across the antimeridian
+
+    /// Where a line across ±180° is drawn: the Taveuni coast in Fiji, a
+    /// latitude away from the equator so the longitude span is not its
+    /// distance.
+    private enum Dateline {
+        static let latitude = -16.8
+        /// About 2.1 km apart, the short way round.
+        static let short = (westOfIt: 179.99, eastOfIt: -179.99)
+        /// About 32 km apart: longer than a stretch, so the gap is filled in.
+        static let long = (westOfIt: 179.85, eastOfIt: -179.85)
+    }
+
+    /// Every kilometre of the line from `start` to `end`, walked the short way
+    /// round, sits in one of `areas` — and none of them is wider than a
+    /// stretch.
+    private static func expectCovered(
+        from start: CLLocationCoordinate2D,
+        to end: CLLocationCoordinate2D,
+        by areas: [CommunitySearchArea]
+    ) {
+        #expect(!areas.isEmpty)
+        #expect(areas.allSatisfy { $0.radiusMeters <= TrailPlaceCorridorSearch.stretchRadiusMeters })
+        let length = RouteGeometry.distanceMeters(from: start, to: end)
+        let kilometres = Int(length / 1000)
+        for kilometre in 0...(kilometres + 1) {
+            let fraction = min(Double(kilometre) * 1000 / length, 1)
+            let point = RouteGeometry.interpolate(from: start, to: end, fraction: fraction)
+            let covered = areas.contains { area in
+                RouteGeometry.distanceMeters(from: area.coordinate, to: point) <= area.radiusMeters
+            }
+            #expect(covered, "\(point.latitude), \(point.longitude) is in no circle")
+        }
+    }
+
+    @Test(
+        "a short line across ±180° is asked about where it is, in either direction",
+        arguments: [true, false]
+    )
+    func shortCrossingIsCovered(eastward: Bool) {
+        let west = CLLocationCoordinate2D(latitude: Dateline.latitude, longitude: Dateline.short.westOfIt)
+        let east = CLLocationCoordinate2D(latitude: Dateline.latitude, longitude: Dateline.short.eastOfIt)
+        let (start, end) = eastward ? (west, east) : (east, west)
+        let route = [start, end].map { RouteCoordinate(latitude: $0.latitude, longitude: $0.longitude) }
+
+        let areas = TrailPlaceCorridorSearch.areas(along: route)
+
+        #expect(areas.count == 1)
+        Self.expectCovered(from: start, to: end, by: areas)
+    }
+
+    @Test(
+        "a long segment across ±180° is filled in the short way round, in either direction",
+        arguments: [true, false]
+    )
+    func longCrossingIsCovered(eastward: Bool) {
+        let west = CLLocationCoordinate2D(latitude: Dateline.latitude, longitude: Dateline.long.westOfIt)
+        let east = CLLocationCoordinate2D(latitude: Dateline.latitude, longitude: Dateline.long.eastOfIt)
+        let (start, end) = eastward ? (west, east) : (east, west)
+        let route = [start, end].map { RouteCoordinate(latitude: $0.latitude, longitude: $0.longitude) }
+
+        let areas = TrailPlaceCorridorSearch.areas(along: route)
+
+        #expect(areas.count > 1)
+        Self.expectCovered(from: start, to: end, by: areas)
+    }
+
     // MARK: Keeping the answers
 
     @Test("only what the line passes is kept, once each, in walking order")
@@ -195,10 +263,44 @@ struct TrailPlaceCorridorSearchTests {
             showing: Set(TrailPlaceSymbol.allCases)
         ).value
         search.toggle(car.id)
-        let added = search.add(to: hike, in: context)
+        let added = try search.add(to: hike, in: context)
 
         #expect(added == 1)
         #expect(hike.places.map(\.osm?.elementID) == [1])
+    }
+
+    @Test("a refused save keeps the choice, takes the places back, and Add again commits them once")
+    func refusedSaveCanBeRetried() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: Line.short)
+        try context.save()
+        let spring = Self.place(1, latitude: 47.605)
+        let hut = Self.place(2, latitude: 47.61, symbol: .shelter)
+        let search = HikePlaceSearch()
+        await search.start(
+            for: hike,
+            source: AnsweringSource(answer: [spring, hut]),
+            showing: Set(TrailPlaceSymbol.allCases)
+        ).value
+        // An edit of the hiker's own, pending in the same context: what a
+        // `rollback()` would have taken with it.
+        hike.title = "Renamed"
+        let saver = ScriptedModelContextSaver(failedSaveNumbers: [1])
+
+        #expect(throws: HikePlaceSearchRefusal.notSaved) {
+            try search.add(to: hike, in: context, save: saver.save)
+        }
+        #expect(hike.places.isEmpty)
+        #expect(search.chosen == [spring.id, hut.id])
+        #expect(search.canAdd)
+        #expect(hike.title == "Renamed")
+
+        let added = try search.add(to: hike, in: context, save: saver.save)
+
+        #expect(added == 2)
+        let reopened = ModelContext(context.container)
+        let stored = try reopened.fetch(FetchDescriptor<TrailPoint>())
+        #expect(stored.map(\.id).sorted() == [spring.id, hut.id].sorted())
     }
 
     @Test("the sheet starts with everything found chosen, and a refusal with nothing is a failure")
