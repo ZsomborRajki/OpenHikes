@@ -27,9 +27,9 @@ struct OpenHikesWatchApp: App {
                 // A hiker who opens it again after installing it is a hiker
                 // already wondering why the list is empty, and this is the
                 // cheapest moment to ask the phone again — see
-                // ``WatchModel/askForLibraryIfEmpty()``.
+                // ``WatchModel/cameToFront()``.
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .active { model.askForLibraryIfEmpty() }
+                    if phase == .active { model.cameToFront() }
                 }
         }
     }
