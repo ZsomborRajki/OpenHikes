@@ -11,6 +11,7 @@
 //  for a second copy of the `tan`/`log` to exist here.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -92,12 +93,9 @@ nonisolated struct TileBoundingBox: Sendable {
         let longitudes = route.map(\.longitude).sorted()
         var gapWest = longitudes[longitudes.count - 1]
         var widestGap = longitudes[0] + 360 - longitudes[longitudes.count - 1]
-        for index in 1..<longitudes.count {
-            let gap = longitudes[index] - longitudes[index - 1]
-            if gap > widestGap {
-                widestGap = gap
-                gapWest = longitudes[index - 1]
-            }
+        for (west, east) in longitudes.adjacentPairs() where east - west > widestGap {
+            widestGap = east - west
+            gapWest = west
         }
         westLon = RouteGeometry.normalizedLongitude(gapWest + widestGap)
         lonSpan = 360 - widestGap

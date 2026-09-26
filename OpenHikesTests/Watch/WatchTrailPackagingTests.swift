@@ -23,6 +23,20 @@ struct WatchTrailPackagingTests {
         #expect(package.points.last?.latitude == Fixture.longRoute.last?.latitude)
     }
 
+    @Test("the same hike packaged again is nothing new to a watch that holds it")
+    func repackagingIsNotResent() async throws {
+        // What the phone does when a watch asks again for a trail it holds —
+        // issue #694. Packaging has to be deterministic for this to hold, or
+        // every re-ask would resend the whole line.
+        // One input, read once: each read of the fixture is a new hike.
+        let input = Fixture.longInput
+        let held = try #require(await WatchTrailPackaging.package(from: input))
+        let again = try #require(await WatchTrailPackaging.package(from: input))
+        let crossed = try WatchLink.trailPackage(from: WatchLink.message(held))
+
+        #expect(!WatchTrailRequest(hikeID: held.hikeID, holding: crossed).needs(again))
+    }
+
     @Test("a short route crosses whole")
     func aShortRouteIsNotTouched() async throws {
         let package = try #require(await WatchTrailPackaging.package(from: Fixture.shortInput))

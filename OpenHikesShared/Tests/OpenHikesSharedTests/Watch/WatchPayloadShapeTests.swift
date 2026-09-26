@@ -56,7 +56,7 @@ struct WatchPayloadShapeTests {
             of: Fixture.trailRequest,
             named: "WatchTrailRequest",
             versionedBy: "WatchTrailRequest.currentSchemaVersion",
-            matches: ["hikeID: string", "schemaVersion: number"]
+            matches: ["heldRevision: string", "hikeID: string", "schemaVersion: number"]
         )
     }
 
@@ -250,7 +250,7 @@ struct WatchPayloadShapeTests {
             sentAt: stamp
         )
 
-        static let trailRequest = WatchTrailRequest(hikeID: hikeID)
+        static let trailRequest = WatchTrailRequest(hikeID: hikeID, heldRevision: "1v8k2j3m9q0x")
 
         static let libraryRequest = WatchLibraryRequest()
 

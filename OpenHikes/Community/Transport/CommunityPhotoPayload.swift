@@ -36,6 +36,7 @@
 //  carried the same way, for the same reason.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 
@@ -78,7 +79,7 @@ nonisolated struct CommunityPhotoDraft: Sendable {
     /// no picture knows where it was taken, which is a contribution a reviewer
     /// judges on the pictures alone.
     var startCoordinate: CLLocationCoordinate2D? {
-        photoPins.lazy.compactMap(\.coordinate).first
+        photoPins.firstNonNil(\.coordinate)
     }
 }
 

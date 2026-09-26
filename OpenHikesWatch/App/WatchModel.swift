@@ -21,7 +21,9 @@
 //  anything is on screen: a hiker finishes a walk, the phone is out of range,
 //  and the walk has to go the moment it is back. ``PhoneLink`` reports
 //  reachability changes as deliveries for exactly this, and the drain is also
-//  run at launch, which covers the watch having been rebooted in between.
+//  run at launch, which covers the watch having been rebooted in between, and
+//  whenever the app comes to the front, which covers a phone that refused a
+//  walk and then stayed in range.
 //
 
 import CoreLocation
@@ -72,6 +74,10 @@ final class WatchModel {
     /// trail ends — ``WatchRecorder/stop()`` stops the receiver, and the
     /// screen that wanted it is still open.
     @ObservationIgnored private var isFollowing = false
+    /// Whether ``start()`` has run. `false` on a seeded launch, whose queue
+    /// count is the fixture's and must not be recounted from a disk it never
+    /// wrote.
+    @ObservationIgnored private var isStarted = false
 
     init(store: WatchStore = WatchStore()) {
         self.store = store
@@ -114,9 +120,21 @@ final class WatchModel {
 
     /// Starts the link and sends whatever is already waiting.
     func start() {
+        isStarted = true
         link.activate { [weak self] delivery in self?.apply(delivery) }
         drainQueue()
         askForLibraryIfEmpty()
+    }
+
+    /// The app came to the front: ask for a library it lacks, and offer any
+    /// walk the phone has not acknowledged whose wait has run out.
+    ///
+    /// The drain matters for a phone that refused a walk and never left
+    /// range — no reachability change will come to retry it, and a hiker
+    /// opening the app to look at a walk still waiting is the moment to.
+    func cameToFront() {
+        askForLibraryIfEmpty()
+        if isStarted { drainQueue() }
     }
 
     /// Asks the phone for the library, but only when there is nothing to show.
@@ -140,15 +158,15 @@ final class WatchModel {
 
     /// Asks the phone for a trail, and shows the one already held if it is
     /// this one.
+    ///
+    /// Asked even when it is — a trail edited on the phone would otherwise be
+    /// the old route on this watch for good, since the package is persisted.
+    /// The request names the revision held, so the phone answers only if the
+    /// route has changed and the held copy is drawn and matched against in the
+    /// meantime, in or out of range.
     func selectTrail(_ hikeID: UUID) {
-        if trail?.hikeID == hikeID {
-            // Already here. Asking again would cost a transfer for geometry
-            // that does not change; a trail whose route was edited on the
-            // phone arrives with the next digest-driven request instead.
-            return
-        }
-        follow.clear()
-        link.requestTrail(hikeID)
+        if trail?.hikeID != hikeID { follow.clear() }
+        link.requestTrail(hikeID, holding: trail)
     }
 
     /// Starts the live position feed for a trail being followed without a
@@ -263,6 +281,36 @@ final class WatchModel {
         if isFollowing { recorder.startFollowingFeed() }
     }
 
+    /// Tries again to write a walk that Stop could not. A success goes
+    /// through ``walkQueued(_:)`` like any other.
+    func retrySavingWalk() {
+        recorder.retrySave()
+    }
+
+    /// Throws away a walk that could not be written.
+    func discardUnsavedWalk() {
+        recorder.discardUnsaved()
+    }
+
+    /// Carries on recording a walk the last process never finished.
+    ///
+    /// Refused while the phone is recording, for the reason
+    /// ``startRecording(alongTrail:)`` is: carrying on is starting again.
+    func continueInterruptedRecording() async {
+        guard !isPhoneRecording else { return }
+        await recorder.continueInterrupted()
+    }
+
+    /// Keeps a walk the last process never finished, as it stood. A walk kept
+    /// goes through ``walkQueued(_:)`` like any other.
+    func saveInterruptedRecording() {
+        recorder.saveInterrupted()
+    }
+
+    func discardInterruptedRecording() {
+        recorder.discardInterrupted()
+    }
+
     /// Offers a walk the recorder has just put on the disk queue.
     ///
     /// The hook rather than ``stopRecording()``'s own return value, because a
@@ -285,6 +333,15 @@ final class WatchModel {
             guard digest.sentAt >= library.sentAt else { return }
             library = digest
             store.save(digest)
+            // A new list is the phone saying its library changed, and the
+            // trail held here may be what changed. Asking costs one small
+            // request and nothing comes back unless it did — see
+            // ``selectTrail(_:)``. A trail no longer on the list is left
+            // alone: it may have been deleted, and a hiker following it
+            // still has the line.
+            if let trail, digest.hikes.contains(where: { $0.id == trail.hikeID }) {
+                link.requestTrail(trail.hikeID, holding: trail)
+            }
         case .trail(let package):
             trail = package
             tracker = WatchRouteTracker(package)
@@ -332,7 +389,8 @@ final class WatchModel {
         phoneRecording = recording
     }
 
-    /// Offers every queued walk again.
+    /// Offers every queued walk again, bar the ones ``PhoneLink`` holds back
+    /// as still crossing or not yet due a retry — see `WatchWalkDelivery`.
     ///
     /// Sending a walk the phone already has is safe by construction: the
     /// import is keyed on `sessionID` and recognises an arrival it has seen,

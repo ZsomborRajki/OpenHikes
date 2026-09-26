@@ -118,23 +118,80 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
     public var polyline: [SharedTrailSnapshot.CodableCoordinate] {
         points.map(\.coordinate)
     }
+
+    /// Which version of the trail this is, as a short opaque string.
+    ///
+    /// Computed from the content rather than carried, so there is nothing to
+    /// keep in step: the phone takes it from the package it has just built,
+    /// the watch from the one it decoded, and the two agree exactly when the
+    /// watch would draw and match the same thing the phone would send. That
+    /// holds across the link because `JSONEncoder` writes a `Double` in the
+    /// shortest form that reads back to the same bits.
+    ///
+    /// Everything the watch uses is in it — the line, the heights, the name it
+    /// records under, the tint and the length it reports progress on — and
+    /// ``sentAt`` and ``schemaVersion`` are not, since a trail packaged twice
+    /// is the same trail. See ``WatchTrailRequest/heldRevision`` for the one
+    /// thing it is for.
+    public var revision: String {
+        var hasher = StableHasher()
+        hasher.combine(hikeID)
+        hasher.combine(title)
+        hasher.combine(tintHex)
+        hasher.combine(totalDistanceMeters)
+        // A marker byte before each optional, so a missing value and a present
+        // one cannot run together into the same stream as the next field.
+        for optional in [elevationGainMeters, elevationLossMeters] {
+            hasher.combine(bytes: [optional == nil ? 0 : 1])
+            if let optional { hasher.combine(optional) }
+        }
+        for point in points {
+            hasher.combine(point.latitude)
+            hasher.combine(point.longitude)
+            hasher.combine(bytes: [point.elevationMeters == nil ? 0 : 1])
+            if let elevation = point.elevationMeters { hasher.combine(elevation) }
+        }
+        return String(hasher.value, radix: 36)
+    }
 }
 
 /// The watch asking for one trail's geometry.
 ///
 /// Its own payload rather than a bare `UUID` in the envelope, so the request
-/// is versioned like everything else crossing this link and a future field —
-/// a point budget the watch picks for itself, say — does not need a second
-/// message kind.
+/// is versioned like everything else crossing this link and a future field
+/// does not need a second message kind — ``heldRevision`` was the first.
 public struct WatchTrailRequest: SharedPayload, Equatable {
     public static let currentSchemaVersion = 1
 
     public let schemaVersion: Int
     public var hikeID: UUID
+    /// The ``WatchTrailPackage/revision`` of the copy the watch already holds
+    /// for this hike, or `nil` when it holds none.
+    ///
+    /// This is what lets the watch ask again for a trail it has. A watch that
+    /// never asked kept navigating a route the phone had since edited — across
+    /// relaunches too, since the package is persisted. A watch that asked
+    /// without saying what it held would be sent the same tens of kilobytes on
+    /// every tap. With it, the phone answers only when the trail has changed,
+    /// and says nothing otherwise; the copy the watch holds stays usable
+    /// throughout, which is what a hiker out of range needs.
+    public var heldRevision: String?
 
-    public init(hikeID: UUID) {
+    public init(hikeID: UUID, heldRevision: String? = nil) {
         self.hikeID = hikeID
+        self.heldRevision = heldRevision
         schemaVersion = Self.currentSchemaVersion
+    }
+
+    /// A request for `hikeID` from a watch holding `held`, which may be a
+    /// different trail — in which case it holds nothing for this one.
+    public init(hikeID: UUID, holding held: WatchTrailPackage?) {
+        self.init(hikeID: hikeID, heldRevision: held?.hikeID == hikeID ? held?.revision : nil)
+    }
+
+    /// Whether sending `package` would tell the watch anything.
+    public func needs(_ package: WatchTrailPackage) -> Bool {
+        package.revision != heldRevision
     }
 }
 

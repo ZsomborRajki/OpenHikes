@@ -17,11 +17,15 @@ import PackageDescription
 /// `swift test` runs the suite on the macOS host, which CI pins to the
 /// `xcode-27` runner image.
 ///
+/// The library has no dependencies, deliberately: every product that links
+/// this package and nothing else — the widget, the watch app, its
+/// complications — would carry a dependency whole. *Architecture* in the
+/// repository instructions has the measurement.
+///
 /// swift-numerics is the one external dependency, and only the test target
-/// links it, for `isApproximatelyEqual(to:absoluteTolerance:)`: the library
-/// the app, widgets and watch link still depends on nothing. It is the version
-/// swift-algorithms already resolves for the app and `OpenHikesData`, named by
-/// the same URL so the three pin one checkout.
+/// links it, for `isApproximatelyEqual(to:absoluteTolerance:)`. It is the
+/// version swift-algorithms already resolves for the app and `OpenHikesData`,
+/// named by the same URL so the three pin one checkout.
 let package = Package(
     name: "OpenHikesShared",
     platforms: [

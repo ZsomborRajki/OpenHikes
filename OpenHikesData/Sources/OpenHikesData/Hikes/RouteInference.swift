@@ -16,6 +16,7 @@
 //  a guess with the same authority as a measurement.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 
@@ -29,19 +30,18 @@ nonisolated public extension [RouteCoordinate] {
     /// quiet. Including it is what makes the drawn stretch meet the rest of the
     /// route instead of floating a segment away from it.
     var inferredSegments: [[CLLocationCoordinate2D]] {
-        guard count > 1 else { return [] }
         var segments: [[CLLocationCoordinate2D]] = []
         var current: [CLLocationCoordinate2D] = []
-        for index in 1..<count {
-            guard self[index].isInferred else {
+        for (previous, point) in adjacentPairs() {
+            guard point.isInferred else {
                 if current.count > 1 { segments.append(current) }
                 current = []
                 continue
             }
             if current.isEmpty {
-                current.append(self[index - 1].clCoordinate)
+                current.append(previous.clCoordinate)
             }
-            current.append(self[index].clCoordinate)
+            current.append(point.clCoordinate)
         }
         if current.count > 1 { segments.append(current) }
         return segments
@@ -53,13 +53,9 @@ nonisolated public extension [RouteCoordinate] {
     /// hike's own distance: "3.2 km of these 14.6 km is inferred" is the
     /// sentence it exists to support.
     var inferredDistanceMeters: Double {
-        guard count > 1 else { return 0 }
         var total = 0.0
-        for index in 1..<count where self[index].isInferred {
-            total += RouteGeometry.distanceMeters(
-                from: self[index - 1].clCoordinate,
-                to: self[index].clCoordinate
-            )
+        for (previous, point) in adjacentPairs() where point.isInferred {
+            total += RouteGeometry.distanceMeters(from: previous.clCoordinate, to: point.clCoordinate)
         }
         return total
     }
@@ -84,10 +80,9 @@ nonisolated public extension [RouteCoordinate] {
     /// things — "nobody watched this" against "nobody was asked to" — and a
     /// route can carry both. See ``RouteBoundary``.
     var pausedSegments: [[CLLocationCoordinate2D]] {
-        guard count > 1 else { return [] }
-        return (1..<count).compactMap { index in
-            guard self[index].isPauseBoundary else { return nil }
-            return [self[index - 1].clCoordinate, self[index].clCoordinate]
+        adjacentPairs().compactMap { previous, point in
+            guard point.isPauseBoundary else { return nil }
+            return [previous.clCoordinate, point.clCoordinate]
         }
     }
 

@@ -35,6 +35,7 @@
 //  never throws away what did arrive.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import Observation
@@ -122,20 +123,23 @@ nonisolated enum TrailPlaceCorridorSearch {
     /// than ``TrailPointQuery/maximumRadiusMeters``, which the query answers
     /// with nothing rather than an error, so the stretch would be skipped
     /// without a word. Straight lines between the two ends are enough: the
-    /// circle only has to hold the segment, not follow the ground.
+    /// circle only has to hold the segment, not follow the ground — but the
+    /// short way round, which ``RouteGeometry/interpolate(from:to:fraction:)``
+    /// takes, or a segment across ±180° is filled in across the whole world.
     private static func densified(_ route: [RouteCoordinate], step: Double) -> [RouteCoordinate] {
         guard step > 0 else { return route }
         var result: [RouteCoordinate] = [route[0]]
-        for (from, to) in zip(route, route.dropFirst()) {
+        for (from, to) in route.adjacentPairs() {
             let length = RouteGeometry.distanceMeters(from: from.clCoordinate, to: to.clCoordinate)
             let pieces = Int((length / step).rounded(.up))
             if pieces > 1 {
                 for index in 1..<pieces {
-                    let fraction = Double(index) / Double(pieces)
-                    result.append(RouteCoordinate(
-                        latitude: from.latitude + (to.latitude - from.latitude) * fraction,
-                        longitude: from.longitude + (to.longitude - from.longitude) * fraction
-                    ))
+                    let point = RouteGeometry.interpolate(
+                        from: from.clCoordinate,
+                        to: to.clCoordinate,
+                        fraction: Double(index) / Double(pieces)
+                    )
+                    result.append(RouteCoordinate(latitude: point.latitude, longitude: point.longitude))
                 }
             }
             result.append(to)
@@ -196,12 +200,21 @@ nonisolated enum TrailPlaceCorridorSearch {
     }
 
     /// A stretch's bounding box, in degrees.
+    ///
+    /// Its longitudes are unwrapped from the stretch's first point: each new
+    /// point is placed the short way from the one before, so a stretch across
+    /// ±180° runs on past 180 rather than jumping back to -180 and spanning
+    /// the whole world. Only the centre is brought back into range. A stretch
+    /// is at most ``TrailPointQuery/maximumRadiusMeters`` wide, so the short
+    /// way is always the way the line went.
     private struct Box {
         var south: Double
         var west: Double
         var north: Double
         var east: Double
         var last: RouteCoordinate
+        /// `last`'s longitude in the box's unwrapped frame.
+        private var lastLongitude: Double
 
         init(_ point: RouteCoordinate) {
             south = point.latitude
@@ -209,18 +222,25 @@ nonisolated enum TrailPlaceCorridorSearch {
             west = point.longitude
             east = point.longitude
             last = point
+            lastLongitude = point.longitude
         }
 
         mutating func include(_ point: RouteCoordinate) {
+            let longitude = lastLongitude
+                + RouteGeometry.normalizedLongitudeDelta(point.longitude - last.longitude)
             south = min(south, point.latitude)
             north = max(north, point.latitude)
-            west = min(west, point.longitude)
-            east = max(east, point.longitude)
+            west = min(west, longitude)
+            east = max(east, longitude)
             last = point
+            lastLongitude = longitude
         }
 
         var centre: CLLocationCoordinate2D {
-            CLLocationCoordinate2D(latitude: (south + north) / 2, longitude: (west + east) / 2)
+            CLLocationCoordinate2D(
+                latitude: (south + north) / 2,
+                longitude: RouteGeometry.normalizedLongitude((west + east) / 2)
+            )
         }
 
         /// Half the box's diagonal: the circle about its centre that holds it.
@@ -234,6 +254,27 @@ nonisolated enum TrailPlaceCorridorSearch {
         func area(margin: Double) -> CommunitySearchArea {
             CommunitySearchArea(coordinate: centre, radiusMeters: radiusMeters + margin)
         }
+    }
+}
+
+/// Why *Find Places Along Trail*'s *Add* did not add.
+///
+/// Carries no diagnostic, for the reason ``TrailDraftRefusal/notSaved``
+/// carries none.
+enum HikePlaceSearchRefusal: LocalizedError, Equatable {
+    /// The store refused to keep the places.
+    case notSaved
+
+    var errorDescription: String? {
+        String(localized: "These places couldn't be added.")
+    }
+
+    // Says the choice is still there, because the obvious reading of a failed
+    // save is that it is gone.
+    var recoverySuggestion: String? {
+        String(
+            localized: "Your selection wasn't lost. Check that the device has storage available, then tap Add again."
+        )
     }
 }
 
@@ -317,19 +358,37 @@ final class HikePlaceSearch {
         if chosen.contains(id) { chosen.remove(id) } else { chosen.insert(id) }
     }
 
-    /// Adds the chosen places to `hike`, answering how many went in.
-    @discardableResult func add(to hike: Hike, in context: ModelContext) -> Int {
+    /// Adds the chosen places to `hike` and saves them, answering how many
+    /// went in.
+    ///
+    /// A refused save takes the added rows back out and throws, so the sheet
+    /// stays up with the same places ticked and *Add* can simply be tapped
+    /// again: a place that is only pending is not one the hiker has, and
+    /// closing the sheet over it would say it was. Taken back by hand rather
+    /// than through `ModelContext.rollback()`, for the reason
+    /// ``TrailWalkSession`` gives — and because a rollback would also discard
+    /// every other pending edit in the shared context.
+    @discardableResult func add(
+        to hike: Hike,
+        in context: ModelContext,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws(HikePlaceSearchRefusal) -> Int {
         guard case .found(let rows, _) = phase else { return 0 }
         let places = rows.map(\.place).filter { chosen.contains($0.id) }
         let added = hike.addPlaces(places, in: context)
+        guard !added.isEmpty else { return 0 }
         do {
-            try context.save()
+            try save(context)
         } catch {
-            // Left to the next autosave rather than taken back: the rows are
-            // on the hike, and a place is not a file that can be orphaned.
+            // A row's id is its place's — see ``TrailPoint``.
+            let addedIDs = Set(added.map(\.id))
+            let inserted = (hike.trailPoints ?? []).filter { addedIDs.contains($0.id) }
+            hike.trailPoints?.removeAll { addedIDs.contains($0.id) }
+            for row in inserted { context.delete(row) }
             Self.logger.error(
                 "Places found along a trail could not be saved: \(error.localizedDescription, privacy: .public)"
             )
+            throw .notSaved
         }
         return added.count
     }

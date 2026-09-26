@@ -34,6 +34,22 @@
 //  port, and this app does not create one. The phone's `HikeRecorder` is never
 //  told a watch recording is happening.
 //
+//  ## A recording outlives its process
+//
+//  The accumulator is in memory, and until Stop it is the only copy of the
+//  walk. So every kept fix, pause and resume is also appended to a journal on
+//  the watch's own disk — see ``WatchRecoveredRecording`` for its shape and
+//  ``WatchRecordingJournalBuffer`` for how often it is written — and a launch
+//  that finds one has found a walk the last process never finished.
+//
+//  Two ways back from there. When the system still holds the workout session,
+//  which is what it does for an app that crashed mid-workout, HealthKit hands
+//  it back and the recording simply carries on. When it does not — a reboot,
+//  a flat battery — the Record screen says a walk was interrupted and lets the
+//  hiker continue it, save it as it stood, or throw it away. Either way the
+//  time the process was gone is a pause and not a leg: nothing observed it,
+//  and a straight line across it would be distance nobody measured.
+//
 
 import CoreLocation
 import Foundation
@@ -61,12 +77,35 @@ final class WatchRecorder: NSObject {
         case paused
         /// Stopped, and the walk is on disk waiting for the phone.
         case saved(WatchRecordedWalk)
+        /// Stopped, and the walk could not be written. This is the only copy
+        /// of it, so nothing starts over it until ``retrySave()`` writes it or
+        /// ``discardUnsaved()`` throws it away — see ``WatchStoppedWalk``.
+        case unsaved(WatchRecordedWalk)
+        /// A recording the last process never finished, found in its journal
+        /// at launch and waiting for the hiker to say what becomes of it.
+        case interrupted(WatchRecoveredRecording)
         case failed(String)
 
         var isActive: Bool {
             switch self {
             case .recording, .paused: true
-            case .idle, .preparing, .saved, .failed: false
+            case .idle, .preparing, .saved, .unsaved, .interrupted, .failed: false
+            }
+        }
+
+        /// Whether Start may begin a recording from here.
+        var canStart: Bool {
+            switch self {
+            case .idle, .saved, .failed: true
+            // `.preparing` is the half that is easy to miss: it suspends on a
+            // permission prompt the hiker can take as long as they like over,
+            // and two taps before it resolves would otherwise start a second
+            // `HKWorkoutSession`, leak the first unended and reset the
+            // accumulator under a recording that was already running.
+            // `.unsaved` would reset it under a walk nothing else holds, and
+            // `.interrupted` would start a journal over the only copy of a
+            // walk the hiker has not answered for.
+            case .preparing, .recording, .paused, .unsaved, .interrupted: false
             }
         }
     }
@@ -115,6 +154,7 @@ final class WatchRecorder: NSObject {
     @ObservationIgnored private var startedAt = Date.now
     @ObservationIgnored private var trailHikeID: UUID?
     @ObservationIgnored private var trailTitle: String?
+    @ObservationIgnored private var journal: WatchRecordingJournalWriter
     /// The start that is waiting for the hiker to answer the location prompt.
     /// Resumed by ``locationManagerDidChangeAuthorization(_:)`` and by nothing
     /// else; `nil` whenever no start is waiting.
@@ -122,6 +162,7 @@ final class WatchRecorder: NSObject {
 
     init(store: WatchStore) {
         self.store = store
+        journal = WatchRecordingJournalWriter(file: store.recordingJournal)
         super.init()
         // On the main actor, which is what makes every delivery below take
         // `onMainActor`'s synchronous path — see WatchMainActorDelivery.swift.
@@ -129,21 +170,27 @@ final class WatchRecorder: NSObject {
         locations.desiredAccuracy = kCLLocationAccuracyBest
         locations.distanceFilter = WatchFixPolicy.minimumDisplacement
         locations.allowsBackgroundLocationUpdates = true
-        // Nothing survives a relaunch — a recording lives in this process and
-        // no other — so a complication still showing one is showing a walk
-        // that ended with the last process. Said now, rather than left to
-        // tick for the six hours ``WatchGlanceDisplay/staleAfter`` allows.
+        let queued = Set(store.queuedWalks().map(\.sessionID))
+        switch WatchRecordingRecovery.resolve(journal.file.recover(), queued: queued) {
+        case .nothing:
+            break
+        case .alreadyQueued:
+            journal.close()
+        case .offer(let recovered):
+            phase = .interrupted(recovered)
+            recoverWorkoutSession()
+        }
+        // Whatever the last process was recording is not being recorded now,
+        // so a complication still showing it is showing a walk that ended
+        // with that process. Said now, rather than left to tick for the six
+        // hours ``WatchGlanceDisplay/staleAfter`` allows; a recording that
+        // HealthKit hands back says so again the moment it resumes.
         publishGlance()
     }
 
     /// Starts a recording, optionally naming the trail being walked.
     func start(trailHikeID: UUID? = nil, title: String? = nil) async {
-        // `.preparing` counts, and is the half that is easy to miss: this
-        // suspends on a permission prompt the hiker can take as long as they
-        // like over, and two taps before it resolves would otherwise start a
-        // second `HKWorkoutSession`, leak the first unended and reset the
-        // accumulator under a recording that was already running.
-        guard phase != .preparing, !phase.isActive else { return }
+        guard phase.canStart else { return }
         phase = .preparing
         self.trailHikeID = trailHikeID
         trailTitle = title
@@ -154,6 +201,7 @@ final class WatchRecorder: NSObject {
 
         guard await requestPermissions() else { return }
         guard startWorkoutSession() else { return }
+        beginJournal()
         locations.startUpdatingLocation()
         phase = .recording
         publishGlance()
@@ -162,6 +210,7 @@ final class WatchRecorder: NSObject {
     func pause() {
         guard phase == .recording else { return }
         accumulator.pause()
+        journaling { try $0.record(.paused(.now), at: .now) }
         session?.pause()
         // The feed is left running rather than stopped. On a phone a pause can
         // afford to drop to significant-location-change monitoring, because
@@ -176,6 +225,7 @@ final class WatchRecorder: NSObject {
     func resume() {
         guard phase == .paused else { return }
         session?.resume()
+        journaling { try $0.record(.resumed(.now), at: .now) }
         phase = .recording
         publishGlance()
     }
@@ -185,7 +235,9 @@ final class WatchRecorder: NSObject {
     /// Returns `nil` for a recording with nothing in it, which is a hiker who
     /// started and stopped before their watch had a second fix — told so on
     /// the watch, where they can do something about it, rather than sent to
-    /// become a row they have to find and delete.
+    /// become a row they have to find and delete. Also `nil` for a walk the
+    /// disk refused, which stays in hand as ``Phase/unsaved(_:)`` for
+    /// ``retrySave()``.
     @discardableResult func stop() -> WatchRecordedWalk? {
         guard phase.isActive else { return nil }
         locations.stopUpdatingLocation()
@@ -193,31 +245,74 @@ final class WatchRecorder: NSObject {
         // Whatever happens to the walk below, nothing is being recorded now.
         glances.publish(.idle(at: .now))
 
-        guard let walk = accumulator.recordedWalk(
+        let walk = accumulator.recordedWalk(
             sessionID: sessionID,
             startedAt: startedAt,
             endedAt: .now,
             trailHikeID: trailHikeID,
             title: trailTitle
-        ) else {
+        )
+        return settle(WatchStoppedWalk.settle(walk, writing: store.enqueue))
+    }
+
+    /// Writes an unsaved walk again, and offers it to the phone once it is on
+    /// disk. The same walk under the same session ID, so however often this
+    /// is pressed the phone is sent one walk — and the journal it was
+    /// recorded into is the one a success lets go, never a new one.
+    @discardableResult func retrySave() -> WatchRecordedWalk? {
+        guard case .unsaved(let walk) = phase else { return nil }
+        return settle(WatchStoppedWalk.unsaved(walk).retried(writing: store.enqueue))
+    }
+
+    /// Throws away a walk that could not be written, which only the hiker
+    /// decides. Its journal goes with it, or the next launch would offer the
+    /// discarded walk back as an interrupted one.
+    func discardUnsaved() {
+        guard case .unsaved = phase else { return }
+        journal.close()
+        phase = .idle
+    }
+
+    /// The phase a stopped walk leaves behind, and what becomes of its journal.
+    ///
+    /// On disk before anything is told it exists — the ordering ``WatchStore``
+    /// exists for — so ``onWalkQueued`` is called for a saved walk and never
+    /// for an unsaved one.
+    private func settle(_ stopped: WatchStoppedWalk) -> WatchRecordedWalk? {
+        switch stopped {
+        case .tooShort:
+            journal.close()
             phase = .failed("That walk was too short to keep.")
             return nil
-        }
-        // On disk before anything is told it exists — the ordering
-        // ``WatchStore`` exists for.
-        guard store.enqueue(walk) else {
-            phase = .failed("This watch is out of storage, so the walk couldn't be kept.")
+        case .unsaved(let walk):
+            // The journal stays, with everything still waiting written out:
+            // it is now the walk's only copy on disk, and a relaunch before
+            // a retry offers it back as an interrupted recording.
+            journaling { try $0.flush() }
+            phase = .unsaved(walk)
             return nil
+        case .saved(let walk):
+            // After the enqueue, never before. A process killed between the
+            // two leaves both, which ``WatchRecordingRecovery`` recognises;
+            // the other order would leave neither.
+            journal.close()
+            phase = .saved(walk)
+            onWalkQueued?(walk)
+            return walk
         }
-        phase = .saved(walk)
-        onWalkQueued?(walk)
-        return walk
     }
 
     /// Clears a finished or failed recording once the hiker has seen it.
+    ///
+    /// Never an unsaved or interrupted one: each is the only copy of a walk,
+    /// and what becomes of it is ``retrySave()`` or ``discardUnsaved()``, or
+    /// ``continueInterrupted()``, ``saveInterrupted()`` or
+    /// ``discardInterrupted()`` — a decision rather than an acknowledgement.
     func acknowledge() {
-        guard !phase.isActive else { return }
-        phase = .idle
+        switch phase {
+        case .saved, .failed: phase = .idle
+        case .idle, .preparing, .recording, .paused, .unsaved, .interrupted: break
+        }
     }
 
     // MARK: Permissions
@@ -306,30 +401,40 @@ final class WatchRecorder: NSObject {
                 healthStore: healthStore,
                 configuration: configuration
             )
-            let collector = started.associatedWorkoutBuilder()
-            collector.dataSource = HKLiveWorkoutDataSource(
-                healthStore: healthStore,
-                workoutConfiguration: configuration
-            )
-            collector.delegate = self
-            started.delegate = self
+            attach(started)
             let startDate = Date.now
             started.startActivity(with: startDate)
-            collector.beginCollection(withStart: startDate) { _, error in
+            started.associatedWorkoutBuilder().beginCollection(withStart: startDate) { _, error in
                 if let error {
                     Self.logger.error(
                         "Workout collection did not begin: \(error.localizedDescription, privacy: .public)"
                     )
                 }
             }
-            session = started
-            builder = collector
             return true
         } catch {
             Self.logger.error("Workout session failed to start: \(error.localizedDescription, privacy: .public)")
             phase = .failed("A workout couldn't be started, so a recording wouldn't survive the screen going dark.")
             return false
         }
+    }
+
+    /// Makes a session this recorder's, whether it was just started or
+    /// handed back by HealthKit after a crash.
+    ///
+    /// The data source is set on a recovered builder too: it is the one
+    /// thing heart rate is read from, and a recovered session does not bring
+    /// the last process's back with it.
+    private func attach(_ attached: HKWorkoutSession) {
+        let collector = attached.associatedWorkoutBuilder()
+        collector.dataSource = HKLiveWorkoutDataSource(
+            healthStore: healthStore,
+            workoutConfiguration: attached.workoutConfiguration
+        )
+        collector.delegate = self
+        attached.delegate = self
+        session = attached
+        builder = collector
     }
 
     #if DEBUG
@@ -377,18 +482,21 @@ final class WatchRecorder: NSObject {
             horizontalAccuracy: location.horizontalAccuracy,
             elevationMeters: elevation
         )
-        guard kept else { return }
-        stats.update(
-            from: WatchWalkAccumulatorSnapshot(
-                distanceMeters: accumulator.distanceMeters,
-                activeSeconds: accumulator.activeSeconds,
-                elevationGainMeters: accumulator.elevationGainMeters,
-                averageSpeedMetersPerSecond: accumulator.averageSpeedMetersPerSecond,
-                fixCount: accumulator.fixes.count
-            )
-        )
+        guard kept, let fix = accumulator.lastFix else { return }
+        journaling { try $0.record(.fix(fix), at: location.timestamp) }
+        stats.update(from: snapshot)
         publishGlance(asOf: location.timestamp)
         onFix?(location)
+    }
+
+    private var snapshot: WatchWalkAccumulatorSnapshot {
+        WatchWalkAccumulatorSnapshot(
+            distanceMeters: accumulator.distanceMeters,
+            activeSeconds: accumulator.activeSeconds,
+            elevationGainMeters: accumulator.elevationGainMeters,
+            averageSpeedMetersPerSecond: accumulator.averageSpeedMetersPerSecond,
+            fixCount: accumulator.fixes.count
+        )
     }
 
     /// What the complication is told: the phase and the figures as they
@@ -402,7 +510,7 @@ final class WatchRecorder: NSObject {
         let state: WatchGlance.State = switch phase {
         case .recording: .recording
         case .paused: .paused
-        case .idle, .preparing, .saved, .failed: .idle
+        case .idle, .preparing, .saved, .unsaved, .interrupted, .failed: .idle
         }
         glances.publish(
             WatchGlance(
@@ -452,6 +560,129 @@ final class WatchRecorder: NSObject {
     func stopFollowingFeed() {
         guard !phase.isActive else { return }
         locations.stopUpdatingLocation()
+    }
+}
+
+// Recovery and the journal, in an extension of the same file: it can reach the
+// recorder's private state, and the class body stays within the lint's type
+// length.
+extension WatchRecorder {
+    // MARK: An interrupted recording
+
+    /// Carries on recording an interrupted walk, under a new workout session.
+    ///
+    /// The same session ID, so however it ends the phone is sent one walk.
+    func continueInterrupted() async {
+        guard case .interrupted(let recovered) = phase else { return }
+        phase = .preparing
+        guard await requestPermissions(), startWorkoutSession() else {
+            // Back to the choice rather than on to the failure: the walk is
+            // still only in the journal, and a `.failed` phase would let the
+            // next Start write a fresh journal over it. Saving it as it stood
+            // is still on offer.
+            phase = .interrupted(recovered)
+            return
+        }
+        resume(recovered, paused: false)
+    }
+
+    /// Keeps an interrupted walk as it stood when the recording stopped.
+    func saveInterrupted() {
+        guard case .interrupted(let recovered) = phase else { return }
+        _ = settle(WatchStoppedWalk.settle(recovered.finishedWalk(), writing: store.enqueue))
+    }
+
+    /// Throws an interrupted walk away, which only the hiker decides.
+    func discardInterrupted() {
+        guard case .interrupted = phase else { return }
+        journal.close()
+        phase = .idle
+    }
+
+    /// Asks HealthKit for the workout session the last process was running.
+    ///
+    /// Asked at every launch that finds a journal rather than only from
+    /// `WKApplicationDelegate.handleActiveWorkoutRecovery()`: HealthKit
+    /// answers `nil` when it has nothing, and asking here needs no app
+    /// delegate to reach this object before the scene exists.
+    private func recoverWorkoutSession() {
+        Task { [weak self, healthStore] in
+            do {
+                let recovered = try await healthStore.recoverActiveWorkoutSession()
+                self?.adopt(recovered)
+            } catch {
+                Self.logger.error("Workout recovery failed: \(error.localizedDescription, privacy: .public)")
+                self?.adopt(nil)
+            }
+        }
+    }
+
+    /// Carries on under the session HealthKit handed back, or leaves the
+    /// choice with the hiker when there was none.
+    private func adopt(_ recoveredSession: HKWorkoutSession?) {
+        guard case .interrupted(let recovered) = phase else {
+            // The hiker answered before HealthKit did, and their answer
+            // stands. A session nothing records into would only hold the app
+            // awake.
+            recoveredSession?.end()
+            recoveredSession?.associatedWorkoutBuilder().discardWorkout()
+            return
+        }
+        guard let recoveredSession else {
+            // Nothing to carry on, and nothing worth offering to save: a
+            // recording interrupted before its second fix is the same
+            // too-short walk Stop would have refused.
+            if recovered.finishedWalk() == nil { discardInterrupted() }
+            return
+        }
+        attach(recoveredSession)
+        resume(recovered, paused: recovered.wasPaused)
+    }
+
+    /// Puts an interrupted recording back on the recorder and the feed.
+    private func resume(_ recovered: WatchRecoveredRecording, paused: Bool) {
+        sessionID = recovered.sessionID
+        startedAt = recovered.header.startedAt
+        trailHikeID = recovered.header.trailHikeID
+        trailTitle = recovered.header.title
+        accumulator = recovered.accumulator
+        // The outage is a pause: the next fix opens a new leg instead of
+        // closing one across ground nobody observed. Written down too, so a
+        // second interruption replays the same break.
+        accumulator.pause()
+        let now = Date.now
+        journaling { journal in
+            try journal.record(.paused(now), at: now)
+            if !paused { try journal.record(.resumed(now), at: now) }
+        }
+        stats.reset()
+        stats.update(from: snapshot)
+        locations.startUpdatingLocation()
+        phase = paused ? .paused : .recording
+        publishGlance()
+    }
+
+    // MARK: The journal
+
+    private func beginJournal() {
+        let header = WatchRecordingJournalHeader(
+            sessionID: sessionID,
+            startedAt: startedAt,
+            trailHikeID: trailHikeID,
+            title: trailTitle
+        )
+        journaling { try $0.begin(header) }
+    }
+
+    /// Writes to the journal, and logs rather than stops on a failure — see
+    /// ``WatchRecordingJournalWriter`` for why a recording carries on without
+    /// one.
+    private func journaling(_ write: (inout WatchRecordingJournalWriter) throws -> Void) {
+        do {
+            try write(&journal)
+        } catch {
+            Self.logger.error("Recording journal not written: \(error.localizedDescription, privacy: .public)")
+        }
     }
 }
 

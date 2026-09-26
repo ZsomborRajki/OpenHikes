@@ -46,10 +46,25 @@
         }
       }
     },
+    "A walk was interrupted — see Record" : {
+
+    },
     "Asking your iPhone for your trails…" : {
 
     },
     "Bring your iPhone nearby, with OpenHikes installed, to send your trails over." : {
+
+    },
+    "Continue" : {
+
+    },
+    "Discard" : {
+
+    },
+    "Discard this walk?" : {
+
+    },
+    "Discard Walk" : {
 
     },
     "Done" : {
@@ -68,6 +83,12 @@
 
     },
     "Install OpenHikes on the iPhone paired with this watch to send trails across." : {
+
+    },
+    "It hasn't been saved anywhere, so it can't be recovered." : {
+
+    },
+    "Last walk not saved" : {
 
     },
     "Location is off, so your position isn't shown." : {
@@ -112,6 +133,9 @@
     "Recording" : {
 
     },
+    "Recording stopped at %@. Everything before then is kept." : {
+
+    },
     "Records on this watch, with or without your iPhone. The walk goes to your iPhone when it's back in range." : {
 
     },
@@ -119,6 +143,9 @@
 
     },
     "Resume recording" : {
+
+    },
+    "Save Walk" : {
 
     },
     "Sent to your iPhone." : {
@@ -136,6 +163,9 @@
     "Stop recording" : {
 
     },
+    "This watch is out of storage. Free up some space, then try again." : {
+
+    },
     "Time walking" : {
 
     },
@@ -143,6 +173,9 @@
 
     },
     "Trails" : {
+
+    },
+    "Try Again" : {
 
     },
     "Waiting for Your iPhone" : {
@@ -154,7 +187,13 @@
     "Waiting for your iPhone. It'll go across on its own." : {
 
     },
+    "Walk Interrupted" : {
+
+    },
     "Walk Kept" : {
+
+    },
+    "Walk Not Saved" : {
 
     },
     "Your iPhone is recording" : {

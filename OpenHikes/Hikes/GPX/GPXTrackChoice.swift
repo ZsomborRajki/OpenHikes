@@ -22,6 +22,7 @@
 //  on the second's arrival would throw away a file the hiker never saw.
 //
 
+import DequeModule
 import Foundation
 import Observation
 import OpenHikesData
@@ -59,8 +60,10 @@ final class GPXTrackChoice {
     /// straight to the next in ``waiting``, and a question is `nil` for the
     /// moment in between; a newcomer that saw only that would jump the queue.
     @ObservationIgnored private var isAsking = false
-    /// The callers queued behind the one on screen, first come first asked.
-    @ObservationIgnored private var waiting: [CheckedContinuation<Void, Never>] = []
+    /// The callers queued behind the one on screen, first come first asked —
+    /// a `Deque` so handing the turn to the front doesn't shift the rest, the
+    /// waiter queue ``TileLoadGate`` keeps too.
+    @ObservationIgnored private var waiting: Deque<CheckedContinuation<Void, Never>> = []
 
     /// How many questions are queued behind the one on screen — for the suite,
     /// which has no other way to know a concurrent ask has reached the queue.
