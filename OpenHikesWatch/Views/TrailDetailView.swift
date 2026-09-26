@@ -142,6 +142,14 @@ private struct RecordAlongTrailButton: View {
                 }
                 .tint(.red)
             }
+        case .unsaved:
+            // Said rather than offered, like the phone's recording above: a
+            // start from here would begin over a walk the watch has not
+            // written yet, and ``WatchRecorder/start(trailHikeID:title:)``
+            // refuses it. The Record screen is where it can be retried.
+            Label("Last walk not saved", systemImage: "exclamationmark.triangle")
+                .font(.footnote)
+                .foregroundStyle(.orange)
         case .preparing:
             ProgressView()
         case .recording, .paused:

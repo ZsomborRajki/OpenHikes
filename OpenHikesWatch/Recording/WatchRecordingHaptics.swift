@@ -38,7 +38,11 @@ extension WatchRecorder.Phase {
         // to an idle recorder, which is the whole reason the shared table has
         // a `finished` the phone never reaches.
         case .saved: .finished
-        case .failed: .failed
+        // A walk that could not be written is news worth feeling as much as
+        // a start that failed: it is still on the screen, and it is the one
+        // outcome a hiker who pressed Stop and dropped their wrist has to go
+        // back and look at.
+        case .unsaved, .failed: .failed
         }
     }
 }
