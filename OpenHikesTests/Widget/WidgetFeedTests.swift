@@ -8,8 +8,8 @@
 //  it, and whether that reading is fresh enough to show at all.
 //
 //  The throttle is part of the contract, not an implementation detail: the
-//  live-fix feed is fed from a once-a-second poll, and a widget that asks to
-//  be reloaded every second gets its reload budget cut by the system.
+//  live-fix feed is fed on every published fix, and a widget that asks to be
+//  reloaded that often gets its reload budget cut by the system.
 //
 
 import CoreLocation
@@ -275,7 +275,7 @@ final class WidgetFeedTests {
         #expect(!snapshot.statusText.contains("%"))
     }
 
-    /// The poll runs once a second; the feed must not.
+    /// Fixes can arrive seconds apart; the feed must not publish that often.
     @Test("a second fix moments later doesn't republish")
     func publishesAreThrottled() async throws {
         let hike = hike()

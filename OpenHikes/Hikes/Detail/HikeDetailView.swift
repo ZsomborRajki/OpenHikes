@@ -807,10 +807,9 @@ private extension HikeDetailView {
     /// way. Runs while this hike stays selected; cancelled when it changes.
     ///
     /// Driven by ``LocationManager/fixes`` rather than by a 1 Hz timer: the
-    /// source already throttles to one publish a second and already drops a
-    /// repeat of the last coordinate, so this now stops entirely while the
-    /// hiker is standing still instead of re-deriving the same match once a
-    /// second through every rest stop. The two moments that used to depend on
+    /// source publishes only when the hiker has moved, so this stops entirely
+    /// while they are standing still instead of re-deriving the same match
+    /// through every rest stop. The two moments that used to depend on
     /// the next tick — a scrub ending, and auto-follow being switched on —
     /// are handled by the `onChange` handlers in `body`.
     private func followLocation(profile: RouteProfile) async {

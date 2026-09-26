@@ -153,54 +153,37 @@ struct LocationPublishingTests {
         #expect(fix.course == 42)
     }
 
-    /// CoreLocation can deliver far more often than once a second; the
-    /// throttle is what keeps that off every observer downstream.
+    /// Every accepted fix is published, so a burst — the first few of a
+    /// launch, say, arriving as the receiver settles — leaves `coordinate` on
+    /// its last, the freshest, rather than on whichever arrived first.
     ///
-    /// Asserted on the published value rather than on a notification count.
+    /// Read off the published value rather than a notification count:
     /// `ObservationCounter` re-arms through a `Task`, so ten writes in one
-    /// runloop turn consume the single armed registration on the first and
-    /// reach the counter exactly once whether the throttle exists or not —
-    /// measured, by deleting `minimumPublishInterval` and watching this stay
-    /// green. `coordinate` is the only witness that can tell the two apart:
-    /// throttled it holds the *first* fix of the burst, unthrottled the last.
-    @Test("a burst of fixes publishes once")
-    func burstIsThrottled() {
-        let clock = TestClock()
-        let manager = LocationManager(clock: clock.read)
-
-        for step in 0..<10 {
-            manager.locationManager(
-                CLLocationManager(),
-                didUpdateLocations: [CLLocation(latitude: 47.63 + Double(step) * 1e-4, longitude: 12.86)]
-            )
+    /// runloop turn reach it once however many of them were published.
+    @Test("a burst of fixes publishes its latest")
+    func burstPublishesItsLatestFix() {
+        let manager = LocationManager()
+        let burst = (0..<10).map { step in
+            CLLocation(latitude: 47.63 + Double(step) * 1e-4, longitude: 12.86)
         }
+
+        for fix in burst {
+            manager.locationManager(CLLocationManager(), didUpdateLocations: [fix])
+        }
+
         // `onMainActor` runs the delegate body synchronously here, so there is
         // a value to read without settling for one.
-        #expect(manager.coordinate?.latitude == 47.63, "the nine behind the first are inside the window")
-
-        // Past `minimumPublishInterval`, which is private; the sibling tests
-        // step the same 1.1s over it.
-        clock.advance(by: 1.1)
-        manager.locationManager(
-            CLLocationManager(),
-            didUpdateLocations: [CLLocation(latitude: 47.64, longitude: 12.86)]
-        )
-        #expect(manager.coordinate?.latitude == 47.64, "and the window reopens rather than latching shut")
+        #expect(manager.coordinate?.latitude == burst.last?.coordinate.latitude)
     }
 
-    /// A hiker who has stopped — at a viewpoint, a hut, a photo — still gets
-    /// a fix every second. Republishing each one as a new value would wake the
-    /// map coordinator, which re-registers its observation through a `Task`
-    /// hop, once a second for as long as the app is open.
-    ///
-    /// Nothing downstream needs that heartbeat: auto-follow and the weather
-    /// poll both drive off `fixes`, which only emits when `coordinate`
-    /// changes, and the map only uses it to center on the very first fix. So
-    /// an unchanged fix has nobody to tell.
+    /// Core Location can hand over the same place twice — it sends a fresh
+    /// first fix every time the feed resumes, and that fix can be where the
+    /// last one was. Republishing it as a new value would wake the map
+    /// coordinator, which re-registers its observation through a `Task` hop,
+    /// and auto-follow, which would re-derive a match it already has.
     @Test("an unchanged fix isn't republished")
     func unchangedFixIsNotRepublished() async {
-        let clock = TestClock()
-        let manager = LocationManager(clock: clock.read)
+        let manager = LocationManager()
         let counter = ObservationCounter { _ = manager.coordinate }
         await counter.settle()
 
@@ -209,9 +192,6 @@ struct LocationPublishingTests {
         await counter.settle()
         #expect(counter.count == 1, "precondition: the first fix is published")
 
-        // Past the 1 s throttle, so this one is not being dropped for timing —
-        // it's the same place.
-        clock.advance(by: 1.1)
         manager.locationManager(
             CLLocationManager(),
             didUpdateLocations: [
@@ -219,14 +199,13 @@ struct LocationPublishingTests {
             ]
         )
         await counter.settle()
-        #expect(counter.count == 1, "standing still should not wake the map's observation every second")
+        #expect(counter.count == 1, "the same place again should not wake the map's observation")
     }
 
     /// …while actually moving must still publish, or auto-follow stops.
     @Test("a fix that moved is published")
     func movedFixIsPublished() async {
-        let clock = TestClock()
-        let manager = LocationManager(clock: clock.read)
+        let manager = LocationManager()
         let counter = ObservationCounter { _ = manager.coordinate }
         await counter.settle()
 
@@ -235,7 +214,6 @@ struct LocationPublishingTests {
             didUpdateLocations: [CLLocation(latitude: 47.6300, longitude: 12.8600)]
         )
         await counter.settle()
-        clock.advance(by: 1.1)
         manager.locationManager(
             CLLocationManager(),
             didUpdateLocations: [CLLocation(latitude: 47.6305, longitude: 12.8600)]

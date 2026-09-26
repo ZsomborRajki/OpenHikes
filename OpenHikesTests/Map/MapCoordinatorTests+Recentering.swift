@@ -46,8 +46,6 @@ extension MapCoordinatorTests {
         #expect(coordinator.hasHandledFirstFix)
         let centred = map.region.center.latitude
 
-        // Past the publish throttle, so the map really is offered this one.
-        clock.advance(by: 1.1)
         locationManager.locationManager(
             CLLocationManager(),
             didUpdateLocations: [CLLocation(latitude: 47.6400, longitude: 12.8600)]
@@ -114,8 +112,6 @@ extension MapCoordinatorTests {
         mapView().update(map, coordinator)
         #expect(coordinator.routeID == nil, "precondition: the route was deselected")
 
-        // Past the publish throttle, so the map really is offered this one.
-        clock.advance(by: 1.1)
         locationManager.locationManager(
             CLLocationManager(),
             didUpdateLocations: [CLLocation(latitude: 47.6400, longitude: 12.8600)]

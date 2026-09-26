@@ -238,8 +238,8 @@ private struct TrailStopRecentsSection: View {
     /// sometimes missing is a row a hiker learns not to look for. Until there
     /// is a fix it says so and waits, disabled, instead of doing nothing when
     /// pressed. Offered on ``LocationManager/hasFix``, which changes once, and
-    /// resolved on the tap, so the sheet is not rebuilt once a second while
-    /// the hiker is typing.
+    /// resolved on the tap, so the sheet is not rebuilt on every fix while the
+    /// hiker is typing.
     ///
     /// **The stop it puts down is not called "My Location".** Apple Maps' row
     /// means the hiker, and follows them; this one puts a point where they are
