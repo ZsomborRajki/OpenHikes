@@ -94,6 +94,11 @@ silently for as long as it is left to. So a run claims the simulator it
 resolved and refuses to start on one another run holds; `--device <name|udid>`
 gives this one its own device and `--derived-data <path>` its own build.
 
+**Get that device from the pool, never from `simctl create`:**
+`udid="$(Scripts/sim-pool.sh acquire)"` before a test command (repeating it is
+safe), and `Scripts/sim-pool.sh release` when the work is done. *Build and test*
+in the instructions file says how it picks, erases and frees a device.
+
 ## House rules an agent trips over first
 
 - **Do not edit `project.pbxproj` to add a file.** The target folders are

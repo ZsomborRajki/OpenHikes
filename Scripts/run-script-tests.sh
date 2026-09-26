@@ -27,6 +27,9 @@
 # file. They run against fixtures written here rather than against a stub.
 # So does Scripts/lib/sort-string-catalogs.swift, which rewrites every String
 # Catalog in the repository on each sync and must only ever reorder one.
+# Scripts/sim-pool.sh is here because what it decides — which device a session
+# lands on, and whether that device is erased first — is invisible until two
+# sessions' tests collide on one simulator or somebody's device is wiped.
 #
 # `xcrun`, `xcodebuild`, `swiftlint` and `periphery` are replaced with
 # recording stubs on PATH and the scripts are run for real against them.
@@ -92,6 +95,9 @@ mkdir -p "$stub_bin"
 # call so a test can assert which device each one addressed. STUB_DEVICES names
 # the `simctl list devices` fixture; STUB_CONTAINER is what get_app_container
 # prints, and an empty one makes it fail the way a missing app does.
+# STUB_CREATED_UDID, when set, is what `simctl create` answers, and the device
+# it made is appended to the fixture — under its last runtime, so a fixture
+# that should grow ends with an iOS one.
 cat > "$stub_bin/xcrun" <<'STUB'
 #!/usr/bin/env bash
 printf 'xcrun %s\n' "$*" >> "$STUB_CALL_LOG"
@@ -100,6 +106,12 @@ shift
 case "${1:-}" in
     list)
         cat "$STUB_DEVICES"
+        ;;
+    create)
+        if [[ -n "${STUB_CREATED_UDID:-}" ]]; then
+            printf '    %s (%s) (Shutdown) \n' "$2" "$STUB_CREATED_UDID" >> "$STUB_DEVICES"
+            printf '%s\n' "$STUB_CREATED_UDID"
+        fi
         ;;
     get_app_container)
         if [[ -z "${STUB_CONTAINER:-}" ]]; then
@@ -1794,6 +1806,144 @@ run_script "screenshots skips the library frames when there is no library" \
 if expect_status 0 \
     && expect_contains "$output" "nothing left to shoot" "the output" \
     && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
+    pass
+fi
+
+echo
+echo "Simulator pool"
+
+# Scripts/sim-pool.sh decides which device a session's tests land on and
+# whether it is erased first. Every case names its owner, so nothing here reads
+# the Claude Code session this suite may itself be running in, and the claims
+# go into the work directory rather than the ones this machine's sessions hold.
+sim_pool="$repository_root/Scripts/sim-pool.sh"
+export OPENHIKES_SIM_POOL_DIR="$work/sim-pool"
+pool_fixture="$work/devices-pool.txt"
+pool_one="A0000000-0000-4000-8000-000000000001"
+pool_two="A0000000-0000-4000-8000-000000000002"
+cat > "$pool_fixture" <<'EOF'
+== Devices ==
+-- watchOS 27.0 --
+    Apple Watch SE 3 (40mm) (33333333-3333-3333-3333-333333333333) (Shutdown)
+-- iOS 27.0 --
+    iPhone 18 Pro (77777777-7777-7777-7777-777777777777) (Booted)
+EOF
+export STUB_DEVICES="$pool_fixture"
+
+STUB_CREATED_UDID="$pool_one" \
+    run_script "sim-pool creates the first device when the pool is empty" \
+    "$sim_pool" acquire --owner alpha
+if expect_status 0 \
+    && expect_contains "$calls" "simctl create OpenHikes Pool 1 iPhone 18 Pro" "the recorded calls" \
+    && expect_contains "$calls" "simctl bootstatus $pool_one -b" "the recorded calls" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls" \
+    && expect_absent "$calls" "77777777" "the recorded calls"; then
+    if [[ "$(printf '%s\n' "$output" | tail -n 1)" == "$pool_one" ]]; then
+        pass
+    else
+        fail "did not end its output with the device's UDID" "$output"
+    fi
+fi
+
+run_script "sim-pool gives an owner back its own device, data and all" \
+    "$sim_pool" acquire --owner alpha
+if expect_status 0 \
+    && expect_contains "$output" "$pool_one" "the output" \
+    && expect_absent "$calls" "simctl create" "the recorded calls" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls"; then
+    pass
+fi
+
+STUB_CREATED_UDID="$pool_two" \
+    run_script "sim-pool creates the next number when every device is held" \
+    "$sim_pool" acquire --owner beta
+if expect_status 0 \
+    && expect_contains "$calls" "simctl create OpenHikes Pool 2 iPhone 18 Pro" "the recorded calls" \
+    && expect_contains "$output" "$pool_two" "the output"; then
+    pass
+fi
+
+OPENHIKES_SIM_POOL_MAX=2 \
+    run_script "sim-pool refuses to grow past its cap" \
+    "$sim_pool" acquire --owner gamma
+if expect_status 1 \
+    && expect_contains "$output" "at its cap of 2" "the error" \
+    && expect_absent "$calls" "simctl create" "the recorded calls"; then
+    pass
+fi
+
+run_script "sim-pool release gives the device back" \
+    "$sim_pool" release --owner alpha
+if expect_status 0 && expect_contains "$output" "Released OpenHikes Pool 1" "the output"; then
+    pass
+fi
+
+run_script "sim-pool hands a released device to the next owner, erased" \
+    "$sim_pool" acquire --owner gamma
+if expect_status 0 \
+    && expect_contains "$output" "$pool_one" "the output" \
+    && expect_contains "$calls" "simctl erase $pool_one" "the recorded calls" \
+    && expect_absent "$calls" "simctl create" "the recorded calls"; then
+    pass
+fi
+
+# A claim whose process has exited is one nobody holds. The PID is a process
+# this suite started and waited for, so it is certainly gone.
+true & dead_pid=$!
+wait "$dead_pid"
+printf 'owner=gamma\npid=%s\nstarted=\nclaimed=0\n' "$dead_pid" > "$OPENHIKES_SIM_POOL_DIR/$pool_one.claim"
+run_script "sim-pool takes over a claim whose process has exited" \
+    "$sim_pool" acquire --owner delta --keep-data
+if expect_status 0 \
+    && expect_contains "$output" "$pool_one" "the output" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls"; then
+    pass
+fi
+
+OPENHIKES_SIM_POOL_TTL_MINUTES=0 \
+    run_script "sim-pool takes over a claim left idle past its lease" \
+    "$sim_pool" acquire --owner epsilon
+if expect_status 0 \
+    && expect_contains "$output" "$pool_one" "the output" \
+    && expect_contains "$calls" "simctl erase $pool_one" "the recorded calls"; then
+    pass
+fi
+
+# Neither device has a claim, but each has a run on it: a process naming Pool
+# 1's UDID — `bash -c` puts it on its own command line as `$0`, and it waits on
+# a pipe this suite closes rather than on a duration — and a live
+# Scripts/run-ui-tests.sh lock on Pool 2.
+holder_fifo="$work/holder.fifo"
+mkfifo "$holder_fifo"
+bash -c 'read -r _ < "$1"' "$pool_one" "$holder_fifo" & holder_pid=$!
+rm -f "$OPENHIKES_SIM_POOL_DIR"/*.claim
+mkdir -p "$OPENHIKES_UI_TEST_LOCK_DIR/$pool_two.lock"
+printf '%s\n' "$$" > "$OPENHIKES_UI_TEST_LOCK_DIR/$pool_two.lock/pid"
+OPENHIKES_SIM_POOL_MAX=2 \
+    run_script "sim-pool never hands out a device a run is using" \
+    "$sim_pool" acquire --owner zeta
+echo > "$holder_fifo"
+wait "$holder_pid" 2>/dev/null || true
+rm -rf "$OPENHIKES_UI_TEST_LOCK_DIR/$pool_two.lock"
+if expect_status 1 \
+    && expect_contains "$output" "busy" "the status it printed" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls"; then
+    pass
+fi
+
+run_script "sim-pool prune keeps the lowest free devices and deletes the rest" \
+    "$sim_pool" prune --keep 1
+if expect_status 0 \
+    && expect_contains "$calls" "simctl delete $pool_two" "the recorded calls" \
+    && expect_absent "$calls" "simctl delete $pool_one" "the recorded calls"; then
+    pass
+fi
+
+run_script "sim-pool refuses to adopt a booted simulator" \
+    "$sim_pool" adopt "iPhone 18 Pro"
+if expect_status 1 \
+    && expect_contains "$output" "only an idle, shut-down simulator" "the error" \
+    && expect_absent "$calls" "simctl rename" "the recorded calls"; then
     pass
 fi
 
