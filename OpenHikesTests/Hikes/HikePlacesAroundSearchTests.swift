@@ -156,7 +156,7 @@ struct HikePlacesAroundSearchTests {
 
     // MARK: Adding
 
-    @Test("adding puts one found place on the hike, saved, and closes its card")
+    @Test("adding puts one found place on the hike, saved, and keeps its card open")
     func addingSavesOnePlace() async throws {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context, route: Line.route)
@@ -167,7 +167,7 @@ struct HikePlacesAroundSearchTests {
 
         #expect(added)
         #expect(hike.places.map(\.osm?.elementID) == [2])
-        #expect(search.selection == nil)
+        #expect(search.selection == Self.hut.id, "the card stays up, now the card of a place the hike has")
         let reopened = ModelContext(context.container)
         #expect(try reopened.fetch(FetchDescriptor<TrailPoint>()).map(\.id) == [Self.hut.id])
     }

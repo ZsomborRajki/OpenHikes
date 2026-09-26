@@ -124,7 +124,8 @@
 # `TrailPlaceCorridorSearch`,
 # `NearbyPlaceSuggestions`, and the editing rules on `Hike` in `TrailPoint`.
 #
-# `HikePlacesAroundView` replaced `HikePlaceSearchSheet` on 2026-09-26, and
+# `HikePlacesAroundView` replaced `HikePlaceSearchSheet` on 2026-09-26, with
+# `HikePlaceAroundCard` the place card it raises over the sheet, and
 # `TrailPlaceKindChips` came out of it the same day as the kind chips it and
 # the maker's `TrailPlaceFilterSection` now share — body code, whose switching
 # is `TrailPlaceFilter`'s and measured there:
@@ -223,6 +224,7 @@ OpenHikes/Hikes/Places/HikePlaceEditor.swift
 OpenHikes/Hikes/Places/HikePlaceAdder.swift
 OpenHikes/Hikes/Places/HikePlacesAroundView.swift
 OpenHikes/Hikes/Places/TrailPlaceKindChips.swift
+OpenHikes/Hikes/Places/HikePlaceAroundCard.swift
 OpenHikes/Hikes/Places/TrailPlaceCardParts.swift
 OpenHikes/Recording/RecordingPlaceSheet.swift
 OpenHikes/Map/MapSheet+Places.swift

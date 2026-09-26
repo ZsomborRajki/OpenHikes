@@ -41,7 +41,7 @@ extension MapSheet {
             mapController: mapController,
             placePins: placePins,
             onShowMap: presentation.makeRoomForTheMap,
-            onOpenPlace: { placeID in presentation.path.append(.place(hike, placeID)) },
+            onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
             onAddPlace: { spot in
                 presentation.path.append(.newPlace(hike, spot))
                 presentation.makeRoomForTheMap()
