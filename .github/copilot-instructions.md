@@ -412,7 +412,11 @@ it only on a `WatchWalkReceipt`. `transferUserInfo` guarantees delivery and
 guarantees nothing about how many times, so the import is idempotent on
 `HikeLocalState.watchSessionID` — device-local, for the reason `healthWorkoutID`
 is — and a walk the phone already has still earns a receipt. Withholding one
-would leave the watch offering the same transfer forever.
+would leave the watch offering the same transfer forever. A write the watch's
+disk refuses does not lose the walk either: the recorder holds it as
+`.unsaved`, the Record screen offers Try Again and a confirmed Discard rather
+than an OK, and Start is refused until one of them has happened —
+`WatchStoppedWalk` is the policy and its suite is the test.
 
 **The watch matches against the trail itself.** `WatchRouteTracker` projects a
 fix onto the one polyline it was handed; it is not `TrailMatcher` and must not
@@ -440,8 +444,8 @@ omission.** A `HKWorkoutSession` cannot be driven by a suite, no CI gate runs a
 watch simulator, and a watchOS unit bundle would need a host on a device
 nothing here has. So the half worth testing is pushed down into the shared
 package, where `swift test` covers it on the macOS host in milliseconds:
-`WatchRouteTracker`, `WatchWalkAccumulator`, `WatchFixPolicy` and `WatchLink`
-are all value types with suites. What is left in `OpenHikesWatch/` is Core
+`WatchRouteTracker`, `WatchWalkAccumulator`, `WatchFixPolicy`,
+`WatchStoppedWalk` and `WatchLink` are all value types with suites. What is left in `OpenHikesWatch/` is Core
 Location, HealthKit and SwiftUI — frameworks, not decisions — and anything that
 becomes a decision belongs on the other side of that line. The phone's half is
 covered by `OpenHikesTests/Watch/`.

@@ -281,6 +281,17 @@ final class WatchModel {
         if isFollowing { recorder.startFollowingFeed() }
     }
 
+    /// Tries again to write a walk that Stop could not. A success goes
+    /// through ``walkQueued(_:)`` like any other.
+    func retrySavingWalk() {
+        recorder.retrySave()
+    }
+
+    /// Throws away a walk that could not be written.
+    func discardUnsavedWalk() {
+        recorder.discardUnsaved()
+    }
+
     /// Offers a walk the recorder has just put on the disk queue.
     ///
     /// The hook rather than ``stopRecording()``'s own return value, because a
