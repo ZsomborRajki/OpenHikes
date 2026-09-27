@@ -178,4 +178,24 @@ struct RouteDifficultyShadingTests {
 
         #expect(shading.measurement == nil)
     }
+
+    /// Following the same hike keeps its stretches up while it is measured
+    /// again; one whose stored breakdown now grades nothing is not measured,
+    /// so the stretches must go then rather than stay over the line.
+    @Test("the same hike followed again with no grades left clears its stretches")
+    func refollowingAnUngradedHikeClears() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: try fixtureRoute())
+        let shading = RouteDifficultyShading(provider: try fixtureProvider(), defaults: try scratchDefaults())
+        shading.follow(hike)
+        await shading.measurement?.value
+        #expect(!shading.stretches.isEmpty)
+
+        hike.difficultyBreakdown = TrailDifficultyBreakdown(metersByCategory: [.unknown: 800, .unmapped: 200])
+        shading.follow(hike)
+
+        #expect(shading.measurement == nil)
+        #expect(shading.hikeID == nil)
+        #expect(shading.stretches.isEmpty)
+    }
 }

@@ -104,7 +104,12 @@ final class RouteDifficultyShading {
         guard isEnabled, let hike = followed, let provider else { return }
         // A breakdown already measured with no grade in it has answered the
         // question: there is nothing to colour, so there is nothing to fetch.
-        if let stored = hike.difficultyBreakdown, stored.surveyedFraction == 0 { return }
+        // Anything still drawn is from before — the same hike followed again
+        // after an edit took its grades away — and goes now.
+        if let stored = hike.difficultyBreakdown, stored.surveyedFraction == 0 {
+            publish(hikeID: nil, stretches: [])
+            return
+        }
         let measuredID = hike.id
         let route = hike.route
         let started = generation
