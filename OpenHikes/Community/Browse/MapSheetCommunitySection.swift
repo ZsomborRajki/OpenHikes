@@ -168,6 +168,9 @@ extension MapSheetHikes {
     /// for the same reason the share button is absent rather than disabled.
     var communityList: some View {
         List {
+            // Above everything, the queue included: a walk under way outranks
+            // a list — see ``MapSheetHikes/activeHikeSection``.
+            activeHikeSection
             reviewSection
             if community.nearbyListings.isEmpty {
                 Section {
