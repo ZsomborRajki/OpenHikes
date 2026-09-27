@@ -7,7 +7,6 @@
 //
 
 import Foundation
-@testable import OpenHikes
 
 /// Everything a stream delivered while this was reading it, in order.
 ///
