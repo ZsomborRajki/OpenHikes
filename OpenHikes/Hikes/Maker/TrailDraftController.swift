@@ -156,9 +156,10 @@ final class TrailDraftController {
     /// One tap, one meaning.
     private(set) var isEditing = false
 
-    /// A one-shot request to open the maker, in the shape ``MapController``'s
-    /// commands take: a token whose *change* is the message.
-    private(set) var openRequest = 0
+    /// One-shot requests to open the maker, read by the view that owns the
+    /// sheet's navigation stack. A feed rather than a token observed with
+    /// `onChange` — see ``EventFeed`` for what the token cost.
+    private let openFeed = EventFeed<Void>()
 
     /// What the place sheet is showing, or `nil` when it is down. See
     /// ``TrailDraftSelection``.
@@ -378,7 +379,7 @@ final class TrailDraftController {
             editingPlaceIDs = Set(hike.places.map(\.id))
             persist()
         }
-        openRequest &+= 1
+        openFeed.send(())
         return true
     }
 
@@ -387,7 +388,12 @@ final class TrailDraftController {
     /// has stopped offering one.
     func requestOpen() {
         guard isAvailable else { return }
-        openRequest &+= 1
+        openFeed.send(())
+    }
+
+    /// The requests to open the maker made from now on, for one reader.
+    func openRequests() -> AsyncStream<Void> {
+        openFeed.events()
     }
 
     /// Fills the first open field, or puts a new destination at the end — the

@@ -38,10 +38,10 @@
 //  away would make "start recording along X" a worse way to start a recording
 //  than "start recording".
 //
-//  So the trail request is left where ``HikeOpenRequests`` puts it and is
-//  applied by the view tree whenever there is one: immediately if the app is
-//  in front, and otherwise the next time the hiker looks at the map — which is
-//  the moment a drawn route is worth anything at all. The recording, which is
+//  So the trail request is sent through ``HikeOpenRequests`` and applied by
+//  the view tree the moment it arrives, whether the app is in front or behind
+//  — so the route is already drawn the next time the hiker looks at the map,
+//  which is the moment it is worth anything at all. The recording, which is
 //  the part that cannot wait, starts either way.
 //
 

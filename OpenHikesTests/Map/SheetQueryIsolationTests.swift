@@ -190,7 +190,7 @@ struct SheetQueryIsolationTests {
             walkSession: TrailWalkSession(context: ModelContext(container)),
             community: CommunityBrowser(transport: nil, blockList: .scratch()),
             review: CommunityReviewQueue(transport: nil),
-            selectedHikeID: nil,
+            selectedHike: nil,
             onOpen: { _ in /* unused */ },
             onSelectResult: { _ in /* unused */ },
             onSelectCompletion: { _ in /* unused */ },

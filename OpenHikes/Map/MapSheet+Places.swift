@@ -43,8 +43,10 @@ extension MapSheet {
             onShowMap: presentation.makeRoomForTheMap,
             onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
             onAddPlace: { spot in
-                presentation.path.append(.newPlace(hike, spot))
                 presentation.makeRoomForTheMap()
+                // The path last: the press arrives from the map, not as a
+                // tap's action — see ``SheetPresentation/path``.
+                presentation.path.append(.newPlace(hike, spot))
             }
         )
     }

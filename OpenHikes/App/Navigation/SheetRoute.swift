@@ -76,15 +76,20 @@ enum SheetRoute: Hashable {
         path = [.recording]
     }
 
-    static func openRecording(
-        hike: Hike?,
-        selectedHike: inout Hike?,
-        in path: inout [Self]
-    ) {
+    /// Selects the recording's hike, when there is one, and returns the path
+    /// that shows its screen.
+    ///
+    /// Returns the path rather than taking it `inout` beside the selection:
+    /// two `inout`s are written back when the call returns, in an order the
+    /// caller cannot choose, and the path has to be written after the
+    /// selection — see ``SheetPresentation/path``.
+    static func openRecording(hike: Hike?, selectedHike: inout Hike?) -> [Self] {
         if let hike {
             selectedHike = hike
         }
+        var path: [Self] = []
         reopenRecording(in: &path)
+        return path
     }
 
     /// Whether this route is showing the given hike — a pushed photo viewer

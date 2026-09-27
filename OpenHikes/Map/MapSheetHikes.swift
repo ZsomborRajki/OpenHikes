@@ -95,7 +95,13 @@ struct MapSheetHikes: View, Equatable {
     /// who is not a reviewer — so for almost every launch this draws nothing
     /// and costs one comparison. See ``CommunityReviewQueue``.
     var review: CommunityReviewQueue
-    let selectedHikeID: UUID?
+    /// The selected hike itself rather than its id, so the id is read here
+    /// and not in `MapSheet`'s body. Reading a `@Model` property is a
+    /// dependency on every write to that hike, and `MapSheet`'s body is the
+    /// sheet's navigation stack — see `MapSheet+Equatable.swift`. This body
+    /// already reads every row's hike, so it pays nothing new for it.
+    let selectedHike: Hike?
+    private var selectedHikeID: UUID? { selectedHike?.id }
     let onOpen: (Hike) -> Void
     /// A hike tapped in the search results: the caller clears the field and
     /// drops focus before opening it.
@@ -155,7 +161,7 @@ struct MapSheetHikes: View, Equatable {
         lhs.searchText == rhs.searchText
             && lhs.isSearchFocused == rhs.isSearchFocused
             && lhs.isCompact == rhs.isCompact
-            && lhs.selectedHikeID == rhs.selectedHikeID
+            && lhs.selectedHike === rhs.selectedHike
             && lhs.completer === rhs.completer
             && lhs.recorder === rhs.recorder
             && lhs.walkSession === rhs.walkSession

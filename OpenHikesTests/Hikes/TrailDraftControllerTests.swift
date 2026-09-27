@@ -107,25 +107,36 @@ struct TrailDraftControllerTests {
 
     // MARK: Opening
 
+    /// Proved against a request that *is* sent afterwards. The two carry
+    /// nothing to tell them apart and a reader takes one per turn, so the
+    /// first arriving says nothing on its own: it is given the turns to take
+    /// a second before counting.
     @Test("a request to open is refused while the pill isn't offered")
-    func openIsRefusedWhileWithdrawn() {
+    func openIsRefusedWhileWithdrawn() async {
         let maker = TrailDraftController()
+        let opens = FeedReader(maker.openRequests())
         maker.setHostScreenPresent(true)
 
         maker.requestOpen()
+        maker.setHostScreenPresent(false)
+        maker.requestOpen()
+        await settleDelegateHop(until: "the offered request to arrive") { !opens.received.isEmpty }
+        await settleDelegateHop()
 
-        #expect(maker.openRequest == 0)
+        #expect(opens.received.count == 1)
     }
 
-    @Test("a request to open posts a token the map screen can act on")
-    func openPostsAToken() {
+    @Test("a request to open is sent to the map screen, once per tap")
+    func openSendsARequest() async {
         let maker = TrailDraftController()
+        let opens = FeedReader(maker.openRequests())
         maker.setHostScreenPresent(false)
 
         maker.requestOpen()
         maker.requestOpen()
+        await settleDelegateHop(until: "both requests to arrive") { opens.received.count == 2 }
 
-        #expect(maker.openRequest == 2, "each tap is its own message")
+        #expect(opens.received.count == 2, "each tap is its own message")
     }
 
     // MARK: The canvas

@@ -44,11 +44,7 @@ struct SheetRouteTests {
         var selectedHike: Hike? = previous
         var path: [SheetRoute] = [.hike(previous)]
 
-        SheetRoute.openRecording(
-            hike: recording,
-            selectedHike: &selectedHike,
-            in: &path
-        )
+        path = SheetRoute.openRecording(hike: recording, selectedHike: &selectedHike)
 
         #expect(selectedHike?.id == recording.id)
         #expect(path == [.recording])

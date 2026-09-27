@@ -77,6 +77,19 @@ final class SheetPresentation {
     /// the flags below in the same breath as the write — including the write
     /// `NavigationStack` itself makes when the user swipes back, which no call
     /// site here would ever see.
+    ///
+    /// **Written last, and once.** A navigation that also moves the selection
+    /// or the sheet's height writes those first and this at the end, in one
+    /// assignment. From a tap it would not matter — SwiftUI folds everything a
+    /// tap's action writes into one update. From anywhere else — a task
+    /// reading an ``EventFeed``, an import finishing — a write here updates
+    /// the view graph there and then, taking with it what was written before
+    /// it and leaving what comes after for a second pass in the same frame.
+    /// That second pass updates the stack again, and SwiftUI reports it:
+    /// "Update NavigationRequestObserver tried to update multiple times per
+    /// frame". Measured on opening the maker, which cleared the selection
+    /// after the push and raised it on every open; cleared first, it raised
+    /// nothing.
     var path: [SheetRoute] {
         get {
             access(keyPath: \.path)
@@ -241,17 +254,20 @@ final class SheetPresentation {
         // The detent a reader chose is worth less than the thing they opened
         // the screen to look at.
         makeRoomForTheMap()
-        if let open = path.firstIndex(of: route) {
-            path.removeSubrange((open + 1)...)
+        // Built aside and assigned once — see ``path``.
+        var next = path
+        if let open = next.firstIndex(of: route) {
+            next.removeSubrange((open + 1)...)
         } else {
             // The gallery goes with its preview: its files belong to the
             // screen underneath, so leaving it would orphan it over the new
             // hike. Anything else on the stack — an owned hike, the recorder —
             // stays, and Back from the new preview lands there rather than on
             // the trail just left.
-            path.removeAll { $0.isCommunityPreview }
-            path.append(route)
+            next.removeAll { $0.isCommunityPreview }
+            next.append(route)
         }
+        path = next
     }
 
     /// Opens a published hike: the hiker's own copy of it when they have one,
@@ -406,9 +422,22 @@ final class SheetPresentation {
     /// because building one reads nothing: the stack calls the getter during
     /// its own update, which registers the dependency on the stack and not on
     /// whichever body happened to construct it.
-    var pathBinding: Binding<[SheetRoute]> {
-        Binding(get: { self.path }, set: { self.path = $0 })
-    }
+    ///
+    /// **Made once and kept**, rather than built by a computed property as
+    /// ``detentBinding`` is. `MapSheet`'s body hands this to the stack on every
+    /// pass, and a binding built afresh is a new input each time, so any pass
+    /// that happened to land in the same frame as a push — a selection
+    /// changing beside it, the sheet's height animating to make room — gave
+    /// the stack a second update of its path in one frame. SwiftUI says so, as
+    /// "Update NavigationRequestObserver tried to update multiple times per
+    /// frame" and "Update NavigationAuthority bound path tried to update
+    /// multiple times per frame". Measured on the two pushes that did it:
+    /// adding a published hike to the library, and opening a photo from its
+    /// pin on the map. Kept, the stack sees one path per push.
+    @ObservationIgnored private(set) lazy var pathBinding = Binding<[SheetRoute]>(
+        get: { [weak self] in self?.path ?? [] },
+        set: { [weak self] in self?.path = $0 }
+    )
 
     /// Drives `.presentationDetents(_:selection:)`, and a binding for the same
     /// reason.

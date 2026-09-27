@@ -102,8 +102,8 @@ struct OpenHikesApp: App {
             AppDependencyManager.shared.add(dependency: activityControl)
             // The one intent that reaches the view tree rather than the store.
             // Registered from the model's instance rather than a fresh one,
-            // because a request left on a second object is a request nothing
-            // is watching — see ``HikeOpenRequests``.
+            // because a request sent on a second object is a request nothing
+            // is listening to — see ``HikeOpenRequests``.
             AppDependencyManager.shared.add(dependency: appModel.hikeOpenRequests)
         }
     }
