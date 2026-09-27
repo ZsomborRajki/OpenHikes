@@ -109,6 +109,31 @@ nonisolated final class WalkUITests: XCTestCase {
         expectPhase(phase, contains: "Active")
     }
 
+    /// A walk under way is not one tab away from its controls: History draws
+    /// the progress card above the trail's walks while one is running, and
+    /// only then.
+    @MainActor
+    func testHistoryShowsTheWalkInProgressAboveItsWalks() {
+        let app = makeApp(arguments: [
+            "--ui-test-expanded-sheet",
+            "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+        ])
+        launch(app)
+        openHikeDetail(in: app)
+        app.segmentedControls["walk-segment"].buttons["History"].tap()
+        XCTAssertTrue(element("walk-history-empty", in: app).waitForExistence(timeout: UITestTimeout.existence))
+        XCTAssertFalse(element("trail-progress", in: app).exists, "no walk, no card")
+
+        app.buttons["walk-toggle"].tap()
+
+        XCTAssertTrue(
+            element("trail-progress", in: app).waitForExistence(timeout: UITestTimeout.existence),
+            "a walk started from History shows its progress there"
+        )
+        XCTAssertTrue(element("walk-controls", in: app).exists, "with its End")
+        XCTAssertTrue(element("walk-history-empty", in: app).exists, "above the walks, not instead of them")
+    }
+
     /// Ending a walk produces a summary whose percentage is coverage, and the
     /// summary is reachable again from the trail's History segment afterwards.
     @MainActor

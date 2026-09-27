@@ -197,7 +197,7 @@ struct HikeDetailView: View {
             segmentPicker
             switch interaction.segment {
             case .details: details
-            case .history: HikeWalkHistory(hike: hike, onOpen: onOpenWalk)
+            case .history: history
             }
         }
         // On the container rather than in the Photos and Places sections, so
@@ -380,6 +380,21 @@ struct HikeDetailView: View {
             // scroll away behind it instead of meeting a hard line, which is
             // what the bar's own glass is drawn to sit on.
             .softScrollEdgeEffect(for: .top)
+        }
+    }
+
+    /// This trail's walks — and, while one is under way, the same progress
+    /// card Details draws, above them. A walk in progress is the one thing
+    /// on this screen a hiker must not have to hunt for, and History is where
+    /// they land after flipping over to see how their last walk compared.
+    /// Not scrolled with the list: it is the walk now, and the rows are walks
+    /// before.
+    private var history: some View {
+        VStack(spacing: 0) {
+            WhileWalking(hikeID: hike.id, session: walkSession) {
+                progressSection.padding([.horizontal, .bottom])
+            }
+            HikeWalkHistory(hike: hike, onOpen: onOpenWalk)
         }
     }
 
