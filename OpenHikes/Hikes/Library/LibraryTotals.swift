@@ -253,14 +253,34 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
 // MARK: - Reading the library
 
 nonisolated enum LibraryTotalsSweep {
+    /// The two fetches the sweep makes. The app only ever uses ``store``; the
+    /// seam is there so a test can make either one fail.
+    struct Reads: Sendable {
+        var hikes: @Sendable (ModelContext) throws -> [Hike]
+        var walks: @Sendable (ModelContext) throws -> [HikeWalk]
+
+        static let store = Self(
+            hikes: { try $0.fetch(FetchDescriptor<Hike>()) },
+            walks: { try $0.fetch(FetchDescriptor<HikeWalk>()) }
+        )
+    }
+
     /// Every hike and walk in `container`, read once in a context of its own
     /// and walked into values. `@concurrent`, so a library as long as a
     /// hiker's walking life is walked off the main actor.
+    ///
+    /// Throws when either fetch does, rather than summing what the other one
+    /// returned: a library that could not be read is not an empty one, and a
+    /// walk read without its hikes loses the clocks that keep an afternoon
+    /// from counting twice.
     @concurrent
-    static func read(from container: ModelContainer) async -> (hikes: [LibraryHikeFacts], walks: [LibraryWalkFacts]) {
+    static func read(
+        from container: ModelContainer,
+        using reads: Reads = .store
+    ) async throws -> (hikes: [LibraryHikeFacts], walks: [LibraryWalkFacts]) {
         assertOffMainThread("Summing the library walks every route, and must stay off the main thread")
         let context = ModelContext(container)
-        let hikes = (try? context.fetch(FetchDescriptor<Hike>())) ?? []
+        let hikes = try reads.hikes(context)
         let hikeFacts = hikes.compactMap { hike -> LibraryHikeFacts? in
             // A recording still being drawn is not a walk yet.
             guard !hike.isRecording else { return nil }
@@ -279,7 +299,7 @@ nonisolated enum LibraryTotalsSweep {
                 isFromCommunity: hike.importedFromListingID != nil
             )
         }
-        let walks = (try? context.fetch(FetchDescriptor<HikeWalk>())) ?? []
+        let walks = try reads.walks(context)
         let walkFacts = walks.map { walk in
             LibraryWalkFacts(
                 hikeID: walk.hikeID,
