@@ -28,10 +28,11 @@ struct CloudSyncSection: View {
             Text("iCloud")
         } footer: {
             Text(
-                "Your recorded and imported hikes, and the photos taken along them, "
-                    + "are kept in your private iCloud storage and appear on your other "
-                    + "devices. Downloaded maps are not — they stay on the device that "
-                    + "downloaded them."
+                "Your recorded and imported hikes, and where and when each of their "
+                    + "photos was taken, are kept in your private iCloud storage and appear "
+                    + "on your other devices. The photo files themselves are not — they stay "
+                    + "on the device they were added on, as downloaded maps stay on the "
+                    + "device that downloaded them."
             )
         }
     }
