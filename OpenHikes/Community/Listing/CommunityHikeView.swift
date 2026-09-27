@@ -1106,7 +1106,7 @@ extension CommunityHikeView {
     /// The distance is the route's own length rather than
     /// ``CommunityListing/distanceMeters``, and that is the same call
     /// ``CommunityImport`` makes for the same reason: the listing's figure is
-    /// typed by a person in the CloudKit Console, the route is what was
+    /// one the submitting app wrote beside the route, the route is what was
     /// uploaded, and a preview whose stated length disagreed with the hike it
     /// is about to become would be wrong in the one place the hiker can see
     /// both. That disagreement is what is invisible here — a page built off

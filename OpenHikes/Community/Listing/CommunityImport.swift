@@ -39,11 +39,13 @@
 //  to contribute it, and a hike deleted and saved again came back without it.
 //
 //  And the distance is recomputed from the route rather than copied from the
-//  listing. The listing is a record a human creates by hand in the CloudKit
-//  Console, so its numbers are typed; the route is what was actually uploaded.
-//  Where the two disagree the route is the one that drew the line on the map,
-//  and a hike whose stated length disagreed with its own polyline would be
-//  wrong in the one place the hiker could see it.
+//  listing. The listing's figure is the submission's, carried across when a
+//  reviewer publishes it, and the submission's is a number the submitting app
+//  wrote in a field of its own beside the route rather than one derived from
+//  it; the route is what was actually uploaded. Where the two disagree the
+//  route is the one that drew the line on the map, and a hike whose stated
+//  length disagreed with its own polyline would be wrong in the one place the
+//  hiker could see it.
 //
 
 import Algorithms

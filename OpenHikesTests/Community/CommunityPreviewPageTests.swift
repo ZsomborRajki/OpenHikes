@@ -62,8 +62,8 @@ struct CommunityPreviewPageTests {
     }
 
     /// The two screens a hiker compares have to state the same length, and the
-    /// listing's own figure is the one that can disagree: it is typed by a
-    /// reviewer in the CloudKit Console, while both the preview and the
+    /// listing's own figure is the one that can disagree: it is a number the
+    /// submitting app wrote beside the route, while both the preview and the
     /// imported hike measure the route that was actually uploaded.
     ///
     /// Asserted against the imported hike rather than against

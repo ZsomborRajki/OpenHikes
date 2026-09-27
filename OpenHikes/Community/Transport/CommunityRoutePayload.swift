@@ -15,10 +15,10 @@
 //  straight to the map and to ``CommunityImport`` — so the one path that
 //  produces a *saved* hike was the one path that checked nothing.
 //
-//  A person approving a listing in the CloudKit Console is not validation of
-//  the file behind it. They read a title, a distance and a name; the route is
-//  an asset they cannot open, and what a reviewer approves is the hike rather
-//  than the JSON.
+//  A person approving a submission on the review screen is not validation of
+//  the file behind it. They read a title, a distance and a name and look at
+//  the line on the map; the file under that line is one they never see, and
+//  what a reviewer approves is the hike rather than the JSON.
 //
 //  ## What is refused, and what is only cleaned
 //
