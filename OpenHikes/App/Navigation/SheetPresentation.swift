@@ -435,8 +435,8 @@ final class SheetPresentation {
     /// adding a published hike to the library, and opening a photo from its
     /// pin on the map. Kept, the stack sees one path per push.
     @ObservationIgnored private(set) lazy var pathBinding = Binding<[SheetRoute]>(
-        get: { [weak self] in self?.path ?? [] },
-        set: { [weak self] in self?.path = $0 }
+        get: { @MainActor [weak self] in self?.path ?? [] },
+        set: { @MainActor [weak self] in self?.path = $0 }
     )
 
     /// Drives `.presentationDetents(_:selection:)`, and a binding for the same
