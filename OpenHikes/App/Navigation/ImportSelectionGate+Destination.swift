@@ -15,7 +15,9 @@ extension ImportSelectionGate {
         guard let route = path.last else { return .root }
         if let hikeID = Self.hikeScreen(route) { return .hike(hikeID) }
         switch route {
-        case .recording: return .recording
+        // *Places Nearby* is the recording's screen one push further in, and
+        // an import landing under it must not take the map from the walk.
+        case .recording, .placesNearby: return .recording
         case .trailDraft: return .trailDraft
         case .totals: return .totals
         case .communityHike(let listing): return .communityHike(listing.id)
@@ -42,8 +44,8 @@ extension ImportSelectionGate {
         case .placesAround(let hike): hike.id
         case .routeStyle(let hike): hike.id
         case .walk(let walk): walk.hikeID
-        case .communityHike, .communityPhoto, .pendingPhotos, .pendingSubmission, .recording, .totals,
-            .trailDraft:
+        case .communityHike, .communityPhoto, .pendingPhotos, .pendingSubmission, .placesNearby, .recording,
+            .totals, .trailDraft:
             nil
         }
     }

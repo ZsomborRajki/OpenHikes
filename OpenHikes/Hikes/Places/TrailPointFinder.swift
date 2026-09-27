@@ -171,7 +171,19 @@ final class TrailPointFinder {
     /// Asks what is in the visible area, ranked against `route` and leaving out
     /// anything already `placed`.
     func search(along route: [RouteCoordinate], avoiding placed: [TrailPlace]) {
-        guard let source, let area = searchableArea, canSearch else { return }
+        guard let area = searchableArea, canSearch else { return }
+        search(in: area, along: route, avoiding: placed)
+    }
+
+    /// Asks what is in `area` rather than in the area the map last settled
+    /// on — for a screen that has just asked the map to show `area` and must
+    /// not wait for the camera to arrive before asking. *Places Nearby* is the
+    /// one: see ``HikePlacesNearbyView``. Still one request, and still refused
+    /// while one is out or past ``TrailPointQuery/maximumRadiusMeters``.
+    func search(in area: CommunitySearchArea, along route: [RouteCoordinate], avoiding placed: [TrailPlace]) {
+        guard let source, !isSearching, !filter.shown.isEmpty,
+              area.radiusMeters > 0, area.radiusMeters <= TrailPointQuery.maximumRadiusMeters
+        else { return }
         let symbols = filter.shown
         isSearching = true
         task?.cancel()

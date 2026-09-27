@@ -253,17 +253,29 @@ struct HikePlacesAroundView: View {
 }
 
 /// One place in the list: the row every place list draws, and ⊕ to add it or
-/// a tick for one the hike already has.
-private struct TrailPlaceAroundRow: View {
+/// a tick for one the hike already has. *Places Nearby* draws it too — see
+/// ``HikePlacesNearbyView`` — with how far away each place is.
+struct TrailPlaceAroundRow: View {
     let entry: TrailPlaceAroundEntry
+    /// How far the place is from the hiker, where there is no line to measure
+    /// along — *Places Nearby*'s rows. `nil` on *Places Around Trail*, whose
+    /// row already says how far along the trail it is.
+    var distance: String?
     let onOpen: () -> Void
     let onAdd: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
             Button(action: onOpen) {
-                TrailPlaceRowView(row: entry.row)
-                    .contentShape(.rect)
+                HStack(spacing: 12) {
+                    TrailPlaceRowView(row: entry.row)
+                    if let distance {
+                        Text(distance)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+                .contentShape(.rect)
             }
             .buttonStyle(.plain)
             .accessibilityHint(Text("Shows the place's card"))

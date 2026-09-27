@@ -131,6 +131,13 @@ final class RecordingTrace {
     @ObservationIgnored private var reviewRoute: [CLLocationCoordinate2D] = []
     private(set) var revision = 0
 
+    /// The whole line drawn so far, as one array, for a reader that wants its
+    /// extent once — *Places Nearby* framing the walk as it opens, see
+    /// ``PlacesNearbyFrame``. Copies every coordinate, so never per fix.
+    var recordedCoordinates: [CLLocationCoordinate2D] {
+        committedChunks.flatMap(\.self) + tail
+    }
+
     func append(
         _ coordinate: CLLocationCoordinate2D,
         provisional: Bool = false
