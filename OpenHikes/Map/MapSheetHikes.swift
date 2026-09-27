@@ -533,7 +533,12 @@ private extension MapSheetHikes {
     /// that sorts to the top must be the same row, and there is one rule for
     /// that already.
     var activeHikeID: UUID? {
-        hikes.first { status(for: $0) != nil }?.id
+        activeHike?.id
+    }
+
+    /// The row ``activeHikeID`` names — see there for the rule.
+    var activeHike: Hike? {
+        hikes.first { status(for: $0) != nil }
     }
 
     func hikeRow(_ hike: Hike) -> some View {
@@ -644,7 +649,7 @@ extension MapSheetHikes {
     /// same walk on either side. Absent when nothing is under way — which is
     /// what keeps the community half the community's the rest of the time.
     @ViewBuilder var activeHikeSection: some View {
-        if let hike = hikes.first(where: { status(for: $0) != nil }) {
+        if let hike = activeHike {
             Section {
                 hikeRow(hike)
                     .moveDisabled(true)

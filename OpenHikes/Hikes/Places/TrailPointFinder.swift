@@ -180,10 +180,16 @@ final class TrailPointFinder {
     /// not wait for the camera to arrive before asking. *Places Nearby* is the
     /// one: see ``HikePlacesNearbyView``. Still one request, and still refused
     /// while one is out or past ``TrailPointQuery/maximumRadiusMeters``.
-    func search(in area: CommunitySearchArea, along route: [RouteCoordinate], avoiding placed: [TrailPlace]) {
+    /// Answers whether it asked, so a screen that must ask again once the one
+    /// out has landed knows this one was refused.
+    @discardableResult func search(
+        in area: CommunitySearchArea,
+        along route: [RouteCoordinate],
+        avoiding placed: [TrailPlace]
+    ) -> Bool {
         guard let source, !isSearching, !filter.shown.isEmpty,
               area.radiusMeters > 0, area.radiusMeters <= TrailPointQuery.maximumRadiusMeters
-        else { return }
+        else { return false }
         let symbols = filter.shown
         isSearching = true
         task?.cancel()
@@ -198,6 +204,7 @@ final class TrailPointFinder {
             guard let self, !Task.isCancelled else { return }
             receive(outcome)
         }
+        return true
     }
 
     func dismissNotice() {

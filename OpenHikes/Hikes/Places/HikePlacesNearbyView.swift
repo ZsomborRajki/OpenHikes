@@ -56,9 +56,10 @@ struct HikePlacesNearbyView: View {
     /// What the rows are measured from: the hiker as the screen opened, or
     /// the middle of the first search where there was no fix to read.
     @State private var origin: CLLocationCoordinate2D?
-    /// The last area asked about and the kinds it asked for, so switching a
-    /// kind on asks that area again and *Try Again* has something to retry.
-    @State private var lastSearch: PlacesNearbySearch?
+    /// What has been asked, so switching a kind on asks that area again,
+    /// *Try Again* has something to retry, and coming back to the screen asks
+    /// nothing unless a search was cut off.
+    @State private var asked = PlacesNearbySearch()
 
     private var filter: TrailPlaceFilter { around.finder.filter }
 
@@ -158,11 +159,22 @@ struct HikePlacesNearbyView: View {
             // No line to measure along: the rows are ordered by distance from
             // the hiker instead — see ``PlacesNearbyEntry``.
             search.receiveArea(places, along: [])
+            asked.answer(keeping: filter.shown)
+            // A kind switched on while this was out was refused then.
+            askAgainIfWider()
         }
         if let token {
             around.show(search.candidates(showing: filter.shown, held: hike.places), token: token)
         }
         onShowMap()
+        // Back from a screen pushed over this one — *Add Place*, or a
+        // photograph — which took the claim and with it cancelled anything
+        // out. The map stays where the hiker left it, and only a search that
+        // never answered is asked again.
+        if asked.hasAsked {
+            if let area = asked.interrupted { ask(area) }
+            return
+        }
         let here = position()
         guard let region = PlacesNearbyFrame.region(line: line(), position: here) else { return }
         origin = here ?? region.center
@@ -178,20 +190,20 @@ struct HikePlacesNearbyView: View {
     }
 
     private func ask(_ area: CommunitySearchArea) {
-        lastSearch = PlacesNearbySearch(area: area, symbols: filter.shown)
         if origin == nil { origin = area.coordinate }
-        around.finder.search(in: area, along: [], avoiding: hike.places)
+        let symbols = filter.shown
+        let isTaken = around.finder.search(in: area, along: [], avoiding: hike.places)
+        asked.ask(area, for: symbols, isTaken: isTaken)
     }
 
     private func retry() {
-        if let lastSearch { ask(lastSearch.area) }
+        if let area = asked.area { ask(area) }
     }
 
     /// Asks the last area again when a kind it left out has been switched on.
     /// Switching one off only filters what was already found.
     private func askAgainIfWider() {
-        guard let lastSearch, !filter.shown.isSubset(of: lastSearch.symbols) else { return }
-        ask(lastSearch.area)
+        if let area = asked.widened(showing: filter.shown) { ask(area) }
     }
 
     private func open(_ entry: TrailPlaceAroundEntry) {
@@ -217,10 +229,53 @@ struct HikePlacesNearbyView: View {
     }
 }
 
-/// An area *Places Nearby* asked about, and the kinds it asked for.
-private struct PlacesNearbySearch {
-    let area: CommunitySearchArea
-    let symbols: Set<TrailPlaceSymbol>
+/// What *Places Nearby* has asked the finder, and whether it has answered.
+///
+/// The kinds are the ones of the last request the finder *took*, not the last
+/// one tried: the first search goes out the moment the screen opens, and a
+/// kind switched on while it is out is refused. Recording that refusal as
+/// asked would never ask for the kind at all.
+struct PlacesNearbySearch: Equatable {
+    /// The area last asked about — the frame, the pill or *Try Again* —
+    /// whether or not the finder took it.
+    private(set) var area: CommunitySearchArea?
+    /// The kinds of the last request the finder took. Empty until it takes
+    /// one, so the first kind switched on asks.
+    private(set) var symbols: Set<TrailPlaceSymbol> = []
+    /// Whether that request has answered.
+    private(set) var isAnswered = false
+
+    /// Whether the screen has asked anything yet — framed the map and asked
+    /// about it, which it does once.
+    var hasAsked: Bool { area != nil }
+
+    /// The area to ask again as the screen comes back, if the last request
+    /// never answered: a screen pushed over this one takes the map's claim,
+    /// and giving it up cancels the search that is out.
+    var interrupted: CommunitySearchArea? { isAnswered ? nil : area }
+
+    /// The area to ask again when `shown` holds a kind the last request the
+    /// finder took left out.
+    func widened(showing shown: Set<TrailPlaceSymbol>) -> CommunitySearchArea? {
+        shown.isSubset(of: symbols) ? nil : area
+    }
+
+    /// Records asking about `area` for `symbols`. Only the area is kept when
+    /// the finder refused — one already out, or every kind switched off.
+    mutating func ask(_ area: CommunitySearchArea, for symbols: Set<TrailPlaceSymbol>, isTaken: Bool) {
+        self.area = area
+        guard isTaken else { return }
+        self.symbols = symbols
+        isAnswered = false
+    }
+
+    /// Records that the request out has answered, with the kinds `shown`
+    /// as it landed. The finder drops a kind switched off while it was out —
+    /// see ``TrailPointFinder`` — so switching it back on must ask again.
+    mutating func answer(keeping shown: Set<TrailPlaceSymbol>) {
+        isAnswered = true
+        symbols.formIntersection(shown)
+    }
 }
 
 /// One row of *Places Nearby*: a place, whether the walk has it, and how far
