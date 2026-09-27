@@ -13,15 +13,43 @@
 //
 //  That choice brings the two things a non-consumable does not have, and both
 //  are handled here rather than left to the views. A subscription *lapses*,
-//  and StoreKit raises no transaction when it does — see ``statusTask``. And
-//  its introductory offer can be spent, so the trial is advertised only to an
-//  account that can still take it.
+//  and StoreKit raises no transaction when it does — see
+//  ``EntitlementEvent/statusChanged``. And its introductory offer can be
+//  spent, so the trial is advertised only to an account that can still take
+//  it.
 //
 
+import AsyncAlgorithms
 import Foundation
 import Observation
 import OSLog
 import StoreKit
+
+/// What woke the entitlement listener — see ``MapEntitlementStore/start()``.
+///
+/// One listener reads both of StoreKit's sequences, merged, so the store keeps
+/// one task for the life of the process rather than one per sequence, and
+/// handles one event at a time: a status change that lands while a
+/// transaction is being finished waits for it instead of resolving beside it.
+/// Neither kind decides the entitlement itself: each is a hint that it may
+/// have moved, and `currentEntitlements` is the one answer the store
+/// publishes.
+private enum EntitlementEvent: Sendable {
+    /// The sequence a non-consumable did not need.
+    ///
+    /// `Transaction.updates` fires when a subscription *renews*, because a
+    /// renewal is a new transaction — but nothing is issued when one expires,
+    /// so an app watching only that sequence keeps showing paid maps to a
+    /// lapsed subscriber until the next cold launch. Subscription status is
+    /// the sequence that reports the end of a period, and
+    /// ``MapEntitlementStore/sceneDidBecomeActive()`` is the backstop for a
+    /// lapse that happened while the process was not running.
+    case statusChanged
+    /// Anything that issues or revises a transaction — a renewal, a refund, a
+    /// family-sharing grant, an interrupted purchase finishing. Verified and
+    /// finished before the entitlement is re-read.
+    case transaction(VerificationResult<Transaction>)
+}
 
 /// Drives the paywall and the locked rows in Settings.
 ///
@@ -95,21 +123,13 @@ final class MapEntitlementStore {
     /// needs the button, so a failed load must not take it away.
     var canRestore: Bool { !isWorking }
 
+    /// Reads every ``EntitlementEvent`` for the life of the process.
+    ///
     /// Never cancelled: the store is created once by ``OpenHikesModel`` and
     /// lives as long as the process, and a `deinit` cannot touch a main-actor
-    /// property anyway. `guard updatesTask == nil` is what keeps ``start()``
+    /// property anyway. `guard listenerTask == nil` is what keeps ``start()``
     /// from opening a second one.
-    private var updatesTask: Task<Void, Never>?
-    /// The listener that a non-consumable did not need.
-    ///
-    /// `Transaction.updates` fires when a subscription *renews*, because a
-    /// renewal is a new transaction — but nothing is issued when one expires,
-    /// so an app watching only that sequence keeps showing paid maps to a
-    /// lapsed subscriber until the next cold launch. Subscription status is
-    /// the sequence that reports the end of a period, and
-    /// ``sceneDidBecomeActive()`` is the backstop for a lapse that happened
-    /// while the process was not running.
-    private var statusTask: Task<Void, Never>?
+    private var listenerTask: Task<Void, Never>?
     private static let logger = Logger(subsystem: "OpenHikes", category: "Purchases")
 
     /// Injectable so a suite can drive the store without StoreKit. The default
@@ -174,19 +194,26 @@ final class MapEntitlementStore {
     /// resolve, which is the order StoreKit documents: a transaction that
     /// arrives while the initial query is in flight — an interrupted purchase
     /// finishing, a family-sharing grant — would otherwise be missed until the
-    /// next launch.
+    /// next launch. `merge` opens the two sequences from tasks of its own
+    /// once the listener asks it for a first event, so they are opened
+    /// alongside that query rather than strictly ahead of it; a foreground
+    /// launch resolves again as the scene becomes active, through
+    /// ``sceneDidBecomeActive()``.
     func start() {
-        guard updatesTask == nil else { return }
-        updatesTask = Task { [weak self] in
-            for await update in Transaction.updates {
+        guard listenerTask == nil else { return }
+        listenerTask = Task { [weak self] in
+            let events = merge(
+                Transaction.updates.map { update in EntitlementEvent.transaction(update) },
+                Product.SubscriptionInfo.Status.updates.map { _ in EntitlementEvent.statusChanged }
+            )
+            for await event in events {
                 guard let self else { return }
-                await handle(update)
-            }
-        }
-        statusTask = Task { [weak self] in
-            for await _ in Product.SubscriptionInfo.Status.updates {
-                guard let self else { return }
-                await refresh()
+                switch event {
+                case .statusChanged:
+                    await refresh()
+                case .transaction(let update):
+                    await handle(update)
+                }
             }
         }
         Task { await refresh() }
@@ -196,7 +223,7 @@ final class MapEntitlementStore {
     ///
     /// A subscription can lapse while the app is not running, and can be
     /// cancelled or refunded entirely outside it — in the App Store, or on
-    /// another device. Neither leaves anything for ``statusTask`` to receive
+    /// another device. Neither leaves anything for the listener to receive
     /// in *this* process, so the entitlement is re-read whenever the app comes
     /// back. It is a cheap local query and does not prompt for a password.
     func sceneDidBecomeActive() {

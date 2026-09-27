@@ -33,14 +33,15 @@
 //  ## One thing this suite cannot clean up after itself
 //
 //  `start()` opens a `Transaction.updates` and a
-//  `Product.SubscriptionInfo.Status.updates` iterator that are deliberately
-//  never cancelled — the store is a process-lifetime object owned by
-//  ``OpenHikesModel`` and documents that choice. So a test that calls it
-//  leaves two parked iterators behind for whatever suite runs next — there is
-//  no longer a product query among them, since `SubscriptionStoreView` loads
-//  its own. Nothing here can prevent that; covering `start()` at all means
-//  accepting it. It is recorded rather than hidden so that a future
-//  investigation into cross-suite state starts with this file already ruled in.
+//  `Product.SubscriptionInfo.Status.updates` iterator, merged into one
+//  listener, that are deliberately never cancelled — the store is a
+//  process-lifetime object owned by ``OpenHikesModel`` and documents that
+//  choice. So a test that calls it leaves two parked iterators behind, and the
+//  merge reading them, for whatever suite runs next — there is no longer a
+//  product query among them, since `SubscriptionStoreView` loads its own.
+//  Nothing here can prevent that; covering `start()` at all means accepting
+//  it. It is recorded rather than hidden so that a future investigation into
+//  cross-suite state starts with this file already ruled in.
 //
 
 import Foundation
