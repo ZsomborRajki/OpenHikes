@@ -9,25 +9,45 @@
 //  kept: a library changes by a hike at a time and re-summing one on open is
 //  cheaper than keeping a second copy of every figure in step with it.
 //
+//  A library that could not be read says so, with *Try Again*, rather than
+//  showing the zeroes an empty one would: nothing is summed from half a read.
+//
 
 import Charts
 import OpenHikesData
+import os
 import SwiftData
 import SwiftUI
 
 struct LibraryTotalsView: View {
+    private static let logger = Logger(subsystem: "OpenHikes", category: "LibraryTotals")
+
     /// Opens one of the records, the way a row of the library does.
     var onOpenHike: (Hike) -> Void = { _ in /* no-op default */ }
 
     @Environment(\.modelContext)
     private var modelContext
     @State private var totals: LibraryTotals?
+    @State private var couldNotRead = false
+    /// Bumped by *Try Again*, which re-runs the sum.
+    @State private var attempt = 0
 
     var body: some View {
         ScrollView {
             if let totals {
                 LibraryTotalsContent(totals: totals, onOpenHike: open)
                     .padding()
+            } else if couldNotRead {
+                ContentUnavailableView {
+                    Label("Couldn't Add Up Your Hikes", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text("Your library couldn't be read just now.")
+                } actions: {
+                    Button("Try Again") { attempt += 1 }
+                        .glassButtonStyle()
+                        .accessibilityIdentifier("library-totals-retry")
+                }
+                .padding(.top, 40)
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity)
@@ -38,10 +58,23 @@ struct LibraryTotalsView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .task {
-            let read = await LibraryTotalsSweep.read(from: modelContext.container)
+        .task(id: attempt) { await sum() }
+    }
+
+    /// Replaces the figures with a fresh sum, or with the failure: figures
+    /// from an earlier read are not left up as if they were this one's.
+    private func sum() async {
+        couldNotRead = false
+        do {
+            let read = try await LibraryTotalsSweep.read(from: modelContext.container)
             let year = Calendar.autoupdatingCurrent.component(.year, from: .now)
             totals = LibraryTotals(hikes: read.hikes, walks: read.walks, year: year)
+        } catch {
+            Self.logger.error(
+                "The library could not be read for its totals: \(error.localizedDescription, privacy: .public)"
+            )
+            totals = nil
+            couldNotRead = true
         }
     }
 
