@@ -62,6 +62,35 @@ nonisolated enum HikeTrailAnalysis {
         )
     }
 
+    /// Every graded stretch of `route`, in order, for the map to colour the
+    /// line by — see ``RouteDifficultyShading``.
+    ///
+    /// Only the surveyed grades: a stretch OSM has no grade for, or no way
+    /// under at all, is left out rather than returned as `unknown`, because
+    /// what the map does with one is draw nothing over the hike's own colour.
+    ///
+    /// The same graph, fetched the same way, as ``breakdowns(route:provider:)``,
+    /// so the colours on the line and the percentages under the Difficulty
+    /// heading are one measurement. The provider shares an in-flight fetch,
+    /// so the detail screen asking for its breakdown at the same moment costs
+    /// one round of Overpass requests, not two. Quiet on failure for the same
+    /// reason that is: an empty answer draws the line as it always was.
+    @concurrent
+    static func difficultyRuns(
+        route: [RouteCoordinate],
+        provider: any TrailGraphProviding
+    ) async -> [TrailCategoryRun<TrailDifficulty>] {
+        assertOffMainThread("Hike trail analysis must stay off the main thread")
+        guard route.count > 1 else { return [] }
+        guard let graph = await graph(covering: route, provider: provider) else { return [] }
+        let runs = try? await TrailBreakdownAnalyzer.runs(
+            of: TrailDifficulty.self,
+            route: route,
+            graph: graph
+        )
+        return (runs ?? []).filter(\.category.isSurveyed)
+    }
+
     /// The cached graph when it already covers the whole route, and a
     /// downloaded one otherwise.
     ///

@@ -17,6 +17,11 @@
 //  properties is in this screen, so the drag repaints this and the map's line
 //  and nothing else.
 //
+//  The *Difficulty Colors* switch at the bottom is the odd one out: it is not
+//  this hike's, it is every hike's — see ``RouteDifficultyShading``. It sits
+//  here because this is where a hiker looks when they want to know why their
+//  line is not the colour they picked, and it says so under itself.
+//
 
 import OpenHikesData
 import OpenHikesShared
@@ -36,6 +41,9 @@ struct RouteStyleView: View {
                     widthRow
                     RouteLinePatternPicker(hike: hike)
                         .padding(.vertical, 10)
+                }
+                PlaceCardList(title: String(localized: "All Hikes")) {
+                    RouteDifficultySwitch()
                 }
             }
             .padding()
@@ -141,5 +149,75 @@ struct RouteStyleRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("route-style-row")
+    }
+}
+
+/// The *Difficulty Colors* switch, and the key to the colours it draws.
+///
+/// Its own view so the switch's position is read here and not by
+/// ``RouteStyleView``: flipping it redraws one row rather than the colour
+/// wells beside it.
+private struct RouteDifficultySwitch: View {
+    /// How faded the key is while the switch is off: still there to say what
+    /// turning it on would do, but plainly not what the map is showing.
+    private static let offKeyOpacity = 0.4
+
+    @Environment(OpenHikesModel.self)
+    private var appModel
+
+    var body: some View {
+        let shading = appModel.routeDifficulty
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(
+                isOn: Binding(get: { shading.isEnabled }, set: { shading.setEnabled($0) })
+            ) {
+                Label("Difficulty Colors", systemImage: "mountain.2")
+            }
+            .frame(minHeight: StatCardMetrics.rowMinimumHeight)
+            .accessibilityIdentifier("route-difficulty-toggle")
+            TrailDifficultyKey()
+                .opacity(shading.isEnabled ? 1 : Self.offKeyOpacity)
+            Text(
+                """
+                Colors each stretch of the line by its OpenStreetMap \
+                difficulty grade, as in the Difficulty section. Ungraded \
+                stretches keep the route color. Applies to every hike.
+                """
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.bottom, 10)
+    }
+}
+
+/// The six grades' colours, easiest to hardest, as one bar.
+///
+/// A key rather than a legend: the names are the Difficulty section's to
+/// read out, and six of them would be a second copy of it on a screen about
+/// something else. VoiceOver hears the ends of the scale instead.
+private struct TrailDifficultyKey: View {
+    private static let grades = TrailDifficulty.displayOrdering.filter(\.isSurveyed)
+
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 2) {
+                ForEach(Self.grades, id: \.self) { grade in
+                    Rectangle().fill(grade.color)
+                }
+            }
+            .frame(height: TrailBreakdownMetrics.barHeight / 2)
+            .clipShape(.capsule)
+            HStack {
+                Text("Easier")
+                Spacer()
+                Text("Harder")
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Difficulty colors")
+        .accessibilityValue("From green for hiking to dark red for difficult alpine hiking")
     }
 }

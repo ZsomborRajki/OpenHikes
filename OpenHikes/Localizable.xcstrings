@@ -452,6 +452,9 @@
     "Adds up everything you have hiked today." : {
 
     },
+    "All Hikes" : {
+
+    },
     "Also Save to Photos" : {
 
     },
@@ -594,6 +597,9 @@
 
     },
     "Colors" : {
+
+    },
+    "Colors each stretch of the line by its OpenStreetMap difficulty grade, as in the Difficulty section. Ungraded stretches keep the route color. Applies to every hike." : {
 
     },
     "Community" : {
@@ -740,6 +746,12 @@
     "Details" : {
 
     },
+    "Difficulty colors" : {
+
+    },
+    "Difficulty Colors" : {
+
+    },
     "Discard Changes" : {
 
     },
@@ -789,6 +801,9 @@
 
     },
     "Each track becomes a hike of its own." : {
+
+    },
+    "Easier" : {
 
     },
     "Edit" : {
@@ -872,6 +887,9 @@
     "Free Up Space" : {
 
     },
+    "From green for hiking to dark red for difficult alpine hiking" : {
+
+    },
     "From OpenStreetMap" : {
 
     },
@@ -879,6 +897,9 @@
 
     },
     "Give this trail a name, or leave it blank to keep the default." : {
+
+    },
+    "Harder" : {
 
     },
     "Have a GPX file? Tap %@ to import it." : {
