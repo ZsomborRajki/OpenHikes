@@ -1094,6 +1094,9 @@
     "Location access is off" : {
 
     },
+    "Looking around here…" : {
+
+    },
     "Looking around the trail…" : {
 
     },
@@ -1437,6 +1440,9 @@
     "Opens the trail, where the hike can be paused or ended." : {
 
     },
+    "OpenStreetMap has nothing of these kinds here. Move the map to look somewhere else." : {
+
+    },
     "OpenStreetMap has nothing of these kinds this close to the trail." : {
 
     },
@@ -1630,7 +1636,13 @@
     "Places Around Trail" : {
 
     },
+    "Places from OpenStreetMap, in the area the map shows. Move the map and tap Search This Area to look somewhere else, or press and hold it to add a place of your own." : {
+
+    },
     "Places from OpenStreetMap. Press and hold the map to add a place of your own anywhere, on the trail or off it." : {
+
+    },
+    "Places Nearby" : {
 
     },
     "Press and hold the map to add a stop, or tap a grey route to take it instead. Press and hold a stop to drag it somewhere else." : {
@@ -2109,6 +2121,9 @@
     "The map search service is busy. Try again in a moment." : {
 
     },
+    "The map shows too wide an area to search. Zoom in, then tap Search This Area." : {
+
+    },
     "The photograph is deleted from this device for good." : {
 
     },
@@ -2401,6 +2416,9 @@
 
     },
     "Zoom in to look here" : {
+
+    },
+    "Zoom In to Search" : {
 
     },
     "Zoom in to search somewhere else." : {

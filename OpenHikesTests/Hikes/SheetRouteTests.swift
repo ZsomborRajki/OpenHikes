@@ -60,6 +60,8 @@ struct SheetRouteTests {
             .photo(deleted, UUID()),
             .place(deleted, UUID()),
             .newPlace(deleted, HikePlaceSpot(CLLocationCoordinate2D(latitude: 47.6, longitude: 12.9))),
+            .placesAround(deleted),
+            .placesNearby(deleted),
             .routeStyle(deleted),
             .hike(survivor),
         ]
@@ -191,8 +193,12 @@ struct SheetRouteTests {
             .routeStyle(hike),
             .recording,
             .trailDraft,
+            .placesAround(hike),
+            .placesNearby(hike),
+            .placesNearby(hike),
         ]
-        #expect(routes.count == 6)
+        #expect(routes.count == 8)
+        #expect(SheetRoute.placesAround(hike) != .placesNearby(hike))
         #expect(routes.contains(.routeStyle(hike)))
         #expect(!routes.contains(.routeStyle(Fixture.hike(in: context))))
         #expect(routes.contains(.place(hike, id)))

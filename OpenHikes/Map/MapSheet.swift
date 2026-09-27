@@ -107,7 +107,9 @@ struct MapSheet: View {
         appModel.autoSaveController
     }
 
-    private var hikeRecorder: HikeRecorder {
+    /// Internal rather than private so *Places Nearby*, in
+    /// `MapSheet+Places.swift`, can read the walk it frames.
+    var hikeRecorder: HikeRecorder {
         appModel.hikeRecorder
     }
 
@@ -340,7 +342,8 @@ struct MapSheet: View {
             pendingSubmissionDestination(pending)
         case let .pendingPhotos(pending):
             pendingPhotosDestination(pending)
-        case .hike, .newPlace, .photo, .place, .placesAround, .recording, .routeStyle, .totals, .trailDraft, .walk:
+        case .hike, .newPlace, .photo, .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals,
+            .trailDraft, .walk:
             EmptyView()
         }
     }
@@ -500,7 +503,7 @@ struct MapSheet: View {
             )
         case .communityHike, .communityPhoto, .pendingSubmission, .pendingPhotos:
             communityDestination(for: route)
-        case .place, .newPlace, .placesAround:
+        case .place, .newPlace, .placesAround, .placesNearby:
             placesDestination(for: route)
         case .trailDraft: trailDraftDestination
         case .recording: recordingDestination
@@ -549,7 +552,8 @@ private extension MapSheet {
             },
             placePins: placePins,
             placeSource: appModel.placeSource,
-            onOpenPlace: { hike, placeID in openPlace(placeID, of: hike) }
+            onOpenPlace: { hike, placeID in openPlace(placeID, of: hike) },
+            onFindPlacesNearby: { hike in presentation.path.append(.placesNearby(hike)) }
         )
     }
 }

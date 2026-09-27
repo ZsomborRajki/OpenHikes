@@ -87,4 +87,15 @@ struct ImportSelectionGateTests {
             )
         )
     }
+
+    /// *Places Nearby* is the recording's screen one push further in, so an
+    /// import finishing under it is landing on the walk.
+    @Test("places nearby is the recording's screen")
+    @MainActor
+    func placesNearbyIsTheRecording() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+
+        #expect(ImportSelectionGate().destination(for: [.recording, .placesNearby(hike)]) == .recording)
+    }
 }

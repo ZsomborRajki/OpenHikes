@@ -14,8 +14,8 @@ import OpenHikesData
 import SwiftUI
 
 extension MapSheet {
-    /// The three screens about a hike's places: one place, *Add Place*, and
-    /// *Places Around Trail*. A switch of its own so the sheet's list of
+    /// The four screens about a hike's places: one place, *Add Place*,
+    /// *Places Around Trail* and the recording's *Places Nearby*. A switch of its own so the sheet's list of
     /// destinations stays one the linter allows.
     @ViewBuilder
     func placesDestination(for route: SheetRoute) -> some View {
@@ -26,6 +26,8 @@ extension MapSheet {
             placeAdderDestination(at: spot, on: hike)
         case let .placesAround(hike):
             placesAroundDestination(of: hike)
+        case let .placesNearby(hike):
+            placesNearbyDestination(of: hike)
         case .communityHike, .communityPhoto, .hike, .pendingPhotos, .pendingSubmission, .photo, .recording,
             .routeStyle, .totals, .trailDraft, .walk:
             EmptyView()
@@ -40,6 +42,30 @@ extension MapSheet {
             around: placePins.around,
             mapController: mapController,
             placePins: placePins,
+            onShowMap: presentation.makeRoomForTheMap,
+            onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
+            onAddPlace: { spot in
+                presentation.makeRoomForTheMap()
+                // The path last: the press arrives from the map, not as a
+                // tap's action — see ``SheetPresentation/path``.
+                presentation.path.append(.newPlace(hike, spot))
+            }
+        )
+    }
+
+    /// *Places Nearby*, over the recording screen: the walk so far and where
+    /// the hiker is, read as it opens. A press on the map opens *Add Place*,
+    /// as it does on *Places Around Trail*.
+    func placesNearbyDestination(of hike: Hike) -> some View {
+        HikePlacesNearbyView(
+            hike: hike,
+            around: placePins.around,
+            mapController: mapController,
+            placePins: placePins,
+            line: { [recorder = hikeRecorder] in recorder.trace.recordedCoordinates },
+            position: { [recorder = hikeRecorder] in
+                PhotoTrailAnchor.recordingCoordinate(recorder.lastAcceptedPoint)
+            },
             onShowMap: presentation.makeRoomForTheMap,
             onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
             onAddPlace: { spot in

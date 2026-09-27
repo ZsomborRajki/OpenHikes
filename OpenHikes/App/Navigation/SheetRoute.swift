@@ -56,6 +56,9 @@ enum SheetRoute: Hashable {
     /// line, on the map and in a list, to add to it. See
     /// ``HikePlacesAroundView``.
     case placesAround(Hike)
+    /// *Places Nearby*: what OpenStreetMap has around a walk being recorded,
+    /// in the area the map shows, to add to it. See ``HikePlacesNearbyView``.
+    case placesNearby(Hike)
     case recording
     /// How a hike's line is drawn — see ``RouteStyleView``. Pushed over the
     /// hike's own screen, and popped with it when the hike is deleted.
@@ -101,6 +104,7 @@ enum SheetRoute: Hashable {
         case let .place(hike, _): hike.id == hikeID
         case let .newPlace(hike, _): hike.id == hikeID
         case let .placesAround(hike): hike.id == hikeID
+        case let .placesNearby(hike): hike.id == hikeID
         case let .routeStyle(hike): hike.id == hikeID
         case let .walk(walk): walk.hikeID == hikeID
         // None of them shows a `Hike`, so none is popped by one being
@@ -146,8 +150,8 @@ enum SheetRoute: Hashable {
     var isCommunityPreview: Bool {
         switch self {
         case .communityHike, .communityPhoto: true
-        case .hike, .newPlace, .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .recording,
-            .routeStyle, .totals, .trailDraft, .walk:
+        case .hike, .newPlace, .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .placesNearby,
+            .recording, .routeStyle, .totals, .trailDraft, .walk:
             false
         }
     }
@@ -158,8 +162,8 @@ enum SheetRoute: Hashable {
     var prefersFullHeight: Bool {
         switch self {
         case .communityPhoto, .photo: true
-        case .communityHike, .hike, .newPlace, .pendingPhotos, .pendingSubmission, .place, .placesAround, .recording,
-            .routeStyle, .totals, .trailDraft, .walk:
+        case .communityHike, .hike, .newPlace, .pendingPhotos, .pendingSubmission, .place, .placesAround,
+            .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
             false
         }
     }
@@ -191,21 +195,22 @@ enum SheetRoute: Hashable {
         }
     }
 
-    /// Whether this is one of the three routes about a hike's places.
+    /// Whether this is one of the four routes about a hike's places.
     private var isAboutPlaces: Bool {
         switch self {
-        case .newPlace, .place, .placesAround: true
+        case .newPlace, .place, .placesAround, .placesNearby: true
         default: false
         }
     }
 
-    /// `==` for the three routes about a hike's places — split from `==` so
+    /// `==` for the four routes about a hike's places — split from `==` so
     /// that switch stays inside the complexity limit.
     private static func placeRoutesEqual(_ lhs: Self, _ rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case let (.place(left, leftPlace), .place(right, rightPlace)): left == right && leftPlace == rightPlace
         case let (.newPlace(left, leftSpot), .newPlace(right, rightSpot)): left == right && leftSpot == rightSpot
         case let (.placesAround(left), .placesAround(right)): left == right
+        case let (.placesNearby(left), .placesNearby(right)): left == right
         default: false
         }
     }
@@ -244,6 +249,9 @@ enum SheetRoute: Hashable {
         case let .placesAround(hike):
             hasher.combine(13)
             hasher.combine(hike)
+        case let .placesNearby(hike):
+            hasher.combine(14)
+            hasher.combine(hike)
         }
     }
 
@@ -272,7 +280,8 @@ enum SheetRoute: Hashable {
         case let .pendingPhotos(pending):
             hasher.combine(7)
             hasher.combine(pending.id)
-        case .hike, .newPlace, .photo, .place, .placesAround, .recording, .routeStyle, .totals, .trailDraft, .walk:
+        case .hike, .newPlace, .photo, .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals,
+            .trailDraft, .walk:
             break
         }
     }

@@ -157,20 +157,25 @@ struct RecordingPlaceSheet: View {
 
 extension View {
     /// *Add Place* in the navigation bar while `recorder` has a walk under
-    /// way, and the sheet it opens.
+    /// way, and the sheet it opens — with *Places Nearby* beside it.
     ///
-    /// - Parameter onAdded: Called with the walk and the new place once it is
-    ///   on the walk — the recording screen opens it.
+    /// - Parameters:
+    ///   - onAdded: Called with the walk and the new place once it is on the
+    ///     walk — the recording screen opens it.
+    ///   - onFindNearby: Opens *Places Nearby* for the walk — see
+    ///     ``HikePlacesNearbyView`` — or `nil` for a launch that must not ask
+    ///     OpenStreetMap, which offers no button.
     func recordingAddPlace(
         recorder: HikeRecorder,
         source: (any TrailPointSourcing)?,
-        onAdded: @escaping (Hike, UUID) -> Void
+        onAdded: @escaping (Hike, UUID) -> Void,
+        onFindNearby: ((Hike) -> Void)? = nil
     ) -> some View {
-        modifier(RecordingAddPlace(recorder: recorder, source: source, onAdded: onAdded))
+        modifier(RecordingAddPlace(recorder: recorder, source: source, onAdded: onAdded, onFindNearby: onFindNearby))
     }
 }
 
-/// The button, the sheet and the one refusal, as a modifier so the recording
+/// The buttons, the sheet and the one refusal, as a modifier so the recording
 /// screen's own body gains a line rather than a feature.
 private struct RecordingAddPlace: ViewModifier {
     /// Where *Add Place* was tapped, and on which walk.
@@ -183,6 +188,7 @@ private struct RecordingAddPlace: ViewModifier {
     let recorder: HikeRecorder
     let source: (any TrailPointSourcing)?
     let onAdded: (Hike, UUID) -> Void
+    let onFindNearby: ((Hike) -> Void)?
 
     @State private var spot: Spot?
     @State private var isMissingLocation = false
@@ -190,8 +196,14 @@ private struct RecordingAddPlace: ViewModifier {
     func body(content: Content) -> some View {
         content
             .toolbar {
-                if recorder.currentHike != nil, recorder.isActive {
-                    ToolbarItem(placement: .topBarTrailing) {
+                if let hike = recorder.currentHike, recorder.isActive {
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        // Looking before marking: what is around, then the
+                        // spot underfoot.
+                        if let onFindNearby {
+                            Button("Places Nearby", systemImage: "binoculars") { onFindNearby(hike) }
+                                .accessibilityIdentifier("recording-places-nearby")
+                        }
                         Button("Add Place", systemImage: "mappin.and.ellipse") { addPlace() }
                             .accessibilityIdentifier("recording-add-place")
                     }

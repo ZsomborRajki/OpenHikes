@@ -32,6 +32,8 @@ struct RecordingView: View {
     var placeSource: (any TrailPointSourcing)?
     /// Pushes one of the walk's places, where its photographs are taken.
     var onOpenPlace: (Hike, UUID) -> Void = { _, _ in /* no-op default */ }
+    /// Pushes *Places Nearby* for the walk — see ``HikePlacesNearbyView``.
+    var onFindPlacesNearby: (Hike) -> Void = { _ in /* no-op default */ }
 
     private var recordingFailure: RecordingFailure? {
         if case let .failed(failure) = recorder.phase {
@@ -94,9 +96,15 @@ struct RecordingView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .softScrollEdgeEffect(for: .top)
-        // *Add Place*, in the bar while a walk is under way — see
-        // ``RecordingPlaceSheet``.
-        .recordingAddPlace(recorder: recorder, source: placeSource, onAdded: onOpenPlace)
+        // *Add Place* and *Places Nearby*, in the bar while a walk is under
+        // way — see ``RecordingPlaceSheet``. Nearby only where the map can
+        // ask OpenStreetMap, which a test launch cannot.
+        .recordingAddPlace(
+            recorder: recorder,
+            source: placeSource,
+            onAdded: onOpenPlace,
+            onFindNearby: placePins?.around.finder.isAvailable == true ? onFindPlacesNearby : nil
+        )
         .onAppear {
             mapController.followUser()
         }
