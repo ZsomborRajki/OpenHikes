@@ -10,9 +10,9 @@
 //  of a suggestion the user just tapped, and a fragment they have since
 //  erased — and neither of those is visible in the result. `suggestions` is
 //  empty in both cases, and empty is also what a request that simply hasn't
-//  answered yet looks like. `MKLocalSearchCompleter` has no public way to
-//  stub, and `MKLocalSearchCompletion` has no public initializer, so the
-//  decision is the only part of this that can be held to anything.
+//  answered yet looks like. So the decision is held to account here, and
+//  what ``SearchCompleter`` then does to MapKit is held to account against a
+//  recording subclass of the completer in `SearchCompleterFragmentTests`.
 //
 
 import Foundation
