@@ -16,16 +16,20 @@ struct RecordingEntryTests {
     @Test("with nothing recording, a tap starts one and then asks for its screen")
     func startsThenOpens() async {
         let requests = HikeOpenRequests()
+        let sent = FeedReader(requests.links())
         var live = false
         var starts = 0
-        // How many requests had been left when the recording started — the
-        // order is the claim, not only that both happened.
+        // How many requests had been sent when the recording started — the
+        // order is the claim, not only that both happened. Read after letting
+        // the reader catch up: requests arrive on its task, so a count taken
+        // straight away would read 0 even if the request had gone first.
         var requestsAtStart: Int?
         let entry = RecordingEntry(
             isLive: { live },
             start: {
                 starts += 1
-                requestsAtStart = requests.request
+                await settleDelegateHop()
+                requestsAtStart = sent.received.count
                 live = true
             },
             openRequests: requests
@@ -33,17 +37,19 @@ struct RecordingEntryTests {
         #expect(!entry.isRecording)
 
         entry.requestRecording()
-        await settleDelegateHop(until: "the screen to be asked for") { requests.request == 1 }
+        await settleDelegateHop(until: "the screen to be asked for") { sent.received.count == 1 }
 
         #expect(starts == 1)
         #expect(requestsAtStart == 0, "the screen was asked for before the recording started")
-        #expect(requests.link == TrailWidgetDeepLink.recordingURL())
+        #expect(sent.received.count == 1)
+        #expect(sent.received.last == TrailWidgetDeepLink.recordingURL())
         #expect(entry.isRecording)
     }
 
     @Test("with a recording under way, a tap reopens it and starts nothing")
     func reopensWithoutStarting() async {
         let requests = HikeOpenRequests()
+        let sent = FeedReader(requests.links())
         var starts = 0
         let entry = RecordingEntry(
             isLive: { true },
@@ -52,17 +58,19 @@ struct RecordingEntryTests {
         )
 
         entry.requestRecording()
-        await settleDelegateHop(until: "the screen to be asked for") { requests.request == 1 }
+        await settleDelegateHop(until: "the screen to be asked for") { sent.received.count == 1 }
 
         #expect(starts == 0)
-        #expect(requests.link == TrailWidgetDeepLink.recordingURL())
+        #expect(sent.received.count == 1)
+        #expect(sent.received.last == TrailWidgetDeepLink.recordingURL())
     }
 
-    /// Two taps are two requests, for the reason ``HikeOpenRequests`` is a
-    /// token: a recording screen closed and asked for again has to open.
+    /// Two taps are two requests, for the reason ``HikeOpenRequests`` sends
+    /// each one: a recording screen closed and asked for again has to open.
     @Test("each tap is its own request")
     func eachTapCounts() async {
         let requests = HikeOpenRequests()
+        let sent = FeedReader(requests.links())
         let entry = RecordingEntry(
             isLive: { true },
             start: { /* already live, never called */ },
@@ -71,8 +79,8 @@ struct RecordingEntryTests {
 
         entry.requestRecording()
         entry.requestRecording()
-        await settleDelegateHop(until: "both requests to land") { requests.request == 2 }
+        await settleDelegateHop(until: "both requests to land") { sent.received.count == 2 }
 
-        #expect(requests.request == 2)
+        #expect(sent.received.count == 2)
     }
 }

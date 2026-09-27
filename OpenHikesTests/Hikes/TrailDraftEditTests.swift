@@ -272,20 +272,21 @@ struct TrailDraftEditTests {
     // MARK: The maker
 
     @Test("Edit Route opens the maker on the hike's own stops and places")
-    func editOpensTheStops() throws {
+    func editOpensTheStops() async throws {
         let context = try Fixture.modelContext()
         let draft = Self.draft([Line.south, Line.north])
         draft.addPlaces([TrailPlace(latitude: Line.middle, longitude: Line.longitude, name: "Spring")])
         let hike = try #require(TrailDraftSave.hike(from: draft, named: "Ridge", into: context).hike)
         let maker = TrailDraftController()
-        let request = maker.openRequest
+        let opens = FeedReader(maker.openRequests())
 
         #expect(maker.edit(hike))
+        await settleDelegateHop(until: "the maker to be asked for") { !opens.received.isEmpty }
 
         #expect(maker.editingHikeID == hike.id)
         #expect(maker.draft.waypoints.map(\.latitude) == [Line.south, Line.north])
         #expect(maker.draft.places.map(\.name) == ["Spring"])
-        #expect(maker.openRequest != request, "and the maker is asked for")
+        #expect(opens.received.count == 1, "and the maker is asked for")
     }
 
     @Test("a second Edit Route on the same hike resumes rather than starting over")

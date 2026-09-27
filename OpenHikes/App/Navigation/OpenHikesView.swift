@@ -409,13 +409,13 @@ struct OpenHikesView: View {
                 showSheet = !isPanel
             }
             .onOpenURL { url in openInboundURL(url) }
-            // An intent asked for a hike, from outside the view tree. Handed
-            // to the same router the widget's taps go through rather than a
-            // second way in — see ``HikeOpenRequests``.
-            .onChange(of: appModel.hikeOpenRequests.request) { _, _ in
-                guard let url = appModel.hikeOpenRequests.link else { return }
-                openInboundURL(url)
-            }
+            // Navigation asked for from outside the view tree: an intent or
+            // the record button asking for a hike, the maker's pill, the
+            // camera pill's *Add Place*. Read as events rather than observed
+            // as tokens — see ``EventFeed`` — each by a task of its own.
+            .task { await readHikeOpenRequests() }
+            .task { await readMakerOpenRequests() }
+            .task { await readPlaceRequests() }
             // The pill posts a token; flipping the presentation flags is this
             // view's job because it owns `photoPresentation`. The pickers and
             // the alerts that report what they couldn't do both hang off
@@ -427,25 +427,6 @@ struct OpenHikesView: View {
             .onChange(of: photoCapture.libraryRequest) { _, _ in
                 photoPresentation.pickedPhotos = []
                 photoPresentation.showLibraryPicker = true
-            }
-            .onChange(of: photoCapture.placeRequest) { _, _ in openPlaceAdder() }
-            // The same shape, for the pill that shares that slot: the map
-            // posts a token and the push belongs here, because this view owns
-            // the sheet's navigation stack. Assigned rather than appended —
-            // the maker is only ever offered when nothing is pushed, so there
-            // is nothing to push it onto, and an assignment cannot stack a
-            // second copy behind a double tap.
-            .onChange(of: appModel.trailMaker.openRequest) { _, _ in
-                sheet.path = [.trailDraft]
-                // The map is the maker's canvas, and a hike left selected
-                // would still be drawn across it. Let go of it rather than
-                // hide it: a new trail is not about the old one, and a saved
-                // drawing selects itself anyway — see `showSavedHike`.
-                selectedHike = nil
-                // The compact detent is only tall enough for the search field,
-                // and `.large` covers the map the maker is drawn on. See
-                // ``SheetPresentation/makeRoomForTheMap()``.
-                sheet.makeRoomForTheMap()
             }
             // Re-points map styling, auto-save and background route matching
             // at the new selection. A recording draft still styles its route;
@@ -565,6 +546,9 @@ extension OpenHikesView {
             onSheetTopChange: onSheetTopChange,
             onSheetDetentCommitted: onSheetDetentCommitted
         )
+            // Rebuilt only when it is handed something new — see
+            // `MapSheet+Equatable.swift` for what that saves a push.
+            .equatable()
             .photoCapturePickers(
                 $photoPresentation,
                 onCaptured: attachCapturedPhoto,
@@ -579,6 +563,57 @@ extension OpenHikesView {
                 locationAccess: locationAccessPrompt.isShowingBinding,
                 photoCapture: $photoPresentation
             )
+    }
+}
+
+// MARK: - Navigation requests
+
+/// The readers of the three ``EventFeed``s that ask this view to navigate.
+///
+/// Each loop outlives the body pass that started it, and that is safe only
+/// because everything the handlers read is `@State` or an environment object
+/// — storage that is shared, not a value copied into this struct when the task
+/// began.
+private extension OpenHikesView {
+    /// An intent asked for a hike, or the record button for the recording.
+    /// Handed to the same router the widget's taps go through rather than a
+    /// second way in — see ``HikeOpenRequests``.
+    func readHikeOpenRequests() async {
+        for await url in appModel.hikeOpenRequests.links() {
+            openInboundURL(url)
+        }
+    }
+
+    /// The pill that shares the camera's slot. The push belongs here because
+    /// this view owns the sheet's navigation stack.
+    func readMakerOpenRequests() async {
+        for await _ in appModel.trailMaker.openRequests() {
+            openMaker()
+        }
+    }
+
+    func readPlaceRequests() async {
+        for await _ in photoCapture.placeRequests() {
+            openPlaceAdder()
+        }
+    }
+
+    /// Assigned rather than appended — the maker is only ever offered when
+    /// nothing is pushed, so there is nothing to push it onto, and an
+    /// assignment cannot stack a second copy behind a double tap.
+    func openMaker() {
+        // The map is the maker's canvas, and a hike left selected would still
+        // be drawn across it. Let go of it rather than hide it: a new trail is
+        // not about the old one, and a saved drawing selects itself anyway —
+        // see `showSavedHike`.
+        selectedHike = nil
+        // The compact detent is only tall enough for the search field, and
+        // `.large` covers the map the maker is drawn on. See
+        // ``SheetPresentation/makeRoomForTheMap()``.
+        sheet.makeRoomForTheMap()
+        // The path last — see ``SheetPresentation/path``, which this is the
+        // measurement behind.
+        sheet.path = [.trailDraft]
     }
 }
 
@@ -632,14 +667,7 @@ private extension OpenHikesView {
         switch destination {
         case .recording:
             guard appModel.hikeRecorder.hasScreenToShow else { return }
-            sheet.searchText = ""
-            SheetRoute.openRecording(
-                hike: appModel.hikeRecorder.currentHike,
-                selectedHike: &selectedHike,
-                in: &sheet.path
-            )
-            highlight.move(to: nil)
-            sheet.makeRoomForTheMap()
+            openRecordingScreen(selecting: appModel.hikeRecorder.currentHike)
         case .hike(let id): openHike(id: id)
         }
     }
@@ -655,14 +683,7 @@ private extension OpenHikesView {
         if hike.belongsToActiveRecording(
             currentHikeID: currentRecordingHikeID
         ), appModel.hikeRecorder.isActive {
-            sheet.searchText = ""
-            SheetRoute.openRecording(
-                hike: hike,
-                selectedHike: &selectedHike,
-                in: &sheet.path
-            )
-            highlight.move(to: nil)
-            sheet.makeRoomForTheMap()
+            openRecordingScreen(selecting: hike)
             return
         }
 
@@ -670,10 +691,21 @@ private extension OpenHikesView {
         // otherwise still be showing over the detail view.
         sheet.searchText = ""
         selectedHike = hike
-        sheet.path = [.hike(hike)]
         // The compact detent is only tall enough for the search field, so a
         // push there would arrive off-screen.
         sheet.makeRoomForTheMap()
+        // The path last — see ``SheetPresentation/path``.
+        sheet.path = [.hike(hike)]
+    }
+
+    /// The recording's screen, with `hike` selected when there is one.
+    private func openRecordingScreen(selecting hike: Hike?) {
+        sheet.searchText = ""
+        let path = SheetRoute.openRecording(hike: hike, selectedHike: &selectedHike)
+        highlight.move(to: nil)
+        sheet.makeRoomForTheMap()
+        // The path last — see ``SheetPresentation/path``.
+        sheet.path = path
     }
 }
 
@@ -876,8 +908,9 @@ private extension OpenHikesView {
     /// ``SheetPresentation/restAtMiddleWhenFullHeightScreenPops()``.
     func openPlaceAdder() {
         guard let spot = photoCapture.placeSpot() else { return }
-        sheet.path.append(.newPlace(spot.hike, HikePlaceSpot(spot.coordinate)))
         sheet.makeRoomForTheMap()
         mapController.showPhotoSpot(spot.coordinate)
+        // The path last — see ``SheetPresentation/path``.
+        sheet.path.append(.newPlace(spot.hike, HikePlaceSpot(spot.coordinate)))
     }
 }

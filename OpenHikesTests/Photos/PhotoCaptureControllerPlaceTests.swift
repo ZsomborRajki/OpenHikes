@@ -21,25 +21,31 @@ private final class Spot {
 @Suite("Photo capture controller: Add Place")
 struct PhotoCaptureControllerPlaceTests {
     @Test("a screen with no place anchor offers photographs and no Add Place")
-    func noPlaceAnchorNoAddPlace() throws {
+    func noPlaceAnchorNoAddPlace() async throws {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
         let controller = PhotoCaptureController()
+        let places = FeedReader(controller.placeRequests())
 
         controller.attach(to: hike) { nil }
         controller.requestPlace()
+        // Nothing can be sent afterwards to prove the absence against — this
+        // screen has nowhere to put a place — so the reader is given the turns
+        // it would have needed to drain a request that had gone.
+        await settleDelegateHop()
 
         #expect(controller.isAvailable)
         #expect(controller.canAddPlace == false)
-        #expect(controller.placeRequest == 0)
+        #expect(places.received.isEmpty)
         #expect(controller.placeSpot() == nil)
     }
 
     @Test("a hike's screen offers Add Place, resolved at the tap rather than at attach")
-    func placeSpotIsResolvedLate() throws {
+    func placeSpotIsResolvedLate() async throws {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
         let controller = PhotoCaptureController()
+        let places = FeedReader(controller.placeRequests())
         let spot = Spot()
 
         controller.attach(to: hike, placeAnchor: { spot.coordinate }, anchor: { nil })
@@ -49,25 +55,33 @@ struct PhotoCaptureControllerPlaceTests {
 
         spot.coordinate = CLLocationCoordinate2D(latitude: 47.6, longitude: 12.9)
         controller.requestPlace()
-        #expect(controller.placeRequest == 1)
+        await settleDelegateHop(until: "the request to arrive") { !places.received.isEmpty }
+        #expect(places.received.count == 1)
         let resolved = try #require(controller.placeSpot())
         #expect(resolved.hike.id == hike.id)
         #expect(resolved.coordinate.latitude == 47.6)
     }
 
     @Test("Add Place goes with the pill, and a place's own screen takes it away")
-    func addPlaceFollowsThePill() throws {
+    func addPlaceFollowsThePill() async throws {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
         let controller = PhotoCaptureController()
+        let places = FeedReader(controller.placeRequests())
         let detail = controller.attach(to: hike, placeAnchor: { nil }, anchor: { nil })
 
         controller.setHostScreenPresent(false)
         #expect(controller.canAddPlace == false)
         controller.requestPlace()
-        #expect(controller.placeRequest == 0)
         controller.setHostScreenPresent(true)
         #expect(controller.canAddPlace)
+        // Proved against a request that does go. The two carry nothing to tell
+        // them apart and a reader takes one per turn, so it is given the turns
+        // to take a second before counting.
+        controller.requestPlace()
+        await settleDelegateHop(until: "the offered request to arrive") { !places.received.isEmpty }
+        await settleDelegateHop()
+        #expect(places.received.count == 1)
 
         // A place's screen claims the pill for its photographs only.
         let place = controller.attach(to: hike, place: UUID()) { nil }

@@ -14,8 +14,8 @@
 //
 //  ## Why it performs no work of its own
 //
-//  `openAppWhenRun` brings the app to the front and this leaves a request
-//  behind; the view tree does the rest. Resolving the hike, drawing its route,
+//  `openAppWhenRun` brings the app to the front and this sends a request;
+//  the view tree does the rest. Resolving the hike, drawing its route,
 //  deciding whether a live recording outranks it — all of that already has an
 //  owner, and doing any of it here would be a second copy of a rule that has
 //  to keep agreeing with the widget's.

@@ -145,7 +145,7 @@ struct MapSheet: View {
                     walkSession: appModel.walkSession,
                     community: appModel.community,
                     review: appModel.communityReview,
-                    selectedHikeID: selectedHike?.id,
+                    selectedHike: selectedHike,
                     onOpen: open,
                     onSelectResult: select,
                     onSelectCompletion: select,
@@ -227,33 +227,16 @@ struct MapSheet: View {
                 searchFocused = false
             }
         }
-        // The map's photo controls belong to whatever screen is pushed, and a
-        // pushed screen's `onDisappear` arrives only once the pop animation has
-        // finished — which left the camera pill and this hike's photo pins over
-        // the map, fully opaque and answering taps, for the whole of a back
-        // navigation. Reported here as a function of the path rather than as a
-        // pop event, so an abandoned back-swipe recomputes to the same answer
-        // rather than withdrawing them for good.
-        //
-        // "A screen, any screen" is deliberately all this asks: a hike and the
-        // photo viewer pushed on top of it are both a screen that can offer the
-        // pill, so moving between them changes nothing here.
-        .onChange(of: presentation.hasPushedScreen, initial: true) { _, isPushed in
-            photoCapture.setHostScreenPresent(isPushed)
-            photoPins.setHostScreenPresent(isPushed)
-            placePins.setHostScreenPresent(isPushed)
-            // The inverse of the same signal, which is the whole of what keeps
-            // the maker's pill and the camera's out of each other's way — see
-            // ``TrailDraftController``.
-            trailMaker.setHostScreenPresent(isPushed)
-        }
-        // And whether the map is the maker's canvas, which is a narrower
-        // question than "is anything pushed" and has to be asked separately:
-        // pushing a hike over the maker would leave the map taking waypoints
-        // for a screen nobody is looking at.
-        .onChange(of: presentation.isTrailDraftPresented, initial: true) { _, isDrafting in
-            trailMaker.setEditing(isDrafting)
-        }
+        // Whether anything is pushed, and whether the maker is, told to the
+        // map's controllers — from a modifier of their own so this body never
+        // reads either flag. See ``PushedScreenReport``.
+        .modifier(PushedScreenReport(
+            presentation: presentation,
+            photoCapture: photoCapture,
+            photoPins: photoPins,
+            placePins: placePins,
+            trailMaker: trailMaker
+        ))
         // Track the sheet's top edge continuously (including during interactive
         // drags) and hand it to the map so it can position the location button.
         .onTopEdgeChange(perform: onSheetTopChange)
@@ -822,13 +805,12 @@ private func presentImporter() {
 }
 
 private func openRecording() {
-    SheetRoute.openRecording(
-        hike: hikeRecorder.currentHike,
-        selectedHike: &selectedHike,
-        in: &presentation.path
-    )
+    let path = SheetRoute.openRecording(hike: hikeRecorder.currentHike, selectedHike: &selectedHike)
     highlight.move(to: nil)
     presentation.makeRoomForTheMap()
+    // The path last: an import can land here from a task — see
+    // ``SheetPresentation/path``.
+    presentation.path = path
 }
 
 private func closeRecording() {
@@ -855,8 +837,10 @@ private func closeDiscardedRecording(_ hikeID: UUID?) {
 /// way.
 private func showSavedHike(_ hike: Hike) {
     selectedHike = hike
-    presentation.path = [.hike(hike)]
     presentation.makeRoomForTheMap()
+    // The path last: a save finishes on a task, not in a tap — see
+    // ``SheetPresentation/path``.
+    presentation.path = [.hike(hike)]
 }
 
 /// A hike a published preview has just added to the library.

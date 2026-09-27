@@ -77,7 +77,10 @@ final class PhotoCaptureController {
     /// a token whose *change* is the message.
     private(set) var cameraRequest = 0
     private(set) var libraryRequest = 0
-    private(set) var placeRequest = 0
+    /// *Add Place* is the one of the three that navigates — it pushes a
+    /// screen — so it is a feed rather than a token observed with `onChange`,
+    /// for the reason ``EventFeed`` gives. The other two raise a modal.
+    private let placeFeed = EventFeed<Void>()
 
     /// Every screen's claim, the deepest in force — see ``ScreenClaims``. The
     /// token identifies a claim, so a screen that goes away after its
@@ -205,7 +208,12 @@ final class PhotoCaptureController {
     /// pill has nowhere to put a place.
     func requestPlace() {
         guard canAddPlace else { return }
-        placeRequest &+= 1
+        placeFeed.send(())
+    }
+
+    /// The *Add Place* requests made from now on, for one reader.
+    func placeRequests() -> AsyncStream<Void> {
+        placeFeed.events()
     }
 
     private func refreshAvailability() {

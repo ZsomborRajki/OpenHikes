@@ -24,34 +24,31 @@
 //
 //  ## The shape
 //
-//  A token whose *change* is the message, exactly like
-//  ``PhotoCaptureController/cameraRequest`` — and for the same reason: the
-//  same hike asked for twice is two requests, and a plain `URL?` would make
-//  the second one invisible. The URL rides alongside and is read only when
-//  the token moves.
+//  An event rather than state: each request goes to the readers of
+//  ``links()`` — in practice the one `OpenHikesView`'s `.task` holds — as
+//  the system's `onOpenURL` hands over a widget tap. The same hike asked for
+//  twice is two requests, and nothing is kept for a reader that is not there
+//  yet. ``EventFeed`` says why this is a stream and not a token observed by
+//  `onChange`, which is what it was.
 //
 
 import Foundation
-import Observation
 import OpenHikesShared
 
 /// One request to open a hike, from outside the view tree.
-@Observable
 @MainActor
 final class HikeOpenRequests {
-    /// A token whose change is the message — see this file's header.
-    private(set) var request = 0
-    /// The link the current token is for. Read on the token's change and not
-    /// otherwise, so nothing has to decide whether an old URL is still live.
-    ///
-    /// `@ObservationIgnored` because the token is what the view watches: a
-    /// body that also depended on this would run twice for one request, once
-    /// for each property the same call sets.
-    @ObservationIgnored private(set) var link: URL?
+    private let feed = EventFeed<URL>()
 
     init() {
         // Nothing pending, which is what a launch that was not started by an
         // intent means.
+    }
+
+    /// The requests made from now on, for one reader. Nothing asked before
+    /// the call is replayed — see ``EventFeed``.
+    func links() -> AsyncStream<URL> {
+        feed.events()
     }
 
     /// Asks for `hikeID` to be opened, as though its widget had been tapped.
@@ -62,8 +59,7 @@ final class HikeOpenRequests {
     /// and there is nothing further to say.
     func open(hikeID: UUID) {
         guard let url = TrailWidgetDeepLink.url(hikeID: hikeID) else { return }
-        link = url
-        request &+= 1
+        feed.send(url)
     }
 
     /// Asks for the live recording's screen, as though the widget showing it
@@ -71,7 +67,6 @@ final class HikeOpenRequests {
     /// it has started one. See ``RecordingEntry``.
     func openRecording() {
         guard let url = TrailWidgetDeepLink.recordingURL() else { return }
-        link = url
-        request &+= 1
+        feed.send(url)
     }
 }

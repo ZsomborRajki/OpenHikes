@@ -87,12 +87,17 @@ extension MapCoordinatorTests {
         defer { detach(map) }
         let pill = try #require(coordinator.trailDraftControls)
         let record = try #require(pill.recordButton)
+        let sent = FeedReader(openRequests.links())
+        let makerOpens = FeedReader(trailMaker.openRequests())
 
         record.sendActions(for: .primaryActionTriggered)
 
-        await settle(until: "the request to arrive") { openRequests.request == 1 }
-        #expect(openRequests.link == TrailWidgetDeepLink.recordingURL())
-        #expect(trailMaker.openRequest == 0, "the tap reached the maker as well")
+        await settle(until: "the request to arrive") { sent.received.count == 1 }
+        #expect(sent.received.last == TrailWidgetDeepLink.recordingURL())
+        // The maker's request, had there been one, was sent at the tap — before
+        // the recording's — so a drained reader would already hold it.
+        await settleDelegateHop()
+        #expect(makerOpens.received.isEmpty, "the tap reached the maker as well")
         #endif
     }
 

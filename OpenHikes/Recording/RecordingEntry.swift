@@ -33,7 +33,7 @@ final class RecordingEntry {
     ///   - isLive: whether a recording is under way. Read inside the map's
     ///     observation, so it has to read observable state.
     ///   - start: starts one. Only called while `isLive` says there is none.
-    ///   - openRequests: where the request for the screen is left.
+    ///   - openRequests: where the request for the screen is sent.
     init(
         isLive: @escaping @MainActor () -> Bool,
         start: @escaping @MainActor () async -> Void,
