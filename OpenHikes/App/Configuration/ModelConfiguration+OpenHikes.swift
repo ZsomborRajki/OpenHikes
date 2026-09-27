@@ -17,10 +17,9 @@
 //  somewhere is not a compile error: it is a silent whole-row sync of
 //  whichever store was opened without thinking about it.
 //
-//  Both are opened at an explicit URL in ``StoreLocation/directory``, never at
-//  SwiftData's default: with an App Group in the entitlements, the default is
-//  the group container, where a mirroring import in flight at suspension gets
-//  the app killed. See ``StoreLocation``.
+//  Both disable the automatic App Group location. Only the app opens these
+//  databases; the widget reads separate snapshots. A SQLite lock in the shared
+//  container at suspension can terminate the app with `0xdead10cc`.
 //
 //  Two constraints ride along with `.automatic` and are easy to trip over
 //  later. Mirroring refuses to open a store that has a mandatory attribute
@@ -47,19 +46,12 @@ extension ModelConfiguration {
         isStoredInMemoryOnly: Bool = false,
         syncsToCloud: Bool = true
     ) -> ModelConfiguration {
-        guard !isStoredInMemoryOnly else {
-            return ModelConfiguration(
-                StoreLocation.hikes,
-                schema: schema,
-                isStoredInMemoryOnly: true,
-                cloudKitDatabase: .none
-            )
-        }
-        return ModelConfiguration(
-            StoreLocation.hikes,
+        ModelConfiguration(
+            "Hikes",
             schema: schema,
-            url: StoreLocation.storeURL(StoreLocation.hikes, in: StoreLocation.directory),
-            cloudKitDatabase: syncsToCloud ? .automatic : .none
+            isStoredInMemoryOnly: isStoredInMemoryOnly,
+            groupContainer: .none,
+            cloudKitDatabase: isStoredInMemoryOnly || !syncsToCloud ? .none : .automatic
         )
     }
 
@@ -71,18 +63,11 @@ extension ModelConfiguration {
         schema: Schema,
         isStoredInMemoryOnly: Bool = false
     ) -> ModelConfiguration {
-        guard !isStoredInMemoryOnly else {
-            return ModelConfiguration(
-                StoreLocation.localState,
-                schema: schema,
-                isStoredInMemoryOnly: true,
-                cloudKitDatabase: .none
-            )
-        }
-        return ModelConfiguration(
-            StoreLocation.localState,
+        ModelConfiguration(
+            "HikeLocalState",
             schema: schema,
-            url: StoreLocation.storeURL(StoreLocation.localState, in: StoreLocation.directory),
+            isStoredInMemoryOnly: isStoredInMemoryOnly,
+            groupContainer: .none,
             cloudKitDatabase: .none
         )
     }
@@ -93,14 +78,14 @@ extension ModelConfiguration {
     /// Never mirrored: a test that writes into the user's real iCloud database
     /// is a test that has already failed.
     static func openHikes(schema: Schema, url: URL) -> ModelConfiguration {
-        ModelConfiguration(StoreLocation.hikes, schema: schema, url: url, cloudKitDatabase: .none)
+        ModelConfiguration("Hikes", schema: schema, url: url, cloudKitDatabase: .none)
     }
 
     /// The sidecar store at a chosen location, alongside
     /// ``openHikes(schema:url:)``.
     static func openHikesLocal(schema: Schema, url: URL) -> ModelConfiguration {
         ModelConfiguration(
-            StoreLocation.localState,
+            "HikeLocalState",
             schema: schema,
             url: url,
             cloudKitDatabase: .none
@@ -124,16 +109,10 @@ extension ModelContainer {
     /// testing, two previews and the test fixtures — and a container built
     /// with only the mirrored half does not fail to compile. It fails at the
     /// first tile a hike tries to claim.
-    ///
-    /// A persistent container moves the stores out of the App Group container
-    /// first, the one time they are still there — see ``StoreLocation``.
     static func openHikes(
         isStoredInMemoryOnly: Bool = false,
         syncsToCloud: Bool = true
     ) throws -> ModelContainer {
-        if !isStoredInMemoryOnly {
-            try StoreLocation.prepare()
-        }
         let version = OpenHikesSchema.self
         return try ModelContainer(
             for: Schema(versionedSchema: version),
