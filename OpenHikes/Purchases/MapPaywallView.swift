@@ -42,9 +42,9 @@
 //  ## What is still ours
 //
 //  ``MapEntitlementStore`` keeps owning the entitlement. `.subscriptionStatusTask`
-//  is the declarative form of its `statusTask`, and is deliberately not adopted:
-//  the store has to answer before any view exists, for the `.notEntitled`
-//  seeding in *Remember only the negative entitlement answer*.
+//  is the declarative form of its status listener, and is deliberately not
+//  adopted: the store has to answer before any view exists, for the
+//  `.notEntitled` seeding in *Remember only the negative entitlement answer*.
 //
 //  Restore is ours too, and that is a decision rather than an oversight.
 //  Apple's own restore button reports success or failure; ``MapEntitlementStore/restore()``
