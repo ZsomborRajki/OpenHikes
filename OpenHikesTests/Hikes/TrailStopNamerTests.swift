@@ -29,6 +29,9 @@ struct TrailStopNamerTests {
     /// would let the reader empty the stream before anything could look at it.
     private final class Stub: TrailStopNaming {
         private(set) var asked: [CLLocationCoordinate2D] = []
+        /// How many questions have come back, answered or refused — the one
+        /// effect a refusal has that a test can wait on.
+        private(set) var returned = 0
         /// What to answer with, in the order the questions arrive. `nil` is a
         /// refusal.
         var answers: [String?] = []
@@ -40,6 +43,7 @@ struct TrailStopNamerTests {
             await withCheckedContinuation { continuation in
                 waiting.append(continuation)
             }
+            returned += 1
             guard !answers.isEmpty, let answer = answers.removeFirst() else { return nil }
             return MKMapItem(
                 location: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude),
@@ -54,6 +58,9 @@ struct TrailStopNamerTests {
             waiting.removeFirst().resume()
             return true
         }
+
+        /// How many questions are being held open right now.
+        var open: Int { waiting.count }
     }
 
     private enum Ridge {
@@ -61,6 +68,13 @@ struct TrailStopNamerTests {
         static let south: Double = 47.6300
         static let middle: Double = 47.6320
         static let north: Double = 47.6340
+    }
+
+    /// The names that reached the drawing, in order. A box rather than a
+    /// captured `var`, because a settle condition reads it from a closure of
+    /// its own.
+    private final class Names {
+        var all: [String] = []
     }
 
     private static func coordinate(_ latitude: Double) -> CLLocationCoordinate2D {
@@ -71,24 +85,51 @@ struct TrailStopNamerTests {
         latitudes.map { TrailWaypoint(coordinate: coordinate($0)) }
     }
 
-    /// Lets whatever the namer has started reach its first suspension point.
+    /// Waits until the reader has put its `count`th question and is parked
+    /// inside it.
     ///
-    /// Not a sleep: the reader is an unstructured `Task` on this same actor, so
-    /// yielding is exactly the barrier that lets it run — the shape every other
-    /// suite here waits on an effect with.
-    private func settle() async {
-        for _ in 0..<8 { await Task.yield() }
+    /// Waited on, not yielded for: a fixed number of `Task.yield()`s buys an
+    /// amount of progress that depends on how busy the runner is, which is how
+    /// this suite went red on CI in run 36301065320 while passing locally — see
+    /// `SettleSupport.swift`. Parked is also what makes "the next one waits" an
+    /// assertion rather than a race: the reader is serial, so while it is held
+    /// inside a question it cannot start another.
+    private func settleAsked(
+        _ stub: Stub,
+        _ count: Int,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async {
+        await settleDelegateHop(
+            until: "the geocoder to have been asked \(count) time(s) and be holding one open",
+            sourceLocation: sourceLocation
+        ) {
+            stub.asked.count == count && stub.open == 1
+        }
+    }
+
+    /// Waits until `count` questions have come back to the reader.
+    private func settleReturned(
+        _ stub: Stub,
+        _ count: Int,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async {
+        await settleDelegateHop(
+            until: "\(count) question(s) to have come back",
+            sourceLocation: sourceLocation
+        ) {
+            stub.returned == count
+        }
     }
 
     @Test("a launch with no geocoder asks nothing and says so")
-    func withoutASourceNothingIsAsked() async {
+    func withoutASourceNothingIsAsked() {
         let namer = TrailStopNamer(source: nil)
         #expect(!namer.canAsk)
 
+        // Refused before a reader could start, so there is nothing to wait
+        // for: the absence of a crash and of a queue is the point, because
+        // `nil` is the launch that must not ask.
         namer.nameUnnamed(in: Self.waypoints([Ridge.south, Ridge.north]))
-        await settle()
-        // Nothing to assert against but the absence of a crash and of a
-        // queue — which is the point: `nil` is the launch that must not ask.
         #expect(!namer.canAsk)
     }
 
@@ -100,7 +141,9 @@ struct TrailStopNamerTests {
         namer.nameUnnamed(in: [
             TrailWaypoint(coordinate: Self.coordinate(Ridge.south), name: "Lurdy Ház"),
         ])
-        await settle()
+        // Best effort only — there is no positive effect to wait on when the
+        // right answer is that nothing happens.
+        await settleDelegateHop()
 
         #expect(stub.asked.isEmpty)
     }
@@ -111,25 +154,24 @@ struct TrailStopNamerTests {
         let stub = Stub()
         stub.answers = ["One", "Two", "Three"]
         let namer = TrailStopNamer(source: stub)
-        var named: [String] = []
-        namer.onNamed { _, name in named.append(name) }
+        let named = Names()
+        namer.onNamed { _, name in named.all.append(name) }
 
         namer.nameUnnamed(in: Self.waypoints([Ridge.south, Ridge.middle, Ridge.north]))
-        await settle()
-
+        await settleAsked(stub, 1)
         #expect(stub.asked.count == 1, "the second must wait for the first")
 
         stub.answer()
-        await settle()
+        await settleAsked(stub, 2)
         #expect(stub.asked.count == 2)
 
         stub.answer()
-        await settle()
+        await settleAsked(stub, 3)
         #expect(stub.asked.count == 3)
 
         stub.answer()
-        await settle()
-        #expect(named == ["One", "Two", "Three"])
+        await settleDelegateHop(until: "all three names to have landed") { named.all.count == 3 }
+        #expect(named.all == ["One", "Two", "Three"])
     }
 
     @Test("asking again while a question is open does not ask it twice")
@@ -140,17 +182,19 @@ struct TrailStopNamerTests {
         let points = Self.waypoints([Ridge.south, Ridge.middle])
 
         namer.nameUnnamed(in: points)
-        await settle()
+        await settleAsked(stub, 1)
         // What every edit to the line does — see
         // ``TrailDraftController.commitLine()``.
         namer.nameUnnamed(in: points)
         namer.nameUnnamed(in: points)
-        await settle()
 
         stub.answer()
-        await settle()
+        await settleAsked(stub, 2)
         stub.answer()
-        await settle()
+        await settleReturned(stub, 2)
+        // A duplicate would be the reader's next question; give it the chance
+        // to be asked before saying it was not.
+        await settleDelegateHop()
 
         #expect(stub.asked.count == 2, "two points are two questions, however often it is asked")
         #expect(!stub.answer(), "and nothing is left open")
@@ -167,12 +211,12 @@ struct TrailStopNamerTests {
         let points = Self.waypoints([Ridge.south])
 
         namer.nameUnnamed(in: points)
-        await settle()
+        await settleAsked(stub, 1)
         stub.answer()
-        await settle()
+        await settleReturned(stub, 1)
 
+        // Settled before it was asked, so this call queues nothing at all.
         namer.nameUnnamed(in: points)
-        await settle()
 
         #expect(stub.asked.count == 1)
     }
@@ -184,23 +228,23 @@ struct TrailStopNamerTests {
         let stub = Stub()
         stub.answers = ["Before", "After"]
         let namer = TrailStopNamer(source: stub)
-        var named: [String] = []
-        namer.onNamed { _, name in named.append(name) }
+        let named = Names()
+        namer.onNamed { _, name in named.all.append(name) }
         let point = TrailWaypoint(coordinate: Self.coordinate(Ridge.south))
 
         namer.nameUnnamed(in: [point])
-        await settle()
+        await settleAsked(stub, 1)
         stub.answer()
-        await settle()
+        await settleDelegateHop(until: "the first name to have landed") { named.all.count == 1 }
 
         let moved = TrailWaypoint(coordinate: Self.coordinate(Ridge.north), id: point.id)
         namer.nameUnnamed(in: [moved])
-        await settle()
+        await settleAsked(stub, 2)
         stub.answer()
-        await settle()
+        await settleDelegateHop(until: "the moved stop's name to have landed") { named.all.count == 2 }
 
         #expect(stub.asked.map(\.latitude) == [Ridge.south, Ridge.north])
-        #expect(named == ["Before", "After"])
+        #expect(named.all == ["Before", "After"])
     }
 
     /// End to end through the controller: the answer for where a stop *was*
@@ -214,18 +258,23 @@ struct TrailStopNamerTests {
         maker.setEditing(true)
 
         maker.appendWaypoint(at: Self.coordinate(Ridge.south))
-        await settle()
+        await settleAsked(stub, 1)
         #expect(stub.asked.count == 1)
 
         let id = maker.draft.waypoints[0].id
         maker.placeWaypoint(id, at: Self.coordinate(Ridge.north), named: "")
         stub.answer()
-        await settle()
+        // The stale answer is applied — or refused — in the same turn that
+        // goes on to ask the next question, so by the second ask it has had
+        // its chance to name the stop.
+        await settleAsked(stub, 2)
         #expect(maker.draft.name(ofWaypointAt: 0).isEmpty, "the address of the spot it left")
         #expect(stub.asked.map(\.latitude) == [Ridge.south, Ridge.north])
 
         stub.answer()
-        await settle()
+        await settleDelegateHop(until: "the stop to be named where it now stands") {
+            !maker.draft.name(ofWaypointAt: 0).isEmpty
+        }
         #expect(maker.draft.name(ofWaypointAt: 0) == "After")
     }
 
@@ -240,22 +289,27 @@ struct TrailStopNamerTests {
         let namer = TrailStopNamer(source: stub)
 
         namer.nameUnnamed(in: Self.waypoints([Ridge.south]))
-        await settle()
+        await settleAsked(stub, 1)
         namer.clear()
         namer.nameUnnamed(in: Self.waypoints([Ridge.middle]))
-        await settle()
+        await settleDelegateHop(until: "the cleared question to be open beside the new one") {
+            stub.asked.count == 2 && stub.open == 2
+        }
         #expect(stub.asked.count == 2, "the cleared question is still open, and the new one has started")
 
         // The cleared reader's request comes back and that reader ends.
         stub.answer()
-        await settle()
+        await settleReturned(stub, 1)
         namer.nameUnnamed(in: Self.waypoints([Ridge.north]))
-        await settle()
+        // The live reader is parked inside the second question, so the only
+        // way the third is asked now is by a second reader — give one the
+        // chance to start before saying none did.
+        await settleDelegateHop()
 
         #expect(stub.asked.count == 2, "the third must wait for the second")
         stub.answer()
-        await settle()
-        #expect(stub.asked.count == 3)
+        await settleAsked(stub, 3)
+        #expect(stub.asked.map(\.latitude) == [Ridge.south, Ridge.middle, Ridge.north])
     }
 
     /// A hiker who closes the maker and comes back has plausibly moved, and one
@@ -268,13 +322,13 @@ struct TrailStopNamerTests {
         let points = Self.waypoints([Ridge.south])
 
         namer.nameUnnamed(in: points)
-        await settle()
+        await settleAsked(stub, 1)
         stub.answer()
-        await settle()
+        await settleReturned(stub, 1)
 
         namer.clear()
         namer.nameUnnamed(in: points)
-        await settle()
+        await settleAsked(stub, 2)
 
         #expect(stub.asked.count == 2)
     }
