@@ -150,6 +150,9 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored var startRequested = false
     @ObservationIgnored var isActivating = false
     @ObservationIgnored var pendingResumeFlag = false
+    /// Refuses live fixes taken before this recording, or its current leg,
+    /// began — see ``RecordingFixWindow``. `nil` until a session is under way.
+    @ObservationIgnored var fixWindow: RecordingFixWindow?
     @ObservationIgnored var acceptedFixRevision: UInt64 = 0
     @ObservationIgnored var liveMatchWindow: [RecordingPoint] = []
     /// How far this walk has gone along each trail the live matcher could
@@ -436,11 +439,13 @@ extension HikeRecorder {
             fail(.preciseLocationRequired)
             return
         }
+        let resumedAt: Date
         do {
             guard let journal else { throw RecordingFailure.storageUnavailable }
             await journalQueue.drain()
             try await journal.reopenForAppending()
-            try await journal.resume(at: clock())
+            resumedAt = clock()
+            try await journal.resume(at: resumedAt)
         } catch let failure as RecordingFailure {
             fail(failure)
             return
@@ -456,6 +461,9 @@ extension HikeRecorder {
         let elevationAnchor = lastAcceptedPoint?.elevation
         pendingResumeFlag = true
         lastAcceptedPoint = nil
+        // With no accepted point to be newer than, the window is all that
+        // stands between the new leg and a fix taken while it was paused.
+        fixWindow?.reopen(at: resumedAt)
         recoveryState = .absent
         startElevationUpdates(anchorElevation: elevationAnchor)
         startMotionUpdates()

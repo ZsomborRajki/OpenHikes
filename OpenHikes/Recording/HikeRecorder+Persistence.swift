@@ -11,6 +11,7 @@ import CoreLocation
 import Foundation
 import Observation
 import OpenHikesData
+import OpenHikesShared
 import os
 import SwiftData
 
@@ -522,6 +523,7 @@ extension HikeRecorder {
         phase = .idle
         recoveryState = .absent
         sessionStartedAt = nil
+        fixWindow = nil
         currentHike = nil
         routeReview = nil
         pendingReviewSave = nil
@@ -602,6 +604,7 @@ extension HikeRecorder {
         cancelTrailGraphPrefetches()
         sessionID = id
         sessionStartedAt = startedAt
+        fixWindow = RecordingFixWindow(opensAt: startedAt)
         sessionUptimeBase = uptime()
         cancelLiveMatching(clearWindow: true)
         stats.reset()

@@ -153,8 +153,8 @@ final class WatchRecorder: NSObject {
     @ObservationIgnored private var sessionID = UUID()
     @ObservationIgnored private var startedAt = Date.now
     /// Refuses fixes taken before this recording, or its current leg, began —
-    /// see ``WatchFixWindow``.
-    @ObservationIgnored private var window = WatchFixWindow(opensAt: .now)
+    /// see ``RecordingFixWindow``.
+    @ObservationIgnored private var window = RecordingFixWindow(opensAt: .now)
     @ObservationIgnored private var trailHikeID: UUID?
     @ObservationIgnored private var trailTitle: String?
     @ObservationIgnored private var journal: WatchRecordingJournalWriter
@@ -199,7 +199,7 @@ final class WatchRecorder: NSObject {
         trailTitle = title
         sessionID = UUID()
         startedAt = .now
-        window = WatchFixWindow(opensAt: startedAt)
+        window = RecordingFixWindow(opensAt: startedAt)
         accumulator = WatchWalkAccumulator()
         stats.reset()
 
@@ -663,7 +663,7 @@ extension WatchRecorder {
         // Opened at the break rather than at the header's start: whatever the
         // feed still holds from before the outage is ground nobody observed.
         // A recovery that stays paused reopens it again at ``resume()``.
-        window = WatchFixWindow(opensAt: now)
+        window = RecordingFixWindow(opensAt: now)
         journaling { journal in
             try journal.record(.paused(now), at: now)
             if !paused { try journal.record(.resumed(now), at: now) }

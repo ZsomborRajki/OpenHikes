@@ -9,6 +9,7 @@
 import CoreLocation
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 import os
 import SwiftData
 
@@ -196,6 +197,11 @@ extension HikeRecorder {
             return
         }
         guard phase == .waitingForFix || phase == .recording else { return }
+        // Before either policy: both judge a fix's age against *now*, and a
+        // cached fix from the walk to the trailhead is fresh by that measure.
+        // Only the window knows the recording had not started when it was
+        // taken (#749).
+        guard fixWindow?.admits(location.timestamp) ?? false else { return }
         if LocationFixPolicy.accepts(
             location,
             maximumAge: LocationFixPolicy.foregroundMaximumAge,
@@ -465,6 +471,12 @@ extension HikeRecorder {
     ) throws(RecordingFailure) -> (Hike, Date) {
         sessionID = session.metadata.sessionID
         sessionStartedAt = session.metadata.startedAt
+        // Where the journal says the running leg began. A recovery that stays
+        // paused reopens it again at ``resume()``.
+        fixWindow = RecordingFixWindow(
+            opensAt: session.metadata.pausedIntervals.last?.endedAt
+                ?? session.metadata.startedAt
+        )
         let recoveryLastUpdatedAt = session.metadata.lastUpdatedAt
         startRequested = true
         try deleteOrphanedRecordingHikes(except: session.metadata.sessionID)

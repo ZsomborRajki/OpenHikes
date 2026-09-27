@@ -30,13 +30,14 @@ extension PlaceUITests {
 
         launch(app)
         startRecording(in: app)
+        // Handed over again until it is taken: the location set before launch
+        // is older than the recording, and is refused as such.
         let points = element("recording-point-count", in: app)
         XCTAssertTrue(
-            waitUntil(timeout: UITestTimeout.navigation) {
-                points.exists && (points.value as? String).map { $0 != "0" } == true
-            },
+            points.waitForExistence(timeout: UITestTimeout.existence),
             "the walk needs a fix for the screen to frame"
         )
+        walkRecordedTrace([UITestFixture.trailheadCoordinate], countedBy: points)
 
         tapWhenReady(element("recording-places-nearby", in: app))
         XCTAssertTrue(
