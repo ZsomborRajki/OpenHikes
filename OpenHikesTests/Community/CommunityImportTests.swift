@@ -93,9 +93,9 @@ struct CommunityImportTests {
         #expect(hike.tintHex != Hike.defaultTintHex, "the default green is what this test exists to rule out")
     }
 
-    /// The listing's figures are typed by a reviewer in the CloudKit Console;
-    /// the route is what was actually uploaded and is what draws the line on
-    /// the map. A hike whose stated length disagreed with its own polyline
+    /// The listing's distance is a figure the submitting app wrote beside the
+    /// route, carried onto the listing at publication; the route is what was
+    /// actually uploaded and is what draws the line on the map. A hike whose stated length disagreed with its own polyline
     /// would be wrong in the one place the hiker can see it.
     @Test("the distance is recomputed from the route, not copied")
     func distanceComesFromTheRoute() async throws {

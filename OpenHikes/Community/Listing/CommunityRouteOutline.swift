@@ -29,10 +29,11 @@
 //  Google's encoded-polyline format, at five decimal places — about a metre,
 //  which is finer than the tolerance the points were thinned with, so the
 //  encoding is never the thing that loses detail. It is printable ASCII, which
-//  matters for one unglamorous reason: everything about this feature that
-//  crosses the reviewer's desk crosses it through the CloudKit Console, and a
-//  value a person can see, select and paste is one they can check. A blob
-//  cannot be proof-read.
+//  matters for one unglamorous reason: a record looked at by hand is looked at
+//  in the CloudKit Console, and a value a person can see, select and paste
+//  there is one they can check. A blob cannot be proof-read. That was every
+//  review once, before ``CommunityReviewView`` took the job over, and it is
+//  still every inspection of a record outside the app.
 //
 //  Decoding is correspondingly suspicious of what it is handed — see
 //  ``decoded(_:)``. A truncated paste, a stray quotation mark or a value out
