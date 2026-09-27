@@ -547,6 +547,14 @@ public extension Hike {
 public extension Hike {
     /// Adds complete or partial bulk coverage without accumulating redundant
     /// records for repeated attempts at the same provider/depth.
+    ///
+    /// A complete record supersedes every other at its provider and depth —
+    /// including a complete one planned over an older line, whose tiles the
+    /// hike no longer needs once it has the map for the line it has now. A
+    /// partial one is redundant only against a complete record planned over
+    /// the same ``OfflineDownloadRecord/footprint``: after the trail is
+    /// redrawn, the first batches of the new line's map lie outside the old
+    /// grid, and dropping them would leave tiles on disk that nothing claims.
     func mergeOfflineDownload(_ record: OfflineDownloadRecord) {
         let matches: (OfflineDownloadRecord) -> Bool = { existing in
             existing.providerID == record.providerID
@@ -559,7 +567,10 @@ public extension Hike {
             return
         }
 
-        if offlineDownloads.contains(where: { matches($0) && $0.savedTileKeys.isEmpty }) { return }
+        let covered = offlineDownloads.contains { existing in
+            matches(existing) && existing.savedTileKeys.isEmpty && existing.footprint == record.footprint
+        }
+        if covered { return }
 
         var mergedKeys = Set(record.savedTileKeys)
         offlineDownloads.removeAll { existing in
@@ -572,7 +583,12 @@ public extension Hike {
             OfflineDownloadRecord(
                 providerID: record.providerID,
                 maxZoom: record.maxZoom,
-                savedTileKeys: mergedKeys.sorted()
+                savedTileKeys: mergedKeys.sorted(),
+                // The latest run's box. Keys are exact whatever box they were
+                // planned from, so this only decides which complete record
+                // later makes the union redundant — and that is the latest
+                // run's.
+                footprint: record.footprint
             )
         )
     }

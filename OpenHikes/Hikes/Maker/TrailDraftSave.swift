@@ -272,6 +272,10 @@ enum TrailDraftSave {
                 hike.unfilePhotos(fromPlace: place.id)
             }
         }
+        // Before the line changes: a download recorded without its box has
+        // only the route to be recomputed from, and after this it would be
+        // recomputed from the new one — tiles nobody fetched.
+        hike.pinUnboxedDownloads()
         hike.route = heights?.filling(route) ?? route
         hike.distanceMeters = draft.distanceMeters
         hike.surfaceMetersByCategory = [:]

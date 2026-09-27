@@ -101,6 +101,23 @@ nonisolated struct TileBoundingBox: Sendable {
         lonSpan = 360 - widestGap
     }
 
+    /// The box a download recorded it was planned over — see
+    /// ``OfflineDownloadRecord/footprint``.
+    init(_ footprint: OfflineDownloadFootprint) {
+        self.init(
+            southLat: footprint.southLat,
+            northLat: footprint.northLat,
+            westLon: footprint.westLon,
+            lonSpan: footprint.lonSpan
+        )
+    }
+
+    /// This box as a download records it, so the grid can be recomputed from
+    /// it after the route has moved on.
+    var footprint: OfflineDownloadFootprint {
+        OfflineDownloadFootprint(southLat: southLat, northLat: northLat, westLon: westLon, lonSpan: lonSpan)
+    }
+
     /// Tile columns the box spans at zoom `z`, as a first column and a count.
     /// The run may pass the last column and continue from zero, so callers must
     /// take each column through ``SlippyTileMath/wrap(_:to:)``.

@@ -43,8 +43,11 @@ nonisolated struct TileOwnership: Sendable {
     /// Every cache key this hike claims: the tiles each bulk download would
     /// have covered, plus the ones auto-saved while it was browsed.
     ///
-    /// Recomputed from the route rather than stored, matching how the
-    /// downloader enumerates them in the first place.
+    /// Recomputed from the box each download was planned over rather than
+    /// stored, matching how the downloader enumerates them in the first place.
+    /// Not from the route: the trail may have been redrawn since, and its
+    /// current line's grid is tiles nobody fetched. The route is snapshotted
+    /// only for a record written before the box was kept.
     func tileKeys() throws(CancellationError) -> Set<String> {
         guard hasStoredTiles else { return [] }
         let coordinates = route.map(\.clCoordinate)
@@ -209,4 +212,24 @@ extension Hike {
     /// work worth not doing on the main actor. Not a filter anything builds a
     /// claim set with — see ``tileClaim()`` for why the difference matters.
     var hasStoredTiles: Bool { !offlineDownloads.isEmpty || !autoSavedTileKeys.isEmpty }
+
+    /// Pins every download recorded before ``OfflineDownloadRecord/footprint``
+    /// was kept to the box of the route it has now — the one its grid has been
+    /// derived from all along. Called before the route is replaced, so the
+    /// claim stays on the tiles that were fetched rather than moving to the new
+    /// line's.
+    ///
+    /// Safe to leave in place when the edit is then refused: the route is the
+    /// old one again, and the box pinned from it recomputes the very grid the
+    /// record stood for without one.
+    func pinUnboxedDownloads() {
+        let downloads = offlineDownloads
+        guard downloads.contains(where: { $0.footprint == nil }),
+              let box = TileBoundingBox(route: route.map(\.clCoordinate)) else { return }
+        offlineDownloads = downloads.map { record in
+            var pinned = record
+            pinned.footprint = pinned.footprint ?? box.footprint
+            return pinned
+        }
+    }
 }
