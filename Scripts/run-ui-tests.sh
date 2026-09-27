@@ -81,14 +81,20 @@ serial_tests=(
 )
 default_suite="RecordingUITests"
 default_test="testReviewsSnappedRouteAfterStopping"
-# Three, not "one per core". xcodebuild spreads whole *classes*, so the floor of
-# a parallel run is the longest single class, and RecordingUITests is 274s of a
-# 787s serial `--all`. Three workers already reach that floor (787/3 = 262s);
-# a fourth only adds a simulator to boot, install into and contend with. The
-# shape holds wherever one class dominates, which is why the number is a
-# considered default rather than a function of `sysctl hw.ncpu`. It is what a
-# bare `--all` uses; `--parallel N` overrides it and `--serial` turns it off.
-default_parallel_workers=3
+# Four, not "one per core". xcodebuild spreads whole *classes*, so the floor of
+# a parallel run is the longest single class. When this was three, that floor
+# was RecordingUITests at 274s of a 787s serial `--all`, which three workers
+# already reached. The suite has since grown to some 3,300s of tests across 18
+# classes, and the longest, AccessibilityUITests, is 474s, well under a
+# quarter of it. So a fourth worker now shortens the run. Measured on a
+# 16-core M-series machine on 2026-09-27, same device, same idle machine: the
+# tests finished after 18.5 minutes on three clones and 15.1 on four, each
+# clone carrying 815-870s of tests, and no test ran slower for the extra
+# simulator. Five or more is unmeasured: each one is another simulator booting
+# alongside the rest, which is what the retries and `serial_tests` below exist
+# for. It is what a bare `--all` uses; `--parallel N` overrides it and
+# `--serial` turns it off.
+default_parallel_workers=4
 
 device="${OPENHIKES_SIMULATOR_NAME:-iPhone 18 Pro}"
 # Where the build lands. Empty means Xcode's shared derived-data
@@ -392,18 +398,19 @@ if [[ -n "$parallel_workers" ]] && { [[ "$run_all" != true ]] || [[ -n "$suite" 
     exit 2
 fi
 
-# A bare `--all` is the run worth making fast — thirteen minutes serial against
-# 5m49s across three clones — and it is the line every document already tells a
-# contributor to run, so it parallelises without being asked. `--serial` is the
-# way back. Everything narrower stays serial with no comment, because there is
-# genuinely nothing to spread; that is also what keeps CI untouched, since the
-# `accessibility-ui-tests` job always passes `--suite`.
+# A bare `--all` is the run worth making fast — about fifty minutes serial
+# against under twenty across four clones — and it is the line every
+# document already tells a contributor to run, so it parallelises without being
+# asked. `--serial` is the way back. Everything narrower stays serial with no
+# comment, because there is genuinely nothing to spread; that is also what
+# keeps CI untouched, since the `accessibility-ui-tests` job always passes
+# `--suite`.
 if [[ -z "$parallel_workers" && "$serial" != true ]] \
     && [[ "$run_all" == true && -z "$suite" ]]; then
     parallel_workers="$default_parallel_workers"
 fi
 
-# And the same run retries its failures, for the reason it fans out: three
+# And the same run retries its failures, for the reason it fans out: the
 # clones booting, installing and first-launching at once make the machine slow
 # enough that a test with a tight wait gives up, and the evidence for that is
 # specific rather than general — in one such run the failures were each clone's
@@ -534,6 +541,17 @@ fi
 if [[ "$retry" == true ]]; then
     base_command+=(-retry-tests-on-failure -test-iterations 2)
 fi
+# No sysdiagnose at the end of a run. By default xcodebuild runs `simctl
+# diagnose --timeout=600` at the end of a run, and on Xcode 27 that step hangs
+# until the timeout. Every one of four three-clone `--all` runs on 2026-09-27
+# sat idle for exactly 10.0 minutes after its last test, green runs included,
+# with an empty `diagnose.log` in the bundle, against 0.2 minutes for a run
+# where it completed. That is a third of a run spent on nothing. What a failure
+# needs is still in the result bundle: the test's screen recording, its
+# screenshots and its failure message, which is what diagnosed the Trail
+# Maker reorder flake. CI's `--suite` runs go through here too, and gain the
+# same.
+base_command+=(-collect-test-diagnostics never)
 
 command=(
     "${base_command[@]}"
@@ -625,7 +643,7 @@ fi
 # failure, so a hundred green lines can carry one red one nobody sees — which
 # is exactly how two red tests sat on `main` for days, each found by somebody
 # reading a result bundle rather than the run. A parallel run makes it worse
-# rather than better: three clones write into one terminal, interleaved.
+# rather than better: four clones write into one terminal, interleaved.
 #
 # The retried ones are printed on a green run too, and over time that is the
 # more useful half. `-retry-tests-on-failure` makes a test that failed once and

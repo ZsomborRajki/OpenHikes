@@ -364,8 +364,29 @@ run_script "run-ui-tests --all parallelises by default" \
     "$ui_tests" --device "iPhone 17 Pro" --all --dry-run
 if expect_status 0 \
     && expect_contains "$output" "-parallel-testing-enabled YES" "the printed invocation" \
-    && expect_contains "$output" "-parallel-testing-worker-count 3" "the printed invocation" \
-    && expect_contains "$output" "Workers: 3 simulator clones" "the printed summary"; then
+    && expect_contains "$output" "-parallel-testing-worker-count 4" "the printed invocation" \
+    && expect_contains "$output" "Workers: 4 simulator clones" "the printed summary"; then
+    pass
+fi
+
+# Every invocation skips the end-of-run sysdiagnose, which hangs to its 600s
+# timeout on Xcode 27. Both passes of a parallel --all, and the --suite shape CI
+# runs: a pass left out keeps paying ten minutes for nothing.
+run_script "run-ui-tests skips test diagnostics in both passes" \
+    "$ui_tests" --device "iPhone 17 Pro" --all --dry-run
+printed_diagnostics="$(printf '%s\n' "$output" | grep -c -- "-collect-test-diagnostics never" || true)"
+if expect_status 0; then
+    if [[ "$printed_diagnostics" == 2 ]]; then
+        pass
+    else
+        fail "printed -collect-test-diagnostics never $printed_diagnostics times, expected 2" "$output"
+    fi
+fi
+
+run_script "run-ui-tests skips test diagnostics for a CI suite run" \
+    "$ui_tests" --device "iPhone 17 Pro" --suite AccessibilityUITests --all --retry --dry-run
+if expect_status 0 \
+    && expect_contains "$output" "-collect-test-diagnostics never" "the printed invocation"; then
     pass
 fi
 
@@ -407,7 +428,7 @@ fi
 run_script "run-ui-tests --parallel does not swallow the flag after it" \
     "$ui_tests" --device "iPhone 17 Pro" --parallel --all --dry-run
 if expect_status 0 \
-    && expect_contains "$output" "-parallel-testing-worker-count 3" "the printed invocation" \
+    && expect_contains "$output" "-parallel-testing-worker-count 4" "the printed invocation" \
     && expect_contains "$output" "RecordingUITests" "the selected tests"; then
     pass
 fi
@@ -1421,7 +1442,7 @@ if expect_status 0 \
 fi
 
 # And a serial --all has no second pass to print: the pinned list exists
-# because three clones make the machine slow, so with one simulator those
+# because the clones make the machine slow, so with one simulator those
 # tests run in the ordinary pass and must not be run twice.
 run_script "run-ui-tests --serial --all prints one invocation" \
     "$ui_tests" --device "iPhone 17 Pro" --all --serial --dry-run

@@ -31,10 +31,10 @@ xcodebuild test \
   -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
   -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
 
-# Run everything the scheme's plan carries, UI automation included: ~13 minutes.
-# This is not "the unit tests with extra safety" — OpenHikes.xctestplan lists
-# OpenHikesUITests too, and omitting -only-testing: is the whole difference
-# between a twenty-second gate and a quarter-hour one.
+# Run everything the scheme's plan carries, UI automation included: most of an
+# hour, serially. This is not "the unit tests with extra safety" —
+# OpenHikes.xctestplan lists OpenHikesUITests too, and omitting -only-testing:
+# is the whole difference between a twenty-second gate and an hour-long one.
 xcodebuild test \
   -project OpenHikes.xcodeproj \
   -scheme OpenHikes \
@@ -82,7 +82,7 @@ The runner image is `xcode-27`, not `macos-26`. That is what makes the three com
 
 `.github/workflows/codeql.yml` is the deliberate exception and still pins `Xcode_26.6` on `macos-26`. CodeQL's Swift extractor analyses up to Swift 6.3.3 and Xcode 27 ships Swift 6.4, so that job on the new image would have no extractor rather than no findings. It moves when a bundle announces 6.4 in `swift/ql/lib/CHANGELOG.md`; the file says so at the pin.
 
-Scope the local test command the way CI does. The `unit-tests` job passes `-only-testing:OpenHikesTests -only-testing:OpenWidgetTests`, so an unscoped `xcodebuild test -scheme OpenHikes` is not the gate CI runs — it is that gate plus the whole `OpenHikesUITests` bundle, which turns roughly twenty seconds into roughly thirteen minutes of real gestures. Run the UI automation deliberately, through `Scripts/run-ui-tests.sh`, where a bare `--all` parallelises by default: about thirteen minutes of serial test execution becomes 5m49s end to end, measured on a 16-core M-series machine.
+Scope the local test command the way CI does. The `unit-tests` job passes `-only-testing:OpenHikesTests -only-testing:OpenWidgetTests`, so an unscoped `xcodebuild test -scheme OpenHikes` is not the gate CI runs — it is that gate plus the whole `OpenHikesUITests` bundle, which turns roughly twenty seconds into most of an hour of real gestures. Run the UI automation deliberately, through `Scripts/run-ui-tests.sh`, where a bare `--all` parallelises by default across four simulator clones: about fifty minutes of serial test execution becomes under twenty minutes end to end, measured on a 16-core M-series machine in September 2026. Four rather than three because no single class dominates any more, so a fourth clone shortens the run instead of idling behind the longest class; the script's comment on `default_parallel_workers` has the measurement. Every run of the script also passes `-collect-test-diagnostics never`: on Xcode 27 the `simctl diagnose` that `xcodebuild` runs at the end of a test session hangs to its 600-second timeout, and it did in every three-clone `--all` measured, green runs included, so a run sat ten minutes idle after its last test. A failure's evidence is still in the result bundle — its screen recording, screenshots and failure message — so read that, via `--result-bundle`, rather than expecting a sysdiagnose.
 
 Rebase before trusting a timing. A branch cut before a fix that made a suite faster keeps paying the old cost, and a measurement taken on it describes the branch rather than the change: long after `TrailBasemapRendererTests` had its snapshot boundary injected on `main`, a stale worktree here was still spending 570 seconds in `Trail basemap rendering` and reporting it as the cost of a full test run. The same applies to a suite that got *slower*: compare against `main` at the same commit, not against a number remembered from another branch.
 
