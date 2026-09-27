@@ -1836,6 +1836,7 @@ STUB_CREATED_UDID="$pool_one" \
 if expect_status 0 \
     && expect_contains "$calls" "simctl create OpenHikes Pool 1 iPhone 18 Pro" "the recorded calls" \
     && expect_contains "$calls" "simctl bootstatus $pool_one -b" "the recorded calls" \
+    && expect_contains "$calls" "simctl privacy $pool_one grant photos tappium.com.OpenHikes" "the recorded calls" \
     && expect_absent "$calls" "simctl erase" "the recorded calls" \
     && expect_absent "$calls" "77777777" "the recorded calls"; then
     if [[ "$(printf '%s\n' "$output" | tail -n 1)" == "$pool_one" ]]; then
@@ -1850,7 +1851,8 @@ run_script "sim-pool gives an owner back its own device, data and all" \
 if expect_status 0 \
     && expect_contains "$output" "$pool_one" "the output" \
     && expect_absent "$calls" "simctl create" "the recorded calls" \
-    && expect_absent "$calls" "simctl erase" "the recorded calls"; then
+    && expect_absent "$calls" "simctl erase" "the recorded calls" \
+    && expect_contains "$calls" "simctl privacy $pool_one grant photos tappium.com.OpenHikes" "the recorded calls"; then
     pass
 fi
 
@@ -1884,7 +1886,14 @@ if expect_status 0 \
     && expect_contains "$output" "$pool_one" "the output" \
     && expect_contains "$calls" "simctl erase $pool_one" "the recorded calls" \
     && expect_absent "$calls" "simctl create" "the recorded calls"; then
-    pass
+    # The grant after the erase, which would otherwise wipe it.
+    erase_at="$(call_line "simctl erase $pool_one")"
+    grant_at="$(call_line "simctl privacy $pool_one grant photos")"
+    if (( grant_at > erase_at )); then
+        pass
+    else
+        fail "granted the photo library before erasing, or not at all" "$calls"
+    fi
 fi
 
 # A claim whose process has exited is one nobody holds. The PID is a process
