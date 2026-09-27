@@ -2,13 +2,13 @@
 //  HikeIntentQueryTests.swift
 //  OpenHikesTests
 //
-//  The reading half of the intents: what the last hike was, and what a day
-//  adds up to.
+//  The reading half of the intents: what the last hike was. What a day adds
+//  up to is `HikeIntentTotalsTests`'.
 //
 //  These need no recorder at all — only a store with rows in it — so the one
 //  they are handed never records anything. What they are actually pinning is
 //  which rows count: a recording in progress owns a persisted row from the
-//  moment it starts, and both questions have to look straight past it.
+//  moment it starts, and the question has to look straight past it.
 //
 
 import Foundation
@@ -66,56 +66,8 @@ final class HikeIntentQueryTests {
         #expect(try coordinator().lastFinishedHike().title == "Kalvarienberg")
     }
 
-    @Test("today's total adds up only today's hikes")
-    func todaysTotalCoversToday() throws {
-        try insert(title: "This morning", daysAgo: 0, distanceMeters: 4000)
-        try insert(title: "Also today", daysAgo: 0, distanceMeters: 2500)
-        try insert(title: "Yesterday", daysAgo: 1, distanceMeters: 9000)
-
-        let totals = try coordinator().totalsForToday()
-
-        #expect(totals.hikeCount == 2)
-        #expect(totals.distance.value == 6500)
-    }
-
-    @Test("today's total excludes the recording still being walked")
-    func todaysTotalExcludesADraft() throws {
-        try insert(title: "Finished", daysAgo: 0, distanceMeters: 4000)
-        try insert(title: "In progress", daysAgo: 0, distanceMeters: 1200) { hike in
-            hike.isRecording = true
-        }
-
-        let totals = try coordinator().totalsForToday()
-
-        #expect(totals.hikeCount == 1)
-        #expect(totals.distance.value == 4000)
-    }
-
-    @Test("a hike just before midnight belongs to its own day")
-    func theDayBoundaryIsTheCalendarDay() throws {
-        // The last minute of yesterday, which a naive "twenty-four hours back"
-        // window would count as today.
-        try insert(title: "Late last night", secondsAgo: 60, distanceMeters: 3000)
-
-        let totals = try coordinator().totalsForToday()
-
-        #expect(totals.hikeCount == 0)
-    }
-
-    @Test("a day with nothing in it reports nothing rather than failing")
-    func anEmptyDayIsAnAnswer() throws {
-        try insert(title: "Last week", daysAgo: 7, distanceMeters: 8000)
-
-        let totals = try coordinator().totalsForToday()
-
-        #expect(totals.hikeCount == 0)
-        #expect(totals.distance.value == 0)
-    }
-
     // MARK: - Harness
 
-    /// Midnight is the interesting boundary, so the clock is pinned just past
-    /// it: `secondsAgo: 60` then lands in the previous calendar day.
     private lazy var now: Date = calendar.startOfDay(for: clock.now)
         .addingTimeInterval(30)
 
@@ -150,15 +102,11 @@ final class HikeIntentQueryTests {
     private func insert(
         title: String,
         daysAgo: Int = 0,
-        secondsAgo: TimeInterval = 0,
-        distanceMeters: Double = 1000,
         configure: (Hike) -> Void = { _ in /* no-op */ }
     ) throws {
-        let hike = Hike(title: title, distanceMeters: distanceMeters)
+        let hike = Hike(title: title, distanceMeters: 1000)
         context.insert(hike)
-        hike.date = now
-            .addingTimeInterval(-Double(daysAgo) * 24 * 3600)
-            .addingTimeInterval(-secondsAgo)
+        hike.date = now.addingTimeInterval(-Double(daysAgo) * 24 * 3600)
         configure(hike)
         try context.save()
     }

@@ -274,7 +274,7 @@ extension HikeIntentCoordinator {
     }
 
     /// What was walked on the calendar day containing `date`.
-    func totals(forDayContaining date: Date) throws(HikeIntentFailure) -> HikeTotalsReport {
+    func totals(forDayContaining date: Date) async throws(HikeIntentFailure) -> HikeTotalsReport {
         let day = calendar.startOfDay(for: date)
         guard let next = calendar.date(byAdding: .day, value: 1, to: day) else {
             // Only reachable for a date the calendar cannot step from, which
@@ -283,28 +283,47 @@ extension HikeIntentCoordinator {
             // would claim their hikes could not be read.
             throw .unknownDay
         }
-        return try totals(from: day, to: next)
+        return try await totals(from: day, to: next)
     }
 
-    func totals(from start: Date, to end: Date) throws(HikeIntentFailure) -> HikeTotalsReport {
-        let descriptor = FetchDescriptor<Hike>(
-            predicate: #Predicate { hike in
-                !hike.isRecording && hike.date >= start && hike.date < end
-            }
-        )
-        let hikes = try fetch(descriptor)
+    /// The outings *Totals* counts, placed by their own dates, between
+    /// `start` and `end` (#751).
+    ///
+    /// Not a fetch of the `Hike`s dated in the interval: a trail drawn or
+    /// saved today has not been walked, and a walk today along a trail saved
+    /// last year is dated by the trail. ``LibraryTotals/outings(hikes:walks:)``
+    /// is the one place that decides what a walk is — clocked hikes, walks
+    /// by what they covered, an afternoon recorded and followed at once
+    /// counted once — so Siri and the Totals screen give the same answer.
+    ///
+    /// The sweep reads the whole library, off the main actor, rather than
+    /// the interval's rows: a walk in the interval can overlap a recording
+    /// whose `date` is outside it, and the overlap is what keeps it from
+    /// counting twice.
+    func totals(from start: Date, to end: Date) async throws(HikeIntentFailure) -> HikeTotalsReport {
+        let library: (hikes: [LibraryHikeFacts], walks: [LibraryWalkFacts])
+        do {
+            library = try await LibraryTotalsSweep.read(from: container)
+        } catch {
+            // As in `fetch(_:)`: logged, not carried, because the failure is
+            // read out loud.
+            Self.logger.error("Reading hikes for an intent failed: \(error.localizedDescription, privacy: .public)")
+            throw .storage
+        }
+        let outings = LibraryTotals.outings(hikes: library.hikes, walks: library.walks)
+            .filter { $0.date >= start && $0.date < end }
         return HikeTotalsReport(
-            hikeCount: hikes.count,
+            hikeCount: outings.count,
             distance: Measurement(
-                value: hikes.reduce(0) { $0 + $1.distanceMeters },
+                value: outings.reduce(0) { $0 + $1.distanceMeters },
                 unit: .meters
             )
         )
     }
 
     /// Today, by the hiker's own calendar and the injected clock.
-    func totalsForToday() throws(HikeIntentFailure) -> HikeTotalsReport {
-        try totals(forDayContaining: clock())
+    func totalsForToday() async throws(HikeIntentFailure) -> HikeTotalsReport {
+        try await totals(forDayContaining: clock())
     }
 
     /// A context per query rather than one held for the coordinator's life:
