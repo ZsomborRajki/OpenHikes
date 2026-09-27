@@ -631,6 +631,28 @@ private extension MapSheetHikes {
     #endif
 }
 
+// MARK: - The hike under way, over the community's
+
+extension MapSheetHikes {
+    /// The hike being recorded or walked, pinned above the published hikes
+    /// the way ``hikesList`` pins it above the hiker's own.
+    ///
+    /// A walk under way is the thing happening, not a place in a library, and
+    /// a hiker who flips to the community half to look for the next trail is
+    /// still one tap from the controls that pause or end this one. The same
+    /// row as the hiker's own list draws, badge and all, so it reads as the
+    /// same walk on either side. Absent when nothing is under way — which is
+    /// what keeps the community half the community's the rest of the time.
+    @ViewBuilder var activeHikeSection: some View {
+        if let hike = hikes.first(where: { status(for: $0) != nil }) {
+            Section {
+                hikeRow(hike)
+                    .moveDisabled(true)
+            }
+        }
+    }
+}
+
 // MARK: - Search results
 
 private extension MapSheetHikes {
