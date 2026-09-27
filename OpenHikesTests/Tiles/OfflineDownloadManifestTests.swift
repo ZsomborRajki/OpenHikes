@@ -66,6 +66,28 @@ struct OfflineDownloadManifestTests {
         #expect(hike.offlineDownloads[0].savedTileKeys.isEmpty)
     }
 
+    /// After a trail is redrawn, the first batches of its new map lie outside
+    /// the grid the old complete record claims. Dropping them as redundant
+    /// would leave tiles on disk that nothing claims.
+    @Test("a partial run over a new box is kept beside a complete one over the old")
+    func partialOverANewBoxIsKept() {
+        let hike = Fixture.hike(in: context)
+        let old = OfflineDownloadFootprint(southLat: 47.63, northLat: 47.64, westLon: 12.86, lonSpan: 0)
+        let new = OfflineDownloadFootprint(southLat: 47.63, northLat: 47.64, westLon: 22.86, lonSpan: 0)
+        hike.mergeOfflineDownload(OfflineDownloadRecord(providerID: "test", maxZoom: 12, footprint: old))
+        hike.mergeOfflineDownload(
+            OfflineDownloadRecord(providerID: "test", maxZoom: 12, savedTileKeys: ["test/12/9/9"], footprint: new)
+        )
+
+        #expect(hike.offlineDownloads.count == 2)
+        #expect(hike.offlineDownloads.contains { $0.savedTileKeys == ["test/12/9/9"] })
+
+        hike.mergeOfflineDownload(
+            OfflineDownloadRecord(providerID: "test", maxZoom: 12, savedTileKeys: ["test/12/1/1"], footprint: old)
+        )
+        #expect(hike.offlineDownloads.count == 2, "a partial inside the complete record's own box adds nothing")
+    }
+
     @Test("a record without partial keys decodes as complete coverage")
     func completeRecordDecodes() throws {
         let data = Data(#"{"providerID":"test","maxZoom":12,"savedTileKeys":[]}"#.utf8)

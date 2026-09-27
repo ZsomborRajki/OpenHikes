@@ -31,6 +31,19 @@ nonisolated extension OfflineTileDownloader {
         }
     }
 
+    /// What a download sets out to save, and the box it was planned over.
+    ///
+    /// The box travels with the tiles because it is what every record the run
+    /// claims is stamped with — see ``OfflineDownloadRecord/footprint``. Read
+    /// back off the hike when the run ends, it would describe whatever the
+    /// trail had been redrawn to in the meantime rather than the tiles this
+    /// run actually fetched.
+    nonisolated struct Plan: Sendable {
+        let tiles: [Tile]
+        /// `nil` only for an empty route, which plans no tiles either.
+        let footprint: OfflineDownloadFootprint?
+    }
+
     /// `@concurrent` so a tap that starts a download does its O(tileBudget)
     /// planning on the concurrent executor while staying in the download
     /// task — cancelling that task stops planning immediately.
@@ -39,21 +52,21 @@ nonisolated extension OfflineTileDownloader {
         for route: [RouteCoordinate],
         maxZoom: Int,
         providerID: String
-    ) async throws(CancellationError) -> [Tile] {
+    ) async throws(CancellationError) -> Plan {
         assertOffMainThread(
             "Offline-download planning must stay off the main thread"
         )
         // The one thing that runs before a download commits to any network
         // traffic.
-        let coordinates = try route.clCoordinates()
+        let box = try TileBoundingBox(route: route.clCoordinates())
         let result = tiles(
-            covering: coordinates,
+            covering: box,
             minZoom: minZoom,
             maxZoom: maxZoom,
             budget: tileBudget(forProviderID: providerID)
         )
         guard !Task.isCancelled else { throw CancellationError() }
-        return result
+        return Plan(tiles: result, footprint: box?.footprint)
     }
 
     /// What a previous run of the same download already saved and claimed.
@@ -98,9 +111,25 @@ nonisolated extension OfflineTileDownloader {
         providerMaxZoom: Int,
         maxZoom: Int
     ) -> [String] {
+        tileKeys(
+            in: TileBoundingBox(route: route),
+            providerID: providerID,
+            providerMaxZoom: providerMaxZoom,
+            maxZoom: maxZoom
+        )
+    }
+
+    /// The same, for a download planned over `box` — the spelling a record
+    /// that kept its ``OfflineDownloadRecord/footprint`` is recomputed with.
+    static func tileKeys(
+        in box: TileBoundingBox?,
+        providerID: String,
+        providerMaxZoom: Int,
+        maxZoom: Int
+    ) -> [String] {
         let clamped = min(max(maxZoom, minZoom), providerMaxZoom)
         return tiles(
-            covering: route,
+            covering: box,
             minZoom: minZoom,
             maxZoom: clamped,
             budget: tileBudget(forProviderID: providerID)
@@ -109,6 +138,12 @@ nonisolated extension OfflineTileDownloader {
         }
     }
 
+    /// A complete record is recomputed from the box it was planned over, not
+    /// from `route`: the trail may have been redrawn since, and the grid of
+    /// the line it has now is tiles nobody fetched — see
+    /// ``OfflineDownloadRecord/footprint``. `route` stands in only for a
+    /// record written before the box was kept.
+    ///
     /// Enumerating tiles across every recorded download is real CPU work (trig
     /// per tile, up to `tileBudget` tiles each), so callers that do this
     /// repeatedly — re-measuring storage as auto-save drains in new keys —
@@ -130,9 +165,10 @@ nonisolated extension OfflineTileDownloader {
         // one-off a download pays.
         var keys = Set<String>()
         for record in offlineDownloads {
-            // Every record, not every nth: each one re-walks the whole route
-            // to build its bounding box, so a route-sized unit of work sits
-            // between consecutive checks even when there are only two records.
+            // Every record, not every nth: each one enumerates up to a tile
+            // budget's worth of grid — and one without a footprint re-walks
+            // the whole route first — so a sizeable unit of work sits between
+            // consecutive checks even when there are only two records.
             guard !Task.isCancelled else { throw CancellationError() }
             if !record.savedTileKeys.isEmpty {
                 keys.formUnion(record.savedTileKeys)
@@ -141,7 +177,7 @@ nonisolated extension OfflineTileDownloader {
             let provider = TileProvider.provider(id: record.providerID)
             keys.formUnion(
                 tileKeys(
-                    for: route,
+                    in: record.footprint.map(TileBoundingBox.init) ?? TileBoundingBox(route: route),
                     providerID: record.providerID,
                     providerMaxZoom: provider.maximumZ,
                     maxZoom: record.maxZoom
@@ -151,16 +187,15 @@ nonisolated extension OfflineTileDownloader {
         return Array(keys)
     }
 
-    /// Enumerates the tiles covering the route's bounding box from the overview
+    /// Enumerates the tiles covering a route's bounding box from the overview
     /// zoom up, stopping before a zoom level that would exceed the tile budget.
     private static func tiles(
-        covering route: [CLLocationCoordinate2D],
+        covering box: TileBoundingBox?,
         minZoom: Int,
         maxZoom: Int,
         budget: Int
     ) -> [Tile] {
-        guard maxZoom >= minZoom,
-              let box = TileBoundingBox(route: route) else { return [] }
+        guard maxZoom >= minZoom, let box else { return [] }
 
         // A route too sprawling for even the overview zoom to fit the budget
         // gets a shallower overview rather than nothing at all: the budget has

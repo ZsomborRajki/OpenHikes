@@ -115,6 +115,12 @@ final class OfflineTileDownloader {
     /// only what is new. The merge would union them anyway — this is about not
     /// handing a four-thousand-element array to the store thirty-two times.
     private var claimedKeys: Set<String> = []
+    /// The box the current run was planned over, stamped on every record it
+    /// claims. Kept from planning rather than read off the hike at claim time:
+    /// a trail redrawn while its map downloads still gets the tiles planned
+    /// for the line it had, and the claim has to say so — see
+    /// ``OfflineDownloadRecord/footprint``.
+    private var footprint: OfflineDownloadFootprint?
     let quota: QuotaBroker
     /// A plan waiting on the space confirmation. Cleared by every path that
     /// leaves ``Phase/needsSpace(_:)``.
@@ -229,6 +235,7 @@ final class OfflineTileDownloader {
         completed = alreadySaved.count
         total = 0
         completedRecord = nil
+        footprint = nil
         pendingRun = nil
         self.claim = claim
         phase = .downloading
@@ -262,9 +269,9 @@ final class OfflineTileDownloader {
         maxZoom: Int,
         generation: Int
     ) async {
-        let tiles: [Tile]
+        let plan: Plan
         do throws(CancellationError) {
-            tiles = try await Self.plannedTiles(
+            plan = try await Self.plannedTiles(
                 for: route,
                 maxZoom: maxZoom,
                 providerID: source.providerID
@@ -282,6 +289,8 @@ final class OfflineTileDownloader {
             finishPlanning()
             return
         }
+        let tiles = plan.tiles
+        footprint = plan.footprint
         guard !tiles.isEmpty else {
             phase = .failed("Nothing to save.")
             finishPlanning()
@@ -469,7 +478,8 @@ final class OfflineTileDownloader {
         let record = Self.coverage(
             savedKeys: sortedKeys,
             plannedCount: tiles.count,
-            source: source
+            source: source,
+            footprint: footprint
         )
         completedRecord = record
 
@@ -554,7 +564,8 @@ extension OfflineTileDownloader {
         let record = OfflineDownloadRecord(
             providerID: source.providerID,
             maxZoom: source.maximumZ,
-            savedTileKeys: pending.sorted()
+            savedTileKeys: pending.sorted(),
+            footprint: footprint
         )
         do {
             try claim(record)

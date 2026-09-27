@@ -22,11 +22,49 @@ nonisolated public struct OfflineDownloadRecord: Codable, Hashable, Sendable {
     /// Exact durable keys for a partial download. An empty array indicates
     /// that every tile in the deterministic grid was saved (complete download).
     public var savedTileKeys: [String]
+    /// The box the download was planned from — what a complete record's grid
+    /// is recomputed from.
+    ///
+    /// **Not the hike's route.** A trail can be redrawn after its map was
+    /// saved, here or on another device, and a grid re-derived from the line
+    /// it has *now* claims tiles nobody fetched while abandoning the ones that
+    /// were. The box is fixed when the run is planned, so the claim stays with
+    /// the bytes. `nil` only on a record written before the box was kept,
+    /// which has nothing better to go on than the current route.
+    public var footprint: OfflineDownloadFootprint?
 
-    public init(providerID: String, maxZoom: Int, savedTileKeys: [String] = []) {
+    public init(
+        providerID: String,
+        maxZoom: Int,
+        savedTileKeys: [String] = [],
+        footprint: OfflineDownloadFootprint? = nil
+    ) {
         self.providerID = providerID
         self.maxZoom = maxZoom
         self.savedTileKeys = savedTileKeys
+        self.footprint = footprint
+    }
+}
+
+/// The bounding box an offline download was planned over, kept on its record
+/// so its tile grid can be recomputed exactly however the route changes later.
+///
+/// Longitude is a west edge and an eastward span rather than a `min`/`max`
+/// pair, so a box across the antimeridian round-trips as the few kilometres it
+/// covers rather than the rest of the globe.
+nonisolated public struct OfflineDownloadFootprint: Codable, Hashable, Sendable {
+    public var southLat: Double
+    public var northLat: Double
+    /// West edge, in [-180, 180).
+    public var westLon: Double
+    /// Degrees east from `westLon` to the east edge, in [0, 360].
+    public var lonSpan: Double
+
+    public init(southLat: Double, northLat: Double, westLon: Double, lonSpan: Double) {
+        self.southLat = southLat
+        self.northLat = northLat
+        self.westLon = westLon
+        self.lonSpan = lonSpan
     }
 }
 

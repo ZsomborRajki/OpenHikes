@@ -4,8 +4,8 @@
 //
 //  Bulk download is the half of offline maps that runs ahead of time, and
 //  its bookkeeping is deliberately *derived*: nothing records which tiles a
-//  download saved, the set is recomputed from the route whenever it has to
-//  be measured or deleted. That only works if the enumeration is exactly
+//  download saved, the set is recomputed from the box it was planned over
+//  whenever it has to be measured or deleted. That only works if the enumeration is exactly
 //  reproducible and its keys are byte-identical to the ones the renderer
 //  looks up — otherwise a hike reports 0 bytes saved and "Delete" frees
 //  nothing.
