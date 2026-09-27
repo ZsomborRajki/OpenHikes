@@ -101,7 +101,7 @@ nonisolated final class CommunityPublishedPhotosUITests: XCTestCase {
                 .waitForExistence(timeout: UITestTimeout.existence),
             "the menu this class is about needs a submission to be about"
         )
-        app.buttons["Done"].firstMatch.tap()
+        app.buttons["community-send-dismiss"].tap()
         return app
     }
 

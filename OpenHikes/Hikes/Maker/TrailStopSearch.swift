@@ -91,7 +91,7 @@ struct TrailStopSearchSheet: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", systemImage: "xmark", role: .cancel, action: onClose)
+                    Button(role: .cancel, action: onClose)
                         .accessibilityIdentifier("trail-stop-search-cancel")
                 }
             }

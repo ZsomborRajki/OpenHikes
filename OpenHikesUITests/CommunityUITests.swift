@@ -428,7 +428,7 @@ nonisolated final class CommunityUITests: XCTestCase {
         field.typeText(notes)
         // Cancelled rather than shared: the notes belong to the walk, so
         // thinking better of publishing must not throw away what was written.
-        app.buttons["Cancel"].firstMatch.tap()
+        app.buttons["community-send-dismiss"].tap()
 
         tapWhenReady(element("community-share-button", in: app))
         let reopened = element("community-share-notes", in: app)
@@ -466,7 +466,7 @@ nonisolated final class CommunityUITests: XCTestCase {
             element("community-share-sent", in: app)
                 .waitForExistence(timeout: UITestTimeout.existence)
         )
-        app.buttons["Done"].firstMatch.tap()
+        app.buttons["community-send-dismiss"].tap()
 
         tapWhenReady(element("community-share-button", in: app))
         XCTAssertTrue(

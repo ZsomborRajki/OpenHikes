@@ -332,7 +332,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
                 + "OpenHikes/Secrets.plist carries a Stadia key"
         )
         stadia.tap()
-        app.buttons["Done"].tap()
+        app.buttons["settings-close"].tap()
 
         openHikeDetail(in: app, titled: Self.routeTitle)
         let download = element("offline-download-button", in: app)

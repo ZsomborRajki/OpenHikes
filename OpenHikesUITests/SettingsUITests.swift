@@ -35,7 +35,7 @@ nonisolated final class SettingsUITests: XCTestCase {
             osm.isSelected,
             "OpenStreetMap is the keyless default this app ships on"
         )
-        app.buttons["Done"].tap()
+        app.buttons["settings-close"].tap()
 
         openHikeDetail(in: app)
         scrollIntoView(element("route-style-row", in: app), in: app)
@@ -67,7 +67,7 @@ nonisolated final class SettingsUITests: XCTestCase {
         )
         appleMaps.tap()
         XCTAssertTrue(appleMaps.isSelected, "the tapped source should become the selected one")
-        app.buttons["Done"].tap()
+        app.buttons["settings-close"].tap()
 
         openHikeDetail(in: app)
         scrollIntoView(element("route-style-row", in: app), in: app)
@@ -116,7 +116,7 @@ nonisolated final class SettingsUITests: XCTestCase {
             "tapping a toggle should flip it"
         )
 
-        app.buttons["Done"].tap()
+        app.buttons["settings-close"].tap()
         element("settings-button", in: app).tap()
         XCTAssertTrue(
             element("settings-screen", in: app)

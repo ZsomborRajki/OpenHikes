@@ -30,6 +30,7 @@ struct MapSheetHikes: View, Equatable {
     /// without swallowing the title on top of it.
     private static let selectedHikeHighlightOpacity: Double = 0.28
     private static let actionGlyphSize: CGFloat = 40
+    private static let sortCapsulePadding: CGFloat = 14
     /// Every hike this hiker has, newest first.
     ///
     /// Internal rather than private so the community section can read it from
@@ -325,10 +326,11 @@ private extension MapSheetHikes {
     /// they cannot change on purpose — and *Most Climb* is not a thing anybody
     /// discovers by dragging a row.
     ///
-    /// It shows the current order as that order's own glyph — the same one
-    /// its row in the menu carries — in the glass circle ``importButton`` is
-    /// drawn in, rather than spelling it out; VoiceOver hears the order's name
-    /// as the menu's value.
+    /// It states the current order rather than showing a bare glyph, because
+    /// the first question a list like this raises is "why is that one at the
+    /// top", and the answer belongs on screen next to it. Apple's sort glyph
+    /// leads it, and it sits in the same glass as ``importButton``, stretched
+    /// to a capsule to hold the name.
     @ViewBuilder var sortBar: some View {
         HStack(spacing: 8) {
             if editMode == .active {
@@ -370,15 +372,17 @@ private extension MapSheetHikes {
             }
             .pickerStyle(.inline)
         } label: {
-            HStack(spacing: 2) {
-                Image(systemName: isCustomOrder ? "hand.draw" : sort.symbol)
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.up.arrow.down")
+                Text(isCustomOrder ? "Your Order" : sort.title)
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.bold))
-                    .imageScale(.small)
             }
+            .font(.footnote.weight(.semibold))
             .foregroundStyle(.tint)
-            .frame(width: Self.actionGlyphSize, height: Self.actionGlyphSize)
-            .glassSurface(.regular.interactive(), in: .circle)
+            .padding(.horizontal, Self.sortCapsulePadding)
+            .frame(height: Self.actionGlyphSize)
+            .glassSurface(.regular.interactive(), in: .capsule)
             .minimumTapTarget()
         }
         // On the `Menu` and deliberately *not* on the `Picker` inside it.

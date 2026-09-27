@@ -363,8 +363,6 @@ private extension CommunityPhotoShareSheet {
     var toolbarContent: some ToolbarContent {
         CommunitySendToolbar(
             phase: phase,
-            confirmTitle: "Add",
-            confirmSymbol: "checkmark",
             confirmIdentifier: "community-photos-confirm",
             // The same floor ``CommunityPhotoPublisher/contribute`` refuses
             // below, so a hike with nothing to send cannot start an upload

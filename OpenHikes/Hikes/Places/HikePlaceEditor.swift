@@ -49,10 +49,10 @@ struct HikePlaceEditor: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", systemImage: "xmark", role: .cancel) { dismiss() }
+                    Button(role: .cancel) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", systemImage: "checkmark") {
+                    Button(role: .confirm) {
                         do throws(HikePlaceRefusal) {
                             try onSave(name, symbol, note)
                             dismiss()

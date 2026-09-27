@@ -18,6 +18,10 @@ struct DoneReorderingButton: View {
     let action: () -> Void
 
     var body: some View {
+        // Not the system's `Button(role: .confirm)`, though it is the one
+        // place in the app a ✓ is drawn by hand. With it — icon-only, plain
+        // or not, widened or not — the drag in `HikeOrderUITests` lifts the
+        // row and never moves it, on every run; this button passes.
         Button {
             withAnimation { action() }
         } label: {

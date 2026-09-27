@@ -186,7 +186,7 @@ struct WatchRecordingView: View {
             .font(.caption2)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
-            Button("Done", systemImage: "checkmark") { model.recorder.acknowledge() }
+            Button(role: .confirm) { model.recorder.acknowledge() }
                 .labelStyle(.iconOnly)
         }
     }
@@ -227,7 +227,7 @@ struct WatchRecordingView: View {
             Text(message)
                 .font(.footnote)
                 .multilineTextAlignment(.center)
-            Button("OK", systemImage: "checkmark") { model.recorder.acknowledge() }
+            Button(role: .close) { model.recorder.acknowledge() }
                 .labelStyle(.iconOnly)
         }
     }
@@ -432,7 +432,7 @@ private struct RefusalNote: View {
             Text(text)
                 .font(.caption2)
                 .multilineTextAlignment(.center)
-            Button("OK", systemImage: "checkmark", action: dismiss)
+            Button(role: .close, action: dismiss)
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
                 .font(.caption2)

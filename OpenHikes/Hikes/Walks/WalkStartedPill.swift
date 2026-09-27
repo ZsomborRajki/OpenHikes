@@ -85,7 +85,7 @@ struct WalkStartedPill: View {
             .accessibilityHint("Opens the trail, where the hike can be paused or ended.")
             .accessibilityIdentifier("walk-started-pill")
 
-            Button("Dismiss", systemImage: "xmark") {
+            Button(role: .close) {
                 session.dismissStartNotice()
             }
             .labelStyle(.iconOnly)

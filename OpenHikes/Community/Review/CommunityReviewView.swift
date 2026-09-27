@@ -247,7 +247,8 @@ private extension CommunityReviewView {
                     .toolbar {
                         ToolbarItemGroup(placement: .keyboard) {
                             Spacer()
-                            Button("Done", systemImage: "keyboard.chevron.compact.down") { isEditingTitle = false }
+                            Button(role: .confirm) { isEditingTitle = false }
+                                .accessibilityIdentifier("keyboard-done")
                         }
                     }
                     .accessibilityIdentifier("review-title-field")

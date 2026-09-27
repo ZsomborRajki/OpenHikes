@@ -36,7 +36,7 @@ nonisolated final class OpenHikesUITests: XCTestCase {
             element("settings-screen", in: app)
                 .waitForExistence(timeout: UITestTimeout.navigation)
         )
-        app.buttons["Done"].tap()
+        app.buttons["settings-close"].tap()
     }
 
     @MainActor

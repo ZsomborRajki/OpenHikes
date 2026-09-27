@@ -32,7 +32,7 @@ struct RecordingRecoveryNotice: View {
                 )
                 .font(.subheadline)
                 Spacer()
-                Button("Dismiss", systemImage: "xmark") {
+                Button(role: .close) {
                     recorder.dismissRecoveryNotice()
                 }
                 .labelStyle(.iconOnly)

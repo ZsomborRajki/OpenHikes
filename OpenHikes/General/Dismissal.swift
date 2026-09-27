@@ -44,21 +44,21 @@ import SwiftUI
 /// button underneath, so a caller that needs one attaches it as a modifier
 /// rather than passing it in.
 ///
-/// It draws the ✕ Apple's own sheets close with, whatever it is called: the
-/// title is what VoiceOver, Voice Control and the UI tests know it by, and a
-/// toolbar shows a `Label` as its glyph alone.
+/// The system draws it: a role-only `Button`, so its glyph, its styling and
+/// the word VoiceOver says are Apple's own. `.close` for a screen that has
+/// nothing to lose, `.cancel` for one that abandons what was typed into it.
 struct DismissButton: View {
-    private let title: LocalizedStringKey
+    private let role: ButtonRole
 
     @Environment(\.dismiss)
     private var dismiss
 
-    init(_ title: LocalizedStringKey = "Done") {
-        self.title = title
+    init(role: ButtonRole = .close) {
+        self.role = role
     }
 
     var body: some View {
-        Button(title, systemImage: "xmark") { dismiss() }
+        Button(role: role) { dismiss() }
     }
 }
 

@@ -182,10 +182,10 @@ struct TrailDraftView: View {
             // Save and close share one glass pill on the trailing edge, the ✕
             // outermost, where Apple Maps puts its own.
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("Save", systemImage: "checkmark", action: saveTapped)
+                Button(role: .confirm, action: saveTapped)
                     .disabled(!draft.canBeSaved)
                     .accessibilityIdentifier("trail-draft-save")
-                Button("Close", systemImage: "xmark", action: close)
+                Button(role: .close, action: close)
                     .accessibilityIdentifier("trail-draft-close")
             }
         }

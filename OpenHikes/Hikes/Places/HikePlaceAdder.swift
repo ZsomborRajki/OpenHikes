@@ -90,7 +90,7 @@ struct HikePlaceAdder: View {
         .navigationBarBackButtonHidden()
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel", systemImage: "xmark", role: .cancel, action: onCancel)
+                Button(role: .cancel, action: onCancel)
                     .disabled(isAdding)
                     .accessibilityIdentifier("hike-place-adder-cancel")
             }
@@ -98,7 +98,7 @@ struct HikePlaceAdder: View {
                 if isAdding || stagingCount > 0 {
                     ProgressView()
                 } else {
-                    Button("Add", systemImage: "checkmark", action: add)
+                    Button(role: .confirm, action: add)
                         .accessibilityIdentifier("hike-place-adder-add")
                 }
             }
