@@ -68,7 +68,7 @@ see *Build and test* in the instructions file.
 Those four are the gates CI runs, on the same device and the same compiler.
 **The `-only-testing:` scoping is part of the command, not a refinement of
 it** — `OpenHikes.xctestplan` also carries `OpenHikesUITests`, so dropping it
-turns a twenty-second gate into thirteen minutes of simulator automation and
+turns a twenty-second gate into most of an hour of simulator automation and
 stops the run matching the one CI gates on. CI names `iPhone 18 Pro` on an
 `xcode-27` runner image carrying Xcode 27.0, so a green local gate now means
 what it says; it did not while CI was on `Xcode_26.6`, and *Build and test* in
@@ -76,13 +76,13 @@ the instructions file records what that cost.
 
 `Scripts/run-ui-tests.sh --all` stays out
 of CI and is run locally for a change to recording, the map, or anything on
-the render path. `--all` spreads its classes across three simulator clones on
-its own — 5m49s against thirteen minutes serial — so the line above is already
-the fast one; `--serial` goes back to a single device and `--parallel N`
-changes the count. Anything narrower than a bare `--all` stays serial, which is
-what keeps CI's `--suite` runs on one simulator.
+the render path. `--all` spreads its classes across four simulator clones on
+its own — under twenty minutes against about fifty serial — so the line
+above is already the fast one; `--serial` goes back to a single device and
+`--parallel N` changes the count. Anything narrower than a bare `--all` stays
+serial, which is what keeps CI's `--suite` runs on one simulator.
 
-Two things guard that fan-out against itself, because three clones booting,
+Two things guard that fan-out against itself, because four clones booting,
 installing and first-launching at once make the machine slow enough that a test
 with a tight wait gives up. A bare `--all` **retries its failures** — failures
 and only failures, so a green run pays nothing; `--no-retry` turns it off — and

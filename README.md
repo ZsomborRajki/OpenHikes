@@ -103,7 +103,7 @@ swift test --package-path OpenHikesShared
 # The data package's suite: the models and their logic, on the macOS host
 swift test --package-path OpenHikesData
 
-# Simulator UI automation, across three simulator clones; --serial for one,
+# Simulator UI automation, across four simulator clones; --serial for one,
 # and --list shows the available tests. A second run on the same machine needs
 # its own of both: --device <name|udid> and --derived-data <path>
 Scripts/run-ui-tests.sh --all

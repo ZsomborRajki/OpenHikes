@@ -81,7 +81,7 @@ gestures and timing-sensitive waits slow and unreliable. Run it locally when
 you touch recording, the map, or anything on the render path:
 
 ```sh
-# Spreads its classes across three simulator clones; --serial for one
+# Spreads its classes across four simulator clones; --serial for one
 Scripts/run-ui-tests.sh --all
 ```
 
