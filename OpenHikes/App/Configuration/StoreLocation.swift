@@ -59,9 +59,10 @@ nonisolated enum StoreLocation {
     /// Makes sure `directory` exists and holds the stores, moving them out of
     /// `legacyDirectory` the first time it runs, and returns it.
     ///
-    /// Throws only when a rename fails. The caller's answer to that is the
-    /// temporary store it already falls back to — never the legacy location,
-    /// because by then part of a store may have left it.
+    /// A failed directory read or rename throws into the caller's temporary
+    /// store fallback. Only a missing legacy directory means a fresh install;
+    /// an unreadable one must leave the move unfinished so a later launch can
+    /// retry, including when part of a store has already been staged.
     @discardableResult static func prepare(
         directory: URL = directory,
         legacyDirectory: URL? = legacyDirectory
@@ -74,7 +75,7 @@ nonisolated enum StoreLocation {
             .appending(path: "\(directory.lastPathComponent).moving", directoryHint: .isDirectory)
         try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
 
-        for item in legacyItems(in: legacyDirectory) {
+        for item in try legacyItems(in: legacyDirectory) {
             let destination = staging.appending(path: item.lastPathComponent)
             // Already staged by a launch that stopped part-way.
             guard !fileManager.fileExists(atPath: destination.path(percentEncoded: false)) else {
@@ -90,13 +91,17 @@ nonisolated enum StoreLocation {
     ///
     /// Matched by name rather than listed, so a sidecar SQLite or Core Data
     /// adds later still travels with its database.
-    private static func legacyItems(in legacyDirectory: URL?) -> [URL] {
-        guard let legacyDirectory,
-              let contents = try? FileManager.default.contentsOfDirectory(
-                  at: legacyDirectory,
-                  includingPropertiesForKeys: nil
-              )
-        else { return [] }
+    private static func legacyItems(in legacyDirectory: URL?) throws -> [URL] {
+        guard let legacyDirectory else { return [] }
+        let contents: [URL]
+        do {
+            contents = try FileManager.default.contentsOfDirectory(
+                at: legacyDirectory,
+                includingPropertiesForKeys: nil
+            )
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            return []
+        }
         return contents.filter { item in
             let name = item.lastPathComponent
             return [hikes, localState].contains { store in
