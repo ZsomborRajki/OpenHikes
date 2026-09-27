@@ -114,8 +114,10 @@ struct CommunitySendPhotoCountRow: View {
 struct CommunitySendToolbar: ToolbarContent {
     let phase: CommunitySendPhase
     /// What the confirmation button is called — *Share* for a hike, *Add* for
-    /// photographs.
+    /// photographs. The toolbar draws only `confirmSymbol`; the title is what
+    /// VoiceOver says.
     let confirmTitle: LocalizedStringKey
+    let confirmSymbol: String
     let confirmIdentifier: String
     /// Whether the confirmation may be pressed at all. Each form has its own
     /// floor and its own window in which the answer is not yet known; see the
@@ -129,7 +131,7 @@ struct CommunitySendToolbar: ToolbarContent {
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button(phase.hasFinished ? "Done" : "Cancel", action: cancel)
+            Button(phase.hasFinished ? "Done" : "Cancel", systemImage: "xmark", action: cancel)
                 .disabled(phase.isSending)
         }
         ToolbarItem(placement: .confirmationAction) {
@@ -137,7 +139,7 @@ struct CommunitySendToolbar: ToolbarContent {
                 ProgressView()
                     .accessibilityLabel("Sending")
             } else if !phase.hasFinished, offersConfirmation {
-                Button(confirmTitle, action: confirm)
+                Button(confirmTitle, systemImage: confirmSymbol, action: confirm)
                     .accessibilityIdentifier(confirmIdentifier)
                     .disabled(!canConfirm)
             }

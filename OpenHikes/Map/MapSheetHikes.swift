@@ -325,9 +325,9 @@ private extension MapSheetHikes {
     /// they cannot change on purpose — and *Most Climb* is not a thing anybody
     /// discovers by dragging a row.
     ///
-    /// It states the current order rather than showing a bare glyph, because
-    /// the first question a list like this raises is "why is that one at the
-    /// top", and the answer belongs on screen next to it.
+    /// It shows the current order as that order's own glyph — the same one
+    /// its row in the menu carries — rather than spelling it out; VoiceOver
+    /// hears the order's name as the menu's value.
     @ViewBuilder var sortBar: some View {
         HStack(spacing: 8) {
             if editMode == .active {
@@ -344,6 +344,7 @@ private extension MapSheetHikes {
             if editMode != .active {
                 Button(action: onOpenTotals) {
                     Label("Totals", systemImage: "chart.bar.xaxis")
+                        .labelStyle(.iconOnly)
                         .font(.footnote.weight(.semibold))
                         .minimumTapTarget()
                 }
@@ -371,7 +372,6 @@ private extension MapSheetHikes {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: isCustomOrder ? "hand.draw" : sort.symbol)
-                Text(isCustomOrder ? "Your Order" : sort.title)
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.semibold))
             }

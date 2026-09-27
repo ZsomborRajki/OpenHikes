@@ -43,6 +43,10 @@ import SwiftUI
 /// An accessibility identifier applied from the outside still lands on the
 /// button underneath, so a caller that needs one attaches it as a modifier
 /// rather than passing it in.
+///
+/// It draws the ✕ Apple's own sheets close with, whatever it is called: the
+/// title is what VoiceOver, Voice Control and the UI tests know it by, and a
+/// toolbar shows a `Label` as its glyph alone.
 struct DismissButton: View {
     private let title: LocalizedStringKey
 
@@ -54,7 +58,7 @@ struct DismissButton: View {
     }
 
     var body: some View {
-        Button(title) { dismiss() }
+        Button(title, systemImage: "xmark") { dismiss() }
     }
 }
 

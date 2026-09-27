@@ -179,7 +179,7 @@ struct CommunityMailRequestToolbar: ToolbarContent {
         }
         ToolbarItem(placement: .confirmationAction) {
             if phase == .editing {
-                Button("Send", action: send)
+                Button("Send", systemImage: "paperplane", action: send)
                     .accessibilityIdentifier(sendIdentifier)
             }
         }

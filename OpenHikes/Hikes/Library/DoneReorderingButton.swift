@@ -22,7 +22,9 @@ struct DoneReorderingButton: View {
             withAnimation { action() }
         } label: {
             Label("Done Reordering", systemImage: "checkmark")
+                .labelStyle(.iconOnly)
                 .font(.footnote.weight(.semibold))
+                .minimumTapTarget()
         }
         .buttonStyle(.plain)
         .foregroundStyle(.tint)

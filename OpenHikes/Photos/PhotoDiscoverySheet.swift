@@ -427,6 +427,10 @@ private struct DiscoverySelectionBar: View {
 
 /// The toolbar's Add button, which counts the selection in its own title.
 ///
+/// Drawn as *+ 3* rather than *Add 3*: a `+` and the count, both kept, because
+/// a toolbar shows a plain `Label` as its glyph alone and the count is the one
+/// thing on it worth reading. VoiceOver still hears "Add 3".
+///
 /// It closes the sheet itself rather than being handed a closure that does,
 /// for the reason ``DismissButton`` exists: the sheet's own body must not read
 /// the dismiss action, and `dismiss.callAsFunction` passed down from there
@@ -440,7 +444,8 @@ private struct DiscoveryAddButton: View {
 
     var body: some View {
         let count = controller.selectedCount
-        return Button(count > 0 ? String(localized: "Add \(count)") : String(localized: "Add")) {
+        let title = count > 0 ? String(localized: "Add \(count)") : String(localized: "Add")
+        return Button {
             Task {
                 // Through the controller rather than straight to
                 // `importSelected`, so the work has an owner that outlives
@@ -453,7 +458,19 @@ private struct DiscoveryAddButton: View {
                 // `matches`, which keeps the sheet open to be retried.
                 if added > 0, controller.matches.isEmpty { dismiss() }
             }
+        } label: {
+            if count > 0 {
+                Label {
+                    Text(count, format: .number)
+                } icon: {
+                    Image(systemName: "plus")
+                }
+                .labelStyle(.titleAndIcon)
+            } else {
+                Image(systemName: "plus")
+            }
         }
+        .accessibilityLabel(title)
         .disabled(!controller.canImport)
         .accessibilityIdentifier("photo-discovery-add-button")
     }

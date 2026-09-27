@@ -496,10 +496,13 @@ struct OfflineStorageStatus: View {
                     role: .destructive,
                     action: deleteStoredTiles
                 ) {
-                    Text("Delete").font(.caption.weight(.medium))
+                    Label("Delete", systemImage: "trash")
+                        .labelStyle(.iconOnly)
+                        .font(.caption.weight(.medium))
                 }
                 .glassButtonStyle()
                 .controlSize(.small)
+                .minimumTapTarget()
                 // "Delete" alone doesn't say what goes.
                 .accessibilityLabel("Delete this hike's offline tiles")
                 .accessibilityIdentifier("delete-offline-tiles-button")
