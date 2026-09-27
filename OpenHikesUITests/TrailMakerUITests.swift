@@ -406,24 +406,18 @@ extension TrailMakerUITests {
         XCTAssertFalse(app.navigationBars.buttons["Edit"].exists)
 
         // A press and hold anywhere on the row lifts it; its grabber is only a sign.
-        // Slow and held at both ends, as in `HikeOrderUITests`: a reorder
-        // commits on the drop, and a quick flick is over before the list has
-        // decided it was a drag. The destination goes to the top, turning the
-        // route round: a one-place move is the drop iOS 27.0's
-        // `reorderable()` sometimes misplaces — see `TrailStopReordering.swift`.
-        element("trail-draft-point-3", in: app)
-            .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
-            forDuration: 1.2,
-            thenDragTo: first.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)),
-            withVelocity: .slow,
-            thenHoldForDuration: 0.8
-        )
-
-        // The line is a different line now, which is the whole point of the
-        // operation: the same three places walked in another order are a
-        // different length.
+        // The destination goes to the top, turning the route round: a
+        // one-place move is the drop iOS 27.0's `reorderable()` sometimes
+        // misplaces — see `TrailStopReordering.swift`.
+        //
+        // The line is a different line afterwards, which is the whole point
+        // of the operation: the same three places walked in another order are
+        // a different length.
         XCTAssertTrue(
-            waitUntil { element("trail-draft-length", in: app).label != length },
+            dragRouteRow(
+                element("trail-draft-point-3", in: app),
+                to: first.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1))
+            ) { element("trail-draft-length", in: app).label != length },
             "reordering the points should change the trail they describe"
         )
 

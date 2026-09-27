@@ -102,6 +102,43 @@ extension XCTestCase {
         map.coordinate(withNormalizedOffset: offset).press(forDuration: Self.pinDropPressDuration)
     }
 
+    /// Drags a route row onto `destination`, and drags it again if the list
+    /// did not take it, until `moved` holds. Returns whether it ever did.
+    ///
+    /// Slow and held at both ends, as in `HikeOrderUITests`: a reorder commits
+    /// on the drop, and a quick flick is over before the list has decided it
+    /// was a drag. **Even so the list can let the row go.** A screen recording
+    /// of a four-clone `--all` shows the row highlighted under the press,
+    /// never following the finger, and back where it started with the route
+    /// unchanged: the drag never began. That is the gesture lost rather than a
+    /// drop landing wrong, so the row is dragged again, and only when nothing
+    /// moved. A reorder that is really broken still fails on every attempt.
+    @MainActor
+    func dragRouteRow(
+        _ row: XCUIElement,
+        to destination: XCUICoordinate,
+        until moved: () -> Bool
+    ) -> Bool {
+        for _ in 0..<Self.routeRowDragAttempts {
+            row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
+                forDuration: Self.routeRowLiftDuration,
+                thenDragTo: destination,
+                withVelocity: .slow,
+                thenHoldForDuration: Self.routeRowDropHoldDuration
+            )
+            if waitUntil(moved) { return true }
+        }
+        return false
+    }
+
+    /// Enough to ride out a loaded runner's lost gesture, few enough that a
+    /// broken reorder fails some forty seconds later rather than retrying for long.
+    private static let routeRowDragAttempts = 3
+    /// The press before the drag, and the hold after it: long enough for the
+    /// list to lift the row, and to take the drop as a drop.
+    private static let routeRowLiftDuration: TimeInterval = 1.2
+    private static let routeRowDropHoldDuration: TimeInterval = 0.8
+
     /// Presses a button on the place sheet a press on the map opened, and
     /// waits for the sheet to go if the button closes it — so the next press
     /// lands on the map rather than on a sheet on its way out.
