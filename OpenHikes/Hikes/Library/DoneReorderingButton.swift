@@ -24,7 +24,13 @@ struct DoneReorderingButton: View {
             Label("Done Reordering", systemImage: "checkmark")
                 .labelStyle(.iconOnly)
                 .font(.footnote.weight(.semibold))
-                .minimumTapTarget()
+                // Widened to a finger but left its own height. Grown to the
+                // full `minimumTapTarget()` square it holds the bar above the
+                // list at the sort menu's height through the switch into
+                // reorder mode, and the drag `HikeOrderUITests` makes from a
+                // row's handle then never moves the row.
+                .frame(minWidth: AccessibilityMetrics.minimumTapTarget)
+                .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .foregroundStyle(.tint)

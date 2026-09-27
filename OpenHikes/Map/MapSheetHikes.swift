@@ -326,8 +326,9 @@ private extension MapSheetHikes {
     /// discovers by dragging a row.
     ///
     /// It shows the current order as that order's own glyph — the same one
-    /// its row in the menu carries — rather than spelling it out; VoiceOver
-    /// hears the order's name as the menu's value.
+    /// its row in the menu carries — in the glass circle ``importButton`` is
+    /// drawn in, rather than spelling it out; VoiceOver hears the order's name
+    /// as the menu's value.
     @ViewBuilder var sortBar: some View {
         HStack(spacing: 8) {
             if editMode == .active {
@@ -344,7 +345,6 @@ private extension MapSheetHikes {
             if editMode != .active {
                 Button(action: onOpenTotals) {
                     Label("Totals", systemImage: "chart.bar.xaxis")
-                        .labelStyle(.iconOnly)
                         .font(.footnote.weight(.semibold))
                         .minimumTapTarget()
                 }
@@ -370,13 +370,15 @@ private extension MapSheetHikes {
             }
             .pickerStyle(.inline)
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 2) {
                 Image(systemName: isCustomOrder ? "hand.draw" : sort.symbol)
                 Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.semibold))
+                    .font(.caption2.weight(.bold))
+                    .imageScale(.small)
             }
-            .font(.footnote.weight(.semibold))
             .foregroundStyle(.tint)
+            .frame(width: Self.actionGlyphSize, height: Self.actionGlyphSize)
+            .glassSurface(.regular.interactive(), in: .circle)
             .minimumTapTarget()
         }
         // On the `Menu` and deliberately *not* on the `Picker` inside it.
