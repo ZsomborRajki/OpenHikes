@@ -188,11 +188,56 @@ nonisolated enum TrailBreakdownAnalyzer {
         assertOffMainThread(
             "Trail breakdown analysis must stay off the main thread"
         )
-        guard route.count > 1, !graph.isEmpty else { return .empty }
-        let index = TrailMatcherGraphIndex(graph: graph)
-        guard !index.edges.isEmpty else { return .empty }
-
         var metersByCategory: [Category: Double] = [:]
+        try walk(categoryType, route: route, graph: graph, toleranceMeters: toleranceMeters) { sample in
+            metersByCategory[sample.category, default: 0] += sample.meters
+        }
+        return TrailBreakdown(metersByCategory: metersByCategory)
+    }
+
+    /// The same measurement as ``breakdown(of:route:graph:toleranceMeters:)``,
+    /// kept in route order instead of totalled: every unbroken stretch of one
+    /// category, with the geometry to draw it.
+    ///
+    /// What the map colours a line by. The two come from one walk rather
+    /// than two for the reason this file exists — a stretch drawn red on the
+    /// map and a percentage in the legend beneath it have to be the same
+    /// answer, so they must not be two implementations of the question.
+    ///
+    /// Consecutive runs share their boundary point, so drawn end to end they
+    /// leave no gap; a boundary falls between two samples, which is to say
+    /// within ``samplingStepMeters`` of where the tagging actually changes.
+    @concurrent
+    static func runs<Category: TrailCategory>(
+        of categoryType: Category.Type,
+        route: [RouteCoordinate],
+        graph: TrailGraph,
+        toleranceMeters: Double = defaultToleranceMeters
+    ) async throws(CancellationError) -> [TrailCategoryRun<Category>] {
+        assertOffMainThread(
+            "Trail breakdown analysis must stay off the main thread"
+        )
+        var builder = TrailCategoryRunBuilder<Category>()
+        try walk(categoryType, route: route, graph: graph, toleranceMeters: toleranceMeters) { sample in
+            builder.add(sample)
+        }
+        return builder.finish()
+    }
+
+    /// The walk both of the above are made of: every sample along `route`, in
+    /// order, with the category the way beneath it puts it in. Visits nothing
+    /// for a route or graph with nothing to measure.
+    private static func walk<Category: TrailCategory>(
+        _: Category.Type,
+        route: [RouteCoordinate],
+        graph: TrailGraph,
+        toleranceMeters: Double,
+        visit: (TrailCategorySample<Category>) -> Void
+    ) throws(CancellationError) {
+        guard route.count > 1, !graph.isEmpty else { return }
+        let index = TrailMatcherGraphIndex(graph: graph)
+        guard !index.edges.isEmpty else { return }
+
         var previousWayID: Int64?
         var samplesTaken = 0
 
@@ -234,11 +279,18 @@ nonisolated enum TrailBreakdownAnalyzer {
                     category = .unmapped
                     previousWayID = nil
                 }
-                metersByCategory[category, default: 0] += stepMeters
+                visit(
+                    TrailCategorySample(
+                        category: category,
+                        from: from,
+                        to: to,
+                        step: step,
+                        steps: steps,
+                        meters: stepMeters
+                    )
+                )
             }
         }
-
-        return TrailBreakdown(metersByCategory: metersByCategory)
     }
 
     /// The closest way to `coordinate`, with a bias towards staying on the way
@@ -278,5 +330,84 @@ nonisolated enum TrailBreakdownAnalyzer {
            preferred.offRouteMeters
            <= best.offRouteMeters + wayStickinessMeters { return preferred.edgeIndex }
         return best.edgeIndex
+    }
+}
+
+// MARK: - Runs
+
+/// One unbroken stretch of route in a single category — see
+/// ``TrailBreakdownAnalyzer/runs(of:route:graph:toleranceMeters:)``.
+nonisolated struct TrailCategoryRun<Category: TrailCategory>: Sendable {
+    let category: Category
+    /// From where the stretch's first sample starts to where its last one
+    /// ends, through the route's own points in between. Never fewer than two.
+    let coordinates: [CLLocationCoordinate2D]
+}
+
+/// One sub-step of a route segment and the category it landed in. Where it
+/// starts and ends is worked out only when asked, because a breakdown never
+/// asks.
+nonisolated struct TrailCategorySample<Category: TrailCategory> {
+    let category: Category
+    let from: CLLocationCoordinate2D
+    let to: CLLocationCoordinate2D
+    let step: Int
+    let steps: Int
+    let meters: Double
+
+    /// Whether this is the segment's last sub-step, which ends on the route's
+    /// own next point.
+    var endsSegment: Bool { step == steps - 1 }
+
+    var start: CLLocationCoordinate2D {
+        step == 0 ? from : RouteGeometry.interpolate(from: from, to: to, fraction: Double(step) / Double(steps))
+    }
+
+    var end: CLLocationCoordinate2D {
+        endsSegment ? to : RouteGeometry.interpolate(from: from, to: to, fraction: Double(step + 1) / Double(steps))
+    }
+}
+
+/// Folds samples into runs as they arrive.
+///
+/// A sample continuing the current run adds a point only when it ends on a
+/// route vertex: the sub-steps between two vertices are collinear, so a
+/// point per twenty metres would be thousands of points drawing the same
+/// line. The end of the last sample is kept aside instead, and put down only
+/// if the run closes mid-segment.
+nonisolated struct TrailCategoryRunBuilder<Category: TrailCategory> {
+    private var runs: [TrailCategoryRun<Category>] = []
+    private var category: Category?
+    private var coordinates: [CLLocationCoordinate2D] = []
+    private var pendingEnd: CLLocationCoordinate2D?
+
+    mutating func add(_ sample: TrailCategorySample<Category>) {
+        if sample.category != category {
+            close()
+            category = sample.category
+            coordinates = [sample.start]
+        }
+        if sample.endsSegment {
+            coordinates.append(sample.to)
+            pendingEnd = nil
+        } else {
+            pendingEnd = sample.end
+        }
+    }
+
+    mutating func finish() -> [TrailCategoryRun<Category>] {
+        close()
+        return runs
+    }
+
+    private mutating func close() {
+        guard let category else { return }
+        if let pendingEnd { coordinates.append(pendingEnd) }
+        if coordinates.count > 1 {
+            runs.append(TrailCategoryRun(category: category, coordinates: coordinates))
+        }
+        self.category = nil
+        coordinates = []
+        pendingEnd = nil
     }
 }

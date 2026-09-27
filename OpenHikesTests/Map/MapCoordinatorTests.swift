@@ -28,6 +28,9 @@ import Testing
 struct MapCoordinatorTests {
     private let highlight = RouteHighlight()
     private let walkHighlight = WalkHighlight()
+    /// Never measures anything: no provider. The suite that does hands the
+    /// map its own — see `MapCoordinatorTests+DifficultyShading.swift`.
+    private let routeDifficulty = RouteDifficultyShading(provider: nil)
     private let recordingTrace = RecordingTrace()
     /// Internal, like `mapController` below, so the tracking-button tests get
     /// their own file — see `MapCoordinatorTests+SheetInsets.swift`.
@@ -109,7 +112,10 @@ struct MapCoordinatorTests {
         // suite's own maker has no place source, so the file that asserts on
         // the *Search this area* pill has to build one that can answer — see
         // `MapCoordinatorTests+TrailPoints.swift`.
-        trailMaker: TrailDraftController? = nil
+        trailMaker: TrailDraftController? = nil,
+        // And for the reason `trailMaker` is: the suite's own has no trail
+        // graph to measure a route against.
+        routeDifficulty: RouteDifficultyShading? = nil
     ) -> MapView {
         MapView(
             locationManager: locationManager ?? self.locationManager,
@@ -117,6 +123,7 @@ struct MapCoordinatorTests {
             routeStyle: routeStyle,
             highlight: highlight,
             walkHighlight: walkHighlight,
+            routeDifficulty: routeDifficulty ?? self.routeDifficulty,
             recordingTrace: recordingTrace,
             sheetMetrics: sheetMetrics,
             tileSource: tileSource,
