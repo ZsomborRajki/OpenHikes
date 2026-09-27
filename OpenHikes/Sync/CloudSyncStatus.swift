@@ -168,7 +168,8 @@ final class CloudSyncStatus {
         case .idle:
             lastSyncedAt.map { date in
                 "Last synced \(HikeFormat.timestamp(date))."
-            } ?? "Your hikes and photos are kept in your private iCloud storage."
+            } ?? "Your hikes and photo details are kept in your private iCloud storage. "
+                + "Photo files stay on the device they were added on."
         case .paused:
             "Your hikes stay on this device only."
         case .retrying:
@@ -177,7 +178,7 @@ final class CloudSyncStatus {
                     + "Last synced \(HikeFormat.timestamp(date))."
             } ?? "iCloud hasn't finished this yet. It will catch up on its own."
         case .working:
-            "Sending and receiving your hikes and photos."
+            "Sending and receiving your hikes and photo details."
         }
     }
 

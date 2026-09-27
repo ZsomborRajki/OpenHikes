@@ -181,7 +181,23 @@ struct CloudSyncStatusTests {
         // Being ready is not having synced: nothing has come back with a time
         // to show, so the row must not invent one.
         #expect(status.lastSyncedAt == nil)
-        #expect(status.detail == "Your hikes and photos are kept in your private iCloud storage.")
+        #expect(
+            status.detail
+                == "Your hikes and photo details are kept in your private iCloud storage. "
+                + "Photo files stay on the device they were added on."
+        )
+    }
+
+    /// Mirroring carries a photo's metadata and never its file, so a pass in
+    /// flight must not promise the pictures are on their way to iCloud.
+    @Test("A pass under way says it moves photo details, not photos")
+    func workingNamesPhotoDetails() {
+        let status = CloudSyncStatus()
+        status.account = .available
+
+        status.began()
+
+        #expect(status.detail == "Sending and receiving your hikes and photo details.")
     }
 
     /// A foregrounding re-runs the account check, so this arrives on top of
