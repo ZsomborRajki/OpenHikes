@@ -292,6 +292,28 @@
         }
       }
     },
+    "%lld photos couldn't be saved to this hike." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld photo couldn't be saved to this hike."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld photos couldn't be saved to this hike."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld photos go on %@, each with the spot on the trail and the time it was taken at" : {
       "localizations" : {
         "en" : {
