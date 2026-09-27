@@ -125,8 +125,9 @@ struct PlacesNearbyTests {
         let area = PlacesNearbyFrame.area(of: region)
 
         #expect(finder.searchableArea == nil)
-        finder.search(in: area, along: [], avoiding: [])
+        #expect(finder.search(in: area, along: [], avoiding: []))
         #expect(finder.isSearching)
+        #expect(!finder.search(in: area, along: [], avoiding: []), "one request out at a time")
         while finder.isSearching {
             await Task.yield()
         }
@@ -140,14 +141,65 @@ struct PlacesNearbyTests {
         let source = AreaRecordingSource(answer: [])
         let finder = TrailPointFinder(source: source)
 
-        finder.search(
+        let isTaken = finder.search(
             in: CommunitySearchArea(coordinate: Self.here, radiusMeters: TrailPointQuery.maximumRadiusMeters + 1),
             along: [],
             avoiding: []
         )
 
+        #expect(!isTaken)
         #expect(!finder.isSearching)
         #expect(source.areas.isEmpty)
+    }
+
+    // MARK: - Asking again
+
+    private static let askedArea = CommunitySearchArea(coordinate: here, radiusMeters: 1500)
+
+    /// The first search goes out as the screen opens, so a chip tapped a
+    /// second later is refused by the finder — and must still be asked for
+    /// once that search lands.
+    @Test("a kind switched on while a search is out is asked for after it lands")
+    func refusedKindIsAskedLater() {
+        var asked = PlacesNearbySearch()
+        asked.ask(Self.askedArea, for: [.water], isTaken: true)
+        asked.ask(Self.askedArea, for: [.water, .shelter], isTaken: false)
+
+        #expect(asked.widened(showing: [.water, .shelter]) == Self.askedArea)
+        asked.answer(keeping: [.water, .shelter])
+        #expect(asked.widened(showing: [.water, .shelter]) == Self.askedArea, "the answer was for water alone")
+
+        asked.ask(Self.askedArea, for: [.water, .shelter], isTaken: true)
+        #expect(asked.widened(showing: [.water, .shelter]) == nil)
+        #expect(asked.widened(showing: [.water]) == nil, "narrowing only filters")
+    }
+
+    /// The finder drops a kind switched off while its request is out, so
+    /// that kind was never answered for.
+    @Test("a kind switched off while a search is out is asked for when it comes back")
+    func kindDroppedAtLandingIsAskedAgain() {
+        var asked = PlacesNearbySearch()
+        asked.ask(Self.askedArea, for: [.water, .shelter], isTaken: true)
+        asked.answer(keeping: [.water])
+
+        #expect(asked.widened(showing: [.water, .shelter]) == Self.askedArea)
+    }
+
+    /// Returning from *Add Place* or a photograph must not move the map or
+    /// spend a request — only a search that screen's arrival cut off is
+    /// asked again.
+    @Test("coming back asks again only a search that never answered")
+    func onlyAnInterruptedSearchIsAskedAgain() {
+        var asked = PlacesNearbySearch()
+        #expect(!asked.hasAsked)
+        #expect(asked.interrupted == nil)
+
+        asked.ask(Self.askedArea, for: [.water], isTaken: true)
+        #expect(asked.hasAsked)
+        #expect(asked.interrupted == Self.askedArea)
+
+        asked.answer(keeping: [.water])
+        #expect(asked.interrupted == nil)
     }
 
     // MARK: - The list
