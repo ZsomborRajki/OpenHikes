@@ -177,6 +177,7 @@ extension XCTestCase {
         _ app: XCUIApplication,
         timeout: TimeInterval = UITestTimeout.launch
     ) -> XCUIApplication {
+        FirstLaunchOfTheRun.absorbInstall()
         app.launch()
         XCTAssertTrue(
             app.wait(for: .runningForeground, timeout: timeout),
