@@ -103,6 +103,44 @@ struct StoreLocationTests {
         #expect(!Self.exists(staging))
     }
 
+    @Test("an unreadable source leaves the move retryable", arguments: [false, true])
+    func sourceReadFailureIsRetryable(moveStarted: Bool) throws {
+        let fileManager = FileManager.default
+        defer {
+            try? fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: legacy.path)
+            try? fileManager.removeItem(at: root)
+        }
+        for name in Self.storeItems {
+            try Self.write(name, in: legacy)
+        }
+        if moveStarted {
+            try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
+            try fileManager.moveItem(
+                at: legacy.appending(path: "Hikes.store"),
+                to: staging.appending(path: "Hikes.store")
+            )
+        }
+        try fileManager.setAttributes([.posixPermissions: 0o000], ofItemAtPath: legacy.path)
+
+        #expect(throws: CocoaError.self) {
+            try StoreLocation.prepare(directory: directory, legacyDirectory: legacy)
+        }
+        #expect(!Self.exists(directory), "a failed read must not mark the move complete")
+        if moveStarted {
+            #expect(try Self.contents(of: staging.appending(path: "Hikes.store")) == "Hikes.store")
+        }
+
+        try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: legacy.path)
+        try StoreLocation.prepare(directory: directory, legacyDirectory: legacy)
+
+        for name in Self.storeItems {
+            #expect(Self.exists(directory.appending(path: name)), "\(name) did not arrive after retry")
+            #expect(!Self.exists(legacy.appending(path: name)), "\(name) was left behind after retry")
+        }
+        #expect(try Self.contents(of: directory.appending(path: "Hikes.store")) == "Hikes.store")
+        #expect(!Self.exists(staging))
+    }
+
     /// What a TestFlight downgrade leaves: an older build made a store in the
     /// group container again. The finished move is not redone over it — a
     /// log from that store beside this database would corrupt it.
