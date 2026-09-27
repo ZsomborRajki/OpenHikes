@@ -179,7 +179,7 @@ struct GPXTrackChoiceSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", role: .cancel) { choice.cancel() }
+                    Button(role: .cancel) { choice.cancel() }
                         .accessibilityIdentifier("gpx-track-choice-cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {

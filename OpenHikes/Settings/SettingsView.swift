@@ -159,13 +159,16 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    // A view rather than `Button("Done") { dismiss() }`: a
-                    // `.toolbar` closure is inlined into the body around it,
+                // Trailing rather than `.confirmationAction`, which would draw
+                // the system ✕ in the prominent tint of a Save.
+                ToolbarItem(placement: .topBarTrailing) {
+                    // A view rather than `Button(role: .close) { dismiss() }`:
+                    // a `.toolbar` closure is inlined into the body around it,
                     // and this body is the whole `Form` above. See
                     // ``DismissButton`` for what the environment's dismiss
                     // action costs a screen that declares it.
                     DismissButton()
+                        .accessibilityIdentifier("settings-close")
                 }
             }
             .task { await refreshUsage() }

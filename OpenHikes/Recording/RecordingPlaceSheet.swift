@@ -57,7 +57,7 @@ struct RecordingPlaceSheet: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", role: .cancel) { dismiss() }
+                    Button(role: .cancel) { dismiss() }
                 }
             }
             .hikePlaceRefusalAlert($refusal)

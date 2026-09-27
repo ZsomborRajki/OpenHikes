@@ -427,7 +427,15 @@ extension TrailMakerUITests {
             element("trail-draft-close", in: app).exists,
             "the ✕ stays put while rows are being dragged"
         )
-        XCTAssertFalse(app.navigationBars.buttons["Done"].exists)
+        // Save is the system's confirm button, which is itself called Done;
+        // any other Done up there would be an editing mode's.
+        XCTAssertEqual(
+            app.navigationBars.buttons
+                .matching(NSPredicate(format: "label == 'Done' AND identifier != 'trail-draft-save'"))
+                .count,
+            0,
+            "no editing mode should have put a Done of its own in the bar"
+        )
         XCTAssertTrue(
             element("trail-draft-save", in: app).isEnabled,
             "a reordered trail is still a trail"

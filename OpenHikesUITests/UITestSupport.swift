@@ -808,7 +808,7 @@ extension XCTestCase {
     /// has no such button, ``submitKeyboardEdit(in:)`` is the one to ask.
     @MainActor
     func commitKeyboardEdit(in app: XCUIApplication) {
-        let toolbarDone = app.toolbars.buttons["Done"]
+        let toolbarDone = app.toolbars.buttons["keyboard-done"]
         if toolbarDone.waitForExistence(timeout: UITestTimeout.navigation) {
             toolbarDone.tap()
             return

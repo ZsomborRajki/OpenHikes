@@ -111,11 +111,11 @@ struct CommunitySendPhotoCountRow: View {
 /// this is the one exit it can rely on — a sheet's content is not guaranteed
 /// to be torn down when it is dismissed, so `onDisappear` is a hook that
 /// sometimes runs rather than a commit point.
+///
+/// Both are the system's role-only buttons: cancel while there is a form to
+/// abandon, close once the send has finished, and confirm to send.
 struct CommunitySendToolbar: ToolbarContent {
     let phase: CommunitySendPhase
-    /// What the confirmation button is called — *Share* for a hike, *Add* for
-    /// photographs.
-    let confirmTitle: LocalizedStringKey
     let confirmIdentifier: String
     /// Whether the confirmation may be pressed at all. Each form has its own
     /// floor and its own window in which the answer is not yet known; see the
@@ -129,15 +129,16 @@ struct CommunitySendToolbar: ToolbarContent {
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button(phase.hasFinished ? "Done" : "Cancel", action: cancel)
+            Button(role: phase.hasFinished ? .close : .cancel, action: cancel)
                 .disabled(phase.isSending)
+                .accessibilityIdentifier("community-send-dismiss")
         }
         ToolbarItem(placement: .confirmationAction) {
             if phase.isSending {
                 ProgressView()
                     .accessibilityLabel("Sending")
             } else if !phase.hasFinished, offersConfirmation {
-                Button(confirmTitle, action: confirm)
+                Button(role: .confirm, action: confirm)
                     .accessibilityIdentifier(confirmIdentifier)
                     .disabled(!canConfirm)
             }

@@ -103,7 +103,7 @@ struct HikePlaceView: View {
         .toolbar {
             if card.isEditable {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Edit") { isEditing = true }
+                    Button("Edit", systemImage: "pencil") { isEditing = true }
                         .accessibilityIdentifier("hike-place-edit")
                 }
             }

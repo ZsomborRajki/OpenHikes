@@ -214,11 +214,13 @@ struct HikeActivityControls: View {
         if state.isPaused {
             Button(intent: ResumeHikeActivityIntent()) {
                 Label("Resume", systemImage: "play.fill")
+                    .labelStyle(.iconOnly)
             }
             .tint(tint)
         } else {
             Button(intent: PauseHikeActivityIntent()) {
                 Label("Pause", systemImage: "pause.fill")
+                    .labelStyle(.iconOnly)
             }
             .tint(tint)
         }

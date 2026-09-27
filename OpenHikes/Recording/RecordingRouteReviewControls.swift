@@ -74,17 +74,19 @@ struct RecordingRouteReviewControls: View {
 
     @ViewBuilder private var navigationButtons: some View {
         HStack {
-            Button("Previous") {
+            Button("Previous", systemImage: "chevron.left") {
                 recorder.moveToPreviousReviewSection()
             }
             .glassButtonStyle()
+            .placeCardControl()
             .disabled(!review.canMoveBackward)
             .accessibilityIdentifier("review-previous-section")
             Spacer()
-            Button("Next") {
+            Button("Next", systemImage: "chevron.right") {
                 recorder.moveToNextReviewSection()
             }
             .glassButtonStyle()
+            .placeCardControl()
             .disabled(!review.canMoveForward)
             .accessibilityIdentifier("review-next-section")
         }

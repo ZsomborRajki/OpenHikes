@@ -175,11 +175,11 @@ struct CommunityMailRequestToolbar: ToolbarContent {
 
     @ToolbarContentBuilder var body: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            DismissButton(phase == .editing ? "Cancel" : "Done")
+            DismissButton(role: phase == .editing ? .cancel : .close)
         }
         ToolbarItem(placement: .confirmationAction) {
             if phase == .editing {
-                Button("Send", action: send)
+                Button(role: .confirm, action: send)
                     .accessibilityIdentifier(sendIdentifier)
             }
         }

@@ -185,7 +185,7 @@ struct WeatherDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .topBarTrailing) {
                     DismissButton()
                         .accessibilityIdentifier("weather-detail-done")
                 }

@@ -519,7 +519,6 @@ private extension CommunityShareSheet {
     var toolbarContent: some ToolbarContent {
         CommunitySendToolbar(
             phase: phase,
-            confirmTitle: "Share",
             confirmIdentifier: "community-share-confirm",
             // The same floor ``CommunityPublisher/share`` refuses below, so a
             // hike with no route cannot start an upload that was always going

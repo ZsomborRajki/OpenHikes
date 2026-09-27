@@ -86,7 +86,7 @@ extension CommunityUITests {
         // Cancelled rather than shared, for the reason the notes test cancels:
         // the name belongs to the walk, so thinking better of publishing must
         // not throw away the correction.
-        app.buttons["Cancel"].firstMatch.tap()
+        app.buttons["community-send-dismiss"].tap()
 
         XCTAssertTrue(
             app.navigationBars[renamed].waitForExistence(timeout: UITestTimeout.navigation),
@@ -135,7 +135,7 @@ extension CommunityUITests {
 
         // And it is still the hike's photograph: leaving one out of a share is
         // not a deletion, which is the whole difference #389 asked for.
-        app.buttons["Cancel"].firstMatch.tap()
+        app.buttons["community-send-dismiss"].tap()
         XCTAssertTrue(
             photoTile(at: 2, of: 2, in: app).waitForExistence(timeout: UITestTimeout.existence),
             "the hike should still have both pictures in its own gallery"

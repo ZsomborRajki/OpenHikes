@@ -150,7 +150,7 @@ struct MapPaywallView: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    DismissButton("Close")
+                    DismissButton()
                 }
             }
             .dismiss(when: store.isEntitled)

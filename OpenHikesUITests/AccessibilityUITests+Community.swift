@@ -137,7 +137,7 @@ extension AccessibilityUITests {
                 .waitForExistence(timeout: UITestTimeout.existence),
             "the withdrawal form needs a submission to be about"
         )
-        app.buttons["Done"].firstMatch.tap()
+        app.buttons["community-send-dismiss"].tap()
         return app
     }
 

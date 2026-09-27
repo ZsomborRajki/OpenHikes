@@ -103,6 +103,7 @@ struct RecordingCard: View {
             }
             .prominentGlassButtonStyle()
             .tint(.red)
+            .placeCardControl()
         case .recovering, .saving:
             ProgressView()
         case .waitingForFix, .recording:

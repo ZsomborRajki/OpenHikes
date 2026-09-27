@@ -32,10 +32,12 @@ struct RecordingRecoveryNotice: View {
                 )
                 .font(.subheadline)
                 Spacer()
-                Button("Dismiss") {
+                Button(role: .close) {
                     recorder.dismissRecoveryNotice()
                 }
-                .font(.caption)
+                .labelStyle(.iconOnly)
+                .font(.caption.weight(.semibold))
+                .minimumTapTarget()
             }
             .padding(noticePadding)
             // Orange-tinted glass rather than a flat 12% orange wash: the
