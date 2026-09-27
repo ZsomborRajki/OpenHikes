@@ -59,12 +59,14 @@ enum CommunityImportOutcome {
     /// handed back so the caller can open it rather than reporting an error
     /// for something that is not one.
     case alreadyImported(Hike)
-    case imported(Hike)
+    /// Kept, with what became of its photographs — which may be less than
+    /// all of them. See ``CommunityPhotoCopy``.
+    case imported(Hike, photos: CommunityPhotoCopy)
     case refused(CommunityFailure)
 
     var hike: Hike? {
         switch self {
-        case .alreadyImported(let hike), .imported(let hike): hike
+        case .alreadyImported(let hike), .imported(let hike, _): hike
         case .refused: nil
         }
     }
@@ -187,15 +189,15 @@ nonisolated enum CommunityImport {
             return .refused(.unavailable(error.localizedDescription))
         }
 
-        await attachPhotos(
+        let photos = await copyPhotos(
             of: detail,
-            to: hike,
-            places: placeIDs,
+            onto: hike,
+            after: CommunityPhotoCopy(places: placeIDs),
             store: store,
             libraryWriter: libraryWriter,
             save: save
         )
-        return .imported(hike)
+        return .imported(hike, photos: photos)
     }
 
     /// Whether this listing is already in the library.
@@ -262,19 +264,32 @@ nonisolated enum CommunityImport {
     /// is the point: the two sets are separate records with separate authors,
     /// so they are paired separately, credited separately, and fail
     /// separately.
+    ///
+    /// **Also the retry**, which is why it is not private. The import calls it
+    /// once with nothing copied yet; the preview calls it again with what that
+    /// came to, and it tries only what is not already on the hike — see
+    /// ``CommunityPhotoCopy/copied``. So a retry cannot put a second copy of a
+    /// photograph on the hike, and a hiker who has since removed one does not
+    /// get it back. `detail` has to be the one `previous` was read from, which
+    /// the preview holds for as long as it can offer the retry.
+    ///
+    /// - Returns: `previous`, with every photograph this attempt copied moved
+    ///   into ``CommunityPhotoCopy/copied`` and every one it could not in
+    ///   ``CommunityPhotoCopy/failed``.
     @MainActor
-    private static func attachPhotos(
+    static func copyPhotos(
         of detail: CommunityHikeDetail,
-        to hike: Hike,
-        places: [UUID: UUID],
-        store: HikePhotoStore,
-        libraryWriter: any PhotoLibraryWriting,
-        save: (ModelContext) throws -> Void
-    ) async {
+        onto hike: Hike,
+        after previous: CommunityPhotoCopy,
+        store: HikePhotoStore = .shared,
+        libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter(),
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) async -> CommunityPhotoCopy {
+        var copy = previous.retrying()
         await attachOwnPhotos(
             of: detail,
             to: hike,
-            places: places,
+            copy: &copy,
             store: store,
             libraryWriter: libraryWriter,
             save: save
@@ -287,10 +302,17 @@ nonisolated enum CommunityImport {
         await attachContributedPhotos(
             of: detail,
             to: hike,
+            copy: &copy,
             store: store,
             libraryWriter: libraryWriter,
             save: save
         )
+        if !copy.isComplete {
+            logger.error(
+                "Copied \(detail.listing.id, privacy: .public) without \(copy.failed.count) of its photos."
+            )
+        }
+        return copy
     }
 
     /// The hike author's own photographs — the ones on the submission.
@@ -323,13 +345,13 @@ nonisolated enum CommunityImport {
     /// No per-photograph credit, and that is not an omission: these are the
     /// work of whoever published the walk, which the hike records once on
     /// ``Hike/importedAuthorName`` and its own screen draws as *Shared by*.
-    /// ``attachContributedPhotos(of:to:store:libraryWriter:save:)`` is where a
+    /// ``attachContributedPhotos(of:to:copy:store:libraryWriter:save:)`` is where a
     /// photograph needs a name of its own.
     @MainActor
     private static func attachOwnPhotos(
         of detail: CommunityHikeDetail,
         to hike: Hike,
-        places: [UUID: UUID],
+        copy: inout CommunityPhotoCopy,
         store: HikePhotoStore,
         libraryWriter: any PhotoLibraryWriting,
         save: (ModelContext) throws -> Void
@@ -343,15 +365,17 @@ nonisolated enum CommunityImport {
             )
             return
         }
-        await attachSet(
-            zip(detail.photoPins, detail.photoFileURLs),
+        let pending = copy.pending(zip(detail.photoPins, detail.photoFileURLs), from: nil)
+        let landed = await attachSet(
+            pending,
             // No per-photograph credit, for the reason above.
-            stampedAs: Stamp(listingID: detail.listing.id, authorName: nil, places: places),
+            stampedAs: Stamp(listingID: detail.listing.id, authorName: nil, places: copy.places),
             to: hike,
             store: store,
             libraryWriter: libraryWriter,
             save: save
         )
+        copy.attempted(pending, landed: landed)
     }
 
     /// The photographs other hikers published onto this trail.
@@ -397,6 +421,7 @@ nonisolated enum CommunityImport {
     private static func attachContributedPhotos(
         of detail: CommunityHikeDetail,
         to hike: Hike,
+        copy: inout CommunityPhotoCopy,
         store: HikePhotoStore,
         libraryWriter: any PhotoLibraryWriting,
         save: (ModelContext) throws -> Void
@@ -412,8 +437,12 @@ nonisolated enum CommunityImport {
                 )
                 continue
             }
-            await attachSet(
+            let pending = copy.pending(
                 zip(contribution.photoPins, contribution.photoFileURLs),
+                from: contribution.id
+            )
+            let landed = await attachSet(
+                pending,
                 // No places: a contributor's pictures are not theirs to file
                 // under the author's places, whatever their pins claim.
                 stampedAs: Stamp(
@@ -426,6 +455,7 @@ nonisolated enum CommunityImport {
                 libraryWriter: libraryWriter,
                 save: save
             )
+            copy.attempted(pending, landed: landed)
         }
     }
 
@@ -461,21 +491,31 @@ nonisolated enum CommunityImport {
     /// **The hike is re-checked every picture.** It can be swiped away while a
     /// dozen are being copied — the list is one tap behind this screen — and
     /// writing to a detached row persists nothing, leaving files nothing
-    /// claims. That ends the import rather than skipping one photograph, which
-    /// is why it returns.
+    /// claims. That ends the copying rather than skipping one photograph: what
+    /// is left is counted as missed without a file being read for it.
+    ///
+    /// - Returns: The photographs that are on the hike now. Every other one
+    ///   passed in is a failure the preview tells the hiker about — a file
+    ///   that would not read, bytes that were not an image, a save the store
+    ///   refused — where it used to be a silent `continue`. The ones an
+    ///   earlier attempt already landed never reach here; see
+    ///   ``CommunityPhotoCopy/pending(_:from:)``.
     @MainActor
     private static func attachSet(
-        _ photos: some Sequence<(CommunityPhotoPin, URL)>,
+        _ photos: [CommunityPhotoCopy.Pending],
         stampedAs stamp: Stamp,
         to hike: Hike,
         store: HikePhotoStore,
         libraryWriter: any PhotoLibraryWriting,
         save: (ModelContext) throws -> Void
-    ) async {
-        for (pin, url) in photos {
-            guard let data = await readFile(at: url) else { continue }
-            guard hike.isAttached else { return }
-            await HikePhotoImport.add(
+    ) async -> Set<CommunityPhotoCopy.Source> {
+        var landed: Set<CommunityPhotoCopy.Source> = []
+        for (source, pin, url) in photos {
+            guard hike.isAttached,
+                  let data = await readFile(at: url),
+                  hike.isAttached
+            else { continue }
+            let added = await HikePhotoImport.add(
                 data,
                 to: hike,
                 coordinate: pin.coordinate,
@@ -494,7 +534,11 @@ nonisolated enum CommunityImport {
                 libraryWriter: libraryWriter,
                 save: save
             )
+            if added != nil {
+                landed.insert(source)
+            }
         }
+        return landed
     }
 
     /// Reads a downloaded file off the main actor.

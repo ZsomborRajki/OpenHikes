@@ -122,7 +122,7 @@ struct CommunityImportTests {
         let first = await CommunityImport.importHike(Self.detail(), into: context)
         let second = await CommunityImport.importHike(Self.detail(), into: context)
 
-        guard case .imported(let original) = first,
+        guard case .imported(let original, _) = first,
               case .alreadyImported(let existing) = second else {
             Issue.record("the second import should report the hike already in the library")
             return

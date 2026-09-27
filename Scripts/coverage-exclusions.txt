@@ -155,6 +155,7 @@ OpenHikes/Community/CommunityFailureSections.swift
 OpenHikes/Community/Browse/CommunityHikeRow.swift
 OpenHikes/Community/Listing/CommunityHikeView+Contributions.swift
 OpenHikes/Community/Listing/CommunityHikeView+Curated.swift
+OpenHikes/Community/Listing/CommunityHikeView+Import.swift
 OpenHikes/Community/Listing/CommunityHikeView.swift
 OpenHikes/Community/CommunityMailOutcomeSections.swift
 OpenHikes/Community/CommunityOutcomeSection.swift

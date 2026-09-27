@@ -209,7 +209,7 @@ struct CommunityHikeView: View {
     var trailGraphProvider: (any TrailGraphProviding)?
 
     @Environment(\.modelContext)
-    private var context
+    var context
     // Shared with the contributions fetch in the companion extension file,
     // which hangs its answer on the detail already on screen — the same
     // disable ``HikeDetailView`` carries for its own companion files, and for
@@ -243,9 +243,20 @@ struct CommunityHikeView: View {
     /// back, so ``TrackerState/liveTrackerDistance`` stays `nil` for the life
     /// of this screen.
     @State private var tracker = TrackerState()
-    @State private var isImporting = false
-    @State private var importFailure: CommunityFailure?
-    @State private var existingHike: Hike?
+    // The import's state is read by `CommunityHikeView+Import.swift`, which
+    // holds the button and the save — internal for the reason ``phase`` is.
+    // swiftlint:disable private_swiftui_state
+    @State var isImporting = false
+    @State var importFailure: CommunityFailure?
+    @State var existingHike: Hike?
+    /// What the import this screen made came to, for as long as some of its
+    /// photographs are still missing — and `nil` the rest of the time.
+    ///
+    /// Kept here rather than on the hike because this is the only place a
+    /// retry can run: the photographs are copied out of this screen's own
+    /// downloads, which go when it does. See ``CommunityPhotoCopy``.
+    @State var photoCopy: CommunityPhotoCopy?
+    // swiftlint:enable private_swiftui_state
     @State private var isReporting = false
     @State private var isConfirmingBlock = false
     @State private var isConfirmingTakeDown = false
@@ -257,7 +268,7 @@ struct CommunityHikeView: View {
     /// — and two things have to wait for it: the download directory, which it
     /// is still reading photographs out of, and nothing else may delete
     /// underneath it. See ``discardDownloads()``.
-    @State private var importTask: Task<Void, Never>?
+    @State var importTask: Task<Void, Never>? // swiftlint:disable:this private_swiftui_state
     /// The download, held for the same reason and a sharper one.
     ///
     /// This is what *writes* into the directory ``discardDownloads()``
@@ -298,7 +309,7 @@ struct CommunityHikeView: View {
     /// Read by the import when it finishes, so a hike the hiker asked for a
     /// moment before blocking does not re-open itself over the list — see
     /// ``performImport(_:)``.
-    @State private var wasAuthorBlocked = false
+    @State var wasAuthorBlocked = false // swiftlint:disable:this private_swiftui_state
 
     /// This visit, told apart from every other visit to the same listing.
     ///
@@ -922,53 +933,6 @@ private extension CommunityHikeView {
             }
         }
     }
-
-    @ViewBuilder
-    func importButton(_ detail: CommunityHikeDetail) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                performImport(detail)
-            } label: {
-                HStack {
-                    if isImporting {
-                        ProgressView()
-                    } else {
-                        Image(systemName: importGlyph)
-                    }
-                    Text(importButtonTitle)
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .prominentGlassButtonStyle()
-            .disabled(isImporting)
-            .accessibilityIdentifier("community-import-button")
-
-            if let importFailure {
-                Text(importFailure.localizedDescription)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-            }
-            if existingHike != nil {
-                Text("This hike is already in your list.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.top, 8)
-    }
-
-    /// One title for one action, wherever it is offered: the button under the
-    /// page and the first item of the toolbar menu are the same tap, and two
-    /// wordings for it would read as two different things to do.
-    var importButtonTitle: String {
-        if isImporting { return "Adding…" }
-        return existingHike == nil ? "Add to My Hikes" : "Open in My Hikes"
-    }
-
-    /// The glyph beside that title, shared for the same reason.
-    var importGlyph: String {
-        existingHike == nil ? "square.and.arrow.down" : "checkmark"
-    }
 }
 
 // MARK: - Work
@@ -1053,76 +1017,6 @@ private extension CommunityHikeView {
             // is what every other section that appears late here already uses.
             withAnimation { breakdowns = measured }
         }
-    }
-
-    /// Adds the hike, and holds the task that does it.
-    ///
-    /// Held because the hiker can leave — by backing out, or by blocking this
-    /// author — while the photographs are still being copied, and an
-    /// unstructured task keeps running when the screen goes. What that costs
-    /// is covered in ``discardDownloads()`` and just below.
-    func performImport(_ detail: CommunityHikeDetail) {
-        // Already in the library: this is the "Open" case, and re-importing
-        // would make a second copy of the same trail.
-        if let existingHike {
-            onImport(existingHike)
-            return
-        }
-        isImporting = true
-        importFailure = nil
-        // Inherits the main actor from here, which is what every assignment
-        // inside it needs and what ``CommunityImport/importHike(_:into:)``
-        // requires anyway.
-        importTask = Task {
-            let outcome = await CommunityImport.importHike(
-                await withContributedSets(detail),
-                into: context
-            )
-            isImporting = false
-            switch outcome {
-            case .imported(let hike), .alreadyImported(let hike):
-                existingHike = hike
-                // Blocked while this was running, which is the later of the
-                // two things the hiker said. The hike stays in the library —
-                // it committed before the photographs began copying, and
-                // blocking is a control over what the *community* shows rather
-                // than a retraction of a save — but nothing re-opens it. The
-                // alternative is the screen they just hid reappearing on top
-                // of the list they were sent back to.
-                guard !wasAuthorBlocked else { return }
-                onImport(hike)
-            case .refused(let failure):
-                importFailure = failure
-            }
-        }
-    }
-
-    /// `detail` once the contributed sets have had their chance to land.
-    ///
-    /// The trail is two requests, and the second is deliberately not awaited
-    /// by the first — see ``loadContributions()`` — so this screen is
-    /// tappable while the contributed photographs are still in flight.
-    /// Importing on that tap used to be harmless, because the import ignored
-    /// those sets entirely. Now that it copies them, a hiker quick on the
-    /// button would get a hike missing exactly the photographs that copy
-    /// exists for, *some* of the time, with nothing to tell the fast tap from
-    /// the slow one — which is the worst shape a bug of this kind can take.
-    ///
-    /// So it waits, and then reads the detail the **screen** ended up with
-    /// rather than the one captured at the tap: the fetch hangs its answer on
-    /// ``phase``, where a value copied out before it landed cannot see it.
-    /// Filtered on the way out for the reason everything drawn from `phase` is
-    /// — see ``visible(_:)``.
-    ///
-    /// A fetch that fails, finds nothing or is cancelled changes nothing: the
-    /// wait ends and what comes back is the detail already on screen, which is
-    /// what makes this safe to wait on unconditionally rather than only when
-    /// something is known to be coming. The button is showing a spinner by the
-    /// time this runs, so the wait reads as part of the import it is part of.
-    func withContributedSets(_ detail: CommunityHikeDetail) async -> CommunityHikeDetail {
-        await contributionsTask?.value
-        guard case .loaded(let latest) = phase else { return detail }
-        return visible(latest)
     }
 
     /// Off the main actor, in the shape the photo and tile deletions already
