@@ -34,8 +34,10 @@ import OpenHikesData
 import os
 #if canImport(UIKit)
 import UIKit
+private typealias LineColor = UIColor
 #elseif canImport(AppKit)
 import AppKit
+private typealias LineColor = NSColor
 #endif
 
 nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
@@ -70,23 +72,6 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
     struct Shade {
         let polyline: MKPolyline
         let color: CGColor
-    }
-
-    /// The stretches, and the renderers built to draw them.
-    private struct ShadeState {
-        var shades: [Shade] = []
-        /// Built by the first draw that needs them, for the reason
-        /// ``borderLine`` is, and dropped by any change to what they draw.
-        var built: (scale: CGFloat, lines: [ShadeLine])?
-    }
-
-    /// A stretch's passes: a solid stroke that clears the line — and its
-    /// border, when it has one — out from under it, the stretch's own border,
-    /// and the stretch itself in the pattern's own dashes and cap.
-    private struct ShadeLine {
-        let clear: MKPolylineRenderer
-        let border: MKPolylineRenderer?
-        let fill: MKPolylineRenderer
     }
 
     /// Behind a lock rather than a plain property because, unlike the stroke
@@ -173,10 +158,12 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         /// along the whole path rather than resetting at every vertex.
         var carry: Double
         var placed: RouteChevronField
+        let tint: ChevronTint
 
-        init(plan: ChevronPlan, mapRect: MKMapRect) {
+        init(plan: ChevronPlan, mapRect: MKMapRect, tint: ChevronTint) {
             self.plan = plan
             self.mapRect = mapRect
+            self.tint = tint
             carry = plan.spacing
             placed = RouteChevronField(cellSize: plan.cellSize)
         }
@@ -189,11 +176,318 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         // The dash pattern (and the cap that makes a dotted line round) are
         // ordinary stroke properties, so the inherited draw already honours
         // them; only `arrowheads`, which has no line at all, opts out.
+        var tint = ChevronTint(color: arrowColor(on: strokeColor))
         if pattern.drawsLine {
             super.draw(mapRect, zoomScale: zoomScale, in: context)
-            drawShades(in: mapRect, zoomScale: zoomScale, context: context)
+            let stretches = shadeLines(forScale: contentScaleFactor)
+            drawShades(stretches, in: mapRect, zoomScale: zoomScale, context: context)
+            // Every stretch rather than the ones drawn in this rect: a
+            // chevron reaches past the line's edge, into a tile its stretch
+            // is not in, and must be the same colour on both sides of it.
+            tint.stretches = stretches
+            tint.tolerance = Double(lineWidth * contentScaleFactor / zoomScale) / 2
         }
-        strokeChevrons(in: mapRect, zoomScale: zoomScale, context: context, color: arrowColor(), widenedBy: 0)
+        strokeChevrons(in: mapRect, zoomScale: zoomScale, context: context, tint: tint, widenedBy: 0)
+    }
+
+    /// The border, drawn under the marks it outlines: the line again, wider,
+    /// with the line itself cleared back out of it, and each chevron again,
+    /// widened.
+    ///
+    /// Both the copy and the chevrons are scaled by the renderer's
+    /// `contentScaleFactor` as well as by the zoom, because that is how MapKit
+    /// scales the line they sit under — on a map it is the screen's scale, so
+    /// a border sized by the zoom alone came out a third of the width of the
+    /// line on top of it and was invisible. The copy is never on a map, so its
+    /// own factor stays one and the factor goes into its width and dashes
+    /// instead. Not into its zoom scale, which would size it the same: MapKit
+    /// thins the line's points by the zoom scale, and a copy thinned three
+    /// times as hard cut the corners the line on top of it kept. A unit test
+    /// cannot see any of this: a renderer drawn outside a map has a factor of
+    /// one too.
+    private func drawBorder(
+        _ color: CGColor,
+        in mapRect: MKMapRect,
+        zoomScale: MKZoomScale,
+        context: CGContext
+    ) {
+        let scale = contentScaleFactor
+        if pattern.drawsLine {
+            borderLine(forScale: scale).draw(mapRect, zoomScale: zoomScale, in: context)
+            // The line's own stroke, clearing what it covers. What is left is
+            // a ring, so a translucent line shows the map through it rather
+            // than the border — and a line with no colour at all, just the
+            // ring. The line is drawn again, in its colour, straight after.
+            context.saveGState()
+            context.setBlendMode(.clear)
+            super.draw(mapRect, zoomScale: zoomScale, in: context)
+            context.restoreGState()
+        }
+        let border = CGFloat(RouteBorder.width(forLineWidth: Double(lineWidth))) * scale / zoomScale
+        strokeChevrons(
+            in: mapRect,
+            zoomScale: zoomScale,
+            context: context,
+            tint: ChevronTint(color: color),
+            widenedBy: border * 2
+        )
+    }
+
+    /// Drops the border's copy of the line, for the next draw to rebuild from
+    /// the style as it is now.
+    private func invalidateBorderLine() {
+        borderLine.withLockUnchecked { $0 = nil }
+    }
+
+    /// The border's copy of the line for a renderer at `scale`: the one built
+    /// already if it still fits, or a new one. See ``borderLine``, and
+    /// ``RouteBorder/dashes(outlining:cap:borderWidth:)`` for the dashes.
+    private func borderLine(forScale scale: CGFloat) -> MKPolylineRenderer {
+        borderLine.withLockUnchecked { built in
+            if let built, built.scale == scale { return built.line }
+            let line = makeBorderLine(for: polyline, scale: scale)
+            built = (scale, line)
+            return line
+        }
+    }
+
+    /// A copy of `polyline` drawn as the border round it, at `scale` — see
+    /// ``borderLine``. Also what outlines each coloured stretch, which is why
+    /// it takes the polyline rather than assuming this renderer's own.
+    private func makeBorderLine(for polyline: MKPolyline, scale: CGFloat) -> MKPolylineRenderer {
+        let line = MKPolylineRenderer(polyline: polyline)
+        let width = Double(lineWidth)
+        let border = RouteBorder.width(forLineWidth: width)
+        let dashes = RouteBorder.dashes(
+            outlining: pattern.dashLengths(forWidth: width),
+            cap: pattern.lineCap,
+            borderWidth: border
+        )
+        line.lineWidth = CGFloat(width + border * 2) * scale
+        line.lineJoin = .round
+        line.lineCap = pattern.lineCap
+        // swiftlint:disable:next legacy_objc_type
+        line.lineDashPattern = dashes.lengths.isEmpty ? nil : dashes.lengths.map { NSNumber(value: $0 * scale) }
+        line.lineDashPhase = CGFloat(dashes.phase) * scale
+        #if canImport(UIKit)
+        line.strokeColor = borderColor.map { UIColor(cgColor: $0) }
+        #else
+        line.strokeColor = borderColor.flatMap { NSColor(cgColor: $0) }
+        #endif
+        return line
+    }
+
+    /// One pass of chevrons along the whole line, in `color` — `widenedBy` map
+    /// points wider for the pass that draws their outline. A chevron's caps
+    /// and joins are round, so its wider stroke is exactly its outline.
+    ///
+    /// Both passes place exactly the same chevrons: placement depends only on
+    /// the line and the zoom, never on the colour or the width drawn.
+    private func strokeChevrons(
+        in mapRect: MKMapRect,
+        zoomScale: MKZoomScale,
+        context: CGContext,
+        tint: ChevronTint,
+        widenedBy extraWidth: CGFloat
+    ) {
+        guard let metrics = pattern.chevronMetrics(forWidth: Double(lineWidth)) else { return }
+        guard let polyline = overlay as? MKPolyline, polyline.pointCount > 1 else { return }
+        let count = polyline.pointCount
+        let points = polyline.points()
+
+        // Convert screen-point sizes into map-point space for this zoom level.
+        guard let plan = ChevronPlan(metrics: metrics, zoomScale: Double(zoomScale)) else { return }
+
+        context.setLineWidth(CGFloat(plan.strokeWidth) + extraWidth)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        // The stroke above may have left a dash pattern on the context; a
+        // chevron is a solid glyph whatever the line it rides is drawn as.
+        context.setLineDash(phase: 0, lengths: [])
+        context.setStrokeColor(tint.color)
+
+        var pass = ChevronPass(plan: plan, mapRect: mapRect, tint: tint)
+        for i in 1..<count {
+            drawChevrons(from: points[i - 1], to: points[i], context: context, pass: &pass)
+        }
+    }
+
+    private func drawChevrons(
+        from a: MKMapPoint,
+        to b: MKMapPoint,
+        context: CGContext,
+        pass: inout ChevronPass
+    ) {
+        let plan = pass.plan
+        let dx = b.x - a.x, dy = b.y - a.y
+        let segLength = (dx * dx + dy * dy).squareRoot()
+        if segLength == 0 { return }
+
+        // Skip segments outside the visible rect, but keep the spacing carry
+        // accurate so on-screen chevrons stay evenly placed.
+        let segRect = MKMapRect(
+            x: min(a.x, b.x) - plan.pad,
+            y: min(a.y, b.y) - plan.pad,
+            width: abs(dx) + 2 * plan.pad,
+            height: abs(dy) + 2 * plan.pad
+        )
+        guard pass.mapRect.intersects(segRect) else {
+            // Closed-form version of the on-screen loop below (advance `d` by
+            // `spacing` until it passes `segLength`). An off-screen segment
+            // isn't bounded by screen size, so at deep zoom (tiny `spacing`)
+            // a single long segment could otherwise mean millions of
+            // iterations just to keep the chevron spacing carry accurate.
+            let steps = max(0, Int(((segLength - pass.carry) / plan.spacing).rounded(.down)) + 1)
+            pass.carry = pass.carry + Double(steps) * plan.spacing - segLength
+            return
+        }
+
+        let ux = dx / segLength, uy = dy / segLength   // unit direction
+        var d = pass.carry
+        while d <= segLength {
+            let chevron = RouteChevron(x: a.x + ux * d, y: a.y + uy * d, ux: ux, uy: uy)
+            // Ground an earlier chevron already covers: the way home over the
+            // way out, a second lap, a switchback tighter than the spacing.
+            let clear = pass.placed.claim(
+                chevron,
+                retrace: plan.retraceClearance,
+                crossing: plan.overlapClearance
+            )
+            if clear {
+                if !pass.tint.stretches.isEmpty {
+                    context.setStrokeColor(pass.tint.color(at: MKMapPoint(x: chevron.x, y: chevron.y)))
+                }
+                stroke(chevron, plan: plan, in: context)
+            }
+            d += plan.spacing
+        }
+        pass.carry = d - segLength
+    }
+
+    /// One chevron: from its left tail to its tip and on to its right tail.
+    private func stroke(_ chevron: RouteChevron, plan: ChevronPlan, in context: CGContext) {
+        let ux = chevron.ux, uy = chevron.uy
+        let nx = -uy, ny = ux                          // unit normal
+        let tip = point(
+            for: MKMapPoint(
+                x: chevron.x + ux * plan.halfLength,
+                y: chevron.y + uy * plan.halfLength
+            )
+        )
+        let left = point(
+            for: MKMapPoint(
+                x: chevron.x - ux * plan.halfLength + nx * plan.halfWidth,
+                y: chevron.y - uy * plan.halfLength + ny * plan.halfWidth
+            )
+        )
+        let right = point(
+            for: MKMapPoint(
+                x: chevron.x - ux * plan.halfLength - nx * plan.halfWidth,
+                y: chevron.y - uy * plan.halfLength - ny * plan.halfWidth
+            )
+        )
+
+        context.beginPath()
+        context.move(to: left)
+        context.addLine(to: tip)
+        context.addLine(to: right)
+        context.strokePath()
+    }
+
+    /// A grey shade that contrasts with the line color (near-white on dark lines,
+    /// near-black on light ones), kept opaque so chevrons read even on a
+    /// translucent route.
+    ///
+    /// With no line to contrast against — ``RouteLinePattern/arrowheads`` — the
+    /// chevrons take the route's own colour instead: they are the route, and
+    /// drawing them grey would discard the colour the user picked.
+    ///
+    /// Takes the colour rather than reading ``strokeColor`` because each
+    /// coloured stretch asks it about its own — see ``ChevronTint``.
+    private func arrowColor(on line: LineColor?) -> CGColor {
+        let stroke = line ?? .white
+        if pattern.chevronsUseRouteTint { return stroke.cgColor }
+        #if canImport(UIKit)
+        var r: CGFloat = 1, g: CGFloat = 1, b: CGFloat = 1, a: CGFloat = 1
+        stroke.getRed(&r, green: &g, blue: &b, alpha: &a)
+        #else
+        let c = stroke.usingColorSpace(.sRGB) ?? .white
+        let r = c.redComponent, g = c.greenComponent, b = c.blueComponent
+        #endif
+        let luminance = RouteChevronShade.luminance(red: r, green: g, blue: b)
+        return CGColor(
+            gray: CGFloat(RouteChevronShade.gray(forLuminance: luminance)),
+            alpha: CGFloat(RouteChevronShade.alpha)
+        )
+    }
+}
+
+// MARK: - Coloured stretches
+
+nonisolated extension DirectionalPolylineRenderer {
+    /// The stretches, and the renderers built to draw them.
+    private struct ShadeState {
+        var shades: [Shade] = []
+        /// Built by the first draw that needs them, for the reason
+        /// ``borderLine`` is, and dropped by any change to what they draw.
+        var built: (scale: CGFloat, lines: [ShadeLine])?
+    }
+
+    /// A stretch's passes: a solid stroke that clears the line — and its
+    /// border, when it has one — out from under it, the stretch's own border,
+    /// and the stretch itself in the pattern's own dashes and cap.
+    private struct ShadeLine {
+        let clear: MKPolylineRenderer
+        let border: MKPolylineRenderer?
+        let fill: MKPolylineRenderer
+        /// The stretch's own points, for ``ChevronTint`` to find a chevron on.
+        let points: [MKMapPoint]
+        /// The shade that contrasts with the stretch's colour, as
+        /// ``arrowColor(on:)`` picks one for the whole line.
+        let chevronColor: CGColor
+
+        /// Whether `point` lies within `tolerance` map points of the stretch.
+        func carries(_ point: MKMapPoint, within tolerance: Double) -> Bool {
+            let bounds = fill.polyline.boundingMapRect.insetBy(dx: -tolerance, dy: -tolerance)
+            guard bounds.contains(point) else { return false }
+            let squared = tolerance * tolerance
+            return zip(points, points.dropFirst()).contains { a, b in
+                Self.squaredDistance(from: point, toSegmentFrom: a, to: b) <= squared
+            }
+        }
+
+        private static func squaredDistance(
+            from point: MKMapPoint,
+            toSegmentFrom a: MKMapPoint,
+            to b: MKMapPoint
+        ) -> Double {
+            let dx = b.x - a.x, dy = b.y - a.y
+            let lengthSquared = dx * dx + dy * dy
+            let t = lengthSquared > 0
+                ? min(max(((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared, 0), 1)
+                : 0
+            let x = a.x + t * dx - point.x, y = a.y + t * dy - point.y
+            return x * x + y * y
+        }
+    }
+
+    /// What each chevron of a pass is drawn in: one colour along the whole
+    /// line, except on a coloured stretch, where it takes the shade that
+    /// contrasts with *that* colour — the white a dark blue route picks all
+    /// but vanishes on a yellow stretch.
+    ///
+    /// Decided by the chevron's centre, which lies on the line, so one
+    /// straddling the end of a stretch is one colour rather than two.
+    private struct ChevronTint {
+        let color: CGColor
+        var stretches: [ShadeLine] = []
+        /// How far off a stretch a centre may be and still be on it: half the
+        /// line's width, in map points.
+        var tolerance: Double = 0
+
+        func color(at point: MKMapPoint) -> CGColor {
+            stretches.first { $0.carries(point, within: tolerance) }?.chevronColor ?? color
+        }
     }
 
     /// The coloured stretches, each over a hole cleared in the line for it.
@@ -208,16 +502,20 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
     /// beside the stretch's own dashes.
     ///
     /// Scaled by `contentScaleFactor` for the reason the border's copy is.
-    /// A stretch nowhere near the rect being drawn is skipped outright.
+    /// A stretch nowhere near the rect being drawn is skipped outright —
+    /// "near" measured by the hole, which a border makes wider than the line.
     ///
     /// Each stretch is a polyline of its own, and a renderer draws in map
     /// points measured from *its* overlay's corner — so the context is moved
     /// by the distance between the two corners first, or every stretch would
     /// be drawn as far off the line as its start is from the route's.
-    private func drawShades(in mapRect: MKMapRect, zoomScale: MKZoomScale, context: CGContext) {
-        let lines = shadeLines(forScale: contentScaleFactor)
-        guard !lines.isEmpty else { return }
-        let reach = Double(lineWidth * contentScaleFactor / zoomScale)
+    private func drawShades(
+        _ lines: [ShadeLine],
+        in mapRect: MKMapRect,
+        zoomScale: MKZoomScale,
+        context: CGContext
+    ) {
+        guard let reach = lines.first.map({ Double($0.clear.lineWidth / zoomScale) }) else { return }
         let visible = mapRect.insetBy(dx: -reach, dy: -reach)
         let origin = overlay.boundingMapRect.origin
         for line in lines where line.fill.polyline.boundingMapRect.intersects(visible) {
@@ -282,228 +580,15 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
                 return ShadeLine(
                     clear: clear,
                     border: bordered ? makeBorderLine(for: shade.polyline, scale: scale) : nil,
-                    fill: fill
+                    fill: fill,
+                    points: Array(
+                        UnsafeBufferPointer(start: shade.polyline.points(), count: shade.polyline.pointCount)
+                    ),
+                    chevronColor: arrowColor(on: fill.strokeColor)
                 )
             }
             state.built = (scale, lines)
             return lines
         }
-    }
-
-    /// The border, drawn under the marks it outlines: the line again, wider,
-    /// with the line itself cleared back out of it, and each chevron again,
-    /// widened.
-    ///
-    /// Both the copy and the chevrons are scaled by the renderer's
-    /// `contentScaleFactor` as well as by the zoom, because that is how MapKit
-    /// scales the line they sit under — on a map it is the screen's scale, so
-    /// a border sized by the zoom alone came out a third of the width of the
-    /// line on top of it and was invisible. The copy is never on a map, so its
-    /// own factor stays one and the factor goes into its width and dashes
-    /// instead. Not into its zoom scale, which would size it the same: MapKit
-    /// thins the line's points by the zoom scale, and a copy thinned three
-    /// times as hard cut the corners the line on top of it kept. A unit test
-    /// cannot see any of this: a renderer drawn outside a map has a factor of
-    /// one too.
-    private func drawBorder(
-        _ color: CGColor,
-        in mapRect: MKMapRect,
-        zoomScale: MKZoomScale,
-        context: CGContext
-    ) {
-        let scale = contentScaleFactor
-        if pattern.drawsLine {
-            borderLine(forScale: scale).draw(mapRect, zoomScale: zoomScale, in: context)
-            // The line's own stroke, clearing what it covers. What is left is
-            // a ring, so a translucent line shows the map through it rather
-            // than the border — and a line with no colour at all, just the
-            // ring. The line is drawn again, in its colour, straight after.
-            context.saveGState()
-            context.setBlendMode(.clear)
-            super.draw(mapRect, zoomScale: zoomScale, in: context)
-            context.restoreGState()
-        }
-        let border = CGFloat(RouteBorder.width(forLineWidth: Double(lineWidth))) * scale / zoomScale
-        strokeChevrons(in: mapRect, zoomScale: zoomScale, context: context, color: color, widenedBy: border * 2)
-    }
-
-    /// Drops the border's copy of the line, for the next draw to rebuild from
-    /// the style as it is now.
-    private func invalidateBorderLine() {
-        borderLine.withLockUnchecked { $0 = nil }
-    }
-
-    /// The border's copy of the line for a renderer at `scale`: the one built
-    /// already if it still fits, or a new one. See ``borderLine``, and
-    /// ``RouteBorder/dashes(outlining:cap:borderWidth:)`` for the dashes.
-    private func borderLine(forScale scale: CGFloat) -> MKPolylineRenderer {
-        borderLine.withLockUnchecked { built in
-            if let built, built.scale == scale { return built.line }
-            let line = makeBorderLine(for: polyline, scale: scale)
-            built = (scale, line)
-            return line
-        }
-    }
-
-    /// A copy of `polyline` drawn as the border round it, at `scale` — see
-    /// ``borderLine``. Also what outlines each coloured stretch, which is why
-    /// it takes the polyline rather than assuming this renderer's own.
-    private func makeBorderLine(for polyline: MKPolyline, scale: CGFloat) -> MKPolylineRenderer {
-        let line = MKPolylineRenderer(polyline: polyline)
-        let width = Double(lineWidth)
-        let border = RouteBorder.width(forLineWidth: width)
-        let dashes = RouteBorder.dashes(
-            outlining: pattern.dashLengths(forWidth: width),
-            cap: pattern.lineCap,
-            borderWidth: border
-        )
-        line.lineWidth = CGFloat(width + border * 2) * scale
-        line.lineJoin = .round
-        line.lineCap = pattern.lineCap
-        // swiftlint:disable:next legacy_objc_type
-        line.lineDashPattern = dashes.lengths.isEmpty ? nil : dashes.lengths.map { NSNumber(value: $0 * scale) }
-        line.lineDashPhase = CGFloat(dashes.phase) * scale
-        #if canImport(UIKit)
-        line.strokeColor = borderColor.map { UIColor(cgColor: $0) }
-        #else
-        line.strokeColor = borderColor.flatMap { NSColor(cgColor: $0) }
-        #endif
-        return line
-    }
-
-    /// One pass of chevrons along the whole line, in `color` — `widenedBy` map
-    /// points wider for the pass that draws their outline. A chevron's caps
-    /// and joins are round, so its wider stroke is exactly its outline.
-    ///
-    /// Both passes place exactly the same chevrons: placement depends only on
-    /// the line and the zoom, never on the colour or the width drawn.
-    private func strokeChevrons(
-        in mapRect: MKMapRect,
-        zoomScale: MKZoomScale,
-        context: CGContext,
-        color: CGColor,
-        widenedBy extraWidth: CGFloat
-    ) {
-        guard let metrics = pattern.chevronMetrics(forWidth: Double(lineWidth)) else { return }
-        guard let polyline = overlay as? MKPolyline, polyline.pointCount > 1 else { return }
-        let count = polyline.pointCount
-        let points = polyline.points()
-
-        // Convert screen-point sizes into map-point space for this zoom level.
-        guard let plan = ChevronPlan(metrics: metrics, zoomScale: Double(zoomScale)) else { return }
-
-        context.setLineWidth(CGFloat(plan.strokeWidth) + extraWidth)
-        context.setLineCap(.round)
-        context.setLineJoin(.round)
-        // The stroke above may have left a dash pattern on the context; a
-        // chevron is a solid glyph whatever the line it rides is drawn as.
-        context.setLineDash(phase: 0, lengths: [])
-        context.setStrokeColor(color)
-
-        var pass = ChevronPass(plan: plan, mapRect: mapRect)
-        for i in 1..<count {
-            drawChevrons(from: points[i - 1], to: points[i], context: context, pass: &pass)
-        }
-    }
-
-    private func drawChevrons(
-        from a: MKMapPoint,
-        to b: MKMapPoint,
-        context: CGContext,
-        pass: inout ChevronPass
-    ) {
-        let plan = pass.plan
-        let dx = b.x - a.x, dy = b.y - a.y
-        let segLength = (dx * dx + dy * dy).squareRoot()
-        if segLength == 0 { return }
-
-        // Skip segments outside the visible rect, but keep the spacing carry
-        // accurate so on-screen chevrons stay evenly placed.
-        let segRect = MKMapRect(
-            x: min(a.x, b.x) - plan.pad,
-            y: min(a.y, b.y) - plan.pad,
-            width: abs(dx) + 2 * plan.pad,
-            height: abs(dy) + 2 * plan.pad
-        )
-        guard pass.mapRect.intersects(segRect) else {
-            // Closed-form version of the on-screen loop below (advance `d` by
-            // `spacing` until it passes `segLength`). An off-screen segment
-            // isn't bounded by screen size, so at deep zoom (tiny `spacing`)
-            // a single long segment could otherwise mean millions of
-            // iterations just to keep the chevron spacing carry accurate.
-            let steps = max(0, Int(((segLength - pass.carry) / plan.spacing).rounded(.down)) + 1)
-            pass.carry = pass.carry + Double(steps) * plan.spacing - segLength
-            return
-        }
-
-        let ux = dx / segLength, uy = dy / segLength   // unit direction
-        var d = pass.carry
-        while d <= segLength {
-            let chevron = RouteChevron(x: a.x + ux * d, y: a.y + uy * d, ux: ux, uy: uy)
-            // Ground an earlier chevron already covers: the way home over the
-            // way out, a second lap, a switchback tighter than the spacing.
-            let clear = pass.placed.claim(
-                chevron,
-                retrace: plan.retraceClearance,
-                crossing: plan.overlapClearance
-            )
-            if clear { stroke(chevron, plan: plan, in: context) }
-            d += plan.spacing
-        }
-        pass.carry = d - segLength
-    }
-
-    /// One chevron: from its left tail to its tip and on to its right tail.
-    private func stroke(_ chevron: RouteChevron, plan: ChevronPlan, in context: CGContext) {
-        let ux = chevron.ux, uy = chevron.uy
-        let nx = -uy, ny = ux                          // unit normal
-        let tip = point(
-            for: MKMapPoint(
-                x: chevron.x + ux * plan.halfLength,
-                y: chevron.y + uy * plan.halfLength
-            )
-        )
-        let left = point(
-            for: MKMapPoint(
-                x: chevron.x - ux * plan.halfLength + nx * plan.halfWidth,
-                y: chevron.y - uy * plan.halfLength + ny * plan.halfWidth
-            )
-        )
-        let right = point(
-            for: MKMapPoint(
-                x: chevron.x - ux * plan.halfLength - nx * plan.halfWidth,
-                y: chevron.y - uy * plan.halfLength - ny * plan.halfWidth
-            )
-        )
-
-        context.beginPath()
-        context.move(to: left)
-        context.addLine(to: tip)
-        context.addLine(to: right)
-        context.strokePath()
-    }
-
-    /// A grey shade that contrasts with the line color (near-white on dark lines,
-    /// near-black on light ones), kept opaque so chevrons read even on a
-    /// translucent route.
-    ///
-    /// With no line to contrast against — ``RouteLinePattern/arrowheads`` — the
-    /// chevrons take the route's own colour instead: they are the route, and
-    /// drawing them grey would discard the colour the user picked.
-    private func arrowColor() -> CGColor {
-        let stroke = strokeColor ?? .white
-        if pattern.chevronsUseRouteTint { return stroke.cgColor }
-        #if canImport(UIKit)
-        var r: CGFloat = 1, g: CGFloat = 1, b: CGFloat = 1, a: CGFloat = 1
-        stroke.getRed(&r, green: &g, blue: &b, alpha: &a)
-        #else
-        let c = stroke.usingColorSpace(.sRGB) ?? .white
-        let r = c.redComponent, g = c.greenComponent, b = c.blueComponent
-        #endif
-        let luminance = RouteChevronShade.luminance(red: r, green: g, blue: b)
-        return CGColor(
-            gray: CGFloat(RouteChevronShade.gray(forLuminance: luminance)),
-            alpha: CGFloat(RouteChevronShade.alpha)
-        )
     }
 }
