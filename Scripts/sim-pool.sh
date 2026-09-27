@@ -9,7 +9,7 @@
 # machine collected one per issue. The pool replaces that with devices named
 # `OpenHikes Pool 1`, `OpenHikes Pool 2`, … and a claim per device:
 #
-#   udid="$(Scripts/sim-pool.sh acquire)"   # a free device, erased and booted
+#   udid="$(Scripts/sim-pool.sh acquire)"   # a free device, erased, booted, granted
 #   xcodebuild test … -destination "platform=iOS Simulator,id=$udid"
 #   Scripts/sim-pool.sh release             # shut it down, give it back
 #
@@ -46,6 +46,19 @@
 # — is exactly what makes a test pass or fail for a reason that is not the
 # code. Its own owner coming back keeps its data. `--keep-data` skips the erase.
 #
+# ## Granting
+#
+# Every device it hands out has the photo library granted to the app, erased or
+# not. `PhotosLibraryReaderTests` asks the real PhotoKit for an asset, and on a
+# device that has never answered, PhotoKit raises the permission alert on its
+# own — over the unit tests' host app for the rest of the run, and again on the
+# next run, because nothing ever answers it. Granted beforehand, the question is
+# never asked. A grant to a bundle the device does not have yet survives the
+# install `xcodebuild` makes (measured: the TCC row stays authorized and tccd
+# logs no prompt), which a location grant does not — see
+# Scripts/lib/screenshots.sh. The UI tests read a stubbed library and never
+# notice either way.
+#
 # Exit status:
 #   0  success (acquire prints the UDID on stdout, and nothing else)
 #   1  failure: no free device and the pool is at its cap, or simctl failed
@@ -61,6 +74,7 @@ pool_prefix="OpenHikes Pool"
 pool_max="${OPENHIKES_SIM_POOL_MAX:-5}"
 ttl_minutes="${OPENHIKES_SIM_POOL_TTL_MINUTES:-180}"
 device_type="${OPENHIKES_SIM_POOL_DEVICE_TYPE:-iPhone 18 Pro}"
+app_bundle_id="tappium.com.OpenHikes"
 claim_root="${OPENHIKES_SIM_POOL_DIR:-${HOME:-/tmp}/Library/Caches/OpenHikes/sim-pool}"
 # Scripts/run-ui-tests.sh's own claims, read so the pool never hands out a
 # device one of its runs is on. The same default and override it uses.
@@ -373,6 +387,12 @@ acquire() {
     if ! boot_log="$(xcrun simctl bootstatus "$chosen" -b 2>&1)"; then
         printf '%s\n' "$boot_log" >&2
         echo "$chosen did not boot." >&2
+        exit 1
+    fi
+    # After the boot, because `simctl privacy` needs a running device; see
+    # "Granting" above for why.
+    if ! xcrun simctl privacy "$chosen" grant photos "$app_bundle_id" >&2; then
+        echo "Could not grant the photo library on $chosen." >&2
         exit 1
     fi
     printf '%s\n' "$chosen"

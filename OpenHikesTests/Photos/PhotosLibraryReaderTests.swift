@@ -49,14 +49,13 @@ struct PhotosLibraryReaderTests {
     /// in Photos — and a fetch that returns nothing has to become `nil` rather
     /// than a request against a missing asset.
     ///
-    /// Runs against the host's real library, which is empty, and on a machine
-    /// that has never granted access is also unreadable. Neither changes what
-    /// is under test: `fetchAssets(withLocalIdentifiers:)` answers with an
-    /// empty result rather than prompting when the app has no permission, so
-    /// the fetch misses either way and the guard in front of it is what
-    /// answers. Prompting in PhotoKit happens only through
-    /// `requestAuthorization(for:)`, which this file deliberately never calls —
-    /// a test that put a system alert on screen would hang rather than fail.
+    /// Runs against the host's real library, which is empty. The fetch misses
+    /// either way and the guard in front of it is what answers — but the
+    /// fetch is not silent on a device that has never answered: PhotoKit
+    /// raises the permission alert itself on the first fetch from an undecided
+    /// app, `requestAuthorization(for:)` or not, and leaves it over the host
+    /// app for the rest of the run. That is why `Scripts/sim-pool.sh acquire`
+    /// and CI grant the photo library before these run.
     @Test("a thumbnail for an identifier the library does not have is nil")
     func aThumbnailForAnUnknownIdentifierIsNil() async {
         let reader = PhotosLibraryReader()
