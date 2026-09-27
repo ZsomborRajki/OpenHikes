@@ -1,5 +1,5 @@
 //
-//  WatchFixWindowTests.swift
+//  RecordingFixWindowTests.swift
 //  OpenHikesSharedTests
 //
 //  The window and the accumulator together, the way `WatchRecorder` puts them
@@ -13,11 +13,11 @@ import Foundation
 import Testing
 
 @Suite("Watch fix window")
-struct WatchFixWindowTests {
+struct RecordingFixWindowTests {
     @Test("A cached fix from before Start neither starts the walk nor lengthens it")
     func aCachedFixBeforeStartIsRefused() throws {
         var walk = WatchWalkAccumulator()
-        let window = WatchFixWindow(opensAt: Fixture.start)
+        let window = RecordingFixWindow(opensAt: Fixture.start)
         // The issue's reproduction: an hour-old fix first, then the first real
         // one ten seconds into the recording, a kilometre north of it.
         let kept = Fixture.offer(
@@ -48,7 +48,7 @@ struct WatchFixWindowTests {
         let kept = Fixture.offer(
             [(0, -600), (0.001, -300), (0.002, -1)],
             to: &walk,
-            through: WatchFixWindow(opensAt: Fixture.start)
+            through: RecordingFixWindow(opensAt: Fixture.start)
         )
         #expect(kept == 0)
         #expect(walk.fixes.isEmpty)
@@ -69,7 +69,7 @@ struct WatchFixWindowTests {
         let kept = Fixture.offer(
             [(0, 0), (0.0001, 10), (0.0002, 20), (0.0003, 30), (0.0004, 40)],
             to: &walk,
-            through: WatchFixWindow(opensAt: Fixture.start)
+            through: RecordingFixWindow(opensAt: Fixture.start)
         )
         #expect(kept == 5)
         #expect(walk.activeSeconds == 40)
@@ -79,7 +79,7 @@ struct WatchFixWindowTests {
     @Test("A fix taken during a pause does not open the leg after it")
     func aFixFromThePauseIsRefusedAfterResume() {
         var walk = WatchWalkAccumulator()
-        var window = WatchFixWindow(opensAt: Fixture.start)
+        var window = RecordingFixWindow(opensAt: Fixture.start)
         Fixture.offer([(0, 0), (0.0001, 10)], to: &walk, through: window)
         walk.pause()
         // Paused at 10 s, resumed at 600 s. The batch delivered after the
@@ -99,7 +99,7 @@ struct WatchFixWindowTests {
 
     @Test("A resume never reopens the window earlier than it already was")
     func reopeningNeverMovesBack() {
-        var window = WatchFixWindow(opensAt: Fixture.start)
+        var window = RecordingFixWindow(opensAt: Fixture.start)
         window.reopen(at: Fixture.start.addingTimeInterval(-60))
         #expect(window.opensAt == Fixture.start)
         #expect(!window.admits(Fixture.start.addingTimeInterval(-1)))
@@ -117,7 +117,7 @@ struct WatchFixWindowTests {
         @discardableResult static func offer(
             _ batch: [(north: Double, seconds: TimeInterval)],
             to walk: inout WatchWalkAccumulator,
-            through window: WatchFixWindow
+            through window: RecordingFixWindow
         ) -> Int {
             var kept = 0
             for fix in batch.sorted(by: { $0.seconds < $1.seconds }) {

@@ -150,13 +150,16 @@ extension HikeRecorderTests {
             )
         )
         let track = try GPXImport.load(from: routeURL)
+        let hikeRecorder = makeRecorder()
+
+        await hikeRecorder.start()
+        // Walked after Start, and delivered as one batch at its end: a route
+        // stamped before Start is exactly what the fix window refuses.
+        clock.advance(by: 20)
         let locations = acceleratedLocations(
             from: track,
             endingAt: clock.now
         )
-        let hikeRecorder = makeRecorder()
-
-        await hikeRecorder.start()
         source.deliver(locations)
 
         let acceptedPointCount = hikeRecorder.stats.pointCount

@@ -149,14 +149,15 @@ extension AccessibilityUITests {
         launch(app)
         startRecording(in: app)
         // A place is marked at the last accepted fix, and *Add Place* before
-        // the first one is an alert rather than the sheet.
+        // the first one is an alert rather than the sheet. Handed over again
+        // until it is taken: the location set before launch is older than the
+        // recording, and is refused as such.
         let points = element("recording-point-count", in: app)
         XCTAssertTrue(
-            waitUntil(timeout: UITestTimeout.navigation) {
-                points.exists && (points.value as? String).map { $0 != "0" } == true
-            },
+            points.waitForExistence(timeout: UITestTimeout.existence),
             "the walk needs a fix before a place can be marked on it"
         )
+        walkRecordedTrace([UITestFixture.trailheadCoordinate], countedBy: points)
 
         tapWhenReady(element("recording-add-place", in: app))
         XCTAssertTrue(

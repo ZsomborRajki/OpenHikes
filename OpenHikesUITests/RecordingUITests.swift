@@ -64,10 +64,17 @@ nonisolated final class RecordingUITests: XCTestCase {
         launch(app)
         startRecording(in: app)
 
+        // A fix taken after Start: the one set before launch is refused as
+        // older than the recording, and resuming a recording that never had a
+        // point goes back to finding GPS rather than to "Recording".
+        let points = element("recording-point-count", in: app)
+        XCTAssertTrue(points.waitForExistence(timeout: UITestTimeout.existence))
+        walkRecordedTrace([UITestFixture.trailheadCoordinate], countedBy: points)
         let phase = element("recording-phase", in: app)
         XCTAssertTrue(
             phase.waitForExistence(timeout: UITestTimeout.navigation)
         )
+        expectPhase(phase, contains: "Recording")
         let discard = app.buttons["Discard Recording"]
         XCTAssertFalse(
             discard.exists,

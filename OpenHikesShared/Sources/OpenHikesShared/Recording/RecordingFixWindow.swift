@@ -1,20 +1,23 @@
 //
-//  WatchFixWindow.swift
+//  RecordingFixWindow.swift
 //  OpenHikesShared
 //
 //  The earliest moment a fix can have been taken and still belong to the
-//  watch recording it is delivered to.
+//  recording it is delivered to — on the watch and on the phone alike.
 //
 //  ## Why a recording needs one
 //
 //  Core Location does not promise that a fix is new. The first delivery after
-//  `startUpdatingLocation()` can be the last position the watch had cached,
-//  minutes or hours old, and Apple's location guide says to read the timestamp
-//  for exactly that reason. `WatchFixPolicy` has no opinion about age — the
-//  first accurate fix of a recording is kept whenever it was taken — and
+//  `startUpdatingLocation()` can be the last position the device had cached,
+//  and Apple's location guide says to read the timestamp for exactly that
+//  reason. On the watch, `WatchFixPolicy` has no opinion about age — the first
+//  accurate fix of a recording is kept whenever it was taken — and
 //  `WatchWalkAccumulator` adds the whole gap from it to the next fix. One
 //  cached fix an hour old was a recording ten seconds long with an hour of
-//  active time and a kilometre it never walked (#720).
+//  active time and a kilometre it never walked (#720). The phone's
+//  `RecordingFixPolicy` does refuse anything older than thirty seconds, but a
+//  fix twenty seconds old from the car park is fresh by that measure, and it
+//  became the first point of the hike and the start of its distance (#749).
 //
 //  ## Why at the recorder, and not in the accumulator
 //
@@ -23,7 +26,8 @@
 //  to know when each leg of the original recording opened, which is state it
 //  has no line for. The window is the recorder's instead: opened at Start,
 //  reopened at every resume, and consulted before a fix reaches the
-//  accumulator at all.
+//  accumulator at all. It guards the *live* feed only — the phone's widget
+//  fixes are deliberately historical evidence, and merge by another path.
 //
 //  ## Why a resume moves it
 //
@@ -35,14 +39,14 @@
 //  start of the first.
 //
 //  What stays admitted is a late batch from inside the recording: Core
-//  Location batches deliveries on a watch whose screen is off, and every fix
+//  Location batches deliveries on a device whose screen is off, and every fix
 //  in one taken since the window opened is as good as one delivered at once.
 //
 
 import Foundation
 
 /// When fixes started counting for the leg of a recording now running.
-public struct WatchFixWindow: Sendable, Equatable {
+public struct RecordingFixWindow: Sendable, Equatable {
     /// The first moment a fix may have been taken at and still be kept.
     public private(set) var opensAt: Date
 
