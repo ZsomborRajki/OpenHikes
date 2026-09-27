@@ -20,7 +20,7 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
     /// Live autocomplete suggestions for the current query fragment.
     var suggestions: [MKLocalSearchCompletion] = []
 
-    @ObservationIgnored private let completer = MKLocalSearchCompleter()
+    @ObservationIgnored private let completer: MKLocalSearchCompleter
     /// Whether the next query is worth asking. See ``SearchQueryPolicy``.
     @ObservationIgnored private var policy = SearchQueryPolicy()
 
@@ -34,7 +34,11 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
     /// stop panning.
     @ObservationIgnored private(set) var region: MKCoordinateRegion?
 
-    override init() {
+    /// `completer` is a parameter so a test can hand in a subclass that
+    /// records what it was asked instead of asking Apple — see
+    /// `SearchCompleterFragmentTests`.
+    init(completer: MKLocalSearchCompleter = MKLocalSearchCompleter()) {
+        self.completer = completer
         super.init()
         completer.delegate = self
         // Physical features are the peaks, passes, lakes and valleys a hiker
@@ -117,11 +121,17 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
         completer.queryFragment = ""
     }
 
-    /// Clears the suggestions and records `query` as already answered, so the
-    /// echo of it arriving through ``update(query:)`` is not re-requested.
+    /// Ends autocomplete for a search the hiker has finished — a tapped
+    /// suggestion or a typed Return — and records `query` as already
+    /// answered, so the echo of it arriving through ``update(query:)`` is not
+    /// re-requested.
+    ///
+    /// The fragment is forgotten, not just cancelled, for the reason
+    /// ``forgetFragment()`` gives: the search that follows moves the camera,
+    /// and the settle it ends in would otherwise ask the finished query again.
     func commit(query: String) {
-        completer.cancel()
         policy.commit(query: query)
+        forgetFragment()
         suggestions = []
     }
 
@@ -133,6 +143,10 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
     // was a hand-written `MainActor.assumeIsolated`. Both are now unnecessary
     // — the compiler proves statically what they asserted dynamically.
     func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        // An answer that lands after the fragment was forgotten is for a
+        // search that has ended, and would sit in the list until the field is
+        // focused again.
+        guard !completer.queryFragment.isEmpty else { return }
         suggestions = completer.results
     }
 

@@ -2,11 +2,10 @@
 //  SearchQueryPolicyTests.swift
 //  OpenHikesTests
 //
-//  `SearchCompleter` itself is three lines of MapKit plumbing around this
-//  type, and none of those three can be held to anything: the completer has
-//  no stub, `MKLocalSearchCompletion` has no public initializer, and a
-//  request that was never made looks exactly like one that hasn't answered
-//  yet. The decision is the part with behaviour, so it is the part asserted.
+//  A request that was never made looks exactly like one that hasn't
+//  answered yet, so the decision is asserted here, on its own.
+//  `SearchCompleterFragmentTests` asserts what `SearchCompleter` then hands
+//  MapKit, against a completer subclass that records instead of asking.
 //
 //  Two of the cases below are the reason it exists at all. The echo case
 //  stops a wasted network round-trip every time a suggestion is tapped; the

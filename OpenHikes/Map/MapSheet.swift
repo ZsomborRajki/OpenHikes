@@ -737,6 +737,9 @@ private func performSearch() {
     guard !query.isEmpty else { return }
     appModel.community.search(matching: query)
     searchFocused = false
+    // Return ends autocomplete as a tapped suggestion does: the search below
+    // moves the camera, and its settle would re-ask a fragment still set.
+    completer.commit(query: query)
     let request = MKLocalSearch.Request()
     request.naturalLanguageQuery = query
     // The three the suggestions are drawn from — see ``SearchCompleter`` for
