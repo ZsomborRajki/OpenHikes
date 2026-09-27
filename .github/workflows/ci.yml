@@ -756,10 +756,10 @@ jobs:
       # in the list above. `WidgetFeedSuites` is an enclosing type, and a
       # suite written into an `extension WidgetFeedSuites` — as the nested
       # Trail walk end boundary, background delivery, background tracking
-      # selection, proximity and region gate suites all are — is selected by
-      # a line that is already there. Selecting that one parent runs ten of
-      # the 65 suites, so adding a nested suite moves this number with no
-      # change to the list at all.
+      # selection, proximity, region gate and foreground off-trail feed suites
+      # all are — is selected by a line that is already there. Selecting that
+      # one parent runs eleven of the 66 suites, so adding a nested suite moves
+      # this number with no change to the list at all.
       #
       # Tests are a floor for the reason the comment above gives: some 700 run
       # today, and 659 sits far enough below that removing a test does not
@@ -767,7 +767,7 @@ jobs:
       # that still resolves does. Raise it when the measured number rises.
       - name: Check the sanitized selection actually ran
         env:
-          EXPECTED_SUITES: "65"
+          EXPECTED_SUITES: "66"
           TEST_FLOOR: "659"
         run: |
           set -o pipefail
