@@ -434,10 +434,18 @@ final class SheetPresentation {
     /// multiple times per frame". Measured on the two pushes that did it:
     /// adding a published hike to the library, and opening a photo from its
     /// pin on the map. Kept, the stack sees one path per push.
-    @ObservationIgnored private(set) lazy var pathBinding = Binding<[SheetRoute]>(
-        get: { @MainActor [weak self] in self?.path ?? [] },
-        set: { @MainActor [weak self] in self?.path = $0 }
-    )
+    @ObservationIgnored private(set) lazy var pathBinding = makePathBinding()
+
+    /// Builds ``pathBinding`` in a method rather than in the `lazy var`'s own
+    /// initializer. `Binding(get:set:)` takes `@_inheritActorContext
+    /// @isolated(any)` closures, and an initializer has no actor context to
+    /// hand them, so written there they need an explicit `@MainActor` — and
+    /// Swift 6.3 (Xcode 26.6, which CodeQL still builds with) crashes in IRGen
+    /// converting a `@MainActor` closure to `@isolated(any)`. In a
+    /// main-actor method they inherit the isolation, as ``detentBinding``'s do.
+    private func makePathBinding() -> Binding<[SheetRoute]> {
+        Binding(get: { [weak self] in self?.path ?? [] }, set: { [weak self] in self?.path = $0 })
+    }
 
     /// Drives `.presentationDetents(_:selection:)`, and a binding for the same
     /// reason.
