@@ -322,8 +322,7 @@ struct HikeActivityContentView: View {
     let attributes: HikeActivityAttributes
     let state: HikeActivityAttributes.ContentState
 
-    @Environment(\.activityFamily)
-    private var family
+    @Environment(\.activityFamily) private var family
 
     var body: some View {
         if family == .small {

@@ -303,8 +303,7 @@ private struct PhotoMapPinsModifier: ViewModifier {
     let onOpen: (UUID) -> Void
 
     @State private var token: Int?
-    @Environment(\.sheetDepth)
-    private var depth
+    @Environment(\.sheetDepth) private var depth
 
     func body(content: Content) -> some View {
         content

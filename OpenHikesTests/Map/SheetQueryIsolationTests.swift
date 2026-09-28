@@ -34,8 +34,7 @@ final class BodyCounter {
 /// that invalidates the query re-runs all of it.
 private struct BroadQueryProbe: View {
     let counter: BodyCounter
-    @Query(sort: \Hike.date, order: .reverse)
-    private var hikes: [Hike]
+    @Query(sort: \Hike.date, order: .reverse) private var hikes: [Hike]
 
     var body: some View {
         counter.record()

@@ -12,8 +12,7 @@ import SwiftUI
 struct OpenHikesWatchApp: App {
     @State private var model = WatchModel()
 
-    @Environment(\.scenePhase)
-    private var scenePhase
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {

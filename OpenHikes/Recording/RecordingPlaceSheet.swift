@@ -33,10 +33,8 @@ struct RecordingPlaceSheet: View {
     /// Called with the new place's id once it is on the hike.
     let onAdded: (UUID) -> Void
 
-    @Environment(\.modelContext)
-    private var modelContext
-    @Environment(\.dismiss)
-    private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @State private var finder = NearbyPlaceFinder()
     @State private var name = ""
     @State private var symbol: TrailPlaceSymbol?

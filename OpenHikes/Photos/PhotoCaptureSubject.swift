@@ -103,8 +103,7 @@ private struct PhotoCaptureSubject: ViewModifier {
     let anchor: () -> CLLocationCoordinate2D?
 
     @State private var token: Int?
-    @Environment(\.sheetDepth)
-    private var depth
+    @Environment(\.sheetDepth) private var depth
 
     func body(content: Content) -> some View {
         content

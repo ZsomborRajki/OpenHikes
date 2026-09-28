@@ -112,8 +112,7 @@ struct HikeActionRow<OfflineTile: View>: View {
 /// keeps the switch semantics a `Toggle` carries — its on/off value and the
 /// label it is announced by — whatever it looks like.
 private struct FollowTileToggleStyle: ToggleStyle {
-    @Environment(\.isEnabled)
-    private var isEnabled
+    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         Button {

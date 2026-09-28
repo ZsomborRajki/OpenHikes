@@ -82,8 +82,7 @@ struct MapSheet: View {
     /// which is the only one the map learns a resting height for.
     var onSheetDetentCommitted: (Bool) -> Void = { _ in /* no-op default */ }
 
-    @Environment(OpenHikesModel.self)
-    private var appModel
+    @Environment(OpenHikesModel.self) private var appModel
     @FocusState private var searchFocused: Bool
     @State private var showImporter = false
     @State private var showSettings = false

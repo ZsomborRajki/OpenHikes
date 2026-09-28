@@ -497,8 +497,7 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
 }
 
 struct TrailWidgetEntryView: View {
-    @Environment(\.widgetFamily)
-    private var family
+    @Environment(\.widgetFamily) private var family
     let entry: TrailWidgetEntry
 
     var body: some View {

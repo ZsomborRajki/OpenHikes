@@ -100,8 +100,7 @@ private struct RecordingDurationFigure: View {
     /// question only SwiftUI can answer. Scene phase changes a handful of
     /// times per hike, so the redraw it costs is bounded by transitions rather
     /// than by fixes.
-    @Environment(\.scenePhase)
-    private var scenePhase
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         // Only while the readout is on screen. A recording keeps running in

@@ -208,8 +208,7 @@ struct CommunityHikeView: View {
     /// suite get, exactly as on ``HikeDetailView``.
     var trailGraphProvider: (any TrailGraphProviding)?
 
-    @Environment(\.modelContext)
-    var context
+    @Environment(\.modelContext) var context
     // Shared with the contributions fetch in the companion extension file,
     // which hangs its answer on the detail already on screen — the same
     // disable ``HikeDetailView`` carries for its own companion files, and for

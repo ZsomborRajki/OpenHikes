@@ -55,8 +55,7 @@ public struct TrailWidgetConfiguration: WidgetConfigurationIntent {
     /// The picker behind it is ``HikeEntityQuery``, which reads the App Group
     /// catalogue rather than the app's store precisely so that it can run
     /// here, in a process that has neither.
-    @Parameter(title: "Trail")
-    public var hike: HikeEntity?
+    @Parameter(title: "Trail") public var hike: HikeEntity?
 
     public init() {
         // `nil` — follow the selection, which is what every already-placed

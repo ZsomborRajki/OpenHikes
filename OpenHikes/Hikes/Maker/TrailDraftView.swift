@@ -71,8 +71,7 @@ struct TrailDraftView: View {
     var onClose: () -> Void
     var onSaved: (Hike) -> Void
 
-    @Environment(\.modelContext)
-    private var modelContext
+    @Environment(\.modelContext) private var modelContext
 
     /// The one refusal a hiker can reach from the Save button — the store said
     /// no. ``TrailDraftRefusal/tooShort`` is unreachable from here because the

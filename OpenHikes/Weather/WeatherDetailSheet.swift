@@ -121,8 +121,7 @@ struct WeatherDetailView: View {
 
     let weather: WeatherManager
 
-    @Environment(\.colorScheme)
-    private var colorScheme
+    @Environment(\.colorScheme) private var colorScheme
 
     /// `nil` until WeatherKit answers, and for good if it never does. The
     /// wording and the fallback link below do not wait on it — see

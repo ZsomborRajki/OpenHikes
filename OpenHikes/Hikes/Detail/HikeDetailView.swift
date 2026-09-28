@@ -81,13 +81,11 @@ struct HikeDetailView: View {
 
     /// The active tile source, mirrored from Settings so offline downloads use the
     /// same provider (and API key) the map is currently drawing.
-    @AppStorage(SettingsKey.tileProviderID)
-    private var tileProviderID = TileProvider.default.id
+    @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
     // Shared with the offline-storage and community helpers in the
     // companion extension files.
     // swiftlint:disable private_swiftui_state
-    @Environment(\.modelContext)
-    var modelContext
+    @Environment(\.modelContext) var modelContext
     @State var downloader = OfflineTileDownloader()
     /// Disk space used by this hike's saved tiles; `nil` until measured.
     @State var storedBytes: Int64?

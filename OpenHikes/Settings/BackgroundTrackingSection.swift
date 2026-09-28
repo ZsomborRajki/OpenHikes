@@ -34,8 +34,7 @@ struct BackgroundTrackingSection: View {
     /// observer answers for a feature it serves none of.
     let locationManager: LocationManager
 
-    @AppStorage(SettingsKey.backgroundTrackingEnabled)
-    private var backgroundTrackingEnabled = false
+    @AppStorage(SettingsKey.backgroundTrackingEnabled) private var backgroundTrackingEnabled = false
     /// Raised when the switch is turned on and Always access is refused — the
     /// one case the app can neither ask about nor work around.
     @State private var showAccessDenied = false

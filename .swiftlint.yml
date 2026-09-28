@@ -398,15 +398,16 @@ modifier_order:
     - owned
 
 attributes:
+  # Project preference: `@Environment(\.scenePhase) private var scenePhase`
+  # reads better on one line than split across two. Attributes on types and
+  # functions still belong on their own lines by the rule's default; this only
+  # stops attributes with arguments on properties from being forced there.
+  attributes_with_arguments_always_on_line_above: false
   always_on_same_line:
     - "@discardableResult"
     - "@IBAction"
     - "@NSManaged"
     - "@objc"
-  always_on_line_above:
-    - "@MainActor"
-    - "@Observable"
-    - "@Model"
 
 vertical_whitespace:
   max_empty_lines: 1

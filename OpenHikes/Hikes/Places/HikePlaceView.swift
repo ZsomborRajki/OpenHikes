@@ -47,10 +47,8 @@ struct HikePlaceView: View {
     /// Opens another of the hike's places, from its pin.
     var onOpenPlace: (UUID) -> Void = { _ in /* no-op default */ }
 
-    @Environment(\.modelContext)
-    private var modelContext
-    @Environment(\.dismiss)
-    private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @State private var isEditing = false
     @State private var isConfirmingRemoval = false
     /// Set when *Remove*'s save was refused. The place is back on the screen

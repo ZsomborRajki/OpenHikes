@@ -72,8 +72,7 @@ public final class Hike {
     /// is a couple of megabytes encoded, and a `CKRecord`'s fields have to add
     /// up to less than one. Without this the longest hikes — the ones most
     /// worth keeping — are exactly the ones that would silently fail to sync.
-    @Attribute(.externalStorage)
-    public var route: [RouteCoordinate] = []
+    @Attribute(.externalStorage) public var route: [RouteCoordinate] = []
     /// A user-chosen name that overrides the GPS/import-derived ``title``.
     /// `nil` means no override is set and the original title is displayed.
     public var customName: String?
@@ -83,8 +82,7 @@ public final class Hike {
     ///
     /// External for the same reason ``route`` is: it is the same size and
     /// travels the same way.
-    @Attribute(.externalStorage)
-    public var rawRoute: [RouteCoordinate] = []
+    @Attribute(.externalStorage) public var rawRoute: [RouteCoordinate] = []
     /// True while this row is the durable draft owned by an active recording.
     /// The route stays empty until Stop finalizes the draft in place.
     ///
@@ -294,8 +292,7 @@ public final class Hike {
     /// through here: the History segment's query filters on that column so a
     /// write to this row does not re-rank it. What this is for is the
     /// cascade, which takes the walks with the hike.
-    @Relationship(deleteRule: .cascade, inverse: \HikeWalk.hike)
-    public var walks: [HikeWalk]?
+    @Relationship(deleteRule: .cascade, inverse: \HikeWalk.hike) public var walks: [HikeWalk]?
 
     /// Every place marked along this trail — see ``TrailPoint``, and
     /// ``orderedPlaces`` for the order they are read in.
@@ -305,8 +302,7 @@ public final class Hike {
     /// from ``walks``: no screen lists places across hikes, and both callers
     /// want this trail's, ordered against this trail's line. The cascade does
     /// the same job either way.
-    @Relationship(deleteRule: .cascade, inverse: \TrailPoint.hike)
-    public var trailPoints: [TrailPoint]?
+    @Relationship(deleteRule: .cascade, inverse: \TrailPoint.hike) public var trailPoints: [TrailPoint]?
     // swiftlint:enable discouraged_optional_collection
 
     /// The resolved ``HikeLocalState``, remembered so repeated tile-ownership

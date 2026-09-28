@@ -20,8 +20,7 @@ struct HikePlaceEditor: View {
     /// Saves the change. The form closes only once it has been kept.
     let onSave: (_ name: String, _ symbol: TrailPlaceSymbol?, _ note: String) throws(HikePlaceRefusal) -> Void
 
-    @Environment(\.dismiss)
-    private var dismiss
+    @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var symbol: TrailPlaceSymbol?
     @State private var note = ""

@@ -58,10 +58,8 @@ struct CommunityPhotoShareSheet: View {
     /// pictures this device actually holds.
     var store: HikePhotoStore = .shared
 
-    @Environment(\.dismiss)
-    private var dismiss
-    @AppStorage(SettingsKey.communityAuthorName)
-    private var authorName = ""
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage(SettingsKey.communityAuthorName) private var authorName = ""
     @State private var phase: CommunitySendPhase = .editing
     /// The photographs struck off the strip, by id.
     ///

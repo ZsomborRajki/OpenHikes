@@ -17,10 +17,8 @@ struct OpenHikesView: View {
     /// line taps can be claimed from `OpenHikesView+MapTaps.swift` —
     /// `private` is file-scoped in Swift, and this file is at its length
     /// limit.
-    @Environment(OpenHikesModel.self)
-    var appModel
-    @Environment(\.modelContext)
-    var modelContext
+    @Environment(OpenHikesModel.self) var appModel
+    @Environment(\.modelContext) var modelContext
 
     @State private var showSheet = true
     @State private var highlight = RouteHighlight()
@@ -124,14 +122,12 @@ struct OpenHikesView: View {
     private var usesSidePanel: Bool { sheet.layout == .sidePanel }
 
     /// The selected tile provider, persisted by the settings sheet.
-    @AppStorage(SettingsKey.tileProviderID)
-    private var tileProviderID = TileProvider.default.id
+    @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
 
     /// Opt-in second copy of every photo in the system photo library. Off by
     /// default, and the only reason the app ever asks for photo-library
     /// access — see ``PhotoLibraryWriter``.
-    @AppStorage(SettingsKey.savePhotosToLibrary)
-    var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
+    @AppStorage(SettingsKey.savePhotosToLibrary) var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
 
     /// The route drawn on the map — always the currently selected hike, if any.
     /// Geometry only: its appearance reaches the map through ``routeStyle``,

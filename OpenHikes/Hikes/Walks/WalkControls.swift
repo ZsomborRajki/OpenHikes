@@ -135,8 +135,7 @@ private struct WalkPhaseRow: View {
     let phase: TrailWalkPhase
     let tint: Color
 
-    @Environment(\.scenePhase)
-    private var scenePhase
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         HStack(spacing: 10) {

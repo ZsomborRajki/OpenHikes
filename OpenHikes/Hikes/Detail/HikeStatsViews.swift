@@ -73,8 +73,7 @@ nonisolated enum StatCardMetrics {
 /// AX3 and above, and a number that has to shrink to fit is a number the
 /// reader asked to be bigger.
 struct StatStrip<Content: View>: View {
-    @Environment(\.dynamicTypeSize)
-    private var dynamicTypeSize
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @ViewBuilder let content: Content
 
@@ -110,8 +109,7 @@ struct StatStrip<Content: View>: View {
 /// which is what lets the recording screen's clock tick through it — see
 /// ``PhaseClock`` for the freeze a stored reference causes.
 struct StatFigure: View {
-    @Environment(\.dynamicTypeSize)
-    private var dynamicTypeSize
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let label: String
     let value: String
@@ -162,8 +160,7 @@ struct StatList<Content: View>: View {
 /// At an accessibility text size the value goes under the label instead,
 /// for the reason ``StatStrip`` becomes a column.
 struct StatRow: View {
-    @Environment(\.dynamicTypeSize)
-    private var dynamicTypeSize
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let label: String
     let value: String

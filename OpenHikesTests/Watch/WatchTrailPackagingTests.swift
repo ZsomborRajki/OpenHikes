@@ -153,16 +153,11 @@ struct WatchTrailPackagingTests {
             )
         }
 
-        @MainActor
-        static var longInput: HikeRouteInput { input(route: longRoute) }
-        @MainActor
-        static var shortInput: HikeRouteInput { input(route: shortRoute) }
-        @MainActor
-        static var sawtoothInput: HikeRouteInput { input(route: sawtoothRoute) }
-        @MainActor
-        static var flatlessInput: HikeRouteInput { input(route: flatlessRoute) }
-        @MainActor
-        static var singlePointInput: HikeRouteInput {
+        @MainActor static var longInput: HikeRouteInput { input(route: longRoute) }
+        @MainActor static var shortInput: HikeRouteInput { input(route: shortRoute) }
+        @MainActor static var sawtoothInput: HikeRouteInput { input(route: sawtoothRoute) }
+        @MainActor static var flatlessInput: HikeRouteInput { input(route: flatlessRoute) }
+        @MainActor static var singlePointInput: HikeRouteInput {
             input(route: [RouteCoordinate(latitude: baseLatitude, longitude: longitude)])
         }
 

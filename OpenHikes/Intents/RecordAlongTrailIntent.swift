@@ -64,16 +64,14 @@ struct RecordAlongTrailIntent: AppIntent, HikeCoordinatingIntent {
     /// background.
     static let supportedModes: IntentModes = [.background, .foreground(.dynamic)]
 
-    @Parameter(title: "Trail")
-    var hike: HikeEntity
+    @Parameter(title: "Trail") var hike: HikeEntity
 
     @Dependency var appCoordinator: HikeIntentCoordinator
 
     @Dependency var openRequests: HikeOpenRequests
 
     /// Resolved the way the coordinator is — see ``HikeIntentContext``.
-    @MainActor
-    private var requests: HikeOpenRequests {
+    @MainActor private var requests: HikeOpenRequests {
         HikeIntentContext.openRequestsOverride ?? openRequests
     }
 

@@ -71,8 +71,7 @@ struct WatchGlanceWidget: Widget {
 }
 
 struct WatchGlanceView: View {
-    @Environment(\.widgetFamily)
-    private var family
+    @Environment(\.widgetFamily) private var family
 
     /// How far a distance may shrink to fit the circular face before it is
     /// cut instead.

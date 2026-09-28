@@ -101,8 +101,7 @@ struct HikeDurationIntent: AppIntent, HikeCoordinatingIntent {
     )
     static let supportedModes: IntentModes = .background
 
-    @Parameter(title: "Hike")
-    var hike: HikeEntity
+    @Parameter(title: "Hike") var hike: HikeEntity
 
     @Dependency var appCoordinator: HikeIntentCoordinator
 

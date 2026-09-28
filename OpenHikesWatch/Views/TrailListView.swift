@@ -14,8 +14,7 @@ import OpenHikesShared
 import SwiftUI
 
 struct TrailListView: View {
-    @Environment(WatchModel.self)
-    private var model
+    @Environment(WatchModel.self) private var model
 
     var body: some View {
         List {
