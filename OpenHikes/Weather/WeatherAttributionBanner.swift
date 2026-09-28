@@ -26,8 +26,7 @@ struct WeatherAttributionBanner: View {
     /// in rather than asked for again, since the sheet already holds it.
     let marks: WeatherAttributionMarks?
 
-    @Environment(\.colorScheme)
-    private var colorScheme
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Section {

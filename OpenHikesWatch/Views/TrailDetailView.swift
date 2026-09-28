@@ -41,8 +41,7 @@ struct TrailDetailView: View {
 private struct FollowFigures: View {
     let trail: WatchTrailPackage
 
-    @Environment(WatchModel.self)
-    private var model
+    @Environment(WatchModel.self) private var model
 
     var body: some View {
         VStack(spacing: 6) {
@@ -117,8 +116,7 @@ private struct FollowFigures: View {
 /// when they decide to: they have opened the trail, they are at the trailhead,
 /// and the walk they are about to record is this one.
 private struct RecordAlongTrailButton: View {
-    @Environment(WatchModel.self)
-    private var model
+    @Environment(WatchModel.self) private var model
 
     var body: some View {
         switch model.recorder.phase {

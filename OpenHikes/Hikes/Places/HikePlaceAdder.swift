@@ -45,10 +45,8 @@ struct HikePlaceAdder: View {
     let onAdded: (UUID) -> Void
     let onCancel: () -> Void
 
-    @Environment(\.modelContext)
-    private var modelContext
-    @AppStorage(SettingsKey.savePhotosToLibrary)
-    private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
+    @Environment(\.modelContext) private var modelContext
+    @AppStorage(SettingsKey.savePhotosToLibrary) private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
     @State private var draft = HikePlaceDraft()
     @State private var photos: [HikePlaceStagedPhoto] = []
     @State private var capture = PhotoCaptureState()

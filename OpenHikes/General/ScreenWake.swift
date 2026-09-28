@@ -149,10 +149,8 @@ private struct KeepScreenAwake: ViewModifier {
     let coordinator: ScreenWakeCoordinator
     let isLive: () -> Bool
 
-    @AppStorage(SettingsKey.keepScreenAwake)
-    private var enabled = SettingsDefault.keepScreenAwake
-    @Environment(\.scenePhase)
-    private var scenePhase
+    @AppStorage(SettingsKey.keepScreenAwake) private var enabled = SettingsDefault.keepScreenAwake
+    @Environment(\.scenePhase) private var scenePhase
     /// Identity for this screen's claim, stable for as long as the view is.
     @State private var claim = UUID()
 

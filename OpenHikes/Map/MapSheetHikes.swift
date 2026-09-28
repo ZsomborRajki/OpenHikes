@@ -38,12 +38,10 @@ struct MapSheetHikes: View, Equatable {
     /// long enough to have pushed this one past its length limit. See
     /// `MapSheetCommunitySection.swift`, which needs it for one thing: which
     /// published hikes are already in the library.
-    @Query(sort: \Hike.date, order: .reverse)
-    var hikes: [Hike]
+    @Query(sort: \Hike.date, order: .reverse) var hikes: [Hike]
     /// Only ever used to reach the container a background sweep opens its own
     /// context on — see ``HikeListMetrics``. Nothing here writes through it.
-    @Environment(\.modelContext)
-    private var modelContext
+    @Environment(\.modelContext) private var modelContext
     /// Keeps the matching-hike ranking across body passes — see ``HikeSearch``.
     @State private var hikeSearch = HikeSearch()
     /// The hike a swipe has asked to delete, while the dialog is up.
@@ -71,8 +69,7 @@ struct MapSheetHikes: View, Equatable {
     /// Which order the list is in, unless the hiker has dragged a row — see
     /// ``HikeListOrder``. A preference about this screen rather than a fact
     /// about the library, so it lives in settings and not on a hike.
-    @AppStorage(SettingsKey.hikeListSort)
-    private var sortID: String = HikeListSort.newest.rawValue
+    @AppStorage(SettingsKey.hikeListSort) private var sortID: String = HikeListSort.newest.rawValue
 
     let searchText: String
     let isSearchFocused: Bool

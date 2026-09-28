@@ -96,8 +96,7 @@ private struct HikePlaceAroundCardContent: View {
     let onOpenPhoto: (HikePhoto) -> Void
     let onClose: () -> Void
 
-    @AppStorage(SettingsKey.savePhotosToLibrary)
-    private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
+    @AppStorage(SettingsKey.savePhotosToLibrary) private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
     @State private var capture = PhotoCaptureState()
     /// How many photographs are being filed, so the strip can say so.
     @State private var filing = 0

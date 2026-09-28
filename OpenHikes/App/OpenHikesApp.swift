@@ -12,8 +12,7 @@ import SwiftUI
 
 @main
 struct OpenHikesApp: App {
-    @Environment(\.scenePhase)
-    private var scenePhase
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var model: OpenHikesModel
 

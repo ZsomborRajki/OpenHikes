@@ -50,8 +50,7 @@ import OpenHikesShared
 import SwiftUI
 
 struct WatchRecordingView: View {
-    @Environment(WatchModel.self)
-    private var model
+    @Environment(WatchModel.self) private var model
 
     var body: some View {
         ScrollView {
@@ -243,8 +242,7 @@ struct WatchRecordingView: View {
 private struct UnsavedWalkPanel: View {
     let walk: WatchRecordedWalk
 
-    @Environment(WatchModel.self)
-    private var model
+    @Environment(WatchModel.self) private var model
     @State private var isConfirmingDiscard = false
 
     var body: some View {
@@ -274,8 +272,7 @@ private struct UnsavedWalkPanel: View {
 
 /// The live figures, and the only view that reads them.
 private struct RecordingFigures: View {
-    @Environment(WatchModel.self)
-    private var model
+    @Environment(WatchModel.self) private var model
 
     var body: some View {
         let stats = model.recorder.stats
@@ -325,8 +322,7 @@ private struct RecordingFigures: View {
 private struct PhoneRecordingPanel: View {
     let recording: WatchPhoneRecording
 
-    @Environment(WatchModel.self)
-    private var model
+    @Environment(WatchModel.self) private var model
 
     var body: some View {
         VStack(spacing: 6) {

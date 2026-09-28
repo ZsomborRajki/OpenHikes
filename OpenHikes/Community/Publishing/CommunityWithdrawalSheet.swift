@@ -38,8 +38,7 @@ struct CommunityWithdrawalSheet: View {
     /// way ``CommunityReportSheet``'s is, and for the same reason.
     let withdrawal: CommunityWithdrawal
 
-    @Environment(\.openURL)
-    private var openURL
+    @Environment(\.openURL) private var openURL
     @State private var note = ""
     @State private var phase: CommunityMailPhase = .editing
 

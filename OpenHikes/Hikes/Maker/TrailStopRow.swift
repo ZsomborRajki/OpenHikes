@@ -109,8 +109,7 @@ struct TrailStopRowView: View {
     /// points either side every row in the card has.
     static let rowInsets = EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
 
-    @Environment(\.dynamicTypeSize)
-    private var dynamicTypeSize
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         let slots = draft.slots

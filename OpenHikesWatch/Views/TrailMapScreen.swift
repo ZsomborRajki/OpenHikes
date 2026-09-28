@@ -128,8 +128,7 @@ struct TrailMapScreen: View {
     let hikeID: UUID
     let name: String
 
-    @Environment(WatchModel.self)
-    private var model
+    @Environment(WatchModel.self) private var model
 
     // periphery:ignore - read through its projected value, which the index
     // does not record as a use: `$isShowingFigures` is handed to `TrailMapFull`

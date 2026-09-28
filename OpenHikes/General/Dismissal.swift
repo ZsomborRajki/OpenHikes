@@ -50,8 +50,7 @@ import SwiftUI
 struct DismissButton: View {
     private let role: ButtonRole
 
-    @Environment(\.dismiss)
-    private var dismiss
+    @Environment(\.dismiss) private var dismiss
 
     init(role: ButtonRole = .close) {
         self.role = role
@@ -70,8 +69,7 @@ struct DismissButton: View {
 private struct DismissWhen: ViewModifier {
     let condition: Bool
 
-    @Environment(\.dismiss)
-    private var dismiss
+    @Environment(\.dismiss) private var dismiss
 
     func body(content: Content) -> some View {
         content.onChange(of: condition) { _, met in

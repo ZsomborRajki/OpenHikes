@@ -91,17 +91,13 @@ public struct HikeEntity: AppEntity {
 
     public let id: UUID
     /// The name the hiker has actually seen — see this file's header.
-    @Property(title: "Name")
-    public var name: String
-    @Property(title: "Date")
-    public var date: Date
-    @Property(title: "Distance")
-    public var distance: Measurement<UnitLength>
+    @Property(title: "Name") public var name: String
+    @Property(title: "Date") public var date: Date
+    @Property(title: "Distance") public var distance: Measurement<UnitLength>
     /// `nil` for a hike whose route carries no usable timestamps, which is
     /// most imported GPX. Optional because the fact is, rather than for
     /// anybody's convenience.
-    @Property(title: "Duration")
-    public var duration: TimeInterval?
+    @Property(title: "Duration") public var duration: TimeInterval?
 
     public var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(

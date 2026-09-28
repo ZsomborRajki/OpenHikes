@@ -34,8 +34,7 @@ public struct TrailMapView: View {
     private let lineWidth: CGFloat
     private let imageData: (String) -> Data?
 
-    @Environment(\.colorScheme)
-    private var colorScheme
+    @Environment(\.colorScheme) private var colorScheme
 
     /// - Parameter imageData: where the rendered bytes come from. Defaults to
     ///   the App Group, which is the only place they live in the shipping

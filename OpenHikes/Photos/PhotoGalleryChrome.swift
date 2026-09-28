@@ -77,8 +77,7 @@ struct ShowPhotoSpotButton: View {
     /// before it goes.
     let thenSelecting: () -> Void
 
-    @Environment(\.dismiss)
-    private var dismiss
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         Button {

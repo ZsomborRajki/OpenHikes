@@ -22,8 +22,7 @@ import UIKit
 #endif
 
 struct SettingsView: View {
-    @Environment(\.modelContext)
-    private var modelContext
+    @Environment(\.modelContext) private var modelContext
 
     /// Fetched on demand rather than held in a `@Query`.
     ///
@@ -67,18 +66,14 @@ struct SettingsView: View {
     let cloudSync: CloudSyncCoordinator
     let entitlement: MapEntitlementStore
 
-    @AppStorage(SettingsKey.tileProviderID)
-    private var tileProviderID = TileProvider.default.id
-    @AppStorage(SettingsKey.liveActivitiesEnabled)
-    private var liveActivitiesEnabled = SettingsDefault.liveActivitiesEnabled
-    @AppStorage(SettingsKey.savePhotosToLibrary)
-    private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
-    @AppStorage(SettingsKey.movementRemindersEnabled)
-    private var movementRemindersEnabled = SettingsDefault.movementRemindersEnabled
-    @AppStorage(SettingsKey.keepScreenAwake)
-    private var keepScreenAwake = SettingsDefault.keepScreenAwake
-    @AppStorage(SettingsKey.savesHikesToHealth)
-    private var savesHikesToHealth = SettingsDefault.savesHikesToHealth
+    @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
+    @AppStorage(SettingsKey.liveActivitiesEnabled) private var liveActivitiesEnabled =
+        SettingsDefault.liveActivitiesEnabled
+    @AppStorage(SettingsKey.savePhotosToLibrary) private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
+    @AppStorage(SettingsKey.movementRemindersEnabled) private var movementRemindersEnabled =
+        SettingsDefault.movementRemindersEnabled
+    @AppStorage(SettingsKey.keepScreenAwake) private var keepScreenAwake = SettingsDefault.keepScreenAwake
+    @AppStorage(SettingsKey.savesHikesToHealth) private var savesHikesToHealth = SettingsDefault.savesHikesToHealth
 
     private static let disabledOpacity: Double = 0.55
     private static let badgeHorizontalPadding: CGFloat = 7

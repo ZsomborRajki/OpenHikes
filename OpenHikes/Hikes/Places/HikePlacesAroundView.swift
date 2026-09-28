@@ -41,8 +41,7 @@ struct HikePlacesAroundView: View {
     /// Opens *Add Place* at a spot the hiker pressed on the map.
     var onAddPlace: (HikePlaceSpot) -> Void = { _ in /* no-op default */ }
 
-    @Environment(\.modelContext)
-    private var modelContext
+    @Environment(\.modelContext) private var modelContext
     @State private var search = HikePlacesAroundSearch()
     @State private var token: Int?
     /// Set when an add was refused. The screen stays as it was under it, so

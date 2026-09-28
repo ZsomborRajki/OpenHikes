@@ -55,8 +55,7 @@ struct CommunityReportSheet: View {
     /// the hike rather than the hike itself. `nil` is the ordinary report.
     var contribution: CommunityPhotoAttribution?
 
-    @Environment(\.openURL)
-    private var openURL
+    @Environment(\.openURL) private var openURL
     @State private var reason: CommunityReportReason = .objectionable
     @State private var note = ""
     @State private var phase: CommunityMailPhase = .editing

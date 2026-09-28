@@ -25,8 +25,7 @@ struct LibraryTotalsView: View {
     /// Opens one of the records, the way a row of the library does.
     var onOpenHike: (Hike) -> Void = { _ in /* no-op default */ }
 
-    @Environment(\.modelContext)
-    private var modelContext
+    @Environment(\.modelContext) private var modelContext
     @State private var totals: LibraryTotals?
     @State private var couldNotRead = false
     /// Bumped by *Try Again*, which re-runs the sum.

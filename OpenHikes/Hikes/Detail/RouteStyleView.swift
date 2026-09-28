@@ -162,8 +162,7 @@ private struct RouteDifficultySwitch: View {
     /// turning it on would do, but plainly not what the map is showing.
     private static let offKeyOpacity = 0.4
 
-    @Environment(OpenHikesModel.self)
-    private var appModel
+    @Environment(OpenHikesModel.self) private var appModel
 
     var body: some View {
         let shading = appModel.routeDifficulty

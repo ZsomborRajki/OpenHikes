@@ -42,8 +42,7 @@ struct SheetLayoutReader: View {
     /// for yet — see the `canImport` note in the repository instructions.
     private var layout: SheetLayout { .bottomSheet }
     #else
-    @Environment(\.verticalSizeClass)
-    private var verticalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     private var layout: SheetLayout {
         verticalSizeClass == .compact ? .sidePanel : .bottomSheet

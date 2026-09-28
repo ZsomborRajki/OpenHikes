@@ -51,8 +51,7 @@ struct OpenHikeIntent: AppIntent {
     /// everything to show.
     static let openAppWhenRun = true
 
-    @Parameter(title: "Hike")
-    var hike: HikeEntity
+    @Parameter(title: "Hike") var hike: HikeEntity
 
     @Dependency var openRequests: HikeOpenRequests
 
@@ -60,8 +59,7 @@ struct OpenHikeIntent: AppIntent {
     /// and for the same reason: a suite has no registered dependency at all,
     /// and asking for one that was never registered traps rather than
     /// returning `nil`. See ``HikeIntentContext``.
-    @MainActor
-    private var requests: HikeOpenRequests {
+    @MainActor private var requests: HikeOpenRequests {
         HikeIntentContext.openRequestsOverride ?? openRequests
     }
 
