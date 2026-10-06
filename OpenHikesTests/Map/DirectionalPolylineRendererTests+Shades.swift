@@ -202,6 +202,29 @@ extension DirectionalPolylineRendererTests {
         )
     }
 
+    /// The same out-and-back at the line's alpha: the leg coming back is
+    /// laid over the one going out, and has to replace it rather than add
+    /// its alpha to it.
+    @Test("a translucent leg that doubles back is no more opaque than the line")
+    func translucentReturnLegKeepsTheLinesAlpha() throws {
+        let out = Self.meetingPoints(0, Self.meetingLength)
+        let back = Array(out.reversed())
+        let whole = out + back.dropFirst()
+        let going = MKPolyline(points: out, count: out.count)
+        let returning = MKPolyline(points: back, count: back.count)
+        let canvas = try Self.render(
+            MKPolyline(points: whole, count: whole.count),
+            shades: [
+                .init(polyline: going, color: CGColor(red: 1, green: 0, blue: 0, alpha: 0.5)),
+                .init(polyline: returning, color: CGColor(red: 0, green: 0, blue: 1, alpha: 0.5)),
+            ]
+        )
+
+        let middle = Self.pixel(in: canvas, x: canvas.context.width / 2, y: canvas.context.height / 2)
+        #expect(abs(Int(middle.alpha) - 128) <= 8, "the two legs' alphas were stacked")
+        #expect(middle.blue > middle.red, "the leg coming back should be the one on top")
+    }
+
     @Test("where two stretches meet the colour blends from one into the other")
     func meetingStretchesBlend() throws {
         let canvas = try Self.renderMeeting(alpha: 1)
