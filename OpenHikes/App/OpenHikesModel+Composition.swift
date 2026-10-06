@@ -189,10 +189,28 @@ extension OpenHikesModel {
         )
     }
 
+    /// The Pro entitlement. A UI test cannot buy anything, and a suite that
+    /// hosts the app must not reach the App Store at all — so both take a
+    /// stubbed answer and only a real launch starts StoreKit.
+    static func makeEntitlement(defaults: UserDefaults) -> MapEntitlementStore {
+        guard !AppLaunchEnvironment.isRunningTests else {
+            let stub = MapEntitlementStore(
+                defaults: entitlementDefaults(defaults),
+                currentEntitlements: { AppLaunchEnvironment.grantsPaidMaps }
+            )
+            Task { await stub.refresh() }
+            return stub
+        }
+        let store = MapEntitlementStore(defaults: defaults)
+        store.start()
+        return store
+    }
+
     static func makeTrailMaker(
         container: ModelContainer,
         graph trailGraphProvider: (any TrailGraphProviding)?,
-        defaults: UserDefaults
+        defaults: UserDefaults,
+        entitlement: MapEntitlementStore
     ) -> TrailDraftController {
         let directions = Self.makeDirectionsRouters()
         return TrailDraftController(
@@ -208,7 +226,10 @@ extension OpenHikesModel {
             // The model's own defaults, so a UI-testing launch keeps its
             // recents in the scratch domain rather than the developer's.
             recents: TrailStopRecents(defaults: defaults),
-            placeFilter: TrailPlaceFilter(defaults: defaults)
+            placeFilter: TrailPlaceFilter(defaults: defaults),
+            // The same answer the elevation source asks before it spends a
+            // call, read through the store so a purchase repaints the line.
+            elevationUnlocked: { entitlement.isEntitled }
         )
     }
 

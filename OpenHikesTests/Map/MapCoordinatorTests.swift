@@ -598,6 +598,9 @@ extension MapCoordinatorTests {
         #expect(!(renderer is DirectionalPolylineRenderer))
         #expect(renderer.lineWidth == 4)
         #expect(renderer.lineDashPattern == [10, 6])
+        // Outlined like a hike's line, so it reads against any basemap.
+        let bordered = try #require(renderer as? BorderedPolylineRenderer)
+        #expect(bordered.borderColor == MapView.Coordinator.defaultBorderColor)
     }
 
     // MARK: Fitting
