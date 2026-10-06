@@ -552,6 +552,10 @@ private extension MapSheet {
             placePins: placePins,
             placeSource: appModel.placeSource,
             onOpenPlace: { hike, placeID in openPlace(placeID, of: hike) },
+            onAddOwnPlace: { hike, coordinate in
+                presentation.makeRoomForTheMap()
+                presentation.path.append(.newPlace(hike, HikePlaceSpot(coordinate)))
+            },
             onFindPlacesNearby: { hike in presentation.path.append(.placesNearby(hike)) }
         )
     }

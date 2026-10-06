@@ -1195,6 +1195,9 @@
     "Move the map and tap Search This Area to look somewhere else." : {
 
     },
+    "Move the map to put the pin where the place is." : {
+
+    },
     "Move Up" : {
 
     },
@@ -1226,6 +1229,9 @@
 
     },
     "Nearby" : {
+
+    },
+    "New place" : {
 
     },
     "New Place" : {
@@ -1757,6 +1763,9 @@
 
     },
     "Publishing waits for the photos to load." : {
+
+    },
+    "Put it on the map where it is, then name it and add photos." : {
 
     },
     "Read the ground you walk on" : {
@@ -2424,9 +2433,6 @@
 
     },
     "You appear to be offline. Saved hikes and downloaded maps still work." : {
-
-    },
-    "You can add photos to it next." : {
 
     },
     "You don't have to give a reason. It's your hike." : {

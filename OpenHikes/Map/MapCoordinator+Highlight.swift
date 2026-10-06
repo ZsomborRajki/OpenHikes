@@ -21,6 +21,14 @@ import UIKit
 #endif
 
 extension MapView.Coordinator {
+    /// Rebuilds the highlight annotation so `viewFor` recreates its dot in the
+    /// new route tint. Cheap — there is at most one such annotation.
+    func refreshHighlightColor(on mapView: MKMapView) {
+        guard let annotation = highlightAnnotation else { return }
+        mapView.removeAnnotation(annotation)
+        mapView.addAnnotation(annotation)
+    }
+
     /// Adds/moves/removes the single highlight annotation. O(1).
     func applyHighlight(_ coordinate: CLLocationCoordinate2D?, on mapView: MKMapView) {
         guard let coordinate else {

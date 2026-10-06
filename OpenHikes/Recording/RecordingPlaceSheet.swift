@@ -8,12 +8,18 @@
 //  What OpenStreetMap has within reach is offered first — see
 //  ``NearbyPlaceSuggestions`` — because a hut marked from the map arrives with
 //  its name, its kind, its height and its link, and a hut typed in by hand
-//  arrives with whatever the hiker spelled. *Your own place* is always there
-//  under it, and never waits on the search.
+//  arrives with whatever the hiker spelled. Adding one closes the sheet and
+//  opens the place's own screen, where the camera files what it takes under
+//  the place — which is what makes *add a place and photograph it* one
+//  gesture rather than two trips through the gallery.
 //
-//  Adding closes the sheet and opens the place's own screen, where the camera
-//  files what it takes under the place — which is what makes *add a place and
-//  photograph it* one gesture rather than two trips through the gallery.
+//  *Your own place* is always there under it, and never waits on the search.
+//  It closes the sheet and opens the form a hike's own screen adds places
+//  with — see ``HikePlaceAdder`` — at the spot the hiker is standing on, with
+//  the map uncovered and its pin in the middle of it: the place a hiker marks
+//  on a walk is often the one they have just walked past, and the map is the
+//  one thing that can put it back. The form names it, takes its photographs
+//  and puts it on the walk; this sheet asks nothing about it.
 //
 
 import CoreLocation
@@ -32,15 +38,15 @@ struct RecordingPlaceSheet: View {
     var source: (any TrailPointSourcing)?
     /// Called with the new place's id once it is on the hike.
     let onAdded: (UUID) -> Void
+    /// Called with ``coordinate`` once the sheet is going, to open the form
+    /// that places one of the hiker's own there.
+    let onAddOwn: (CLLocationCoordinate2D) -> Void
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @State private var finder = NearbyPlaceFinder()
-    @State private var name = ""
-    @State private var symbol: TrailPlaceSymbol?
-    @State private var note = ""
-    /// Set when adding's save was refused. The sheet stays up under it, with
-    /// what was typed, so adding again is the retry.
+    /// Set when adding a mapped place was refused. The sheet stays up under
+    /// it, so adding again is the retry.
     @State private var refusal: HikePlaceRefusal?
 
     var body: some View {
@@ -102,24 +108,15 @@ struct RecordingPlaceSheet: View {
 
     private var ownSection: some View {
         Section {
-            TextField("Name", text: $name, prompt: Text(TrailPlace.unnamedName(for: symbol)))
-                .accessibilityIdentifier("recording-place-name")
-            TrailPlaceKindPicker(selection: $symbol)
-            TextField("Note", text: $note, axis: .vertical)
-                .lineLimit(1...4)
             Button("Add Your Own Place", systemImage: "mappin.and.ellipse") {
-                add(TrailPlace(
-                    coordinate: coordinate,
-                    name: BoundedText.boundedOrEmpty(name, to: .title),
-                    symbol: symbol,
-                    note: BoundedText.boundedOrEmpty(note, to: .notes)
-                ))
+                dismiss()
+                onAddOwn(coordinate)
             }
             .accessibilityIdentifier("recording-place-add-own")
         } header: {
             Text("Your Own Place")
         } footer: {
-            Text("You can add photos to it next.")
+            Text("Put it on the map where it is, then name it and add photos.")
         }
     }
 
@@ -160,6 +157,8 @@ extension View {
     /// - Parameters:
     ///   - onAdded: Called with the walk and the new place once it is on the
     ///     walk — the recording screen opens it.
+    ///   - onAddOwn: Called with the walk and where the hiker stood, to open
+    ///     the form that places one of their own — see ``HikePlaceAdder``.
     ///   - onFindNearby: Opens *Places Nearby* for the walk — see
     ///     ``HikePlacesNearbyView`` — or `nil` for a launch that must not ask
     ///     OpenStreetMap, which offers no button.
@@ -167,9 +166,16 @@ extension View {
         recorder: HikeRecorder,
         source: (any TrailPointSourcing)?,
         onAdded: @escaping (Hike, UUID) -> Void,
+        onAddOwn: @escaping (Hike, CLLocationCoordinate2D) -> Void,
         onFindNearby: ((Hike) -> Void)? = nil
     ) -> some View {
-        modifier(RecordingAddPlace(recorder: recorder, source: source, onAdded: onAdded, onFindNearby: onFindNearby))
+        modifier(RecordingAddPlace(
+            recorder: recorder,
+            source: source,
+            onAdded: onAdded,
+            onAddOwn: onAddOwn,
+            onFindNearby: onFindNearby
+        ))
     }
 }
 
@@ -186,6 +192,7 @@ private struct RecordingAddPlace: ViewModifier {
     let recorder: HikeRecorder
     let source: (any TrailPointSourcing)?
     let onAdded: (Hike, UUID) -> Void
+    let onAddOwn: (Hike, CLLocationCoordinate2D) -> Void
     let onFindNearby: ((Hike) -> Void)?
 
     @State private var spot: Spot?
@@ -208,9 +215,13 @@ private struct RecordingAddPlace: ViewModifier {
                 }
             }
             .sheet(item: $spot) { spot in
-                RecordingPlaceSheet(hike: spot.hike, coordinate: spot.coordinate, source: source) { placeID in
-                    onAdded(spot.hike, placeID)
-                }
+                RecordingPlaceSheet(
+                    hike: spot.hike,
+                    coordinate: spot.coordinate,
+                    source: source,
+                    onAdded: { placeID in onAdded(spot.hike, placeID) },
+                    onAddOwn: { coordinate in onAddOwn(spot.hike, coordinate) }
+                )
             }
             .alert("No Location Yet", isPresented: $isMissingLocation) {
                 Button("OK", role: .cancel) { /* no-op */ }

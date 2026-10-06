@@ -14,6 +14,7 @@
 //  without touching the claim underneath, and is remembered.
 //
 
+import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
@@ -186,5 +187,25 @@ struct TrailPlacePinControllerTests {
         controller.setShowsPins(false)
         #expect(controller.rows == [placeholder])
         #expect(controller.placeholderID == placeholder.id)
+    }
+
+    /// The map writes where it has the placeholder, and the form reads it
+    /// back at *Add* — see `MapPlacePlacement.swift`.
+    @Test("a move of the map belongs to the placeholder it was made for")
+    func placeholderMoveBelongsToItsForm() {
+        let controller = TrailPlacePinController()
+        let spot = HikePlaceSpot(CLLocationCoordinate2D(latitude: 47.63, longitude: 12.99))
+        let moved = CLLocationCoordinate2D(latitude: 47.631, longitude: 12.991)
+
+        controller.movePlaceholder(to: moved)
+        #expect(controller.placeholderMove == nil, "no form, nothing to move")
+
+        controller.attach([Self.spring], placeholder: HikePlaceDraft().placeholder(at: spot))
+        #expect(controller.placement(of: spot) == spot, "unmoved, it is where the form opened it")
+
+        controller.movePlaceholder(to: moved)
+        #expect(controller.placement(of: spot) == HikePlaceSpot(moved, id: spot.id))
+        let another = HikePlaceSpot(spot.coordinate)
+        #expect(controller.placement(of: another) == another, "and it is not another form's")
     }
 }

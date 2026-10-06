@@ -248,6 +248,9 @@ extension MapView {
         var hikePlaceAnnotations: [TrailPlaceAnnotation] = []
         var isObservingHikePlaces = false
         weak var hikePlaceController: TrailPlacePinController?
+        /// The pin a place about to be added stands under while the map moves
+        /// — see `MapPlacePlacement.swift`.
+        var placePlacement = PlacePlacementState()
         /// *Places Around Trail*'s half of the map: its pale pins and its
         /// pill. See `TrailPlacesAround.swift`.
         var placesAroundMap = PlacesAroundMapState()
@@ -499,14 +502,6 @@ extension MapView {
                 longitudinalMeters: Self.initialCenterMeters
             )
             mapView.setRegion(region, animated: true)
-        }
-
-        /// Rebuilds the highlight annotation so `viewFor` recreates its dot in the
-        /// new route tint. Cheap — there is at most one such annotation.
-        func refreshHighlightColor(on mapView: MKMapView) {
-            guard let annotation = highlightAnnotation else { return }
-            mapView.removeAnnotation(annotation)
-            mapView.addAnnotation(annotation)
         }
 
         /// Observes the drawn route's tint, width and line pattern and restyles
@@ -868,6 +863,9 @@ extension MapView.Coordinator {
     #endif
 
     func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+        // A place being added goes wherever the map came to rest under its
+        // pin — see `MapPlacePlacement.swift`.
+        placePlacementRegionDidSettle(on: mapView)
         // Zooming changes the on-screen distance between two fixed coordinates,
         // so the overlap fade needs to be re-checked, not just on move/relocate.
         updateHighlightOpacity(on: mapView)

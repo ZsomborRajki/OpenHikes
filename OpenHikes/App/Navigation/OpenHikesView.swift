@@ -911,13 +911,14 @@ private extension OpenHikesView {
     /// live match while auto-follow has one, otherwise wherever the elevation
     /// graph's tracker is — see
     /// ``PhotoTrailAnchor/placeCoordinate(profile:live:scrubbed:)``. The
-    /// sheet goes to its middle detent before the camera moves, because
-    /// that is the height the move frames its target above — see
-    /// ``SheetPresentation/restAtMiddleWhenFullHeightScreenPops()``.
+    /// sheet goes to its middle detent, because that is the height the map
+    /// frames the pin above — see
+    /// ``SheetPresentation/restAtMiddleWhenFullHeightScreenPops()``. The map
+    /// moves itself onto the spot when the form's pin appears — see
+    /// `MapPlacePlacement.swift`.
     func openPlaceAdder() {
         guard let spot = photoCapture.placeSpot() else { return }
         sheet.makeRoomForTheMap()
-        mapController.showPhotoSpot(spot.coordinate)
         // The path last — see ``SheetPresentation/path``.
         sheet.path.append(.newPlace(spot.hike, HikePlaceSpot(spot.coordinate)))
     }

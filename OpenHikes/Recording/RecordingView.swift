@@ -3,6 +3,7 @@
 //  OpenHikes
 //
 
+import CoreLocation
 import Foundation
 import OpenHikesData
 import SwiftUI
@@ -32,6 +33,9 @@ struct RecordingView: View {
     var placeSource: (any TrailPointSourcing)?
     /// Pushes one of the walk's places, where its photographs are taken.
     var onOpenPlace: (Hike, UUID) -> Void = { _, _ in /* no-op default */ }
+    /// Pushes *Add Place* for a place of the hiker's own at where they stood —
+    /// see ``HikePlaceAdder``.
+    var onAddOwnPlace: (Hike, CLLocationCoordinate2D) -> Void = { _, _ in /* no-op default */ }
     /// Pushes *Places Nearby* for the walk — see ``HikePlacesNearbyView``.
     var onFindPlacesNearby: (Hike) -> Void = { _ in /* no-op default */ }
 
@@ -103,6 +107,7 @@ struct RecordingView: View {
             recorder: recorder,
             source: placeSource,
             onAdded: onOpenPlace,
+            onAddOwn: onAddOwnPlace,
             onFindNearby: placePins?.around.finder.isAvailable == true ? onFindPlacesNearby : nil
         )
         .onAppear {

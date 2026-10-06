@@ -54,8 +54,9 @@ final class TrailPlacePinController {
     /// What one screen's claim says: its places, kept apart from ``rows`` so a
     /// screen being navigated away from can have its pins taken off the map
     /// and put back without re-deriving them; a place not on the hike yet —
-    /// the one ``HikePlaceAdder`` is about to add — drawn where it would
-    /// stand, and kept apart because the show-places switch does not hide it;
+    /// the one ``HikePlaceAdder`` is about to add — whose pin the map stands
+    /// in its middle, and kept apart because the show-places switch does not
+    /// hide it;
     /// and what a tap on one of the pins does — see ``open(_:)``.
     private struct Claim {
         var rows: [TrailPlaceRow]
@@ -65,9 +66,18 @@ final class TrailPlacePinController {
 
     /// Every screen's claim, the deepest in force — see ``ScreenClaims``.
     @ObservationIgnored private var claims = ScreenClaims<Claim>()
-    /// Which of ``rows`` is the placeholder, so the map can mark its pin as
-    /// one. Written before ``rows``, whose change is what the map observes.
-    @ObservationIgnored private(set) var placeholderID: UUID?
+    /// Which of ``rows`` is the placeholder, so the map can stand its pin in
+    /// the middle of the map rather than among the others. Written before
+    /// ``rows``, and observed beside them: *Add* can turn the placeholder into
+    /// the hike's own row without the rows changing at all — an unnamed place
+    /// off the line reads the same either way — and the pin still has to go.
+    private(set) var placeholderID: UUID?
+    /// Where the hiker has moved the placeholder to, by moving the map under
+    /// its pin — see `MapPlacePlacement.swift`. Observed, so the form's
+    /// coordinates follow the map; the map itself writes it and never reads
+    /// it back through observation. Keyed by the placeholder's id, so a move
+    /// made for one form is never read as another's.
+    private(set) var placeholderMove: HikePlaceSpot?
     /// See ``setHostScreenPresent(_:)``.
     @ObservationIgnored private var hasHostScreen = true
     /// Whether the hiker wants saved hikes' places on the map at all.
@@ -147,6 +157,24 @@ final class TrailPlacePinController {
         publish()
     }
 
+    /// Records that the map has the placeholder at `coordinate` now. Does
+    /// nothing while there is no placeholder, and nothing for a coordinate it
+    /// already holds — `CLLocationCoordinate2D` is not `Equatable`, so
+    /// Observation would otherwise wake the form on every settle of the map.
+    func movePlaceholder(to coordinate: CLLocationCoordinate2D) {
+        guard let placeholderID else { return }
+        let moved = HikePlaceSpot(coordinate, id: placeholderID)
+        guard moved != placeholderMove else { return }
+        placeholderMove = moved
+    }
+
+    /// Where the place about to be added at `spot` stands now: where the hiker
+    /// moved it to, or the spot itself while they have not.
+    func placement(of spot: HikePlaceSpot) -> HikePlaceSpot {
+        guard let placeholderMove, placeholderMove.id == spot.id else { return spot }
+        return placeholderMove
+    }
+
     /// Puts every saved hike's places on the map, or takes them off. Hiding
     /// removes pins, not places.
     func setShowsPins(_ shows: Bool) {
@@ -160,7 +188,7 @@ final class TrailPlacePinController {
         let claimed = claims.active?.payload.rows ?? []
         let placeholder = claims.active?.payload.placeholder
         guard hasHostScreen else {
-            placeholderID = nil
+            if placeholderID != nil { placeholderID = nil }
             if !rows.isEmpty { rows = [] }
             return
         }
@@ -171,7 +199,7 @@ final class TrailPlacePinController {
         // two pins on one spot with one id between them.
         let pending = placeholder.flatMap { row in visible.contains { $0.id == row.id } ? nil : row }
         if let pending { visible.append(pending) }
-        placeholderID = pending?.id
+        if placeholderID != pending?.id { placeholderID = pending?.id }
         guard visible != rows else { return }
         rows = visible
     }
@@ -186,8 +214,8 @@ extension View {
     ///     with no map passes.
     ///   - rows: The hike's places in along-route order — see
     ///     ``Hike/orderedPlaces``.
-    ///   - placeholder: A place not on the hike yet, drawn where it would
-    ///     stand whether or not the hike's places are shown. See
+    ///   - placeholder: A place not on the hike yet, whose pin stands in the
+    ///     middle of the map whether or not the hike's places are shown. See
     ///     ``HikePlaceAdder``.
     ///   - onOpen: What a tap on one of the pins does.
     func trailPlacePins(
@@ -287,15 +315,20 @@ extension MapView.Coordinator {
 
     private func trackHikePlaces(_ controller: TrailPlacePinController, on mapView: MKMapView) {
         hikePlaceController = controller
+        // The placeholder is not a pin among the others: it stands still in
+        // the middle of the map while the map moves under it — see
+        // `MapPlacePlacement.swift`.
+        let placeholderID = controller.placeholderID
         applyPlaceAnnotations(
-            controller.rows,
+            controller.rows.filter { $0.id != placeholderID },
             belongsToDraft: false,
-            placeholderID: controller.placeholderID,
             to: \.hikePlaceAnnotations,
             on: mapView
         )
+        applyPlacePlacement(controller, on: mapView)
         reobserving(self, mapView, controller) {
             _ = controller.rows
+            _ = controller.placeholderID
         } onChange: { coordinator, map, model in
             coordinator.trackHikePlaces(model, on: map)
         }
@@ -309,7 +342,6 @@ extension MapView.Coordinator {
         applyPlaceAnnotations(
             rows,
             belongsToDraft: true,
-            placeholderID: nil,
             to: \.trailDraftPlaceAnnotations,
             on: mapView
         )
@@ -325,7 +357,6 @@ extension MapView.Coordinator {
     private func applyPlaceAnnotations(
         _ rows: [TrailPlaceRow],
         belongsToDraft: Bool,
-        placeholderID: UUID?,
         to storage: ReferenceWritableKeyPath<MapView.Coordinator, [TrailPlaceAnnotation]>,
         on mapView: MKMapView
     ) {
@@ -333,7 +364,6 @@ extension MapView.Coordinator {
         guard drawn.count != rows.count
             || !zip(drawn, rows).allSatisfy({ annotation, row in
                 annotation.matches(row, belongsToDraft: belongsToDraft)
-                    && annotation.isPlaceholder == (row.id == placeholderID)
             })
         else { return }
 
@@ -347,7 +377,7 @@ extension MapView.Coordinator {
         }
         guard !rows.isEmpty else { return }
         let annotations = rows.map { row in
-            TrailPlaceAnnotation(row: row, belongsToDraft: belongsToDraft, isPlaceholder: row.id == placeholderID)
+            TrailPlaceAnnotation(row: row, belongsToDraft: belongsToDraft)
         }
         self[keyPath: storage] = annotations
         mapView.addAnnotations(annotations)

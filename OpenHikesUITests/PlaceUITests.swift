@@ -129,6 +129,50 @@ nonisolated final class PlaceUITests: XCTestCase {
         )
     }
 
+    /// The pin stays in the middle of the map and the map moves under it:
+    /// wherever the map is left is where the place goes. See
+    /// `MapPlacePlacement.swift`.
+    @MainActor
+    func testMovingTheMapMovesTheNewPlace() {
+        let app = launchApp(arguments: ["--ui-test-import-gpx=\(Self.fixture)"])
+        openPlaceAdder(in: app)
+        let coordinates = element("trail-place-coordinates", in: app)
+        XCTAssertTrue(coordinates.waitForExistence(timeout: UITestTimeout.existence))
+        let opened = Self.reading(of: coordinates)
+
+        // A short press and a drag, which pans; a held one would drop a pin.
+        let map = element("trail-map", in: app)
+        map.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+            .press(forDuration: 0.1, thenDragTo: map.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.1)))
+
+        let moved = NSPredicate { _, _ in Self.reading(of: coordinates) != opened }
+        XCTAssertEqual(
+            XCTWaiter().wait(for: [expectation(for: moved, evaluatedWith: nil)], timeout: UITestTimeout.existence),
+            .completed,
+            "the form's coordinates follow the map"
+        )
+        XCTAssertTrue(element("hike-place-placeholder", in: app).exists, "the pin stays up while the map moves")
+        let placed = Self.reading(of: coordinates)
+
+        app.buttons["hike-place-adder-add"].tap()
+        XCTAssertTrue(
+            element("hike-place-title", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "adding opens the new place"
+        )
+        XCTAssertEqual(
+            Self.reading(of: element("trail-place-coordinates", in: app)),
+            placed,
+            "the place went where the pin was left, not where the form opened"
+        )
+    }
+
+    /// Everything a row says, whichever of its label and value carries the
+    /// figures.
+    @MainActor
+    private static func reading(of row: XCUIElement) -> String {
+        "\(row.label) \(row.value as? String ?? "")"
+    }
+
     @MainActor
     func testCancellingAddPlaceLeavesNothingBehind() {
         let app = launchApp(arguments: ["--ui-test-import-gpx=\(Self.fixture)"])

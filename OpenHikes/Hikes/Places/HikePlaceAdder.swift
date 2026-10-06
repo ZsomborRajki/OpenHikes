@@ -5,12 +5,22 @@
 //  *Add Place*, from the map's pill: a place of the hiker's own, put onto a
 //  saved hike at the spot the pill resolved, with its photographs.
 //
-//  Offered only where the pill is and only for a hike's own screen — see
-//  ``PhotoCaptureController/Subject/placeAnchor`` — and pushed at the spot
-//  the pill read at the tap, the photograph's rule: the live match while
-//  auto-follow has one, otherwise wherever the elevation graph's tracker is.
-//  A pin stands there while the form is up, in the chosen kind's glyph and
-//  colour, and the map is moved onto it before the screen arrives.
+//  Opened from the pill on a hike's own screen — see
+//  ``PhotoCaptureController/Subject/placeAnchor`` — at the spot the pill read
+//  at the tap, the photograph's rule: the live match while auto-follow has
+//  one, otherwise wherever the elevation graph's tracker is. Also from a
+//  press on the map on *Places Around Trail* and *Places Nearby*, and from a
+//  recording's *Add Place*, at the hiker's last fix — see
+//  ``RecordingPlaceSheet``.
+//
+//  ## The map places it
+//
+//  A pin stands in the middle of the map while the form is up, in the chosen
+//  kind's glyph and colour, and the map is moved to put the spot under it.
+//  The pin stays put and the map moves: wherever the hiker leaves the map is
+//  where the place is added, which is how a viewpoint noticed fifty metres
+//  after it was passed gets put back where it is. See
+//  `MapPlacePlacement.swift`.
 //
 //  ## The place screen's questions, and none of its other buttons
 //
@@ -67,12 +77,16 @@ struct HikePlaceAdder: View {
         ScrollView {
             VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
                 header
+                Text("Move the map to put the pin where the place is.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("hike-place-adder-placement-hint")
                 actions
                 fields
                 HikePlaceStagedPhotoStrip(photos: photos) { removed in
                     photos.removeAll { $0.id == removed }
                 }
-                TrailPlaceFactsAndLocation(facts: [], coordinate: spot.coordinate)
+                HikePlaceAdderLocation(spot: spot, placePins: placePins)
             }
             .padding()
         }
@@ -215,7 +229,8 @@ struct HikePlaceAdder: View {
     /// save leaves the form and its photographs as they were.
     private func add() {
         guard !isAdding, stagingCount == 0, hike.isAttached else { return }
-        let place = draft.place(at: spot)
+        // Where the pin stands now, not where the form opened.
+        let place = draft.place(at: placePins?.placement(of: spot) ?? spot)
         do throws(HikePlaceRefusal) {
             guard try HikePlaceChange.add(place, to: hike, in: modelContext) else { return }
         } catch {
@@ -247,6 +262,19 @@ struct HikePlaceAdder: View {
             addedID = place.id
             capture.failure = failure
         }
+    }
+}
+
+/// Where the place will go, following the map as it is moved under the pin.
+///
+/// Its own view so a settle of the map redraws these rows and not the form —
+/// the reason ``HikePlaceStagedPhotoStrip`` is split out.
+private struct HikePlaceAdderLocation: View {
+    let spot: HikePlaceSpot
+    let placePins: TrailPlacePinController?
+
+    var body: some View {
+        TrailPlaceFactsAndLocation(facts: [], coordinate: (placePins?.placement(of: spot) ?? spot).coordinate)
     }
 }
 
