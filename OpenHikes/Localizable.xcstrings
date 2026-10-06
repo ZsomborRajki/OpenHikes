@@ -194,6 +194,16 @@
         }
       }
     },
+    "%lld of %lld shared" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld shared"
+          }
+        }
+      }
+    },
     "%lld of this hike's photos are on the device they were added on, so they can't be shared from here." : {
       "localizations" : {
         "en" : {
@@ -475,6 +485,12 @@
 
     },
     "All Hikes" : {
+
+    },
+    "Already Sent · Left Out" : {
+
+    },
+    "Already Sent · Sharing" : {
 
     },
     "Also Save to Photos" : {
@@ -1004,6 +1020,9 @@
     "Import GPX file" : {
 
     },
+    "Includes this photo in the share" : {
+
+    },
     "Issued by %@" : {
 
     },
@@ -1068,7 +1087,13 @@
     "Leave photo %lld out" : {
 
     },
+    "Leaves this photo out of the share" : {
+
+    },
     "left" : {
+
+    },
+    "Left Out" : {
 
     },
     "Legal" : {
@@ -1980,6 +2005,9 @@
     "Shared by %@." : {
 
     },
+    "Sharing" : {
+
+    },
     "Shelter" : {
 
     },
@@ -2302,10 +2330,16 @@
     "Very High" : {
 
     },
+    "View" : {
+
+    },
     "View on OpenStreetMap" : {
 
     },
     "View or correct it on OpenStreetMap" : {
+
+    },
+    "View Photos" : {
 
     },
     "Viewpoint" : {

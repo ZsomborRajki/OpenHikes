@@ -27,6 +27,16 @@ nonisolated final class OrientationUITests: XCTestCase {
     /// to catch a sheet that has taken the window, not to pin a width.
     private static let maximumSheetWidthShare: CGFloat = 0.5
 
+    /// The least of the window a full-screen photograph's container may
+    /// measure. Less than all of it, because the container is laid out inside
+    /// the safe area — the Dynamic Island's edge and the home indicator's —
+    /// while the black behind the picture runs on past it.
+    private static let minimumFilledWindowShare: CGFloat = 0.8
+
+    /// How many swipes the share form gets to bring *View Photos* into
+    /// reach. A landscape window shows two rows of it at a time.
+    private static let formSwipes = 6
+
     /// How far below the panel's top edge the weather badge may sit before it
     /// has stopped being at the top of the map. Generous — the badge asks for
     /// the panel's own margin — and its job is to catch a portrait-sized drop,
@@ -187,6 +197,95 @@ nonisolated final class OrientationUITests: XCTestCase {
         // The restored scroll position must also drive subsequent paging.
         next.tap()
         XCTAssertTrue(app.navigationBars["3 of 3"].waitForExistence(timeout: UITestTimeout.navigation))
+    }
+
+    /// A photograph opened in landscape takes the window, as it takes the
+    /// whole sheet in portrait — and the panel goes back to being a panel when
+    /// the photograph is closed.
+    @MainActor
+    func testLandscapePhotoViewerFillsTheWindow() {
+        addTeardownBlock {
+            await MainActor.run { XCUIDevice.shared.orientation = .portrait }
+        }
+        let app = launchUpright(arguments: [
+            "--ui-test-expanded-sheet",
+            "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+            "--ui-test-seed-photos=3",
+        ])
+        openHikeDetail(in: app)
+        XCTAssertTrue(scrollIntoView(element("hike-photo-strip", in: app), in: app))
+        photoTile(at: 1, of: 3, in: app).tap()
+        XCTAssertTrue(app.navigationBars["1 of 3"].waitForExistence(timeout: UITestTimeout.navigation))
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(waitForLandscape(app))
+        let panel = element("map-side-panel", in: app)
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.navigation) {
+                panel.frame.width > app.frame.width * Self.minimumFilledWindowShare
+            },
+            "the photograph should take the window, not the panel's column"
+        )
+
+        app.navigationBars["1 of 3"].buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(
+            app.navigationBars[UITestFixture.importedHikeTitle]
+                .waitForExistence(timeout: UITestTimeout.navigation)
+        )
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.navigation) {
+                panel.frame.width < app.frame.width * Self.maximumSheetWidthShare
+            },
+            "closing the photograph should give the map its half back"
+        )
+    }
+
+    /// The share form's gallery is full-screen in landscape too: the form is
+    /// a sheet, which the system draws across the whole window in compact
+    /// height, and the gallery is pushed inside it.
+    ///
+    /// Opened in landscape rather than rotated into it. The form is presented
+    /// from the hike's screen, and a rotation moves that screen from the
+    /// portrait sheet to the side panel — a different host — which takes the
+    /// form down with the old one.
+    @MainActor
+    func testLandscapeShareGalleryFillsTheWindow() {
+        addTeardownBlock {
+            await MainActor.run { XCUIDevice.shared.orientation = .portrait }
+        }
+        XCUIDevice.shared.orientation = .portrait
+        let app = launchCommunity(
+            scenario: .seeded,
+            extraArguments: [
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+                "--ui-test-seed-photos=3",
+            ]
+        )
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(waitForLandscape(app))
+        openHikeDetail(in: app)
+        scrollToTap(element("community-share-button", in: app), in: app)
+        // Dragged by coordinate rather than through ``scrollIntoView``, whose
+        // container is the first scroll view in the app — in landscape the
+        // side panel's, under the form — and rather than through a query for
+        // the form's list, which matches on rows that scroll out of it.
+        XCTAssertTrue(app.navigationBars["Share Hike"].waitForExistence(timeout: UITestTimeout.navigation))
+        let viewPhotos = element("community-share-view-photos", in: app)
+        for _ in 0..<Self.formSwipes where !isReachable(viewPhotos, in: app) {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)))
+        }
+        tapWhenReady(viewPhotos)
+        XCTAssertTrue(app.navigationBars["1 of 3"].waitForExistence(timeout: UITestTimeout.navigation))
+
+        let gallery = element("community-share-photo-viewer", in: app)
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.navigation) {
+                gallery.frame.width > app.frame.width * Self.minimumFilledWindowShare
+                    && gallery.frame.height > app.frame.height * Self.minimumFilledWindowShare
+            },
+            "the share form's gallery should take the window in landscape"
+        )
     }
 
     @MainActor
