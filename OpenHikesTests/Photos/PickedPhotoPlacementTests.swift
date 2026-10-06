@@ -169,6 +169,22 @@ struct PickedPhotoPlacementTests {
         #expect(Self.metres(placement.coordinate, takenAt) < 1)
     }
 
+    /// A drawn or imported trail can run a straight kilometre between two of
+    /// its points. A camera halfway along that stretch is standing on the
+    /// trail, and is pinned where it stood rather than refused for being
+    /// half a kilometre from either end.
+    @Test("a photo between two distant route points is snapped onto the line")
+    func sparseRouteSnapsOntoTheLine() {
+        let route = [PhotoDiscoveryFixture.unstampedRoute[0], PhotoDiscoveryFixture.unstampedRoute[9]]
+        let plan = HikePhotoSearchPlan(timeline: nil, walks: [], route: route)
+        let takenAt = PhotoDiscoveryFixture.coordinate(atStep: 4.5)
+
+        let placement = Self.resolve(takenAtStep: nil, camera: takenAt, plan: plan)
+
+        #expect(placement.evidence == .place)
+        #expect(Self.metres(placement.coordinate, takenAt) < 1)
+    }
+
     // MARK: - Falling back to the graph selection
 
     /// No clock and no position: the hiker's own pointing is the best
@@ -263,7 +279,7 @@ struct PickedPhotoPlacementTests {
             await HikePhotoImport.addPicked(
                 data,
                 to: hike,
-                plan: hike.photoSearchPlan,
+                plan: hike.photoSearchPlan(profilesRoute: true),
                 fallback: Self.graphSelection,
                 assetLocalIdentifier: "picked-asset",
                 store: sandbox.store
@@ -287,7 +303,7 @@ struct PickedPhotoPlacementTests {
             await HikePhotoImport.addPicked(
                 PhotoDiscoveryFixture.sampleImageData(),
                 to: hike,
-                plan: hike.photoSearchPlan,
+                plan: hike.photoSearchPlan(profilesRoute: true),
                 fallback: Self.graphSelection,
                 assetLocalIdentifier: "bare-asset",
                 store: sandbox.store

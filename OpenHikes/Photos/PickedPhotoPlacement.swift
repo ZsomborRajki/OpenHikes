@@ -185,12 +185,20 @@ nonisolated struct PickedPhotoPlacement: Equatable, Sendable {
            ).first {
             return Self(coordinate: match.coordinate, capturedAt: dated, evidence: match.evidence)
         }
-        // No clock to place it by, but a position on this trail: snapped
-        // where the camera was, on the same terms as the scan's own `.place`.
-        if let plan, let camera = metadata.coordinate,
-           let nearest = LibraryPhotoMatcher.nearestRoutePoint(to: camera, in: plan.route),
-           nearest.meters <= LibraryPhotoMatcher.maximumOffRouteMeters {
-            return Self(coordinate: nearest.coordinate, capturedAt: dated, evidence: .place)
+        // No clock to place it by, but a position on this trail: projected
+        // onto the line where the camera was. Onto the line, not its nearest
+        // vertex as a recording's own `.place` is: a recorded route is sampled
+        // every few metres, and this tier is mostly for trails that were
+        // imported or drawn, whose points can be a straight half-kilometre
+        // apart — far enough that a camera standing on the trail between two
+        // of them would be refused as off it.
+        if let plan, let camera = metadata.coordinate {
+            let profile = plan.profile ?? RouteProfile(route: plan.route)
+            if let nearest = profile.nearestPoint(to: camera),
+               nearest.offRouteMeters <= LibraryPhotoMatcher.maximumOffRouteMeters,
+               let snapped = profile.coordinate(atDistance: nearest.distanceAlongRoute) {
+                return Self(coordinate: snapped, capturedAt: dated, evidence: .place)
+            }
         }
         return Self(coordinate: fallback, capturedAt: dated, evidence: nil)
     }
@@ -201,8 +209,9 @@ extension HikePhotoImport {
     /// ``PickedPhotoPlacement`` says it belongs.
     ///
     /// - Parameters:
-    ///   - plan: Built once for the whole selection by the caller — it is
-    ///     route-sized work — and `nil` for a photo filed under a place.
+    ///   - plan: Built once for the whole selection by the caller, with its
+    ///     profile — see ``Hike/photoSearchPlan(profilesRoute:)`` — because
+    ///     both are route-sized work; `nil` for a photo filed under a place.
     ///   - fallback: The anchor in force when the picker closed.
     @MainActor
     static func addPicked(

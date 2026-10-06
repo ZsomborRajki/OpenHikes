@@ -36,20 +36,24 @@ nonisolated struct HikePhotoSearchPlan: Sendable {
     let walks: [HikeWalkPhotoTimeline]
     /// The raw route, for ``LibraryPhotoMatcher``'s off-route test.
     let route: [RouteCoordinate]
-    /// Built only when there are walks to place photographs with, because
-    /// building one is route-sized work and the timeline path has no use for
-    /// it.
+    /// Built only when there are walks to place photographs with, or when
+    /// the caller asks for it, because building one is route-sized work and
+    /// the timeline path has no use for it.
     let profile: RouteProfile?
 
+    /// - Parameter profilesRoute: Build ``profile`` even with no walks. The
+    ///   picker wants one on every trail, because it projects a photograph's
+    ///   own position onto the line — see ``PickedPhotoPlacement``.
     init(
         timeline: HikePhotoTimeline?,
         walks: [HikeWalkPhotoTimeline],
-        route: [RouteCoordinate]
+        route: [RouteCoordinate],
+        profilesRoute: Bool = false
     ) {
         self.timeline = timeline
         self.walks = walks
         self.route = route
-        profile = walks.isEmpty ? nil : RouteProfile(route: route)
+        profile = walks.isEmpty && !profilesRoute ? nil : RouteProfile(route: route)
     }
 
     /// Whether there is anything to search at all. A hike with neither a
@@ -124,10 +128,17 @@ extension Hike {
     /// the walks, and the one screen that wants it wants it behind a button
     /// tap.
     var photoSearchPlan: HikePhotoSearchPlan {
+        photoSearchPlan(profilesRoute: false)
+    }
+
+    /// The same, with ``HikePhotoSearchPlan/profile`` built whatever the
+    /// walks when `profilesRoute` is set — what the picker places with.
+    func photoSearchPlan(profilesRoute: Bool) -> HikePhotoSearchPlan {
         HikePhotoSearchPlan(
             timeline: photoTimeline,
             walks: walkPhotoTimelines,
-            route: route
+            route: route,
+            profilesRoute: profilesRoute
         )
     }
 }

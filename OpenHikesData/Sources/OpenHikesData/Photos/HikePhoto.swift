@@ -22,7 +22,8 @@ import Foundation
 /// imported itself: the elevation graph's selection or the recording's last
 /// accepted fix, both of which are the app's own answer to "where am I" and
 /// need no explaining. A value means the photo came out of the system photo
-/// library through ``LibraryPhotoMatch``, and says which of the two things the
+/// library — found by ``LibraryPhotoMatch``, or handed over by the picker and
+/// placed by ``PickedPhotoPlacement`` — and says which of the two things the
 /// asset carried was used to place it.
 ///
 /// Stored so the gallery can be honest about the difference. A pin the app
@@ -32,7 +33,8 @@ import Foundation
 nonisolated public enum PhotoMatchEvidence: String, Codable, Hashable, Sendable {
     /// The asset's own recorded position, snapped onto the route. Used when
     /// the walk had no fix close enough in time to place the photo by clock —
-    /// a stretch that was walked through a GPS gap.
+    /// a stretch that was walked through a GPS gap — and for a photo picked
+    /// by hand whose time places it on no walk at all.
     case place = "place"
     /// The moment the photo was taken, against the route's own timestamps.
     /// The asset carried no position of its own.
