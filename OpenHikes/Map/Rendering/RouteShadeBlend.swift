@@ -21,6 +21,7 @@
 //  where the last one ended.
 //
 
+import Algorithms
 import CoreGraphics
 import MapKit
 
@@ -51,7 +52,7 @@ nonisolated enum RouteShadeBlend {
     /// return leg over its outward one, and a blend from the outward leg
     /// painted after everything else would show through on top of it.
     static func pieces(between shades: [DirectionalPolylineRenderer.Shade]) -> [Piece?] {
-        zip(shades, shades.dropFirst()).map { previous, next in
+        shades.adjacentPairs().map { previous, next in
             piece(from: previous, to: next)
         }
     }
@@ -86,7 +87,7 @@ nonisolated enum RouteShadeBlend {
     }
 
     private static func length(of points: [MKMapPoint]) -> Double {
-        zip(points, points.dropFirst()).reduce(0) { total, pair in total + distance(pair.0, pair.1) }
+        points.adjacentPairs().reduce(0) { total, pair in total + distance(pair.0, pair.1) }
     }
 
     private static func distance(_ from: MKMapPoint, _ to: MKMapPoint) -> Double {
