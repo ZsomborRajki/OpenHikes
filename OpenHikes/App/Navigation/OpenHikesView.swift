@@ -306,7 +306,8 @@ struct OpenHikesView: View {
             searchCompleter: appModel.searchCompleter,
             // Keeps the credit line and the camera pill beside the landscape
             // panel instead of behind it.
-            sidePanelInset: usesSidePanel ? MapSidePanelLayout.mapInset : 0
+            sidePanelInset: usesSidePanel ? MapSidePanelLayout.mapInset : 0,
+            isCoveredByPanel: panelCoversMap
         )
             .equatable()
             .accessibilityIdentifier("trail-map")
