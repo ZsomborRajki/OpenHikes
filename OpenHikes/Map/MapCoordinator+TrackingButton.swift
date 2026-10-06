@@ -49,6 +49,9 @@ extension MapView.Coordinator {
     func observeSheetMetrics(_ metrics: SheetMetrics, on mapView: MKMapView) {
         sheetMetrics = metrics
         applySheetTop(on: mapView)
+        // The sheet's measured rest is the bottom of the middle a place being
+        // added stands in — see `MapPlacePlacement.swift`.
+        placePlacementSheetDidMove(on: mapView)
         reobserving(self, mapView, metrics) {
             _ = metrics.topY
         } onChange: { coordinator, map, model in

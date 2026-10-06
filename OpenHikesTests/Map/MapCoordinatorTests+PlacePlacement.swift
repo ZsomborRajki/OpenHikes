@@ -150,6 +150,74 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// Where the foot of the pin is, in the map's points.
+    private func pinDot(_ coordinator: MapView.Coordinator) throws -> CGPoint {
+        let pin = try #require(coordinator.placePlacement.pin)
+        return CGPoint(x: pin.frame.midX, y: pin.frame.maxY - 4)
+    }
+
+    /// The sheet's rest is measured the next time it is dragged, so the
+    /// middle moves under a form that is already up — and a redraw of the
+    /// placeholder, a name typed, must not move the pin off the place.
+    @Test("a redraw after the middle moved leaves the pin on the place")
+    func aRedrawKeepsThePinOnThePlace() async throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        settle(sheetMetrics, at: map.bounds.height * 0.45)
+        let spot = offCentreSpot(on: map)
+        let token = await placePin(at: spot, on: map, coordinator)
+        let before = coordinator.focusPoint(in: map)
+
+        sheetMetrics.detentCommitted(toMiddle: true)
+        settle(sheetMetrics, at: map.bounds.height * 0.6)
+        #expect(distance(before, coordinator.focusPoint(in: map)) > 10, "precondition: the middle moved")
+        var draft = HikePlaceDraft()
+        draft.name = "Spring"
+        placePins.update([], token: token, placeholder: draft.placeholder(at: spot))
+
+        await settle(until: "the pin to stand on the new middle") {
+            (try? self.distance(self.pinDot(coordinator), coordinator.focusPoint(in: map))) ?? .infinity
+                < Self.pinTolerance
+        }
+        let placed = placePins.placement(of: spot)
+        #expect(distance(map.convert(placed.coordinate, toPointTo: map), try pinDot(coordinator)) < Self.pinTolerance)
+        #endif
+    }
+
+    @Test("a pan after the middle moved is read, not undone")
+    func aPanAfterTheMiddleMovedIsRead() async {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        settle(sheetMetrics, at: map.bounds.height * 0.45)
+        let spot = offCentreSpot(on: map)
+        _ = await placePin(at: spot, on: map, coordinator)
+
+        sheetMetrics.detentCommitted(toMiddle: true)
+        settle(sheetMetrics, at: map.bounds.height * 0.6)
+        await settle(until: "the spot to be under the new middle") {
+            self.distance(map.convert(spot.coordinate, toPointTo: map), coordinator.focusPoint(in: map))
+                < Self.pinTolerance
+        }
+
+        let dragged = map.convert(
+            CGPoint(x: map.bounds.midX + 40, y: map.bounds.midY + 60),
+            toCoordinateFrom: map
+        )
+        map.setCenter(dragged, animated: false)
+        coordinator.mapView(map, regionDidChangeAnimated: false)
+
+        let placed = placePins.placement(of: spot)
+        let underPin = map.convert(coordinator.focusPoint(in: map), toCoordinateFrom: map)
+        #expect(placed.latitude.isApproximatelyEqual(to: underPin.latitude, absoluteTolerance: 1e-6))
+        #expect(placed.longitude.isApproximatelyEqual(to: underPin.longitude, absoluteTolerance: 1e-6))
+        #expect(placed.latitude < spot.latitude, "the pan moved the place")
+        #endif
+    }
+
     @Test("the pin goes with the form, and the place it added is an ordinary pin")
     func thePinGoesWithTheForm() async throws {
         #if os(iOS)
