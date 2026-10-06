@@ -15,6 +15,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Synchronization
 import Testing
 
@@ -362,6 +363,48 @@ struct CuratedElevationTests {
 
         #expect(!samples.describes(moved))
         #expect(samples.filling(moved).allSatisfy { $0.elevation == nil })
+    }
+
+    /// The maker measures steepness from these, and a window closes at any
+    /// point without a height — so every point between two readings needs
+    /// one, placed by how far along the line it is.
+    @Test("interpolating puts a height on every point between two readings")
+    func interpolatingFillsBetweenReadings() throws {
+        let route = Self.route(5)
+        let samples = RouteHeightSamples(
+            routePointCount: 5,
+            indexes: [0, 4],
+            coordinates: [route[0], route[4]],
+            heights: [600, 640]
+        )
+
+        let heights = samples.interpolating(route).map(\.elevation)
+
+        // The points are evenly spaced, so the heights are too.
+        let expected: [Double] = [600, 610, 620, 630, 640]
+        for (filled, wanted) in zip(heights, expected) {
+            let height = try #require(filled)
+            #expect(height.isApproximatelyEqual(to: wanted, absoluteTolerance: 0.01))
+        }
+        let other = samples.interpolating(Self.route(6))
+        #expect(!other.contains { $0.elevation != nil }, "a different line is left alone")
+    }
+
+    /// A reading that is not a number is not a height, and joins its
+    /// neighbours instead of breaking the line in two.
+    @Test("interpolating passes over a reading that is not a number")
+    func interpolatingSkipsNonFiniteReadings() throws {
+        let route = Self.route(3)
+        let samples = RouteHeightSamples(
+            routePointCount: 3,
+            indexes: [0, 1, 2],
+            coordinates: route,
+            heights: [600, .nan, 640]
+        )
+
+        let middle = try #require(samples.interpolating(route)[1].elevation)
+
+        #expect(middle.isApproximatelyEqual(to: 620, absoluteTolerance: 0.01))
     }
 
     /// The source a launch gets when it must not ask — a suite, or a UI test

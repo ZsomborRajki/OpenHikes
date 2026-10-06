@@ -228,6 +228,9 @@ struct MapView: MapViewRepresentable, Equatable {
         // maker's screen is up — including on a map rebuilt underneath one, as
         // a rotation rebuilds it.
         coordinator.observeTrailDraft(trailMaker, on: mapView)
+        // And its colours, in whichever way the *Color By* control every hike
+        // shares is set.
+        coordinator.observeTrailDraftShading(trailMaker, coloring: routeShading, on: mapView)
         // After `addControls` for the same reason: this decides which of the
         // two buttons in the tracking capsule is on screen, and neither
         // exists until that call has run. A map built by a hiker who refused

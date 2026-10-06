@@ -235,6 +235,9 @@ extension MapView {
         /// The other routes each leg could take, and the time bubbles — see
         /// `MapTrailDraftRouteChoices.swift`.
         var trailDraftRouteChoices = TrailDraftRouteChoiceLayer()
+        /// The line's colours, by difficulty or steepness — see
+        /// `MapTrailDraftShading.swift`.
+        var trailDraftShades = TrailDraftShadeLayer()
         /// The pin a tap on open ground dropped while the place sheet is up on
         /// it, or `nil`. See `MapTrailDraftSelection.swift`.
         var trailDraftDroppedPin: TrailDraftDroppedPin?
@@ -905,12 +908,9 @@ extension MapView.Coordinator {
             if let renderer = communityRouteRenderer(for: polyline) {
                 return renderer
             }
-            // And the trail being drawn, which is not a hike at all yet, and
-            // the routes it could take instead.
-            if let renderer = trailDraftRenderer(for: polyline, on: mapView) {
-                return renderer
-            }
-            if let renderer = trailDraftAlternativeRenderer(for: polyline, on: mapView) {
+            // And the trail being drawn, which is not a hike at all yet, the
+            // routes it could take instead and its colours.
+            if let renderer = trailDraftOverlayRenderer(for: polyline, on: mapView) {
                 return renderer
             }
             if recordingReviewOverlay === polyline {

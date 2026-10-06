@@ -197,6 +197,20 @@ struct TrailDraftElevationTests {
         #expect(filled.compactMap(\.elevation) == Heights.all)
     }
 
+    /// The same heights colour the line by steepness in the maker, which is
+    /// the controller handing them on — see ``TrailDraftShading``.
+    @Test("heights that land colour the drawn line by steepness")
+    func heightsReachTheShading() async {
+        let source = StubHeightSource(heights: Heights.all)
+        let maker = Self.maker(source: source)
+        for latitude in Line.all { maker.appendWaypoint(at: Line.at(latitude)) }
+
+        await Self.settle { !maker.shading.stretches(for: .elevation).isEmpty }
+
+        #expect(!maker.shading.stretches(for: .elevation).isEmpty)
+        #expect(maker.shading.offered.contains(.elevation))
+    }
+
     /// A line with one point on it is a place rather than a trail and has no
     /// climb to ask about — the same floor ``TrailDraftSave`` refuses below.
     @Test("a single point is not worth a question")

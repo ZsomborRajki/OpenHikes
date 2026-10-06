@@ -142,6 +142,7 @@ final class TrailDraftElevation {
     @ObservationIgnored private let source: (any CuratedElevationSourcing)?
     @ObservationIgnored private let pause: @Sendable (TimeInterval) async throws -> Void
     @ObservationIgnored private var task: Task<Void, Never>?
+    @ObservationIgnored private var deliver: ((RouteHeightSamples) -> Void)?
 
     /// - Parameters:
     ///   - draft: read when the drawing settles rather than handed in per
@@ -169,6 +170,12 @@ final class TrailDraftElevation {
     /// Non-isolated so releasing the last reference never requires proving
     /// we're on the main actor — see ``LocationManager``'s deinit for why.
     nonisolated deinit { /* intentionally empty */ }
+
+    /// Where the heights go once they land, besides ``samples``. Set once, by
+    /// the controller, which hands them to ``TrailDraftShading``.
+    func onMeasured(_ deliver: @escaping (RouteHeightSamples) -> Void) {
+        self.deliver = deliver
+    }
 
     /// The line moved: whatever was measured is about a trail that no longer
     /// exists.
@@ -221,6 +228,7 @@ final class TrailDraftElevation {
         guard !Task.isCancelled, let measured else { return }
         samples = measured
         summary = measured.summary
+        deliver?(measured)
     }
 
     /// Drops the answer and cancels whatever was going to replace it.

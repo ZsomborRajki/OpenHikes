@@ -200,6 +200,7 @@ extension OpenHikesModel {
             router: trailGraphProvider.map { provider in
                 OverpassTrailLegRouter(provider: provider, fallback: directions[.walking])
             },
+            graph: trailGraphProvider,
             placeSource: Self.makeTrailPointSource(),
             elevationSource: Self.makeTrailElevationSource(),
             naming: Self.makeTrailStopNaming(),
