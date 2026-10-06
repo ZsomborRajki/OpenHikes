@@ -87,9 +87,9 @@ struct MapPaywallView: View {
         ),
         (
             "chart.xyaxis.line",
-            "Elevation for Planned Trails",
-            "The climb, the elevation profile and steepness colors for trails you draw and "
-                + "routes found on OpenStreetMap, from Stadia Maps' elevation service."
+            "Elevation Where There Is None",
+            "The climb, the elevation profile and steepness colors for trails you draw, routes "
+                + "found on OpenStreetMap and hikes whose file has no heights, from Stadia Maps."
         ),
         (
             "heart.fill",
