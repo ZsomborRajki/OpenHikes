@@ -37,9 +37,13 @@
 //  ## When the middle moves
 //
 //  The middle of the visible map moves with rotation, and once more when the
-//  sheet's middle detent is first measured. A settle that finds it moved is
-//  not read, which would hand the place whatever happens to be at the new
-//  middle. It is answered with a move that puts the place back under the pin.
+//  sheet's middle detent is first measured — which is the next time the sheet
+//  is dragged, not the moment it comes to rest. Whenever it is found to have
+//  moved, the pin goes to the new middle and the map moves with it, so the
+//  place stays under the pin. That is checked on every settle, every redraw
+//  of the placeholder and every report from the sheet, because a pin moved
+//  on its own would point at ground the place is not being added at, and a
+//  middle found moved only at the next settle would undo that settle's pan.
 //
 
 import MapKit
@@ -83,9 +87,12 @@ extension MapView.Coordinator {
         if let row = controller.rows.first(where: { $0.id == spot.id }) {
             pin.show(row.place)
         }
+        guard placePlacement.placeholderID != spot.id else {
+            keepPlacementUnderPin(spot, on: mapView)
+            return
+        }
         let focus = focusPoint(in: mapView)
         pin.stand(at: focus)
-        guard placePlacement.placeholderID != spot.id else { return }
         placePlacement.placeholderID = spot.id
         placePlacement.focus = focus
         if mapView.userTrackingMode != .none {
@@ -103,16 +110,36 @@ extension MapView.Coordinator {
               let spot = Self.heldSpot(of: controller), spot.id == placePlacement.placeholderID
         else { return }
         pin.lower()
-        let focus = focusPoint(in: mapView)
-        if let held = placePlacement.focus,
-           hypot(held.x - focus.x, held.y - focus.y) > Self.placementFocusTolerance {
-            placePlacement.focus = focus
-            pin.stand(at: focus)
-            bringUnderPin(spot.coordinate, on: mapView, animated: false)
-            return
-        }
-        controller.movePlaceholder(to: mapView.convert(focus, toCoordinateFrom: mapView))
+        guard !keepPlacementUnderPin(spot, on: mapView) else { return }
+        controller.movePlaceholder(to: mapView.convert(focusPoint(in: mapView), toCoordinateFrom: mapView))
         #endif
+    }
+
+    /// Keeps the place under the pin when the sheet's measured rest moves the
+    /// middle of the map. Called on every report from the sheet.
+    func placePlacementSheetDidMove(on mapView: MKMapView) {
+        #if canImport(UIKit)
+        guard placePlacement.placeholderID != nil, let controller = hikePlaceController,
+              let spot = Self.heldSpot(of: controller), spot.id == placePlacement.placeholderID
+        else { return }
+        keepPlacementUnderPin(spot, on: mapView)
+        #endif
+    }
+
+    /// Stands the pin on the middle of the map and moves the map to keep
+    /// `spot` under it, if the middle has moved since the pin was stood —
+    /// see *When the middle moves*. Returns whether it had.
+    @discardableResult private func keepPlacementUnderPin(_ spot: HikePlaceSpot, on mapView: MKMapView) -> Bool {
+        let focus = focusPoint(in: mapView)
+        guard let held = placePlacement.focus,
+              hypot(held.x - focus.x, held.y - focus.y) > Self.placementFocusTolerance
+        else { return false }
+        placePlacement.focus = focus
+        #if canImport(UIKit)
+        placePlacement.pin?.stand(at: focus)
+        #endif
+        bringUnderPin(spot.coordinate, on: mapView, animated: false)
+        return true
     }
 
     /// Lifts the pin off the map while the map moves under it. The only use
