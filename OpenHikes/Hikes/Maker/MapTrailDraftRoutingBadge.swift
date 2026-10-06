@@ -16,8 +16,10 @@
 //  the same sentence the sheet's caption uses. It is one of the route-choice
 //  layer's annotations — see `MapTrailDraftRouteChoices.swift` — so it comes
 //  and goes on that layer's schedule: drawn when a leg starts routing, taken
-//  down by the rebuild its answer causes, and hidden while a stop is dragged,
-//  when nothing has been asked yet.
+//  down by the rebuild its answer causes, and hidden with the rest of the
+//  layer while a stop is dragged — every leg's, not only the two the finger is
+//  bending, so one still waiting elsewhere loses its bubble until the stop is
+//  let go and keeps its dash.
 //
 //  **The spinner costs no map redraw.** `UIActivityIndicatorView` turns in Core
 //  Animation, on the annotation's own layer, so nothing asks MapKit to draw a

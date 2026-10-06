@@ -250,7 +250,7 @@ extension MapCoordinatorTests {
         #expect(map.annotations.contains { $0 === badge })
         let view = try #require(coordinator.mapView(map, viewFor: badge))
         #expect(view.accessibilityLabel == TrailLegSnap.routing.notice?.text)
-        #expect(coordinator.selectTrailDraftAnnotation(view, on: map), "a tap on it drops no pin")
+        #expect(coordinator.selectTrailDraftAnnotation(view, on: map), "a tap on it is the maker's")
         #expect(trailMaker.selection == nil)
 
         trailMaker.draft.apply(

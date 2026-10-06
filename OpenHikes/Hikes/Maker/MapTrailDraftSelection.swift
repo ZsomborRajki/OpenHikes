@@ -121,9 +121,12 @@ extension MapView.Coordinator {
             guard let choice = time.choice else { break }
             controller.chooseRoute(choice.alternativeIndex, forLegAt: choice.legIndex)
         case is TrailDraftRoutingAnnotation:
-            // Says something and does nothing, as the route's own time does;
-            // taken here so the tap does not fall through and drop a pin.
-            break
+            // Says something and does nothing. Taken so MapKit's selection is
+            // let go of, as for the route's own time — a bubble left selected
+            // would not hear a second tap — but not answered with
+            // ``HapticMoment/targetHit``, which says a tap *did* something.
+            mapView.deselectAnnotation(annotation, animated: false)
+            return true
         case is TrailDraftDroppedPin:
             // Its card again, which closing left the pin standing without.
             controller.select(.droppedPin)
