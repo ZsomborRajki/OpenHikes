@@ -106,10 +106,10 @@ extension MapView {
         var routeWidth: Double = RouteStyle.defaultWidth
         var routePattern: RouteLinePattern = RouteStyle.defaultPattern
         var routeBorder: Color = RouteStyle.defaultBorder
-        /// The graded stretches the line is coloured by, and the hike they
-        /// were measured along — see `MapCoordinator+DifficultyShading.swift`.
-        var difficultyStretches: [(difficulty: TrailDifficulty, polyline: MKPolyline)] = []
-        var difficultyHikeID: UUID?
+        /// The stretches the line is coloured by, and the hike they were
+        /// measured along — see `MapCoordinator+RouteShading.swift`.
+        var shadedStretches: [(shade: RouteShade, polyline: MKPolyline)] = []
+        var shadedHikeID: UUID?
         var highlightAnnotation: MKPointAnnotation?
 
         // MARK: Tracking button
@@ -578,8 +578,8 @@ extension MapView {
             // refresh them when the color moves.
             if tintChanged {
                 // The stretches take the line's alpha, so a translucent
-                // route stays translucent where it is graded too.
-                applyDifficultyShades()
+                // route stays translucent where it is coloured too.
+                applyRouteShades()
                 refreshHighlightColor(on: mapView)
                 refreshPhotoPinColor(on: mapView)
             }
@@ -951,7 +951,7 @@ extension MapView.Coordinator {
             let renderer = DirectionalPolylineRenderer(polyline: polyline)
             applyStyle(to: renderer)
             routeRenderer = renderer
-            applyDifficultyShades()
+            applyRouteShades()
             return renderer
         }
         return MKOverlayRenderer(overlay: overlay)

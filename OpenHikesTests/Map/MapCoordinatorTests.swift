@@ -30,7 +30,7 @@ struct MapCoordinatorTests {
     private let walkHighlight = WalkHighlight()
     /// Never measures anything: no provider. The suite that does hands the
     /// map its own — see `MapCoordinatorTests+DifficultyShading.swift`.
-    private let routeDifficulty = RouteDifficultyShading(provider: nil)
+    private let routeShading = RouteShading(provider: nil)
     private let recordingTrace = RecordingTrace()
     /// Internal, like `mapController` below, so the tracking-button tests get
     /// their own file — see `MapCoordinatorTests+SheetInsets.swift`.
@@ -116,7 +116,7 @@ struct MapCoordinatorTests {
         trailMaker: TrailDraftController? = nil,
         // And for the reason `trailMaker` is: the suite's own has no trail
         // graph to measure a route against.
-        routeDifficulty: RouteDifficultyShading? = nil
+        routeShading: RouteShading? = nil
     ) -> MapView {
         MapView(
             locationManager: locationManager ?? self.locationManager,
@@ -124,7 +124,7 @@ struct MapCoordinatorTests {
             routeStyle: routeStyle,
             highlight: highlight,
             walkHighlight: walkHighlight,
-            routeDifficulty: routeDifficulty ?? self.routeDifficulty,
+            routeShading: routeShading ?? self.routeShading,
             recordingTrace: recordingTrace,
             sheetMetrics: sheetMetrics,
             tileSource: tileSource,
@@ -473,13 +473,17 @@ extension MapCoordinatorTests {
             hike.routeWidth = 9
             hike.routeBorderHex = "#FFFFFFFF"
         }
-        #expect(renderer.borderColor?.alpha == 0, "a line drawn before any hike is followed has no border")
+        let unfollowed = renderer.borderColor
+        #expect(unfollowed?.alpha == 1, "a line drawn before any hike is followed has the default border")
         routeStyle.follow(hike)
         await settle()
 
         #expect(coordinator.routeWidth == 9)
         #expect(renderer.lineWidth == 9, "the drawn line, not just the coordinator's copy of the number")
-        #expect(renderer.borderColor?.alpha == 1, "the border is drawn by the renderer, so it has to be on it")
+        #expect(
+            renderer.borderColor?.alpha == 1 && renderer.borderColor != unfollowed,
+            "the border is drawn by the renderer, so the hike's white has to be on it"
+        )
         #expect(coordinator.routeOverlay === line, "restyling must not rebuild the line")
     }
 

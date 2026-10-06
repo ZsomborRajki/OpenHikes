@@ -14,9 +14,10 @@ extension Hike {
     /// Full tint including the user's chosen alpha — used for the map polyline.
     var tint: Color { Color(hex: tintHex) ?? .green }
 
-    /// The outline around the map polyline, with its alpha. Clear when unset
-    /// or unreadable, which draws nothing.
-    var routeBorder: Color { Color(hex: routeBorderHex) ?? .clear }
+    /// The outline around the map polyline, with its alpha. The default
+    /// border when never picked (or unreadable) — see
+    /// ``RouteStyle/defaultBorder``.
+    var routeBorder: Color { Color(hex: routeBorderHex) ?? RouteStyle.defaultBorder }
 
     /// A random, visually distinct route color, so each newly imported hike
     /// gets its own default tint instead of always green.

@@ -53,10 +53,10 @@ struct MapView: MapViewRepresentable, Equatable {
     /// polylines without re-rendering any view — see ``WalkHighlight``.
     var walkHighlight: WalkHighlight
 
-    /// The selected hike's difficulty grades. Observed directly by the map
+    /// The selected hike's line colours. Observed directly by the map
     /// (not via SwiftUI) so the answer landing recolours the line without
-    /// re-rendering any view — see ``RouteDifficultyShading``.
-    var routeDifficulty: RouteDifficultyShading
+    /// re-rendering any view — see ``RouteShading``.
+    var routeShading: RouteShading
 
     /// The growing recorded track. Its revision is observed directly by the
     /// coordinator so accepted fixes update only MapKit overlays.
@@ -180,7 +180,7 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.observeSheetMetrics(sheetMetrics, on: mapView)
         coordinator.observeMapController(mapController, on: mapView)
         coordinator.observeRouteStyle(routeStyle, on: mapView)
-        coordinator.observeRouteDifficulty(routeDifficulty, on: mapView)
+        coordinator.observeRouteShading(routeShading, on: mapView)
         coordinator.observePhotoPins(photoPins, on: mapView)
         coordinator.observeHikePlaces(placePins, on: mapView)
         #if os(iOS)
@@ -739,7 +739,7 @@ extension MapView {
             && lhs.routeStyle === rhs.routeStyle
             && lhs.highlight === rhs.highlight
             && lhs.walkHighlight === rhs.walkHighlight
-            && lhs.routeDifficulty === rhs.routeDifficulty
+            && lhs.routeShading === rhs.routeShading
             && lhs.recordingTrace === rhs.recordingTrace
             && lhs.sheetMetrics === rhs.sheetMetrics
             && lhs.tileSource == rhs.tileSource

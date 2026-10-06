@@ -26,6 +26,7 @@ suites=(
   PhotoUITests
   PlaceUITests
   SettingsUITests
+  RouteColoringUITests
   CommunityUITests
   CommunityCuratedUITests
   CommunityPhotoUITests

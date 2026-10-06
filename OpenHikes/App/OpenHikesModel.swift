@@ -103,11 +103,11 @@ final class OpenHikesModel {
     /// its scratch defaults rather than the developer's. See
     /// ``TrailPlacePinController``.
     let placePins: TrailPlacePinController
-    /// The selected hike's difficulty grades, observed directly by the map.
-    /// Owned here for the reasons ``placePins`` is — it keeps a switch the
-    /// hiker set, and it needs ``trailGraphProvider`` — see
-    /// ``RouteDifficultyShading``.
-    let routeDifficulty: RouteDifficultyShading
+    /// The selected hike's line colours, observed directly by the map.
+    /// Owned here for the reasons ``placePins`` is — it keeps a setting the
+    /// hiker chose, and it needs ``trailGraphProvider`` — see
+    /// ``RouteShading``.
+    let routeShading: RouteShading
 
     /// Where the app asks OpenStreetMap what is on a trail — the maker's
     /// *Search this area*, a saved hike's *Places Around Trail* and the
@@ -203,7 +203,7 @@ final class OpenHikesModel {
         self.communityTransport = communityTransport
         trailMaker = Self.makeTrailMaker(container: container, graph: trailGraphProvider, defaults: defaults)
         placePins = Self.makePlacePins(defaults: defaults, maker: trailMaker)
-        routeDifficulty = RouteDifficultyShading(provider: trailGraphProvider, defaults: defaults)
+        routeShading = RouteShading(provider: trailGraphProvider, defaults: defaults)
         watchLink = Self.makeWatchLink(container: container, recorder: hikeRecorder, defaults: defaults)
         communityBlocks = CommunityBlockList(defaults: defaults)
         community = Self.makeCommunityBrowser(transport: communityTransport, blocks: communityBlocks)
@@ -308,7 +308,7 @@ final class OpenHikesModel {
     func selectedHikeDidChange(to hike: Hike?) {
         let finishedHike = browsableHike(hike)
         autoSaveController.hikeSelectionChanged(to: finishedHike)
-        routeDifficulty.follow(finishedHike)
+        routeShading.follow(finishedHike)
         if !AppLaunchEnvironment.isRunningTests {
             backgroundTracker.hikeSelectionChanged(to: finishedHike)
         }

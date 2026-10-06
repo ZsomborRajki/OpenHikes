@@ -202,7 +202,7 @@ struct RouteStyleTests {
         let hike = Fixture.hike(in: context)
         let style = RouteStyle()
         style.follow(hike)
-        #expect(style.border == hike.routeBorder, "a new hike starts with no border")
+        #expect(style.border == RouteStyle.defaultBorder, "a new hike starts with the default border")
 
         hike.routeBorderHex = "#FFFFFFFF"
         await settleDelegateHop(until: "the border to reach the style") {

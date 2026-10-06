@@ -60,8 +60,8 @@ public final class Hike {
     public var routeLinePatternID: String = RouteLinePattern.default.rawValue
     /// The colour of the outline drawn around the map polyline — see
     /// ``RouteBorder``. Stored like ``tintHex``, and empty until the hiker
-    /// picks one, which draws as clear. After that, "no border" is a colour
-    /// faded to zero opacity.
+    /// picks one, which the app draws in its default border, opaque black.
+    /// "No border" is a colour faded to zero opacity.
     public var routeBorderHex: String = ""
     /// SF Symbol shown in the row's colored circle.
     public var symbol: String = "figure.hiking"

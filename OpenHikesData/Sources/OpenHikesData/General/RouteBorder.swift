@@ -42,7 +42,7 @@ nonisolated public enum RouteBorder {
     }
 
     /// What a hike that has never had a border picked stores: no colour at
-    /// all, which draws as clear.
+    /// all, which the app draws in its default border (opaque black).
     ///
     /// Empty rather than a transparent colour, because every transparent
     /// colour is one the picker can hand back — `#00000000` is black at the
