@@ -83,6 +83,9 @@ struct CommunityShareSheet: View {
     /// Empty is the starting state and the ordinary one: sharing a hike shares
     /// its pictures, and this is the exception the hiker reaches for.
     @State private var excludedPhotoIDs: Set<UUID> = []
+    /// The photograph the full-screen gallery was opened at, while it is
+    /// pushed. See ``CommunitySharePhotoViewer``.
+    @State private var viewedPhotoID: UUID?
     /// How many photographs this device can send, once the disk has been
     /// asked. `nil` until then. Kept and written here rather than inside
     /// ``CommunitySharePhotoTally`` because it is the answer to a `.task`,
@@ -195,9 +198,24 @@ struct CommunityShareSheet: View {
         }
     }
 
+    /// The form, with the full-screen gallery its photo strip opens.
+    ///
+    /// Out of `body` for the reason ``formContent`` is: the closure around it
+    /// is at the length the linter allows.
+    private var form: some View {
+        Form { formContent }
+            .communitySharePhotoGallery(
+                $viewedPhotoID,
+                photos: CommunityPublisher.shareablePhotos(of: hike),
+                excluded: $excludedPhotoIDs,
+                store: store,
+                isSending: phase.isSending
+            )
+    }
+
     var body: some View {
         NavigationStack {
-            Form { formContent }
+            form
             .navigationTitle("Share Hike")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -346,7 +364,8 @@ private extension CommunityShareSheet {
             photos: CommunityPublisher.shareablePhotos(of: hike),
             excluded: $excludedPhotoIDs,
             store: store,
-            isSending: phase.isSending
+            isSending: phase.isSending,
+            onView: { viewedPhotoID = $0 }
         )
     }
 

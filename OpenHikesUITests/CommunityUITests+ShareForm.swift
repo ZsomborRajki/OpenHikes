@@ -141,4 +141,51 @@ extension CommunityUITests {
             "the hike should still have both pictures in its own gallery"
         )
     }
+
+    /// Looking at the share form's photographs full-screen, and choosing there.
+    ///
+    /// The gallery writes the form's own set rather than a copy, so the count
+    /// row the previous test watches is what proves it: a picture struck off
+    /// on its page is one fewer on the form the hiker goes back to.
+    @MainActor
+    func testTheShareFormsGalleryChoosesWhatGetsShared() {
+        let app = launchCommunity(
+            scenario: .seeded,
+            extraArguments: [
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+                "--ui-test-seed-photos=3",
+            ]
+        )
+        openHikeDetail(in: app)
+
+        tapWhenReady(element("community-share-button", in: app))
+        let count = element("community-share-photo-count", in: app)
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.trace) { count.value as? String == "3" },
+            "all three seeded photographs should start out included"
+        )
+
+        scrollToTap(element("community-share-view-photos", in: app), in: app)
+        XCTAssertTrue(
+            app.navigationBars["1 of 3"].waitForExistence(timeout: UITestTimeout.navigation),
+            "View Photos should open the gallery at the first photograph"
+        )
+
+        app.buttons["Next photo"].tap()
+        XCTAssertTrue(app.navigationBars["2 of 3"].waitForExistence(timeout: UITestTimeout.navigation))
+        let toggle = element("community-share-photo-toggle", in: app)
+        tapWhenReady(toggle)
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.trace) {
+                (toggle.label as String).hasSuffix("not shared")
+            },
+            "the page's own control should say the picture is now left out"
+        )
+
+        app.navigationBars["2 of 3"].buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.trace) { count.value as? String == "2" },
+            "the picture struck off in the gallery should be off the form too"
+        )
+    }
 }

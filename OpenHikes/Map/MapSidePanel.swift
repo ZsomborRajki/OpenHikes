@@ -21,6 +21,13 @@
 //  map is told as well so its own controls stay clear of the panel rather than
 //  behind it.
 //
+//  One screen is the exception: a photo viewer. In portrait it raises the sheet
+//  to `.large`; here the equivalent is the whole window, so the panel widens to
+//  it — edge to edge, past the safe area, the way a photograph is shown — and
+//  narrows again when the viewer is popped. The same view widening rather than
+//  a cover presented over it, so the navigation stack, the back gesture and
+//  the page being looked at all carry on through the change.
+//
 
 import SwiftUI
 
@@ -51,12 +58,18 @@ enum MapSidePanelLayout {
 }
 
 struct MapSidePanel<Content: View>: View {
+    /// Whether the panel covers the whole window — while a photo viewer is the
+    /// screen on top. See ``SheetPresentation/isShowingFullHeightScreen``.
+    var fillsWindow = false
     @ViewBuilder var content: Content
 
     var body: some View {
+        // Every change below is a value rather than a branch, so widening
+        // keeps the content's identity — a branch would rebuild the navigation
+        // stack, and the gallery with it, mid-push.
         content
-            .frame(width: MapSidePanelLayout.width)
-            .frame(maxHeight: .infinity)
+            .frame(width: fillsWindow ? nil : MapSidePanelLayout.width)
+            .frame(maxWidth: fillsWindow ? .infinity : nil, maxHeight: .infinity)
             // An overlay has no system sheet material of its own. Use
             // adaptive glass here too, bounded by the panel's four edges.
             .background {
@@ -69,8 +82,47 @@ struct MapSidePanel<Content: View>: View {
                 )
                 #endif
             }
-            .clipShape(.rect(cornerRadius: MapSidePanelLayout.cornerRadius))
-            .padding(MapSidePanelLayout.margin)
+            .clipShape(
+                PanelClip(
+                    cornerRadius: fillsWindow ? 0 : MapSidePanelLayout.cornerRadius,
+                    outset: fillsWindow ? PanelClip.safeAreaReach : 0
+                )
+            )
+            .padding(fillsWindow ? 0 : MapSidePanelLayout.margin)
+            .animation(.snappy, value: fillsWindow)
             .accessibilityIdentifier("map-side-panel")
+    }
+}
+
+/// The panel's clip: its rounded rectangle, or — filling the window — a rect
+/// grown past its own edges.
+///
+/// The panel is laid out inside the safe area, and a full-screen photograph's
+/// black is drawn past it into the Dynamic Island's edge and the home
+/// indicator's. A clip at the panel's own bounds would cut that back off and
+/// leave a strip of map down both sides of the picture, so the filled clip
+/// reaches beyond the bounds rather than being dropped — dropping it would be
+/// a branch, and a branch is a new navigation stack.
+nonisolated private struct PanelClip: Shape {
+    /// Further than any iPhone's landscape safe-area inset.
+    static let safeAreaReach: CGFloat = 200
+
+    var cornerRadius: CGFloat
+    var outset: CGFloat
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(cornerRadius, outset) }
+        set {
+            cornerRadius = newValue.first
+            outset = newValue.second
+        }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        Path(
+            roundedRect: rect.insetBy(dx: -outset, dy: -outset),
+            cornerRadius: cornerRadius,
+            style: .continuous
+        )
     }
 }

@@ -121,6 +121,14 @@ struct OpenHikesView: View {
     /// scene transition, and the measurement that says so is in that file.
     private var usesSidePanel: Bool { sheet.layout == .sidePanel }
 
+    /// Whether the side panel has widened over the whole map, for a photo
+    /// viewer — see ``MapSidePanel``. The map's own overlays stand down then,
+    /// or they would sit on the photograph.
+    ///
+    /// `usesSidePanel` first, so a portrait body never reads the viewer flag
+    /// and is not re-run by a photograph being opened inside the sheet.
+    private var panelCoversMap: Bool { usesSidePanel && sheet.isShowingFullHeightScreen }
+
     /// The selected tile provider, persisted by the settings sheet.
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
 
@@ -214,11 +222,11 @@ struct OpenHikesView: View {
         ZStack(alignment: .leading) {
             mapSurface
             if usesSidePanel {
-                MapSidePanel { mapSheet() }
+                MapSidePanel(fillsWindow: panelCoversMap) { mapSheet() }
             }
         }
             .overlay(alignment: .topLeading) {
-                if appModel.weatherManager.state != .idle {
+                if appModel.weatherManager.state != .idle, !panelCoversMap {
                     WeatherBadge(state: appModel.weatherManager.state) {
                         weatherDetail.present()
                     }
@@ -257,7 +265,9 @@ struct OpenHikesView: View {
             }
             // Handed the session and never reading it — see ``WalkStartedPill``.
             .overlay {
-                WalkStartedPill(session: appModel.walkSession, usesSidePanel: usesSidePanel) { openHike(id: $0) }
+                if !panelCoversMap {
+                    WalkStartedPill(session: appModel.walkSession, usesSidePanel: usesSidePanel) { openHike(id: $0) }
+                }
             }
             // Draws nothing. It is where the vertical size class is read —
             // out of this body, deliberately and at a measured cost if it

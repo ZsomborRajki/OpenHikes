@@ -75,6 +75,9 @@ struct CommunityPhotoShareSheet: View {
     /// really does want one again can put it back with the same tap that takes
     /// any other out.
     @State private var excludedPhotoIDs: Set<UUID>
+    /// The photograph the full-screen gallery was opened at, while it is
+    /// pushed. See ``CommunitySharePhotoViewer``.
+    @State private var viewedPhotoID: UUID?
     /// How many photographs this device can send, once the disk has been
     /// asked. `nil` until then. Kept and written here rather than inside
     /// ``CommunitySharePhotoTally`` because it is the answer to a `.task`,
@@ -175,6 +178,13 @@ struct CommunityPhotoShareSheet: View {
                 #endif
                 .toolbar { toolbarContent }
                 .interactiveDismissDisabled(phase.isSending)
+                .communitySharePhotoGallery(
+                    $viewedPhotoID,
+                    photos: CommunityPublisher.shareablePhotos(of: hike),
+                    excluded: $excludedPhotoIDs,
+                    store: store,
+                    isSending: phase.isSending
+                )
                 .countsSendablePhotos(
                     of: hike,
                     excluding: excludedPhotoIDs,
@@ -253,7 +263,8 @@ private extension CommunityPhotoShareSheet {
                 photos: CommunityPublisher.shareablePhotos(of: hike),
                 excluded: $excludedPhotoIDs,
                 store: store,
-                isSending: phase.isSending
+                isSending: phase.isSending,
+                onView: { viewedPhotoID = $0 }
             )
             if alreadySentPhotoCount > 0 {
                 Text(Self.alreadySent(count: alreadySentPhotoCount))

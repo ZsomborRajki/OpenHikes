@@ -35,6 +35,12 @@
 //  Two spellings of any of those is how the two screens end up meaning
 //  different things by the same tap.
 //
+//  A tile is too small to choose by, so the strip is also the way into
+//  ``CommunitySharePhotoViewer`` — a *View Photos* row under it, and *View* in
+//  each tile's long-press menu. A tap stays the toggle: it is the gesture the
+//  reviewer's strip makes too, and a tap that opened a gallery on one screen
+//  and struck a picture off on the other would be the disagreement above.
+//
 
 import OpenHikesData
 import SwiftUI
@@ -57,23 +63,41 @@ struct CommunitySharePhotoStrip: View {
     /// Whether the form is mid-send, which is the one state the strip does not
     /// take taps in.
     var isSending = false
+    /// Opens the full-screen gallery at a photograph, or `nil` where there is
+    /// nowhere to push it — which draws neither way in.
+    var onView: ((UUID) -> Void)?
 
     var body: some View {
         if !photos.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                // Lazy for the reason ``HikePhotoSection/gallery(_:)`` is: an eager
-                // stack starts a decode for every tile at once, for a row that shows
-                // a handful.
-                LazyHStack(spacing: PhotoTileMetrics.spacing) {
-                    ForEach(photos) { photo in
-                        tile(photo)
-                    }
+            strip
+            if let onView, let first = photos.first {
+                // A row of its own under the strip rather than a header
+                // button, so it is where the eye already is after the tiles,
+                // and as wide as a row to tap.
+                Button {
+                    onView(first.id)
+                } label: {
+                    Label("View Photos", systemImage: "arrow.up.left.and.arrow.down.right")
                 }
-                .padding(.vertical, 2)
+                .accessibilityIdentifier("community-share-view-photos")
             }
-            .scrollIndicators(.hidden)
-            .disabled(isSending)
         }
+    }
+
+    private var strip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            // Lazy for the reason ``HikePhotoSection/gallery(_:)`` is: an eager
+            // stack starts a decode for every tile at once, for a row that shows
+            // a handful.
+            LazyHStack(spacing: PhotoTileMetrics.spacing) {
+                ForEach(photos) { photo in
+                    tile(photo)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .scrollIndicators(.hidden)
+        .disabled(isSending)
     }
 
     private func tile(_ photo: HikePhoto) -> some View {
@@ -115,6 +139,13 @@ struct CommunitySharePhotoStrip: View {
             }
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if let onView {
+                Button("View", systemImage: "arrow.up.left.and.arrow.down.right") {
+                    onView(photo.id)
+                }
+            }
+        }
         // `-tile-` rather than bare `-photo-`: the count row above answers to
         // `community-share-photo-count`, and a test reaching for "the first
         // tile" by prefix would otherwise find the number instead.
@@ -125,8 +156,15 @@ struct CommunitySharePhotoStrip: View {
         )
     }
 
-    /// Strikes a photograph off, or puts it back.
     private func toggle(_ photo: HikePhoto) {
+        Self.toggle(photo, in: &excluded)
+    }
+
+    /// Strikes a photograph off, or puts it back.
+    ///
+    /// Static so ``CommunitySharePhotoViewer`` makes the same change to the
+    /// same set rather than a second spelling of it.
+    static func toggle(_ photo: HikePhoto, in excluded: inout Set<UUID>) {
         if excluded.contains(photo.id) {
             excluded.remove(photo.id)
         } else {

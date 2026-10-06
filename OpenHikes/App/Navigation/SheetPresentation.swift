@@ -172,6 +172,16 @@ final class SheetPresentation {
     /// the largest detent, or a side panel, which is always that tall.
     private(set) var isFullHeight: Bool
 
+    /// Whether the top of the stack is a screen that wants the whole sheet —
+    /// a photo viewer. ``applyFullHeightPolicy()`` acts on the transition
+    /// rather than on every path write, and so does this flag.
+    ///
+    /// Published for landscape, where there is no sheet to raise: the side
+    /// panel widens to the whole window instead, because a photograph in a
+    /// 320-point column is the stamp the detent policy exists to avoid. See
+    /// ``MapSidePanel``.
+    private(set) var isShowingFullHeightScreen = false
+
     /// True at the middle detent — the only one ``SheetMetrics`` learns a
     /// resting height for. A side panel rests at no detent and reports none.
     private(set) var isAtMiddleDetent: Bool
@@ -400,10 +410,6 @@ final class SheetPresentation {
     @ObservationIgnored private var storedPath: [SheetRoute] = []
     @ObservationIgnored private var storedDetent: PresentationDetent
     @ObservationIgnored private var storedLayout: SheetLayout = .bottomSheet
-    /// Whether the top of the stack is currently a screen that wants the whole
-    /// sheet, so ``applyFullHeightPolicy()`` acts on the transition rather than
-    /// on every path write.
-    @ObservationIgnored private var isShowingFullHeightScreen = false
     /// The height the sheet was at before a full-height screen was pushed, so
     /// popping back restores it rather than collapsing a detail view that was
     /// being read at `.large`.
