@@ -90,7 +90,7 @@ extension OpenHikesView {
     func attachPickedPhotos(_ items: [PhotosPickerItem]) {
         guard let subject = photoCapture.currentSubject() else { return }
         // Once for the whole selection: building it is route-sized work.
-        let plan = subject.placeID == nil ? subject.hike.photoSearchPlan : nil
+        let plan = subject.placeID == nil ? subject.hike.photoSearchPlan(profilesRoute: true) : nil
         photoCapture.runLibraryImport {
             for item in items {
                 guard !Task.isCancelled else { return }
