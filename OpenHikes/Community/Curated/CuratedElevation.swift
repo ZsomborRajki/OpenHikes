@@ -62,6 +62,7 @@
 //  coarser interval rather than an interpolation of a finer-looking one.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -356,6 +357,42 @@ nonisolated struct RouteHeightSamples: Equatable, Sendable {
         var filled = route
         for (index, height) in zip(indexes, heights) where height.isFinite {
             filled[index].elevation = height
+        }
+        return filled
+    }
+
+    /// `route` with a height on every point between the first and last that
+    /// were read, the ones in between interpolated by distance along the
+    /// line — or `route` untouched when it is not the route they were read
+    /// for.
+    ///
+    /// What steepness is measured from on a line drawn in the maker.
+    /// ``filling(_:)`` leaves every point between two samples without a
+    /// height, and ``RouteSteepness`` closes its window at a point with none,
+    /// so a snapped line — thousands of points and two hundred heights —
+    /// would measure as nothing at all. A straight run between two readings is
+    /// the grade those two readings give, which is as fine as the answer
+    /// gets. A non-finite reading is passed over, so the readings either side
+    /// of it are joined instead.
+    func interpolating(_ route: [RouteCoordinate]) -> [RouteCoordinate] {
+        guard describes(route) else { return route }
+        var filled = route
+        let readings = zip(indexes, heights).filter(\.1.isFinite)
+        for reading in readings {
+            filled[reading.0].elevation = reading.1
+        }
+        for (start, end) in readings.adjacentPairs() where end.0 - start.0 > 1 {
+            // How far along the line each point between the two is, from the
+            // first: `along[k]` is the distance to `route[start.0 + k]`.
+            let along = route[start.0...end.0].adjacentPairs().reductions(0) { total, pair in
+                total + RouteGeometry.distanceMeters(from: pair.0.clCoordinate, to: pair.1.clCoordinate)
+            }
+            let total = along[along.count - 1]
+            let steps = Double(end.0 - start.0)
+            for offset in 1..<(end.0 - start.0) {
+                let fraction = total > 0 ? along[offset] / total : Double(offset) / steps
+                filled[start.0 + offset].elevation = start.1 + (end.1 - start.1) * fraction
+            }
         }
         return filled
     }

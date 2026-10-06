@@ -130,6 +130,14 @@ final class TrailDraftController {
     /// waits rather than being asked per tap.
     let elevation: TrailDraftElevation
 
+    /// The line's colours, by difficulty and by steepness, measured as the
+    /// line settles and its heights land.
+    ///
+    /// Held here for the reason ``elevation`` is. Which of the two the map
+    /// draws is the *Color By* control every hike shares — see
+    /// ``TrailDraftShading``.
+    let shading: TrailDraftShading
+
     /// What the points a hiker merely tapped are called.
     ///
     /// Held here like the two above, and unlike them what it produces *is*
@@ -242,9 +250,13 @@ final class TrailDraftController {
     ///     must not ask — a preview, or a suite, for the reason
     ///     `elevationSource` is `nil` in both. See
     ///     ``OpenHikesModel/makeTrailStopNaming()``.
+    ///   - graph: the trail graph the hiking legs are routed over, read again
+    ///     from its cache to colour the line by difficulty. `nil` grades
+    ///     nothing — see ``TrailDraftShading``.
     init(
         store: TrailDraftStore? = nil,
         router: (any TrailLegRouting)? = nil,
+        graph: (any TrailGraphProviding)? = nil,
         placeSource: (any TrailPointSourcing)? = nil,
         elevationSource: (any CuratedElevationSourcing)? = nil,
         elevationPause: (@Sendable (TimeInterval) async throws -> Void)? = nil,
@@ -263,6 +275,7 @@ final class TrailDraftController {
         elevation = elevationPause.map { pause in
             TrailDraftElevation(draft: drawing, source: elevationSource, pause: pause)
         } ?? TrailDraftElevation(draft: drawing, source: elevationSource)
+        shading = TrailDraftShading(draft: drawing, provider: graph)
         geocoder = naming
         namer = TrailStopNamer(source: naming)
         self.recents = recents ?? TrailStopRecents(defaults: nil)
@@ -271,6 +284,9 @@ final class TrailDraftController {
         }
         finder.onFound { [weak self] places in
             self?.addPlaces(places)
+        }
+        elevation.onMeasured { [weak self] samples in
+            self?.shading.heightsDidLand(samples)
         }
     }
 
@@ -319,7 +335,7 @@ final class TrailDraftController {
             // it is a line the hiker is looking at — so the figure is asked
             // for on open exactly as it is asked for after an edit, and
             // arrives a couple of seconds later either way.
-            elevation.drawingDidChange()
+            lineDidChange()
         } else {
             // Stop this editor's requests. The graph provider retains any
             // download another caller still owns through its waiter count.
@@ -340,7 +356,7 @@ final class TrailDraftController {
             // there is no shared download behind it and nothing else is
             // waiting for it, so a request nobody will read is a request worth
             // dropping. The next open asks again.
-            elevation.clear()
+            forgetMeasurements()
             // Cancelled for the same reason, and with the record of what has
             // been asked — see ``TrailStopNamer/clear()``.
             namer.clear()
@@ -365,7 +381,7 @@ final class TrailDraftController {
         if editingHikeID != hike.id {
             cancelRouting()
             finder.clear()
-            elevation.clear()
+            forgetMeasurements()
             namer.clear()
             selection = nil
             droppedPin = nil
@@ -557,7 +573,7 @@ final class TrailDraftController {
         draft.chooseAlternative(alternative, forLegAt: legIndex)
         // A different shape has a different climb; the stored draft is points
         // and does not change, so nothing is written.
-        elevation.drawingDidChange()
+        lineDidChange()
     }
 
     /// The address at a coordinate, for the place sheet, or `nil` when there
@@ -693,7 +709,7 @@ final class TrailDraftController {
         // clear them: the drawing is emptied rather than edited, and an empty
         // draft is never measured, so a figure left here would be the climb of
         // a trail that has just been saved or thrown away.
-        elevation.clear()
+        forgetMeasurements()
         // And the names go with the points they were about, for the same
         // reason: a question still out about one of them has nothing left to
         // answer.
@@ -701,27 +717,6 @@ final class TrailDraftController {
         selection = nil
         droppedPin = nil
         endEdit()
-    }
-
-    private func endEdit() {
-        editingHikeID = nil
-        editingPlaceIDs = []
-    }
-
-    private func restoreIfNeeded() {
-        // Only into an empty draft. Leaving the maker and coming back within a
-        // launch finds the line still in memory, and overwriting it with the
-        // copy on disk would undo whatever was added after the last write.
-        guard draft.isEmpty, let stored = store?.load(), !stored.isEmpty else { return }
-        draft.replace(
-            with: stored.waypoints,
-            places: stored.places,
-            snapsToPaths: stored.snapsToPaths,
-            travelMode: stored.travelMode,
-            startIsOpen: stored.startIsOpen
-        )
-        editingHikeID = stored.editingHikeID
-        editingPlaceIDs = Set(stored.editingPlaceIDs)
     }
 
     /// Runs one edit to the points and, only if it changed them, ends it the
@@ -750,7 +745,7 @@ final class TrailDraftController {
     /// through ``persist()``.
     private func commitLine() {
         persist()
-        elevation.drawingDidChange()
+        lineDidChange()
         // Every edit to the line, rather than only the two that add a point:
         // a restore brings back points nothing has named, a delete can leave a
         // named point in flight beside an unnamed one, and asking after all of
@@ -870,7 +865,7 @@ extension TrailDraftController {
         // drawing has settled by exactly one leg, and the debounce in front of
         // the question is what folds a run of them into one — see
         // ``TrailDraftElevation``.
-        defer { elevation.drawingDidChange() }
+        defer { lineDidChange() }
         guard let route else {
             draft.abandonRouting(of: ends)
             return
@@ -878,5 +873,46 @@ extension TrailDraftController {
         // Nothing is written down: a resolved shape is re-derivable and
         // deliberately not part of the stored draft.
         draft.apply(route, to: ends)
+    }
+}
+
+// MARK: - Measuring, editing and restoring
+
+// An extension in the same file, so these stay private to the controller: the
+// class body is at its length limit.
+extension TrailDraftController {
+    /// The line moved: its climb and its colours are about a trail that no
+    /// longer exists, and are asked for again — see ``TrailDraftElevation``
+    /// and ``TrailDraftShading``.
+    private func lineDidChange() {
+        elevation.drawingDidChange()
+        shading.drawingDidChange()
+    }
+
+    /// Drops the climb and the colours and stops asking for them.
+    private func forgetMeasurements() {
+        elevation.clear()
+        shading.clear()
+    }
+
+    private func endEdit() {
+        editingHikeID = nil
+        editingPlaceIDs = []
+    }
+
+    private func restoreIfNeeded() {
+        // Only into an empty draft. Leaving the maker and coming back within a
+        // launch finds the line still in memory, and overwriting it with the
+        // copy on disk would undo whatever was added after the last write.
+        guard draft.isEmpty, let stored = store?.load(), !stored.isEmpty else { return }
+        draft.replace(
+            with: stored.waypoints,
+            places: stored.places,
+            snapsToPaths: stored.snapsToPaths,
+            travelMode: stored.travelMode,
+            startIsOpen: stored.startIsOpen
+        )
+        editingHikeID = stored.editingHikeID
+        editingPlaceIDs = Set(stored.editingPlaceIDs)
     }
 }

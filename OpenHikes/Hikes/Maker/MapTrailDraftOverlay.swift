@@ -201,7 +201,7 @@ extension MapView.Coordinator {
         trailDraftDrawn.waypoints.map(\.clCoordinate)
     }
 
-    private static let trailDraftLineWidth: CGFloat = 4
+    static let trailDraftLineWidth: CGFloat = 4
     private static let trailDraftPinDiameter: CGFloat = 24
     private static let trailDraftPinBorderWidth: CGFloat = 2.5
     private static let trailDraftPinShadowOpacity: Float = 0.35
@@ -354,6 +354,9 @@ extension MapView.Coordinator {
         guard held != trailDraftDrag else { return }
         let released = trailDraftDrag
         trailDraftDrag = held
+        // The colours come off while a point is held and go back when it is
+        // let go — see `MapTrailDraftShading.swift`.
+        if (held == nil) != (released == nil) { refreshTrailDraftShades(on: mapView) }
         // See `MapTrailDraftRouteChoices.swift`: hidden while a point is held,
         // and back as they were when one is let go without a rebuild.
         if held != nil {
@@ -452,7 +455,7 @@ extension MapView.Coordinator {
                 // that asks MapKit about an overlay keeps one answer.
                 // `rendererFor` looks the state up by identity.
                 trailDraftLegStyles[ObjectIdentifier(line)] = leg.snap
-                mapView.addOverlay(line, level: .aboveLabels)
+                addTrailDraftLegLine(line, to: mapView)
                 lines.append(line)
             }
         }
@@ -508,7 +511,7 @@ extension MapView.Coordinator {
         let line = MKPolyline(coordinates: coordinates, count: coordinates.count)
         trailDraftOverlays[index] = line
         trailDraftLegStyles[ObjectIdentifier(line)] = snap
-        mapView.addOverlay(line, level: .aboveLabels)
+        addTrailDraftLegLine(line, to: mapView)
     }
 
     /// The straight line leg `index` takes while `held` is being moved, and
@@ -554,6 +557,15 @@ extension MapView.Coordinator {
             coordinates = [leg.ends.startCoordinate, leg.ends.endCoordinate]
         }
         return MKPolyline(coordinates: coordinates, count: coordinates.count)
+    }
+
+    /// The renderer for any of the trail's overlays — a leg, one of the
+    /// routes a leg could take instead, or the line's colours — or `nil` when
+    /// this polyline is none of them.
+    func trailDraftOverlayRenderer(for polyline: MKPolyline, on mapView: MKMapView) -> MKOverlayRenderer? {
+        if let renderer = trailDraftRenderer(for: polyline, on: mapView) { return renderer }
+        if let renderer = trailDraftAlternativeRenderer(for: polyline, on: mapView) { return renderer }
+        return trailDraftShadeRenderer(for: polyline)
     }
 
     /// One leg's renderer, or `nil` when this polyline is not one of the

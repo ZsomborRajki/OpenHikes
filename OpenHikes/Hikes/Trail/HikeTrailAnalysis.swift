@@ -75,14 +75,22 @@ nonisolated enum HikeTrailAnalysis {
     /// so the detail screen asking for its breakdown at the same moment costs
     /// one round of Overpass requests, not two. Quiet on failure for the same
     /// reason that is: an empty answer draws the line as it always was.
+    ///
+    /// `downloading: false` measures against the cache or not at all. The
+    /// trail maker asks that way, after every leg lands: a snapped line runs
+    /// through regions its own routing has just downloaded, and nothing on a
+    /// line that is still being drawn is worth another Overpass request.
     @concurrent
     static func difficultyRuns(
         route: [RouteCoordinate],
-        provider: any TrailGraphProviding
+        provider: any TrailGraphProviding,
+        downloading: Bool = true
     ) async -> [TrailCategoryRun<TrailDifficulty>] {
         assertOffMainThread("Hike trail analysis must stay off the main thread")
         guard route.count > 1 else { return [] }
-        guard let graph = await graph(covering: route, provider: provider) else { return [] }
+        guard let graph = await graph(covering: route, provider: provider, downloading: downloading) else {
+            return []
+        }
         let runs = try? await TrailBreakdownAnalyzer.runs(
             of: TrailDifficulty.self,
             route: route,
@@ -92,7 +100,7 @@ nonisolated enum HikeTrailAnalysis {
     }
 
     /// The cached graph when it already covers the whole route, and a
-    /// downloaded one otherwise.
+    /// downloaded one otherwise — or none, when `downloading` is false.
     ///
     /// The completeness check is what keeps the free case honest.
     /// ``TrailGraphProviding/cachedGraph(covering:)`` merges whatever happens
@@ -102,13 +110,15 @@ nonisolated enum HikeTrailAnalysis {
     /// which is a wrong number rather than a missing one.
     private static func graph(
         covering route: [RouteCoordinate],
-        provider: any TrailGraphProviding
+        provider: any TrailGraphProviding,
+        downloading: Bool = true
     ) async -> TrailGraph? {
         let coordinates = route.map(\.clCoordinate)
         if await provider.hasCompleteCachedGraph(covering: coordinates),
            let cached = try? await provider.cachedGraph(covering: coordinates),
            !cached.isEmpty { return cached }
-        guard let downloaded = try? await provider.graph(covering: coordinates),
+        guard downloading,
+              let downloaded = try? await provider.graph(covering: coordinates),
               !downloaded.isEmpty
         else { return nil }
         return downloaded

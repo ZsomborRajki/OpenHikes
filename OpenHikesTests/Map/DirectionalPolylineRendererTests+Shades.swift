@@ -120,8 +120,13 @@ extension DirectionalPolylineRendererTests {
 
     /// Draws `polyline` solid with `shades` over it, in the canvas
     /// ``renderMeeting(alpha:)`` frames.
-    private static func render(_ polyline: MKPolyline, shades: [DirectionalPolylineRenderer.Shade]) throws -> Canvas {
+    private static func render(
+        _ polyline: MKPolyline,
+        shades: [DirectionalPolylineRenderer.Shade],
+        stroke: UIColor? = nil
+    ) throws -> Canvas {
         let renderer = Self.renderer(.solid, on: polyline)
+        if let stroke { renderer.strokeColor = stroke }
         renderer.setShades(shades)
         let canvas = try Canvas()
         let perMeter = MKMapPointsPerMeterAtLatitude(meetingLatitude)
@@ -173,6 +178,28 @@ extension DirectionalPolylineRendererTests {
         )
         renderer.draw(rect, zoomScale: zoom, in: canvas.context)
         return canvas
+    }
+
+    /// The trail maker's colours are drawn this way, over the legs: only the
+    /// stretches, so a leg with no colour shows through in its own — see
+    /// `MapTrailDraftShading.swift`.
+    @Test("a clear line draws its stretches and nothing between them")
+    func clearLineDrawsOnlyItsStretches() throws {
+        let whole = Self.meetingPoints(0, Self.meetingLength)
+        let half = Self.meetingLength / 2
+        let canvas = try Self.render(
+            MKPolyline(points: whole, count: whole.count),
+            shades: [Self.stretch(0, half, CGColor(red: 0, green: 0, blue: 1, alpha: 1))],
+            stroke: .clear
+        )
+
+        let shown = Self.meetingLength + Self.meetingMargin * 2
+        let row = canvas.context.height / 2
+        let column = { (meters: Double) in Int((Self.meetingMargin + meters) / shown * Double(canvas.context.width)) }
+        let coloured = Self.pixel(in: canvas, x: column(half / 2), y: row)
+        let uncoloured = Self.pixel(in: canvas, x: column(half * 3 / 2), y: row)
+        #expect(coloured.blue > Self.bright && coloured.red < Self.dim)
+        #expect(uncoloured.alpha == 0, "the line itself is not drawn")
     }
 
     /// An out-and-back trail draws its return leg over its outward one, and
