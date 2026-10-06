@@ -308,7 +308,9 @@ final class MapController {
         show(framed)
     }
 
-    private static let photoSpotSpanMeters: CLLocationDistance = 500
+    /// Also the closest *Add Place* zooms in to — see
+    /// `MapPlacePlacement.swift`.
+    static let photoSpotSpanMeters: CLLocationDistance = 500
     private static let lonePointSpanMeters: CLLocationDistance = 1000
     private static let drawnLinePadding: Double = 1.4
 }

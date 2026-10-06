@@ -173,7 +173,14 @@ extension MapView.Coordinator {
         edgePadding: MapEdgeInsets,
         animated: Bool
     ) {
-        let margins = Self.layoutMargins(of: mapView)
+        let padding = Self.residualPadding(edgePadding, on: mapView)
+        mapView.setVisibleMapRect(rect, edgePadding: padding.platformInsets, animated: animated)
+    }
+
+    /// What ``setVisible`` hands MapKit for `edgePadding`: the padding less
+    /// the margins MapKit adds back, clamped to the box it frames into.
+    private static func residualPadding(_ edgePadding: MapEdgeInsets, on mapView: MKMapView) -> MapEdgeInsets {
+        let margins = layoutMargins(of: mapView)
         let residual = MapEdgeInsets(
             top: max(0, edgePadding.top - margins.top),
             left: max(0, edgePadding.left - margins.left),
@@ -184,8 +191,25 @@ extension MapView.Coordinator {
             width: max(0, mapView.bounds.width - margins.left - margins.right),
             height: max(0, mapView.bounds.height - margins.top - margins.bottom)
         )
-        let clamped = Self.clamped(residual, toFit: framed)
-        mapView.setVisibleMapRect(rect, edgePadding: clamped.platformInsets, animated: animated)
+        return clamped(residual, toFit: framed)
+    }
+
+    /// The middle of the focus area, in the map's own points: where
+    /// ``show(_:on:animated:)`` puts the centre of the region it is given.
+    ///
+    /// The same arithmetic ``setVisible`` hands MapKit, read back as a point,
+    /// so a pin standing here and a region shown through the focus area agree
+    /// to the point — see `MapPlacePlacement.swift`, which stands a pin here
+    /// and moves the map under it.
+    func focusPoint(in mapView: MKMapView) -> CGPoint {
+        let margins = Self.layoutMargins(of: mapView)
+        let padding = Self.residualPadding(obstructionInsets(in: mapView), on: mapView)
+        let bounds = mapView.bounds
+        let left = bounds.minX + margins.left + padding.left
+        let right = bounds.maxX - margins.right - padding.right
+        let top = bounds.minY + margins.top + padding.top
+        let bottom = bounds.maxY - margins.bottom - padding.bottom
+        return CGPoint(x: (left + right) / 2, y: (top + bottom) / 2)
     }
 
     /// The map's own layout margins, per *physical* edge.

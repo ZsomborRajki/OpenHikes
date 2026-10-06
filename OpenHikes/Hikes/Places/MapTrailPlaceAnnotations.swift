@@ -48,9 +48,6 @@ final class TrailPlaceAnnotation: NSObject, MKAnnotation {
     /// Whether this is the drawing's place, which opens the place sheet, rather
     /// than a saved hike's, which opens the place's screen.
     let belongsToDraft: Bool
-    /// Whether this is where a place about to be added would stand, rather
-    /// than a place the hike has. Opens nothing. See ``HikePlaceAdder``.
-    let isPlaceholder: Bool
     /// Whether this is a place found around a saved hike and not on it yet,
     /// drawn pale. Opens its card on *Places Around Trail* — see
     /// ``TrailPlacesAround``.
@@ -74,12 +71,11 @@ final class TrailPlaceAnnotation: NSObject, MKAnnotation {
         return parts.joined(separator: " · ")
     }
 
-    init(row: TrailPlaceRow, belongsToDraft: Bool, isPlaceholder: Bool = false, isCandidate: Bool = false) {
+    init(row: TrailPlaceRow, belongsToDraft: Bool, isCandidate: Bool = false) {
         place = row.place
         coordinate = row.place.clCoordinate
         anchor = row.anchor
         self.belongsToDraft = belongsToDraft
-        self.isPlaceholder = isPlaceholder
         self.isCandidate = isCandidate
     }
 
@@ -134,15 +130,14 @@ extension MapView.Coordinator {
             ? tint.withAlphaComponent(TrailPlaceAnnotation.candidatePinAlpha)
             : tint
         view.displayPriority = annotation.isCandidate ? .defaultHigh : .required
-        view.accessibilityIdentifier = switch (annotation.belongsToDraft, annotation.isPlaceholder) {
-        case (true, _): "trail-draft-place"
-        case (false, true): "hike-place-placeholder"
-        case (false, false): annotation.isCandidate ? "hike-place-candidate" : "hike-place"
+        view.accessibilityIdentifier = if annotation.belongsToDraft {
+            "trail-draft-place"
+        } else {
+            annotation.isCandidate ? "hike-place-candidate" : "hike-place"
         }
         #endif
-        // The pin a hiker is placing stands in front of the ones already
-        // there, and the ones not on the trail stand behind them.
-        view.zPriority = annotation.isPlaceholder ? .max : annotation.isCandidate ? .min : .defaultUnselected
+        // The ones not on the trail stand behind the ones that are.
+        view.zPriority = annotation.isCandidate ? .min : .defaultUnselected
         // Neither kind shows a callout: the drawing's opens the place sheet
         // and a saved hike's opens the place's screen — see
         // ``selectHikePlaceAnnotation(_:on:)``.
