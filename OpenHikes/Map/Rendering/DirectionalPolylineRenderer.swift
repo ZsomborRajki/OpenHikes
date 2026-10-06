@@ -158,7 +158,7 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         /// along the whole path rather than resetting at every vertex.
         var carry: Double
         var placed: RouteChevronField
-        let tint: ChevronTint
+        var tint: ChevronTint
 
         init(plan: ChevronPlan, mapRect: MKMapRect, tint: ChevronTint) {
             self.plan = plan
@@ -440,16 +440,11 @@ nonisolated extension DirectionalPolylineRenderer {
         /// One per pair of neighbouring stretches, `nil` where they do not
         /// blend — see ``RouteShadeBlend/pieces(between:)``.
         let blends: [RouteShadeBlend.Piece?]
-        /// The line's own alpha, which the stretches are drawn at as one
-        /// layer rather than each on its own — so a blend drawn over the end
-        /// of a stretch, or two round caps where stretches meet, do not
-        /// double it.
-        let alpha: CGFloat
     }
 
     /// A stretch's passes: a solid stroke that clears the line — and its
     /// border, when it has one — out from under it, the stretch's own border,
-    /// and the stretch itself, opaque, in the pattern's own dashes and cap.
+    /// and the stretch itself, in the pattern's own dashes and cap.
     private struct ShadeLine {
         let polyline: MKPolyline
         let clear: MKPolylineRenderer
@@ -499,9 +494,21 @@ nonisolated extension DirectionalPolylineRenderer {
         /// How far off a stretch a centre may be and still be on it: half the
         /// line's width, in map points.
         var tolerance: Double = 0
+        /// The stretch the last chevron was found on. A pass places its
+        /// chevrons along the line in order, so the next is nearly always on
+        /// that stretch or the one after it, and asking those two first
+        /// spares a search of every stretch for every chevron — which, with
+        /// the line coloured by steepness from end to end, is hundreds of
+        /// stretches.
+        private var last = 0
 
-        func color(at point: MKMapPoint) -> CGColor {
-            stretches.first { $0.carries(point, within: tolerance) }?.chevronColor ?? color
+        mutating func color(at point: MKMapPoint) -> CGColor {
+            let near = last..<min(last + 2, stretches.count)
+            guard let index = near.first(where: { stretches[$0].carries(point, within: tolerance) })
+                ?? stretches.firstIndex(where: { $0.carries(point, within: tolerance) })
+            else { return color }
+            last = index
+            return stretches[index].chevronColor
         }
     }
 
@@ -557,11 +564,18 @@ nonisolated extension DirectionalPolylineRenderer {
                 context.restoreGState()
             }
         }
-        let layered = shading.alpha < 1
-        if layered {
-            context.setAlpha(shading.alpha)
-            context.beginTransparencyLayer(auxiliaryInfo: nil)
-        }
+        // Copied rather than composited: each stretch and blend replaces
+        // what is under it, so a blend laid over the ends of the stretches it
+        // joins, two round caps where stretches meet, or a leg that doubles
+        // back over another do not double a translucent line's alpha. A
+        // transparency layer gave the same picture, but it is a bitmap the
+        // size of the whole tile, cleared and composited on every draw:
+        // measured at the 768-pixel tile a 3× screen draws, about 2 ms a
+        // tile at every zoom, against the fraction of that the stretches
+        // themselves cost.
+        let blendFloor = Double(lineWidth * contentScaleFactor / zoomScale)
+        context.saveGState()
+        context.setBlendMode(.copy)
         // In route order, each stretch and then the blend into it: where the
         // route doubles back over itself the later leg covers the earlier
         // one, blends included — see ``RouteShadeBlend/pieces(between:)``.
@@ -572,11 +586,15 @@ nonisolated extension DirectionalPolylineRenderer {
                     line.fill.draw(mapRect, zoomScale: zoomScale, in: context)
                 }
             }
-            if index > 0, let blend = shading.blends[index - 1], blend.bounds.intersects(visible) {
+            // A piece no longer than the line is wide is a blot under the
+            // round caps at this zoom, with no change of colour to show — and
+            // a whole long route seen at once is hundreds of them in a tile.
+            if index > 0, let blend = shading.blends[index - 1], blend.bounds.intersects(visible),
+               max(blend.bounds.size.width, blend.bounds.size.height) > blendFloor {
                 drawBlend(blend, zoomScale: zoomScale, context: context)
             }
         }
-        if layered { context.endTransparencyLayer() }
+        context.restoreGState()
     }
 
     /// Runs `draw` with the context moved from this line's corner to
@@ -604,12 +622,7 @@ nonisolated extension DirectionalPolylineRenderer {
             let dashes = pattern.dashLengths(forWidth: width).map { NSNumber(value: $0 * scale) }
             let bordered = (borderColor?.alpha ?? 0) > 0
             let cleared = bordered ? width + RouteBorder.width(forLineWidth: width) * 2 : width
-            // Opaque here, and drawn at the line's alpha as one layer — see
-            // ``Shading/alpha``.
-            let opaque = state.shades.map { shade in
-                Shade(polyline: shade.polyline, color: shade.color.copy(alpha: 1) ?? shade.color)
-            }
-            let lines = opaque.map { shade in
+            let lines = state.shades.map { shade in
                 let clear = MKPolylineRenderer(polyline: shade.polyline)
                 clear.lineWidth = CGFloat(cleared) * scale
                 clear.lineJoin = .round
@@ -632,11 +645,7 @@ nonisolated extension DirectionalPolylineRenderer {
                     chevronColor: arrowColor(on: fill.strokeColor)
                 )
             }
-            let shading = Shading(
-                lines: lines,
-                blends: RouteShadeBlend.pieces(between: opaque),
-                alpha: state.shades.first?.color.alpha ?? 1
-            )
+            let shading = Shading(lines: lines, blends: RouteShadeBlend.pieces(between: state.shades))
             state.built = (scale, shading)
             return shading
         }
