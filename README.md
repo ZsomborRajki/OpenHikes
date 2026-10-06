@@ -43,7 +43,7 @@ That is local-first with one deliberate exception. There is no OpenHikes account
   watchOS 26.0. The watch app is embedded in the phone app, so building the
   `OpenHikes` scheme builds it too.
 
-OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia and Thunderforest require build-time API keys *and* a paid subscription with each vendor, whose terms forbid using them free of charge in a shipping app — in OpenHikes they sit behind a monthly subscription, OpenHikes Pro, which is what pays for them, along with saving a whole route's Stadia map for offline use — Thunderforest's licence reserves pre-caching for a plan this app is not on — and Stadia's elevation for drawn trails and OpenStreetMap routes, which is billed per call too. Everything else in the app, the community feature included, is free. A build without keys shows them locked, and OpenStreetMap keeps working.
+OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia and Thunderforest require build-time API keys *and* a paid subscription with each vendor, whose terms forbid using them free of charge in a shipping app — in OpenHikes they sit behind a monthly subscription, OpenHikes Pro, which is what pays for them, along with saving a whole route's Stadia map for offline use — Thunderforest's licence reserves pre-caching for a plan this app is not on — and Stadia's elevation for drawn trails, OpenStreetMap routes and hikes imported without heights, which is billed per call too. Everything else in the app, the community feature included, is free. A build without keys shows them locked, and OpenStreetMap keeps working.
 
 ## Setup
 

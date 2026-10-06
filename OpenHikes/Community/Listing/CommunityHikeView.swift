@@ -801,6 +801,9 @@ private extension CommunityHikeView {
     /// ``HikeElevationPlaceholder``. The difference is what the hiker can do
     /// about it: that file is theirs, so *no elevation data in this file* tells
     /// them something true about a thing they chose to import.
+    ///
+    /// Without OpenHikes Pro, a curated route's missing chart is the card that
+    /// sells the heights instead — see ``ElevationProPrompt``.
     @ViewBuilder var elevationSection: some View {
         if let profile = prepared?.profile, profile.samples.count > 1 {
             VStack(alignment: .leading, spacing: 6) {
@@ -832,6 +835,15 @@ private extension CommunityHikeView {
                         .accessibilityIdentifier("community-elevation-attribution")
                 }
             }
+        } else if listing.isCurated, prepared != nil {
+            // The one route here a subscription gives heights to — see
+            // ``ElevationProPrompt``. Drawn only for a hiker without one: a
+            // subscriber whose request failed gets no section, as before.
+            ElevationProPrompt(
+                tint: listing.tint,
+                message: "No elevation data for this route",
+                onUnlocked: fetchHeights
+            )
         }
     }
 
@@ -987,6 +999,22 @@ private extension CommunityHikeView {
             return
         } catch {
             phase = .failed(CommunityFailure(error))
+        }
+    }
+
+    /// Asks for the heights a subscription bought from this screen's
+    /// ``ElevationProPrompt``, and draws the chart from them — the request
+    /// the transport made on open and was refused, made again now that it
+    /// would not be. Onto the detail too, so *Save* keeps them.
+    func fetchHeights() {
+        guard case .loaded(var detail) = phase,
+              let source = OpenHikesModel.makeTrailElevationSource() else { return }
+        Task {
+            let filled = await source.filled(detail.route)
+            guard filled != detail.route, case .loaded = phase else { return }
+            detail.route = filled
+            phase = .loaded(detail)
+            prepared = await Self.prepare(detail)
         }
     }
 

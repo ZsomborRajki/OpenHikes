@@ -7,6 +7,7 @@
 
 import OpenHikesData
 import OpenHikesShared
+import SwiftData
 import SwiftUI
 
 /// The one tile the hike detail's action row is built from — Zoom, Follow,
@@ -295,21 +296,49 @@ struct HikeTrailProgress: View {
 }
 
 /// Keeps the empty chart's tint observation out of `HikeDetailView.body`.
+///
+/// A hike with no heights at all is one OpenHikes Pro fills in: without the
+/// subscription the card is a way to it, and with it the heights are read
+/// once and saved onto the hike — see ``HikeElevationFill``. The chart then
+/// takes this card's place, because the route the detail screen keys its
+/// profile on has changed.
 struct HikeElevationPlaceholder: View {
     let hike: Hike
 
+    @Environment(OpenHikesModel.self) private var appModel
+    @Environment(\.modelContext) private var context
+    @State private var isReading = false
+
     var body: some View {
-        ElevationPlaceholderView(
-            tint: hike.tintOpaque,
-            // "in this file" for as long as every hike without heights had
-            // arrived as one. A recorded walk with no barometer never had a
-            // file, and since the trail maker neither has a drawn trail — which
-            // is exactly the hike a free subscriber's drawn trail *always* is,
-            // because the heights ride the gate ``StadiaElevationSource``
-            // enforces.
-            message: "No elevation data for this hike"
-        )
+        let entitlement = appModel.entitlement
+        let entitled = entitlement.isEntitled
+        Group {
+            if entitlement.state == .notEntitled, HikeElevationFill.canFill(hike) {
+                ElevationProPrompt(tint: hike.tintOpaque, message: Self.message)
+            } else {
+                ElevationPlaceholderView(
+                    tint: hike.tintOpaque,
+                    message: isReading ? "Reading elevation\u{2026}" : Self.message
+                )
+            }
+        }
+        // Keyed on the subscription, so a purchase made from the card asks at
+        // once rather than the next time the hike is opened.
+        .task(id: entitled) {
+            guard entitled, HikeElevationFill.canFill(hike),
+                  let source = OpenHikesModel.makeTrailElevationSource() else { return }
+            isReading = true
+            defer { isReading = false }
+            await HikeElevationFill.fill(hike, from: source, in: context)
+        }
     }
+
+    // "in this file" for as long as every hike without heights had arrived as
+    // one. A recorded walk with no barometer never had a file, and since the
+    // trail maker neither has a drawn trail — which is exactly the hike a
+    // free subscriber's drawn trail *always* is, because the heights ride the
+    // gate ``StadiaElevationSource`` enforces.
+    private static let message: LocalizedStringKey = "No elevation data for this hike"
 }
 
 /// Owns the high-frequency download observations so per-tile progress only
