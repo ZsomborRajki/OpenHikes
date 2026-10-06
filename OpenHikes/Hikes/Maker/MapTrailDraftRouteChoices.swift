@@ -46,6 +46,9 @@ struct TrailDraftRouteChoiceLayer {
     var lines: [MKPolyline] = []
     var choices: [ObjectIdentifier: TrailDraftRouteChoice] = [:]
     var times: [TrailDraftTravelTimeAnnotation] = []
+    /// A spinner on each leg still being routed — see
+    /// `MapTrailDraftRoutingBadge.swift`.
+    var routing: [TrailDraftRoutingAnnotation] = []
 }
 
 /// How long the trip takes, by the route drawn or by one on offer — the bubble
@@ -145,7 +148,8 @@ extension MapView.Coordinator {
     ///
     /// The route's bubble waits until no leg is still being routed: until then
     /// its figure is a straight line's estimate that is about to change, and
-    /// the header already carries it.
+    /// the header already carries it. Each leg that is still being routed
+    /// carries a spinner instead — see `MapTrailDraftRoutingBadge.swift`.
     ///
     /// The alternatives go **under** the drawn line, which is already on the
     /// map and stays there across a commit — see `MapTrailDraftOverlay.swift`
@@ -191,6 +195,7 @@ extension MapView.Coordinator {
                 ))
             }
         }
+        layer.routing = Self.trailDraftRoutingBadges(for: legs)
         trailDraftRouteChoices = layer
         // `overlays(in:)` lists a level bottom first, so the first of the
         // draft's own lines in it is the one everything goes beneath.
@@ -203,12 +208,14 @@ extension MapView.Coordinator {
             mapView.addOverlays(layer.lines, level: .aboveLabels)
         }
         mapView.addAnnotations(layer.times)
+        mapView.addAnnotations(layer.routing)
     }
 
     func removeTrailDraftRouteChoices(from mapView: MKMapView) {
         let drawn = trailDraftRouteChoices
         if !drawn.lines.isEmpty { mapView.removeOverlays(drawn.lines) }
         if !drawn.times.isEmpty { mapView.removeAnnotations(drawn.times) }
+        if !drawn.routing.isEmpty { mapView.removeAnnotations(drawn.routing) }
         trailDraftRouteChoices = TrailDraftRouteChoiceLayer()
     }
 

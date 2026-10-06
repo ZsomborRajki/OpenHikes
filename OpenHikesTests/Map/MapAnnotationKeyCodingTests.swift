@@ -14,7 +14,7 @@
 //
 //  So the claim is made once, for every class at once, and by class rather
 //  than by instance: none of these needs to exist for the question to have an
-//  answer, and building seven fixtures to ask it would be seven reasons for
+//  answer, and building eight fixtures to ask it would be eight reasons for
 //  this file to go stale.
 //
 
@@ -35,6 +35,7 @@ struct MapAnnotationKeyCodingTests {
         ("TrailDraftWaypointAnnotation", TrailDraftWaypointAnnotation.self),
         ("TrailPlaceAnnotation", TrailPlaceAnnotation.self),
         ("TrailDraftTravelTimeAnnotation", TrailDraftTravelTimeAnnotation.self),
+        ("TrailDraftRoutingAnnotation", TrailDraftRoutingAnnotation.self),
         ("CommunityMapAnnotation", CommunityMapAnnotation.self),
         ("CommunityPhotoMapAnnotation", CommunityPhotoMapAnnotation.self),
         ("PhotoMapAnnotation", PhotoMapAnnotation.self),

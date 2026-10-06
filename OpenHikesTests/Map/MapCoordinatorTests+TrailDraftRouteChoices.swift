@@ -223,6 +223,51 @@ extension MapCoordinatorTests {
         }
         #endif
     }
+
+    /// The dash alone read as a finished line — see
+    /// `MapTrailDraftRoutingBadge.swift`. The leg says it is waiting where its
+    /// time will land, and stops saying so when the answer does.
+    @Test("a leg still being routed carries a spinner until its answer lands")
+    func aRoutingLegCarriesASpinner() async throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        trailMaker.setEditing(true)
+        let south = Self.valley(Valley.south)
+        let north = Self.valley(Valley.north)
+        trailMaker.appendWaypoint(at: CLLocationCoordinate2D(latitude: south.latitude, longitude: south.longitude))
+        trailMaker.appendWaypoint(at: CLLocationCoordinate2D(latitude: north.latitude, longitude: north.longitude))
+        let ends = TrailLegEnds(start: south, end: north)
+        #expect(coordinator.trailDraftRouteChoices.routing.isEmpty, "a freehand leg is not waiting")
+
+        trailMaker.draft.beginRouting([ends])
+        await settle(until: "the spinner to be drawn") {
+            coordinator.trailDraftRouteChoices.routing.count == 1
+        }
+        let badge = try #require(coordinator.trailDraftRouteChoices.routing.first)
+        #expect(badge.coordinate.latitude.isApproximatelyEqual(to: Valley.latitude, absoluteTolerance: 1e-6))
+        #expect(map.annotations.contains { $0 === badge })
+        let view = try #require(coordinator.mapView(map, viewFor: badge))
+        #expect(view.accessibilityLabel == TrailLegSnap.routing.notice?.text)
+        #expect(coordinator.selectTrailDraftAnnotation(view, on: map), "a tap on it drops no pin")
+        #expect(trailMaker.selection == nil)
+
+        trailMaker.draft.apply(
+            TrailLegRoute(
+                coordinates: [south, north],
+                distanceMeters: ends.straightDistanceMeters,
+                snap: .snapped,
+                travelTime: Valley.drawnTime
+            ),
+            to: ends
+        )
+        await settle(until: "the spinner to be withdrawn") {
+            coordinator.trailDraftRouteChoices.routing.isEmpty
+        }
+        #expect(!map.annotations.contains { $0 === badge })
+        #endif
+    }
 }
 
 /// Heights that climb 600 m from the first point asked about to the last, so
