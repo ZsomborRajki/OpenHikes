@@ -76,10 +76,15 @@ nonisolated enum HikeTrailAnalysis {
     /// one round of Overpass requests, not two. Quiet on failure for the same
     /// reason that is: an empty answer draws the line as it always was.
     ///
-    /// `downloading: false` measures against the cache or not at all. The
-    /// trail maker asks that way, after every leg lands: a snapped line runs
-    /// through regions its own routing has just downloaded, and nothing on a
-    /// line that is still being drawn is worth another Overpass request.
+    /// `downloading: false` measures against whatever the cache holds, and
+    /// never asks Overpass. The trail maker asks that way, after every leg
+    /// lands: a snapped line runs through regions its own routing has just
+    /// downloaded, and nothing on a line that is still being drawn is worth
+    /// another Overpass request. Part of the line can fall in a region nobody
+    /// downloaded — a leg Overpass refused, or one Apple's directions took
+    /// off the straight line between its ends — and that part is ungraded
+    /// rather than the whole line, which is honest here because an ungraded
+    /// stretch is dropped, not counted.
     @concurrent
     static func difficultyRuns(
         route: [RouteCoordinate],
@@ -100,25 +105,32 @@ nonisolated enum HikeTrailAnalysis {
     }
 
     /// The cached graph when it already covers the whole route, and a
-    /// downloaded one otherwise — or none, when `downloading` is false.
+    /// downloaded one otherwise — or, when `downloading` is false, whatever
+    /// of it is cached.
     ///
     /// The completeness check is what keeps the free case honest.
     /// ``TrailGraphProviding/cachedGraph(covering:)`` merges whatever happens
     /// to be on disk, and a region that was never downloaded is
     /// indistinguishable from a region with no trails in it — measuring
     /// against a partial graph would report the former as unmapped trail,
-    /// which is a wrong number rather than a missing one.
+    /// which is a wrong number rather than a missing one. Colouring is the
+    /// exception ``difficultyRuns(route:provider:downloading:)`` explains.
     private static func graph(
         covering route: [RouteCoordinate],
         provider: any TrailGraphProviding,
         downloading: Bool = true
     ) async -> TrailGraph? {
         let coordinates = route.map(\.clCoordinate)
+        guard downloading else {
+            guard let cached = try? await provider.cachedGraph(covering: coordinates), !cached.isEmpty else {
+                return nil
+            }
+            return cached
+        }
         if await provider.hasCompleteCachedGraph(covering: coordinates),
            let cached = try? await provider.cachedGraph(covering: coordinates),
            !cached.isEmpty { return cached }
-        guard downloading,
-              let downloaded = try? await provider.graph(covering: coordinates),
+        guard let downloaded = try? await provider.graph(covering: coordinates),
               !downloaded.isEmpty
         else { return nil }
         return downloaded

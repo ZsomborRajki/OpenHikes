@@ -39,6 +39,29 @@ struct TrailDraftShadingTests {
         func hasCompleteCachedGraph(covering coordinates: [CLLocationCoordinate2D]) -> Bool { false }
     }
 
+    /// The fixture graph, with every region reported missing from the cache
+    /// — a line with one leg nobody downloaded the ground under. Counts every
+    /// time it is asked to download.
+    nonisolated private final class PartlyCachedProvider: TrailGraphProviding, @unchecked Sendable {
+        private let cached: BundledTrailGraphProvider
+        private let prefetches = Mutex(0)
+        var prefetchCount: Int { prefetches.withLock { $0 } }
+
+        init(_ cached: BundledTrailGraphProvider) { self.cached = cached }
+
+        func region(containing coordinate: CLLocationCoordinate2D) -> TrailGraphRegion? { nil }
+
+        func prefetch(around coordinate: CLLocationCoordinate2D) {
+            prefetches.withLock { $0 += 1 }
+        }
+
+        func cachedGraph(covering coordinates: [CLLocationCoordinate2D]) -> TrailGraph? {
+            cached.cachedGraph(covering: coordinates)
+        }
+
+        func hasCompleteCachedGraph(covering coordinates: [CLLocationCoordinate2D]) -> Bool { false }
+    }
+
     private enum Line {
         static let longitude: Double = 12.86
         static let south: Double = 47.6300
@@ -122,6 +145,49 @@ struct TrailDraftShadingTests {
         #expect(provider.prefetchCount == 0)
         #expect(shading.stretches(for: .difficulty).isEmpty)
         #expect(shading.offered.isEmpty)
+    }
+
+    /// One leg Overpass refused, or Apple's directions took off the straight
+    /// line between its ends, must not leave the rest of the line ungraded.
+    @Test("a line only partly in the cached graph is graded where it is, without downloading")
+    func partlyCachedLineIsGraded() async throws {
+        let draft = try Self.fixtureDraft()
+        let bundled = try #require(BundledTrailGraphProvider(fixtureName: UITestTrailTagFixture.trailGraphName))
+        let provider = PartlyCachedProvider(bundled)
+        let shading = TrailDraftShading(draft: draft, provider: provider)
+
+        shading.drawingDidChange()
+        await shading.measurement?.value
+
+        #expect(!shading.stretches(for: .difficulty).isEmpty)
+        #expect(provider.prefetchCount == 0)
+    }
+
+    /// The dashes are the maker's warning that a leg is a placeholder, and a
+    /// grade along it is the grade of ground nobody will walk.
+    @Test("a leg drawn dashed is not coloured by steepness, and the legs after it are")
+    func degradedLegsAreNotColoured() async throws {
+        let draft = TrailDraft()
+        let step = (Line.north - Line.south) / 3
+        let latitudes = (0...3).map { Line.south + Double($0) * step }
+        for latitude in latitudes {
+            draft.append(CLLocationCoordinate2D(latitude: latitude, longitude: Line.longitude))
+        }
+        let ends = draft.legs.map(\.ends)
+        draft.beginRouting(ends)
+        draft.apply(.straight(along: ends[0], .unmapped(.noPathBetween)), to: ends[0])
+        for leg in ends.dropFirst() {
+            draft.apply(.straight(along: leg, .snapped), to: leg)
+        }
+        let shading = TrailDraftShading(draft: draft, provider: nil)
+        let rise = (Line.high - Line.low) / 3
+
+        shading.heightsDidLand(Self.heights(for: draft, (0...3).map { Line.low + Double($0) * rise }))
+        try await #require(shading.measurement).value
+
+        let coloured = shading.stretches(for: .elevation).flatMap(\.coordinates)
+        #expect(!coloured.isEmpty, "the snapped legs are still coloured")
+        #expect(coloured.allSatisfy { $0.latitude >= latitudes[1] }, "nothing on the dashed leg is")
     }
 
     /// The colours go with the line, but the section stays: otherwise it

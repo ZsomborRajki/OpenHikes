@@ -17,7 +17,10 @@
 //  - **Elevation** comes from the heights ``TrailDraftElevation`` reads, once
 //    they land. Those are two hundred readings along a line of any length, so
 //    the points between them are interpolated before steepness is measured —
-//    see ``RouteHeightSamples/interpolating(_:)``.
+//    see ``RouteHeightSamples/interpolating(_:)``. A leg drawn dashed because
+//    no path joined its ends, or Overpass refused it, is left uncoloured: its
+//    straight placeholder is not ground anyone will walk, and colours over it
+//    would hide the dashes that say so.
 //
 //  Hiking only. Walking, cycling and driving legs come from Apple's
 //  directions and run along roads, where neither a SAC grade nor a hill on a
@@ -106,7 +109,7 @@ final class TrailDraftShading {
         guard draft.travelMode == .hiking else { return }
         let route = draft.routeCoordinates
         guard samples.describes(route) else { return }
-        let measured = samples.interpolating(route)
+        let measured = Self.withoutDegradedLegs(samples.interpolating(route), legs: draft.legs)
         start {
             .steepness(await RouteSteepness.measuredRuns(route: measured).map { run in
                 RouteShading.Stretch(shade: run.shade, coordinates: run.coordinates)
@@ -119,6 +122,28 @@ final class TrailDraftShading {
     func clear() {
         forget()
         offered = []
+    }
+
+    /// `route` with no height on any point of a leg ``TrailLegSnap/isDegraded``
+    /// says is drawn dashed, so ``RouteSteepness`` ends a stretch where one
+    /// begins — see the file header. Its two ends go too: a leg that is two
+    /// points has nothing between them to clear, and a window spanning it is
+    /// the grade of the placeholder.
+    ///
+    /// `legs` are the ones `route` was flattened from, so leg *n* starts
+    /// where leg *n − 1* ends — see ``TrailLeg/flattened(_:)``.
+    private static func withoutDegradedLegs(_ route: [RouteCoordinate], legs: [TrailLeg]) -> [RouteCoordinate] {
+        var cleared = route
+        var start = 0
+        for leg in legs {
+            let end = min(start + leg.coordinates.count - 1, route.count - 1)
+            guard start <= end else { break }
+            if leg.snap.isDegraded {
+                for index in start...end { cleared[index].elevation = nil }
+            }
+            start = end
+        }
+        return cleared
     }
 
     private func measureDifficulty() {
