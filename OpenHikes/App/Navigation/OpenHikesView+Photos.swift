@@ -59,13 +59,22 @@ extension OpenHikesView {
 
     /// Files assets picked from the library.
     ///
-    /// They all get the same anchor, which is the anchor at the moment the
-    /// picker closed. Importing is a "these belong to this walk" gesture
-    /// rather than a moment of it, so there is no per-asset position to be
-    /// had — and an asset's own EXIF location is deliberately not used: it
-    /// says where the photographer was, not where on *this* trail it belongs,
-    /// and a picture taken from a summit of the valley below would pin itself
-    /// to a point the route never passes.
+    /// Each one is placed the way "Find Photos of This Hike" would place it:
+    /// by the moment it was taken against the walk's clock, corroborated or
+    /// overruled by the position the camera recorded — see
+    /// ``PickedPhotoPlacement``. A photo the clock cannot place — taken on
+    /// another day, or carrying no time at all — is snapped to the trail where
+    /// its camera was, if that is within metres of the route. Only a photo
+    /// with no usable position falls back to the anchor in force when the
+    /// picker closed, which on a hike's screen is the elevation graph's
+    /// selection.
+    ///
+    /// The camera's position is where the photographer stood, never what the
+    /// picture shows, so a shot taken from a summit of the valley below is
+    /// pinned to the summit and not to the valley.
+    ///
+    /// A pick filed under a place is pinned to the place and nowhere else:
+    /// that screen is the hiker saying where the picture belongs.
     ///
     /// Nothing is mirrored to the photo library here either — it is already
     /// there.
@@ -80,6 +89,8 @@ extension OpenHikesView {
     /// still never opens.
     func attachPickedPhotos(_ items: [PhotosPickerItem]) {
         guard let subject = photoCapture.currentSubject() else { return }
+        // Once for the whole selection: building it is route-sized work.
+        let plan = subject.placeID == nil ? subject.hike.photoSearchPlan : nil
         photoCapture.runLibraryImport {
             for item in items {
                 guard !Task.isCancelled else { return }
@@ -91,11 +102,11 @@ extension OpenHikesView {
                     photoPresentation.failure = .importFailed
                     continue
                 }
-                let stored = await HikePhotoImport.add(
+                let stored = await HikePhotoImport.addPicked(
                     data,
                     to: subject.hike,
-                    coordinate: subject.coordinate,
-                    savesToPhotoLibrary: false,
+                    plan: plan,
+                    fallback: subject.coordinate,
                     assetLocalIdentifier: item.itemIdentifier,
                     placeID: subject.placeID
                 )

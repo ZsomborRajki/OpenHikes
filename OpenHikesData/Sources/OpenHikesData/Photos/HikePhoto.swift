@@ -56,13 +56,13 @@ nonisolated public enum PhotoMatchEvidence: String, Codable, Hashable, Sendable 
 nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// Stable identity, and the stem of the file the pixels are stored under.
     public var id: UUID
-    /// When the picture was taken (camera) or when it was imported (library).
+    /// When the picture was taken.
     ///
-    /// An imported asset's own creation date is deliberately not used: reading
-    /// it means a `PHAsset` fetch, which means read access to the whole photo
-    /// library — and the import path is built to need no photo-library
-    /// permission at all. Import time is also the honest answer for what the
-    /// gesture means: see ``HikePhotoImport``.
+    /// For a photo picked from the library that is the capture time in the
+    /// file's own EXIF, read out of the bytes the picker handed over rather
+    /// than off a `PHAsset` — which would mean read access to the whole photo
+    /// library, on a path built to need no photo-library permission at all.
+    /// A picked file that carries no readable time is dated by its import.
     public var capturedAt: Date
     /// The stored file's extension, taken from the bytes themselves by
     /// ``ImageDataFormat/detect(in:)`` — `jpeg` for a captured frame, whatever
