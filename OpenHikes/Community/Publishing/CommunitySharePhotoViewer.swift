@@ -149,7 +149,10 @@ struct CommunitySharePhotoViewer: View {
         )
         .accessibilityHint(isExcluded ? "Includes this photo in the share" : "Leaves this photo out of the share")
         .accessibilityIdentifier("community-share-photo-toggle")
-        .sensoryFeedback(.selection, trigger: isExcluded)
+        // The set rather than this page's state of it: paging from a picture
+        // left out to one being shared changes `isExcluded` without anybody
+        // choosing anything, and that must not tick.
+        .sensoryFeedback(.selection, trigger: excluded)
     }
 
     // MARK: - Titles

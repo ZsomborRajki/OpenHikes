@@ -150,6 +150,16 @@ struct MapView: MapViewRepresentable, Equatable {
     /// A rotation is the only thing that changes it, so unlike the reference
     /// types above it is a plain value compared in `==` below.
     var sidePanelInset: CGFloat = 0
+    /// Whether ``MapSidePanel`` has widened over the whole map for a photo
+    /// viewer, which takes the map out of VoiceOver's reach.
+    ///
+    /// The map is still drawn underneath, so without this the credit line,
+    /// the camera pill and every pin behind the photograph stay reachable.
+    /// They are UIKit subviews, so it is UIKit's own
+    /// `accessibilityElementsHidden` that is set, on the map they hang off.
+    /// A plain value for the reason ``sidePanelInset`` is — it moves when a
+    /// viewer is pushed or popped.
+    var isCoveredByPanel = false
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -674,6 +684,9 @@ struct MapView: MapViewRepresentable, Equatable {
         // when nothing it reads has moved.
         applySidePanelInset(coordinator)
         #if os(iOS)
+        if mapView.accessibilityElementsHidden != isCoveredByPanel {
+            mapView.accessibilityElementsHidden = isCoveredByPanel
+        }
         applyBuiltInControlMargins(to: mapView)
         #endif
         applyTileSource(to: mapView, coordinator)
@@ -742,6 +755,7 @@ extension MapView {
             && lhs.community === rhs.community
             && lhs.searchCompleter === rhs.searchCompleter
             && lhs.sidePanelInset == rhs.sidePanelInset
+            && lhs.isCoveredByPanel == rhs.isCoveredByPanel
     }
 }
 

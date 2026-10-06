@@ -203,4 +203,28 @@ extension MapCoordinatorTests {
         #expect(map.directionalLayoutMargins.leading == inset, "and gives the edge back")
         #endif
     }
+
+    /// A photograph widened over the whole map is drawn on top of it, so the
+    /// map's own elements leave VoiceOver while it is there, and come back
+    /// when the photograph is closed.
+    ///
+    /// Here rather than in `OrientationUITests`: an XCUITest query still finds
+    /// an element whose ancestor sets `accessibilityElementsHidden`.
+    @Test("a panel covering the map takes the map's elements from VoiceOver")
+    func coveredMapHidesItsAccessibilityElements() {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let view = mapView(sidePanelInset: MapSidePanelLayout.mapInset)
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        view.update(map, coordinator)
+        #expect(!map.accessibilityElementsHidden, "precondition: a panel beside the map hides nothing")
+
+        mapView(sidePanelInset: MapSidePanelLayout.mapInset, isCoveredByPanel: true).update(map, coordinator)
+        #expect(map.accessibilityElementsHidden)
+
+        view.update(map, coordinator)
+        #expect(!map.accessibilityElementsHidden, "and the map is back once the panel narrows")
+        #endif
+    }
 }

@@ -105,6 +105,7 @@ struct MapCoordinatorTests {
         route: DisplayedRoute? = nil,
         tileSource: ActiveTileSource? = osm,
         sidePanelInset: CGFloat = 0,
+        isCoveredByPanel: Bool = false,
         community: CommunityBrowser = CommunityBrowser(transport: nil, blockList: .scratch()),
         searchCompleter: SearchCompleter = SearchCompleter(),
         locationManager: LocationManager? = nil,
@@ -137,7 +138,8 @@ struct MapCoordinatorTests {
             recordingEntry: recordingEntry,
             community: community,
             searchCompleter: searchCompleter,
-            sidePanelInset: sidePanelInset
+            sidePanelInset: sidePanelInset,
+            isCoveredByPanel: isCoveredByPanel
         )
     }
 
