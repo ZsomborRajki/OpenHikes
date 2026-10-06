@@ -618,7 +618,13 @@
     "Close this trail?" : {
 
     },
+    "Color By" : {
+
+    },
     "Colors" : {
+
+    },
+    "Colors each stretch of the line by how steep it is, uphill or down. Stretches without elevation data keep the route color. Applies to every hike." : {
 
     },
     "Colors each stretch of the line by its OpenStreetMap difficulty grade, as in the Difficulty section. Ungraded stretches keep the route color. Applies to every hike." : {
@@ -771,10 +777,10 @@
     "Details" : {
 
     },
-    "Difficulty colors" : {
+    "Difficulty" : {
 
     },
-    "Difficulty Colors" : {
+    "Difficulty colors" : {
 
     },
     "Discard Changes" : {
@@ -864,6 +870,9 @@
     "Every community hike is checked by a person before anyone else can see it." : {
 
     },
+    "Every hike is drawn in its own route color." : {
+
+    },
     "Every photo is checked by a person before anyone else can see it." : {
 
     },
@@ -909,7 +918,10 @@
     "Free Up Space" : {
 
     },
-    "From green for hiking to dark red for difficult alpine hiking" : {
+    "From green for hiking to black for difficult alpine hiking" : {
+
+    },
+    "From green for level ground to black for grades of 30 percent or more" : {
 
     },
     "From OpenStreetMap" : {
@@ -2041,6 +2053,9 @@
 
     },
     "Status" : {
+
+    },
+    "Steepness colors" : {
 
     },
     "Still published" : {

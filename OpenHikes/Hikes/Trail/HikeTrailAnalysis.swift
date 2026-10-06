@@ -63,7 +63,7 @@ nonisolated enum HikeTrailAnalysis {
     }
 
     /// Every graded stretch of `route`, in order, for the map to colour the
-    /// line by — see ``RouteDifficultyShading``.
+    /// line by — see ``RouteShading``.
     ///
     /// Only the surveyed grades: a stretch OSM has no grade for, or no way
     /// under at all, is left out rather than returned as `unknown`, because

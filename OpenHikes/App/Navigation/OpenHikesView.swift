@@ -280,7 +280,7 @@ struct OpenHikesView: View {
             routeStyle: routeStyle,
             highlight: highlight,
             walkHighlight: walkHighlight,
-            routeDifficulty: appModel.routeDifficulty,
+            routeShading: appModel.routeShading,
             recordingTrace: appModel.hikeRecorder.trace,
             sheetMetrics: sheetMetrics,
             tileSource: activeTileSource,

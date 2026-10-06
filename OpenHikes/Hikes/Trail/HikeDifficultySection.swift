@@ -15,17 +15,25 @@ import OpenHikesData
 import SwiftUI
 
 nonisolated extension TrailDifficulty: TrailCategoryPresentation {
-    var color: Color {
+    /// Where this grade sits on the scale the map colours a line on — one
+    /// step per SAC grade, so the six grades are the six shades. `nil` for
+    /// the two ways of not knowing, which have no place on a scale of how
+    /// hard something is.
+    var shade: RouteShade? {
         switch self {
-        case .hiking: .green
-        case .mountainHiking: .yellow
-        case .demandingMountainHiking: .orange
-        case .alpineHiking: .red
-        case .demandingAlpineHiking: .purple
-        case .difficultAlpineHiking: Color(red: 0.5, green: 0, blue: 0)
-        case .unknown: .gray
-        case .unmapped: Color.gray.opacity(TrailBreakdownMetrics.unmappedOpacity)
+        case .hiking: .easiest
+        case .mountainHiking: .easy
+        case .demandingMountainHiking: .moderate
+        case .alpineHiking: .hard
+        case .demandingAlpineHiking: .harder
+        case .difficultAlpineHiking: .hardest
+        case .unknown, .unmapped: nil
         }
+    }
+
+    var color: Color {
+        if let shade { return shade.color }
+        return self == .unmapped ? Color.gray.opacity(TrailBreakdownMetrics.unmappedOpacity) : .gray
     }
 }
 

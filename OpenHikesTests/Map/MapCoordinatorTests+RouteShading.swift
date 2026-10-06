@@ -1,12 +1,12 @@
 //
-//  MapCoordinatorTests+DifficultyShading.swift
+//  MapCoordinatorTests+RouteShading.swift
 //  OpenHikesTests
 //
-//  What the map does with the selected hike's difficulty grades: hands them
+//  What the map does with the selected hike's coloured stretches: hands them
 //  to the live line, in the Difficulty section's colours, and only to the
 //  line they were measured along.
 //
-//  `RouteDifficultyShadingTests` covers where the stretches come from; this is
+//  `RouteShadingTests` covers where the stretches come from; this is
 //  the other half of the render-isolated path — the answer landing restyles
 //  the renderer MapKit already holds, with no overlay rebuilt and no view
 //  re-rendered.
@@ -25,7 +25,7 @@ extension MapCoordinatorTests {
     private struct GradedFixture {
         let hike: Hike
         let route: [RouteCoordinate]
-        let shading: RouteDifficultyShading
+        let shading: RouteShading
     }
 
     private func gradedFixture(in context: ModelContext) throws -> GradedFixture {
@@ -35,10 +35,11 @@ extension MapCoordinatorTests {
         let route = try GPXImport.load(from: url).route
         let provider = try #require(BundledTrailGraphProvider(fixtureName: UITestTrailTagFixture.trailGraphName))
         let defaults = try #require(UserDefaults(suiteName: "MapCoordinatorTests-difficulty-\(UUID().uuidString)"))
+        defaults.set(RouteColoring.difficulty.rawValue, forKey: SettingsKey.routeColoring)
         return GradedFixture(
             hike: Fixture.hike(in: context, route: route),
             route: route,
-            shading: RouteDifficultyShading(provider: provider, defaults: defaults)
+            shading: RouteShading(provider: provider, defaults: defaults)
         )
     }
 
@@ -47,13 +48,13 @@ extension MapCoordinatorTests {
     private func drawnLine(
         id: UUID,
         route: [RouteCoordinate],
-        shading: RouteDifficultyShading,
+        shading: RouteShading,
         coordinator: MapView.Coordinator
     ) throws -> (map: MKMapView, renderer: DirectionalPolylineRenderer) {
         let view = mapView(
             route: DisplayedRoute(id: id, coordinates: Fixture.coordinates(route)),
             tileSource: nil,
-            routeDifficulty: shading
+            routeShading: shading
         )
         let map = makeMap(view, coordinator)
         view.update(map, coordinator)
@@ -84,7 +85,7 @@ extension MapCoordinatorTests {
         #expect(drawn.renderer.shades.count == fixture.shading.stretches.count)
         let first = try #require(fixture.shading.stretches.first)
         let shade = try #require(drawn.renderer.shades.first)
-        let expected = UIColor(first.difficulty.color).withAlphaComponent(UIColor(RouteStyle.defaultTint).cgColor.alpha)
+        let expected = UIColor(first.shade.color).withAlphaComponent(UIColor(RouteStyle.defaultTint).cgColor.alpha)
         #expect(shade.color == expected.cgColor)
     }
 
@@ -101,13 +102,13 @@ extension MapCoordinatorTests {
         fixture.shading.follow(fixture.hike)
         await fixture.shading.measurement?.value
         await settle(until: "the answer to reach the coordinator") {
-            coordinator.difficultyHikeID == fixture.hike.id
+            coordinator.shadedHikeID == fixture.hike.id
         }
 
         #expect(drawn.renderer.shades.isEmpty)
     }
 
-    @Test("turning the switch off takes the colours off the line")
+    @Test("None takes the colours off the line")
     func theSwitchClearsTheLine() async throws {
         let context = try Fixture.modelContext()
         let fixture = try gradedFixture(in: context)
@@ -125,11 +126,11 @@ extension MapCoordinatorTests {
             !drawn.renderer.shades.isEmpty
         }
 
-        fixture.shading.setEnabled(false)
+        fixture.shading.setColoring(.off)
         await settle(until: "the stretches to leave the line") {
             drawn.renderer.shades.isEmpty
         }
 
-        #expect(coordinator.difficultyStretches.isEmpty)
+        #expect(coordinator.shadedStretches.isEmpty)
     }
 }

@@ -17,10 +17,10 @@
 //  properties is in this screen, so the drag repaints this and the map's line
 //  and nothing else.
 //
-//  The *Difficulty Colors* switch at the bottom is the odd one out: it is not
-//  this hike's, it is every hike's — see ``RouteDifficultyShading``. It sits
-//  here because this is where a hiker looks when they want to know why their
-//  line is not the colour they picked, and it says so under itself.
+//  The *Color By* control at the bottom is the odd one out: it is not this
+//  hike's, it is every hike's — see ``RouteShading``. It sits here because
+//  this is where a hiker looks when they want to know why their line is not
+//  the colour they picked, and it says so under itself.
 //
 
 import OpenHikesData
@@ -43,7 +43,7 @@ struct RouteStyleView: View {
                         .padding(.vertical, 10)
                 }
                 PlaceCardList(title: String(localized: "All Hikes")) {
-                    RouteDifficultySwitch()
+                    RouteColoringPicker()
                 }
             }
             .padding()
@@ -65,7 +65,8 @@ struct RouteStyleView: View {
 
     /// The outline round the line, beside the colour it outlines. The same
     /// picker, so "no border" is what it is for the colour too: the opacity
-    /// taken to zero — which is where every hike starts.
+    /// taken to zero. Every hike starts on opaque black — see
+    /// ``RouteStyle/defaultBorder``.
     private var borderRow: some View {
         ColorPicker(selection: borderBinding, supportsOpacity: true) {
             Label("Border", systemImage: "circle.dashed")
@@ -152,30 +153,46 @@ struct RouteStyleRow: View {
     }
 }
 
-/// The *Difficulty Colors* switch, and the key to the colours it draws.
+/// The *Color By* control, and the key to the colours it draws.
 ///
-/// Its own view so the switch's position is read here and not by
-/// ``RouteStyleView``: flipping it redraws one row rather than the colour
+/// Its own view so the control's position is read here and not by
+/// ``RouteStyleView``: moving it redraws one row rather than the colour
 /// wells beside it.
-private struct RouteDifficultySwitch: View {
-    /// How faded the key is while the switch is off: still there to say what
-    /// turning it on would do, but plainly not what the map is showing.
+private struct RouteColoringPicker: View {
+    /// How faded the key is at *None*: still there to say what the other
+    /// positions would do, but plainly not what the map is showing.
     private static let offKeyOpacity = 0.4
 
     @Environment(OpenHikesModel.self) private var appModel
 
     var body: some View {
-        let shading = appModel.routeDifficulty
+        let shading = appModel.routeShading
         VStack(alignment: .leading, spacing: 8) {
-            Toggle(
-                isOn: Binding(get: { shading.isEnabled }, set: { shading.setEnabled($0) })
+            Label("Color By", systemImage: "mountain.2")
+                .frame(minHeight: StatCardMetrics.rowMinimumHeight)
+                .accessibilityHidden(true)
+            Picker(
+                "Color By",
+                selection: Binding(get: { shading.coloring }, set: { shading.setColoring($0) })
             ) {
-                Label("Difficulty Colors", systemImage: "mountain.2")
+                Text("Difficulty").tag(RouteColoring.difficulty)
+                Text("Elevation").tag(RouteColoring.elevation)
+                Text("None").tag(RouteColoring.off)
             }
-            .frame(minHeight: StatCardMetrics.rowMinimumHeight)
-            .accessibilityIdentifier("route-difficulty-toggle")
-            TrailDifficultyKey()
-                .opacity(shading.isEnabled ? 1 : Self.offKeyOpacity)
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("route-coloring-picker")
+            RouteShadeKey(coloring: shading.coloring)
+                .opacity(shading.coloring == .off ? Self.offKeyOpacity : 1)
+            caption(for: shading.coloring)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.bottom, 10)
+    }
+
+    private func caption(for coloring: RouteColoring) -> Text {
+        switch coloring {
+        case .difficulty:
             Text(
                 """
                 Colors each stretch of the line by its OpenStreetMap \
@@ -183,40 +200,70 @@ private struct RouteDifficultySwitch: View {
                 stretches keep the route color. Applies to every hike.
                 """
             )
-            .font(.caption2)
-            .foregroundStyle(.secondary)
+        case .elevation:
+            Text(
+                """
+                Colors each stretch of the line by how steep it is, uphill \
+                or down. Stretches without elevation data keep the route \
+                color. Applies to every hike.
+                """
+            )
+        case .off:
+            Text("Every hike is drawn in its own route color.")
         }
-        .padding(.bottom, 10)
     }
 }
 
-/// The six grades' colours, easiest to hardest, as one bar.
+/// The six steps of the scale, easiest to hardest, as one bar.
 ///
-/// A key rather than a legend: the names are the Difficulty section's to
-/// read out, and six of them would be a second copy of it on a screen about
-/// something else. VoiceOver hears the ends of the scale instead.
-private struct TrailDifficultyKey: View {
-    private static let grades = TrailDifficulty.displayOrdering.filter(\.isSurveyed)
+/// A key rather than a legend: the grade names are the Difficulty section's
+/// to read out, and six of them would be a second copy of it on a screen
+/// about something else. By elevation, each step is labelled with the grade
+/// it starts at instead, since those are short and are the whole meaning.
+/// VoiceOver hears the ends of the scale.
+private struct RouteShadeKey: View {
+    let coloring: RouteColoring
 
     var body: some View {
         VStack(spacing: 4) {
             HStack(spacing: 2) {
-                ForEach(Self.grades, id: \.self) { grade in
-                    Rectangle().fill(grade.color)
+                ForEach(RouteShade.scale, id: \.self) { shade in
+                    Rectangle().fill(shade.color)
                 }
             }
             .frame(height: TrailBreakdownMetrics.barHeight / 2)
             .clipShape(.capsule)
-            HStack {
-                Text("Easier")
-                Spacer()
-                Text("Harder")
+            if coloring == .elevation {
+                HStack(spacing: 2) {
+                    ForEach(RouteShade.scale, id: \.self) { shade in
+                        Text(verbatim: Self.gradeLabel(for: shade))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+            } else {
+                HStack {
+                    Text("Easier")
+                    Spacer()
+                    Text("Harder")
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Difficulty colors")
-        .accessibilityValue("From green for hiking to dark red for difficult alpine hiking")
+        .accessibilityLabel(coloring == .elevation ? "Steepness colors" : "Difficulty colors")
+        .accessibilityValue(
+            coloring == .elevation
+                ? "From green for level ground to black for grades of 30 percent or more"
+                : "From green for hiking to black for difficult alpine hiking"
+        )
+    }
+
+    /// The grade a step starts at, as a percentage — a figure, so formatted
+    /// for the locale rather than catalogued.
+    private static func gradeLabel(for shade: RouteShade) -> String {
+        (RouteSteepness.lowerBoundPercent(of: shade) / 100).formatted(.percent)
     }
 }

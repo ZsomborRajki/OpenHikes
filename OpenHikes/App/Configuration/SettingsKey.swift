@@ -168,14 +168,17 @@ nonisolated enum SettingsKey {
     /// Deliberately not synced through ``SyncedSettingsMirror``, for the
     /// reason ``trailStopRecents`` is not: it is about this device's map.
     static let trailPlacePinsHidden = "places.pinsHidden"
-    /// Whether the selected hike's line is coloured by its SAC difficulty
-    /// grades on the map — see ``RouteDifficultyShading``. One switch for
-    /// every hike rather than a column on each, because it is a way of
-    /// reading the map and not something a hiker styles a route with.
+    /// What the selected hike's line is coloured by on the map — a
+    /// ``RouteColoring`` raw value; see ``RouteShading``.
     ///
     /// Deliberately not synced through ``SyncedSettingsMirror``, for the
     /// reason ``trailStopRecents`` is not: it is about this device's map.
-    static let routeDifficultyColors = "map.routeDifficultyColors"
+    static let routeColoring = "map.routeColoring"
+    /// The on/off *Difficulty Colors* switch ``routeColoring`` replaced. Read
+    /// only while that key is still absent, so a hiker who had turned the
+    /// colours off finds them off rather than back on — see
+    /// ``RouteShading``'s init.
+    static let legacyRouteDifficultyColors = "map.routeDifficultyColors"
 }
 
 /// Defaults for keys where "absent" and "false" are different answers, so the
@@ -217,9 +220,10 @@ nonisolated enum SettingsDefault {
     /// Health is somebody else's, and an app that helped itself to it because
     /// a walk finished would be taking a decision that is theirs.
     static let savesHikesToHealth = false
-    /// On. It is the one thing on the map that says a stretch ahead needs
-    /// hands or a rope, and it costs nothing a hiker did not already pay for:
-    /// the grades come from the trail graph the Difficulty section downloads
-    /// anyway. Where OSM has no grade the line keeps the hike's own colour.
-    static let routeDifficultyColors = true
+    /// Elevation. Every hike with heights has an answer — recorded, imported
+    /// or drawn in the maker — where a difficulty grade needs OpenStreetMap to
+    /// have tagged the way and the trail graph to have downloaded, and it is
+    /// measured from the route alone, offline and at once. Where the route has
+    /// no heights the line keeps the hike's own colour.
+    static let routeColoring = RouteColoring.elevation
 }

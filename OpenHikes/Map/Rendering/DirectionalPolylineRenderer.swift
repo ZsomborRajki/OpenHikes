@@ -17,9 +17,9 @@
 //  chevrons again, widened, so the outline follows every mark the pattern
 //  makes. See ``RouteBorder``.
 //
-//  Stretches with a colour of their own — the difficulty grades, see
-//  ``RouteDifficultyShading`` — are drawn over the line in the same pass,
-//  each one clearing the line out from under itself first. Drawn here rather
+//  Stretches with a colour of their own — difficulty grades or steepness,
+//  see ``RouteShading`` — are drawn over the line in the same pass, each one
+//  clearing the line out from under itself first. Drawn here rather
 //  than as overlays of their own because the line beneath has to be *gone*
 //  there, not covered: a translucent route would otherwise show its own
 //  colour through every graded stretch, and a dashed one its own dashes.
@@ -179,12 +179,12 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         var tint = ChevronTint(color: arrowColor(on: strokeColor))
         if pattern.drawsLine {
             super.draw(mapRect, zoomScale: zoomScale, in: context)
-            let stretches = shadeLines(forScale: contentScaleFactor)
-            drawShades(stretches, in: mapRect, zoomScale: zoomScale, context: context)
+            let layers = shadeLayers(forScale: contentScaleFactor)
+            drawShades(layers, in: mapRect, zoomScale: zoomScale, context: context)
             // Every stretch rather than the ones drawn in this rect: a
             // chevron reaches past the line's edge, into a tile its stretch
             // is not in, and must be the same colour on both sides of it.
-            tint.stretches = stretches
+            tint.stretches = layers.lines
             tint.tolerance = Double(lineWidth * contentScaleFactor / zoomScale) / 2
         }
         strokeChevrons(in: mapRect, zoomScale: zoomScale, context: context, tint: tint, widenedBy: 0)
@@ -430,13 +430,28 @@ nonisolated extension DirectionalPolylineRenderer {
         var shades: [Shade] = []
         /// Built by the first draw that needs them, for the reason
         /// ``borderLine`` is, and dropped by any change to what they draw.
-        var built: (scale: CGFloat, lines: [ShadeLine])?
+        var built: (scale: CGFloat, shading: Shading)?
+    }
+
+    /// Everything a draw needs to put the stretches down.
+    private struct Shading {
+        /// One per stretch.
+        let lines: [ShadeLine]
+        /// One per pair of neighbouring stretches, `nil` where they do not
+        /// blend — see ``RouteShadeBlend/pieces(between:)``.
+        let blends: [RouteShadeBlend.Piece?]
+        /// The line's own alpha, which the stretches are drawn at as one
+        /// layer rather than each on its own — so a blend drawn over the end
+        /// of a stretch, or two round caps where stretches meet, do not
+        /// double it.
+        let alpha: CGFloat
     }
 
     /// A stretch's passes: a solid stroke that clears the line — and its
     /// border, when it has one — out from under it, the stretch's own border,
-    /// and the stretch itself in the pattern's own dashes and cap.
+    /// and the stretch itself, opaque, in the pattern's own dashes and cap.
     private struct ShadeLine {
+        let polyline: MKPolyline
         let clear: MKPolylineRenderer
         let border: MKPolylineRenderer?
         let fill: MKPolylineRenderer
@@ -448,7 +463,7 @@ nonisolated extension DirectionalPolylineRenderer {
 
         /// Whether `point` lies within `tolerance` map points of the stretch.
         func carries(_ point: MKMapPoint, within tolerance: Double) -> Bool {
-            let bounds = fill.polyline.boundingMapRect.insetBy(dx: -tolerance, dy: -tolerance)
+            let bounds = polyline.boundingMapRect.insetBy(dx: -tolerance, dy: -tolerance)
             guard bounds.contains(point) else { return false }
             let squared = tolerance * tolerance
             return zip(points, points.dropFirst()).contains { a, b in
@@ -510,40 +525,69 @@ nonisolated extension DirectionalPolylineRenderer {
     /// by the distance between the two corners first, or every stretch would
     /// be drawn as far off the line as its start is from the route's.
     private func drawShades(
-        _ lines: [ShadeLine],
+        _ shading: Shading,
         in mapRect: MKMapRect,
         zoomScale: MKZoomScale,
         context: CGContext
     ) {
-        guard let reach = lines.first.map({ Double($0.clear.lineWidth / zoomScale) }) else { return }
+        guard let reach = shading.lines.first.map({ Double($0.clear.lineWidth / zoomScale) }) else { return }
         let visible = mapRect.insetBy(dx: -reach, dy: -reach)
-        let origin = overlay.boundingMapRect.origin
-        for line in lines where line.fill.polyline.boundingMapRect.intersects(visible) {
-            let shadeOrigin = line.fill.polyline.boundingMapRect.origin
-            context.saveGState()
-            context.translateBy(x: shadeOrigin.x - origin.x, y: shadeOrigin.y - origin.y)
-            context.saveGState()
-            context.setBlendMode(.clear)
-            // The line's own stroke leaves its dashes on the context, and a
-            // renderer with no dashes of its own does not take them off —
-            // so without this the hole is cut in the line's dash pattern and
-            // its dashes stay showing through the stretch.
-            context.setLineDash(phase: 0, lengths: [])
-            line.clear.draw(mapRect, zoomScale: zoomScale, in: context)
-            context.restoreGState()
-            // The same for the passes below with no dashes of their own,
-            // which must draw solid rather than in the line's leftover ones.
-            context.setLineDash(phase: 0, lengths: [])
-            if let border = line.border {
+        // Every hole and border before any colour: a stretch's border cuts
+        // its inner hole back out, and done after the stretch beside it was
+        // coloured it would cut into that colour where the two meet.
+        for line in shading.lines where line.polyline.boundingMapRect.intersects(visible) {
+            drawInPlace(of: line.polyline, context: context) {
+                context.saveGState()
+                context.setBlendMode(.clear)
+                // The line's own stroke leaves its dashes on the context, and
+                // a renderer with no dashes of its own does not take them off
+                // — so without this the hole is cut in the line's dash pattern
+                // and its dashes stay showing through the stretch.
+                context.setLineDash(phase: 0, lengths: [])
+                line.clear.draw(mapRect, zoomScale: zoomScale, in: context)
+                context.restoreGState()
+                // The same for the border, which must draw solid rather than
+                // in the line's leftover dashes.
+                context.setLineDash(phase: 0, lengths: [])
+                guard let border = line.border else { return }
                 border.draw(mapRect, zoomScale: zoomScale, in: context)
                 context.saveGState()
                 context.setBlendMode(.clear)
                 line.fill.draw(mapRect, zoomScale: zoomScale, in: context)
                 context.restoreGState()
             }
-            line.fill.draw(mapRect, zoomScale: zoomScale, in: context)
-            context.restoreGState()
         }
+        let layered = shading.alpha < 1
+        if layered {
+            context.setAlpha(shading.alpha)
+            context.beginTransparencyLayer(auxiliaryInfo: nil)
+        }
+        // In route order, each stretch and then the blend into it: where the
+        // route doubles back over itself the later leg covers the earlier
+        // one, blends included — see ``RouteShadeBlend/pieces(between:)``.
+        for (index, line) in shading.lines.enumerated() {
+            if line.polyline.boundingMapRect.intersects(visible) {
+                drawInPlace(of: line.polyline, context: context) {
+                    context.setLineDash(phase: 0, lengths: [])
+                    line.fill.draw(mapRect, zoomScale: zoomScale, in: context)
+                }
+            }
+            if index > 0, let blend = shading.blends[index - 1], blend.bounds.intersects(visible) {
+                drawBlend(blend, zoomScale: zoomScale, context: context)
+            }
+        }
+        if layered { context.endTransparencyLayer() }
+    }
+
+    /// Runs `draw` with the context moved from this line's corner to
+    /// `polyline`'s, which is where a renderer of `polyline` measures from.
+    private func drawInPlace(of polyline: MKPolyline, context: CGContext, _ draw: () -> Void) {
+        let origin = overlay.boundingMapRect.origin
+        let own = polyline.boundingMapRect.origin
+        context.saveGState()
+        context.translateBy(x: own.x - origin.x, y: own.y - origin.y)
+        draw()
+        context.restoreGState()
     }
 
     private func invalidateShadeLines() {
@@ -552,32 +596,33 @@ nonisolated extension DirectionalPolylineRenderer {
 
     /// The stretches' renderers for a renderer at `scale`: the ones built
     /// already if they still fit, or new ones.
-    private func shadeLines(forScale scale: CGFloat) -> [ShadeLine] {
+    private func shadeLayers(forScale scale: CGFloat) -> Shading {
         shadeState.withLockUnchecked { state in
-            if let built = state.built, built.scale == scale { return built.lines }
+            if let built = state.built, built.scale == scale { return built.shading }
             let width = Double(lineWidth)
             // swiftlint:disable:next legacy_objc_type
             let dashes = pattern.dashLengths(forWidth: width).map { NSNumber(value: $0 * scale) }
             let bordered = (borderColor?.alpha ?? 0) > 0
             let cleared = bordered ? width + RouteBorder.width(forLineWidth: width) * 2 : width
-            let lines = state.shades.map { shade in
+            // Opaque here, and drawn at the line's alpha as one layer — see
+            // ``Shading/alpha``.
+            let opaque = state.shades.map { shade in
+                Shade(polyline: shade.polyline, color: shade.color.copy(alpha: 1) ?? shade.color)
+            }
+            let lines = opaque.map { shade in
                 let clear = MKPolylineRenderer(polyline: shade.polyline)
                 clear.lineWidth = CGFloat(cleared) * scale
                 clear.lineJoin = .round
                 clear.lineCap = .butt
+                clear.strokeColor = .black
                 let fill = MKPolylineRenderer(polyline: shade.polyline)
                 fill.lineWidth = CGFloat(width) * scale
                 fill.lineJoin = .round
                 fill.lineCap = pattern.lineCap
                 fill.lineDashPattern = dashes.isEmpty ? nil : dashes
-                #if canImport(UIKit)
-                clear.strokeColor = .black
-                fill.strokeColor = UIColor(cgColor: shade.color)
-                #else
-                clear.strokeColor = .black
-                fill.strokeColor = NSColor(cgColor: shade.color)
-                #endif
+                fill.strokeColor = LineColor(cgColor: shade.color)
                 return ShadeLine(
+                    polyline: shade.polyline,
                     clear: clear,
                     border: bordered ? makeBorderLine(for: shade.polyline, scale: scale) : nil,
                     fill: fill,
@@ -587,8 +632,13 @@ nonisolated extension DirectionalPolylineRenderer {
                     chevronColor: arrowColor(on: fill.strokeColor)
                 )
             }
-            state.built = (scale, lines)
-            return lines
+            let shading = Shading(
+                lines: lines,
+                blends: RouteShadeBlend.pieces(between: opaque),
+                alpha: state.shades.first?.color.alpha ?? 1
+            )
+            state.built = (scale, shading)
+            return shading
         }
     }
 }
