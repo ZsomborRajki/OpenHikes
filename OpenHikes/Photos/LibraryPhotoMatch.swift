@@ -255,7 +255,10 @@ nonisolated enum LibraryPhotoMatcher {
     /// the line — far inside ``maximumOffRouteMeters``, and the answer is
     /// being used to decide whether something is on the trail at all rather
     /// than to position a tracker along it.
-    private static func nearestRoutePoint(
+    ///
+    /// Also what a picked photograph the walk's clock cannot place is snapped
+    /// with — see ``PickedPhotoPlacement``.
+    static func nearestRoutePoint(
         to coordinate: CLLocationCoordinate2D,
         in route: [RouteCoordinate]
     ) -> (coordinate: CLLocationCoordinate2D, meters: Double)? {
