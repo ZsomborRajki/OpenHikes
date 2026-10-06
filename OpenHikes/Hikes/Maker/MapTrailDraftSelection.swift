@@ -120,6 +120,10 @@ extension MapView.Coordinator {
         case let time as TrailDraftTravelTimeAnnotation:
             guard let choice = time.choice else { break }
             controller.chooseRoute(choice.alternativeIndex, forLegAt: choice.legIndex)
+        case is TrailDraftRoutingAnnotation:
+            // Says something and does nothing, as the route's own time does;
+            // taken here so the tap does not fall through and drop a pin.
+            break
         case is TrailDraftDroppedPin:
             // Its card again, which closing left the pin standing without.
             controller.select(.droppedPin)
@@ -163,6 +167,8 @@ extension MapView.Coordinator {
             trailPlaceAnnotationView(for: place, on: mapView)
         case let time as TrailDraftTravelTimeAnnotation:
             trailDraftTravelTimeView(for: time, on: mapView)
+        case let routing as TrailDraftRoutingAnnotation:
+            trailDraftRoutingView(for: routing, on: mapView)
         case let dropped as TrailDraftDroppedPin:
             trailDraftDroppedPinView(for: dropped, on: mapView)
         default:
