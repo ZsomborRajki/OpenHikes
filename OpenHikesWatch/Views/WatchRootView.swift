@@ -50,7 +50,9 @@ struct WatchRootView: View {
         case record
     }
 
+    // periphery:ignore - read only as `$tab`, the `TabView` selection.
     @State private var tab: Tab
+    // periphery:ignore - read only as `$trailPath`, the `NavigationStack` path.
     @State private var trailPath: [WatchTrailDestination]
 
     /// - Parameter screen: which screen this launch asked to open on. Read
