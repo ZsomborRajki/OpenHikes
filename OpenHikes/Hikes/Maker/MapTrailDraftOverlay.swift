@@ -579,7 +579,9 @@ extension MapView.Coordinator {
     /// `MapTrailDraftTint.swift`.
     func trailDraftRenderer(for polyline: MKPolyline, on mapView: MKMapView) -> MKPolylineRenderer? {
         guard let snap = trailDraftLegStyles[ObjectIdentifier(polyline)] else { return nil }
-        let renderer = MKPolylineRenderer(polyline: polyline)
+        let renderer = BorderedPolylineRenderer(polyline: polyline)
+        // Outlined like a hike's own line — see `BorderedPolylineRenderer.swift`.
+        renderer.borderColor = Self.defaultBorderColor
         #if os(macOS)
         renderer.strokeColor = NSColor(Color.accentColor)
         #else

@@ -253,6 +253,8 @@ final class TrailDraftController {
     ///   - graph: the trail graph the hiking legs are routed over, read again
     ///     from its cache to colour the line by difficulty. `nil` grades
     ///     nothing — see ``TrailDraftShading``.
+    ///   - elevationUnlocked: whether the hiker has OpenHikes Pro, which the
+    ///     line's heights need — see ``TrailDraftShading``.
     init(
         store: TrailDraftStore? = nil,
         router: (any TrailLegRouting)? = nil,
@@ -263,7 +265,8 @@ final class TrailDraftController {
         naming: (any TrailStopNaming)? = nil,
         travelRouters: [TrailTravelMode: any TrailLegRouting] = [:],
         recents: TrailStopRecents? = nil,
-        placeFilter: TrailPlaceFilter? = nil
+        placeFilter: TrailPlaceFilter? = nil,
+        elevationUnlocked: @escaping () -> Bool = { true }
     ) {
         self.store = store
         var providers = travelRouters
@@ -275,7 +278,7 @@ final class TrailDraftController {
         elevation = elevationPause.map { pause in
             TrailDraftElevation(draft: drawing, source: elevationSource, pause: pause)
         } ?? TrailDraftElevation(draft: drawing, source: elevationSource)
-        shading = TrailDraftShading(draft: drawing, provider: graph)
+        shading = TrailDraftShading(draft: drawing, provider: graph, elevationUnlocked: elevationUnlocked)
         geocoder = naming
         namer = TrailStopNamer(source: naming)
         self.recents = recents ?? TrailStopRecents(defaults: nil)

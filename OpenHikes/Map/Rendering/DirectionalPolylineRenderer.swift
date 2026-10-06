@@ -255,26 +255,15 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
     /// ``borderLine``. Also what outlines each coloured stretch, which is why
     /// it takes the polyline rather than assuming this renderer's own.
     private func makeBorderLine(for polyline: MKPolyline, scale: CGFloat) -> MKPolylineRenderer {
-        let line = MKPolylineRenderer(polyline: polyline)
         let width = Double(lineWidth)
-        let border = RouteBorder.width(forLineWidth: width)
-        let dashes = RouteBorder.dashes(
-            outlining: pattern.dashLengths(forWidth: width),
+        return RouteBorderLine.make(
+            for: polyline,
+            lineWidth: width,
+            dashes: pattern.dashLengths(forWidth: width),
             cap: pattern.lineCap,
-            borderWidth: border
+            color: borderColor,
+            scale: scale
         )
-        line.lineWidth = CGFloat(width + border * 2) * scale
-        line.lineJoin = .round
-        line.lineCap = pattern.lineCap
-        // swiftlint:disable:next legacy_objc_type
-        line.lineDashPattern = dashes.lengths.isEmpty ? nil : dashes.lengths.map { NSNumber(value: $0 * scale) }
-        line.lineDashPhase = CGFloat(dashes.phase) * scale
-        #if canImport(UIKit)
-        line.strokeColor = borderColor.map { UIColor(cgColor: $0) }
-        #else
-        line.strokeColor = borderColor.flatMap { NSColor(cgColor: $0) }
-        #endif
-        return line
     }
 
     /// One pass of chevrons along the whole line, in `color` — `widenedBy` map

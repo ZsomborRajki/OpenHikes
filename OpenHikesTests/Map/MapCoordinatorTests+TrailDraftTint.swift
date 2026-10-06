@@ -73,6 +73,8 @@ extension MapCoordinatorTests {
 
         #expect(renderer.strokeColor?.cgColor.components == expected)
         #expect(pin.layer.backgroundColor?.components == expected)
+        // Outlined like a hike's line, whatever the accent is.
+        #expect((renderer as? BorderedPolylineRenderer)?.borderColor == MapView.Coordinator.defaultBorderColor)
     }
 
     /// A stop picked in the search sheet is put down while that sheet is over

@@ -12,6 +12,11 @@
 //  nothing the control would change. See ``TrailDraftShading`` for why the
 //  section stays once it has appeared rather than following each answer.
 //
+//  Without OpenHikes Pro the line has no heights, so *Elevation* is locked
+//  here and a tap on it opens the paywall — the one screen that says what
+//  the subscription is for — rather than turning the shared setting to a
+//  colouring this drawing cannot have. See ``TrailDraftShading``.
+//
 //  Its own `View` for the reason ``TrailPlaceFilterSection`` is one: what it
 //  reads stays out of ``TrailDraftView``'s body.
 //
@@ -22,12 +27,20 @@ import SwiftUI
 struct TrailDraftColoringSection: View {
     let maker: TrailDraftController
 
+    @Environment(OpenHikesModel.self) private var appModel
+    @State private var showsPaywall = false
+
     var body: some View {
         if maker.draft.travelMode == .hiking, !maker.shading.offered.isEmpty {
             Section {
-                RouteColoringPicker()
+                RouteColoringPicker(
+                    unlockElevation: maker.shading.isElevationUnlocked ? nil : { showsPaywall = true }
+                )
             }
             .accessibilityIdentifier("trail-draft-coloring")
+            .sheet(isPresented: $showsPaywall) {
+                MapPaywallView(store: appModel.entitlement)
+            }
         }
     }
 }

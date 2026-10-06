@@ -201,7 +201,16 @@ final class OpenHikesModel {
         self.walkSession = walkSession
             ?? Self.makeWalkSession(container, backgroundTracker, movementReminders, hikeRecorder, weatherManager)
         self.communityTransport = communityTransport
-        trailMaker = Self.makeTrailMaker(container: container, graph: trailGraphProvider, defaults: defaults)
+        // Before the maker, which asks it whether its line may be coloured by
+        // elevation.
+        let store = Self.makeEntitlement(defaults: defaults)
+        entitlement = store
+        trailMaker = Self.makeTrailMaker(
+            container: container,
+            graph: trailGraphProvider,
+            defaults: defaults,
+            entitlement: store
+        )
         placePins = Self.makePlacePins(defaults: defaults, maker: trailMaker)
         routeShading = RouteShading(provider: trailGraphProvider, defaults: defaults)
         watchLink = Self.makeWatchLink(container: container, recorder: hikeRecorder, defaults: defaults)
@@ -232,21 +241,6 @@ final class OpenHikesModel {
             storageIsDurable: startupIssue == nil
         )
         cloudSync.start()
-        // A UI test cannot buy anything, and a suite that hosts the app must
-        // not reach the App Store at all — so both take a stubbed answer and
-        // only a real launch starts StoreKit.
-        if AppLaunchEnvironment.isRunningTests {
-            let stub = MapEntitlementStore(
-                defaults: Self.entitlementDefaults(defaults),
-                currentEntitlements: { AppLaunchEnvironment.grantsPaidMaps }
-            )
-            entitlement = stub
-            Task { await stub.refresh() }
-        } else {
-            let store = MapEntitlementStore(defaults: defaults)
-            entitlement = store
-            store.start()
-        }
         // Behind the test guard for the same reason every other startup writer
         // is: both unit-test bundles are hosted by the app, and a launch a
         // suite hosts deletes nothing.
@@ -297,7 +291,7 @@ final class OpenHikesModel {
     /// lands nowhere that outlives the run.
     private static let testHostEntitlementSuite = "com.openhikes.testhost.entitlement"
 
-    private static func entitlementDefaults(_ launchDefaults: UserDefaults) -> UserDefaults {
+    static func entitlementDefaults(_ launchDefaults: UserDefaults) -> UserDefaults {
         guard !AppLaunchEnvironment.isUITesting,
               let isolated = UserDefaults(suiteName: testHostEntitlementSuite)
         else { return launchDefaults }

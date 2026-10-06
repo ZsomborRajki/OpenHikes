@@ -252,4 +252,19 @@ struct TrailDraftShadingTests {
 
         #expect(shading.measurement == nil)
     }
+
+    /// The maker's *Elevation* without OpenHikes Pro: drawn and shown as
+    /// *Difficulty*, and the shared setting untouched. Every other position
+    /// stands, and nothing is locked for a subscriber.
+    @Test("without Pro, Elevation is drawn as Difficulty and nothing else moves")
+    func elevationIsLockedWithoutPro() {
+        let locked = TrailDraftShading(draft: Self.straightDraft(), provider: nil, elevationUnlocked: { false })
+        #expect(!locked.isElevationUnlocked)
+        #expect(locked.drawnColoring(for: .elevation) == .difficulty)
+        #expect(locked.drawnColoring(for: .difficulty) == .difficulty)
+        #expect(locked.drawnColoring(for: .off) == .off)
+
+        let unlocked = TrailDraftShading(draft: Self.straightDraft(), provider: nil, elevationUnlocked: { true })
+        #expect(RouteColoring.allCases.allSatisfy { unlocked.drawnColoring(for: $0) == $0 })
+    }
 }

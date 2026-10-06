@@ -926,7 +926,8 @@ extension MapView.Coordinator {
             }
             if recordingTailOverlay === polyline
                 || recordingChunkOverlays.contains(where: { $0 === polyline }) {
-                let renderer = MKPolylineRenderer(polyline: polyline)
+                let renderer = BorderedPolylineRenderer(polyline: polyline)
+                renderer.borderColor = Self.defaultBorderColor
                 #if os(macOS)
                 renderer.strokeColor = NSColor.systemRed.withAlphaComponent(Self.recordingAlpha)
                 #else

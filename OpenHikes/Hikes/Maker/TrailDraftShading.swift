@@ -26,6 +26,17 @@
 //  directions and run along roads, where neither a SAC grade nor a hill on a
 //  footpath is the thing worth knowing.
 //
+//  ## Elevation is OpenHikes Pro's
+//
+//  The heights are Stadia's, billed per call, and ``StadiaElevationSource``
+//  asks only for a subscriber. A free hiker's drawing never has heights, so
+//  *Elevation* on the shared control would leave their line plain while an
+//  imported hike — whose file brought its own heights — is coloured by it.
+//  So in the maker the control's *Elevation* is locked without the
+//  subscription (see ``TrailDraftColoringSection``) and the line is drawn by
+//  difficulty instead, through ``drawnColoring(for:)``. The shared setting is
+//  left alone: it is still right for every imported hike.
+//
 //  ## When the control is offered
 //
 //  ``offered`` is every way of colouring this drawing has had an answer for
@@ -72,6 +83,7 @@ final class TrailDraftShading {
 
     @ObservationIgnored private let draft: TrailDraft
     @ObservationIgnored private let provider: (any TrailGraphProviding)?
+    @ObservationIgnored private let elevationUnlocked: () -> Bool
     /// Identifies the line the measurements are about, so an answer that
     /// lands after the line moved on is dropped rather than drawn over it.
     @ObservationIgnored private var generation = 0
@@ -79,9 +91,28 @@ final class TrailDraftShading {
     /// - Parameter provider: the graph the hiking legs are routed over, or
     ///   `nil` for a launch with none — then nothing is graded, and only the
     ///   heights can colour the line.
-    init(draft: TrailDraft, provider: (any TrailGraphProviding)?) {
+    /// - Parameter elevationUnlocked: whether this hiker has OpenHikes Pro,
+    ///   read from the observable entitlement so a purchase made from the
+    ///   maker repaints it. See the file header.
+    init(
+        draft: TrailDraft,
+        provider: (any TrailGraphProviding)?,
+        elevationUnlocked: @escaping () -> Bool = { true }
+    ) {
         self.draft = draft
         self.provider = provider
+        self.elevationUnlocked = elevationUnlocked
+    }
+
+    /// Whether the maker may colour by steepness — see the file header.
+    var isElevationUnlocked: Bool { elevationUnlocked() }
+
+    /// What the line is drawn by when the shared control says `coloring`:
+    /// the same, except *Elevation* without the subscription, which draws by
+    /// difficulty. Read by the map and by the control, so the segment shown
+    /// is the colours drawn.
+    func drawnColoring(for coloring: RouteColoring) -> RouteColoring {
+        coloring.locking(elevation: !isElevationUnlocked)
     }
 
     /// The stretches to draw for `coloring`: none at all for *None*.
@@ -209,5 +240,14 @@ final class TrailDraftShading {
         difficulty = []
         steepness = []
         revision &+= 1
+    }
+}
+
+extension RouteColoring {
+    /// What a control with *Elevation* locked shows and draws for this
+    /// setting: *Difficulty* in place of *Elevation*, and anything else as it
+    /// is. See ``TrailDraftShading/drawnColoring(for:)``.
+    func locking(elevation locked: Bool) -> RouteColoring {
+        locked && self == .elevation ? .difficulty : self
     }
 }
