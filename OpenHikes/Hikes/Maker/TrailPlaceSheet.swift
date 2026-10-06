@@ -49,6 +49,8 @@ struct TrailPlaceSheetPresenter: ViewModifier {
 struct TrailPlaceSheet: View {
     let maker: TrailDraftController
 
+    // periphery:ignore - read only as `$detent`, the binding
+    // `.presentationDetents(_:selection:)` takes.
     /// Where the card rests. It opens at the middle height, where the buttons
     /// and the address are in view, and a new selection leaves it wherever the
     /// hiker put it. State of this view rather than of the presenter, so every

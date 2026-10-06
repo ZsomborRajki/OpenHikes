@@ -74,9 +74,6 @@ nonisolated enum WatchLaunchEnvironment {
         /// How many finished walks are waiting to be sent.
         let queuedWalkCount: Int
 
-        // periphery:ignore - the `#else` branch below is the only reader a
-        // Release-configuration scan compiles, and it is one this file's own
-        // `#if DEBUG` hides from the other.
         /// What every shipping launch gets, and what a debug launch with no
         /// arguments parses to.
         static let production = Self()

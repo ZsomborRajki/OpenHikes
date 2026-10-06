@@ -41,6 +41,8 @@ struct HikePlaceAroundCard: View {
     /// Opens one of the place's photographs in the gallery.
     let onOpenPhoto: (HikePhoto) -> Void
 
+    // periphery:ignore - read only as `$detent`, the binding
+    // `.presentationDetents(_:selection:)` takes.
     @State private var detent: PresentationDetent = .medium
 
     var body: some View {
