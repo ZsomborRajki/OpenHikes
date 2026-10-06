@@ -15,6 +15,7 @@
 //  more likely to be where a hiker slips.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -40,7 +41,7 @@ nonisolated enum RouteSteepness {
 
     /// Where a grade, in percent and either way, falls on the scale.
     static func shade(forGradePercent grade: Double) -> RouteShade {
-        let step = thresholdsPercent.firstIndex { abs(grade) < $0 } ?? thresholdsPercent.count
+        let step = thresholdsPercent.partitioningIndex { abs(grade) < $0 }
         return RouteShade.scale[step]
     }
 
