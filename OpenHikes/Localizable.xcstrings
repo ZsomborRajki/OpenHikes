@@ -930,13 +930,13 @@
     "End and Save Hike" : {
 
     },
+    "End Hike and Record" : {
+
+    },
     "End this hike?" : {
 
     },
-    "End Walk and Record" : {
-
-    },
-    "End your walk on %@ and start recording?" : {
+    "End your hike on %@ and start recording?" : {
 
     },
     "ENE" : {
