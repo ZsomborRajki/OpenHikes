@@ -327,8 +327,16 @@ private extension MapSheetHikes {
     /// the first question a list like this raises is "why is that one at the
     /// top", and the answer belongs on screen next to it. Apple's sort glyph
     /// leads it, and it sits in the same glass as ``importButton``, stretched
-    /// to a capsule to hold the name.
+    /// to a capsule to hold the name. *Totals* at the other end is the same
+    /// capsule, so the two read as one row of controls.
     @ViewBuilder var sortBar: some View {
+        GlassStack {
+            sortBarContent
+        }
+        .padding(.horizontal)
+    }
+
+    var sortBarContent: some View {
         HStack(spacing: 8) {
             if editMode == .active {
                 // The way out of reorder mode, and the only one: while it is
@@ -345,14 +353,16 @@ private extension MapSheetHikes {
                 Button(action: onOpenTotals) {
                     Label("Totals", systemImage: "chart.bar.xaxis")
                         .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tint)
+                        .padding(.horizontal, Self.sortCapsulePadding)
+                        .frame(height: Self.actionGlyphSize)
+                        .glassSurface(.regular.interactive(), in: .capsule)
                         .minimumTapTarget()
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.tint)
                 .accessibilityIdentifier("library-totals-button")
             }
         }
-        .padding(.horizontal)
     }
 
     var sortMenu: some View {
