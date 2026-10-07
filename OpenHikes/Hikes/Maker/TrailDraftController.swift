@@ -892,6 +892,16 @@ extension TrailDraftController {
         shading.drawingDidChange()
     }
 
+    /// OpenHikes Pro arrived with the maker open — bought from the locked
+    /// *Elevation*, most likely. This line's heights were refused without it,
+    /// and nothing asks again until the line moves, so the line would turn to
+    /// *Elevation* with no heights to colour it by. Asks now. A line that
+    /// already has its heights is not asked about twice.
+    func elevationDidUnlock() {
+        guard elevation.samples == nil else { return }
+        elevation.drawingDidChange()
+    }
+
     /// Drops the climb and the colours and stops asking for them.
     private func forgetMeasurements() {
         elevation.clear()

@@ -41,6 +41,11 @@ struct TrailDraftColoringSection: View {
             .sheet(isPresented: $showsPaywall) {
                 MapPaywallView(store: appModel.entitlement)
             }
+            // A purchase made from the paywall above: the heights this line
+            // was refused are asked for now, or *Elevation* would draw nothing.
+            .onChange(of: maker.shading.isElevationUnlocked) { _, unlocked in
+                if unlocked { maker.elevationDidUnlock() }
+            }
         }
     }
 }

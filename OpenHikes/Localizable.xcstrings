@@ -865,10 +865,19 @@
     "Elevation" : {
 
     },
+    "Elevation 🔒" : {
+
+    },
+    "Elevation colors for a trail you draw come with OpenHikes Pro." : {
+
+    },
     "Elevation from %@." : {
 
     },
     "Elevation profile" : {
+
+    },
+    "Elevation, OpenHikes Pro" : {
 
     },
     "End and Save Hike" : {
@@ -941,6 +950,9 @@
 
     },
     "From OpenStreetMap" : {
+
+    },
+    "Get Elevation with OpenHikes Pro" : {
 
     },
     "Give this hike a name, or leave it blank to keep the default." : {
@@ -1279,6 +1291,9 @@
     "No elevation data for this hike" : {
 
     },
+    "No elevation data for this route" : {
+
+    },
     "No forecast available" : {
 
     },
@@ -1488,6 +1503,9 @@
 
     },
     "Opens an explanation of why this hike can't be shared." : {
+
+    },
+    "Opens OpenHikes Pro." : {
 
     },
     "Opens the App Store subscription settings." : {
@@ -1781,6 +1799,9 @@
 
     },
     "Read the ground you walk on" : {
+
+    },
+    "Reading elevation…" : {
 
     },
     "Reason" : {
