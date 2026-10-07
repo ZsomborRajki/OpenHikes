@@ -569,7 +569,8 @@ extension OpenHikesView {
                 searchFailure: $searchFailure,
                 startupIssue: showingStorageStartupIssue,
                 locationAccess: locationAccessPrompt.isShowingBinding,
-                photoCapture: $photoPresentation
+                photoCapture: $photoPresentation,
+                walkEndRefused: Bindable(appModel.recordingEntry).walkEndRefused
             )
     }
 }

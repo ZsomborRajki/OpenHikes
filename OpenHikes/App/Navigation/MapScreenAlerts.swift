@@ -33,15 +33,16 @@
 //  keeps the answer right in landscape, where ``MapSidePanel`` holds the same
 //  contents and there is no sheet to be inside of.
 //
-//  What the alerts say is still owned by whoever raises them — the state all
-//  five read lives on ``OpenHikesView``, which outlives every rebuild of the
-//  sheet, so a rebuild mid-alert loses the box and not the reason for it.
+//  What the alerts say is still owned by whoever raises them — the state they
+//  read lives on ``OpenHikesView`` or on the app model's ``RecordingEntry``,
+//  both of which outlive every rebuild of the sheet, so a rebuild mid-alert
+//  loses the box and not the reason for it.
 //
 
 import SwiftUI
 
 extension View {
-    /// Attaches the map screen's five alerts to the view they can actually be
+    /// Attaches the map screen's alerts to the view they can actually be
     /// presented from.
     ///
     /// - Parameters:
@@ -51,12 +52,15 @@ extension View {
     ///   - locationAccess: Whether the map's refused "my location" button has
     ///     been tapped — see ``LocationAccessPrompt``.
     ///   - photoCapture: The camera and library pickers' own failures.
+    ///   - walkEndRefused: The record button's End Hike and Record, refused by
+    ///     the store — see ``RecordingEntry/walkEndRefused``.
     func mapScreenAlerts(
         importFailure: Binding<HikeImportFailure?>,
         searchFailure: Binding<SearchFailure?>,
         startupIssue: Binding<Bool>,
         locationAccess: Binding<Bool>,
-        photoCapture: Binding<PhotoCaptureState>
+        photoCapture: Binding<PhotoCaptureState>,
+        walkEndRefused: Binding<Bool>
     ) -> some View {
         modifier(
             MapScreenAlerts(
@@ -64,7 +68,8 @@ extension View {
                 searchFailure: searchFailure,
                 startupIssue: startupIssue,
                 locationAccess: locationAccess,
-                photoCapture: photoCapture
+                photoCapture: photoCapture,
+                walkEndRefused: walkEndRefused
             )
         )
     }
@@ -76,6 +81,7 @@ private struct MapScreenAlerts: ViewModifier {
     @Binding var startupIssue: Bool
     @Binding var locationAccess: Bool
     @Binding var photoCapture: PhotoCaptureState
+    @Binding var walkEndRefused: Bool
 
     func body(content: Content) -> some View {
         content
@@ -97,6 +103,13 @@ private struct MapScreenAlerts: ViewModifier {
             }
             .locationAccessAlert(.whileUsing, isPresented: $locationAccess)
             .photoCaptureAlerts($photoCapture)
+            // The detail's End says the same, in the same words — see
+            // ``WalkControls``. Nothing recorded: the walk is still under way.
+            .alert("Could not end this hike", isPresented: $walkEndRefused) {
+                Button("OK", role: .cancel) { /* dismiss */ }
+            } message: {
+                Text("Its record could not be saved, so the hike is still under way. Try ending it again.")
+            }
     }
 
     /// Presents while `error` holds something, and clears it on dismissal, so

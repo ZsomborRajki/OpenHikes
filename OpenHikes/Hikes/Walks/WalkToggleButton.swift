@@ -17,8 +17,8 @@
 //  phase, the clock and End and Save Hike, and no second Pause (#679).
 //
 //  Draws nothing while another trail holds the walk — ``WalkControls`` names
-//  that one instead — nor on a recording's own draft, which never gets a
-//  walk. Reads only the session's coarse properties, like ``WalkControls``,
+//  that one instead — nor while a recording is under way, on any trail: a
+//  hiker walks or records, never both. Reads only the session's coarse properties, like ``WalkControls``,
 //  and is its own view rather than a `.toolbar` closure's contents, so a
 //  fix that extends coverage redraws neither this nor the detail around it.
 //
