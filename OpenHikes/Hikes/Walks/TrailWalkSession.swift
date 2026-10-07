@@ -110,10 +110,10 @@ final class TrailWalkSession {
     @ObservationIgnored private let context: ModelContext
     @ObservationIgnored private let tracker: BackgroundTrailTracker?
     @ObservationIgnored private let clock: @Sendable () -> Date
-    /// The recorder's answer to "which hike is the active draft", so a
-    /// recording's own row never gets a walk. A closure rather than the
-    /// recorder because the recorder is the single authority on that and
-    /// this must not become a second one.
+    /// The recorder's answer to "which hike is the active draft" — and so to
+    /// whether a recording is under way at all, which no walk may start
+    /// beside. A closure rather than the recorder because the recorder is the
+    /// single authority on that and this must not become a second one.
     @ObservationIgnored private let activeRecordingHikeID: () -> UUID?
     /// The reminder a paused walk can produce, when the app has one.
     ///
@@ -132,8 +132,9 @@ final class TrailWalkSession {
     /// Capped at two: the first failure gets one prompt retry, then attempts
     /// wait for the regular cadence until a write succeeds.
     @ObservationIgnored private var persistenceFailures = 0
-    /// The hike whose walk was ended here, held until the hiker leaves its
-    /// route or turns following on again.
+    /// The hikes whose walk was ended here, or whose recording was just
+    /// saved, each held until the hiker leaves its route or turns following
+    /// on again.
     ///
     /// Without it End is not an end: the next accepted on-route fix finds no
     /// record, starts a fresh walk, and the controls come straight back —
@@ -141,7 +142,11 @@ final class TrailWalkSession {
     /// the detail is still on screen. Cleared by ``recordOffRoute(hikeID:)``
     /// and by turning Follow This Trail back on, which are the two ways a
     /// hiker says they mean to walk this trail again.
-    @ObservationIgnored private var endedHikeID: UUID?
+    ///
+    /// A set, because one hold does not replace another: a walk ended and
+    /// then a recording made and saved leave two trails the hiker has just
+    /// finished, and starting a walk on a third has finished neither.
+    @ObservationIgnored private var endedHikeIDs: Set<UUID> = []
     /// The walk a matched fix has proposed and movement not yet confirmed.
     @ObservationIgnored private var pendingStart: ProposedWalk?
 
@@ -180,6 +185,17 @@ final class TrailWalkSession {
     /// Whether `hikeID` is the walk under way.
     func isWalking(_ hikeID: UUID) -> Bool { walkedHikeID == hikeID }
 
+    /// Whether a recording is under way. A hiker walks a trail or records
+    /// one, never both: two live sessions meant two Lock Screen stories and
+    /// two sets of controls for one hiker. So while one records, nothing
+    /// starts a walk, and a recording asked for mid-walk ends the walk first
+    /// — see ``RecordingEntry``.
+    var isRecording: Bool { activeRecordingHikeID() != nil }
+
+    /// The trail being walked, by its title, or `nil` when nothing is — what
+    /// a recording asked for now would have to end first.
+    var walkUnderWayTitle: String? { walkedHikeID == nil ? nil : walkedHikeTitle }
+
     /// Whether the feeds should publish a fix for `hikeID`: yes for a hike
     /// with no walk, yes for a walk that is following, no for one that is
     /// paused — the widget already says so and a moving dot would contradict it.
@@ -200,7 +216,7 @@ final class TrailWalkSession {
     /// result that was deliberately left up. Cleared by the same two gestures
     /// that rearm the start, which is what makes a genuinely new walk's
     /// activity start normally.
-    func hasEndedWalk(hikeID: UUID) -> Bool { endedHikeID == hikeID }
+    func hasEndedWalk(hikeID: UUID) -> Bool { endedHikeIDs.contains(hikeID) }
 
     /// The walk's figures for the widget and the Lock Screen, or `nil` when
     /// `hikeID` is not being walked.
@@ -309,8 +325,7 @@ final class TrailWalkSession {
 
     /// Lets `hikeID` start a walk again after one was ended along it.
     private func rearmStart(hikeID: UUID) {
-        guard endedHikeID == hikeID else { return }
-        endedHikeID = nil
+        endedHikeIDs.remove(hikeID)
     }
 
     /// Ends a walk that has gone unmatched for ``TrailWalkPolicy/abandonAfter``.
@@ -381,11 +396,12 @@ final class TrailWalkSession {
     // MARK: Start
 
     /// Whether `hike` may start a walk right now: nothing else is being
-    /// walked, the last walk along it has not just been ended, following is
-    /// on, and this is not a recording's own draft.
+    /// walked or recorded, the last walk along it has not just been ended,
+    /// following is on, and this is not a recording's own draft.
     func canStart(_ hike: Hike) -> Bool {
         record == nil
-            && endedHikeID != hike.id
+            && !isRecording
+            && !endedHikeIDs.contains(hike.id)
             && hike.autoFollowEnabled
             && hike.isAttached
             && !hike.belongsToActiveRecording(currentHikeID: activeRecordingHikeID())
@@ -397,7 +413,7 @@ final class TrailWalkSession {
         // memory; the next write carries it.
         record = walk.stamped(along: hike.route)
         walkedHike = hike
-        endedHikeID = nil
+        endedHikeIDs.remove(hike.id)
         pendingStart = nil
         lastEndedWalk = nil
         walkedHikeID = hike.id
@@ -572,9 +588,9 @@ final class TrailWalkSession {
         let final = lingers ? Self.payload(for: closing, at: endedAt, state: .finished) : nil
         let endedID = closing.hikeID
         clearState()
-        // After `clearState`, which clears it: an ended walk is exactly what
-        // has to stop the next matched fix from starting another one.
-        if reason != .abandoned { endedHikeID = endedID }
+        // An ended walk is exactly what has to stop the next matched fix from
+        // starting another one.
+        if reason != .abandoned { endedHikeIDs.insert(endedID) }
         if lingers { lastEndedWalk = row }
         tracker?.walkDidEnd(final: final)
         return row.map { .kept($0) } ?? .discarded
@@ -585,7 +601,6 @@ final class TrailWalkSession {
         record = nil
         walkedHike = nil
         walkedProfile = nil
-        endedHikeID = nil
         lastPersistedAt = nil
         lastPersistenceAttemptAt = nil
         persistenceFailures = 0
@@ -678,7 +693,8 @@ final class TrailWalkSession {
 
 extension TrailWalkSession {
     /// Whether the detail's Start may begin a walk on `hike` right now:
-    /// nothing else is being walked, and this is not a recording's own draft.
+    /// nothing else is being walked or recorded, and this is not a
+    /// recording's own draft.
     ///
     /// Looser than ``canStart(_:)`` on purpose. Following off and an End just
     /// taken both hold the *automatic* start back, because neither a fix nor a
@@ -686,6 +702,7 @@ extension TrailWalkSession {
     /// exactly that.
     func canStartByHand(_ hike: Hike) -> Bool {
         record == nil
+            && !isRecording
             && hike.isAttached
             && !hike.belongsToActiveRecording(currentHikeID: activeRecordingHikeID())
     }
@@ -811,7 +828,7 @@ extension TrailWalkSession {
     /// End: leaving the route, or turning Follow This Trail back on. Start
     /// stays available, since a tap says the hiker means it.
     func recordingDidSave(hikeID: UUID) {
-        endedHikeID = hikeID
+        endedHikeIDs.insert(hikeID)
     }
 }
 

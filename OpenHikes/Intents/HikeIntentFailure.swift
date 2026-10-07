@@ -44,6 +44,10 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     /// store failure — nothing was read — and so not ``storage``, whose
     /// sentence would say otherwise.
     case unknownDay
+    /// Asked to start a recording while a walk is under way along `trail`.
+    /// A hiker walks or records, never both, and ending a walk is the
+    /// hiker's call to make on the screen, not Siri's or the watch's.
+    case walking(trail: String)
 
     var errorDescription: String? {
         switch self {
@@ -52,6 +56,7 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
         case .unknownDay: "OpenHikes couldn't work out which day that is."
         case .noActiveRecording: "OpenHikes isn't recording a hike right now."
         case .alreadyRecording: "OpenHikes is already recording a hike."
+        case .walking(let trail): "You're walking \(trail)."
         case .notPaused: "That hike isn't paused."
         case .recording(let failure): failure.errorDescription
         case .awaitingRouteReview:
@@ -66,6 +71,7 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
         case .alreadyRecording, .noActiveRecording, .notPaused, .noHikesYet, .unknownDay:
             nil
         case .busyFinishing: "Try again in a moment."
+        case .walking: "End the walk in OpenHikes to start recording."
         case .recording(let failure): failure.recoverySuggestion
         case .awaitingRouteReview: "Open OpenHikes to finish reviewing it."
         // Fixed rather than the store's own words: what SwiftData has to say

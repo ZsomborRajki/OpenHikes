@@ -63,7 +63,8 @@ struct OpenHikesApp: App {
         if !AppLaunchEnvironment.isRunningTests {
             let coordinator = HikeIntentCoordinator(
                 recorder: appModel.hikeRecorder,
-                container: appModel.container
+                container: appModel.container,
+                walkUnderWay: { [weak walkSession = appModel.walkSession] in walkSession?.walkUnderWayTitle }
             )
             AppDependencyManager.shared.add(dependency: coordinator)
             let recordingControl: any HikeRecordingControlHandling = coordinator

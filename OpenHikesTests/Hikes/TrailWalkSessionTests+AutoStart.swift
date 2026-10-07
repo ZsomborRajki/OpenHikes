@@ -82,8 +82,9 @@ extension TrailWalkSessionTests {
 
     /// The trailhead and the pocket: the trail is opened, one fix proposes,
     /// the phone goes away, and the significant-change feed is the one that
-    /// sees the hiker walk off.
-    @Test("a background match confirms a walk the foreground proposed")
+    /// sees the hiker walk off — in two deliveries, because one is a place
+    /// and two going outwards are a walk.
+    @Test("background matches confirm a walk the foreground proposed")
     func backgroundConfirmsAProposal() {
         let session = session()
         let hike = hike()
@@ -91,7 +92,10 @@ extension TrailWalkSessionTests {
         let proposedAt = clock.now
         session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
 
-        clock.advance(by: 5 * 60)
+        clock.advance(by: 3 * 60)
+        session.recordBackgroundMatch(hikeID: hike.id, distance: profile.distances[2], at: clock.now)
+        #expect(session.walkedHikeID == nil, "one delivery past the start is not yet a walk")
+        clock.advance(by: 3 * 60)
         session.recordBackgroundMatch(hikeID: hike.id, distance: profile.distances[4], at: clock.now)
 
         #expect(session.walkedHikeID == hike.id)
@@ -124,9 +128,27 @@ extension TrailWalkSessionTests {
         session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
 
         hike.autoFollowEnabled = false
-        clock.advance(by: 5 * 60)
-        session.recordBackgroundMatch(hikeID: hike.id, distance: profile.distances[4], at: clock.now)
+        for index in [2, 4] {
+            clock.advance(by: 3 * 60)
+            session.recordBackgroundMatch(hikeID: hike.id, distance: profile.distances[index], at: clock.now)
+        }
 
         #expect(session.walkedHikeID == nil)
+    }
+
+    /// The jump the coverage would bridge, seen by the session: one fix
+    /// landing 224 m along, a second after the one that proposed.
+    @Test("one fix jumping along the route starts nothing")
+    func oneJumpedFixStartsNothing() {
+        let session = session()
+        let hike = hike()
+        let profile = RouteProfile(route: hike.route)
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
+
+        clock.advance(by: 1)
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[4])
+
+        #expect(session.walkedHikeID == nil)
+        #expect(session.startNotice == nil)
     }
 }

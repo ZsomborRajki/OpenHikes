@@ -43,9 +43,11 @@ struct TrailWalkIsolationTests {
     /// a fix extending coverage must not reach them.
     @Test("coverage writes wake the progress row and not the controls")
     func coverageWakesOnlyTheFineObservers() async {
-        // Two points ~220 m apart: far enough along the route to start it.
+        // Two steps along the route from where it found the hiker: far
+        // enough, in enough fixes, to start it.
         match(at: 0)
         match(at: 1)
+        match(at: 2)
         let coarse = ObservationCounter {
             _ = session.walkedHikeID
             _ = session.phase
@@ -58,8 +60,8 @@ struct TrailWalkIsolationTests {
 
         // Precondition for the zero below: the writes really happened.
         let before = session.coveredFraction
-        match(at: 2)
         match(at: 3)
+        match(at: 4)
         await fine.settle()
         #expect(session.coveredFraction > before, "the walk did extend")
 
@@ -73,6 +75,7 @@ struct TrailWalkIsolationTests {
     func pauseWakesOnlyTheCoarseObservers() async {
         match(at: 0)
         match(at: 1)
+        match(at: 2)
         let coarse = ObservationCounter { _ = session.phase }
         let fine = ObservationCounter { _ = session.coveredFraction }
         await coarse.settle()

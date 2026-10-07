@@ -94,6 +94,7 @@ final class OpenHikesModel {
     /// needs to exist before the map does. See ``RecordingEntry``.
     @ObservationIgnored private(set) lazy var recordingEntry = RecordingEntry(
         recorder: hikeRecorder,
+        walkSession: walkSession,
         openRequests: hikeOpenRequests
     )
 
@@ -279,7 +280,8 @@ final class OpenHikesModel {
             reminderActions = MovementReminderActions(
                 recording: HikeIntentCoordinator(
                     recorder: hikeRecorder,
-                    container: container
+                    container: container,
+                    walkUnderWay: { [weak walkSession = self.walkSession] in walkSession?.walkUnderWayTitle }
                 ),
                 walkSession: self.walkSession
             ).registerAsNotificationDelegate()

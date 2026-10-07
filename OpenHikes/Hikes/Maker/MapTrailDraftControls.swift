@@ -47,15 +47,23 @@ final class MapTrailDraftControlsView: UIView {
 
     private let onDraw: () -> Void
     private let onRecord: () -> Void
+    private let onEndWalkAndRecord: () -> Void
     /// Kept for ``setRecording(_:)``, which re-dresses it in place.
     private(set) var recordButton: UIButton?
     private var recordGlass: UIVisualEffectView?
     /// What ``setRecording(_:)`` last drew, so a repeat is free.
     private(set) var isRecording = false
+    /// What ``setWalkToEnd(_:)`` last offered, so a repeat is free.
+    private(set) var walkToEnd: String?
 
-    init(onDraw: @escaping () -> Void, onRecord: @escaping () -> Void) {
+    init(
+        onDraw: @escaping () -> Void,
+        onRecord: @escaping () -> Void,
+        onEndWalkAndRecord: @escaping () -> Void
+    ) {
         self.onDraw = onDraw
         self.onRecord = onRecord
+        self.onEndWalkAndRecord = onEndWalkAndRecord
         super.init(frame: .zero)
         buildHierarchy()
         applyRecordingAppearance()
@@ -75,6 +83,32 @@ final class MapTrailDraftControlsView: UIView {
         guard recording != isRecording else { return }
         isRecording = recording
         applyRecordingAppearance()
+    }
+
+    /// Has the record button ask before it ends the walk along `trail`, or
+    /// record straight away when `trail` is `nil`.
+    ///
+    /// A hiker walks or records, never both — see ``RecordingEntry``. A menu
+    /// on the button rather than an alert: it opens from the tap that asked,
+    /// anchored to the button, and dismissing it is the Cancel.
+    func setWalkToEnd(_ trail: String?) {
+        guard trail != walkToEnd else { return }
+        walkToEnd = trail
+        guard let recordButton else { return }
+        guard let trail else {
+            recordButton.menu = nil
+            recordButton.showsMenuAsPrimaryAction = false
+            return
+        }
+        let endAndRecord = UIAction(
+            title: String(localized: "End Walk and Record"),
+            image: UIImage(systemName: Self.recordSymbolName)
+        ) { [onEndWalkAndRecord] _ in onEndWalkAndRecord() }
+        recordButton.menu = UIMenu(
+            title: String(localized: "End your walk on \(trail) and start recording?"),
+            children: [endAndRecord]
+        )
+        recordButton.showsMenuAsPrimaryAction = true
     }
 
     private func applyRecordingAppearance() {
@@ -146,7 +180,8 @@ extension MapView {
     ) {
         let controls = MapTrailDraftControlsView(
             onDraw: { [trailMaker] in trailMaker.requestOpen() },
-            onRecord: { [recordingEntry] in recordingEntry.requestRecording() }
+            onRecord: { [recordingEntry] in recordingEntry.requestRecording() },
+            onEndWalkAndRecord: { [recordingEntry] in recordingEntry.endWalkAndRecord() }
         )
         // Starts out of the way, for the reason the camera pill does:
         // `observeTrailDraftControls` decides on its first pass whether there
@@ -233,16 +268,18 @@ extension MapView.Coordinator {
         #endif
     }
 
-    /// Keeps the record button's red in step with the recorder, then
-    /// re-registers — the arrangement every observation on this map uses, so
-    /// a recording starting or ending re-dresses one button and re-renders
-    /// nothing.
+    /// Keeps the record button's red, and whether it asks before ending a
+    /// walk, in step with the recorder and the walk, then re-registers — the
+    /// arrangement every observation on this map uses, so a recording or a
+    /// walk starting or ending re-dresses one button and re-renders nothing.
     private func trackRecordingEntry(_ entry: RecordingEntry) {
         #if os(iOS)
         trailDraftControls?.setRecording(entry.isRecording)
+        trailDraftControls?.setWalkToEnd(entry.walkToEnd)
         #endif
         reobserving(self, entry) {
             _ = entry.isRecording
+            _ = entry.walkToEnd
         } onChange: { coordinator, model in
             coordinator.trackRecordingEntry(model)
         }
