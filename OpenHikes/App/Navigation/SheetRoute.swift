@@ -168,6 +168,23 @@ enum SheetRoute: Hashable {
         }
     }
 
+    /// Whether this full-height route can give the map back beside itself and
+    /// take the whole window again — the hiker's own gallery, whose *Show on
+    /// map* lowers it and whose photograph's tap raises it.
+    ///
+    /// A shared hike's gallery has no such way back, so it is not drawn as a
+    /// column at all: dragged down in portrait and then turned, it would be a
+    /// photograph in a 320-point panel with nothing to widen it but *Back*.
+    /// See ``SheetPresentation/isShowingFullHeightScreen``.
+    var revealsMapBeside: Bool {
+        switch self {
+        case .photo: true
+        case .communityHike, .communityPhoto, .hike, .newPlace, .pendingPhotos, .pendingSubmission, .place,
+            .placesAround, .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
+            false
+        }
+    }
+
     // Spelled out rather than synthesized, because the compiler cannot see
     // `HikeWalk`'s `PersistentModel` conformance from here: `Hike` names
     // `\HikeWalk.hike` in its relationship and `HikeWalk` names `Hike`, and

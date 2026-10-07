@@ -283,8 +283,14 @@ extension MapView.Coordinator {
     /// hiker has turned slides the right way. Only the camera's centre moves:
     /// the hiker chose the zoom, and a page turn is not a request to change
     /// it.
+    ///
+    /// A tilted map can put either end of that measurement past the horizon,
+    /// where MapKit answers with a non-finite point or an invalid coordinate —
+    /// and `setCenter` raises on an invalid one. Those pins are opened where
+    /// they stand instead, as they were before paging slid anything.
     private func slideIntoView(_ coordinate: CLLocationCoordinate2D, on mapView: MKMapView) -> Bool {
         let point = mapView.convert(coordinate, toPointTo: mapView)
+        guard point.x.isFinite, point.y.isFinite else { return false }
         let area = focusArea(in: mapView)
         let clear = area.insetBy(dx: Self.photoPinClearance, dy: Self.photoPinClearance)
         guard !clear.isEmpty, !clear.contains(point) else { return false }
@@ -292,7 +298,9 @@ extension MapView.Coordinator {
             x: mapView.bounds.midX + point.x - area.midX,
             y: mapView.bounds.midY + point.y - area.midY
         )
-        mapView.setCenter(mapView.convert(centre, toCoordinateFrom: mapView), animated: true)
+        let target = mapView.convert(centre, toCoordinateFrom: mapView)
+        guard CLLocationCoordinate2DIsValid(target) else { return false }
+        mapView.setCenter(target, animated: true)
         return true
     }
 

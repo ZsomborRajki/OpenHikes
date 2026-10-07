@@ -115,4 +115,17 @@ struct SheetMapRevealTests {
         presentation.coverMapWithFullHeightScreen()
         #expect(presentation.isShowingFullHeightScreen)
     }
+
+    /// A shared hike's gallery has no tap to take the window back, so a
+    /// portrait drag must not leave it a column once the phone is turned.
+    @Test("a shared hike's gallery keeps the window whatever height it is at")
+    func aSharedGalleryKeepsTheWindow() {
+        let presentation = SheetPresentation(detent: .large)
+        presentation.path = [.communityHike(.stub()), .communityPhoto(.stub(), [], 0)]
+
+        presentation.detent = .medium
+        presentation.layout = .sidePanel
+
+        #expect(presentation.isShowingFullHeightScreen)
+    }
 }

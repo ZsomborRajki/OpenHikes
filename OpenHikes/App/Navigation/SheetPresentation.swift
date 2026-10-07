@@ -188,7 +188,10 @@ final class SheetPresentation {
     /// the sheet is at the middle detent, and a landscape panel that stayed
     /// window-wide would cover the very pin it was asked to show. So the flag
     /// follows the detent as well as the path: the viewer fills the window at
-    /// `.large` and is a panel's worth of photograph anywhere else.
+    /// `.large` and is a panel's worth of photograph anywhere else. That
+    /// viewer only — a shared hike's gallery has no tap to take the window
+    /// back, so it keeps it whatever height it is at; see
+    /// ``SheetRoute/revealsMapBeside``.
     private(set) var isShowingFullHeightScreen = false
 
     /// True at the middle detent — the only one ``SheetMetrics`` learns a
@@ -505,10 +508,11 @@ final class SheetPresentation {
     /// Called by a shared hike's gallery's "show on map" button and by nothing
     /// else — the hiker's own gallery stays open instead, through
     /// ``revealMapUnderFullHeightScreen()``. That button dismisses the picture
-    /// *because* the user asked where it was taken, and the restore below — which exists so a reader who was at
-    /// `.large` is put back there — would answer by covering the very thing
-    /// they asked to see. Overwriting the remembered height is enough: the pop
-    /// runs the same restore and finds the decision already made.
+    /// *because* the user asked where it was taken, and the restore below —
+    /// which exists so a reader who was at `.large` is put back there — would
+    /// answer by covering the very thing they asked to see. Overwriting the
+    /// remembered height is enough: the pop runs the same restore and finds
+    /// the decision already made.
     ///
     /// The middle detent rather than the smallest, which is what this did
     /// before. Every camera move in this app now frames what it is aiming at
@@ -596,9 +600,12 @@ final class SheetPresentation {
     }
 
     /// ``isShowingFullHeightScreen``, from the screen on top and the height —
-    /// see that flag for why it reads both.
+    /// see that flag for why it reads both. Only a screen with a way back to
+    /// the whole window is let go of it below `.large` — see
+    /// ``SheetRoute/revealsMapBeside``.
     private func recomputeFullHeightScreenFlag() {
-        let showing = isFullHeightScreenOnTop && storedDetent == .large
+        let lowered = storedDetent != .large && storedPath.last?.revealsMapBeside == true
+        let showing = isFullHeightScreenOnTop && !lowered
         if isShowingFullHeightScreen != showing { isShowingFullHeightScreen = showing }
     }
 
