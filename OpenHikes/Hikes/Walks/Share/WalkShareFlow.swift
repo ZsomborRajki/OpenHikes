@@ -82,7 +82,10 @@ struct WalkShareFlow: View {
             // Fitted once per share: a flow re-presented after a rotation
             // finds it already here.
             guard session.shape == nil else { return }
-            session.shape = await Self.shape(of: walk.coverage.ranges, along: trail, walked: trailMatchesWalk)
+            let generation = session.generation
+            let shape = await Self.shape(of: walk.coverage.ranges, along: trail, walked: trailMatchesWalk)
+            guard session.generation == generation else { return }
+            session.shape = shape
         }
         .onChange(of: pickedItem) { _, item in
             guard let item else { return }

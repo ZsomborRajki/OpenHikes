@@ -42,12 +42,25 @@ final class WalkShareSession {
     /// was, but a hiker who closed it and tapped *Share* again starts over,
     /// as they always have.
     func start() {
+        clear()
+        isPresented = true
+    }
+
+    /// The flow has been closed rather than turned: the photograph goes now
+    /// rather than when the summary is popped, and a load still on its way
+    /// lands nowhere. Called once the cover has gone, so the editor is not
+    /// emptied under a card still sliding down.
+    func closed() {
+        guard !isPresented else { return }
+        clear()
+    }
+
+    private func clear() {
         generation += 1
         shape = nil
         editor = nil
         isEditing = false
         isLoading = false
         loadFailed = false
-        isPresented = true
     }
 }
