@@ -685,7 +685,7 @@ extension XCTestCase {
         )
         recordButton.tap()
         if endingWalk {
-            let endAndRecord = app.buttons["End Walk and Record"]
+            let endAndRecord = app.buttons["End Hike and Record"]
             XCTAssertTrue(endAndRecord.waitForExistence(timeout: UITestTimeout.existence))
             endAndRecord.tap()
         }

@@ -101,11 +101,11 @@ final class MapTrailDraftControlsView: UIView {
             return
         }
         let endAndRecord = UIAction(
-            title: String(localized: "End Walk and Record"),
+            title: String(localized: "End Hike and Record"),
             image: UIImage(systemName: Self.recordSymbolName)
         ) { [onEndWalkAndRecord] _ in onEndWalkAndRecord() }
         recordButton.menu = UIMenu(
-            title: String(localized: "End your walk on \(trail) and start recording?"),
+            title: String(localized: "End your hike on \(trail) and start recording?"),
             children: [endAndRecord]
         )
         recordButton.showsMenuAsPrimaryAction = true

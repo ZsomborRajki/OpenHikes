@@ -56,7 +56,7 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
         case .unknownDay: "OpenHikes couldn't work out which day that is."
         case .noActiveRecording: "OpenHikes isn't recording a hike right now."
         case .alreadyRecording: "OpenHikes is already recording a hike."
-        case .walking(let trail): "You're walking \(trail)."
+        case .walking(let trail): "You're hiking \(trail)."
         case .notPaused: "That hike isn't paused."
         case .recording(let failure): failure.errorDescription
         case .awaitingRouteReview:
@@ -71,7 +71,7 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
         case .alreadyRecording, .noActiveRecording, .notPaused, .noHikesYet, .unknownDay:
             nil
         case .busyFinishing: "Try again in a moment."
-        case .walking: "End the walk in OpenHikes to start recording."
+        case .walking: "End the hike in OpenHikes to start recording."
         case .recording(let failure): failure.recoverySuggestion
         case .awaitingRouteReview: "Open OpenHikes to finish reviewing it."
         // Fixed rather than the store's own words: what SwiftData has to say
