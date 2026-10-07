@@ -41,8 +41,7 @@ extension TrailWalkSessionTests {
         // its own.
         session.recordOffRoute(hikeID: hike.id)
         #expect(session.canStart(hike))
-        clock.advance(by: 60)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[7])
+        walk(session, hike: hike, profile: profile, from: 7, through: 9)
         #expect(session.walkedHikeID == hike.id)
     }
 
@@ -60,6 +59,41 @@ extension TrailWalkSessionTests {
         session.autoFollowDidChange(hikeID: hike.id, enabled: false)
         #expect(session.hasEndedWalk(hikeID: hike.id), "turning following off must preserve the End boundary")
         hike.autoFollowEnabled = true
+        session.autoFollowDidChange(hikeID: hike.id, enabled: true)
+
+        #expect(session.canStart(hike))
+    }
+
+    /// A saved recording is an end too. The hiker is standing on the last
+    /// point of the line they just drew, so without the hold the saved hike's
+    /// detail matches the next fix and starts a second walk along it.
+    @Test("a just-saved recording does not auto-start a walk until the hiker leaves it")
+    func savedRecordingHoldsTheStart() {
+        let session = session()
+        let hike = hike()
+        let profile = RouteProfile(route: hike.route)
+        session.recordingDidSave(hikeID: hike.id)
+
+        let last = profile.coordinates.count - 1
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[last])
+        #expect(session.walkedHikeID == nil, "standing where the recording ended is not a new walk")
+        #expect(session.startNotice == nil)
+        #expect(session.hasEndedWalk(hikeID: hike.id), "so no follow panel starts over the recording's own")
+        #expect(session.canStartByHand(hike), "Start is still a tap away")
+
+        session.recordOffRoute(hikeID: hike.id)
+        clock.advance(by: 60)
+        startWalk(session, hike: hike, profile: profile, at: 1)
+        #expect(session.walkedHikeID == hike.id, "coming back to the trail later is a walk of its own")
+    }
+
+    @Test("turning following back on rearms a just-saved recording")
+    func followingRearmsAfterASavedRecording() {
+        let session = session()
+        let hike = hike()
+        session.recordingDidSave(hikeID: hike.id)
+        #expect(!session.canStart(hike))
+
         session.autoFollowDidChange(hikeID: hike.id, enabled: true)
 
         #expect(session.canStart(hike))

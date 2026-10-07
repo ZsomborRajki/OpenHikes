@@ -68,13 +68,16 @@ extension TrailWalkSessionTests {
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
         session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[1])
+        #expect(attempts == 0, "a proposed walk writes nothing")
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[2])
         #expect(attempts == 1, "start and match must not spend the retry on the same fix")
         #expect(hike.walkInProgress == nil)
         clock.advance(by: 1)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[1])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[3])
         #expect(attempts == 2)
         clock.advance(by: 1)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[2])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[4])
         #expect(attempts == 2)
 
         refusing = false

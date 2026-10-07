@@ -12,8 +12,8 @@
 //  aligned — and says in its title that ending keeps the walk as a record.
 //
 //  The controls exist only once there is a walk to control: opening a trail
-//  is not walking it, and this draws nothing until the first matched fix or
-//  the navigation bar's Start has started one. On any *other* trail's detail
+//  is not walking it, and this draws nothing until the hiker moving along the
+//  route or the navigation bar's Start has started one. On any *other* trail's detail
 //  while a walk is under way, it draws the one-line notice naming the walk in
 //  progress instead.
 //

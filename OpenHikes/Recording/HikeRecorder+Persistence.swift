@@ -465,6 +465,9 @@ extension HikeRecorder {
         _ session: TrackJournalSession,
         journal: TrackJournal
     ) async {
+        // First, before anything here suspends: once `resetSession()` lets go
+        // of the draft, nothing else stops a fix from starting a walk on it.
+        recordingDidSave?(session.metadata.sessionID)
         endRecordingActivity(.finished)
         await clearSharedRecordingState(
             sessionID: session.metadata.sessionID

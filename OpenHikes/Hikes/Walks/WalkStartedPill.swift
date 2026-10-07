@@ -4,8 +4,8 @@
 //
 //  The pill at the top of the map that says a hike has started.
 //
-//  A walk begins on its own, on the first matched fix with Follow This Trail
-//  on — see ``TrailWalkSession``. Its controls live on the trail's detail,
+//  A walk begins on its own, once matched fixes with Follow This Trail on
+//  show the hiker moving along the route — see ``PendingWalkStart``. Its controls live on the trail's detail,
 //  under the progress bar, which is nowhere near where a hiker is looking
 //  when they reach the trailhead with the sheet pulled down. Starting
 //  silently there read as the app doing something behind their back, so the

@@ -92,7 +92,7 @@ extension TrailWalkSessionTests {
         session.discardWalk(forDeletedHike: first.id)
 
         let second = hike(title: "Valley Path")
-        walk(session, hike: second, profile: RouteProfile(route: second.route), from: 0, through: 1)
+        walk(session, hike: second, profile: RouteProfile(route: second.route), from: 0, through: 3)
         await harness.controller.settle()
 
         #expect(harness.notifier.withdrawn.contains(.afterDark))

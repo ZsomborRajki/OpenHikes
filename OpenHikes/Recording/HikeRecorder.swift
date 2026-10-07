@@ -106,6 +106,12 @@ final class HikeRecorder: NSObject {
     /// ``MovementReminderController`` for why a recording and a followed trail
     /// cannot each have their own.
     @ObservationIgnored let movementReminders: MovementReminderController?
+    /// Told the id of every recording once it is saved, which is the walk
+    /// session's cue not to start a walk along the line the hiker has just
+    /// finished — see ``TrailWalkSession/recordingDidSave(hikeID:)``. A
+    /// closure the composition root sets, as the reminders'
+    /// `hasActiveRecording` is, because the session is built after this.
+    @ObservationIgnored var recordingDidSave: ((UUID) -> Void)?
     @ObservationIgnored let journal: TrackJournal?
     @ObservationIgnored let powerMonitor: PowerStateMonitor
     /// The profile the recorder last asked its source for. Kept here rather

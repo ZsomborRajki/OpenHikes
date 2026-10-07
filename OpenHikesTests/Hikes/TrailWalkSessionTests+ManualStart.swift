@@ -50,7 +50,7 @@ extension TrailWalkSessionTests {
         let session = session()
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
-        walk(session, hike: hike, profile: profile, from: 0, through: 1)
+        walk(session, hike: hike, profile: profile, from: 0, through: 2)
         session.end()
         #expect(!session.canStart(hike))
 

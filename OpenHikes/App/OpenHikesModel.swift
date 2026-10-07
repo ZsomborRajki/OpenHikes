@@ -198,8 +198,14 @@ final class OpenHikesModel {
         self.hikeRecorder = hikeRecorder
         // The recorder stays the single authority on which hike is a draft;
         // the session only asks.
-        self.walkSession = walkSession
+        let session = walkSession
             ?? Self.makeWalkSession(container, backgroundTracker, movementReminders, hikeRecorder, weatherManager)
+        self.walkSession = session
+        // And the recorder says when a draft stops being one, so the hiker
+        // standing at the end of a recording is not walking it again.
+        hikeRecorder.recordingDidSave = { [weak session] hikeID in
+            session?.recordingDidSave(hikeID: hikeID)
+        }
         self.communityTransport = communityTransport
         // Before the maker, which asks it whether its line may be coloured by
         // elevation.

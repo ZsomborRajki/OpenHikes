@@ -2,8 +2,8 @@
 //  WalkUITests.swift
 //  OpenHikesUITests
 //
-//  Walking a followed trail: the walk that starts on the first matched fix,
-//  its Pause / Resume / End controls, the summary an end produces, and the
+//  Walking a followed trail: the walk that starts once matched fixes show the
+//  hiker moving along it, its Pause / Resume / End controls, the summary an end produces, and the
 //  History segment that lists it afterwards.
 //
 //  Kept out of CI alongside `RecordingUITests`, and for the same reason:
@@ -17,13 +17,13 @@ import CoreLocation
 import XCTest
 
 nonisolated final class WalkUITests: XCTestCase {
-    /// A walk starts the way auto-follow starts, on the first matched fix,
-    /// and can be paused and resumed without ending. The controls exist
-    /// only once there is a walk to control: opening a trail is not walking
-    /// it — so the launch starts a kilometre off the trail, where a fix
-    /// matches nothing, and steps onto it afterwards.
+    /// A walk starts once matched fixes show the hiker moving along the
+    /// trail, and can be paused and resumed without ending. The controls
+    /// exist only once there is a walk to control: opening a trail is not
+    /// walking it — so the launch starts a kilometre off the trail, where a
+    /// fix matches nothing, and walks onto it afterwards.
     @MainActor
-    func testWalkStartsOnAMatchedFixAndPauses() {
+    func testWalkStartsOnceTheHikerMovesAndPauses() {
         let app = makeApp(arguments: [
             "--ui-test-expanded-sheet",
             "--ui-test-enable-location",
@@ -41,9 +41,7 @@ nonisolated final class WalkUITests: XCTestCase {
             "looking at a trail must not offer walk controls before a fix matched it"
         )
 
-        setSimulatedLocation(UITestFixture.trailPoints[1])
-        let phase = element("walk-phase", in: app)
-        XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.trace))
+        let phase = walkOntoTheTrail(in: app)
         expectPhase(phase, contains: "Active")
 
         // The start is said on the map, and putting that away is not an end.
@@ -150,8 +148,10 @@ nonisolated final class WalkUITests: XCTestCase {
 
         launch(app)
         openHikeDetail(in: app)
-        let phase = element("walk-phase", in: app)
-        XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.trace))
+        // Started by hand at the trailhead, so every metre of the fixture is
+        // left to move the progress row: an automatic start would spend the
+        // 116 m on starting, and the rest is too short to change its figures.
+        _ = startWalkByHand(in: app)
         // Four points span 116 m of trail, past the minimum a walk needs to
         // be kept. Paced, not waited on: a follow has no speed gate, and the
         // effect waited for is the progress row moving.
@@ -229,8 +229,7 @@ nonisolated final class WalkUITests: XCTestCase {
 
         launch(app)
         openHikeDetail(in: app)
-        setSimulatedLocation(UITestFixture.trailPoints[1])
-        XCTAssertTrue(element("walk-phase", in: app).waitForExistence(timeout: UITestTimeout.trace))
+        _ = walkOntoTheTrail(in: app)
 
         popScreen(in: app)
         startRecording(in: app)
@@ -276,12 +275,17 @@ nonisolated final class WalkUITests: XCTestCase {
         ])
         app.resetAuthorizationStatus(for: .location)
         addLocationPermissionMonitor()
-        setSimulatedLocation(UITestFixture.trailPoints[0])
+        setSimulatedLocation(UITestFixture.offTrailCoordinate)
         defer { XCUIDevice.shared.location = nil }
         launch(app)
         openHikeDetail(in: app)
-        let phase = element("walk-phase", in: app)
-        XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.trace))
+        // By hand, for the reason the test above gives: the step below needs
+        // the fixture's 116 m to move the remaining distance. Started off the
+        // trail so the trailhead is a fix the walk hears, and its coverage is
+        // anchored there — a fix taken before the tap belongs to no walk.
+        let phase = startWalkByHand(in: app)
+        setSimulatedLocation(UITestFixture.trailPoints[0])
+        Thread.sleep(forTimeInterval: UITestFixture.paceSeconds)
 
         let follow = app.switches["Follow This Trail"]
         scrollToTap(follow, in: app)
@@ -329,7 +333,10 @@ nonisolated final class WalkUITests: XCTestCase {
     }
 
     /// End under the keep threshold leaves the detail on screen. Enabling
-    /// following must rearm there, through the real binding and onChange.
+    /// following must rearm there, through the real binding and onChange —
+    /// and the next walk then starts the way any automatic one does, once
+    /// the hiker moves along the trail. The first is started by hand, since
+    /// an automatic start has always covered more than the threshold.
     @MainActor
     func testFollowingOnRearmsAfterEndingAWalk() {
         let app = makeApp(arguments: [
@@ -343,8 +350,7 @@ nonisolated final class WalkUITests: XCTestCase {
         defer { XCUIDevice.shared.location = nil }
         launch(app)
         openHikeDetail(in: app)
-        let phase = element("walk-phase", in: app)
-        XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.trace))
+        let phase = startWalkByHand(in: app)
         scrollToTap(app.buttons["End and Save Hike"], in: app)
         confirmEndWalk(in: app)
         XCTAssertTrue(phase.waitForNonExistence(timeout: UITestTimeout.navigation))
@@ -354,8 +360,10 @@ nonisolated final class WalkUITests: XCTestCase {
         XCTAssertEqual(follow.value as? String, "0")
         scrollToTap(follow, in: app)
         XCTAssertEqual(follow.value as? String, "1")
-        XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.trace))
-        expectPhase(phase, contains: "Active")
+        // Back down from the fourth point, so the sweep spans the whole 116 m
+        // whether or not the fix the switch re-read was still fresh enough
+        // to propose from.
+        expectPhase(walkOntoTheTrail(in: app, along: [3, 2, 1, 0]), contains: "Active")
     }
 
     // MARK: - Helpers
@@ -391,4 +399,37 @@ nonisolated final class WalkUITests: XCTestCase {
         XCTFail("ending a hike should ask before closing its record")
     }
 
+}
+
+private extension WalkUITests {
+    /// Walks the trail's first four points, 116 m end to end — past the
+    /// distance an automatic start waits for, since a matched fix only
+    /// proposes a walk — and waits for the walk to show.
+    ///
+    /// Paced rather than waited on, as the follow steps elsewhere here are:
+    /// a proposal draws nothing, so there is no effect to wait for until the
+    /// fix that confirms it, and the pace only has to outlast
+    /// `LocationManager`'s one-publish-a-second throttle.
+    @MainActor
+    func walkOntoTheTrail(in app: XCUIApplication, along indices: [Int] = [0, 1, 2, 3]) -> XCUIElement {
+        for index in indices {
+            setSimulatedLocation(UITestFixture.trailPoints[index])
+            Thread.sleep(forTimeInterval: UITestFixture.paceSeconds)
+        }
+        let phase = element("walk-phase", in: app)
+        XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.trace))
+        return phase
+    }
+
+    /// The navigation bar's Start, for a test about what a walk does rather
+    /// than how one begins.
+    @MainActor
+    func startWalkByHand(in app: XCUIApplication) -> XCUIElement {
+        let toggle = app.buttons["walk-toggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: UITestTimeout.existence))
+        toggle.tap()
+        let phase = element("walk-phase", in: app)
+        XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.existence))
+        return phase
+    }
 }

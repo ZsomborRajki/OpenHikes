@@ -35,7 +35,7 @@ extension TrailWalkSessionTests {
         let session = remindingSession(harness)
         let walked = hike()
         let profile = RouteProfile(route: walked.route)
-        walk(session, hike: walked, profile: profile, from: 0, through: 1)
+        walk(session, hike: walked, profile: profile, from: 0, through: 2)
         #expect(session.pause())
 
         // Nineteen more matched fixes a minute apart: about a kilometre of
@@ -85,7 +85,7 @@ extension TrailWalkSessionTests {
         let session = remindingSession(harness)
         let walked = hike()
         let profile = RouteProfile(route: walked.route)
-        walk(session, hike: walked, profile: profile, from: 0, through: 1)
+        walk(session, hike: walked, profile: profile, from: 0, through: 2)
         #expect(session.pause())
 
         #expect(session.resume())
@@ -103,7 +103,7 @@ extension TrailWalkSessionTests {
         let walked = hike()
         let profile = RouteProfile(route: walked.route)
         let opening = remindingSession(harness)
-        walk(opening, hike: walked, profile: profile, from: 0, through: 1)
+        walk(opening, hike: walked, profile: profile, from: 0, through: 2)
         #expect(opening.pause())
 
         let relaunched = remindingSession(harness)
