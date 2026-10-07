@@ -514,7 +514,7 @@ struct MapSheet: View {
                 startID: photoID,
                 highlight: highlight,
                 mapController: mapController,
-                onShowOnMap: presentation.restAtMiddleWhenFullHeightScreenPops,
+                presentation: presentation,
                 photoPins: photoPins,
                 selection: presentation.photoSelection(for: route)
             )

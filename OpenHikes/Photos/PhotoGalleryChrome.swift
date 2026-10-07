@@ -67,10 +67,18 @@ extension View {
 /// alone restores the height the gallery was being read at, which on a screen
 /// that had been at `.large` is a sheet closing straight back over the pin — so
 /// each caller's `thenSelecting` collapses the sheet as well.
+///
+/// The hiker's own gallery does not leave at all: it drops the sheet to the
+/// middle detent and stays, so the next photograph is a swipe away with the
+/// map still beside it — see ``HikePhotoViewer``. A shared hike's gallery
+/// still pops, back to the preview its pins belong to.
 struct ShowPhotoSpotButton: View {
     let coordinate: CLLocationCoordinate2D
     var mapController: MapController
     let identifier: String
+    /// Whether the press pops the gallery, or leaves it open over the map
+    /// that `thenSelecting` brings into view.
+    var leavesTheGallery = true
     /// Anything that has to happen before the camera moves.
     var beforeFraming: () -> Void = { /* nothing, for a gallery with no dot */ }
     /// Opens this photograph's pin, and does whatever else the screen needs
@@ -84,7 +92,7 @@ struct ShowPhotoSpotButton: View {
             beforeFraming()
             mapController.showPhotoSpot(coordinate)
             thenSelecting()
-            dismiss()
+            if leavesTheGallery { dismiss() }
         } label: {
             Image(systemName: "mappin.and.ellipse")
         }

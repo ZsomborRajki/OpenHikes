@@ -173,13 +173,22 @@ final class SheetPresentation {
     private(set) var isFullHeight: Bool
 
     /// Whether the top of the stack is a screen that wants the whole sheet —
-    /// a photo viewer. ``applyFullHeightPolicy()`` acts on the transition
-    /// rather than on every path write, and so does this flag.
+    /// a photo viewer — *and* has it. ``applyFullHeightPolicy()`` acts on the
+    /// push and the pop rather than on every path write, and so does this
+    /// flag.
     ///
     /// Published for landscape, where there is no sheet to raise: the side
     /// panel widens to the whole window instead, because a photograph in a
     /// 320-point column is the stamp the detent policy exists to avoid. See
     /// ``MapSidePanel``.
+    ///
+    /// "And has it" is the gallery's *Show on map*, which keeps the gallery
+    /// open and brings the map in beside it — see
+    /// ``revealMapUnderFullHeightScreen()``. The viewer is still on top, but
+    /// the sheet is at the middle detent, and a landscape panel that stayed
+    /// window-wide would cover the very pin it was asked to show. So the flag
+    /// follows the detent as well as the path: the viewer fills the window at
+    /// `.large` and is a panel's worth of photograph anywhere else.
     private(set) var isShowingFullHeightScreen = false
 
     /// True at the middle detent — the only one ``SheetMetrics`` learns a
@@ -414,6 +423,10 @@ final class SheetPresentation {
     /// popping back restores it rather than collapsing a detail view that was
     /// being read at `.large`.
     @ObservationIgnored private var detentBeforeFullHeight: PresentationDetent?
+    /// Whether the top of the stack prefers the whole sheet, whatever height
+    /// it is at — what ``applyFullHeightPolicy()`` acts on the transitions of.
+    /// ``isShowingFullHeightScreen`` is this *and* the height.
+    @ObservationIgnored private var isFullHeightScreenOnTop = false
 
     init(detent: PresentationDetent? = nil) {
         let initial = detent
@@ -472,9 +485,10 @@ final class SheetPresentation {
     ///
     /// Called by everything that asks the map to move and reaches this type —
     /// a search, a preview, an imported hike, the hike screen's *Zoom*, a
-    /// walk's *Show on Map*. The photo viewer takes the same decision through
-    /// ``restAtMiddleWhenFullHeightScreenPops()``, because it has to survive a
-    /// pop rather than apply now.
+    /// walk's *Show on Map*, the hiker's own gallery's — through
+    /// ``revealMapUnderFullHeightScreen()``. A shared hike's gallery takes the
+    /// same decision through ``restAtMiddleWhenFullHeightScreenPops()``,
+    /// because it has to survive a pop rather than apply now.
     ///
     /// Unconditional, and that is the change rather than an oversight: this
     /// used to move only a *compact* sheet, which left `.large` — a height a
@@ -488,9 +502,10 @@ final class SheetPresentation {
     /// Sends the sheet to its middle detent when the full-height screen pops,
     /// rather than back to the height the hike was being read at.
     ///
-    /// Called by the photo viewer's "show on map" button and by nothing else.
-    /// That button dismisses the picture *because* the user asked where it was
-    /// taken, and the restore below — which exists so a reader who was at
+    /// Called by a shared hike's gallery's "show on map" button and by nothing
+    /// else — the hiker's own gallery stays open instead, through
+    /// ``revealMapUnderFullHeightScreen()``. That button dismisses the picture
+    /// *because* the user asked where it was taken, and the restore below — which exists so a reader who was at
     /// `.large` is put back there — would answer by covering the very thing
     /// they asked to see. Overwriting the remembered height is enough: the pop
     /// runs the same restore and finds the decision already made.
@@ -505,6 +520,33 @@ final class SheetPresentation {
     /// pin in the middle of what is visible.
     func restAtMiddleWhenFullHeightScreenPops() {
         detentBeforeFullHeight = .medium
+    }
+
+    /// Brings the map in under the hiker's own gallery without closing it:
+    /// the sheet goes to the middle detent with the viewer still on top, and
+    /// in landscape the panel narrows back to its column.
+    ///
+    /// The middle detent for the reason ``makeRoomForTheMap()`` gives — the
+    /// camera move *Show on map* makes is framed into the strip above it —
+    /// and that is all this is. It has its own name because what it means for
+    /// a full-height screen is not "make room" but "stop being full height",
+    /// which ``isShowingFullHeightScreen`` reports and the side panel acts on.
+    /// The pop that follows, whenever it comes, keeps the height the hiker
+    /// left the gallery at rather than restoring one that would cover the map
+    /// they were just shown — see ``applyFullHeightPolicy()``.
+    func revealMapUnderFullHeightScreen() {
+        makeRoomForTheMap()
+    }
+
+    /// The way back from ``revealMapUnderFullHeightScreen()``: the gallery
+    /// takes the whole sheet again, and in landscape the whole window.
+    ///
+    /// A drag does the same in portrait, since the flag follows the detent.
+    /// This is the landscape door, where there is no sheet to drag — and a
+    /// tap on the photograph is the gesture both orientations share.
+    func coverMapWithFullHeightScreen() {
+        guard isFullHeightScreenOnTop, detent != .large else { return }
+        withAnimation { detent = .large }
     }
 
     private func pathDidChange() {
@@ -532,22 +574,37 @@ final class SheetPresentation {
     /// Derived from the path rather than driven by a push event, so an
     /// abandoned back-swipe recomputes to the same answer rather than leaving
     /// the sheet remembering a height it never left.
+    ///
+    /// The restore applies only to a viewer popped at `.large`. One the hiker
+    /// had brought the map in under — *Show on map*, or a drag — is popped
+    /// with the map already where they put it, and restoring the height the
+    /// hike was read at would cover the pin they were just looking at.
     private func applyFullHeightPolicy() {
         let wantsFullHeight = storedPath.last?.prefersFullHeight ?? false
-        guard wantsFullHeight != isShowingFullHeightScreen else { return }
-        isShowingFullHeightScreen = wantsFullHeight
+        guard wantsFullHeight != isFullHeightScreenOnTop else { return }
+        isFullHeightScreenOnTop = wantsFullHeight
         guard wantsFullHeight else {
-            let restored = detentBeforeFullHeight ?? .medium
+            let restored = storedDetent == .large ? detentBeforeFullHeight ?? .medium : storedDetent
             detentBeforeFullHeight = nil
             withAnimation { detent = restored }
+            recomputeFullHeightScreenFlag()
             return
         }
         detentBeforeFullHeight = storedDetent
         withAnimation { detent = .large }
+        recomputeFullHeightScreenFlag()
+    }
+
+    /// ``isShowingFullHeightScreen``, from the screen on top and the height —
+    /// see that flag for why it reads both.
+    private func recomputeFullHeightScreenFlag() {
+        let showing = isFullHeightScreenOnTop && storedDetent == .large
+        if isShowingFullHeightScreen != showing { isShowingFullHeightScreen = showing }
     }
 
     private func detentDidChange() {
         recomputeDetentFlags()
+        recomputeFullHeightScreenFlag()
     }
 
     /// The three coarse flags, from the detent *and* the layout.

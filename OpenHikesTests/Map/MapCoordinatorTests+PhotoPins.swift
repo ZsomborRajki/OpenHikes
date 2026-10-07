@@ -157,6 +157,56 @@ extension MapCoordinatorTests {
         }
     }
 
+    /// The gallery pages through every photograph taken from a bend, and with
+    /// the map beside it the callout has to stay on that bend for the second
+    /// of them — whose id is not the one the pin previews.
+    @Test("a selection for a later photo at a shared point opens that point's pin")
+    func aSelectionForASharedPointsLaterPhotoOpensItsPin() async {
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+
+        let first = Self.photo(at: Self.bend, offset: 0)
+        let second = Self.photo(at: Self.bend, offset: 60)
+        photoPins.attach([first, second]) { _ in /* unused */ }
+        await settle(until: "the shared pin to reach the map") {
+            coordinator.photoAnnotations.count == 1
+        }
+
+        photoPins.select(second.id)
+
+        await settle(until: "the bend's callout to open") {
+            map.selectedAnnotations.contains { annotation in
+                (annotation as? PhotoMapAnnotation)?.pin.id == first.id
+            }
+        }
+    }
+
+    /// Paging the gallery to a photograph with no place on the trail closes
+    /// the callout rather than leaving it previewing the last one.
+    @Test("a deselection closes the open photo callout")
+    func aDeselectionClosesTheCallout() async {
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+
+        let photo = Self.photo(at: Self.bend, offset: 0)
+        photoPins.attach([photo]) { _ in /* unused */ }
+        await settle(until: "the photo pin to reach the map") {
+            !coordinator.photoAnnotations.isEmpty
+        }
+        photoPins.select(photo.id)
+        await settle(until: "the pin's callout to open") {
+            !map.selectedAnnotations.isEmpty
+        }
+
+        photoPins.deselect()
+
+        await settle(until: "the callout to close") {
+            !map.selectedAnnotations.contains { $0 is PhotoMapAnnotation }
+        }
+    }
+
     /// A callout the hiker has closed must stay closed. The pins are
     /// republished for reasons of their own — a photo taken, a screen coming
     /// back — and an answered request that reapplied would reopen it under them.

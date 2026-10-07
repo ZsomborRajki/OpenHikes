@@ -17,6 +17,20 @@
 //  The pages are ``HikePhotoPager``, which the share form's gallery pages
 //  through as well.
 //
+//  *Show on map* keeps the gallery open. It frames the photograph's spot,
+//  opens its pin and drops the sheet to the middle detent — in landscape, the
+//  panel back to its column — so the picture and the place it was taken are
+//  on screen together. From there a swipe moves the open callout to the next
+//  photograph's pin, or closes it for one with no place on the trail, without
+//  zooming: the hiker paging through the walk chose the zoom they are reading
+//  it at, so a pin out of view is slid into it rather than framed. A tap on
+//  the photograph, or a drag, gives it the whole screen again.
+//
+//  All of which needs the pins on the map while the gallery is up, so this
+//  screen claims the hike's pins for itself rather than leaving them to the
+//  hike screen underneath, whose claim goes when this one is pushed over it —
+//  see ``HikePhotoPinClaim``.
+//
 //  A page that cannot be drawn says so, and says which thing happened. The
 //  store answers "not decoded yet" and "there is no file" with the same `nil`,
 //  and a viewer that renders a spinner for both turns a missing photo into a
@@ -51,12 +65,14 @@ struct HikePhotoViewer: View {
     let startID: UUID
     var highlight: RouteHighlight
     var mapController: MapController
-    /// Told just before this screen dismisses itself to show a photo's place
-    /// on the map, so the sheet can get out of the way rather than snapping
-    /// back over the coordinate it was asked to reveal.
-    var onShowOnMap: () -> Void = { /* no-op default */ }
-    /// The pins on the map, so *Show on map* can open the one it is sending
-    /// the hiker to. `nil` in a preview or a test that has no map behind it.
+    /// The sheet this screen is pushed into: lowered by *Show on map* to bring
+    /// the map in under the gallery, raised again by a tap on the photograph,
+    /// and asked whether the map is in view before a page moves its pin.
+    /// `nil` in a preview or a test that has no sheet around it.
+    var presentation: SheetPresentation?
+    /// The pins on the map: drawn while this screen is up, and the one for the
+    /// photograph on screen opened by *Show on map*. `nil` in a preview or a
+    /// test that has no map behind it.
     var photoPins: PhotoMapPinController?
     var store: HikePhotoStore = .shared
 
@@ -109,16 +125,25 @@ struct HikePhotoViewer: View {
     var body: some View {
         let photos = hike.orderedPhotos
         let currentIndex = index(of: currentID, in: photos)
+        // A coarse flag that moves when the map is brought in or covered
+        // again, which is exactly when the photograph's tap changes meaning.
+        let coversMap = presentation?.isShowingFullHeightScreen ?? true
         // The black surface and the bar that has to be told about it are
         // ``photoGalleryChrome()``, which the community gallery wears too.
         return Group {
             if photos.isEmpty {
                 emptyState
             } else {
-                pages(photos)
+                pages(photos, coversMap: coversMap)
             }
         }
         .photoGalleryChrome()
+        // The hike's pins, for as long as the gallery is up — the hike screen
+        // that drew them is pushed under this one and has handed its claim
+        // back. A tap on one pages here rather than pushing a second gallery.
+        .background {
+            HikePhotoPinClaim(hike: hike, controller: photoPins) { showFromPin($0) }
+        }
         .overlay(alignment: .bottom) { bottomBar(photos, currentIndex: currentIndex) }
         .navigationTitle(title(photos, currentIndex: currentIndex))
         .toolbar {
@@ -143,7 +168,9 @@ struct HikePhotoViewer: View {
         .onChange(of: currentID) { _, id in
             // A scroll view may report nil while its host is being removed.
             // Only an actual page replaces the remembered selection.
-            if let id { selection.currentID = id }
+            guard let id else { return }
+            selection.currentID = id
+            followOnMap(id)
         }
         // A viewer with nothing left to view is a dead end; deleting the last
         // photo returns to the hike. Through the modifier rather than an
@@ -167,13 +194,16 @@ struct HikePhotoViewer: View {
 
     // MARK: - Pages
 
-    private func pages(_ photos: [HikePhoto]) -> some View {
+    /// The pages, and what a tap on one does: nothing while the gallery has
+    /// the whole screen, and gives it back once the map has been brought in.
+    private func pages(_ photos: [HikePhoto], coversMap: Bool) -> some View {
         HikePhotoPager(
             photos: photos,
             currentID: $currentID,
             store: store,
             onFileFound: { id, found in noteFile(for: id, found: found) },
-            onRemove: { delete($0) }
+            onRemove: { delete($0) },
+            onTapPhoto: coversMap ? nil : { presentation?.coverMapWithFullHeightScreen() }
         )
     }
 
@@ -266,12 +296,11 @@ struct HikePhotoViewer: View {
                     coordinate: coordinate,
                     mapController: mapController,
                     identifier: "photo-show-on-map-button",
+                    leavesTheGallery: false,
                     beforeFraming: { highlight.move(to: coordinate) },
                     thenSelecting: {
-                        // Asked for here and answered after the dismiss — see
-                        // ``PhotoMapPinController/select(_:)``.
                         photoPins?.select(current.id)
-                        onShowOnMap()
+                        presentation?.revealMapUnderFullHeightScreen()
                     }
                 )
             }
@@ -338,6 +367,36 @@ struct HikePhotoViewer: View {
             in: photos
         ) else { return }
         withAnimation { currentID = photos[target].id }
+    }
+
+    /// Moves the map's open pin and the route's dot to the page now on
+    /// screen, while the map is in view to show them.
+    ///
+    /// The zoom stays where it is. *Show on map* is the button that frames a
+    /// spot; a swipe is the hiker reading on through the walk at the zoom
+    /// they chose, so a pin under the sheet or past the edge of the map is
+    /// slid into view rather than framed — see
+    /// ``PhotoMapPinController/select(_:slidingIntoView:)``.
+    /// A photograph with no place on the trail closes the callout, which would
+    /// otherwise be previewing a picture that is no longer the one on screen.
+    private func followOnMap(_ id: UUID) {
+        guard let presentation, !presentation.isShowingFullHeightScreen,
+              let photo = hike.photos.first(where: { $0.id == id }) else { return }
+        let place = photo.coordinate.flatMap { CLLocationCoordinate2DIsValid($0) ? $0 : nil }
+        highlight.move(to: place)
+        if place != nil {
+            photoPins?.select(id, slidingIntoView: true)
+        } else {
+            photoPins?.deselect()
+        }
+    }
+
+    /// A pin tapped on the map beside the gallery: its photograph, on the
+    /// whole screen. The pin's photo is the first of its spot — see
+    /// ``PhotoMapPin/photo``.
+    private func showFromPin(_ photo: HikePhoto) {
+        withAnimation { currentID = photo.id }
+        presentation?.coverMapWithFullHeightScreen()
     }
 
     /// Remembers what a page's load found out about its file.

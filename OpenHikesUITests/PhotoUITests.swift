@@ -187,8 +187,10 @@ nonisolated final class PhotoUITests: XCTestCase {
 
     /// Sending a photo's location to the map, from the viewer's toolbar.
     ///
-    /// Separated from the delete test because it ends somewhere else: the
-    /// screens are dismissed back to the map, which is the assertion.
+    /// The gallery stays open: the sheet drops to its middle detent with the
+    /// photograph still in it, the camera frames where it was taken, and the
+    /// pin there is open — the picture and its place on screen together. A
+    /// tap on the photograph gives it the whole screen back.
     @MainActor
     func testShowsAPhotoOnTheMap() {
         let app = launchApp(
@@ -216,44 +218,50 @@ nonisolated final class PhotoUITests: XCTestCase {
         )
         showOnMap.tap()
 
-        let closed = NSPredicate(format: "exists == false")
-        expectation(for: closed, evaluatedWith: viewer)
-        waitForExpectations(timeout: UITestTimeout.existence)
-        XCTAssertTrue(
-            element("trail-map", in: app)
-                .waitForExistence(timeout: UITestTimeout.navigation),
-            "showing a photo on the map should take the user back to the map"
-        )
-
         // The camera moved to the photo's coordinate, so the sheet has to be
-        // where that move expected to find it. Returning to the expanded
-        // height the viewer was opened from would put the sheet over the very
-        // place the map was just told to show.
-        //
-        // The middle detent rather than the lowest, which is where this landed
-        // before. Collapsing was the only way to keep the pin visible while a
-        // camera move framed into the whole window; the map now frames into the
-        // part of itself the sheet is not over, so the two meet rather than one
-        // getting out of the other's way entirely — see
+        // where that move expected to find it: the middle detent, the height
+        // every camera move frames against — see
         // `MapCoordinator+RouteFitting.swift`.
         XCTAssertTrue(
             waitForSheetAtMiddleDetent(in: app),
             "showing a photo on the map should rest the sheet at its middle detent"
         )
-        // And the assertion the detent was only ever a proxy for.
+        XCTAssertTrue(
+            app.navigationBars["1 of 2"].exists,
+            "the gallery should stay open on the photograph it was showing"
+        )
+        // The pins are the gallery's own while it is up, rather than going
+        // with the hike screen it was pushed over.
         let pin = element("photo-pin", in: app)
         XCTAssertTrue(
             pin.waitForExistence(timeout: UITestTimeout.navigation),
-            "an anchored photo should stand on the map where it was taken"
+            "an anchored photo should stand on the map beside its gallery"
         )
         XCTAssertLessThan(
             pin.frame.maxY,
             element("map-sheet", in: app).frame.minY,
             "and the map should have framed it into the part the sheet is not over"
         )
+        XCTAssertTrue(
+            element("photo-pin-preview", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "the photograph's pin should arrive open, not as a marker to find"
+        )
+
+        // The middle of the sheet is the middle of the photograph, which is
+        // drawn scaled to fit and centred in its page.
+        element("map-sheet", in: app)
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .tap()
+        XCTAssertTrue(
+            waitForSheetAtLargeDetent(in: app),
+            "a tap on the photograph should give it the whole screen again"
+        )
+        XCTAssertTrue(app.navigationBars["1 of 2"].exists)
     }
 
-    /// The way back in: a pin on the map opens the gallery the user came from.
+    /// The way back in from the map: a pin's preview, beside the gallery,
+    /// gives the gallery the screen again at that pin's photograph.
     ///
     /// Seeded with one photo rather than two so the assertion can name a
     /// page — with a single pin there is no question which photo a tap meant.
@@ -282,34 +290,18 @@ nonisolated final class PhotoUITests: XCTestCase {
         element("photo-show-on-map-button", in: app).tap()
         XCTAssertTrue(waitForSheetAtMiddleDetent(in: app))
 
-        let pin = element("photo-pin", in: app)
-        XCTAssertTrue(
-            pin.waitForExistence(timeout: UITestTimeout.navigation),
-            "the photo the map was sent to should be standing on it"
-        )
-        // Above the sheet, which is what the framing is for and what makes the
-        // tap below a test of the callout rather than of the camera. Asserted
-        // as a frame rather than through `isHittable`: an `MKAnnotationView`
-        // reports itself unhittable in states it answers a tap in perfectly
-        // well, so that flag fails here on a pin this test then taps.
-        XCTAssertLessThan(
-            pin.frame.maxY,
-            element("map-sheet", in: app).frame.minY,
-            "the map should have framed the pin into the part the sheet is not over"
-        )
-        pin.tap()
-
-        // MapKit's own callout, with the photo in its detail accessory.
+        // MapKit's own callout, with the photo in its detail accessory —
+        // opened by *Show on map* rather than by a tap on the marker.
         let preview = element("photo-pin-preview", in: app)
         XCTAssertTrue(
-            preview.waitForExistence(timeout: UITestTimeout.existence),
-            "selecting a photo pin should open a callout previewing the photo"
+            preview.waitForExistence(timeout: UITestTimeout.navigation),
+            "the photo the map was sent to should be standing on it, open"
         )
         preview.tap()
 
         XCTAssertTrue(
-            viewer.waitForExistence(timeout: UITestTimeout.navigation),
-            "tapping a pin's preview should reopen the gallery viewer"
+            waitForSheetAtLargeDetent(in: app),
+            "tapping a pin's preview should give the gallery the screen again"
         )
         XCTAssertTrue(
             app.navigationBars["1 of 1"].exists,
@@ -463,4 +455,5 @@ extension PhotoUITests {
         )
         XCTAssertTrue(pin.waitForNonExistence(timeout: UITestTimeout.existence), "a deleted photo's pin leaves the map")
     }
+
 }

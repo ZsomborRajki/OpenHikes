@@ -298,6 +298,10 @@ extension MapView {
         /// republish of the same pins does not reopen a callout the hiker has
         /// since dismissed. See `applyPhotoPinSelection(_:on:)`.
         var appliedPhotoPinSelection: Int?
+        /// The pin a page of the gallery asked for, held while the map slides
+        /// it out from under the sheet and opened when the map settles. See
+        /// `applyPhotoPinSelection(_:on:)`.
+        var photoPinAwaitingSlide: PhotoMapAnnotation?
         /// Guards `observePhotoPins` for the same reason the two flags above
         /// guard theirs — a second registration can never be cancelled.
         var isObservingPhotoPins = false
@@ -869,6 +873,9 @@ extension MapView.Coordinator {
         // A place being added goes wherever the map came to rest under its
         // pin — see `MapPlacePlacement.swift`.
         placePlacementRegionDidSettle(on: mapView)
+        // And a photo pin the gallery paged to opens once the map has slid it
+        // into view — see `MapPhotoAnnotations.swift`.
+        openPhotoPinAfterSlide(on: mapView)
         // Zooming changes the on-screen distance between two fixed coordinates,
         // so the overlap fade needs to be re-checked, not just on move/relocate.
         updateHighlightOpacity(on: mapView)

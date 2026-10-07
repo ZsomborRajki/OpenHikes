@@ -24,9 +24,11 @@
 //  One screen is the exception: a photo viewer. In portrait it raises the sheet
 //  to `.large`; here the equivalent is the whole window, so the panel widens to
 //  it — edge to edge, past the safe area, the way a photograph is shown — and
-//  narrows again when the viewer is popped. The same view widening rather than
-//  a cover presented over it, so the navigation stack, the back gesture and
-//  the page being looked at all carry on through the change.
+//  narrows again when the viewer is popped, or when the hiker's own gallery's
+//  *Show on map* brings the map back beside it with the gallery still open —
+//  see ``SheetPresentation/isShowingFullHeightScreen``. The same view widening
+//  rather than a cover presented over it, so the navigation stack, the back
+//  gesture and the page being looked at all carry on through the change.
 //
 
 import SwiftUI

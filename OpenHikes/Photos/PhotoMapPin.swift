@@ -34,12 +34,19 @@ nonisolated struct PhotoMapPin: Hashable, Identifiable, Sendable {
     /// The photo this pin previews, and the one the gallery opens at when the
     /// pin is tapped: the first anchored here in gallery order.
     let photo: HikePhoto
-    /// How many photos share this point, counting ``photo``. Only ever used to
-    /// say so in the callout — the pin still opens the first one.
-    let count: Int
+    /// Every photo anchored at this point, in gallery order, ``photo`` first.
+    ///
+    /// What lets the gallery open this pin for the second photograph taken
+    /// from the same bend as well as for the first: paging through them with
+    /// the map in view should keep the one callout open rather than close it
+    /// for a photo that has no pin of its own.
+    let photoIDs: [UUID]
     let latitude: Double
     let longitude: Double
 
+    /// How many photos share this point, counting ``photo``. Only ever used to
+    /// say so in the callout — the pin still opens the first one.
+    var count: Int { photoIDs.count }
     var id: UUID { photo.id }
 
     var coordinate: CLLocationCoordinate2D {
@@ -63,13 +70,13 @@ nonisolated struct PhotoMapPin: Hashable, Identifiable, Sendable {
             )
             // `candidate` is the seed only when the key is absent, so the
             // first photo anchored here stays the one the pin previews.
-            grouped[key, default: Group(photo: candidate, count: 0)].count += 1
+            grouped[key, default: Group(photo: candidate)].photoIDs.append(candidate.id)
         }
 
         return grouped.map { key, group in
             Self(
                 photo: group.photo,
-                count: group.count,
+                photoIDs: group.photoIDs,
                 latitude: key.latitude,
                 longitude: key.longitude
             )
@@ -90,19 +97,28 @@ nonisolated struct PhotoMapPin: Hashable, Identifiable, Sendable {
     /// every use site changing shape.
     private struct Group {
         let photo: HikePhoto
-        var count: Int
+        var photoIDs: [UUID] = []
     }
 }
 
-/// A request that the map open one pin's callout.
+/// A request that the map open one pin's callout — or, with no photo, close
+/// whichever photo callout is open.
 ///
 /// Tokened rather than compared by photo: asking twice for the same photograph
 /// is two requests, and without the token the second would look to the map like
 /// the one it has already answered — which is exactly the case a hiker hits by
 /// pressing *Show on map*, dismissing the callout and pressing it again.
 nonisolated struct PinSelection: Equatable, Sendable {
-    let photoID: UUID
+    /// The photo whose pin should open, or `nil` to close the open one: the
+    /// gallery paged to a photograph with no place on the trail, and a callout
+    /// left standing would be previewing a picture that is no longer the one
+    /// on screen.
+    let photoID: UUID?
     let token: Int
+    /// Whether the map should slide the pin out from under the sheet first,
+    /// at the zoom it is at — what a page of the gallery asks, as opposed to
+    /// *Show on map*, whose own camera move is already on its way there.
+    var slidesIntoView = false
 }
 
 /// The photo pins currently drawn on the map, and the way back from one of
@@ -197,14 +213,31 @@ final class PhotoMapPinController {
     /// and tap.
     ///
     /// Deliberately not guarded on ``hasHostScreen``, and deliberately not
-    /// cleared by ``detach(token:)``: the only caller is the gallery, which is
-    /// pushed *over* the screen that owns the pins — so at the moment this is
-    /// called they have already been taken off the map, and the request has to
-    /// outlive that to be applied when they come back. The map holds it until
-    /// a pin matches, which is what makes the order of the two safe.
-    func select(_ photoID: UUID) {
+    /// cleared by ``detach(token:)``: the only caller is the gallery, and the
+    /// gallery's own claim is made on appear — a request asked for in the
+    /// moment before its pins are on the map has to outlive that to be
+    /// applied when they arrive. The map holds it until a pin matches, which
+    /// is what makes the order of the two safe.
+    ///
+    /// `slidingIntoView` is the gallery paging with the map beside it: a pin
+    /// under the sheet or past the edge of the map is slid into the part of
+    /// it that shows, at the zoom the hiker left it at, before it opens.
+    /// MapKit would otherwise scroll it only as far as the map's own bounds,
+    /// which in portrait is behind the sheet.
+    func select(_ photoID: UUID, slidingIntoView: Bool = false) {
         nextSelectionToken += 1
-        selection = PinSelection(photoID: photoID, token: nextSelectionToken)
+        selection = PinSelection(
+            photoID: photoID,
+            token: nextSelectionToken,
+            slidesIntoView: slidingIntoView
+        )
+    }
+
+    /// Asks the map to close whichever photo pin is open — what the gallery
+    /// asks when it pages to a photograph with no pin of its own.
+    func deselect() {
+        nextSelectionToken += 1
+        selection = PinSelection(photoID: nil, token: nextSelectionToken)
     }
 
     /// Takes the pins off the map for as long as the sheet has no screen

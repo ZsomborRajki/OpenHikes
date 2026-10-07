@@ -21,18 +21,6 @@
 import XCTest
 
 nonisolated final class OrientationUITests: XCTestCase {
-    /// The most of the screen's width the sheet's contents may take before the
-    /// map has stopped being the thing on screen. Half is generous — the panel
-    /// asks for well under it on every iPhone — and it is the assertion's job
-    /// to catch a sheet that has taken the window, not to pin a width.
-    private static let maximumSheetWidthShare: CGFloat = 0.5
-
-    /// The least of the window a full-screen photograph's container may
-    /// measure. Less than all of it, because the container is laid out inside
-    /// the safe area — the Dynamic Island's edge and the home indicator's —
-    /// while the black behind the picture runs on past it.
-    private static let minimumFilledWindowShare: CGFloat = 0.8
-
     /// How many swipes the share form gets to bring *View Photos* into
     /// reach. A landscape window shows two rows of it at a time.
     private static let formSwipes = 6
@@ -365,6 +353,24 @@ nonisolated final class OrientationUITests: XCTestCase {
             "and beside the panel rather than behind it"
         )
     }
+}
+
+// MARK: - Shared with the gallery tests
+
+// Out of the class body, where `test_case_accessibility` would have them
+// private, because `OrientationUITests+Gallery.swift` stands on them too.
+extension OrientationUITests {
+    /// The most of the screen's width the sheet's contents may take before the
+    /// map has stopped being the thing on screen. Half is generous — the panel
+    /// asks for well under it on every iPhone — and it is the assertion's job
+    /// to catch a sheet that has taken the window, not to pin a width.
+    static let maximumSheetWidthShare: CGFloat = 0.5
+
+    /// The least of the window a full-screen photograph's container may
+    /// measure. Less than all of it, because the container is laid out inside
+    /// the safe area — the Dynamic Island's edge and the home indicator's —
+    /// while the black behind the picture runs on past it.
+    static let minimumFilledWindowShare: CGFloat = 0.8
 
     // MARK: - Turning the device
 
@@ -376,7 +382,7 @@ nonisolated final class OrientationUITests: XCTestCase {
     /// assume. The teardown blocks above are what the *next* class gets; this
     /// is what this one stands on.
     @MainActor
-    private func launchUpright(arguments: [String] = []) -> XCUIApplication {
+    func launchUpright(arguments: [String] = []) -> XCUIApplication {
         XCUIDevice.shared.orientation = .portrait
         let app = launchApp(arguments: arguments)
         XCTAssertTrue(waitForPortrait(app), "the app should have started upright")
@@ -391,12 +397,12 @@ nonisolated final class OrientationUITests: XCTestCase {
     /// the accessibility tree answers with the old geometry until the system
     /// has finished laying out the new one.
     @MainActor
-    private func waitForLandscape(_ app: XCUIApplication) -> Bool {
+    func waitForLandscape(_ app: XCUIApplication) -> Bool {
         wait(for: app) { $0.width > $0.height }
     }
 
     @MainActor
-    private func waitForPortrait(_ app: XCUIApplication) -> Bool {
+    func waitForPortrait(_ app: XCUIApplication) -> Bool {
         wait(for: app) { $0.height > $0.width }
     }
 
