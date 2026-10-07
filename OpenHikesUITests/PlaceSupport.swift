@@ -45,4 +45,24 @@ extension XCTestCase {
             "the pill opens the form"
         )
     }
+
+    /// Moves the map under *Add Place*'s fixed pin: a short press and a drag,
+    /// which pans — a held one would drop a pin.
+    @MainActor
+    func panPlaceMap(in app: XCUIApplication) {
+        let map = element("trail-map", in: app)
+        map.coordinate(withNormalizedOffset: PlaceMapPan.from)
+            .press(forDuration: PlaceMapPan.press, thenDragTo: map.coordinate(withNormalizedOffset: PlaceMapPan.to))
+    }
+}
+
+/// Up and to the left, clear of the sheet along the bottom.
+nonisolated private enum PlaceMapPan {
+    private static let startX = 0.5
+    private static let startY = 0.2
+    private static let endX = 0.3
+    private static let endY = 0.1
+    static let from = CGVector(dx: startX, dy: startY)
+    static let to = CGVector(dx: endX, dy: endY)
+    static let press: TimeInterval = 0.1
 }

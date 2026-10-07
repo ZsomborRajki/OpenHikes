@@ -85,6 +85,10 @@ private struct WalkShareBoxControls: View {
             // Clear of the wordmark, which the hiker should still see.
             .padding(.bottom, 32)
             .transition(.move(edge: .bottom).combined(with: .opacity))
+            // A container of its own, so the bar's identifier stays on the
+            // bar: on a plain stack SwiftUI pushes it down onto both pickers,
+            // and the leaf identifiers under it are lost.
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("walk-share-controls")
         }
     }

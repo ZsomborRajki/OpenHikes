@@ -65,8 +65,10 @@ extension AccessibilityUITests {
         try audit(app)
     }
 
-    /// *Add Place* from the map's pill, with its placeholder pin on the map
-    /// behind it.
+    /// *Add Place* from the map's pill, with the pin fixed in the middle of
+    /// the map behind it (#782) — swept once as it opens and once after the
+    /// map has been moved under the pin, which is the state the form's
+    /// coordinates are read back in.
     ///
     /// Swept without staged photographs: the camera is unavailable on the
     /// Simulator and the library picker is a system process, so the strip's
@@ -80,7 +82,20 @@ extension AccessibilityUITests {
             element("hike-place-adder-library", in: app).waitForExistence(timeout: UITestTimeout.existence),
             "the form should have drawn before it is swept"
         )
+        let pin = element("hike-place-placeholder", in: app)
+        XCTAssertTrue(pin.exists, "the new place's pin stands in the middle of the map")
+        try audit(app)
 
+        // The figures are the label or the value, whichever the row puts them in.
+        let coordinates = element("trail-place-coordinates", in: app)
+        func reading() -> String { "\(coordinates.label) \(coordinates.value as? String ?? "")" }
+        let opened = reading()
+        panPlaceMap(in: app)
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.existence) { reading() != opened },
+            "the form's coordinates follow the map"
+        )
+        XCTAssertTrue(pin.exists, "the pin stays up while the map moves")
         try audit(app)
     }
 

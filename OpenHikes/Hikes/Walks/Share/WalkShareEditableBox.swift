@@ -2,7 +2,8 @@
 //  WalkShareEditableBox.swift
 //  OpenHikes
 //
-//  A box on the share card that a finger can move and pinch.
+//  A box on the share card that a finger can move and pinch, and VoiceOver
+//  can step about with named actions — see `WalkShareBoxActions`.
 //
 //  The gesture's progress is this view's own `@GestureState`, so a drag
 //  re-renders this box and nothing above it; the model hears once, when the
@@ -71,6 +72,7 @@ struct WalkShareEditableBox: View {
             .accessibilityAddTraits(.isButton)
             .accessibilityAddTraits(isSelected ? .isSelected : [])
             .accessibilityHint("Shows this box's options")
+            .modifier(WalkShareBoxActions(widget: widget, model: model, boxSize: boxSize))
             .accessibilityIdentifier("walk-share-box-\(widget.rawValue)")
             .position(target.center)
         }
@@ -113,6 +115,32 @@ struct WalkShareEditableBox: View {
     }
 }
 
+/// The drag and the pinch as actions VoiceOver can take, which has neither:
+/// each moves the box one step, selects it as a drag does, and says where it
+/// ended up — the box's own value is its figures, and is left to them.
+private struct WalkShareBoxActions: ViewModifier {
+    let widget: WalkShareWidget
+    let model: WalkShareEditorModel
+    let boxSize: CGSize
+
+    func body(content: Content) -> some View {
+        content
+            .accessibilityAction(named: "Move Up") { act { model.step(widget, .up, boxSize: boxSize) } }
+            .accessibilityAction(named: "Move Down") { act { model.step(widget, .down, boxSize: boxSize) } }
+            .accessibilityAction(named: "Move Left") { act { model.step(widget, .left, boxSize: boxSize) } }
+            .accessibilityAction(named: "Move Right") { act { model.step(widget, .right, boxSize: boxSize) } }
+            .accessibilityAction(named: "Center") { act { model.center(widget, boxSize: boxSize) } }
+            .accessibilityAction(named: "Larger") { act { model.rescale(widget, larger: true, boxSize: boxSize) } }
+            .accessibilityAction(named: "Smaller") { act { model.rescale(widget, larger: false, boxSize: boxSize) } }
+    }
+
+    private func act(_ change: () -> Void) {
+        model.selection = widget
+        change()
+        AccessibilityNotification.Announcement(model.spokenPlacement(of: widget)).post()
+    }
+}
+
 /// The photograph under the boxes, which a drag pans and a pinch zooms, and a
 /// tap uses to put the selected box's controls away.
 struct WalkShareEditablePhoto: View {
@@ -130,6 +158,13 @@ struct WalkShareEditablePhoto: View {
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel("Photo")
             .accessibilityHint("Hides the box options")
+            // The pan and the zoom, for VoiceOver, one step at a time.
+            .accessibilityAction(named: "Zoom In") { model.zoomPhoto(in: true) }
+            .accessibilityAction(named: "Zoom Out") { model.zoomPhoto(in: false) }
+            .accessibilityAction(named: "Move Up") { model.stepPhoto(.up) }
+            .accessibilityAction(named: "Move Down") { model.stepPhoto(.down) }
+            .accessibilityAction(named: "Move Left") { model.stepPhoto(.left) }
+            .accessibilityAction(named: "Move Right") { model.stepPhoto(.right) }
     }
 
     /// In the window's coordinates, for the reason the box's drag is.

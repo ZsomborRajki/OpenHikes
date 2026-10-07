@@ -162,6 +162,103 @@ nonisolated struct WalkShareLayout: Codable, Equatable, Sendable {
     }
 }
 
+// MARK: - Arranged without a finger
+
+/// One step of a box, or of the photograph, moved by an accessibility action
+/// rather than dragged — VoiceOver has no finger to drag with.
+nonisolated enum WalkShareStep: CaseIterable, Sendable {
+    case down, left, right, up
+
+    /// The way the step goes, in the card's coordinates, where y grows down.
+    var direction: CGVector {
+        switch self {
+        case .up: CGVector(dx: 0, dy: -1)
+        case .down: CGVector(dx: 0, dy: 1)
+        case .left: CGVector(dx: -1, dy: 0)
+        case .right: CGVector(dx: 1, dy: 0)
+        }
+    }
+}
+
+extension WalkShareLayout {
+    /// How far one step carries a box, as a fraction of the card's shorter
+    /// side: twenty steps across a phone held upright.
+    static let stepFraction: CGFloat = 0.05
+    /// How much one *Larger* or *Smaller* changes a box's scale, so that four
+    /// of them cover most of ``WalkShareWidgetPlacement/scaleRange``.
+    static let scaleStep: Double = 1.25
+
+    /// Where a box of `boxSize` points whose stored centre is `center` (a
+    /// fraction of the card) goes one `step` on. From where it is drawn, for
+    /// the reason ``target(center:translation:boxSize:canvas:)`` drags from
+    /// there, and stopped at the edge the way a drag is. Never snapped: a
+    /// step smaller than the pull would leave the box stuck on the middle,
+    /// and *Center* is the way there.
+    static func stepped(
+        center: CGPoint,
+        _ step: WalkShareStep,
+        boxSize: CGSize,
+        canvas: CGSize
+    ) -> CGPoint {
+        let stored = CGPoint(x: center.x * canvas.width, y: center.y * canvas.height)
+        let drawn = clampedCenter(stored, boxSize: boxSize, canvas: canvas)
+        let distance = min(canvas.width, canvas.height) * stepFraction
+        let moved = CGPoint(
+            x: drawn.x + step.direction.dx * distance,
+            y: drawn.y + step.direction.dy * distance
+        )
+        return clampedCenter(moved, boxSize: boxSize, canvas: canvas)
+    }
+
+    /// The same box put on the card's vertical middle — the line a drag
+    /// snaps to — at the height it is drawn at.
+    static func centered(center: CGPoint, boxSize: CGSize, canvas: CGSize) -> CGPoint {
+        let stored = CGPoint(x: center.x * canvas.width, y: center.y * canvas.height)
+        let drawn = clampedCenter(stored, boxSize: boxSize, canvas: canvas)
+        return clampedCenter(CGPoint(x: canvas.width / 2, y: drawn.y), boxSize: boxSize, canvas: canvas)
+    }
+
+    /// Which ninth of the card a box drawn at `center` points is in, which is
+    /// what VoiceOver reads back after a step: precise enough to arrange two
+    /// boxes by, and a figure in points would mean nothing to a listener.
+    static func region(of center: CGPoint, canvas: CGSize) -> WalkShareRegion {
+        guard canvas.width > 0, canvas.height > 0 else { return .center }
+        func third(_ value: CGFloat, of length: CGFloat) -> Int {
+            min(max(Int(value / length * 3), 0), 2)
+        }
+        let usableHeight = canvas.height * (1 - wordmarkBand)
+        let row = third(center.y, of: usableHeight)
+        let column = third(center.x, of: canvas.width)
+        return WalkShareRegion.grid[row][column]
+    }
+}
+
+/// A ninth of the share card, as VoiceOver says where a box is.
+nonisolated enum WalkShareRegion: CaseIterable, Sendable {
+    case bottom, bottomLeft, bottomRight, center, left, right, top, topLeft, topRight
+
+    /// Row by row, top first.
+    static let grid: [[Self]] = [
+        [.topLeft, .top, .topRight],
+        [.left, .center, .right],
+        [.bottomLeft, .bottom, .bottomRight],
+    ]
+
+    var spoken: String {
+        switch self {
+        case .topLeft: String(localized: "Top left")
+        case .top: String(localized: "Top")
+        case .topRight: String(localized: "Top right")
+        case .left: String(localized: "Left")
+        case .center: String(localized: "Center")
+        case .right: String(localized: "Right")
+        case .bottomLeft: String(localized: "Bottom left")
+        case .bottom: String(localized: "Bottom")
+        case .bottomRight: String(localized: "Bottom right")
+        }
+    }
+}
+
 // MARK: - Remembered between cards
 
 extension WalkShareLayout {
