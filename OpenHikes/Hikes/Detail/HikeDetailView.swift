@@ -903,9 +903,10 @@ private extension HikeDetailView {
             return
         }
         followAnchor = .matched(at: match.distanceAlongRoute, course: fix.course, from: followAnchor)
-        // The walk starts here, on the first matched fix with following on,
-        // and this is where every later match extends it. Selection alone
-        // starts nothing.
+        // The walk is proposed here, on the first matched fix with following
+        // on, starts once later ones show the hiker moving along the route,
+        // and this is where every match after that extends it. Selection
+        // alone starts nothing.
         let completedWalk = walkSession.recordForegroundMatch(
             hike: hike,
             profile: profile,

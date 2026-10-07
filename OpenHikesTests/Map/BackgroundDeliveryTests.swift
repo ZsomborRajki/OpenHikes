@@ -323,8 +323,10 @@ final class BackgroundDeliveryTests {
         await deliver(fix(at: CLLocationCoordinate2D(latitude: 37.3340, longitude: -122.0400)))
 
         // Back on the trail, and the detail view opened again: the first
-        // foreground match is the one that used to be refused.
+        // foreground match is the one that used to be refused — and the one
+        // after it, ~220 m on, is the hiker walking it again.
         session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[1])
 
         #expect(session.walkedHikeID == hike.id, "coming back to the trail is a walk of its own")
     }

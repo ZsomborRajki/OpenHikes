@@ -82,6 +82,30 @@ extension HikeRecorderTests {
         #expect(walks.first?.endReason == .recorded)
     }
 
+    /// What keeps the walk session from starting a second walk along the
+    /// line — see ``TrailWalkSession/recordingDidSave(hikeID:)``. Said only
+    /// for a save that landed: a refused one leaves the draft a draft.
+    @Test("a save, and only a save that landed, reports the saved hike")
+    func savingReportsTheSavedHike() async throws {
+        let saver = ScriptedModelContextSaver(failedSaveNumbers: [2])
+        let recorder = makeRecorder(saveModelContext: saver.save)
+        var reported: [UUID] = []
+        recorder.recordingDidSave = { reported.append($0) }
+        await recorder.start()
+        source.deliver(fix(latitude: 47.63))
+        clock.advance(by: 60)
+        source.deliver(fix(latitude: 47.631))
+
+        await #expect(throws: RecordingFailure.self) {
+            try await recorder.stop()
+        }
+        #expect(reported.isEmpty)
+
+        let hike = try await recorder.retrySave()
+
+        #expect(reported == [hike.id])
+    }
+
     /// A recording found open at launch and parked on the recovery screen.
     ///
     /// The journal knows nothing about that wait: `finishRecovery` moves to

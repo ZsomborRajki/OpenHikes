@@ -7,8 +7,9 @@
 //
 //  Following a trail used to answer one question — *where am I on this trail
 //  right now* — and forget the answer. This is what remembers it. A walk
-//  begins on the first matched fix with Follow This Trail on, or on the
-//  detail's Start — ``start(hike:profile:)`` — and keeps the union of along-route intervals its consecutive matches spanned, can be
+//  begins once matched fixes with Follow This Trail on show the hiker moving
+//  along the route — see ``PendingWalkStart`` — or on the detail's Start —
+//  ``start(hike:profile:)`` — and keeps the union of along-route intervals its consecutive matches spanned, can be
 //  paused and resumed, and ends into a `HikeWalk` row the History segment
 //  lists. It outlives the screen that started it: popping the detail,
 //  opening another trail, or starting a recording changes nothing here.
@@ -141,6 +142,8 @@ final class TrailWalkSession {
     /// and by turning Follow This Trail back on, which are the two ways a
     /// hiker says they mean to walk this trail again.
     @ObservationIgnored private var endedHikeID: UUID?
+    /// The walk a matched fix has proposed and movement not yet confirmed.
+    @ObservationIgnored private var pendingStart: ProposedWalk?
 
     /// - Parameters:
     ///   - context: where the sidecar column and the finished rows are
@@ -221,8 +224,10 @@ final class TrailWalkSession {
     // MARK: Feeding
 
     /// A fix matched on-route at `distance` along `hike`, from the foreground
-    /// follow loop. Starts a walk if one may start, extends the one under
-    /// way, or does nothing for a hike that is not the walked one.
+    /// follow loop. Proposes a walk if one may start, or starts the one it
+    /// proposed once the hiker has moved along the route — see
+    /// ``PendingWalkStart``. Otherwise extends the walk under way, or does
+    /// nothing for a hike that is not the walked one.
     ///
     /// - Returns: whether this fix *ended* the walk. A caller that publishes
     ///   the fix afterwards must not: see ``recordMatch(hikeID:distance:at:)``.
@@ -250,31 +255,36 @@ final class TrailWalkSession {
         // outlive its bound because the fix that closed it was taken early.
         endIfAbandoned(at: now)
         if record == nil {
-            startIfEligible(hike: hike, profile: profile, at: matchedAt)
+            proposeOrConfirmStart(hike: hike, profile: profile, distance: distance, at: matchedAt)
         }
         if record?.hikeID == hike.id { walkedProfile = profile }
         return recordMatch(hikeID: hike.id, distance: distance, at: matchedAt)
     }
 
-    /// A fix matched on-route by the background feed. Never starts a walk —
+    /// A fix matched on-route by the background feed. Never proposes a walk —
     /// selection alone starts nothing, and neither does a significant
-    /// change — but keeps one accruing while the phone is in a pocket.
+    /// change — but confirms one a foreground match proposed, which is the
+    /// hiker who opened the trail at the trailhead and pocketed the phone,
+    /// and keeps one accruing while the phone is in a pocket.
     ///
     /// - Returns: whether this fix ended the walk, as above.
     @discardableResult func recordBackgroundMatch(hikeID: UUID, distance: Double, at timestamp: Date) -> Bool {
         discardWalkIfHikeGone()
         endIfRouteChanged()
         endIfAbandoned(at: clock())
+        if record == nil { advancePendingStart(hikeID: hikeID, distance: distance, at: timestamp) }
         return recordMatch(hikeID: hikeID, distance: distance, at: timestamp)
     }
 
     /// An accepted fix that did not match `hikeID`'s route: the hiker is
-    /// off the trail. Breaks the walk under way's coverage continuity, and
+    /// off the trail. Breaks the walk under way's coverage continuity,
     /// rearms auto-start for a hike whose walk was ended here — leaving the
-    /// route is the boundary an End waits for.
+    /// route is the boundary an End waits for — and forgets a proposed walk,
+    /// whose hiker has gone somewhere other than along it.
     func recordOffRoute(hikeID: UUID) {
         breakCoverage(hikeID: hikeID)
         rearmStart(hikeID: hikeID)
+        if pendingStart?.walk.hikeID == hikeID { pendingStart = nil }
     }
 
     /// How far an accepted fix fell from the route, whether or not it matched.
@@ -381,19 +391,6 @@ final class TrailWalkSession {
             && !hike.belongsToActiveRecording(currentHikeID: activeRecordingHikeID())
     }
 
-    private func startIfEligible(hike: Hike, profile: RouteProfile, at now: Date) {
-        guard canStart(hike), profile.totalDistanceMeters > 0 else { return }
-        let started = Self.record(starting: hike, profile: profile, at: now)
-        adopt(started, hike: hike)
-        walkedProfile = profile
-        startNotice = TrailWalkStartNotice(hikeID: hike.id, title: hike.displayTitle)
-        // A refused first write is not a refused start: nothing on disk says
-        // otherwise yet, and the walk is under way in memory. `persist` left
-        // the next write due at once, so the next matched fix writes it.
-        persist(started, at: now)
-        tracker?.walkDidStart(hikeID: hike.id)
-    }
-
     private func adopt(_ walk: TrailWalkRecord, hike: Hike) {
         // A record from before revisions were kept is taken to be along the
         // line it finds, which is the best evidence there is. Stamped in
@@ -401,6 +398,7 @@ final class TrailWalkSession {
         record = walk.stamped(along: hike.route)
         walkedHike = hike
         endedHikeID = nil
+        pendingStart = nil
         lastEndedWalk = nil
         walkedHikeID = hike.id
         walkedHikeTitle = hike.displayTitle
@@ -701,7 +699,7 @@ extension TrailWalkSession {
     /// is news of a start nobody asked for, and this one was asked for.
     ///
     /// - Returns: whether a walk started. A refused first write is not a
-    ///   refused start, for the reason ``startIfEligible(hike:profile:at:)``
+    ///   refused start, for the reason ``confirmPendingStartIfDue(at:)``
     ///   gives: the walk is under way in memory, and the next fix writes it.
     @discardableResult func start(hike: Hike, profile: RouteProfile) -> Bool {
         let now = clock()
@@ -719,6 +717,101 @@ extension TrailWalkSession {
         // Lock Screen should say the walk is on from the tap.
         publishState()
         return true
+    }
+}
+
+// MARK: - Auto-start
+
+/// A proposed walk and what it needs to start: the hike to adopt and the
+/// profile to measure it by, which the background feed has neither of.
+private struct ProposedWalk {
+    var walk: PendingWalkStart
+    let hike: Hike
+    let profile: RouteProfile
+}
+
+private extension TrailWalkSession {
+    /// Proposes a walk along `hike` on a foreground match, or carries the one
+    /// already proposed a step further — starting it once it confirms.
+    ///
+    /// A proposal for another hike, another line, or one gone quiet for
+    /// ``PendingWalkStart/expiresAfter`` is replaced by one starting here.
+    func proposeOrConfirmStart(hike: Hike, profile: RouteProfile, distance: Double, at now: Date) {
+        guard canStart(hike), profile.totalDistanceMeters > 0 else {
+            if pendingStart?.walk.hikeID == hike.id { pendingStart = nil }
+            return
+        }
+        let revision = TrailWalkRecord.routeRevision(of: hike.route)
+        if var proposed = pendingStart,
+           proposed.walk.hikeID == hike.id,
+           proposed.walk.record.routeRevision == revision,
+           !proposed.walk.isExpired(at: now) {
+            proposed.walk.record(distance: distance, at: now)
+            pendingStart = proposed
+        } else {
+            let walk = PendingWalkStart(
+                hikeID: hike.id,
+                routeDistanceMeters: profile.totalDistanceMeters,
+                routeRevision: revision,
+                distance: distance,
+                at: now
+            )
+            pendingStart = ProposedWalk(walk: walk, hike: hike, profile: profile)
+        }
+        confirmPendingStartIfDue(at: now)
+    }
+
+    /// Carries a proposal forward on a background match. Never makes one:
+    /// only a match in the trail's own detail, with following on, can.
+    func advancePendingStart(hikeID: UUID, distance: Double, at date: Date) {
+        guard var proposed = pendingStart, proposed.walk.hikeID == hikeID else { return }
+        guard !proposed.walk.isExpired(at: date) else {
+            pendingStart = nil
+            return
+        }
+        proposed.walk.record(distance: distance, at: date)
+        pendingStart = proposed
+        confirmPendingStartIfDue(at: date)
+    }
+
+    /// Starts the proposed walk once the hiker has moved along the route.
+    ///
+    /// ``canStart(_:)`` is asked again here because the background feed
+    /// confirms with no hike in hand, and an End, a saved recording, following
+    /// switched off or a deletion can all land between a proposal and this.
+    func confirmPendingStartIfDue(at now: Date) {
+        guard let proposed = pendingStart, proposed.walk.isConfirmed else { return }
+        pendingStart = nil
+        let hike = proposed.hike
+        guard canStart(hike), proposed.walk.record.isAlong(hike.route) else { return }
+        let started = proposed.walk.confirmedRecord
+        adopt(started, hike: hike)
+        walkedProfile = proposed.profile
+        startNotice = TrailWalkStartNotice(hikeID: hike.id, title: hike.displayTitle)
+        // A refused first write is not a refused start: nothing on disk says
+        // otherwise yet, and the walk is under way in memory. `persist` left
+        // the next write due at once, so the next matched fix writes it.
+        persist(started, at: now)
+        tracker?.walkDidStart(hikeID: hike.id)
+    }
+}
+
+// MARK: - A recording just saved
+
+extension TrailWalkSession {
+    /// A recording was just saved as `hikeID`, with the hiker standing at
+    /// the end of the line it drew.
+    ///
+    /// Held the way an End is held, because that is what it was: the
+    /// recording *was* the walk, and its row is already in the hike's
+    /// History. Without this the saved hike opens under the hiker, the follow
+    /// loop matches the next fix — on the route by construction — and a
+    /// second walk starts along the trail they have just finished, pill and
+    /// Lock Screen panel included. Rearmed by the same two gestures as an
+    /// End: leaving the route, or turning Follow This Trail back on. Start
+    /// stays available, since a tap says the hiker means it.
+    func recordingDidSave(hikeID: UUID) {
+        endedHikeID = hikeID
     }
 }
 

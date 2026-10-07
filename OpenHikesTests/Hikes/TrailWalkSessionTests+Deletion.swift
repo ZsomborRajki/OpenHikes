@@ -56,7 +56,7 @@ extension TrailWalkSessionTests {
         try context.save()
 
         let profile = RouteProfile(route: other.route)
-        session.recordForegroundMatch(hike: other, profile: profile, distance: profile.distances[0])
+        startWalk(session, hike: other, profile: profile)
 
         #expect(try walks(of: walked).isEmpty, "a walk with no hike left to hang off keeps no row")
         #expect(session.walkedHikeID == other.id, "and the trail that is still here can be walked")

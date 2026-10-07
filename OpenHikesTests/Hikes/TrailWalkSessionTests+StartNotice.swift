@@ -16,14 +16,16 @@ import OpenHikesData
 import Testing
 
 extension TrailWalkSessionTests {
-    @Test("the first matched fix starts a walk and says so, naming the trail")
+    @Test("an automatic start says so, naming the trail")
     func startIsAnnounced() {
         let session = session()
         let hike = hike(title: "Königssee Loop")
         let profile = RouteProfile(route: hike.route)
         #expect(session.startNotice == nil)
 
-        walk(session, hike: hike, profile: profile, from: 0, through: 0)
+        walk(session, hike: hike, profile: profile, from: 0, through: 1)
+        #expect(session.startNotice == nil, "a proposed walk is not news yet")
+        walk(session, hike: hike, profile: profile, from: 2, through: 2)
 
         #expect(session.startNotice == TrailWalkStartNotice(hikeID: hike.id, title: "Königssee Loop"))
     }
@@ -33,10 +35,10 @@ extension TrailWalkSessionTests {
         let session = session()
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
-        walk(session, hike: hike, profile: profile, from: 0, through: 1)
+        walk(session, hike: hike, profile: profile, from: 0, through: 2)
 
         session.dismissStartNotice()
-        walk(session, hike: hike, profile: profile, from: 2, through: 3)
+        walk(session, hike: hike, profile: profile, from: 3, through: 4)
 
         #expect(session.startNotice == nil)
         #expect(session.walkedHikeID == hike.id)
@@ -56,7 +58,7 @@ extension TrailWalkSessionTests {
         #expect(session.startNotice == nil)
 
         session.recordOffRoute(hikeID: hike.id)
-        walk(session, hike: hike, profile: profile, from: 6, through: 6)
+        walk(session, hike: hike, profile: profile, from: 6, through: 8)
         #expect(session.startNotice?.hikeID == hike.id)
     }
 
