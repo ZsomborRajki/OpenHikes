@@ -502,6 +502,12 @@ nonisolated extension DirectionalPolylineRenderer {
         /// stretches.
         private var last = 0
 
+        /// Spelled out because `last` is private: Swift 6.3, which CodeQL
+        /// still builds with, makes the memberwise initialiser private too.
+        init(color: CGColor) {
+            self.color = color
+        }
+
         mutating func color(at point: MKMapPoint) -> CGColor {
             let near = last..<min(last + 2, stretches.count)
             guard let index = near.first(where: { stretches[$0].carries(point, within: tolerance) })
