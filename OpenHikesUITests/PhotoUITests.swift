@@ -455,5 +455,4 @@ extension PhotoUITests {
         )
         XCTAssertTrue(pin.waitForNonExistence(timeout: UITestTimeout.existence), "a deleted photo's pin leaves the map")
     }
-
 }
