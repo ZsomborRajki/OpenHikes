@@ -491,6 +491,18 @@ nonisolated extension GPXExport {
         return "\(stem)\(suffix).\(pathExtension)"
     }
 
+    /// What a walk's share card is called on its way to a share sheet, e.g.
+    /// `Thumsee Loop-2026-06-12.jpeg` — the walk's date rather than a number,
+    /// since a card is one picture per walk.
+    static func shareCardFileName(hikeTitle: String, walkedOn date: Date) -> String {
+        let suffix = "-\(fileDateStyle.format(date)).jpeg"
+        let stem = fileStem(
+            for: hikeTitle,
+            availableUTF8Bytes: maximumFileNameUTF8Bytes - suffix.utf8.count
+        )
+        return stem + suffix
+    }
+
     /// The `.gpx` and the `.zip` extensions weigh the same; this is the bound
     /// either of them has to leave room for.
     private static let archiveSuffixBytes = 4
