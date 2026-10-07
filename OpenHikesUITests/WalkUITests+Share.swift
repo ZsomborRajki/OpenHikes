@@ -12,34 +12,11 @@ import XCTest
 extension WalkUITests {
     @MainActor
     func testSharingAWalkPutsItsFiguresOverAChosenPhoto() {
-        let app = launchApp(arguments: [
-            "--ui-test-expanded-sheet",
-            "--ui-test-import-gpx=\(UITestFixture.gpxName)",
-            "--ui-test-seed-walks=HalfLoop",
-            "--ui-test-seed-photos=2",
-        ])
-        openHikeDetail(in: app)
-        app.segmentedControls["walk-segment"].buttons["History"].tap()
-        let row = app.descendants(matching: .any).matching(identifier: "walk-row").firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: UITestTimeout.existence))
-        row.tap()
-
-        let share = app.buttons["walk-share"]
-        XCTAssertTrue(share.waitForExistence(timeout: UITestTimeout.navigation))
-        XCTAssertTrue(
-            share.wait(for: \.isEnabled, toEqual: true, timeout: UITestTimeout.existence),
-            "Share waits only for the trail's profile"
-        )
-        share.tap()
-
-        let photo = app.buttons["walk-share-photo-0"]
-        XCTAssertTrue(photo.waitForExistence(timeout: UITestTimeout.navigation), "the hike's photos are offered")
+        let app = launchWalkShare()
+        openWalkShare(in: app)
         XCTAssertTrue(app.buttons["walk-share-library"].exists, "and the library beside them")
-        photo.tap()
-
-        let stats = app.descendants(matching: .any).matching(identifier: "walk-share-box-stats").firstMatch
-        XCTAssertTrue(stats.waitForExistence(timeout: UITestTimeout.navigation), "the editor opens on the photo")
-        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "walk-share-box-route").firstMatch.exists)
+        let stats = openWalkShareEditor(in: app)
+        XCTAssertTrue(walkShareBox(.route, in: app).exists)
         attachScreenshot(of: app, named: "Share card, as opened")
 
         // Down and to the left, far enough from the middle not to snap to it

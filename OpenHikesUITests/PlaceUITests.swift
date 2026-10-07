@@ -140,10 +140,7 @@ nonisolated final class PlaceUITests: XCTestCase {
         XCTAssertTrue(coordinates.waitForExistence(timeout: UITestTimeout.existence))
         let opened = Self.reading(of: coordinates)
 
-        // A short press and a drag, which pans; a held one would drop a pin.
-        let map = element("trail-map", in: app)
-        map.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
-            .press(forDuration: 0.1, thenDragTo: map.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.1)))
+        panPlaceMap(in: app)
 
         let moved = NSPredicate { _, _ in Self.reading(of: coordinates) != opened }
         XCTAssertEqual(

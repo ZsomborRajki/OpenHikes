@@ -80,6 +80,70 @@ final class WalkShareEditorModel {
         photoFrame = frame.clamped(image: card.photo.size, canvas: canvasSize)
     }
 
+    // MARK: - Without a gesture
+
+    // VoiceOver's way to arrange the card, which has no drag or pinch. Each
+    // goes through ``place(_:at:)`` and ``resize(_:to:)`` like a gesture's
+    // end does, so it is kept on the card by the same rules. `boxSize` is the
+    // box as drawn now, which only the box itself has measured.
+
+    func step(_ widget: WalkShareWidget, _ step: WalkShareStep, boxSize: CGSize) {
+        place(
+            widget,
+            at: WalkShareLayout.stepped(center: layout[widget].center, step, boxSize: boxSize, canvas: canvasSize)
+        )
+    }
+
+    func center(_ widget: WalkShareWidget, boxSize: CGSize) {
+        place(
+            widget,
+            at: WalkShareLayout.centered(center: layout[widget].center, boxSize: boxSize, canvas: canvasSize)
+        )
+    }
+
+    /// One ``WalkShareLayout/scaleStep`` larger, or smaller when `larger` is
+    /// false — and pulled back onto the card at the size that makes it, as a
+    /// pinch against an edge is.
+    func rescale(_ widget: WalkShareWidget, larger: Bool, boxSize: CGSize) {
+        let before = layout[widget].scale
+        let step = WalkShareLayout.scaleStep
+        resize(widget, to: larger ? before * step : before / step)
+        let ratio = layout[widget].scale / before
+        let resized = CGSize(width: boxSize.width * ratio, height: boxSize.height * ratio)
+        let stored = layout[widget].center
+        let center = CGPoint(x: stored.x * canvasSize.width, y: stored.y * canvasSize.height)
+        place(widget, at: WalkShareLayout.clampedCenter(center, boxSize: resized, canvas: canvasSize))
+    }
+
+    /// Where `widget` is stored and how big it is, as VoiceOver says it after
+    /// a step: the ninth of the card and the scale, never points.
+    func spokenPlacement(of widget: WalkShareWidget) -> String {
+        let placement = layout[widget]
+        let center = CGPoint(x: placement.center.x * canvasSize.width, y: placement.center.y * canvasSize.height)
+        let region = WalkShareLayout.region(of: center, canvas: canvasSize).spoken
+        let size = placement.scale.formatted(.percent.precision(.fractionLength(0)))
+        return String(
+            localized: "\(region), at \(size)",
+            comment: "VoiceOver, after a share card box moves: where it is (Top left…), then its size (125%)"
+        )
+    }
+
+    /// The photograph moved one step under the card. *Up* shows more of what
+    /// is below, as dragging it up would.
+    func stepPhoto(_ step: WalkShareStep) {
+        var frame = photoFrame
+        frame.offset.dx += step.direction.dx * WalkShareLayout.stepFraction
+        frame.offset.dy += step.direction.dy * WalkShareLayout.stepFraction
+        setPhotoFrame(frame)
+    }
+
+    func zoomPhoto(in zoomIn: Bool) {
+        var frame = photoFrame
+        let step = CGFloat(WalkShareLayout.scaleStep)
+        frame.zoom = zoomIn ? frame.zoom * step : frame.zoom / step
+        setPhotoFrame(frame)
+    }
+
     /// The card as it stands, for the share sheet.
     var shareImage: WalkShareImage {
         WalkShareImage(card: card, layout: layout, photoFrame: photoFrame, canvas: canvasSize)
