@@ -25,17 +25,15 @@ struct WalkShareFlow: View {
     /// it is not, the card draws the trail's outline without the covered
     /// stretches and leaves the climb off — see ``WalkShareFigures``.
     let trailMatchesWalk: Bool
+    /// Everything the flow has chosen so far, kept by the sheet so a turn of
+    /// the phone does not throw it away — see ``WalkShareSession``.
+    @Bindable var session: WalkShareSession
     var store: HikePhotoStore = .shared
 
     /// For its `defaults`, where the layout is remembered: the app's own, so
     /// a UI-testing launch's are fresh like every other setting it reads.
     @Environment(OpenHikesModel.self) private var appModel
-    @State private var shape: WalkShareRouteShape?
-    @State private var editor: WalkShareEditorModel?
-    @State private var isEditing = false
     @State private var pickedItem: PhotosPickerItem?
-    @State private var isLoading = false
-    @State private var loadFailed = false
 
     private static let thumbnailSide: CGFloat = 104
 
@@ -54,7 +52,7 @@ struct WalkShareFlow: View {
                 // The photographs only, never the bar: a library photo still
                 // in iCloud can take a long time to arrive, and Close has to
                 // work while it does.
-                .disabled(isLoading || shape == nil)
+                .disabled(session.isLoading || session.shape == nil)
             }
             .navigationTitle("Choose a Photo")
             #if os(iOS)
@@ -66,22 +64,25 @@ struct WalkShareFlow: View {
                 }
             }
             .overlay {
-                if isLoading || shape == nil {
+                if session.isLoading || session.shape == nil {
                     ProgressView()
                         .controlSize(.large)
                 }
             }
-            .navigationDestination(isPresented: $isEditing) {
-                if let editor {
+            .navigationDestination(isPresented: $session.isEditing) {
+                if let editor = session.editor {
                     WalkShareEditor(model: editor)
                 }
             }
-            .alert("This photo couldn't be opened.", isPresented: $loadFailed) {
+            .alert("This photo couldn't be opened.", isPresented: $session.loadFailed) {
                 Button("OK", role: .cancel) { /* the alert's own dismissal */ }
             }
         }
         .task(id: walk.id) {
-            shape = await Self.shape(of: walk.coverage.ranges, along: trail, walked: trailMatchesWalk)
+            // Fitted once per share: a flow re-presented after a rotation
+            // finds it already here.
+            guard session.shape == nil else { return }
+            session.shape = await Self.shape(of: walk.coverage.ranges, along: trail, walked: trailMatchesWalk)
         }
         .onChange(of: pickedItem) { _, item in
             guard let item else { return }
@@ -138,29 +139,36 @@ struct WalkShareFlow: View {
     }
 
     private func open(_ photo: HikePhoto) async {
-        isLoading = true
-        defer { isLoading = false }
-        guard case .ready(let loaded) = await HikePhotoLoader.display(for: photo, in: store) else {
-            loadFailed = true
+        let generation = session.generation
+        session.isLoading = true
+        defer { if session.generation == generation { session.isLoading = false } }
+        let result = await HikePhotoLoader.display(for: photo, in: store)
+        guard session.generation == generation else { return }
+        guard case .ready(let loaded) = result else {
+            session.loadFailed = true
             return
         }
         edit(on: loaded.image)
     }
 
     private func open(_ item: PhotosPickerItem) async {
-        isLoading = true
-        defer { isLoading = false }
-        guard let data = try? await item.loadTransferable(type: Data.self),
-              let image = await Self.decode(data)
-        else {
-            loadFailed = true
+        let generation = session.generation
+        session.isLoading = true
+        defer { if session.generation == generation { session.isLoading = false } }
+        var image: LoadedPhotoImage?
+        if let data = try? await item.loadTransferable(type: Data.self) {
+            image = await Self.decode(data)
+        }
+        guard session.generation == generation else { return }
+        guard let image else {
+            session.loadFailed = true
             return
         }
         edit(on: image.image)
     }
 
     private func edit(on photo: PhotoImage) {
-        guard let shape else { return }
+        guard let shape = session.shape else { return }
         let title = hike?.displayTitle ?? String(localized: "Hike")
         let card = WalkShareCard(
             photo: photo,
@@ -168,8 +176,8 @@ struct WalkShareFlow: View {
             shape: shape,
             tint: hike?.tintOpaque ?? .green
         )
-        editor = WalkShareEditorModel(card: card, defaults: appModel.defaults)
-        isEditing = true
+        session.editor = WalkShareEditorModel(card: card, defaults: appModel.defaults)
+        session.isEditing = true
     }
 
     /// A picked photograph at the size the store keeps its own, upright.

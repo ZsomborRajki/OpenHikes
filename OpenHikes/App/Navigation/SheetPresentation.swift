@@ -224,6 +224,8 @@ final class SheetPresentation {
     /// a second field on ``PhotoViewerSelection``, because the two galleries
     /// identify a page differently — see ``CommunityPhotoSelection``.
     @ObservationIgnored private var communityPhotoSelections: [SheetRoute: CommunityPhotoSelection] = [:]
+    /// The same, for a walk summary's share card — see ``WalkShareSession``.
+    @ObservationIgnored private var walkShares: [SheetRoute: WalkShareSession] = [:]
 
     func hikeInteraction(for hike: Hike) -> HikeDetailInteraction {
         if let existing = hikeInteractions[hike.id] { return existing }
@@ -419,6 +421,13 @@ final class SheetPresentation {
         return selection
     }
 
+    func walkShare(for route: SheetRoute) -> WalkShareSession {
+        if let existing = walkShares[route] { return existing }
+        let session = WalkShareSession()
+        walkShares[route] = session
+        return session
+    }
+
     @ObservationIgnored private var storedPath: [SheetRoute] = []
     @ObservationIgnored private var storedDetent: PresentationDetent
     @ObservationIgnored private var storedLayout: SheetLayout = .bottomSheet
@@ -559,6 +568,7 @@ final class SheetPresentation {
         }
         photoSelections = photoSelections.filter { storedPath.contains($0.key) }
         communityPhotoSelections = communityPhotoSelections.filter { storedPath.contains($0.key) }
+        walkShares = walkShares.filter { storedPath.contains($0.key) }
         let recording = storedPath.last == .recording
         if isRecordingPresented != recording { isRecordingPresented = recording }
         let drafting = storedPath.last == .trailDraft

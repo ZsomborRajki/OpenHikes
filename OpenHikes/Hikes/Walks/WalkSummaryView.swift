@@ -22,6 +22,10 @@ struct WalkSummaryView: View {
     /// Where *Show on Map* puts the covered stretches — see ``WalkHighlight``.
     let walkHighlight: WalkHighlight
     let mapController: MapController
+    /// The share card, kept by the sheet rather than here: a rotation
+    /// replaces this view, and the card has to outlive it — see
+    /// ``WalkShareSession``.
+    @Bindable var share: WalkShareSession
     /// Told when the covered stretches have been drawn, so the sheet can get
     /// out of the way of the map it just changed.
     var onShowOnMap: () -> Void = { /* no-op default */ }
@@ -36,7 +40,6 @@ struct WalkSummaryView: View {
     /// Bumped by *Show on Map*, so the drawing runs as a `.task` the view
     /// owns rather than as a `Task` that outlives it — see ``showOnMap()``.
     @State private var showOnMapRequest = 0
-    @State private var isSharing = false
 
     private var hike: Hike? { walk.hike }
     private var tint: Color { hike?.tintOpaque ?? .green }
@@ -74,15 +77,15 @@ struct WalkSummaryView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 // Waits for the profile: the card's line is drawn from it.
-                Button("Share", systemImage: "square.and.arrow.up") { isSharing = true }
+                Button("Share", systemImage: "square.and.arrow.up") { share.start() }
                     .disabled(profile == nil)
                     .accessibilityIdentifier("walk-share")
             }
         }
         // From the sheet's contents, never beside it — see *Repository-specific
         // conventions* in the repository instructions.
-        .fullScreenCover(isPresented: $isSharing) {
-            WalkShareFlow(walk: walk, trail: profile, trailMatchesWalk: routeMatchesWalk)
+        .fullScreenCover(isPresented: $share.isPresented) {
+            WalkShareFlow(walk: walk, trail: profile, trailMatchesWalk: routeMatchesWalk, session: share)
         }
         .task(id: walk.id) {
             guard let route = hike?.route, !route.isEmpty else { return }
