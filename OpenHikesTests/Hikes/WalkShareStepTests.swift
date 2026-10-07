@@ -11,6 +11,7 @@
 import CoreGraphics
 import Foundation
 @testable import OpenHikes
+import RealModule
 import SwiftUI
 import Testing
 import UIKit
@@ -119,7 +120,10 @@ struct WalkShareStepTests {
         model.step(.stats, .down, boxSize: Self.box)
 
         #expect(model.layout.stats.center.x == before.x)
-        #expect(abs(model.layout.stats.center.y - (before.y + Self.step / Self.canvas.height)) < 1e-9)
+        #expect(
+            model.layout.stats.center.y
+                .isApproximatelyEqual(to: before.y + Self.step / Self.canvas.height, absoluteTolerance: 1e-9)
+        )
     }
 
     @Test("Larger and Smaller step the scale and stop at its limits")
@@ -143,7 +147,10 @@ struct WalkShareStepTests {
         model.rescale(.route, larger: true, boxSize: Self.box)
 
         let grownHalfWidth = Self.box.width * WalkShareLayout.scaleStep / 2
-        #expect(abs(model.layout.route.center.x * Self.canvas.width - (Self.canvas.width - grownHalfWidth)) < 1e-9)
+        #expect(
+            (model.layout.route.center.x * Self.canvas.width)
+                .isApproximatelyEqual(to: Self.canvas.width - grownHalfWidth, absoluteTolerance: 1e-9)
+        )
     }
 
     @Test("the photograph steps and zooms, and never shows past its edge")
@@ -162,7 +169,7 @@ struct WalkShareStepTests {
         #expect(model.photoFrame.offset.dy == -WalkShareLayout.stepFraction)
         for _ in 0..<40 { model.stepPhoto(.up) }
         // 1000 points tall now, so 100 of them past each edge of the card.
-        #expect(abs(model.photoFrame.offset.dy + 100 / Self.canvas.height) < 1e-9)
+        #expect(model.photoFrame.offset.dy.isApproximatelyEqual(to: -100 / Self.canvas.height, absoluteTolerance: 1e-9))
 
         for _ in 0..<10 { model.zoomPhoto(in: false) }
         #expect(model.photoFrame.zoom == WalkSharePhotoFrame.zoomRange.lowerBound)
