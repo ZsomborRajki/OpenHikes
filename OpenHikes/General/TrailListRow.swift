@@ -21,7 +21,7 @@
 //  `AccessibilityLabelUITests` hold every composite row in the app to that.
 //
 //  Combining speaks the text that is drawn, which is right where the drawn
-//  text is words and wrong where it is abbreviations — "50% walked · 4m 12s"
+//  text is words and wrong where it is abbreviations — "50% hiked · 4m 12s"
 //  is a line to read, not a sentence to hear. So a row whose subtitle is
 //  shorthand passes `spokenSubtitle`, and the combined label is built from
 //  that instead. It is the same treatment for all three rows and not a fourth

@@ -82,7 +82,7 @@ struct TrailListView: View {
 
     private var queuedFooter: some View {
         Label {
-            // "1 walk" is the catalog's plural variation.
+            // "1 hike" is the catalog's plural variation.
             Text("\(model.queuedWalkCount) hikes waiting for your iPhone")
             .font(.footnote)
         } icon: {
