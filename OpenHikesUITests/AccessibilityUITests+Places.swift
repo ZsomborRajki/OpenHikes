@@ -86,13 +86,11 @@ extension AccessibilityUITests {
         XCTAssertTrue(pin.exists, "the new place's pin stands in the middle of the map")
         try audit(app)
 
-        // The figures are the label or the value, whichever the row puts them in.
         let coordinates = element("trail-place-coordinates", in: app)
-        func reading() -> String { "\(coordinates.label) \(coordinates.value as? String ?? "")" }
-        let opened = reading()
+        let opened = reading(of: coordinates)
         panPlaceMap(in: app)
         XCTAssertTrue(
-            waitUntil(timeout: UITestTimeout.existence) { reading() != opened },
+            waitUntil(timeout: UITestTimeout.existence) { reading(of: coordinates) != opened },
             "the form's coordinates follow the map"
         )
         XCTAssertTrue(pin.exists, "the pin stays up while the map moves")

@@ -54,6 +54,13 @@ extension XCTestCase {
         map.coordinate(withNormalizedOffset: PlaceMapPan.from)
             .press(forDuration: PlaceMapPan.press, thenDragTo: map.coordinate(withNormalizedOffset: PlaceMapPan.to))
     }
+
+    /// Everything a place's coordinates row says, whichever of its label and
+    /// value carries the figures — what a pan is checked against.
+    @MainActor
+    func reading(of row: XCUIElement) -> String {
+        "\(row.label) \(row.value as? String ?? "")"
+    }
 }
 
 /// Up and to the left, clear of the sheet along the bottom.

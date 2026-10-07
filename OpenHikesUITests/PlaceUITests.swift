@@ -138,18 +138,18 @@ nonisolated final class PlaceUITests: XCTestCase {
         openPlaceAdder(in: app)
         let coordinates = element("trail-place-coordinates", in: app)
         XCTAssertTrue(coordinates.waitForExistence(timeout: UITestTimeout.existence))
-        let opened = Self.reading(of: coordinates)
+        let opened = reading(of: coordinates)
 
         panPlaceMap(in: app)
 
-        let moved = NSPredicate { _, _ in Self.reading(of: coordinates) != opened }
+        let moved = NSPredicate { _, _ in self.reading(of: coordinates) != opened }
         XCTAssertEqual(
             XCTWaiter().wait(for: [expectation(for: moved, evaluatedWith: nil)], timeout: UITestTimeout.existence),
             .completed,
             "the form's coordinates follow the map"
         )
         XCTAssertTrue(element("hike-place-placeholder", in: app).exists, "the pin stays up while the map moves")
-        let placed = Self.reading(of: coordinates)
+        let placed = reading(of: coordinates)
 
         app.buttons["hike-place-adder-add"].tap()
         XCTAssertTrue(
@@ -157,17 +157,10 @@ nonisolated final class PlaceUITests: XCTestCase {
             "adding opens the new place"
         )
         XCTAssertEqual(
-            Self.reading(of: element("trail-place-coordinates", in: app)),
+            reading(of: element("trail-place-coordinates", in: app)),
             placed,
             "the place went where the pin was left, not where the form opened"
         )
-    }
-
-    /// Everything a row says, whichever of its label and value carries the
-    /// figures.
-    @MainActor
-    private static func reading(of row: XCUIElement) -> String {
-        "\(row.label) \(row.value as? String ?? "")"
     }
 
     @MainActor
