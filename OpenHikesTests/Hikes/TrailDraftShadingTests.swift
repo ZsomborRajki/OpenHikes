@@ -66,10 +66,10 @@ struct TrailDraftShadingTests {
         static let longitude: Double = 12.86
         static let south: Double = 47.6300
         static let north: Double = 47.6400
-        /// About 1.1 km apart, so a hundred metres between them is a 9%
-        /// grade: the scale's second step.
+        /// About 1.1 km apart, so 135 metres between them is a 12% grade:
+        /// the scale's second step.
         static let low: Double = 600
-        static let high: Double = 700
+        static let high: Double = 735
     }
 
     private static func straightDraft() -> TrailDraft {

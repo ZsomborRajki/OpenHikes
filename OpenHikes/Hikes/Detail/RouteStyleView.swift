@@ -289,7 +289,7 @@ private struct RouteShadeKey: View {
         .accessibilityLabel(coloring == .elevation ? "Steepness colors" : "Difficulty colors")
         .accessibilityValue(
             coloring == .elevation
-                ? "From green for level ground to black for grades of 30 percent or more"
+                ? "From green for level ground to black for grades of 40 percent or more"
                 : "From green for hiking to black for difficult alpine hiking"
         )
     }
