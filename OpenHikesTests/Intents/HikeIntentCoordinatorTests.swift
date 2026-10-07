@@ -83,6 +83,12 @@ final class HikeIntentCoordinatorTests {
             try await coordinator.startRecording()
         }
         #expect(source.startCount == 0)
+        // The watch shows the description alone, so it has to carry the
+        // instruction as well as the reason.
+        #expect(
+            HikeIntentFailure.walking(trail: "Ridge Loop").errorDescription
+                == "You're hiking Ridge Loop. End the hike in OpenHikes to start recording."
+        )
     }
 
     @Test("denied location is reported instead of a recording that never began")

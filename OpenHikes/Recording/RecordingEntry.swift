@@ -17,7 +17,9 @@
 //  A hiker walks a trail or records one, never both. So a tap while a walk is
 //  under way does not start anything: the button asks first — see
 //  ``walkToEnd`` — and ``endWalkAndRecord()`` is the answer that ends the
-//  walk the way End does and then records.
+//  walk the way End does and then records. A refused End is said the way the
+//  detail's End says it, through ``walkEndRefused``: a menu choice that did
+//  nothing would read as one that was never made.
 //
 //  The live state and the start are closures rather than the recorder itself,
 //  so the map's suite can offer a button without building a recorder, a store
@@ -26,15 +28,21 @@
 //
 
 import Foundation
+import OpenHikesShared
 
 /// Whether a recording is live, and the request to start or reopen one.
 @MainActor
+@Observable
 final class RecordingEntry {
     private let isLive: @MainActor () -> Bool
     private let start: @MainActor () async -> Void
     private let walkUnderWay: @MainActor () -> String?
     private let endWalk: @MainActor () -> Bool
     private let openRequests: HikeOpenRequests
+
+    /// Whether the store refused the End that ``endWalkAndRecord()`` asked
+    /// for. The map's alert reads and clears it — see ``MapScreenAlerts``.
+    var walkEndRefused = false
 
     /// - Parameters:
     ///   - isLive: whether a recording is under way. Read inside the map's
@@ -67,7 +75,10 @@ final class RecordingEntry {
             walkUnderWay: { [weak walkSession] in walkSession?.walkUnderWayTitle },
             endWalk: { [weak walkSession] in
                 guard let walkSession else { return true }
-                if case .refused = walkSession.end() { return false }
+                let end = walkSession.end()
+                // Felt as the detail's End is — see ``WalkHaptics``.
+                end.hapticMoment.play()
+                if case .refused = end { return false }
                 return true
             },
             openRequests: openRequests
@@ -105,7 +116,10 @@ final class RecordingEntry {
     /// records. A walk the store would not let go of stays under way, and
     /// nothing starts beside it.
     func endWalkAndRecord() {
-        if walkToEnd != nil, !endWalk() { return }
+        if walkToEnd != nil, !endWalk() {
+            walkEndRefused = true
+            return
+        }
         requestRecording()
     }
 }

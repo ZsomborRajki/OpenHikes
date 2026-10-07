@@ -127,8 +127,9 @@ struct RecordingEntryTests {
     }
 
     /// A commit the store refused leaves the walk under way, so recording now
-    /// would be the overlap all over again.
-    @Test("a walk the store would not end starts no recording")
+    /// would be the overlap all over again — and is said, as the detail's End
+    /// says it, rather than leaving a menu choice that did nothing.
+    @Test("a walk the store would not end starts no recording, and says so")
     func refusedEndStartsNothing() {
         var starts = 0
         let entry = RecordingEntry(
@@ -139,10 +140,13 @@ struct RecordingEntryTests {
             openRequests: HikeOpenRequests()
         )
 
+        #expect(!entry.walkEndRefused)
+
         entry.endWalkAndRecord()
 
         #expect(starts == 0)
         #expect(entry.walkToEnd == "Ridge Loop")
+        #expect(entry.walkEndRefused)
     }
 
     /// Two taps are two requests, for the reason ``HikeOpenRequests`` sends

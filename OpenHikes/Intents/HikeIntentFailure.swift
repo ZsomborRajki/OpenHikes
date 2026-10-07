@@ -47,6 +47,10 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     /// Asked to start a recording while a walk is under way along `trail`.
     /// A hiker walks or records, never both, and ending a walk is the
     /// hiker's call to make on the screen, not Siri's or the watch's.
+    ///
+    /// The whole sentence is the description, with no recovery suggestion:
+    /// the watch shows the description alone, and "You're hiking X." on its
+    /// own does not say that nothing started, or what to do instead.
     case walking(trail: String)
 
     var errorDescription: String? {
@@ -56,7 +60,7 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
         case .unknownDay: "OpenHikes couldn't work out which day that is."
         case .noActiveRecording: "OpenHikes isn't recording a hike right now."
         case .alreadyRecording: "OpenHikes is already recording a hike."
-        case .walking(let trail): "You're hiking \(trail)."
+        case .walking(let trail): "You're hiking \(trail). End the hike in OpenHikes to start recording."
         case .notPaused: "That hike isn't paused."
         case .recording(let failure): failure.errorDescription
         case .awaitingRouteReview:
@@ -68,10 +72,9 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
 
     var recoverySuggestion: String? {
         switch self {
-        case .alreadyRecording, .noActiveRecording, .notPaused, .noHikesYet, .unknownDay:
+        case .alreadyRecording, .noActiveRecording, .notPaused, .noHikesYet, .unknownDay, .walking:
             nil
         case .busyFinishing: "Try again in a moment."
-        case .walking: "End the hike in OpenHikes to start recording."
         case .recording(let failure): failure.recoverySuggestion
         case .awaitingRouteReview: "Open OpenHikes to finish reviewing it."
         // Fixed rather than the store's own words: what SwiftData has to say

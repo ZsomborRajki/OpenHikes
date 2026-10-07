@@ -14,11 +14,10 @@
 //
 //  So the first match proposes, and the walk starts only once the hiker has
 //  moved ``confirmingMeters`` along the route from where it found them, in
-//  more than one fix —
-//  dated from when they set off, and carrying the coverage it saw on the
-//  way, so a confirmed walk is the walk it would always have been. Nothing
-//  here is published, persisted or drawn: a proposal is the session's
-//  private business until it confirms.
+//  more than one fix — dated from when they set off, and carrying the
+//  coverage it saw on the way, so a confirmed walk is the walk it would
+//  always have been. Nothing here is published, persisted or drawn: a
+//  proposal is the session's private business until it confirms.
 //
 //  A pure value, like ``TrailWalkRecord`` beside it, so every rule here is a
 //  suite with no view, store or clock.
