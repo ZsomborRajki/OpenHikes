@@ -135,6 +135,31 @@ nonisolated struct WalkShareLayout: Codable, Equatable, Sendable {
         guard abs(center.x - middle) <= snapDistance else { return (center, false) }
         return (CGPoint(x: middle, y: center.y), true)
     }
+
+    /// Where a box of `boxSize` points whose stored centre is `center` (a
+    /// fraction of the card) is drawn after a drag of `translation`: on the
+    /// card, clear of the wordmark, and on the middle line when it came close.
+    ///
+    /// The drag starts from where the box is *drawn* — the stored centre
+    /// clamped at the box's size now — not from the stored centre itself,
+    /// which a box that has grown since (a figure added, the card backing,
+    /// another trail's longer name) may no longer be able to reach. Starting
+    /// from there would leave the box stuck at the edge until the finger had
+    /// covered the gap. At rest nothing snaps, so the editor draws exactly
+    /// what ``WalkSharePlacedBox`` exports.
+    static func target(
+        center: CGPoint,
+        translation: CGSize,
+        boxSize: CGSize,
+        canvas: CGSize
+    ) -> (center: CGPoint, isSnapped: Bool) {
+        let stored = CGPoint(x: center.x * canvas.width, y: center.y * canvas.height)
+        let drawn = clampedCenter(stored, boxSize: boxSize, canvas: canvas)
+        guard translation != .zero else { return (drawn, false) }
+        let proposed = CGPoint(x: drawn.x + translation.width, y: drawn.y + translation.height)
+        let snapped = snapped(proposed, canvas: canvas)
+        return (clampedCenter(snapped.center, boxSize: boxSize, canvas: canvas), snapped.isSnapped)
+    }
 }
 
 // MARK: - Remembered between cards
