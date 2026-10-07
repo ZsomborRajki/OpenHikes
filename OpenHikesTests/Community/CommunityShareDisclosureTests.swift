@@ -79,7 +79,7 @@ struct CommunityShareDisclosureTests {
 
         #expect(draft.route.contains { $0.timestamp != nil })
         #expect(Self.disclosure(for: draft).contains("the time you reached it"))
-        #expect(Self.disclosure(for: draft).contains("the date you walked it"))
+        #expect(Self.disclosure(for: draft).contains("the date you hiked it"))
     }
 
     /// Whatever else it says, the sentence ends by claiming the list is

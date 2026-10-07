@@ -433,7 +433,7 @@ private extension CommunityPhotoShareSheet {
     static var publishedExplanation: String {
         String(
             localized: """
-            You've already published this walk, and a published hike can't be \
+            You've already published this hike, and a published hike can't be \
             amended — so its route, its name and its notes stay exactly as they \
             are, and these photos go on as an addition to it.
             """
@@ -510,7 +510,7 @@ nonisolated enum CommunityPhotoDisclosure {
         return String(
             localized: """
             \(photos) — resized before sending, with camera details and original \
-            location data removed. Your route, your notes and this walk's name stay \
+            location data removed. Your route, your notes and this hike's name stay \
             on your device.
             """
         )

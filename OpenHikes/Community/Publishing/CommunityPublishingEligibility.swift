@@ -262,7 +262,7 @@ nonisolated extension CommunityPublishingEligibility.Reason {
             let floor = Self.road(CommunityPublishingEligibility.minimumDistanceMeters, locale)
             let walked = Self.road(meters, locale)
             return """
-            Community hikes start at \(floor); this one is \(walked). Short walks stay \
+            Community hikes start at \(floor); this one is \(walked). Short hikes stay \
             in your own list, where they're still yours to keep, export and sync.
             """
         case .savedFromOpenStreetMap:
@@ -281,7 +281,7 @@ nonisolated extension CommunityPublishingEligibility.Reason {
             // cannot keep.
             return """
             \(title) covers the same ground, and two listings for one trail make it \
-            harder for anyone to find either. This walk stays in your own list, where \
+            harder for anyone to find either. This hike stays in your own list, where \
             it's still yours to keep, export and sync.
             """
         }

@@ -21,10 +21,7 @@
         }
       }
     },
-    "%lld percent" : {
-
-    },
-    "%lld walks waiting for your iPhone" : {
+    "%lld hikes waiting for your iPhone" : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -32,13 +29,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld walk waiting for your iPhone"
+                  "value" : "%lld hike waiting for your iPhone"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld walks waiting for your iPhone"
+                  "value" : "%lld hikes waiting for your iPhone"
                 }
               }
             }
@@ -46,7 +43,10 @@
         }
       }
     },
-    "A walk was interrupted — see Record" : {
+    "%lld percent" : {
+
+    },
+    "A hike was interrupted — see Record" : {
 
     },
     "Asking your iPhone for your trails…" : {
@@ -61,10 +61,10 @@
     "Discard" : {
 
     },
-    "Discard this walk?" : {
+    "Discard Hike" : {
 
     },
-    "Discard Walk" : {
+    "Discard this hike?" : {
 
     },
     "Fetching this trail from your iPhone…" : {
@@ -76,6 +76,15 @@
     "Finding your position…" : {
 
     },
+    "Hike Interrupted" : {
+
+    },
+    "Hike Kept" : {
+
+    },
+    "Hike Not Saved" : {
+
+    },
     "Import a GPX file or record a hike on your iPhone, and it will appear here." : {
 
     },
@@ -85,7 +94,7 @@
     "It hasn't been saved anywhere, so it can't be recovered." : {
 
     },
-    "Last walk not saved" : {
+    "Last hike not saved" : {
 
     },
     "Location is off, so your position isn't shown." : {
@@ -112,7 +121,7 @@
     "Pause recording" : {
 
     },
-    "Paused. The ground you cover now isn't part of the walk." : {
+    "Paused. The ground you cover now isn't part of the hike." : {
 
     },
     "Progress along the trail" : {
@@ -130,7 +139,7 @@
     "Recording stopped at %@. Everything before then is kept." : {
 
     },
-    "Records on this watch, with or without your iPhone. The walk goes to your iPhone when it's back in range." : {
+    "Records on this watch, with or without your iPhone. The hike goes to your iPhone when it's back in range." : {
 
     },
     "Resume" : {
@@ -139,7 +148,7 @@
     "Resume recording" : {
 
     },
-    "Save Walk" : {
+    "Save Hike" : {
 
     },
     "Sent to your iPhone." : {
@@ -160,7 +169,7 @@
     "This watch is out of storage. Free up some space, then try again." : {
 
     },
-    "Time walking" : {
+    "Time hiking" : {
 
     },
     "Trail" : {
@@ -179,15 +188,6 @@
 
     },
     "Waiting for your iPhone. It'll go across on its own." : {
-
-    },
-    "Walk Interrupted" : {
-
-    },
-    "Walk Kept" : {
-
-    },
-    "Walk Not Saved" : {
 
     },
     "Your iPhone is recording" : {

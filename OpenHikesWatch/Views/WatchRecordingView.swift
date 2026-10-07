@@ -122,7 +122,7 @@ struct WatchRecordingView: View {
             Text(
                 """
                 Records on this watch, with or without your iPhone. \
-                The walk goes to your iPhone when it's back in range.
+                The hike goes to your iPhone when it's back in range.
                 """
             )
             .font(.caption2)
@@ -164,7 +164,7 @@ struct WatchRecordingView: View {
             .accessibilityLabel("Stop recording")
         }
         if model.recorder.phase == .paused {
-            Text("Paused. The ground you cover now isn't part of the walk.")
+            Text("Paused. The ground you cover now isn't part of the hike.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -173,7 +173,7 @@ struct WatchRecordingView: View {
 
     private func saved(_ walk: WatchRecordedWalk) -> some View {
         VStack(spacing: 6) {
-            Label("Walk Kept", systemImage: "checkmark.circle.fill")
+            Label("Hike Kept", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
             Text(WidgetFormat.length(meters: walk.distanceMeters))
                 .font(.title3.monospacedDigit())
@@ -198,7 +198,7 @@ struct WatchRecordingView: View {
     /// from where the hiker is now rather than drawing a line across the gap.
     private func interrupted(_ recovered: WatchRecoveredRecording) -> some View {
         VStack(spacing: 6) {
-            Label("Walk Interrupted", systemImage: "exclamationmark.arrow.circlepath")
+            Label("Hike Interrupted", systemImage: "exclamationmark.arrow.circlepath")
                 .foregroundStyle(.orange)
             Text(WidgetFormat.length(meters: recovered.accumulator.distanceMeters))
                 .font(.title3.monospacedDigit())
@@ -214,7 +214,7 @@ struct WatchRecordingView: View {
             }
             .tint(.green)
             .disabled(model.isPhoneRecording)
-            Button("Save Walk") { model.saveInterruptedRecording() }
+            Button("Save Hike") { model.saveInterruptedRecording() }
             Button("Discard", role: .destructive) { model.discardInterruptedRecording() }
         }
     }
@@ -247,7 +247,7 @@ private struct UnsavedWalkPanel: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Label("Walk Not Saved", systemImage: "exclamationmark.triangle.fill")
+            Label("Hike Not Saved", systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
             Text(WidgetFormat.length(meters: walk.distanceMeters))
                 .font(.title3.monospacedDigit())
@@ -256,14 +256,14 @@ private struct UnsavedWalkPanel: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             Button("Try Again") { model.retrySavingWalk() }
-            Button("Discard Walk", role: .destructive) { isConfirmingDiscard = true }
+            Button("Discard Hike", role: .destructive) { isConfirmingDiscard = true }
         }
         .confirmationDialog(
-            "Discard this walk?",
+            "Discard this hike?",
             isPresented: $isConfirmingDiscard,
             titleVisibility: .visible
         ) {
-            Button("Discard Walk", role: .destructive) { model.discardUnsavedWalk() }
+            Button("Discard Hike", role: .destructive) { model.discardUnsavedWalk() }
         } message: {
             Text("It hasn't been saved anywhere, so it can't be recovered.")
         }
@@ -279,7 +279,7 @@ private struct RecordingFigures: View {
         return VStack(spacing: 4) {
             Text(WidgetFormat.duration(seconds: stats.activeSeconds))
                 .font(.title2.monospacedDigit())
-                .accessibilityLabel("Time walking")
+                .accessibilityLabel("Time hiking")
             Grid(horizontalSpacing: 8, verticalSpacing: 4) {
                 GridRow {
                     WatchFigure(title: "Distance", value: WidgetFormat.length(meters: stats.distanceMeters))
@@ -368,11 +368,11 @@ private struct PhoneRecordingPanel: View {
         if let anchor = recording.clockAnchor {
             Text(anchor, style: .timer)
                 .font(.title2.monospacedDigit())
-                .accessibilityLabel("Time walking")
+                .accessibilityLabel("Time hiking")
         } else {
             Text(WidgetFormat.duration(seconds: recording.elapsedSeconds))
                 .font(.title2.monospacedDigit())
-                .accessibilityLabel("Time walking")
+                .accessibilityLabel("Time hiking")
         }
     }
 

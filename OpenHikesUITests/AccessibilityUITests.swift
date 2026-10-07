@@ -422,7 +422,7 @@ nonisolated final class AccessibilityUITests: XCTestCase {
         )
         XCTAssertTrue(
             app.staticTexts[
-                "Tap the Record a hike button on the map to record a walk, "
+                "Tap the Record a hike button on the map to record a hike, "
                     + "or the Make a trail button to draw a trail."
             ].exists
         )

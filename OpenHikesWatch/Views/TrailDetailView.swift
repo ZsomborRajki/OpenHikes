@@ -145,7 +145,7 @@ private struct RecordAlongTrailButton: View {
             // start from here would begin over a walk the watch has not
             // written yet, and ``WatchRecorder/start(trailHikeID:title:)``
             // refuses it. The Record screen is where it can be retried.
-            Label("Last walk not saved", systemImage: "exclamationmark.triangle")
+            Label("Last hike not saved", systemImage: "exclamationmark.triangle")
                 .font(.footnote)
                 .foregroundStyle(.orange)
         case .preparing:
@@ -153,7 +153,7 @@ private struct RecordAlongTrailButton: View {
         case .interrupted:
             // Not a second Start. The interrupted walk is on the Record
             // screen, and a recording begun here would be begun over it.
-            Label("A walk was interrupted — see Record", systemImage: "exclamationmark.arrow.circlepath")
+            Label("A hike was interrupted — see Record", systemImage: "exclamationmark.arrow.circlepath")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         case .recording, .paused:

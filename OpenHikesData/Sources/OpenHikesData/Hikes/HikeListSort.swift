@@ -65,7 +65,7 @@ public enum HikeListSort: String, CaseIterable, Identifiable {
         case .newest: "Newest First"
         case .alphabetical: "Name"
         case .longest: "Longest"
-        case .mostWalked: "Most Walked"
+        case .mostWalked: "Most Hiked"
         case .hilliest: "Hilliest"
         }
     }

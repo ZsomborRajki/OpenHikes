@@ -420,8 +420,8 @@ private extension CommunityShareSheet {
             // pointing at walks worth doing, rather than like an export of
             // everything anybody ever recorded.
             Text("""
-            Community hikes are walks worth someone else's day out — a whole route, \
-            walked by you, that isn't already on the list.
+            Community hikes are ones worth someone else's day out — a whole route, \
+            hiked by you, that isn't already on the list.
             """)
             Text("""
             Share only a route, photos and notes that are yours to publish. A hike that \
@@ -687,7 +687,7 @@ nonisolated enum CommunityShareDisclosure {
         var sentences = [
             """
             Your route — each point on it with the time you reached it — \
-            its name, its length and the date you walked it.
+            its name, its length and the date you hiked it.
             """,
         ]
         if hasNotes {

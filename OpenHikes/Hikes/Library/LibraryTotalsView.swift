@@ -114,8 +114,8 @@ private struct LibraryTotalsContent: View {
                 }
             }
             Text(
-                "Recordings and GPX files with times count as walked, and so does every walk along a saved trail. "
-                    + "A trail you drew or saved counts once you walk it."
+                "Recordings and GPX files with times count as hiked, and so does every activity along a saved trail. "
+                    + "A trail you drew or saved counts once you hike it."
             )
             .font(.footnote)
             .foregroundStyle(.secondary)
@@ -151,7 +151,7 @@ private struct LibraryTotalsContent: View {
             Stat("Distance", TotalsFormat.distance(figures.distanceMeters), headline: true),
             Stat("Climb", TotalsFormat.height(figures.climbMeters), headline: true),
             Stat("Moving Time", HikeFormat.duration(figures.movingSeconds), headline: true),
-            Stat("Walks", figures.outings.formatted()),
+            Stat("Activities", figures.outings.formatted()),
             Stat("Trails", figures.trails.formatted()),
         ]
         if let last {

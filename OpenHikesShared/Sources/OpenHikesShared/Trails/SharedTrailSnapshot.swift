@@ -186,7 +186,7 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
     /// extension cannot drift out of sync.
     ///
     /// During a walk the percentage is coverage and the caption says
-    /// *walked*, so the return-leg case reads "50% walked · 0.2 km left"
+    /// *hiked*, so the return-leg case reads "50% hiked · 0.2 km left"
     /// rather than a contradiction. A paused walk says so first, because on a
     /// widget that is the one word that changes what the number means.
     public var statusText: String {
@@ -205,7 +205,7 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
     /// moving here. See ``TrailWidgetSpeech`` in the widget target.
     public var progressStatusText: String? {
         if let walk {
-            let covered = "\(Self.percent(walk.coveredFraction))% walked"
+            let covered = "\(Self.percent(walk.coveredFraction))% hiked"
             let prefix = walk.state == .paused ? "Paused · " : ""
             guard let remainingDistanceMeters else { return prefix + covered }
             let remaining = WidgetFormat.length(meters: remainingDistanceMeters)

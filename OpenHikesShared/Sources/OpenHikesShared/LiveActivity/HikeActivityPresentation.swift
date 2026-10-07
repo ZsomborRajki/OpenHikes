@@ -162,7 +162,7 @@ public extension HikeActivityAttributes {
             accessibilityLabel: status.label.map { "\(title), \($0.lowercased())" }
                 ?? title,
             accessibilityValue: Self.spoken(
-                ["\(distance) walked", elapsed],
+                ["\(distance) hiked", elapsed],
                 metrics: metrics
             )
         )
@@ -189,7 +189,7 @@ public extension HikeActivityAttributes {
     /// fix, rather than claiming 0%.
     ///
     /// A walk under way changes what the percentage *means*, and says so:
-    /// it is coverage rather than position, captioned *Walked*, with the
+    /// it is coverage rather than position, captioned *Hiked*, with the
     /// walk's own clock in the second slot — ticking while it runs, frozen
     /// while it is paused or finished — and the distance left moved into the
     /// chips so it is not lost to the clock. Paused and Finished outrank
@@ -238,7 +238,7 @@ public extension HikeActivityAttributes {
             statusLabel: status.label,
             primaryValue: percentage ?? total,
             primaryCaption: walk.isWalking
-                ? "Walked"
+                ? "Hiked"
                 : (progress == nil ? "Trail length" : "Complete"),
             // A running walk puts its live timer here instead, exactly as a
             // running recording does; a paused or finished one shows the
@@ -256,7 +256,7 @@ public extension HikeActivityAttributes {
                 ?? title,
             accessibilityValue: Self.spoken(
                 [
-                    percentage.map { "\($0.dropLast()) percent \(walk.isWalking ? "walked" : "complete")" }
+                    percentage.map { "\($0.dropLast()) percent \(walk.isWalking ? "hiked" : "complete")" }
                         ?? "\(total) long",
                     walk.isWalking ? elapsed : walk.remaining.map { "\($0) remaining" },
                 ],

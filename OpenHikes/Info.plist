@@ -44,7 +44,7 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>OpenHikes uses the camera so you can photograph a hike as you walk it. Photos are kept with that hike, and pinned to the point on the trail you had selected.</string>
+	<string>OpenHikes uses the camera so you can photograph a hike while you are on it. Photos are kept with that hike, and pinned to the point on the trail you had selected.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>OpenHikes connects to Health to save your finished hikes as workouts, including distance and route, when you turn on Save Hikes to Health. OpenHikes reads nothing from Health on your iPhone.</string>
 	<key>NSHealthUpdateUsageDescription</key>
@@ -54,16 +54,16 @@
 	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
 	<dict>
 		<key>RecordHike</key>
-		<string>OpenHikes needs your precise location to record the trail you walk.</string>
+		<string>OpenHikes needs your precise location to record the trail you hike.</string>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>OpenHikes uses your location to show where you are on the map and record hikes you choose to start.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>OpenHikes uses motion sensors to improve recorded elevation and infer the trail walked through GPS gaps.</string>
+	<string>OpenHikes uses motion sensors to improve recorded elevation and infer the trail hiked through GPS gaps.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Turn on “Also Save to Photos” to keep a copy of each hike photo in your photo library, stamped with when and where it was taken.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>OpenHikes looks through your photo library for pictures you took while walking a hike, so it can pin each one to the point on the trail you were standing on. It only reads photos taken during that hike.</string>
+	<string>OpenHikes looks through your photo library for pictures you took while on a hike, so it can pin each one to the point on the trail you were standing on. It only reads photos taken during that hike.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

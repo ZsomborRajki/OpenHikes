@@ -354,7 +354,7 @@ private struct TrailMapFull: View {
         var label: String {
             switch self {
             case .off: "Follow your location"
-            case .north: "Turn the map as you walk"
+            case .north: "Turn the map as you hike"
             case .heading: "Stop following your location"
             }
         }

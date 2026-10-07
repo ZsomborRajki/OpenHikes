@@ -170,7 +170,7 @@ struct HikePhotoSection: View {
             return String(
                 localized: """
                     This hike\u{2019}s route doesn\u{2019}t record when each point was \
-                    reached, so photos can\u{2019}t be matched to it by time. Walk it \
+                    reached, so photos can\u{2019}t be matched to it by time. Hike it \
                     with OpenHikes and they can.
                     """
             )
@@ -179,7 +179,7 @@ struct HikePhotoSection: View {
             return String(
                 localized: """
                     OpenHikes can look through your photo library for pictures \
-                    taken while you walked this hike, and pin each one to the \
+                    taken while you were on this hike, and pin each one to the \
                     point of the trail you were on.
                     """
             )

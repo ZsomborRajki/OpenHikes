@@ -48,7 +48,7 @@ struct WalkControls: View {
                     endButton
                 }
             } else if session.walkedHikeID != nil {
-                Text("A hike is in progress on \(session.walkedHikeTitle). End it there to walk this trail.")
+                Text("A hike is in progress on \(session.walkedHikeTitle). End it there to hike this trail.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)

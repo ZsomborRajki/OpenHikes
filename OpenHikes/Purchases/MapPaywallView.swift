@@ -187,7 +187,7 @@ struct MapPaywallView: View {
                 .font(.system(size: Self.headerGlyphSize))
                 .foregroundStyle(.tint)
                 .accessibilityHidden(true)
-            Text("Read the ground you walk on")
+            Text("Read the ground you hike on")
                 .font(.title2.weight(.semibold))
             // Named rather than collapsed into "them", which is what this
             // used to say. Two styles are unlocked and exactly one of them may

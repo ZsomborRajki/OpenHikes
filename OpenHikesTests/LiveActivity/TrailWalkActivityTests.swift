@@ -103,7 +103,7 @@ final class TrailWalkActivityTests {
         #expect(state.elapsedSeconds.isApproximatelyEqual(to: 120, absoluteTolerance: 1))
         let stored = try #require(SharedStore.load())
         #expect(stored.walk?.coveredFraction == session.coveredFraction)
-        #expect(stored.statusText.contains("walked"))
+        #expect(stored.statusText.contains("hiked"))
     }
 
     /// Pausing reaches the panel at once, through the run-state bypass —

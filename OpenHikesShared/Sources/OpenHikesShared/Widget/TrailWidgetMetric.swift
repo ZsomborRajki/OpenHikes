@@ -297,7 +297,7 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
         switch kind {
         case .ascent: "Ascent"
         case .currentElevation: "Elevation"
-        case .distance: "Walked"
+        case .distance: "Hiked"
         case .length: "Length"
         case .pace: "Average speed"
         case .points: "Track points"
@@ -345,7 +345,7 @@ extension TrailWidgetMetric {
     /// How far a recording has come. The same formatting as ``length(meters:locale:)``
     /// and a different name on purpose: the two occupy the same slot in their
     /// respective bands and read identically, so the only place the difference
-    /// survives is what VoiceOver says — "Length 4.2 km" for a route, "Walked
+    /// survives is what VoiceOver says — "Length 4.2 km" for a route, "Hiked
     /// 1.4 km" for a walk.
     ///
     /// Absent before the walk has moved, when "0 m" says only that the first

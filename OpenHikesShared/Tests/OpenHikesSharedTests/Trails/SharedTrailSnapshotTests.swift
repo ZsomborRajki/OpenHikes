@@ -129,12 +129,12 @@ struct SharedTrailSnapshotTests {
 
     /// The return-leg case: position reads 62%, coverage reads 50%, and the
     /// status line has to show the coverage and say that it is coverage.
-    @Test("during a walk the status line is coverage, captioned walked")
+    @Test("during a walk the status line is coverage, captioned hiked")
     func statusDuringAWalkIsCoverage() {
         var snapshot = Self.snapshot(total: 10_000, along: 6200)
         snapshot.walk = Self.walk()
         let status = snapshot.statusText
-        #expect(status.hasPrefix("50% walked"))
+        #expect(status.hasPrefix("50% hiked"))
         #expect(status.contains("left"))
         #expect(!status.contains("62%"))
         #expect(snapshot.progressFraction == 0.5, "and the bar draws the same number")
@@ -145,14 +145,14 @@ struct SharedTrailSnapshotTests {
     func pausedWalkSaysPaused() {
         var snapshot = Self.snapshot(total: 10_000, along: 6200)
         snapshot.walk = Self.walk(state: .paused)
-        #expect(snapshot.statusText.hasPrefix("Paused · 50% walked"))
+        #expect(snapshot.statusText.hasPrefix("Paused · 50% hiked"))
     }
 
     @Test("a walk with no fix reports coverage and nothing left")
     func walkWithoutFixReportsCoverageOnly() {
         var snapshot = Self.snapshot(total: 10_000)
         snapshot.walk = Self.walk(covered: 0.25)
-        #expect(snapshot.statusText == "25% walked")
+        #expect(snapshot.statusText == "25% hiked")
         #expect(snapshot.progressFraction == 0.25)
     }
 

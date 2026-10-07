@@ -260,7 +260,7 @@ private extension CommunityReviewView {
                 Text(pending.authorName.isEmpty ? "None given" : pending.authorName)
                     .foregroundStyle(pending.authorName.isEmpty ? .secondary : .primary)
             }
-            LabeledContent("Walked") {
+            LabeledContent("Hiked") {
                 Text(pending.hikeDate.formatted(date: .abbreviated, time: .omitted))
             }
             LabeledContent("Distance") {
