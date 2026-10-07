@@ -202,6 +202,14 @@ extension MapView.Coordinator {
     /// to the point — see `MapPlacePlacement.swift`, which stands a pin here
     /// and moves the map under it.
     func focusPoint(in mapView: MKMapView) -> CGPoint {
+        let area = focusArea(in: mapView)
+        return CGPoint(x: area.midX, y: area.midY)
+    }
+
+    /// The part of the map nothing is drawn over, in the map's own points —
+    /// what ``focusPoint(in:)`` is the middle of, and what a photo pin the
+    /// gallery pages to has to be inside to be seen.
+    func focusArea(in mapView: MKMapView) -> CGRect {
         let margins = Self.layoutMargins(of: mapView)
         let padding = Self.residualPadding(obstructionInsets(in: mapView), on: mapView)
         let bounds = mapView.bounds
@@ -209,7 +217,7 @@ extension MapView.Coordinator {
         let right = bounds.maxX - margins.right - padding.right
         let top = bounds.minY + margins.top + padding.top
         let bottom = bounds.maxY - margins.bottom - padding.bottom
-        return CGPoint(x: (left + right) / 2, y: (top + bottom) / 2)
+        return CGRect(x: left, y: top, width: max(0, right - left), height: max(0, bottom - top))
     }
 
     /// The map's own layout margins, per *physical* edge.

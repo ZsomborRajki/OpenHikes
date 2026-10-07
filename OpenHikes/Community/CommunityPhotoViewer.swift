@@ -150,7 +150,7 @@ struct CommunityPhotoViewer: View {
             }
             .scrollTargetLayout()
         }
-        .scrollTargetBehavior(.paging)
+        .scrollTargetBehavior(.photoPages)
         .scrollIndicators(.hidden)
         .scrollPosition(id: $currentIndex)
         .ignoresSafeArea(edges: .bottom)

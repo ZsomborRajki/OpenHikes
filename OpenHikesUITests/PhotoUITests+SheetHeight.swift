@@ -10,11 +10,12 @@
 //  these methods `PhotoUITests` members, so `--suite PhotoUITests` still selects
 //  everything, rather than a second class `single_test_class` forbids.
 //
-//  Two waits rather than one, and the difference is the point. One test drags
+//  Three waits rather than one, and the difference is the point. One test drags
 //  the sheet to the bottom itself and asserts that it went; the photo-on-map
 //  tests assert where the *app* puts it, which is its middle detent — the
-//  height every camera move frames against. See
-//  `MapCoordinator+RouteFitting.swift`.
+//  height every camera move frames against, see
+//  `MapCoordinator+RouteFitting.swift` — and where a tap on the photograph
+//  puts it back, which is the top.
 //
 
 import XCTest
@@ -85,4 +86,25 @@ extension PhotoUITests {
     /// top is near the bottom of the screen.
     static let middleSheetLowerBound: CGFloat = 0.3
     static let middleSheetUpperBound: CGFloat = 0.65
+
+    /// Waits for the sheet to have the whole screen: its top edge in the top
+    /// tenth, which is `.large` on every phone and no other detent on any.
+    @MainActor
+    func waitForSheetAtLargeDetent(in app: XCUIApplication) -> Bool {
+        let sheet = element("map-sheet", in: app)
+        guard sheet.waitForExistence(timeout: UITestTimeout.navigation) else {
+            return false
+        }
+        let raised = NSPredicate { _, _ in
+            sheet.frame.minY < app.frame.height * Self.largeSheetUpperBound
+        }
+        let settled = expectation(for: raised, evaluatedWith: sheet)
+        return XCTWaiter.wait(
+            for: [settled],
+            timeout: UITestTimeout.navigation
+        ) == .completed
+    }
+
+    /// See ``waitForSheetAtLargeDetent(in:)``.
+    static let largeSheetUpperBound: CGFloat = 0.1
 }

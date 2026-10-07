@@ -16,7 +16,8 @@
 //
 //  Paging is a horizontally paged `ScrollView` rather than a `TabView`, so a
 //  swipe and the step buttons drive the same `scrollPosition` and cannot
-//  disagree about which photo is showing.
+//  disagree about which photo is showing. Snapped to the pages themselves
+//  rather than by `.paging` — see ``ScrollTargetBehavior/photoPages``.
 //
 
 import OpenHikesData
@@ -35,6 +36,9 @@ struct HikePhotoPager: View {
     /// Takes a photograph out of the hike, or `nil` where the gallery has no
     /// business doing that — see ``HikePhotoPage/onRemove``.
     var onRemove: ((HikePhoto) -> Void)?
+    /// What a tap on a drawn photograph does, or `nil` for nothing — see
+    /// ``HikePhotoPage/onTap``.
+    var onTapPhoto: (() -> Void)?
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -44,7 +48,8 @@ struct HikePhotoPager: View {
                         photo: photo,
                         store: store,
                         onFileFound: { found in onFileFound(photo.id, found) },
-                        onRemove: onRemove.map { remove in { remove(photo) } }
+                        onRemove: onRemove.map { remove in { remove(photo) } },
+                        onTap: onTapPhoto
                     )
                     .containerRelativeFrame(.horizontal)
                     .id(photo.id)
@@ -52,7 +57,7 @@ struct HikePhotoPager: View {
             }
             .scrollTargetLayout()
         }
-        .scrollTargetBehavior(.paging)
+        .scrollTargetBehavior(.photoPages)
         .scrollIndicators(.hidden)
         .scrollPosition(id: $currentID)
         .ignoresSafeArea(edges: .bottom)
@@ -89,6 +94,14 @@ struct HikePhotoPage: View {
     /// deletion would be an answer to a different one. The unreadable page
     /// then offers *Try Again* alone.
     var onRemove: (() -> Void)?
+    /// What a tap on the photograph does: the hiker's own gallery, with the
+    /// map brought in beside it, takes the whole screen back. `nil` while
+    /// there is nothing for a tap to do, which is also when VoiceOver hears
+    /// the photograph as a picture rather than a button.
+    ///
+    /// On the picture alone rather than the page, so the recovery states'
+    /// buttons keep their taps to themselves.
+    var onTap: (() -> Void)?
 
     @State private var display = PhotoDisplay.loading
     /// Bumped by "Try Again", and part of the load's identity below.
@@ -111,11 +124,19 @@ struct HikePhotoPage: View {
                     .accessibilityElement()
                     .accessibilityLabel(Self.label(for: photo))
             case .ready(let loaded):
-                Image(photoImage: loaded.image)
+                let image = Image(photoImage: loaded.image)
                     .resizable()
                     .scaledToFit()
                     .accessibilityElement()
                     .accessibilityLabel(Self.label(for: photo))
+                if let onTap {
+                    image
+                        .onTapGesture(perform: onTap)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityHint("Shows the photo full screen")
+                } else {
+                    image
+                }
             case .unavailable(let reason):
                 unavailable(reason)
             }
@@ -279,4 +300,20 @@ struct HikePhotoPage: View {
             ? String(localized: "Photo taken \(taken), pinned to the trail")
             : String(localized: "Photo taken \(taken)")
     }
+}
+
+extension ScrollTargetBehavior where Self == ViewAlignedScrollTargetBehavior {
+    /// One photograph per swipe, snapped to the page's own frame.
+    ///
+    /// Not `.paging`, which steps by a page size of its own reckoning rather
+    /// than by the pages' width — and in landscape the two disagree. There the
+    /// scroll view spans the 874-point window with the 62-point safe-area
+    /// insets as content insets, so a `containerRelativeFrame` page is 750
+    /// points wide, and `.paging` stepped 781: measured on an iPhone 18 Pro,
+    /// each swipe landed 31 points further left than the last, until the
+    /// clamp at the end of the content put the final page back in the middle.
+    /// Portrait has no side insets, which is why it never showed there.
+    /// View-aligned snapping asks the pages where they are, so no inset can
+    /// put the two out of step.
+    static var photoPages: Self { .viewAligned(limitBehavior: .alwaysByOne) }
 }

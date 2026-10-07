@@ -57,6 +57,9 @@ struct PhotoMapPinTests {
         #expect(pins.count == 1)
         #expect(pin.photo.id == first.id)
         #expect(pin.count == 3)
+        // Every one of them, so the gallery can open this pin for the second
+        // photograph taken here as well as for the first.
+        #expect(pin.photoIDs == [first.id, second.id, third.id])
     }
 
     /// A gallery is sorted by capture time, and the map has to inherit that

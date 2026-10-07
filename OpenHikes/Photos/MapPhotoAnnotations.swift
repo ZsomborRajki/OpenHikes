@@ -226,23 +226,80 @@ extension MapView.Coordinator {
         mapView.addAnnotations(annotations)
     }
 
-    /// Opens a pin's callout because the gallery asked for it.
+    /// Opens a pin's callout because the gallery asked for it, or closes the
+    /// open one when it asked for no photo.
     ///
     /// A request for a pin that is not on the map is kept rather than dropped:
     /// the pins are republished a moment later when the screen that owns them
     /// comes back, and this runs again then. Which also means the token is
     /// recorded only once a pin has actually answered.
+    ///
+    /// Matched on every photo a pin stands for, not only the one it previews:
+    /// the gallery pages through the second photograph taken from a bend as
+    /// readily as the first, and that photograph's place is this pin.
     func applyPhotoPinSelection(
         _ selection: PinSelection?,
         on mapView: MKMapView
     ) {
         guard let selection, appliedPhotoPinSelection != selection.token else { return }
+        guard let photoID = selection.photoID else {
+            appliedPhotoPinSelection = selection.token
+            photoPinAwaitingSlide = nil
+            for annotation in mapView.selectedAnnotations where annotation is PhotoMapAnnotation {
+                mapView.deselectAnnotation(annotation, animated: true)
+            }
+            return
+        }
         guard let annotation = photoAnnotations.first(
-            where: { $0.pin.photo.id == selection.photoID }
+            where: { $0.pin.photoIDs.contains(photoID) }
         ) else { return }
         appliedPhotoPinSelection = selection.token
+        photoPinAwaitingSlide = nil
+        if selection.slidesIntoView, slideIntoView(annotation.coordinate, on: mapView) {
+            // Opened when the map settles: a callout asked for mid-slide is
+            // scrolled by MapKit against where the pin was, not where it is
+            // going.
+            photoPinAwaitingSlide = annotation
+            return
+        }
         mapView.selectAnnotation(annotation, animated: true)
     }
+
+    /// Opens the pin a page asked for, once the slide that brought it into
+    /// view has settled. Called from `regionDidChangeAnimated`.
+    func openPhotoPinAfterSlide(on mapView: MKMapView) {
+        guard let annotation = photoPinAwaitingSlide else { return }
+        photoPinAwaitingSlide = nil
+        guard photoAnnotations.contains(where: { $0 === annotation }) else { return }
+        mapView.selectAnnotation(annotation, animated: true)
+    }
+
+    /// Slides the map, at the zoom it is at, so `coordinate` stands in the
+    /// middle of the part nothing is drawn over — or does nothing, and says
+    /// so, when it is already standing in it.
+    ///
+    /// The same slide *Add Place* makes under its pin — see
+    /// `MapPlacePlacement.swift` — measured on the map as drawn, so a map the
+    /// hiker has turned slides the right way. Only the camera's centre moves:
+    /// the hiker chose the zoom, and a page turn is not a request to change
+    /// it.
+    private func slideIntoView(_ coordinate: CLLocationCoordinate2D, on mapView: MKMapView) -> Bool {
+        let point = mapView.convert(coordinate, toPointTo: mapView)
+        let area = focusArea(in: mapView)
+        let clear = area.insetBy(dx: Self.photoPinClearance, dy: Self.photoPinClearance)
+        guard !clear.isEmpty, !clear.contains(point) else { return false }
+        let centre = CGPoint(
+            x: mapView.bounds.midX + point.x - area.midX,
+            y: mapView.bounds.midY + point.y - area.midY
+        )
+        mapView.setCenter(mapView.convert(centre, toCoordinateFrom: mapView), animated: true)
+        return true
+    }
+
+    /// How far inside the uncovered part of the map a pin has to stand to
+    /// count as in view: about a marker's height, so one at the very edge of
+    /// the sheet is not called visible with half of it underneath.
+    private static let photoPinClearance: CGFloat = 32
 
     /// Recolours the markers in place when the route's tint moves, so a colour
     /// drag doesn't leave the pins on the previous hue until something else
