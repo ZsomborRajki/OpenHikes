@@ -102,7 +102,7 @@ private struct WalkShareBoxControls: View {
 
     private var colorPicker: some View {
         Picker(
-            "Line Colour",
+            "Line Color",
             selection: Binding(get: { model.layout.lineColor }, set: { model.setLineColor($0) })
         ) {
             Text("White").tag(WalkShareLineColor.white)
