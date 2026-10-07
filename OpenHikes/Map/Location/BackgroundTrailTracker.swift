@@ -622,8 +622,9 @@ final class BackgroundTrailTracker: NSObject {
 
     /// Pins the tracked hike to the one being walked.
     ///
-    /// A walk starts on a matched fix in the walked hike's own detail view,
-    /// so the two already agree — except after a relaunch, where the tracked
+    /// A walk is proposed in the walked hike's own detail view and confirmed
+    /// there or by this feed's matches against the tracked hike, so the two
+    /// already agree — except after a relaunch, where the tracked
     /// hike was seeded from the *last selection* and the walk restored from
     /// disk is the one a background fix has to be matched against. That is
     /// the relaunch this pin exists for.

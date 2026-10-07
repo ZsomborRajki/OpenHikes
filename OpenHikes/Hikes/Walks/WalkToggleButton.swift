@@ -8,10 +8,11 @@
 //  which is where a hiker who has put the phone away and wants the map leaves
 //  it — and from there the title row is out of reach.
 //
-//  A walk also starts on its own, on the first fix that matches a trail with
-//  Follow This Trail on. This is the way to start one without waiting for
-//  that: before the hiker is on the route, with following off, or straight
-//  after an End. Once a walk is under way on this trail it is its Pause and
+//  A walk also starts on its own, once matched fixes on a trail with Follow
+//  This Trail on show the hiker moving along it — see ``PendingWalkStart``.
+//  This is the way to start one without waiting for that: before the hiker
+//  is on the route, with following off, or straight after an End or a saved
+//  recording. Once a walk is under way on this trail it is its Pause and
 //  Resume — the only one there is. ``WalkControls`` further down carries the
 //  phase, the clock and End and Save Hike, and no second Pause (#679).
 //
