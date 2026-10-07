@@ -15,8 +15,8 @@
 //  out each, and over a hundred metres that error alone was a whole step of
 //  the scale, so the Königssee fixture changed colour fifty-five times in
 //  eleven kilometres. A stretch shorter than ``minimumStretchMeters`` then
-//  takes the colour of the longer one beside it, so the line reads as a few
-//  long climbs rather than a flicker. Up and down count alike: a 25% descent
+//  takes the colour of the one beside it nearest its own, so the line reads
+//  as a few long climbs rather than a flicker. Up and down count alike: a 25% descent
 //  is as hard on the knees as the climb is on the lungs, and more likely to
 //  be where a hiker slips.
 //
@@ -33,7 +33,7 @@ nonisolated enum RouteSteepness {
     /// over before any grade is measured — see the file header.
     static let smoothingRadiusMeters = 50.0
     /// The shortest stretch drawn in a colour of its own. Anything shorter
-    /// takes the colour of its longer neighbour — see the file header.
+    /// takes the colour of a neighbour — see ``absorbingShort(_:)``.
     static let minimumStretchMeters = 300.0
 
     /// One unbroken stretch at a single step of the scale.
@@ -110,14 +110,17 @@ nonisolated enum RouteSteepness {
         return builder.runs
     }
 
-    /// Each point's height averaged with every point within
-    /// ``smoothingRadiusMeters`` of it along the route, or `nil` where the
-    /// point has no usable height.
+    /// Each point's height averaged over the route within
+    /// ``smoothingRadiusMeters`` of it, or `nil` where the point has no usable
+    /// height.
     ///
-    /// The average never reaches across a gap in the heights, and near the
-    /// end of a stretch it narrows to the same distance either side, so a
-    /// steady climb keeps its grade right to its last point rather than being
-    /// flattened by an average that can only look back.
+    /// The average is over distance, not over points: a snapped line's nodes
+    /// bunch up on every hairpin and a timed track's on every stop, and
+    /// counting them would pull a point on a steady climb towards the height
+    /// of the nearest bend. It never reaches across a gap in the heights, and
+    /// near the end of a stretch it narrows to the same distance either side,
+    /// so a steady climb keeps its grade right to its last point rather than
+    /// being flattened by an average that can only look back.
     static func smoothedHeights(of route: [RouteCoordinate]) -> [Double?] {
         var smoothed = [Double?](repeating: nil, count: route.count)
         var index = route.startIndex
@@ -136,23 +139,35 @@ nonisolated enum RouteSteepness {
     /// ``smoothedHeights(of:)`` for one stretch whose every point has a
     /// height.
     private static func smoothStretch(_ stretch: ArraySlice<RouteCoordinate>, into smoothed: inout [Double?]) {
+        let heights = stretch.map { $0.elevation ?? 0 }
         var along = [0.0]
-        var sums = [0.0]
         for (previous, point) in zip(stretch, stretch.dropFirst()) {
             along.append(along[along.count - 1] + RouteGeometry.distanceMeters(
                 from: previous.clCoordinate,
                 to: point.clCoordinate
             ))
         }
-        for point in stretch {
-            sums.append(sums[sums.count - 1] + (point.elevation ?? 0))
+        // The area under the profile up to each point, the height running
+        // straight between neighbours.
+        var areas = [0.0]
+        for (index, (start, end)) in along.adjacentPairs().enumerated() {
+            areas.append(areas[index] + (end - start) * (heights[index] + heights[index + 1]) / 2)
+        }
+        func area(upTo distance: Double) -> Double {
+            let next = along.partitioningIndex { $0 > distance }
+            guard next < along.count else { return areas[areas.count - 1] }
+            let previous = next - 1
+            let covered = distance - along[previous]
+            let reached = heights[previous]
+                + (heights[next] - heights[previous]) * covered / (along[next] - along[previous])
+            return areas[previous] + covered * (heights[previous] + reached) / 2
         }
         let total = along[along.count - 1]
         for offset in along.indices {
             let radius = min(smoothingRadiusMeters, along[offset], total - along[offset])
-            let first = along.partitioningIndex { $0 >= along[offset] - radius }
-            let pastLast = along.partitioningIndex { $0 > along[offset] + radius }
-            smoothed[stretch.startIndex + offset] = (sums[pastLast] - sums[first]) / Double(pastLast - first)
+            smoothed[stretch.startIndex + offset] = radius > 0
+                ? (area(upTo: along[offset] + radius) - area(upTo: along[offset] - radius)) / (2 * radius)
+                : heights[offset]
         }
     }
 
@@ -213,10 +228,14 @@ nonisolated enum RouteSteepness {
     }
 
     /// `pieces` with each one shorter than ``minimumStretchMeters`` merged
-    /// into the longer of the pieces it touches, shortest first, so a blip
-    /// is never what decides the colour of the stretch around it. A piece
-    /// with nothing beside it — a stretch between two gaps in the heights —
-    /// keeps its own colour however short it is.
+    /// into the piece it touches whose shade is nearest its own, the longer
+    /// on a tie, shortest first, so a blip is never what decides the colour of
+    /// the stretch around it. Nearest rather than longest, because a steady
+    /// climb whose windows fall either side of a threshold is two short
+    /// pieces a step apart, and handing each to the level ground around it
+    /// would draw the climb as no climb at all. A piece with nothing beside
+    /// it — a stretch between two gaps in the heights — keeps its own colour
+    /// however short it is.
     private static func absorbingShort(_ pieces: [Piece]) -> [Piece] {
         var pieces = pieces
         func neighbours(of index: Int) -> [Int] {
@@ -224,10 +243,14 @@ nonisolated enum RouteSteepness {
                 pieces.indices.contains(other) && pieces[max(index, other)].joinsPrevious
             }
         }
+        func step(_ index: Int) -> Int { RouteShade.scale.firstIndex(of: pieces[index].shade) ?? 0 }
         while let short = pieces.indices
             .filter({ pieces[$0].length < minimumStretchMeters && !neighbours(of: $0).isEmpty })
             .min(by: { pieces[$0].length < pieces[$1].length }),
-            let into = neighbours(of: short).max(by: { pieces[$0].length < pieces[$1].length }) {
+            let into = neighbours(of: short).min(by: { first, second in
+                let apart = (abs(step(first) - step(short)), abs(step(second) - step(short)))
+                return apart.0 != apart.1 ? apart.0 < apart.1 : pieces[first].length > pieces[second].length
+            }) {
             let absorbed = pieces.remove(at: short)
             let kept = into < short ? into : into - 1
             pieces[kept].length += absorbed.length

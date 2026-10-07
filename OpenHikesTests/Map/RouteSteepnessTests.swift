@@ -15,13 +15,14 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Route steepness")
 struct RouteSteepnessTests {
     /// Metres between points: twenty points to a window.
     private static let spacing = 10.0
-    /// A hair over ``spacing`` in degrees, so ten steps always fill a window
+    /// A hair over ``spacing`` in degrees, so twenty steps always fill a window
     /// whatever radius the geometry takes the earth to have.
     private static let latitudeStep = 10.01 / 111_195
 
@@ -165,13 +166,56 @@ struct RouteSteepnessTests {
         #expect(runs.first?.coordinates.count == route.count)
     }
 
-    @Test("a short stretch between two takes the colour of the longer one")
+    /// A short stretch a step from each neighbour is no nearer one than the
+    /// other, so the longer one decides.
+    @Test("a short stretch as far from both neighbours takes the colour of the longer one")
     func shortStretchJoinsTheLongerNeighbour() {
-        let route = Self.route([(400, 0), (200, 50), (600, 25)])
+        let route = Self.route([(400, 0), (200, 17), (600, 35)])
 
         let runs = RouteSteepness.runs(route: route)
 
-        #expect(runs.map(\.shade) == [.easiest, .hard])
+        #expect(runs.map(\.shade) == [.easiest, .harder])
         #expect(runs.map(\.coordinates.count).reduce(0, +) == route.count + 1)
+    }
+
+    /// A steady climb whose two windows fall either side of a threshold is
+    /// two short stretches; handed to the level ground around them, the
+    /// climb would not be drawn at all.
+    @Test("a climb split across a threshold keeps its steepness")
+    func aSplitClimbStaysAClimb() {
+        let route = Self.route([(1000, 0), (200, 25), (200, 35), (1000, 0)])
+
+        let runs = RouteSteepness.runs(route: route)
+
+        #expect(runs.map(\.shade) == [.easiest, .harder, .easiest])
+    }
+
+    /// A snapped line's nodes bunch up on a hairpin; counted rather than
+    /// measured, they pull the heights beside them towards the bend's.
+    @Test("points bunched along a steady climb leave its heights where they are")
+    func bunchedPointsDoNotPullTheAverage() throws {
+        let sparse = Self.route([(400, 12)])
+        var route: [RouteCoordinate] = []
+        for (index, (from, to)) in zip(sparse, sparse.dropFirst()).enumerated() {
+            let low = try #require(from.elevation)
+            let high = try #require(to.elevation)
+            let parts = (20..<25).contains(index) ? 10 : 1
+            for part in 0..<parts {
+                let fraction = Double(part) / Double(parts)
+                route.append(RouteCoordinate(
+                    latitude: from.latitude + (to.latitude - from.latitude) * fraction,
+                    longitude: from.longitude,
+                    elevation: low + (high - low) * fraction
+                ))
+            }
+        }
+        route.append(try #require(sparse.last))
+
+        let smoothed = RouteSteepness.smoothedHeights(of: route)
+
+        for (point, height) in zip(route, smoothed) {
+            let expected = try #require(point.elevation)
+            #expect(try #require(height).isApproximatelyEqual(to: expected, absoluteTolerance: 0.01))
+        }
     }
 }
