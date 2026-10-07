@@ -2,6 +2,7 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import SwiftData
+import SwiftUI
 import Testing
 
 @Suite("Sheet destination state")
@@ -41,7 +42,7 @@ struct SheetDestinationStateTests {
 
     /// #795: a turn of the phone replaces the summary that presents the share
     /// card, so the card lives here until the summary is popped.
-    @Test("a walk's share card outlives rotation, and Share starts it over")
+    @Test("a walk's share card outlives rotation, Share starts it over, and Close lets it go")
     func walkShareFollowsTheNavigationLifetime() throws {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
@@ -76,6 +77,24 @@ struct SheetDestinationStateTests {
         share.start()
         #expect(share.generation != generation, "a load from the closed flow is told it is stale")
         #expect(share.isPresented && !share.isEditing && share.shape == nil)
+
+        share.editor = WalkShareEditorModel(
+            card: WalkShareCard(
+                photo: PhotoImage(),
+                figures: WalkShareFigures(walk: walk, title: "Hike", profile: nil),
+                shape: .empty,
+                tint: .green
+            ),
+            defaults: try #require(UserDefaults(suiteName: "SheetDestinationStateTests.walkShare"))
+        )
+        share.isEditing = true
+        let shown = share.generation
+        share.closed()
+        #expect(share.editor != nil, "the old host's dismissal in a turn leaves the card alone")
+        share.isPresented = false
+        share.closed()
+        #expect(share.editor == nil && !share.isEditing, "closing lets the photograph go")
+        #expect(share.generation != shown, "and a load still on its way lands nowhere")
 
         presentation.path.removeLast()
         presentation.path.append(route)

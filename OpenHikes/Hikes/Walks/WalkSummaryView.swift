@@ -84,7 +84,9 @@ struct WalkSummaryView: View {
         }
         // From the sheet's contents, never beside it — see *Repository-specific
         // conventions* in the repository instructions.
-        .fullScreenCover(isPresented: $share.isPresented) {
+        // A rotation takes this view away with the cover still meant to be
+        // up, so only a dismissal that cleared the flag closes the session.
+        .fullScreenCover(isPresented: $share.isPresented, onDismiss: share.closed) {
             WalkShareFlow(walk: walk, trail: profile, trailMatchesWalk: routeMatchesWalk, session: share)
         }
         .task(id: walk.id) {
