@@ -7,8 +7,10 @@
 //  and ascent for context.
 //
 //  Small on purpose. No elevation chart of its own — the trail's is one
-//  segment away — and one action, *Show on Map*, which draws the covered
-//  stretches over the route through ``WalkHighlight``.
+//  segment away — and two actions: *Show on Map*, which draws the covered
+//  stretches over the route through ``WalkHighlight``, and *Share* in the
+//  bar, which puts the walk's figures and line over a photograph — see
+//  ``WalkShareFlow``.
 //
 
 import CoreLocation
@@ -34,6 +36,7 @@ struct WalkSummaryView: View {
     /// Bumped by *Show on Map*, so the drawing runs as a `.task` the view
     /// owns rather than as a `Task` that outlives it — see ``showOnMap()``.
     @State private var showOnMapRequest = 0
+    @State private var isSharing = false
 
     private var hike: Hike? { walk.hike }
     private var tint: Color { hike?.tintOpaque ?? .green }
@@ -68,6 +71,19 @@ struct WalkSummaryView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                // Waits for the profile: the card's line is drawn from it.
+                Button("Share", systemImage: "square.and.arrow.up") { isSharing = true }
+                    .disabled(profile == nil)
+                    .accessibilityIdentifier("walk-share")
+            }
+        }
+        // From the sheet's contents, never beside it — see *Repository-specific
+        // conventions* in the repository instructions.
+        .fullScreenCover(isPresented: $isSharing) {
+            WalkShareFlow(walk: walk, trail: profile, trailMatchesWalk: routeMatchesWalk)
+        }
         .task(id: walk.id) {
             guard let route = hike?.route, !route.isEmpty else { return }
             profile = await Self.profile(of: route)

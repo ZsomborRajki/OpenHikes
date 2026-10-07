@@ -517,6 +517,9 @@
     "arrival" : {
 
     },
+    "Ascent" : {
+
+    },
     "Ask for Photo Removal" : {
 
     },
@@ -530,6 +533,9 @@
 
     },
     "Auto-Save Tiles" : {
+
+    },
+    "Avg Speed" : {
 
     },
     "Back to the %@" : {
@@ -598,6 +604,9 @@
     "Capacity" : {
 
     },
+    "Card" : {
+
+    },
     "Caution" : {
 
     },
@@ -610,10 +619,16 @@
     "Check Whether It's Still Live" : {
 
     },
+    "Choose a Photo" : {
+
+    },
     "Choose a start and a destination above, or press and hold the map." : {
 
     },
     "Choose Destination" : {
+
+    },
+    "Choose from Library" : {
 
     },
     "Choose Start" : {
@@ -659,6 +674,9 @@
 
     },
     "Community hikes are walks worth someone else's day out — a whole route, walked by you, that isn't already on the list." : {
+
+    },
+    "Completed" : {
 
     },
     "Completion" : {
@@ -736,6 +754,9 @@
     "Data Source" : {
 
     },
+    "Date" : {
+
+    },
     "Daylight" : {
 
     },
@@ -779,6 +800,9 @@
 
     },
     "Delete this photograph?" : {
+
+    },
+    "Descent" : {
 
     },
     "Description" : {
@@ -910,6 +934,9 @@
     "Fee" : {
 
     },
+    "Figures" : {
+
+    },
     "Find Photos of This Hike" : {
 
     },
@@ -973,6 +1000,9 @@
     "Health" : {
 
     },
+    "Hides the box options" : {
+
+    },
     "Hides their hikes on this device" : {
 
     },
@@ -994,6 +1024,9 @@
 
     },
     "Hike Active" : {
+
+    },
+    "Hike Figures" : {
 
     },
     "Hike name" : {
@@ -1130,6 +1163,9 @@
 
     },
     "Line Color" : {
+
+    },
+    "Line Colour" : {
 
     },
     "Line style" : {
@@ -1464,6 +1500,9 @@
 
     },
     "Opened in your mail app" : {
+
+    },
+    "OpenHikes" : {
 
     },
     "OpenHikes can look through your photo library for pictures taken while you walked this hike, and pin each one to the point of the trail you were on." : {
@@ -2026,6 +2065,9 @@
     "Share Hike" : {
 
     },
+    "Share hike card" : {
+
+    },
     "Share Hike with Photos" : {
 
     },
@@ -2075,6 +2117,9 @@
 
     },
     "Shows the place's card" : {
+
+    },
+    "Shows this box's options" : {
 
     },
     "Some photos couldn’t be added. Try adding them again." : {
@@ -2137,6 +2182,9 @@
     "Stops the hike being recorded and saves it." : {
 
     },
+    "Style" : {
+
+    },
     "Submission" : {
 
     },
@@ -2193,6 +2241,9 @@
 
     },
     "Terms & Conditions" : {
+
+    },
+    "Text" : {
 
     },
     "That place couldn't be found. Try another search." : {
@@ -2276,6 +2327,9 @@
     "This hike isn't in the community list any more. You can reset it here, which forgets that it was ever sent and lets you share a corrected walk — but it also forgets the details a removal request needs, so only do it if you no longer want this one back." : {
 
     },
+    "This Hike's Photos" : {
+
+    },
     "This hike’s route doesn’t record when each point was reached, so photos can’t be matched to it by time. Walk it with OpenHikes and they can." : {
 
     },
@@ -2283,6 +2337,9 @@
 
     },
     "This is wider than a search reaches." : {
+
+    },
+    "This photo couldn't be opened." : {
 
     },
     "This photograph couldn’t be opened." : {
@@ -2313,6 +2370,9 @@
 
     },
     "This was sent and has not been published yet." : {
+
+    },
+    "Time" : {
 
     },
     "Title" : {
@@ -2454,6 +2514,9 @@
 
     },
     "What's wrong" : {
+
+    },
+    "White" : {
 
     },
     "Within" : {

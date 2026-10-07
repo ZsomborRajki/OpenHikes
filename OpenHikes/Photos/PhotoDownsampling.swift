@@ -34,7 +34,18 @@ nonisolated enum PhotoDownsampling {
     /// makes rather than something this can enforce.
     static func image(at url: URL, maxPixelSize: Int) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        return CGImageSourceCreateThumbnailAtIndex(
+        return image(from: source, maxPixelSize: maxPixelSize)
+    }
+
+    /// The same read, of bytes already in memory — what `PhotosPicker` hands
+    /// back.
+    static func image(from data: Data, maxPixelSize: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return image(from: source, maxPixelSize: maxPixelSize)
+    }
+
+    private static func image(from source: CGImageSource, maxPixelSize: Int) -> CGImage? {
+        CGImageSourceCreateThumbnailAtIndex(
             source,
             0,
             [

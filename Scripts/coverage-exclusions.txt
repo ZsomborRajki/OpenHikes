@@ -210,6 +210,9 @@ OpenHikes/Hikes/Maker/TrailStopSearch.swift
 OpenHikes/Hikes/Walks/WalkControls.swift
 OpenHikes/Hikes/Walks/WalkRow.swift
 OpenHikes/Hikes/Walks/WalkSummaryView.swift
+OpenHikes/Hikes/Walks/Share/WalkShareEditableBox.swift
+OpenHikes/Hikes/Walks/Share/WalkShareEditor.swift
+OpenHikes/Hikes/Walks/Share/WalkShareFlow.swift
 OpenHikes/Map/MapSheetHikes.swift
 OpenHikes/Map/MapSidePanel.swift
 OpenHikes/Map/Search/PlaceSearchRow.swift

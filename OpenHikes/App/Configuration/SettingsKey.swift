@@ -179,6 +179,11 @@ nonisolated enum SettingsKey {
     /// colours off finds them off rather than back on — see
     /// ``RouteShading``'s init.
     static let legacyRouteDifficultyColors = "map.routeDifficultyColors"
+    /// Where a walk's share card put its two boxes, how big, in which style
+    /// and with which figures — a JSON ``WalkShareLayout``, so the next card
+    /// opens the way the last one was sent. About this device's habit rather
+    /// than the library, so never synced.
+    static let walkShareLayout = "share.walkCardLayout"
 }
 
 /// Defaults for keys where "absent" and "false" are different answers, so the
