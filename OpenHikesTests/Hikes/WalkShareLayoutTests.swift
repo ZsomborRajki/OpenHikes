@@ -54,6 +54,42 @@ struct WalkShareLayoutTests {
         #expect(far.center == CGPoint(x: 240, y: 120))
     }
 
+    @Test("a box that outgrew its stored centre is drawn on the card, and drags from there")
+    func dragsFromWhereTheBoxIsDrawn() {
+        // Stored flush with the left edge for a box half this wide.
+        let stored = CGPoint(x: 25.0 / Self.canvas.width, y: 0.5)
+
+        let atRest = WalkShareLayout.target(center: stored, translation: .zero, boxSize: Self.box, canvas: Self.canvas)
+        let dragged = WalkShareLayout.target(
+            center: stored,
+            translation: CGSize(width: 30, height: 0),
+            boxSize: Self.box,
+            canvas: Self.canvas
+        )
+
+        #expect(atRest.center == CGPoint(x: 50, y: 400))
+        #expect(!atRest.isSnapped)
+        #expect(dragged.center == CGPoint(x: 80, y: 400), "the finger's 30 points all move the box")
+    }
+
+    @Test("a box at rest near the middle is not snapped there, only a dragged one")
+    func snapsOnlyWhileDragged() {
+        let stored = CGPoint(x: 205 / Self.canvas.width, y: 0.5)
+
+        let atRest = WalkShareLayout.target(center: stored, translation: .zero, boxSize: Self.box, canvas: Self.canvas)
+        let nudged = WalkShareLayout.target(
+            center: stored,
+            translation: CGSize(width: 1, height: 0),
+            boxSize: Self.box,
+            canvas: Self.canvas
+        )
+
+        #expect(abs(atRest.center.x - 205) < 1e-9)
+        #expect(!atRest.isSnapped)
+        #expect(nudged.center.x == 200)
+        #expect(nudged.isSnapped)
+    }
+
     @Test("a fifth figure is refused, and so is switching off the last")
     func figureLimits() {
         let full = WalkShareLayout.standard

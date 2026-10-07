@@ -51,6 +51,10 @@ struct WalkShareFlow: View {
                     hikePhotos
                 }
                 .padding()
+                // The photographs only, never the bar: a library photo still
+                // in iCloud can take a long time to arrive, and Close has to
+                // work while it does.
+                .disabled(isLoading || shape == nil)
             }
             .navigationTitle("Choose a Photo")
             #if os(iOS)
@@ -67,7 +71,6 @@ struct WalkShareFlow: View {
                         .controlSize(.large)
                 }
             }
-            .disabled(isLoading || shape == nil)
             .navigationDestination(isPresented: $isEditing) {
                 if let editor {
                     WalkShareEditor(model: editor)

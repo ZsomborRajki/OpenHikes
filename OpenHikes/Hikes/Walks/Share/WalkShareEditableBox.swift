@@ -34,7 +34,12 @@ struct WalkShareEditableBox: View {
         let range = WalkShareWidgetPlacement.scaleRange
         let scale = min(max(placement.scale * magnification, range.lowerBound), range.upperBound)
         let isDragging = translation != .zero
-        let target = Self.target(center: placement.center, translation: translation, boxSize: boxSize, canvas: size)
+        let target = WalkShareLayout.target(
+            center: placement.center,
+            translation: translation,
+            boxSize: boxSize,
+            canvas: size
+        )
         let isSelected = model.selection == widget
 
         ZStack(alignment: .topLeading) {
@@ -80,7 +85,7 @@ struct WalkShareEditableBox: View {
             .updating($translation) { value, state, _ in state = value.translation }
             .onEnded { value in
                 let placement = model.layout[widget]
-                let moved = Self.target(
+                let moved = WalkShareLayout.target(
                     center: placement.center,
                     translation: value.translation,
                     boxSize: boxSize,
@@ -97,33 +102,14 @@ struct WalkShareEditableBox: View {
             .onEnded { value in
                 model.selection = widget
                 model.resize(widget, to: model.layout[widget].scale * value.magnification)
-                // A box grown against an edge is pushed back onto the card
-                // the next time it settles; this settles it now.
+                // A box grown against an edge is drawn pulled back onto the
+                // card; this stores where it was drawn. `boxSize` is already
+                // the pinched size — it is measured every frame of the pinch —
+                // so it is not multiplied by the magnification again.
                 let placement = model.layout[widget]
-                let grown = CGSize(
-                    width: boxSize.width * value.magnification,
-                    height: boxSize.height * value.magnification
-                )
                 let center = CGPoint(x: placement.center.x * size.width, y: placement.center.y * size.height)
-                model.place(widget, at: WalkShareLayout.clampedCenter(center, boxSize: grown, canvas: size))
+                model.place(widget, at: WalkShareLayout.clampedCenter(center, boxSize: boxSize, canvas: size))
             }
-    }
-
-    /// Where a box whose settled centre is `center` (a fraction of the card)
-    /// lands after `translation`: on the card, clear of the wordmark, and on
-    /// the middle line when it came close.
-    static func target(
-        center: CGPoint,
-        translation: CGSize,
-        boxSize: CGSize,
-        canvas: CGSize
-    ) -> (center: CGPoint, isSnapped: Bool) {
-        let proposed = CGPoint(
-            x: center.x * canvas.width + translation.width,
-            y: center.y * canvas.height + translation.height
-        )
-        let snapped = WalkShareLayout.snapped(proposed, canvas: canvas)
-        return (WalkShareLayout.clampedCenter(snapped.center, boxSize: boxSize, canvas: canvas), snapped.isSnapped)
     }
 }
 

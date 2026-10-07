@@ -121,13 +121,43 @@ struct WalkSharePlacedBox: View {
 
     var body: some View {
         let placement = layout[widget]
-        WalkShareBoxContent(
-            widget: widget,
-            card: card,
-            layout: layout,
-            metric: WalkShareMetrics.unit(for: size) * placement.scale
+        WalkShareBoxPosition(center: CGPoint(x: placement.center.x * size.width, y: placement.center.y * size.height)) {
+            WalkShareBoxContent(
+                widget: widget,
+                card: card,
+                layout: layout,
+                metric: WalkShareMetrics.unit(for: size) * placement.scale
+            )
+        }
+        .frame(width: size.width, height: size.height)
+    }
+}
+
+/// Its one box centred on `center`, in the card's points, or as near it as
+/// the box can sit wholly on the card and clear of the wordmark — the clamp
+/// the editor draws with, at the box's size measured in the same pass.
+///
+/// A stored centre is only known to fit the box it was stored for. The box
+/// that is exported can be bigger — a figure added since, the card backing,
+/// the remembered layout on another trail's longer name — and `ImageRenderer`
+/// draws one pass, with no measuring first, so the clamp has to be part of
+/// the layout rather than a position worked out beforehand.
+private struct WalkShareBoxPosition: Layout {
+    let center: CGPoint
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let box = subviews.first else { return }
+        let boxSize = box.sizeThatFits(.unspecified)
+        let clamped = WalkShareLayout.clampedCenter(center, boxSize: boxSize, canvas: bounds.size)
+        box.place(
+            at: CGPoint(x: bounds.minX + clamped.x, y: bounds.minY + clamped.y),
+            anchor: .center,
+            proposal: ProposedViewSize(boxSize)
         )
-        .position(x: placement.center.x * size.width, y: placement.center.y * size.height)
     }
 }
 
