@@ -26,7 +26,9 @@ extension TrailWalkSessionTests {
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
         session.recordForegroundMatch(hike: hike, profile: profile, distance: 0)
-        clock.advance(by: 120)
+        clock.advance(by: 60)
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: 100)
+        clock.advance(by: 60)
         session.recordForegroundMatch(hike: hike, profile: profile, distance: 200)
 
         // Down the road, cutting the loop out.
@@ -53,7 +55,9 @@ extension TrailWalkSessionTests {
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
         session.recordForegroundMatch(hike: hike, profile: profile, distance: 0)
-        clock.advance(by: 120)
+        clock.advance(by: 60)
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: 100)
+        clock.advance(by: 60)
         session.recordForegroundMatch(hike: hike, profile: profile, distance: 200)
 
         // Off the route inside the write window: the break is in memory only.
@@ -90,7 +94,9 @@ extension TrailWalkSessionTests {
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
         session.recordForegroundMatch(hike: hike, profile: profile, distance: 0)
-        clock.advance(by: 120)
+        clock.advance(by: 60)
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: 100)
+        clock.advance(by: 60)
         session.recordForegroundMatch(hike: hike, profile: profile, distance: 200)
 
         refusing = true
@@ -115,11 +121,17 @@ extension TrailWalkSessionTests {
         let session = session()
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
+        // Set off — two fixes outwards, which is a walk — and then the gap.
         session.recordForegroundMatch(hike: hike, profile: profile, distance: 0)
+        clock.advance(by: 60)
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: 60)
+        clock.advance(by: 60)
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: 120)
         clock.advance(by: 300)
-        session.recordForegroundMatch(hike: hike, profile: profile, distance: 450)
+        #expect(570 - 120 <= TrailWalkPolicy.gapBoundMeters, "precondition: bridgeable")
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: 570)
 
-        #expect(try #require(session.record).coverage.coveredMeters == 450)
+        #expect(try #require(session.record).coverage.coveredMeters == 570)
     }
 
     /// An off-route fix along a trail nobody is walking says nothing about
@@ -131,7 +143,9 @@ extension TrailWalkSessionTests {
         let other = self.hike(title: "Other")
         let profile = RouteProfile(route: hike.route)
         session.recordForegroundMatch(hike: hike, profile: profile, distance: 0)
-        clock.advance(by: 120)
+        clock.advance(by: 60)
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: 100)
+        clock.advance(by: 60)
         session.recordForegroundMatch(hike: hike, profile: profile, distance: 200)
 
         session.recordOffRoute(hikeID: other.id)

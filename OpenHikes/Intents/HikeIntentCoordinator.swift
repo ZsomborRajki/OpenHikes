@@ -29,6 +29,9 @@ final class HikeIntentCoordinator {
     private let container: ModelContainer
     private let calendar: Calendar
     private let clock: @Sendable () -> Date
+    /// The trail being walked, or `nil` — the walk session's answer, asked
+    /// rather than kept for the reason the recorder is: one authority each.
+    private let walkUnderWay: @MainActor () -> String?
 
     /// Where a store failure's own words go. They are logged rather than
     /// spoken: the underlying text is a SwiftData message written for a
@@ -39,12 +42,14 @@ final class HikeIntentCoordinator {
         recorder: HikeRecorder,
         container: ModelContainer,
         calendar: Calendar = .autoupdatingCurrent,
-        clock: @escaping @Sendable () -> Date = { Date() }
+        clock: @escaping @Sendable () -> Date = { Date() },
+        walkUnderWay: @escaping @MainActor () -> String? = { nil }
     ) {
         self.recorder = recorder
         self.container = container
         self.calendar = calendar
         self.clock = clock
+        self.walkUnderWay = walkUnderWay
     }
 }
 
@@ -93,6 +98,10 @@ extension HikeIntentCoordinator {
         case .reviewing: throw .awaitingRouteReview
         case .saving, .recovering: throw .busyFinishing
         }
+        // After the phase, so a recording already running is reported as
+        // that. A walk is not ended from here: Siri and the watch cannot ask
+        // the hiker whether they mean to, and the map's button can.
+        if let trail = walkUnderWay() { throw .walking(trail: trail) }
         await recorder.start()
         try throwIfRecorderFailed()
         // A failed session that kept its id is not reset by `start()`, which

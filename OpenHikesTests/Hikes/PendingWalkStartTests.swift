@@ -47,7 +47,7 @@ struct PendingWalkStartTests {
         #expect(forward.isConfirmed)
 
         var backward = proposal()
-        backward.record(distance: 950, at: origin.addingTimeInterval(60))
+        backward.record(distance: 940, at: origin.addingTimeInterval(60))
         backward.record(distance: 1000 - PendingWalkStart.confirmingMeters, at: origin.addingTimeInterval(120))
         #expect(backward.isConfirmed)
     }
@@ -59,6 +59,41 @@ struct PendingWalkStartTests {
         var pending = proposal()
         pending.record(distance: 1000 + TrailWalkPolicy.gapBoundMeters + 100, at: origin.addingTimeInterval(600))
         #expect(!pending.isConfirmed)
+    }
+
+    /// GPS re-acquiring after a tunnel, or a phone indoors snapping to
+    /// another spot on the trail: one match lands a few hundred metres along,
+    /// close enough for the coverage to bridge, with no walking in between.
+    @Test("a single fix landing far along the route does not confirm")
+    func singleFixDoesNotConfirm() {
+        var pending = proposal()
+        pending.record(distance: 1300, at: origin.addingTimeInterval(5))
+        #expect(!pending.isConfirmed)
+    }
+
+    /// The same phone, left where it snapped: every fix after the jump lands
+    /// on the one spot, which is standing still somewhere else.
+    @Test("fixes stuck on one snapped spot do not confirm")
+    func snappedSpotDoesNotConfirm() {
+        var pending = proposal()
+        for second in 1...30 {
+            pending.record(distance: 1300, at: origin.addingTimeInterval(Double(second) * 5))
+        }
+        #expect(!pending.isConfirmed)
+    }
+
+    /// A jump that snapped back is forgotten with the setting-off it seemed
+    /// to be: the walk that follows still has to go the whole way.
+    @Test("a jump that snaps back does not count towards the walk that follows")
+    func snappedBackJumpIsForgotten() {
+        var pending = proposal()
+        pending.record(distance: 1300, at: origin.addingTimeInterval(5))
+        pending.record(distance: 1010, at: origin.addingTimeInterval(10))
+        pending.record(distance: 1060, at: origin.addingTimeInterval(60))
+        pending.record(distance: 1080, at: origin.addingTimeInterval(80))
+        #expect(!pending.isConfirmed, "80 m from where the hiker set off is not yet a walk")
+        pending.record(distance: 1100, at: origin.addingTimeInterval(100))
+        #expect(pending.isConfirmed)
     }
 
     /// The walk began when the hiker set off, not when the proposal was made:

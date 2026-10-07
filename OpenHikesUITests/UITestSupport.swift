@@ -672,8 +672,11 @@ extension XCTestCase {
     /// event — and tapped in the status bar, left of the Dynamic Island,
     /// because the middle of the screen is the sheet's grabber, which expands
     /// the sheet and fades out the button this is about to tap.
+    ///
+    /// `endingWalk` answers the menu the button opens instead of recording
+    /// while a walk is under way: a hiker walks or records, never both.
     @MainActor
-    func startRecording(in app: XCUIApplication) {
+    func startRecording(in app: XCUIApplication, endingWalk: Bool = false) {
         let statusBar = CGVector(dx: Self.inertStatusBarX, dy: Self.inertStatusBarY)
         app.coordinate(withNormalizedOffset: statusBar).tap()
         let recordButton = element("record-hike-button", in: app)
@@ -681,6 +684,11 @@ extension XCTestCase {
             recordButton.waitForExistence(timeout: UITestTimeout.navigation)
         )
         recordButton.tap()
+        if endingWalk {
+            let endAndRecord = app.buttons["End Walk and Record"]
+            XCTAssertTrue(endAndRecord.waitForExistence(timeout: UITestTimeout.existence))
+            endAndRecord.tap()
+        }
         XCTAssertTrue(
             app.navigationBars["Record Hike"]
                 .waitForExistence(timeout: UITestTimeout.navigation)

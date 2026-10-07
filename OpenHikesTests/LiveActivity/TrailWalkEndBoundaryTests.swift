@@ -248,7 +248,9 @@ final class TrailWalkEndBoundaryTests {
         await controller.settle()
         #expect(controller.activeSubject == nil, "and leaving alone starts nothing")
 
-        // Two points ~220 m apart, which is walking it rather than standing on it.
+        // Three points working along the route, which is walking it rather
+        // than standing on it.
+        try await match(hike, profile: profile, at: 3)
         try await match(hike, profile: profile, at: 4)
         try await match(hike, profile: profile, at: 5)
 

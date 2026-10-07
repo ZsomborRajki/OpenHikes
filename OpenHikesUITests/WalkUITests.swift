@@ -212,11 +212,12 @@ nonisolated final class WalkUITests: XCTestCase {
         )
     }
 
-    /// Starting a recording while a walk is under way changes nothing on the
-    /// recording screen: same phase label, same controls, no walk controls.
-    /// The walk's own badge is still there when the trail is reopened.
+    /// A hiker walks or records, never both. The map's record button, tapped
+    /// mid-walk, asks before it ends the walk; saying yes ends it — badge
+    /// gone from the trail's row — and records, with no walk controls on the
+    /// recording screen.
     @MainActor
-    func testARecordingIsUnchangedByAWalkInProgress() {
+    func testRecordingMidWalkEndsTheWalkFirst() {
         let app = makeApp(arguments: [
             "--ui-test-expanded-sheet",
             "--ui-test-enable-location",
@@ -232,7 +233,7 @@ nonisolated final class WalkUITests: XCTestCase {
         _ = walkOntoTheTrail(in: app)
 
         popScreen(in: app)
-        startRecording(in: app)
+        startRecording(in: app, endingWalk: true)
         let recordingPhase = element("recording-phase", in: app)
         XCTAssertTrue(recordingPhase.waitForExistence(timeout: UITestTimeout.navigation))
         // The phase label arriving does not mean the controls beside it have
@@ -252,15 +253,11 @@ nonisolated final class WalkUITests: XCTestCase {
         popScreen(in: app)
         let walked = awaitHikeRow(titled: UITestFixture.importedHikeTitle, in: app)
         // ``awaitHikeRow`` matches on the title the label *begins* with, and
-        // the walk badge is appended to it. So the row can exist a redraw
-        // before it says anything about the walk, and reading `.label` here
-        // asked whether the walk was still active before the row had said.
-        expectLabel(
-            walked,
-            contains: "Active",
-            "starting a recording neither pauses nor ends the walk on the trail beside it",
-            timeout: UITestTimeout.existence
-        )
+        // the walk badge is appended to it — so the badge is waited out
+        // rather than read once, which a redraw could still be catching up on.
+        let badgeGone = NSPredicate(format: "NOT (label CONTAINS 'Active')")
+        let ended = expectation(for: badgeGone, evaluatedWith: walked)
+        wait(for: [ended], timeout: UITestTimeout.existence)
     }
 
     /// The switch owns the chart and auto-start; the walk controls own phase.
@@ -360,10 +357,12 @@ nonisolated final class WalkUITests: XCTestCase {
         XCTAssertEqual(follow.value as? String, "0")
         scrollToTap(follow, in: app)
         XCTAssertEqual(follow.value as? String, "1")
-        // Back down from the fourth point, so the sweep spans the whole 116 m
-        // whether or not the fix the switch re-read was still fresh enough
-        // to propose from.
-        expectPhase(walkOntoTheTrail(in: app, along: [3, 2, 1, 0]), contains: "Active")
+        // Out to the fourth point, back to the trailhead and out again, so
+        // two fixes working outwards past 100 m arrive whether or not the fix
+        // the switch re-read was still fresh enough to propose from: from the
+        // trailhead it is the second way out, from the fourth point the way
+        // back.
+        expectPhase(walkOntoTheTrail(in: app, along: [3, 2, 1, 0, 1, 2, 3]), contains: "Active")
     }
 
     // MARK: - Helpers

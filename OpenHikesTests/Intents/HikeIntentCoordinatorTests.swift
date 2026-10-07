@@ -73,6 +73,18 @@ final class HikeIntentCoordinatorTests {
         #expect(source.startCount == 1)
     }
 
+    /// Siri and the watch cannot ask whether to end the walk, so they say
+    /// why nothing started instead of ending it or recording beside it.
+    @Test("starting while a walk is under way is refused, naming the trail")
+    func startingMidWalkIsRefused() async throws {
+        let coordinator = makeCoordinator(walkUnderWay: "Ridge Loop")
+
+        await #expect(throws: HikeIntentFailure.walking(trail: "Ridge Loop")) {
+            try await coordinator.startRecording()
+        }
+        #expect(source.startCount == 0)
+    }
+
     @Test("denied location is reported instead of a recording that never began")
     func deniedLocationSurfacesAsAFailure() async throws {
         source.authorization = .denied
@@ -333,7 +345,8 @@ final class HikeIntentCoordinatorTests {
 
     private func makeCoordinator(
         calendar: Calendar = Calendar(identifier: .gregorian),
-        automaticallyRecovers: Bool = false
+        automaticallyRecovers: Bool = false,
+        walkUnderWay: String? = nil
     ) -> HikeIntentCoordinator {
         let instance = HikeRecorder(
             container: container,
@@ -355,7 +368,8 @@ final class HikeIntentCoordinatorTests {
             recorder: instance,
             container: container,
             calendar: calendar,
-            clock: clock.read
+            clock: clock.read,
+            walkUnderWay: { walkUnderWay }
         )
     }
 

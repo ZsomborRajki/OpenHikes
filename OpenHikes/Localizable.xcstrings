@@ -933,6 +933,12 @@
     "End this hike?" : {
 
     },
+    "End Walk and Record" : {
+
+    },
+    "End your walk on %@ and start recording?" : {
+
+    },
     "ENE" : {
 
     },
