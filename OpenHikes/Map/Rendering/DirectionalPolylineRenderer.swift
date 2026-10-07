@@ -170,6 +170,9 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
     }
 
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
+        let layers = pattern.drawsLine ? shadeLayers(forScale: contentScaleFactor) : nil
+        let isolation = isolationBounds(for: layers, in: mapRect, zoomScale: zoomScale)
+        if let isolation { context.beginTransparencyLayer(in: isolation, auxiliaryInfo: nil) }
         if let borderColor, borderColor.alpha > 0 {
             drawBorder(borderColor, in: mapRect, zoomScale: zoomScale, context: context)
         }
@@ -177,16 +180,16 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         // ordinary stroke properties, so the inherited draw already honours
         // them; only `arrowheads`, which has no line at all, opts out.
         var tint = ChevronTint(color: arrowColor(on: strokeColor))
-        if pattern.drawsLine {
+        if let layers {
             super.draw(mapRect, zoomScale: zoomScale, in: context)
-            let layers = shadeLayers(forScale: contentScaleFactor)
-            drawShades(layers, in: mapRect, zoomScale: zoomScale, context: context)
+            drawShades(layers, in: mapRect, zoomScale: zoomScale, context: context, isolation: isolation)
             // Every stretch rather than the ones drawn in this rect: a
             // chevron reaches past the line's edge, into a tile its stretch
             // is not in, and must be the same colour on both sides of it.
             tint.stretches = layers.lines
             tint.tolerance = Double(lineWidth * contentScaleFactor / zoomScale) / 2
         }
+        if isolation != nil { context.endTransparencyLayer() }
         strokeChevrons(in: mapRect, zoomScale: zoomScale, context: context, tint: tint, widenedBy: 0)
     }
 
@@ -429,6 +432,9 @@ nonisolated extension DirectionalPolylineRenderer {
         /// One per pair of neighbouring stretches, `nil` where they do not
         /// blend — see ``RouteShadeBlend/pieces(between:)``.
         let blends: [RouteShadeBlend.Piece?]
+        /// Whether any stretch is drawn at less than full alpha — see
+        /// ``isolationBounds(for:in:zoomScale:)``.
+        let isTranslucent: Bool
     }
 
     /// A stretch's passes: a solid stroke that clears the line — and its
@@ -530,7 +536,8 @@ nonisolated extension DirectionalPolylineRenderer {
         _ shading: Shading,
         in mapRect: MKMapRect,
         zoomScale: MKZoomScale,
-        context: CGContext
+        context: CGContext,
+        isolation: CGRect?
     ) {
         guard let reach = shading.lines.first.map({ Double($0.clear.lineWidth / zoomScale) }) else { return }
         let visible = mapRect.insetBy(dx: -reach, dy: -reach)
@@ -562,12 +569,19 @@ nonisolated extension DirectionalPolylineRenderer {
         // Copied rather than composited: each stretch and blend replaces
         // what is under it, so a blend laid over the ends of the stretches it
         // joins, two round caps where stretches meet, or a leg that doubles
-        // back over another do not double a translucent line's alpha. A
-        // transparency layer gave the same picture, but it is a bitmap the
-        // size of the whole tile, cleared and composited on every draw:
-        // measured at the 768-pixel tile a 3× screen draws, about 2 ms a
-        // tile at every zoom, against the fraction of that the stretches
-        // themselves cost.
+        // back over another do not double a translucent line's alpha. On a
+        // map that replaces the basemap's pixels too, so a translucent line
+        // is drawn inside the layer ``isolationBounds(for:in:zoomScale:)``
+        // asks for, and an opaque one, which a copy and a plain draw paint
+        // alike, is not.
+        //
+        // A line with gaps puts its colours down in a layer of their own as
+        // well, inside that one: its blends recolour the dashes beneath them
+        // — see ``drawBlend(_:zoomScale:context:)`` — and with the borders
+        // in the same layer they would recolour the borders' ends too.
+        let gapped = !pattern.dashLengths(forWidth: Double(lineWidth)).isEmpty
+        let fillLayer = gapped ? isolation : nil
+        if let fillLayer { context.beginTransparencyLayer(in: fillLayer, auxiliaryInfo: nil) }
         let blendFloor = Double(lineWidth * contentScaleFactor / zoomScale)
         context.saveGState()
         context.setBlendMode(.copy)
@@ -584,13 +598,82 @@ nonisolated extension DirectionalPolylineRenderer {
             // A piece no longer than the line is wide is a blot under the
             // round caps at this zoom, with no change of colour to show — and
             // a whole long route seen at once is hundreds of them in a tile.
-            if index > 0, let blend = shading.blends[index - 1], blend.bounds.intersects(visible),
+            // And never a recolouring outside the layer, where the map is
+            // under it to be recoloured too.
+            if index > 0, !gapped || fillLayer != nil,
+               let blend = shading.blends[index - 1], blend.bounds.intersects(visible),
                max(blend.bounds.size.width, blend.bounds.size.height) > blendFloor {
                 drawBlend(blend, zoomScale: zoomScale, context: context)
             }
         }
         context.restoreGState()
+        if fillLayer != nil { context.endTransparencyLayer() }
     }
+
+    /// Where to draw the line's own passes into a transparency layer, or
+    /// `nil` where they need none: a layer is needed when they cut holes
+    /// that what is drawn after them does not paint back. The caller ends it
+    /// before the chevrons.
+    ///
+    /// The context MapKit hands a renderer is not the renderer's own: every
+    /// overlay at the line's level is drawn into the same tile, and the
+    /// basemap's tiles are an overlay at that level, underneath. So a
+    /// `.clear` here clears the *map*, and a `.copy` replaces it. Where the
+    /// pixels are painted back opaque straight after, nothing shows — a
+    /// solid stretch over its hole, an opaque line over its border's
+    /// middle. Elsewhere the map is gone and the empty grid behind it shows
+    /// through, white: in a dashed or dotted stretch's gaps, whose hole is
+    /// cleared solid so the line's own dashes do not show in them, and
+    /// under any translucent line or stretch drawn over a clear or with
+    /// `.copy`. A bitmap test drawing into an empty canvas cannot see it.
+    ///
+    /// Inside a layer the clears and copies reach only what the line drew
+    /// there itself, and the layer is laid over the map as one. Only then,
+    /// because the layer is a bitmap the size of what it covers, cleared and
+    /// composited on every draw. A dashed or dotted coloured line, whose
+    /// colours go into a second layer inside this one, pays for two:
+    /// measured on a simulator, a 768-pixel tile crossed by a 2,000-point
+    /// line in a hundred stretches took 11.0 ms dashed against 10.2 ms
+    /// without the layers, and 55.1 against 54.6 dotted. Bounded by the
+    /// line, with room for its border and chevrons, so a tile the line only
+    /// crosses a corner of pays for that corner.
+    private func isolationBounds(
+        for shading: Shading?,
+        in mapRect: MKMapRect,
+        zoomScale: MKZoomScale
+    ) -> CGRect? {
+        let bordered = (borderColor?.alpha ?? 0) > 0
+        let lineIsTranslucent = (strokeColor?.cgColor.alpha ?? 0) < 1
+        let shaded = !(shading?.lines.isEmpty ?? true)
+        let leavesHoles = (shaded && (!pattern.dashLengths(forWidth: Double(lineWidth)).isEmpty
+            || shading?.isTranslucent == true))
+            || (bordered && pattern.drawsLine && lineIsTranslucent)
+        guard leavesHoles else { return nil }
+        let width = Double(lineWidth)
+        let stroke = (bordered ? width + RouteBorder.width(forLineWidth: width) * 2 : width)
+            * Double(contentScaleFactor / zoomScale)
+        let chevrons = pattern.chevronMetrics(forWidth: width).map { metrics in
+            (metrics.halfLength + metrics.halfWidth + metrics.strokeWidth) * 2 / Double(zoomScale)
+        } ?? 0
+        let reach = stroke + chevrons
+        let bounds = overlay.boundingMapRect.insetBy(dx: -reach, dy: -reach).intersection(mapRect)
+        guard !bounds.isNull, !bounds.isEmpty else { return nil }
+        return rect(for: bounds)
+    }
+
+    /// How much wider a dashed or dotted stretch's hole is than what it
+    /// clears — and a blend's recolouring, see
+    /// ``drawBlend(_:zoomScale:context:)`` — in the pixels a renderer's width is measured in once it is scaled by
+    /// `contentScaleFactor`: a pixel each side. A hole exactly as wide
+    /// clears the anti-aliased rim of the line's edge only as far as it
+    /// covers it, and leaves a quarter of it behind: a hairline of the
+    /// line, or of its border, along both sides of every gap.
+    ///
+    /// Only where there are gaps, because only there is the line always
+    /// drawn inside its own layer. Outside one the extra pixel would be
+    /// cleared out of the map beside the line, and a solid stretch, which
+    /// covers its whole hole again, has no gap for the rim to show in.
+    static let holeOverreach: CGFloat = 2
 
     /// Runs `draw` with the context moved from this line's corner to
     /// `polyline`'s, which is where a renderer of `polyline` measures from.
@@ -619,7 +702,7 @@ nonisolated extension DirectionalPolylineRenderer {
             let cleared = bordered ? width + RouteBorder.width(forLineWidth: width) * 2 : width
             let lines = state.shades.map { shade in
                 let clear = MKPolylineRenderer(polyline: shade.polyline)
-                clear.lineWidth = CGFloat(cleared) * scale
+                clear.lineWidth = CGFloat(cleared) * scale + (dashes.isEmpty ? 0 : Self.holeOverreach)
                 clear.lineJoin = .round
                 clear.lineCap = .butt
                 clear.strokeColor = .black
@@ -640,7 +723,11 @@ nonisolated extension DirectionalPolylineRenderer {
                     chevronColor: arrowColor(on: fill.strokeColor)
                 )
             }
-            let shading = Shading(lines: lines, blends: RouteShadeBlend.pieces(between: state.shades))
+            let shading = Shading(
+                lines: lines,
+                blends: RouteShadeBlend.pieces(between: state.shades),
+                isTranslucent: state.shades.contains { $0.color.alpha < 1 }
+            )
             state.built = (scale, shading)
             return shading
         }
