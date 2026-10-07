@@ -518,13 +518,7 @@ struct MapSheet: View {
                 photoPins: photoPins,
                 selection: presentation.photoSelection(for: route)
             )
-        case let .walk(walk):
-            WalkSummaryView(
-                walk: walk,
-                walkHighlight: walkHighlight,
-                mapController: mapController,
-                onShowOnMap: presentation.makeRoomForTheMap
-            )
+        case let .walk(walk): walkDestination(walk, route: route)
         }
     }
 }
