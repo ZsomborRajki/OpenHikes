@@ -456,7 +456,7 @@ extension HikeDetailView {
                 localized: """
                 This hike isn't in the community list any more. You can reset \
                 it here, which forgets that it was ever sent and lets you \
-                share a corrected walk — but it also forgets the details a \
+                share a corrected hike — but it also forgets the details a \
                 removal request needs, so only do it if you no longer want \
                 this one back.
                 """

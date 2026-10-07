@@ -4,7 +4,7 @@
     "%@" : {
 
     },
-    "%@ — resized before sending, with camera details and original location data removed. Your route, your notes and this walk's name stay on your device." : {
+    "%@ — resized before sending, with camera details and original location data removed. Your route, your notes and this hike's name stay on your device." : {
 
     },
     "%@ · %@" : {
@@ -47,7 +47,7 @@
     "%@ of descent" : {
 
     },
-    "%@ of the trail not walked" : {
+    "%@ of the trail not hiked" : {
 
     },
     "%@ off trail" : {
@@ -142,7 +142,7 @@
         }
       }
     },
-    "%lld hikes" : {
+    "%lld activities" : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -150,13 +150,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld hike"
+                  "value" : "%lld activity"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld hikes"
+                  "value" : "%lld activities"
                 }
               }
             }
@@ -387,13 +387,13 @@
     "%lld%%" : {
 
     },
-    "A hike is in progress on %@. End it there to walk this trail." : {
+    "A hike is in progress on %@. End it there to hike this trail." : {
 
     },
     "A hike needs a title. Put one back to publish this." : {
 
     },
-    "A place is marked where you are standing. Try again once the walk has a location." : {
+    "A place is marked where you are standing. Try again once the hike has a location." : {
 
     },
     "A trail already in the community list." : {
@@ -673,7 +673,7 @@
     "Community Hikes" : {
 
     },
-    "Community hikes are walks worth someone else's day out — a whole route, walked by you, that isn't already on the list." : {
+    "Community hikes are ones worth someone else's day out — a whole route, hiked by you, that isn't already on the list." : {
 
     },
     "Completed" : {
@@ -1045,6 +1045,9 @@
 
     },
     "Hike title" : {
+
+    },
+    "Hiked" : {
 
     },
     "Hiker who shared without a name" : {
@@ -1505,10 +1508,10 @@
     "OpenHikes" : {
 
     },
-    "OpenHikes can look through your photo library for pictures taken while you walked this hike, and pin each one to the point of the trail you were on." : {
+    "OpenHikes can look through your photo library for pictures taken while you were on this hike, and pin each one to the point of the trail you were on." : {
 
     },
-    "OpenHikes can only see the photos you have shared with it, and none of those were taken while you were out on this hike. If your pictures of this walk are elsewhere in your library, share them and OpenHikes will look again." : {
+    "OpenHikes can only see the photos you have shared with it, and none of those were taken while you were out on this hike. If your pictures of this hike are elsewhere in your library, share them and OpenHikes will look again." : {
 
     },
     "OpenHikes couldn’t reach Apple Weather. It will try again automatically." : {
@@ -1740,7 +1743,7 @@
     "Place" : {
 
     },
-    "placed by how far your walk had got" : {
+    "placed by how far your hike had got" : {
 
     },
     "placed by time, %@ from the nearest recorded point" : {
@@ -1837,7 +1840,7 @@
     "Put it on the map where it is, then name it and add photos." : {
 
     },
-    "Read the ground you walk on" : {
+    "Read the ground you hike on" : {
 
     },
     "Reading elevation…" : {
@@ -2221,12 +2224,12 @@
     "taken on a recorded point of this hike" : {
 
     },
-    "Tap %@ on the map to record a walk, or %@ to draw a trail." : {
+    "Tap %@ on the map to record a hike, or %@ to draw a trail." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Tap %1$@ on the map to record a walk, or %2$@ to draw a trail."
+            "value" : "Tap %1$@ on the map to record a hike, or %2$@ to draw a trail."
           }
         }
       }
@@ -2324,16 +2327,16 @@
     "This hike is still live for other hikers, so it's still somewhere your photos can go." : {
 
     },
-    "This hike isn't in the community list any more. You can reset it here, which forgets that it was ever sent and lets you share a corrected walk — but it also forgets the details a removal request needs, so only do it if you no longer want this one back." : {
+    "This hike isn't in the community list any more. You can reset it here, which forgets that it was ever sent and lets you share a corrected hike — but it also forgets the details a removal request needs, so only do it if you no longer want this one back." : {
 
     },
     "This Hike's Photos" : {
 
     },
-    "This hike’s route doesn’t record when each point was reached, so photos can’t be matched to it by time. Walk it with OpenHikes and they can." : {
+    "This hike’s route doesn’t record when each point was reached, so photos can’t be matched to it by time. Hike it with OpenHikes and they can." : {
 
     },
-    "This hike’s route doesn’t record when each point was reached, so there is nothing to match a photo’s own timestamp against. Hikes you record in OpenHikes always carry those times — and on an imported trail, walking it with OpenHikes gives this the times it needs." : {
+    "This hike’s route doesn’t record when each point was reached, so there is nothing to match a photo’s own timestamp against. Hikes you record in OpenHikes always carry those times — and on an imported trail, hiking it with OpenHikes gives this the times it needs." : {
 
     },
     "This is wider than a search reaches." : {
@@ -2465,9 +2468,6 @@
     "Waiting for your location" : {
 
     },
-    "Walked" : {
-
-    },
     "Walking" : {
 
     },
@@ -2543,7 +2543,7 @@
     "You've already added photos from this hike. Sending again adds a second set beside the first — it doesn't replace it, and this app can't take that one down. Ask for it to be removed from this hike's own screen." : {
 
     },
-    "You've already published this walk, and a published hike can't be amended — so its route, its name and its notes stay exactly as they are, and these photos go on as an addition to it." : {
+    "You've already published this hike, and a published hike can't be amended — so its route, its name and its notes stay exactly as they are, and these photos go on as an addition to it." : {
 
     },
     "You've already shared this hike. Sending it again adds a second copy for other hikers — it doesn't replace or update the first, and this app can't take that one down. Ask for it to be removed by reporting it from its own screen." : {

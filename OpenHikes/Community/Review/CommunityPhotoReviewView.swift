@@ -140,7 +140,7 @@ private extension CommunityPhotoReviewView {
                 Text(pending.authorName.isEmpty ? "None given" : pending.authorName)
                     .foregroundStyle(pending.authorName.isEmpty ? .secondary : .primary)
             }
-            LabeledContent("Walked") {
+            LabeledContent("Hiked") {
                 Text(pending.takenOn.formatted(date: .abbreviated, time: .omitted))
             }
             LabeledContent("Trail") {

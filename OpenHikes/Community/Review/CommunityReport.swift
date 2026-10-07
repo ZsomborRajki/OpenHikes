@@ -198,7 +198,7 @@ nonisolated struct CommunityReport: Equatable, Sendable {
             contribution == nil ? "The hike" : "The hike they were added to",
             "Title: \(listing.title)",
             "Shared by: \(listing.authorName.isEmpty ? "(no name given)" : listing.authorName)",
-            "Walked: \(listing.hikeDate.map(Self.reviewerDate.string(from:)) ?? "(not recorded)")",
+            "Hiked: \(listing.hikeDate.map(Self.reviewerDate.string(from:)) ?? "(not recorded)")",
             "Published: \(Self.reviewerDate.string(from: listing.publishedAt))",
         ])
         // A report is only ever composed about a hike somebody published —

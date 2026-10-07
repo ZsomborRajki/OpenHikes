@@ -217,7 +217,7 @@ struct PhotoDiscoverySheet: View {
                 This hike\u{2019}s route doesn\u{2019}t record when each point \
                 was reached, so there is nothing to match a photo\u{2019}s own \
                 timestamp against. Hikes you record in OpenHikes always carry \
-                those times \u{2014} and on an imported trail, walking it with \
+                those times \u{2014} and on an imported trail, hiking it with \
                 OpenHikes gives this the times it needs.
                 """
             )
@@ -252,7 +252,7 @@ struct PhotoDiscoverySheet: View {
                     """
             )
         case .timeAndPlace: String(localized: "matched by both time and place")
-        case .walk: String(localized: "placed by how far your walk had got")
+        case .walk: String(localized: "placed by how far your hike had got")
         }
     }
 }
@@ -326,7 +326,7 @@ private struct DiscoveryEmptyState: View {
         localized: """
             OpenHikes can only see the photos you have shared with it, and none \
             of those were taken while you were out on this hike. If your \
-            pictures of this walk are elsewhere in your library, share them and \
+            pictures of this hike are elsewhere in your library, share them and \
             OpenHikes will look again.
             """
     )

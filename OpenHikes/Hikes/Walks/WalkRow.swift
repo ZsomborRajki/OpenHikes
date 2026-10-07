@@ -54,12 +54,12 @@ struct WalkRow: View {
     private var percent: Int { Int((walk.coveredFraction * 100).rounded()) }
 
     private var subtitle: String {
-        "\(percent)% walked · \(HikeFormat.duration(walk.activeSeconds)) · \(Self.outcome(walk.endReason))"
+        "\(percent)% hiked · \(HikeFormat.duration(walk.activeSeconds)) · \(Self.outcome(walk.endReason))"
     }
 
     private var spokenSubtitle: String {
         let duration = HikeFormat.spokenDuration(walk.activeSeconds)
-        return "\(percent) percent walked, \(duration), \(Self.outcome(walk.endReason).lowercased())"
+        return "\(percent) percent hiked, \(duration), \(Self.outcome(walk.endReason).lowercased())"
     }
 
     /// The word for how a walk ended. A reason this build does not know reads

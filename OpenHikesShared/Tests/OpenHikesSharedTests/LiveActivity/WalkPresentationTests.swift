@@ -53,11 +53,11 @@ struct WalkPresentationTests {
         #expect(plain.accessibilityValue.contains("percent complete"))
     }
 
-    @Test("a running walk shows coverage, says walked, and ticks its clock")
+    @Test("a running walk shows coverage, says hiked, and ticks its clock")
     func runningWalkShowsCoverageAndTicks() {
         let presentation = Self.presentation(Self.walking)
         #expect(presentation.primaryValue == "50%")
-        #expect(presentation.primaryCaption == "Walked")
+        #expect(presentation.primaryCaption == "Hiked")
         #expect(presentation.progress == 0.5)
         #expect(presentation.showsElapsedTimer)
         #expect(presentation.secondaryValue == nil, "the live timer takes the second slot")
@@ -66,7 +66,7 @@ struct WalkPresentationTests {
             presentation.metrics.first?.kind == .remaining,
             "the distance left moves into the chips so the clock does not cost it"
         )
-        #expect(presentation.accessibilityValue.contains("50 percent walked"))
+        #expect(presentation.accessibilityValue.contains("50 percent hiked"))
     }
 
     /// How long the rest takes sits beside how far it is, ahead of the height
@@ -120,7 +120,7 @@ struct WalkPresentationTests {
         #expect(presentation.statusLabel == "Finished")
         #expect(presentation.symbolName == "checkmark.circle.fill")
         #expect(presentation.primaryValue == "50%")
-        #expect(presentation.primaryCaption == "Walked")
+        #expect(presentation.primaryCaption == "Hiked")
     }
 
     /// Standing still off the trail while paused is still paused: the walk's

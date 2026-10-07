@@ -200,12 +200,12 @@ struct TrailWidgetWeatherTests {
     func spokenValueCarriesEverything() throws {
         let reading = try #require(Self.reading(ageMinutes: 5))
         let spoken = TrailWidgetSpeech.value(
-            status: "62% walked · 1.4 km left",
+            status: "62% hiked · 1.4 km left",
             metrics: "Ascent 420 m, Length 2.6 km",
             weather: reading
         )
 
-        #expect(spoken.hasPrefix("62% walked"))
+        #expect(spoken.hasPrefix("62% hiked"))
         #expect(spoken.contains("Ascent 420 m"))
         #expect(spoken.contains(reading.spoken()))
     }

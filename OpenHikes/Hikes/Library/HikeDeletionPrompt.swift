@@ -160,8 +160,8 @@ struct HikeDeletionPrompt: Equatable {
         String(localized: "\(count) photographs")
     }
 
-    /// A plural variation in the catalog, which says "1 hike".
+    /// A plural variation in the catalog, which says "1 activity".
     private static func walks(_ count: Int) -> String {
-        String(localized: "\(count) hikes")
+        String(localized: "\(count) activities")
     }
 }

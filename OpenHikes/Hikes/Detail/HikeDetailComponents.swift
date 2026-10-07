@@ -95,7 +95,7 @@ struct TrailProgressView: View {
             ?? profile.remainingDistanceMeters(atDistance: distance)
         let fraction = walked ?? profile.fractionComplete(atDistance: distance) ?? 0
         let percent = Int((fraction * 100).rounded())
-        let caption = walked == nil ? "\(percent)%" : "\(percent)% walked"
+        let caption = walked == nil ? "\(percent)%" : "\(percent)% hiked"
         // How long that is, while a walk is under way — the rest of the route
         // at this walk's own pace. Read here, per matched fix, for the reason
         // the coverage is: this row and nothing above it redraws.
@@ -170,7 +170,7 @@ struct TrailProgressView: View {
         // The time before the distance left rather than after it, so
         // "remaining" stays the last thing said — and the last field, which is
         // what the walk suite reads the distance off.
-        var clauses = ["\(percent) percent walked", "\(length(covered)) covered"]
+        var clauses = ["\(percent) percent hiked", "\(length(covered)) covered"]
         if let timeLeft {
             clauses.append("about \(HikeFormat.spokenTravelTime(timeLeft)) to go")
         }

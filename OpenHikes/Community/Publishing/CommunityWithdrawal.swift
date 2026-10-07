@@ -189,9 +189,9 @@ nonisolated struct CommunityWithdrawal: Equatable, Sendable {
         var lines = [
             Self.opening(kind: kind, isPublished: isPublished),
             "",
-            kind == .hike ? "The hike" : "The walk the photos came from",
+            kind == .hike ? "The hike" : "The hike the photos came from",
             "Title: \(title)",
-            "Walked: \(CommunityReport.reviewerDate.string(from: hikeDate))",
+            "Hiked: \(CommunityReport.reviewerDate.string(from: hikeDate))",
             "Status: \(isPublished ? "published" : "awaiting review")",
         ]
         if !note.isEmpty {

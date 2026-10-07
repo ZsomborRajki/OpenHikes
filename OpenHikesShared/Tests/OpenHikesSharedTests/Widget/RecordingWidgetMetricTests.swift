@@ -65,11 +65,11 @@ struct RecordingWidgetMetricTests {
     /// The distance chip and the trail's length chip render the same way and
     /// are deliberately different kinds, because VoiceOver is where the
     /// difference has to survive: "Walked 1.4 km" is not "Length 1.4 km".
-    @Test("a walk's distance is spoken as walked, not as a length")
+    @Test("a walk's distance is spoken as hiked, not as a length")
     func distanceIsSpokenAsAWalk() throws {
         let metrics = Self.snapshot().metrics(limit: 4, locale: Self.locale)
         let walked = try #require(metrics.first { $0.kind == .distance })
-        #expect(walked.spokenLabel == "Walked")
+        #expect(walked.spokenLabel == "Hiked")
         #expect(!metrics.contains { $0.kind == .length })
     }
 

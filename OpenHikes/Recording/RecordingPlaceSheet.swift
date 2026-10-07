@@ -226,7 +226,7 @@ private struct RecordingAddPlace: ViewModifier {
             .alert("No Location Yet", isPresented: $isMissingLocation) {
                 Button("OK", role: .cancel) { /* no-op */ }
             } message: {
-                Text("A place is marked where you are standing. Try again once the walk has a location.")
+                Text("A place is marked where you are standing. Try again once the hike has a location.")
             }
     }
 

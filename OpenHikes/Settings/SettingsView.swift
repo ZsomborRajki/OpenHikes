@@ -507,7 +507,7 @@ private extension SettingsView {
                 + " towards your rings and sits beside your other activity. Deleting a"
                 + " hike removes its workout from Health too. OpenHikes reads nothing"
                 + " from Health on your iPhone; on Apple Watch a recording reads your"
-                + " heart rate to show it while you walk. You'll be asked for permission"
+                + " heart rate to show it while you hike. You'll be asked for permission"
                 + " the first time a hike is saved."
             )
         }
@@ -605,7 +605,7 @@ private extension SettingsView {
         } footer: {
             Text(
                 "Stops the screen dimming while you are on the recording screen, or on a"
-                + " hike you are walking. Only while OpenHikes is open and the hike is"
+                + " trail you are hiking. Only while OpenHikes is open and the hike is"
                 + " under way — the screen locks as usual everywhere else, and once the"
                 + " phone is back in your pocket. The display is the hungriest thing on"
                 + " the device, so leave this off unless you are navigating with the map"

@@ -129,7 +129,7 @@ struct WalkSummaryView: View {
             ProgressView(value: walk.coveredFraction)
                 .progressViewStyle(.linear)
                 .tint(tint)
-            Text("\(Self.length(walk.uncoveredMeters)) of the trail not walked")
+            Text("\(Self.length(walk.uncoveredMeters)) of the trail not hiked")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

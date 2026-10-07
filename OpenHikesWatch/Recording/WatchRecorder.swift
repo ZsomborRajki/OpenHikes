@@ -288,7 +288,7 @@ final class WatchRecorder: NSObject {
         switch stopped {
         case .tooShort:
             journal.close()
-            phase = .failed("That walk was too short to keep.")
+            phase = .failed("That hike was too short to keep.")
             return nil
         case .unsaved(let walk):
             // The journal stays, with everything still waiting written out:

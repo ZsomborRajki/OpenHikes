@@ -609,14 +609,14 @@ private extension MapSheetHikes {
             // most likely to want, and the ones this sentence has to point
             // away from the sheet to find.
             #if os(iOS)
-            Text("Tap \(recordIcon) on the map to record a walk, or \(makerIcon) to draw a trail.")
+            Text("Tap \(recordIcon) on the map to record a hike, or \(makerIcon) to draw a trail.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 // The glyphs are interpolated as images and contribute
                 // nothing spoken, so the sentence has to name the buttons it
                 // is pointing at.
                 .accessibilityLabel(
-                    "Tap the Record a hike button on the map to record a walk, "
+                    "Tap the Record a hike button on the map to record a hike, "
                         + "or the Make a trail button to draw a trail."
                 )
             #endif

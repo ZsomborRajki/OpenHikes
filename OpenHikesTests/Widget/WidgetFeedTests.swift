@@ -256,7 +256,7 @@ final class WidgetFeedTests {
         #expect(walk.coveredFraction == session.coveredFraction)
         #expect(walk.furthestDistanceMeters.isApproximatelyEqual(to: profile.distances[2], absoluteTolerance: 1))
         #expect(snapshot.progressFraction == walk.coveredFraction)
-        #expect(snapshot.statusText.contains("% walked"))
+        #expect(snapshot.statusText.contains("% hiked"))
     }
 
     @Test("a fix off the trail publishes no position")
