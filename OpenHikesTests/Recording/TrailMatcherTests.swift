@@ -7,6 +7,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Trail matcher")
@@ -142,7 +143,7 @@ extension TrailMatcherTests {
         #expect(result.matchedTrailName == "Ridge Path")
         #expect(result.currentTrail?.name == "Ridge Path")
         #expect(result.points.allSatisfy { point in
-            abs(point.longitude - 12.8600) < 0.00001
+            point.longitude.isApproximatelyEqual(to: 12.8600, absoluteTolerance: 0.00001)
         })
     }
 
@@ -526,7 +527,7 @@ extension TrailMatcherTests {
 
         #expect(result.matchedTrailName == "Trail 0")
         #expect(result.points.allSatisfy { point in
-            abs(point.longitude - 12.8600) < 0.00001
+            point.longitude.isApproximatelyEqual(to: 12.8600, absoluteTolerance: 0.00001)
         })
     }
 }

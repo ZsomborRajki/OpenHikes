@@ -9,6 +9,7 @@
 
 import Foundation
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @Suite("Library totals")
@@ -161,18 +162,18 @@ struct LibraryTotalsTests {
         )
     }
 
-    private static func isClose(_ value: Double, to expected: Double) -> Bool {
-        abs(value - expected) < 1e-6
-    }
-
     /// A ten-minute recording used to erase the whole ten kilometres.
     @Test("a short recording inside a walk takes out only its own minutes")
     func interiorOverlapKeepsTheRest() {
         let totals = Self.afternoon(recordingAt: 3600, lasting: 600)
         let walkShare = 230.0 / 240
-        #expect(Self.isClose(totals.allTime.distanceMeters, to: 500 + 10_000 * walkShare))
-        #expect(Self.isClose(totals.allTime.climbMeters, to: 100 + 800 * walkShare))
-        #expect(Self.isClose(totals.allTime.movingSeconds, to: 3600 + 4 * 3600 * walkShare))
+        #expect(
+            totals.allTime.distanceMeters.isApproximatelyEqual(to: 500 + 10_000 * walkShare, absoluteTolerance: 1e-6)
+        )
+        #expect(totals.allTime.climbMeters.isApproximatelyEqual(to: 100 + 800 * walkShare, absoluteTolerance: 1e-6))
+        #expect(
+            totals.allTime.movingSeconds.isApproximatelyEqual(to: 3600 + 4 * 3600 * walkShare, absoluteTolerance: 1e-6)
+        )
         #expect(totals.allTime.outings == 2)
     }
 
@@ -180,7 +181,7 @@ struct LibraryTotalsTests {
     func endOverlapKeepsTheRest(offset: TimeInterval) {
         // An hour's recording, half of it over the walk.
         let totals = Self.afternoon(recordingAt: offset, lasting: 3600)
-        #expect(Self.isClose(totals.allTime.distanceMeters, to: 500 + 10_000 * 3.5 / 4))
+        #expect(totals.allTime.distanceMeters.isApproximatelyEqual(to: 500 + 10_000 * 3.5 / 4, absoluteTolerance: 1e-6))
     }
 
     @Test("a recording that misses the walk leaves all of it")
@@ -211,7 +212,7 @@ struct LibraryTotalsTests {
             ],
             [Self.walk(of: trail, on: start, covered: 10_000, of: 10_000, lasting: 4 * 3600)]
         )
-        #expect(Self.isClose(totals.allTime.distanceMeters, to: 10_000 * 2.5 / 4))
+        #expect(totals.allTime.distanceMeters.isApproximatelyEqual(to: 10_000 * 2.5 / 4, absoluteTolerance: 1e-6))
     }
 
     @Test("a trail saved from the community and walked counts its walk")

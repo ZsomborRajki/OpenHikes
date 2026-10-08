@@ -23,6 +23,7 @@
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftData
 import Synchronization
 import Testing
@@ -174,8 +175,8 @@ struct HikeImportTests {
         let photo = try #require(hike.photos.first)
         #expect(photo.recordsPlaceOnly)
         #expect(photo.isAnchored)
-        #expect(photo.latitude.map { abs($0 - 47.71) < 1e-9 } == true)
-        #expect(photo.longitude.map { abs($0 - 12.91) < 1e-9 } == true)
+        #expect(photo.latitude.map { $0.isApproximatelyEqual(to: 47.71, absoluteTolerance: 1e-9) } == true)
+        #expect(photo.longitude.map { $0.isApproximatelyEqual(to: 12.91, absoluteTolerance: 1e-9) } == true)
     }
 
     /// Nothing is written to ``HikePhotoStore`` for such a row, because there

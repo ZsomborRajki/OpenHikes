@@ -7,6 +7,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Route review sections")
@@ -196,7 +197,7 @@ extension RouteReviewTests {
         // The recorded line is east of the trail but runs parallel to it, so
         // both options cover the same ground to within a metre.
         #expect(
-            abs(section.matchedDistanceMeters - section.rawDistanceMeters) < 1
+            section.matchedDistanceMeters.isApproximatelyEqual(to: section.rawDistanceMeters, absoluteTolerance: 1)
         )
     }
 }
@@ -215,7 +216,7 @@ extension RouteReviewTests {
 
         #expect(resolved == fixture.result.points)
         #expect(resolved.allSatisfy { point in
-            abs(point.longitude - 12.8600) < 0.00001
+            point.longitude.isApproximatelyEqual(to: 12.8600, absoluteTolerance: 0.00001)
         })
     }
 
@@ -233,7 +234,7 @@ extension RouteReviewTests {
         #expect(resolved.map(\.coordinate.latitude)
             == fixture.points.map(\.latitude))
         #expect(resolved.allSatisfy { point in
-            abs(point.longitude - 12.86010) < 0.000001
+            point.longitude.isApproximatelyEqual(to: 12.86010, absoluteTolerance: 0.000001)
         })
     }
 

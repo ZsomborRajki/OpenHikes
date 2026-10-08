@@ -7,6 +7,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftData
 import Testing
 #if canImport(UIKit)
@@ -110,7 +111,10 @@ struct CommunityImportTests {
         let hike = try #require(outcome.hike)
         #expect(hike.distanceMeters != listing.distanceMeters)
         #expect(
-            abs(hike.distanceMeters - CommunityImport.routeLength(of: Fixture.ridgeRoute)) < 0.001
+            hike.distanceMeters.isApproximatelyEqual(
+                to: CommunityImport.routeLength(of: Fixture.ridgeRoute),
+                absoluteTolerance: 0.001
+            )
         )
     }
 

@@ -10,6 +10,7 @@
 import CoreGraphics
 import ImageIO
 @testable import OpenHikes
+import RealModule
 import SwiftUI
 import Testing
 import UIKit
@@ -58,7 +59,9 @@ struct WalkShareImageTests {
 
         #expect(CGImageSourceGetType(source) as String? == UTType.jpeg.identifier)
         #expect(width == Int(WalkShareImage.pixelWidth))
-        #expect(abs(Double(height) - Double(width) * canvas.height / canvas.width) <= 1)
+        #expect(
+            Double(height).isApproximatelyEqual(to: Double(width) * canvas.height / canvas.width, absoluteTolerance: 1)
+        )
     }
 
     @Test("a box stored past the edge is drawn wholly on the card, as the editor draws it")

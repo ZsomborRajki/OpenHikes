@@ -15,6 +15,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Trail leg router alternatives")
@@ -79,10 +80,17 @@ struct TrailLegRouterAlternativeTests {
         let route = try await Self.route(over: Self.graph(loopingAt: Loop.nearEast))
 
         #expect(route.snap == .snapped)
-        #expect(route.coordinates.allSatisfy { abs($0.longitude - Loop.west) < 0.0001 }, "the shorter way is drawn")
+        #expect(
+            route.coordinates.allSatisfy { point in
+                point.longitude.isApproximatelyEqual(to: Loop.west, absoluteTolerance: 0.0001)
+            },
+            "the shorter way is drawn"
+        )
         #expect(route.alternatives.count == 1)
         let alternative = try #require(route.alternatives.first)
-        #expect(alternative.coordinates.contains { abs($0.longitude - Loop.nearEast) < 0.0001 })
+        #expect(alternative.coordinates.contains { point in
+            point.longitude.isApproximatelyEqual(to: Loop.nearEast, absoluteTolerance: 0.0001)
+        })
         #expect(alternative.distanceMeters > route.distanceMeters)
         #expect(alternative.coordinates.first == Self.ends.start, "it runs from the stop itself")
         #expect(alternative.coordinates.last == Self.ends.end)

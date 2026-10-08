@@ -15,6 +15,7 @@
 import CoreLocation
 import MapKit
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @MainActor
@@ -61,8 +62,8 @@ struct MapControllerFramingTests {
 
         let region = try #require(controller.region)
         #expect(controller.showRegionRequest == 1)
-        #expect(abs(region.center.latitude - only.latitude) < 1e-6)
-        #expect(abs(region.center.longitude - only.longitude) < 1e-6)
+        #expect(region.center.latitude.isApproximatelyEqual(to: only.latitude, absoluteTolerance: 1e-6))
+        #expect(region.center.longitude.isApproximatelyEqual(to: only.longitude, absoluteTolerance: 1e-6))
         #expect(region.span.latitudeDelta > 0)
     }
 

@@ -17,6 +17,7 @@ import CoreLocation
 import Foundation
 import MapKit
 @testable import OpenHikes
+import RealModule
 import SwiftUI
 import Testing
 
@@ -41,7 +42,8 @@ extension MapCoordinatorTests {
         // Capturing `centred` mid-animation would make the comparison below
         // fail for a reason that has nothing to do with the second fix.
         await settleDelegateHop(until: "the first fix to centre the map") {
-            coordinator.hasHandledFirstFix && abs(map.region.center.latitude - 47.6300) < Self.centreTolerance
+            coordinator.hasHandledFirstFix
+                && map.region.center.latitude.isApproximatelyEqual(to: 47.6300, absoluteTolerance: Self.centreTolerance)
         }
         #expect(coordinator.hasHandledFirstFix)
         let centred = map.region.center.latitude

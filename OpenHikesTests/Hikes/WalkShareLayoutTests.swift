@@ -11,6 +11,7 @@
 import CoreGraphics
 import Foundation
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @Suite("Walk share layout")
@@ -84,7 +85,7 @@ struct WalkShareLayoutTests {
             canvas: Self.canvas
         )
 
-        #expect(abs(atRest.center.x - 205) < 1e-9)
+        #expect(atRest.center.x.isApproximatelyEqual(to: 205, absoluteTolerance: 1e-9))
         #expect(!atRest.isSnapped)
         #expect(nudged.center.x == 200)
         #expect(nudged.isSnapped)

@@ -28,6 +28,7 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 import Synchronization
 import Testing
 
@@ -287,8 +288,10 @@ extension HikeRecorderTests {
         walk: EnduranceWalk
     ) {
         #expect(
-            abs(hike.distanceMeters - live)
-                <= EnduranceExpectation.replayToleranceMeters,
+            hike.distanceMeters.isApproximatelyEqual(
+                to: live,
+                absoluteTolerance: EnduranceExpectation.replayToleranceMeters
+            ),
             """
             the journal replay produced \(hike.distanceMeters) m where the \
             live accumulator produced \(live) m (seed \(walk.seed))
@@ -332,7 +335,7 @@ extension HikeRecorderTests {
             return
         }
         #expect(
-            abs(gain - live) <= EnduranceExpectation.elevationToleranceMeters,
+            gain.isApproximatelyEqual(to: live, absoluteTolerance: EnduranceExpectation.elevationToleranceMeters),
             """
             the saved profile reports \(gain) m of gain where the recorder \
             reported \(live) m (seed \(seed))
