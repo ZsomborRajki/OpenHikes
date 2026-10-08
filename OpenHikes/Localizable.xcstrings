@@ -259,6 +259,9 @@
         }
       }
     },
+    "%lld percent complete" : {
+
+    },
     "%lld percent complete, %@ remaining" : {
       "localizations" : {
         "en" : {
