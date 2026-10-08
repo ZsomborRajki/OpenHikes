@@ -146,6 +146,7 @@ struct MapSheet: View {
                     walkSession: appModel.walkSession,
                     community: appModel.community,
                     review: appModel.communityReview,
+                    settings: appModel.storedSettings,
                     selectedHike: selectedHike,
                     onOpen: open,
                     onSelectResult: select,
@@ -483,6 +484,7 @@ struct MapSheet: View {
                 mapController: mapController,
                 autoSave: appModel.autoSaveController,
                 entitlement: appModel.entitlement,
+                settings: appModel.storedSettings,
                 locationManager: appModel.locationManager,
                 backgroundTracker: appModel.backgroundTracker,
                 trailGraphProvider: appModel.trailGraphProvider,
@@ -500,6 +502,10 @@ struct MapSheet: View {
                 isSheetCompact: presentation.isCompact,
                 interaction: presentation.hikeInteraction(for: hike)
             )
+            // A push over the hike runs this builder again, and the closures
+            // above make every copy a new view — see
+            // `HikeDetailView+Equatable.swift`.
+            .equatable()
         case .communityHike, .communityPhoto, .pendingSubmission, .pendingPhotos:
             communityDestination(for: route)
         case .place, .newPlace, .placesAround, .placesNearby:

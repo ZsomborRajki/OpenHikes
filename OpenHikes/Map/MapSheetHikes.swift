@@ -68,8 +68,10 @@ struct MapSheetHikes: View, Equatable {
     @State private var orderRevision = 0
     /// Which order the list is in, unless the hiker has dragged a row — see
     /// ``HikeListOrder``. A preference about this screen rather than a fact
-    /// about the library, so it lives in settings and not on a hike.
-    @AppStorage(SettingsKey.hikeListSort) private var sortID: String = HikeListSort.newest.rawValue
+    /// about the library, so it lives in settings and not on a hike — read
+    /// from ``StoredSettings`` rather than `@AppStorage`, which would re-run
+    /// this list on every write any part of the app makes to its defaults.
+    private var sortID: String { settings.hikeListSort }
 
     let searchText: String
     let isSearchFocused: Bool
@@ -93,6 +95,8 @@ struct MapSheetHikes: View, Equatable {
     /// who is not a reviewer — so for almost every launch this draws nothing
     /// and costs one comparison. See ``CommunityReviewQueue``.
     var review: CommunityReviewQueue
+    /// Where the list's order is kept — see ``sortID``.
+    var settings: StoredSettings
     /// The selected hike itself rather than its id, so the id is read here
     /// and not in `MapSheet`'s body. Reading a `@Model` property is a
     /// dependency on every write to that hike, and `MapSheet`'s body is the
@@ -165,6 +169,7 @@ struct MapSheetHikes: View, Equatable {
             && lhs.walkSession === rhs.walkSession
             && lhs.community === rhs.community
             && lhs.review === rhs.review
+            && lhs.settings === rhs.settings
     }
 
     var body: some View {
@@ -422,7 +427,7 @@ private extension MapSheetHikes {
             set: { chosen in
                 guard let chosen else { return }
                 if HikeListOrder.isCustom(hikes) { HikeListOrder.reset(hikes) }
-                sortID = chosen.rawValue
+                settings.setHikeListSort(chosen.rawValue)
                 orderRevision += 1
             }
         )

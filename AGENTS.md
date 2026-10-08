@@ -126,6 +126,8 @@ frees a device.
   `@Observable` reference types, and parent SwiftUI bodies must not read it —
   including from helper `func`s, computed `var`s and `.toolbar` / `.overlay` /
   `.safeAreaInset` closures, all of which are inlined into the declaring body.
+  A screen that is always up reads its settings from `StoredSettings`, never
+  through `@AppStorage`, which re-runs it on every write to `UserDefaults`.
 - **One test class or `@Suite` per file,** and tests use Swift Testing except in
   `OpenHikesUITests`. Both halves are enforced: `single_test_class` for
   `XCTestCase`, and the `one_suite_per_file` custom rule for `@Suite`.

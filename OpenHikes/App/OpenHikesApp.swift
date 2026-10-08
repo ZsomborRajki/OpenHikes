@@ -110,14 +110,7 @@ struct OpenHikesApp: App {
 
     var body: some Scene {
         WindowGroup {
-            // No `.ignoresSafeArea()` here: the map asks for that itself, one
-            // level down, and asking for it out here as well threw the safe
-            // area away for everything else in the window — which is how the
-            // landscape side panel came to sit under the Dynamic Island. See
-            // ``MapSidePanel``.
-            OpenHikesView()
-                .environment(model)
-                .defaultAppStorage(model.defaults)
+            AppRoot(model: model)
         }
         .modelContainer(model.container)
         // The widget's basemaps need the network to render, so a trail
@@ -127,5 +120,31 @@ struct OpenHikesApp: App {
         .onChange(of: scenePhase) { _, phase in
             model.scenePhaseChanged(to: phase)
         }
+    }
+}
+
+/// The window's content, as a view of its own.
+///
+/// `OpenHikesApp` declares `scenePhase`, so its body runs again on every phase
+/// a scene passes through — several each time the app leaves the foreground or
+/// comes back, and on every system alert over it. Built in that body, the root
+/// screen was a new value each time: its `@State` and environment wrappers
+/// never compare equal, so every pass of the scene was a pass of the whole map
+/// screen, and it allocated a fresh set of the controllers its `@State`s start
+/// from only for SwiftUI to throw them away. Here a pass of the scene builds
+/// one of these, which holds nothing but the model and so is the same view
+/// every time, and the screen underneath is left alone.
+private struct AppRoot: View {
+    let model: OpenHikesModel
+
+    var body: some View {
+        // No `.ignoresSafeArea()` here: the map asks for that itself, one
+        // level down, and asking for it out here as well threw the safe
+        // area away for everything else in the window — which is how the
+        // landscape side panel came to sit under the Dynamic Island. See
+        // ``MapSidePanel``.
+        OpenHikesView()
+            .environment(model)
+            .defaultAppStorage(model.defaults)
     }
 }

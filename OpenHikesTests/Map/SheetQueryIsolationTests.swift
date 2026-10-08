@@ -180,6 +180,7 @@ struct SheetQueryIsolationTests {
             "the sheet is the navigation stack the detail view's sliders write from"
         )
 
+        let defaults = try #require(UserDefaults(suiteName: "SheetQueryIsolationTests-\(UUID().uuidString)"))
         let leaf = MapSheetHikes(
             searchText: "",
             isSearchFocused: false,
@@ -189,6 +190,7 @@ struct SheetQueryIsolationTests {
             walkSession: TrailWalkSession(context: ModelContext(container)),
             community: CommunityBrowser(transport: nil, blockList: .scratch()),
             review: CommunityReviewQueue(transport: nil),
+            settings: StoredSettings(defaults: defaults),
             selectedHike: nil,
             onOpen: { _ in /* unused */ },
             onSelectResult: { _ in /* unused */ },
