@@ -53,7 +53,7 @@ nonisolated final class SettingsUITests: XCTestCase {
     /// a control left on screen is what a user would actually experience.
     @MainActor
     func testSystemBaseMapOffersNoTileControls() {
-        assertOffersNoTileControls(selecting: "apple_maps")
+        assertOffersNoTileControls(selecting: "apple_maps", named: "Apple Maps")
     }
 
     /// The same for Apple's satellite map, which fetches no tile of ours
@@ -61,11 +61,11 @@ nonisolated final class SettingsUITests: XCTestCase {
     /// so a download button there would be a promise nothing could keep.
     @MainActor
     func testSatelliteMapOffersNoTileControls() {
-        assertOffersNoTileControls(selecting: "apple_satellite")
+        assertOffersNoTileControls(selecting: "apple_satellite", named: "Apple Satellite")
     }
 
     @MainActor
-    private func assertOffersNoTileControls(selecting providerID: String) {
+    private func assertOffersNoTileControls(selecting providerID: String, named name: String) {
         let app = launchApp(
             arguments: [
                 "--ui-test-expanded-sheet",
@@ -92,6 +92,12 @@ nonisolated final class SettingsUITests: XCTestCase {
             app.switches["Auto-Save Tiles"].exists,
             "a map that fetches no tiles has nothing to auto-save"
         )
+        // The note in the switch's place names the map that is selected —
+        // not Apple Maps whichever of the two it is.
+        let note = app.staticTexts
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "\(name) uses no downloadable tiles"))
+            .firstMatch
+        XCTAssertTrue(note.exists, "the note should name \(name)")
     }
 
     /// The settings toggle, flipped and then found still flipped after the

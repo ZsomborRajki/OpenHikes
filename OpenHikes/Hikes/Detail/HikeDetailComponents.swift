@@ -465,10 +465,12 @@ struct OfflineStorageStatus: View {
     let autoSave: AutoSaveController
     let downloader: OfflineTileDownloader
     let storedBytes: Int64?
-    /// Whether the selected map fetches tiles at all. `false` replaces the
-    /// auto-save note, which would otherwise invite the hiker to turn on a
-    /// switch that is no longer drawn and could save nothing if it were.
-    let mapRendersTiles: Bool
+    /// The selected map's name when it is one of MapKit's own, which fetch no
+    /// tiles at all; `nil` for a tile source. A name replaces the auto-save
+    /// note, which would otherwise invite the hiker to turn on a switch that
+    /// is no longer drawn and could save nothing if it were — and it is the
+    /// name, not a fixed one, because there are two such maps to be on.
+    let systemMapName: String?
     let scheduleStoredBytesRefresh: () -> Void
     let deleteStoredTiles: () -> Void
 
@@ -486,8 +488,8 @@ struct OfflineStorageStatus: View {
     }
 
     private var autoSaveNote: String? {
-        guard mapRendersTiles else {
-            return "Apple Maps uses no downloadable tiles, so nothing is saved for this hike."
+        if let systemMapName {
+            return "\(systemMapName) uses no downloadable tiles, so nothing is saved for this hike."
                 + " Pick another map source in Settings to save one for offline use."
         }
         guard hike.autoSaveTilesEnabled else {
