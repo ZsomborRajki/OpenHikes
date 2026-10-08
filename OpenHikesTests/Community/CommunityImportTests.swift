@@ -110,12 +110,7 @@ struct CommunityImportTests {
 
         let hike = try #require(outcome.hike)
         #expect(hike.distanceMeters != listing.distanceMeters)
-        #expect(
-            hike.distanceMeters.isApproximatelyEqual(
-                to: CommunityImport.routeLength(of: Fixture.ridgeRoute),
-                absoluteTolerance: 0.001
-            )
-        )
+        #expect(hike.distanceMeters.isApproximatelyEqual(to: Fixture.ridgeRoute.lengthMeters, absoluteTolerance: 0.001))
     }
 
     /// Two hikers can publish the same ridge under the same name, so identity

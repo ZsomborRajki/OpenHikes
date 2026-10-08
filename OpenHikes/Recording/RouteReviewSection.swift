@@ -8,7 +8,6 @@
 //  matching moved my line — trail or GPS?".
 //
 
-import Algorithms
 import Foundation
 import OpenHikesData
 
@@ -124,14 +123,7 @@ nonisolated struct RouteReviewSection: Identifiable, Sendable {
     }
 
     private static func distance(of points: [RecordingPoint]) -> Double {
-        guard points.count > 1 else { return 0 }
-        return points.adjacentPairs().reduce(0) { total, pair in
-            let (start, end) = pair
-            return total + RouteGeometry.distanceMeters(
-                from: start.coordinate,
-                to: end.coordinate
-            )
-        }
+        RouteGeometry.lengthMeters(of: points.map(\.coordinate))
     }
 }
 

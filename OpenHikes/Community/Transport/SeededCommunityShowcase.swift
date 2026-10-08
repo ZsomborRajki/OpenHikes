@@ -98,7 +98,7 @@ nonisolated extension SeededCommunityTransport {
             authorName: authorName,
             authorID: authorID,
             hikeDate: hikeDate,
-            distanceMeters: SeededCuratedTrailSource.length(of: route),
+            distanceMeters: route.lengthMeters,
             photoCount: photoCount,
             latitude: start.latitude,
             longitude: start.longitude,
@@ -190,13 +190,6 @@ nonisolated extension SeededCuratedTrailSource {
             box: CuratedTrailQuery.BoundingBox(south: south, west: west, north: north, east: east),
             route: route
         )
-    }
-
-    /// The length along `route`, which is what a published walk's row prints.
-    static func length(of route: [RouteCoordinate]) -> Double {
-        zip(route, route.dropFirst()).reduce(0) { total, leg in
-            total + RouteGeometry.distanceMeters(from: leg.0.clCoordinate, to: leg.1.clCoordinate)
-        }
     }
 }
 

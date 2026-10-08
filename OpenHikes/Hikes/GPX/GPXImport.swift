@@ -136,15 +136,7 @@ nonisolated enum GPXImport {
                 }
             }
             route = coordinates
-
-            var cumulativeDistance = 0.0
-            for (start, end) in points.adjacentPairs() {
-                cumulativeDistance += RouteGeometry.distanceMeters(
-                    from: start.coordinate,
-                    to: end.coordinate
-                )
-            }
-            distanceMeters = cumulativeDistance
+            distanceMeters = coordinates.lengthMeters
         }
     }
 
