@@ -99,6 +99,10 @@ extension MapView {
         /// The currently installed tile overlay and a key identifying its source.
         var tileOverlay: TileOverlay?
         var tileSourceKey: String?
+        /// The installed hiking-route layer and the id it was built for — see
+        /// `MapCoordinator+TileLayer.swift`.
+        var layerOverlay: TileOverlay?
+        var tileLayerKey: String?
         /// The style the line is currently drawn in. Seeded and then kept
         /// current by `observeRouteStyle`, so it is what `rendererFor` reads
         /// when MapKit asks for a renderer.

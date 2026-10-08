@@ -67,6 +67,7 @@ struct SettingsView: View {
     let entitlement: MapEntitlementStore
 
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
+    @AppStorage(SettingsKey.showsHikingRoutes) private var showsHikingRoutes = SettingsDefault.showsHikingRoutes
     @AppStorage(SettingsKey.liveActivitiesEnabled) private var liveActivitiesEnabled =
         SettingsDefault.liveActivitiesEnabled
     @AppStorage(SettingsKey.savePhotosToLibrary) private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
@@ -185,6 +186,7 @@ struct SettingsView: View {
             // Edge to edge, so the row scrolls out from under the section's
             // rounded corners rather than stopping short of them.
             .listRowInsets(EdgeInsets())
+            hikingRoutesToggle
             if entitlement.isEntitled {
                 manageSubscriptionRow
             }
@@ -192,10 +194,19 @@ struct SettingsView: View {
             Text("Map Tiles")
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
-                TileAttributionView(attribution: selectedProvider.attribution)
+                // The map's credits and the layer's, as the line on the map
+                // draws them, so what is credited here is what is drawn there.
+                if let drawn = TileAttribution.drawn(
+                    base: selectedProvider.attribution,
+                    layer: TileLayer.shown(isOn: showsHikingRoutes)?.attribution
+                ) {
+                    TileAttributionView(attribution: drawn)
+                }
                 // "Apart from the previews": the cards above fetch every
-                // source's tiles whichever map is selected.
-                switch selectedProvider.systemStyle {
+                // source's tiles whichever map is selected. Neither sentence
+                // is true with the hiking routes drawn — those are tiles, and
+                // they are cached and auto-saved like any map's.
+                switch showsHikingRoutes ? nil : selectedProvider.systemStyle {
                 case .standard:
                     Text(
                         "Apart from the previews above, OpenHikes downloads, caches and auto-saves"
@@ -214,7 +225,12 @@ struct SettingsView: View {
                         + " Tiles already saved by other sources are kept, and listed below."
                     )
                 case nil:
-                    EmptyView()
+                    if showsHikingRoutes, selectedProvider.usesSystemBaseMap {
+                        Text(
+                            "The hiking routes are the only map tiles OpenHikes downloads, caches"
+                            + " and auto-saves while this is selected."
+                        )
+                    }
                 }
                 if TileProvider.all.contains(where: { !Secrets.canLoadTiles($0) }) {
                     // A sentence a hiker can act on, and — under `#if DEBUG`
@@ -243,6 +259,20 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    /// Waymarked Trails' hiking routes over whichever map is chosen above —
+    /// a layer rather than a sixth card, because it is drawn with any of them.
+    private var hikingRoutesToggle: some View {
+        Toggle(isOn: $showsHikingRoutes) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Hiking Routes")
+                Text("Marked trails from Waymarked Trails, drawn over any map when zoomed in.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityIdentifier("hiking-routes-toggle")
     }
 
     /// The way out, shown to a subscriber in the section their money unlocks.

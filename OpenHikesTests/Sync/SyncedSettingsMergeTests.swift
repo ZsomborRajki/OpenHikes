@@ -89,7 +89,11 @@ struct SyncedSettingsMergeTests {
     func allowlistContents() {
         let keys = Set(SyncedSetting.all.map(\.key))
 
-        #expect(keys == [SettingsKey.tileProviderID, SettingsKey.savePhotosToLibrary])
+        #expect(keys == [
+            SettingsKey.tileProviderID,
+            SettingsKey.showsHikingRoutes,
+            SettingsKey.savePhotosToLibrary,
+        ])
         #expect(!keys.contains(SettingsKey.backgroundTrackingEnabled))
         #expect(!keys.contains(SettingsKey.lastSelectedHikeID))
         #expect(!keys.contains(SettingsKey.lastMatchedDistance))

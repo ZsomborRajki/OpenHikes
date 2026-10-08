@@ -131,6 +131,8 @@ struct OpenHikesView: View {
 
     /// The selected tile provider, persisted by the settings sheet.
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
+    /// Whether the hiking-route layer is drawn over that map, set in Settings.
+    @AppStorage(SettingsKey.showsHikingRoutes) private var showsHikingRoutes = SettingsDefault.showsHikingRoutes
 
     /// Opt-in second copy of every photo in the system photo library. Off by
     /// default, and the only reason the app ever asks for photo-library
@@ -294,6 +296,7 @@ struct OpenHikesView: View {
             recordingTrace: appModel.hikeRecorder.trace,
             sheetMetrics: sheetMetrics,
             base: activeBase,
+            tileLayer: TileLayer.shown(isOn: showsHikingRoutes),
             mapController: mapController,
             drawnRouteTap: drawnRouteTap,
             locationAccessPrompt: locationAccessPrompt,
@@ -459,6 +462,11 @@ struct OpenHikesView: View {
             // for a map that draws no tiles, and picking a tile source back
             // again would leave it off until the selection changed.
             .onChange(of: tileProviderID) { _, _ in
+                appModel.tileProviderDidChange(selectedHike: selectedHike)
+            }
+            // And the layer is a tile source of its own: over Apple's map it
+            // is the only thing auto-save has to save.
+            .onChange(of: showsHikingRoutes) { _, _ in
                 appModel.tileProviderDidChange(selectedHike: selectedHike)
             }
             .onChange(of: currentRecordingHikeID) { _, id in

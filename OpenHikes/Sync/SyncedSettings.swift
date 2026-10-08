@@ -53,6 +53,7 @@ nonisolated struct SyncedSetting: Equatable, Sendable {
     /// a second copy of a key is a second thing to get wrong.
     static let all: [Self] = [
         Self(key: SettingsKey.tileProviderID, kind: .text),
+        Self(key: SettingsKey.showsHikingRoutes, kind: .boolean),
         Self(key: SettingsKey.savePhotosToLibrary, kind: .boolean),
     ]
 }

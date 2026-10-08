@@ -104,6 +104,7 @@ struct MapCoordinatorTests {
     func mapView(
         route: DisplayedRoute? = nil,
         base: MapBase = .tiles(osm),
+        tileLayer: TileLayer? = nil,
         sidePanelInset: CGFloat = 0,
         isCoveredByPanel: Bool = false,
         community: CommunityBrowser = CommunityBrowser(transport: nil, blockList: .scratch()),
@@ -128,6 +129,7 @@ struct MapCoordinatorTests {
             recordingTrace: recordingTrace,
             sheetMetrics: sheetMetrics,
             base: base,
+            tileLayer: tileLayer,
             mapController: mapController,
             drawnRouteTap: drawnRouteTap,
             locationAccessPrompt: locationAccessPrompt,

@@ -82,6 +82,9 @@ struct HikeDetailView: View {
     /// The active tile source, mirrored from Settings so offline downloads use the
     /// same provider (and API key) the map is currently drawing.
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
+    /// Whether the hiking-route layer is drawn too, which is a map that
+    /// fetches tiles — and so has tiles to auto-save — even over Apple's.
+    @AppStorage(SettingsKey.showsHikingRoutes) private var showsHikingRoutes = SettingsDefault.showsHikingRoutes
     // Shared with the offline-storage and community helpers in the
     // companion extension files.
     // swiftlint:disable private_swiftui_state
@@ -490,7 +493,7 @@ private extension HikeDetailView {
                 // No toggle at all rather than a disabled one: there is nothing
                 // to save from a map that fetches no tiles, and
                 // `OfflineStorageStatus` says so where the note goes.
-                if !activeProvider.usesSystemBaseMap { autoSaveToggle }
+                if mapRendersTiles { autoSaveToggle }
                 RouteStyleRow(hike: hike)
             }
             OfflineStorageStatus(
@@ -498,7 +501,7 @@ private extension HikeDetailView {
                 autoSave: autoSave,
                 downloader: downloader,
                 storedBytes: storedBytes,
-                systemMapName: activeProvider.usesSystemBaseMap ? activeProvider.name : nil,
+                systemMapName: mapRendersTiles ? nil : activeProvider.name,
                 scheduleStoredBytesRefresh: scheduleStoredBytesRefresh,
                 deleteStoredTiles: deleteStoredTiles
             )
@@ -551,6 +554,11 @@ private extension HikeDetailView {
     /// `nil` when the selected map draws no raster tiles, which is also when
     /// there is nothing a download could fetch.
     private var activeTileSource: ActiveTileSource? { activeProvider.renderedSource }
+
+    /// Whether anything on the map is fetched as tiles: the selected map, or
+    /// the hiking-route layer over it. Never a reason to offer a *download* —
+    /// the layer has none, so ``canDownload`` asks the provider alone.
+    private var mapRendersTiles: Bool { !activeProvider.usesSystemBaseMap || showsHikingRoutes }
 
     // MARK: Header
 
