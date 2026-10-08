@@ -46,8 +46,9 @@ from the same palette, a hue none of the steepness colours come near.
 
 **The dark set reads as dark only where the sheet covers the map.** The map's
 tiles do not turn over with the appearance, so a dark sheet resting at its
-middle detent is grey glass over a light map. Frames 02 and 10 are the ones
-whose dark copy is a different picture rather than a muddier one.
+middle detent is grey glass over a light map. Frame 02, whose sheet covers the
+map, is the one whose dark copy is a different picture rather than a muddier
+one; frame 10 is a photograph and comes out the same in both.
 
 ### What some of the frames are staged with
 
