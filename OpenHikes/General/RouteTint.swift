@@ -70,6 +70,19 @@ nonisolated enum RouteTint {
         color(hue: .random(in: 0..<1, using: &generator))
     }
 
+    /// The same, from the system's randomness — what the app itself uses.
+    ///
+    /// Not `random(using:)` over a local `SystemRandomNumberGenerator`. That
+    /// generator is an empty struct, so `&generator` has no storage behind
+    /// it, and the thread sanitizer instruments the `inout` access anyway:
+    /// once `Hike/randomTintHex()` grew a branch ahead of it, every recorder
+    /// suite under TSan died with a SEGV on a wild address inside
+    /// `randomTintHex(using:)`. The standard library's own default draw
+    /// keeps that generator out of instrumented code.
+    static func random() -> Color {
+        color(hue: .random(in: 0..<1))
+    }
+
     /// A colour for something that is *not* stored, addressed by whatever
     /// identifies it.
     ///

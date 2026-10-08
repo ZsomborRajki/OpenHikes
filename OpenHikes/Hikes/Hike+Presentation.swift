@@ -33,8 +33,7 @@ extension Hike {
             return RouteTint.color(hue: hue).hexRGBA
         }
         #endif
-        var generator = SystemRandomNumberGenerator()
-        return randomTintHex(using: &generator)
+        return RouteTint.random().hexRGBA
     }
 
     /// The same tint, from a caller-supplied source of randomness — so a test
