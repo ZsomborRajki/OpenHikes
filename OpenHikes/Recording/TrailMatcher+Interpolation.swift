@@ -37,23 +37,30 @@ nonisolated extension TrailMatcher {
         let isInferred: Bool
     }
 
+    /// `coordinates` without any point within ``minimumCoordinateDistanceMeters``
+    /// of the one kept before it — the same place listed twice, where a
+    /// snapped end lands on a node, would otherwise be a leg of no length.
+    /// Every line the matcher and the maker's router build is thinned here.
+    static func deduplicated(_ coordinates: [CLLocationCoordinate2D]) -> [CLLocationCoordinate2D] {
+        var kept: [CLLocationCoordinate2D] = []
+        kept.reserveCapacity(coordinates.count)
+        for coordinate in coordinates {
+            if let previous = kept.last,
+               RouteGeometry.distanceMeters(from: previous, to: coordinate) <= minimumCoordinateDistanceMeters {
+                continue
+            }
+            kept.append(coordinate)
+        }
+        return kept
+    }
+
     static func recordingPoints(
         along rawCoordinates: [CLLocationCoordinate2D],
         from start: RecordingPoint,
         to end: RecordingPoint,
         inferred: Bool = false
     ) -> [RecordingPoint] {
-        var coordinates: [CLLocationCoordinate2D] = []
-        for coordinate in [start.coordinate] + rawCoordinates + [end.coordinate] {
-            guard let previous = coordinates.last else {
-                coordinates.append(coordinate)
-                continue
-            }
-            if RouteGeometry.distanceMeters(from: previous, to: coordinate)
-                > minimumCoordinateDistanceMeters {
-                coordinates.append(coordinate)
-            }
-        }
+        var coordinates = deduplicated([start.coordinate] + rawCoordinates + [end.coordinate])
         if coordinates.count < 2 {
             coordinates = [start.coordinate, end.coordinate]
         }

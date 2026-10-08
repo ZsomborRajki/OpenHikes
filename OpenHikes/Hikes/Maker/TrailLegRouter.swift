@@ -391,7 +391,7 @@ nonisolated private extension OverpassTrailLegRouter {
             shape.append(contentsOf: path.nodes.compactMap { index.nodes[$0]?.coordinate })
         }
         shape.append(contentsOf: [end.coordinate, ends.endCoordinate])
-        return index.deduplicated(shape)
+        return TrailMatcher.deduplicated(shape)
     }
 
     /// A way through the graph, and what it costs end to end — the node path
