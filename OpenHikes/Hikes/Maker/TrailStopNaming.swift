@@ -56,6 +56,7 @@
 //  to match rather than hopping twice to arrive back where it started.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import MapKit
@@ -148,12 +149,7 @@ nonisolated enum TrailStopName {
     /// come from a keyboard — see ``HikeTitle``. This one arrives from a
     /// service, which is precisely the unattended input that bound exists for.
     private static func first(of candidates: [String?]) -> String? {
-        for candidate in candidates {
-            let bounded = BoundedText.boundedOrEmpty(candidate ?? "", to: .title)
-            guard !bounded.isEmpty else { continue }
-            return bounded
-        }
-        return nil
+        candidates.firstNonNil { BoundedText.bounded($0, to: .title) }
     }
 }
 
