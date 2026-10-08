@@ -90,6 +90,31 @@ nonisolated struct TileAttribution: Hashable, Sendable {
     var compactText: String {
         "© " + credits.map(\.compactTitle).joined(separator: ", ")
     }
+
+    /// The credits for a map drawn as `base` with `layer` over it: the map's
+    /// first, then the layer's.
+    ///
+    /// Two things are dropped, and neither is a party anyone is owed. A
+    /// credit the app cannot link — Apple's — is credited by MapKit's own
+    /// **Legal** link, which stays on the map whether or not a layer is drawn
+    /// over it; without the layer it hides the line altogether (see
+    /// ``hasLinks``), and with one, naming it beside the layer's links would
+    /// be a second, unlinked copy of what MapKit already says. And a credit
+    /// whose licence another already reaches is the same party twice: the
+    /// layer credits OpenStreetMap, and so does every raster map here, under
+    /// `©` or `Data ©`. The map's own spelling wins, because a provider's
+    /// terms can require it.
+    ///
+    /// `nil` only when there is neither — no map resolved and no layer.
+    static func drawn(base: Self?, layer: Self?) -> Self? {
+        guard let layer else { return base }
+        var reached = Set<URL>()
+        let candidates = (base?.credits ?? []).filter { $0.url != nil } + layer.credits
+        return Self(candidates.filter { credit in
+            guard let url = credit.url else { return true }
+            return reached.insert(url).inserted
+        })
+    }
 }
 
 nonisolated extension TileAttribution.Credit {
@@ -137,6 +162,16 @@ nonisolated extension TileAttribution.Credit {
         prefix: "Data ©",
         url: URL(string: "https://www.openstreetmap.org/copyright")!,
         compactTitle: "OpenStreetMap"
+    )
+
+    /// The hiking-route layer's own credit. Its overlay is published under
+    /// CC BY-SA 3.0 DE on the condition that "the OpenStreetMap project and
+    /// this site are mentioned", so it links to the site — whose legal page
+    /// carries the licence — and always travels with an OpenStreetMap credit.
+    static let waymarkedTrails = Self(
+        title: "Waymarked Trails",
+        prefix: "Routes ©",
+        url: URL(string: "https://hiking.waymarkedtrails.org/")!
     )
     // swiftlint:enable force_unwrapping
 

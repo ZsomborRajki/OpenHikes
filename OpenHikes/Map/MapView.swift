@@ -77,6 +77,12 @@ struct MapView: MapViewRepresentable, Equatable {
     /// update — on the same `MKMapView` either way.
     var base: MapBase
 
+    /// The transparent layer drawn over that map — Waymarked Trails' hiking
+    /// routes — or `nil` while the switch for it is off. Over every map,
+    /// Apple's included, and beneath every line; see
+    /// `MapCoordinator+TileLayer.swift`.
+    var tileLayer: TileLayer?
+
     /// Observed directly by the map so the detail view's Zoom button can re-fit
     /// the route without re-rendering any view.
     var mapController: MapController
@@ -227,6 +233,8 @@ struct MapView: MapViewRepresentable, Equatable {
 
         // Raster tiles from the selected provider, replacing Apple's base map.
         applyTileSource(to: mapView, coordinator)
+        // And the hiking routes over them, when they are switched on.
+        applyTileLayer(to: mapView, coordinator)
 
         addControls(to: mapView, coordinator)
 
@@ -317,7 +325,7 @@ struct MapView: MapViewRepresentable, Equatable {
         // behind, which is the one thing here that is not Auto Layout's own
         // doing — see ``MapView/Coordinator/applyCreditLineClearance()``.
         #if os(iOS)
-        coordinator.attributionView?.update(with: tileSource?.attribution)
+        coordinator.attributionView?.update(with: drawnAttribution)
         coordinator.applyCreditLineClearance()
         #endif
 
@@ -359,6 +367,26 @@ struct MapView: MapViewRepresentable, Equatable {
         #if DEBUG
         Self.logger.debug("Installed tile overlay for \(key, privacy: .public)")
         #endif
+    }
+
+    /// Puts the hiking-route layer on, takes it off, and credits it either
+    /// way. No-op while nothing about it changed.
+    private func applyTileLayer(to mapView: MKMapView, _ coordinator: Coordinator) {
+        guard coordinator.applyTileLayer(tileLayer, on: mapView) else { return }
+        #if os(iOS)
+        // A layer over Apple's map is the one case where the line comes back
+        // although the map's own credit is MapKit's: the layer's are owed
+        // whatever it is drawn over.
+        coordinator.attributionView?.update(with: drawnAttribution)
+        coordinator.applyCreditLineClearance()
+        #endif
+    }
+
+    /// Everything the line on the map has to credit: the selected map's
+    /// parties, then the layer's, each once — see
+    /// ``TileAttribution/drawn(base:layer:)``.
+    private var drawnAttribution: TileAttribution? {
+        TileAttribution.drawn(base: base.tileSource?.attribution, layer: tileLayer?.attribution)
     }
 
     /// Enables MapKit's standard controls. Compass and scale are built-in flags;
@@ -466,7 +494,7 @@ struct MapView: MapViewRepresentable, Equatable {
                 constant: -Self.controlInset
             ),
         ])
-        attribution.update(with: base.tileSource?.attribution)
+        attribution.update(with: drawnAttribution)
     }
     #endif
 
@@ -566,13 +594,13 @@ struct MapView: MapViewRepresentable, Equatable {
         // Kept alongside so a tap can be answered without reading them back
         // out of MapKit — see ``MapView/Coordinator/routeCoordinates``.
         coordinator.routeCoordinates = route.coordinates
-        if let tileOverlay = coordinator.tileOverlay {
+        if let ground = coordinator.groundOverlay {
             // Above the shared hikes' lines when any are drawn, rather than
             // above the tiles they are anchored on: both sit in this level,
             // and naming the tile overlay here would slide this line
             // underneath theirs. See `MapCommunityRoutes.swift`, which keeps
             // the topmost of them last.
-            let below: any MKOverlay = coordinator.communityRoutes.last?.polyline ?? tileOverlay
+            let below: any MKOverlay = coordinator.communityRoutes.last?.polyline ?? ground
             mapView.insertOverlay(polyline, above: below)
         } else {
             mapView.addOverlay(polyline, level: .aboveLabels)
@@ -715,6 +743,7 @@ struct MapView: MapViewRepresentable, Equatable {
         applyBuiltInControlMargins(to: mapView)
         #endif
         applyTileSource(to: mapView, coordinator)
+        applyTileLayer(to: mapView, coordinator)
         updateRoute(mapView, coordinator)
         // Restyling the line is deliberately absent: `observeRouteStyle` applies
         // tint and width straight from `routeStyle`, so a colour or width drag
@@ -768,6 +797,7 @@ extension MapView {
             && lhs.recordingTrace === rhs.recordingTrace
             && lhs.sheetMetrics === rhs.sheetMetrics
             && lhs.base == rhs.base
+            && lhs.tileLayer == rhs.tileLayer
             && lhs.mapController === rhs.mapController
             && lhs.drawnRouteTap === rhs.drawnRouteTap
             && lhs.locationAccessPrompt === rhs.locationAccessPrompt

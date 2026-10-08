@@ -623,7 +623,9 @@ private extension OpenHikesModel {
         SignificantLocationRegistration(monitor: Self.dormantLocationSource())
     }
 
-    /// The auto-save controller wired to the real selected map source.
+    /// The auto-save controller wired to the real selected map source — and
+    /// to the hiking-route layer, which draws tiles over Apple's map too, so
+    /// either one fetching is reason enough to save what it drew.
     ///
     /// Same argument as
     /// ``makeRecorder(container:trailGraphProvider:defaults:liveActivityController:movementReminders:workoutWriter:weatherState:)``:
@@ -635,6 +637,7 @@ private extension OpenHikesModel {
     static func makeAutoSaveController(defaults: UserDefaults) -> AutoSaveController {
         AutoSaveController {
             !TileProvider.selected(in: defaults).usesSystemBaseMap
+                || TileLayer.selected(in: defaults) != nil
         }
     }
 }

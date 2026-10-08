@@ -20,6 +20,11 @@ import Foundation
 /// UserDefaults / `@AppStorage` key shared between the settings UI and the map.
 nonisolated enum SettingsKey {
     static let tileProviderID = "settings.tileProviderID"
+    /// Whether Waymarked Trails' hiking routes are drawn over the selected
+    /// map — see ``TileLayer/waymarkedHiking``. Synced through
+    /// ``SyncedSettingsMirror`` beside ``tileProviderID``: it is a choice of
+    /// what the map looks like, which is the person's rather than the phone's.
+    static let showsHikingRoutes = "settings.showsHikingRoutes"
     /// How the hike list is ordered — see ``HikeListSort``. A preference about
     /// this screen on this device rather than a fact about the library, so it
     /// sits here with the other settings rather than travelling with the
@@ -221,6 +226,10 @@ nonisolated enum SettingsDefault {
     /// it exists for is narrow and real enough to be worth a switch, and
     /// narrow enough not to be worth assuming: see ``ScreenWakePolicy``.
     static let keepScreenAwake = false
+    /// Off. The layer is a second tile request for every one the map makes,
+    /// to a server a volunteer runs, and the hiker who has not asked for it
+    /// should cost neither of them anything.
+    static let showsHikingRoutes = false
     /// Off. Everything this app writes elsewhere is the hiker's own library;
     /// Health is somebody else's, and an app that helped itself to it because
     /// a walk finished would be taking a decision that is theirs.

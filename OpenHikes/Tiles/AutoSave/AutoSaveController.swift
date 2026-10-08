@@ -37,7 +37,8 @@ final class AutoSaveController {
     /// with its own active hike and its own tile directories rather than the
     /// process-wide singleton the app uses.
     @ObservationIgnored private let store: AutoSaveTileStore
-    /// Whether the selected map draws raster tiles at all.
+    /// Whether the map draws raster tiles at all — the selected map's own, or
+    /// the hiking-route layer's over it.
     ///
     /// Auto-save is a promise about *drawn* tiles, so the code that arms it has
     /// to keep that promise rather than relying on the toggle being hidden.

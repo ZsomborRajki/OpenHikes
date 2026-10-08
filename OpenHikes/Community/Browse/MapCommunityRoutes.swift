@@ -150,10 +150,11 @@ extension MapView.Coordinator {
     /// the same reason, and these belong there too.
     ///
     /// Being underneath is therefore a position within that level rather than
-    /// a level of its own: each line goes just above the tile overlay, which
-    /// is the bottom of everything the app draws. `MapView`'s own route
-    /// anchors on the topmost of these in turn, so theirs stays on top
-    /// however the two arrive.
+    /// a level of its own: each line goes just above the tile overlays — the
+    /// map's, and the hiking-route layer's when it is on, which is what
+    /// ``groundOverlay`` names — the bottom of everything the app draws.
+    /// `MapView`'s own route anchors on the topmost of these in turn, so
+    /// theirs stays on top however the two arrive.
     ///
     /// The position is computed rather than timed, which is the second half of
     /// the same bug: `makeMapView` starts these observations *before* it
@@ -171,7 +172,7 @@ extension MapView.Coordinator {
     /// draws on top.
     private func addCommunityOverlays(_ polylines: [MKPolyline], on mapView: MKMapView) {
         let drawn = mapView.overlays(in: .aboveLabels)
-        let floor = tileOverlay
+        let floor = groundOverlay
             .flatMap { tiles in drawn.firstIndex { $0 === tiles } }
             .map { $0 + 1 } ?? 0
         for (offset, polyline) in polylines.enumerated() {
