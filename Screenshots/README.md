@@ -11,48 +11,122 @@ it. OpenHikes is `TARGETED_DEVICE_FAMILY = 1`, so there is no iPad set at all.
 
 **Between one and ten of them.** Not ten: only the first three appear in search
 results, and every frame past the first few is one more thing to re-shoot when
-the UI moves. The nine captured here are already more than most listings use.
+the UI moves. The ten captured here are a menu to choose from, not a set to
+upload whole.
 
-The order below is the upload order, and it is the order the frames are named
-in, because App Store Connect orders screenshots by the order they arrive.
+The numbers below are the capture's, and the file names carry them. App Store
+Connect orders screenshots by the order they arrive, so the upload order is
+the listing's decision — the frames are numbered in the order they were added
+rather than the order they are worth.
 
 | # | Frame | What it has to say |
 |---|---|---|
 | 1 | `01-trail-and-its-photos` | The whole walk, its photographs, and one of them open |
-| 2 | `02-photos-along-the-trail` | The gallery those photographs land in |
+| 2 | `02-photos-along-the-trail` | The figures, the profile, and the gallery the photographs land in |
 | 3 | `03-nearby-trails` | Published hikes and waymarked OSM routes, listed and pinned |
-| 4 | `04-statistics-and-profile` | Is this a walk or a day out |
-| 5 | `05-recording-a-hike` | It records, with live figures and the line so far |
-| 6 | `06-offline-maps` | It works with no signal |
+| 4 | `04-following-the-trail` | Where on the walk you are, and how much of it is left |
+| 5 | `05-recording-a-hike` | It records, with the figures and the line two hours in |
+| 6 | `06-a-map-for-the-mountains` | The walk on a map with hillshading and contours — OpenHikes Pro |
 | 7 | `07-walk-summary` | A trail walked end to end |
 | 8 | `08-draw-your-own-trail` | Plan Saturday: search three places and walk between them |
 | 9 | `09-a-place-and-its-photos` | A place on the walk, kept with its own photographs |
+| 10 | `10-share-a-hike` | The walk as a picture to send: its figures and line over one of its photographs |
 
-Frame 8 is eighth deliberately rather than by arriving last. It is the only one
-that shows the app *making* something rather than showing something, which is an
-argument for putting it in the first three — and which of the eight those are is
-a listing decision rather than a capture one, so it is appended here and moving
-it is a rename. Nothing in the capture depends on the number.
+Frame 8 is the only one that shows the app *making* something rather than
+showing something, which is an argument for putting it in the first three —
+and which three is a listing decision rather than a capture one. Nothing in the
+capture depends on a frame's number, so moving one is a rename.
 
-It is the walk frame 1 is of, planned rather than imported: *Schönau am
-Königssee*, *Kühroint* and *St. Bartholomä*, picked from the maker's own search,
-routed in **Walking** mode. Apple's walking answer through those three stops runs
-a median 7 m from the fixture's line — up to Kühroint and down the
-Rinnkendlsteig — so the frame shows a real routed path rather than the straight
-legs it used to. Hiking mode would ask Overpass, which no test launch may; the
-frame's `--ui-test-live-maker` lets that one launch ask Apple for directions and
-Stadia for the climb, which needs `OpenHikes/Secrets.plist` and spends one
-Stadia call a run. Like frame 6 it is captured with `--ui-test-entitled`, since
-the climb is a Pro feature.
+**Every frame imports the same walk in the same colour.** A hike imported from
+a file is given a colour at random, and each frame imports its own — so the one
+walk used to be orange in the hero, green on its own screen and pink in its
+summary, and an orange or green draw sank the photo pins into the route's own
+steepness colours. `--ui-test-route-hue=0.68` hands every frame the same indigo
+from the same palette, a hue none of the steepness colours come near.
 
-Frame 9 is a place of the hiker's own, made from the map pill's *Add Place* on
-the frame-1 hike: two of the stamped photographs picked in the system picker, a
-name and a note, then *Add*. The pill puts the place where the elevation
-graph's tracker is, so the frame taps the chart near its end first — the
-lakeside stretch into St. Bartholomä — rather than leaving it at the start,
-which is a car park in Schönau. It needs the stamped library like frames 1 and
-2, and skips without it. The fixture itself carries no `<wpt>` on purpose: a
-place in it would stand on the map in every other frame too.
+**The dark set reads as dark only where the sheet covers the map.** The map's
+tiles do not turn over with the appearance, so a dark sheet resting at its
+middle detent is grey glass over a light map. Frames 02 and 10 are the ones
+whose dark copy is a different picture rather than a muddier one.
+
+### What some of the frames are staged with
+
+**01, the hero.** The photo callout is opened on the topmost pin, the
+trailhead's, so what it covers is the village the walk sets out from. Opened
+halfway down the line it hid the climb to the alm — the stretch the frame is
+of — and a second pin poked out over its top edge.
+
+**02, the walk's screen.** The chart is tapped at the high point before the
+shot, so its tracker points somewhere and the progress card under it reads a
+share of the walk rather than a grey 0%.
+
+**03, the nearby list**, has a database of its own: `--ui-test-community=showcase`
+(`SeededCommunityShowcase.swift`). The seeded scenarios the suites use draw
+straight steps and squares a test can predict, which on a map of real paths
+reads as exactly the test data it is. The showcase's two published walks follow
+mapped paths around the landing — *Kührointalm and Back* is the opening five
+kilometres of the hero's own fixture and back, *Malerwinkel Loop* is
+OpenStreetMap relation 2428487 — under the seeded transport's invented hikers.
+Its two waymarked routes are OpenStreetMap's own, relations 193469 and 222506,
+under their own ids and tags, so their rows draw the red-white-red blaze and
+the ends the signposts name. The lines are bundled as GPX in
+`OpenHikes/SimulatedLocations/` (`KoenigsseeMalerwinkel`, `KoenigsseeGotzenalm`,
+`HammerstielWatzmannhaus`), each with the ODbL notice, chained end to end from
+the relation's ways and thinned in a scratchpad. The hiker is put in Schönau,
+the map zoomed one step out around a pin, and the two walks' pins centred in
+the band above the sheet once — a second, smaller pan is short enough for the
+map to take as a tap, and a tap on a line opens that hike.
+
+**04, following the trail**, is a location frame: the hiker stands on the line
+5.9 km in, so the map draws them on it, the chart's tracker is where they are,
+and the card reads *Live Progress* with the share walked and the distance left.
+A single fix starts no walk, so the card is the follow's.
+
+**05, the recording**, is two hours into the walk rather than just started:
+`--ui-test-seed-recording=KoenigsseeRinnkendlsteig` writes the journal of the
+fixture's first 4.2 km — its own clock and heights, re-timed to end a moment
+ago — and the recorder's own crash recovery resumes it
+(`SeededRecordingFixture`). Every figure on the screen is the recorder's. It
+used to walk twenty fixes 22 m apart at four seconds each, which read 18 km/h,
+no climb, and a line along a village street. The frame closes the recovery's
+own notice, which says, truthfully, that the recording was resumed.
+
+**06, the map**, is the hero's composition on Stadia Outdoors: hillshading,
+contours and the waymarked route numbers under the same line and photographs.
+It shows what OpenHikes Pro buys, so it is captured with `--ui-test-entitled`.
+It was the offline frame once — the hike's screen raised over the very map it
+was about, with an idle *Offline* button the only sign of the feature. The two
+cannot share a picture: the sheet grows before its contents scroll, and *Zoom*
+returns it to the middle detent scrolled to the top. The button is not pressed
+in any frame: a route's download is up to four thousand billed Stadia tiles.
+
+**08, the drawn trail**, is the walk frame 1 is of, planned rather than
+imported: *Schönau am Königssee*, *Kühroint* and *St. Bartholomä*, picked from
+the maker's own search, routed in **Walking** mode. Apple's walking answer
+through those three stops runs a median 7 m from the fixture's line — up to
+Kühroint and down the Rinnkendlsteig — so the frame shows a real routed path
+rather than the straight legs it used to. Hiking mode would ask Overpass, which
+no test launch may; the frame's `--ui-test-live-maker` lets that one launch ask
+Apple for directions and Stadia for the climb, which needs
+`OpenHikes/Secrets.plist` and spends one Stadia call a run. Like frame 6 it is
+captured with `--ui-test-entitled`, since the climb is a Pro feature.
+
+**09, a place**, is one of the hiker's own, made from the map pill's *Add Place*
+on the frame-1 hike: two of the stamped photographs picked in the system
+picker, a name and a note, then *Add*. The pill puts the place where the
+elevation graph's tracker is, so the frame taps the chart where the walk comes
+out over the lake first, rather than leaving it at the start, which is a car
+park in Schönau. A viewpoint, the kind the form starts at, named for what it
+looks at — *Above the Königssee* — rather than after the Archenkanzel, which is
+169 m off the line and labelled on the map where it really stands. The
+photographs are pinned at the place and stand behind its pin. It needs the
+stamped library like frames 1 and 2, and skips without it. The fixture itself
+carries no `<wpt>` on purpose: a place in it would stand on the map in every
+other frame too.
+
+**10, the share card**, opens the summary of the walk that covered the whole
+trail, *Share*, and the sixth of its photographs — the viewing platform with
+the lake below — and shoots the editor as it opens, with no box selected.
 
 ## Capturing
 
@@ -72,7 +146,9 @@ reproduced with the dark script alone, and `--frame` narrows it to the one
 test. The shared machinery is `Scripts/lib/screenshots.sh`.
 
 A run erases its simulator, pins the status bar to 9:41 with a full battery
-and full bars, pins the locale, grants location and photo access, adds the
+and full bars — *discharging*, since `charged` is a phone on a cable and draws
+a green battery with a bolt through it — pins the locale, grants location and
+photo access, adds the
 stamped photographs, runs `ScreenshotUITests`, and writes the PNGs to
 `Screenshots/Output/`. It only replaces its own appearance's files, and with
 `--frame` only that frame's. The raw `xcodebuild` log and result bundle of
@@ -80,9 +156,9 @@ every attempt stay in `DerivedData/Screenshots-<appearance>/`, and the run
 prints the path.
 
 **Permissions are granted, never prompted for** — and location only for the
-three frames that use it (03, 05, 08), which run as a group of their own after
-the grant. The alert used to come up over the first tap of each of them; a
-frame is a picture of the app, not of its permission prompt. The grant is not
+four frames that use it (03, 04, 05, 08), which run as a group of their own
+after the grant. The alert used to come up over the first tap of each of them;
+a frame is a picture of the app, not of its permission prompt. The grant is not
 given to the other six, because MapKit draws the location dot on every map of
 an authorised app, and the hero frame grew a stale dot beside its trailhead the
 one time it was.
@@ -154,11 +230,12 @@ list has something in it here, which is not a safe assumption everywhere.
 
 ## Photographs
 
-Frame 2 uses `--ui-test-seed-photos`, which generates its own images, so a
-capture works with no photographs at all. They are gradients and scattered
-shapes — fine for the layout, useless in a store listing.
+Frames 01, 02, 06, 09 and 10 import real photographs through the real library
+and the real matcher, and skip without them. `--ui-test-seed-photos`, which the
+functional suites use, generates gradients and scattered shapes — fine for a
+layout, useless in a store listing.
 
-For the real frame, put JPEGs in `Screenshots/Photos/` and stamp them:
+Put JPEGs in `Screenshots/Photos/` and stamp them:
 
 ```sh
 Scripts/stamp-hike-photos.swift \
@@ -189,14 +266,18 @@ repository's history.
 
 ## Framing, and the one thing that kept breaking it
 
-Three of the frames position the map themselves, because the app will not do
+Four of the frames position the map themselves, because the app will not do
 it for them: every camera move in `MapCoordinator+RouteFitting.swift` frames
 into the strip above a sheet at its *middle* detent, which on this device is
 about a quarter of the screen. Correct for the app; too small for a hero shot.
 
-So the hero frame pans and zooms the map by hand, measuring the photo pins
-between gestures and correcting. The measuring matters — a drag lands short of
-the vector it is given, and a zoom doubles whatever is left off-centre.
+So the hero frame, and frame 06 after it, pans and zooms the map by hand,
+measuring the photo pins between gestures and correcting. The measuring
+matters — a drag lands short of the vector it is given, and a zoom doubles
+whatever is left off-centre. Frame 03 zooms out with a two-finger tap on one of
+its pins, since the map's own centre is under the sheet, and pans once; frame
+05 drags the recording's map up by a fixed fifth, because a recorded line is
+drawn rather than exposed and has nothing to measure.
 
 **Zoom with a double tap, never `XCUIElement.pinch`.** A pinch rotates the map
 a little, and that cost the most time here by far: a few degrees off north
@@ -214,9 +295,14 @@ a gesture known to disturb the screen and correct afterwards.
   anything else is the wrong device.
 - The OpenStreetMap attribution has to stay visible in every map frame. It is a
   licence condition, not decoration.
-- Frame 6 is captured with `--ui-test-entitled`, so it shows a control that is
-  behind OpenHikes Pro. That is honest — it is a real feature — but the listing
-  text should not imply it is free.
+- Frames 6 and 8 are captured with `--ui-test-entitled`, so they show what
+  OpenHikes Pro buys: frame 6 the Stadia Outdoors map, frame 8 the climb and
+  descent in the drawn trail's header, which come from Stadia's elevation.
+  That is honest — both are real features — but App Store guideline 2.3.2 asks
+  the listing to say which featured items need a purchase, so the description's
+  Pro paragraph has to name both, not only the maps and the offline download.
+- Frames 01, 02, 06, 09 and 10 import the stamped photographs and skip without
+  them; see *Photographs* below.
 
 ## The Apple Watch set
 

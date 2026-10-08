@@ -11,23 +11,26 @@
 import XCTest
 
 extension ScreenshotUITests {
-    /// The place the walk ends at, as the hiker would keep it.
-    private static let placeName = "St. Bartholomä"
-    private static let placeNote = "Boats back to Schönau every half hour."
+    /// The place, as the hiker would keep it: a viewpoint of their own, named
+    /// for what it looks at rather than after the Archenkanzel a little way
+    /// off the line, which the map labels where it really stands.
+    private static let placeName = "Above the Königssee"
+    private static let placeNote = "The whole lake below, and the boats in to St. Bartholomä."
 
     /// Where on the elevation chart the place is put, as a share of the
-    /// chart element's width: near the far end, on the flat lakeside stretch
-    /// into St. Bartholomä. The plot stops at about 0.88 of the element —
-    /// the elevation labels stand to the right of it — and a tap on them
-    /// selects nothing, which is how 0.97 failed.
-    private static let placeChartPosition: CGFloat = 0.86
+    /// chart element's width: six and a half kilometres in, where the walk
+    /// comes out over the lake at the top of the Rinnkendlsteig. The plot
+    /// stops at about 0.88 of the element — the elevation labels stand to the
+    /// right of it — and a tap on them selects nothing, which is how 0.97
+    /// failed.
+    private static let placeChartPosition: CGFloat = 0.53
 
     /// Which of the stamped photographs the place is given, by where the
-    /// system picker lists them: newest first, so the first and the eighth are
-    /// the Obersee boathouse and the lake shore — the two of the eight that
-    /// are of water, which is what this place is. The simulator's own stock
+    /// system picker lists them: newest first, so the second and the third
+    /// are the two taken from up here — the lake from above, once over the
+    /// meadow and once from the platform. The simulator's own stock
     /// photographs are older than any stamped one and come after them.
-    private static let placePhotoIndexes = [0, 7]
+    private static let placePhotoIndexes = [1, 2]
 
     /// A place of the hiker's own, open on its screen with two photographs.
     ///
@@ -35,8 +38,12 @@ extension ScreenshotUITests {
     /// pictures from the library, a name and a note, then *Add*. The pill puts
     /// the place where the elevation graph's tracker stands, so the chart is
     /// tapped first: a hike that has just been opened keeps it at the start,
-    /// which is a car park in Schönau and reads "0 m along the route". The
-    /// walk's end is on the lake, and is what the photographs are of.
+    /// which is a car park in Schönau and reads "0 m along the route".
+    ///
+    /// A viewpoint, which is the kind the form starts at — so the frame
+    /// changes nothing it does not have to. It used to be St. Bartholomä,
+    /// which is a chapel and a landing and no kind the form offers, and came
+    /// out labelled *Viewpoint* by default.
     ///
     /// Nothing is seeded: the Königssee fixture carries no `<wpt>`,
     /// deliberately, because a place in it would stand on the map in every
@@ -45,16 +52,18 @@ extension ScreenshotUITests {
     /// The photographs are the stamped library the hero frames use, picked in
     /// the system's own picker. The form files them under the place, so the
     /// strip on the place screen is ``HikePhoto/placeID`` doing its job rather
-    /// than the hike's gallery shown again.
+    /// than the hike's gallery shown again — and pins them at the place, under
+    /// its own pin.
     @MainActor
     func testCapturesAPlaceAndItsPhotos() throws {
         try XCTSkipUnless(Self.hasStampedLibrary, Self.noStampedLibrary)
         let app = launchApp(arguments: [
             "--ui-test-expanded-sheet",
-            "--ui-test-import-gpx=KoenigsseeRinnkendlsteig",
+            "--ui-test-import-gpx=\(Self.routeFixture)",
             "--ui-test-weather",
+            Self.routeHueArgument,
         ])
-        openHikeDetail(in: app, titled: "Königssee – Kühroint – Rinnkendlsteig – St. Bartholomä")
+        openHikeDetail(in: app, titled: Self.routeTitle)
 
         let chart = element("elevation-chart", in: app)
         XCTAssertTrue(scrollIntoView(chart, in: app), "the hike should draw its elevation chart")
@@ -62,7 +71,7 @@ extension ScreenshotUITests {
         chart.coordinate(withNormalizedOffset: CGVector(dx: Self.placeChartPosition, dy: 0.5)).tap()
         XCTAssertTrue(
             waitUntilValueChanges(from: atStart, on: chart),
-            "a tap on the chart should move the tracker to the walk's end"
+            "a tap on the chart should move the tracker out over the lake"
         )
 
         let addPlace = element("map-add-place-button", in: app)
