@@ -573,7 +573,7 @@ private extension OpenHikesModel {
             guard scenario.servesCuratedTrails else { return seeded }
             return MergedCommunityTransport(
                 published: seeded,
-                curated: SeededCuratedTrailSource(),
+                curated: SeededCuratedTrailSource(showcase: scenario == .showcase),
                 // Heights that reached no network either, so the chart a
                 // curated hike now draws is reachable from automation.
                 elevation: SeededElevationSource()

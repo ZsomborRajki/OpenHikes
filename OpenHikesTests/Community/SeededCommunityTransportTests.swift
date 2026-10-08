@@ -29,6 +29,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 /// Short for ``SeededCommunityFixture``. Not `Fixture`, which this bundle
@@ -58,20 +59,72 @@ struct SeededCommunityTransportTests {
     /// answers is which *screens* a scenario can reach — and a scenario that
     /// silently stopped serving rows would leave the suites that name it green
     /// against an empty list.
-    @Test("four scenarios serve rows, and one each serves a queue and curated trails")
+    @Test("five scenarios serve rows, one serves a queue and two serve curated trails")
     func scenarioCapabilities() {
         let serving = SeededCommunityTransport.Scenario.allCases.filter(\.servesListings)
-        #expect(Set(serving) == [.seeded, .published, .reviewing, .curated])
+        #expect(Set(serving) == [.seeded, .published, .reviewing, .curated, .showcase])
 
         let queueing = SeededCommunityTransport.Scenario.allCases.filter(\.servesQueue)
         #expect(queueing == [.reviewing])
 
-        // One, and behind the same door as the rest: a launch that does not
-        // name this gets no curated source, so no suite reaches Overpass by
+        // Two, and behind the same door as the rest: a launch that names
+        // neither gets no curated source, so no suite reaches Overpass by
         // default any more than it reaches CloudKit. See
         // ``OpenHikesModel/makeCommunityTransport()``.
         let curating = SeededCommunityTransport.Scenario.allCases.filter(\.servesCuratedTrails)
-        #expect(curating == [.curated])
+        #expect(Set(curating) == [.curated, .showcase])
+    }
+
+    /// The App Store frame's list: two walks along mapped paths, neither of
+    /// them the straight steps the other scenarios draw.
+    @Test("the showcase serves its own two walks, along lines mapped on the ground")
+    func showcaseServesMappedWalks() async throws {
+        let listings = try await Seed.nearby(.showcase)
+        #expect(
+            Set(listings.map(\.title)) == [
+                SeededCommunityTransport.showcaseKuehrointTitle,
+                SeededCommunityTransport.showcaseMalerwinkelTitle,
+            ]
+        )
+        for listing in listings {
+            let route = SeededCommunityTransport.showcaseRoute(of: listing)
+            // A bundled file rather than generated steps: far more points
+            // than the generator's two dozen.
+            #expect(route.count > 50, "\(listing.title) follows a mapped path")
+            let start = try #require(route.first)
+            #expect(start.latitude.isApproximatelyEqual(to: listing.latitude, absoluteTolerance: 1e-6))
+            #expect(listing.distanceMeters > 2000)
+        }
+    }
+
+    /// Out to the alm and back the same way, so it ends where it began.
+    @Test("the walk to the alm comes back to the landing")
+    func kuehrointWalkIsAnOutAndBack() async throws {
+        let listings = try await Seed.nearby(.showcase)
+        let walk = try #require(listings.first { $0.title == SeededCommunityTransport.showcaseKuehrointTitle })
+        let route = SeededCommunityTransport.showcaseRoute(of: walk)
+        let start = try #require(route.first)
+        let end = try #require(route.last)
+        #expect(start.latitude.isApproximatelyEqual(to: end.latitude, absoluteTolerance: 1e-6))
+        #expect(start.longitude.isApproximatelyEqual(to: end.longitude, absoluteTolerance: 1e-6))
+        #expect(walk.distanceMeters.isApproximatelyEqual(to: 10_000, absoluteTolerance: 200))
+    }
+
+    @Test("the showcase's waymarked routes are OpenStreetMap's own, with their tags")
+    func showcaseTrailsAreRealRelations() {
+        let trails = SeededCuratedTrailSource(showcase: true).served
+        #expect(
+            Set(trails.map(\.relationID)) == [
+                SeededCuratedTrailSource.gotzenalmRelationID,
+                SeededCuratedTrailSource.watzmannhausRelationID,
+            ]
+        )
+        for trail in trails {
+            #expect(trail.route.count > 50)
+            #expect(trail.tags["osmc:symbol"]?.hasPrefix("red:red:white_bar") == true)
+        }
+        // And the shaped pair stays the default every other scenario gets.
+        #expect(SeededCuratedTrailSource().served.map(\.relationID).allSatisfy { $0 > 4_000_000 })
     }
 
     // MARK: Browsing
