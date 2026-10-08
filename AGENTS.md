@@ -82,6 +82,14 @@ above is already the fast one; `--serial` goes back to a single device and
 `--parallel N` changes the count. Anything narrower than a bare `--all` stays
 serial, which is what keeps CI's `--suite` runs on one simulator.
 
+`Scripts/render-trace.sh` takes the same selection and runs it under
+Instruments, reporting which SwiftUI bodies each step made the app evaluate and
+why; a change on the render path is read as that run on `main` and on the
+branch, compared with `--baseline` — *Render isolation, in practice* in the
+instructions file says how. Unlike the UI tests, it is one at a time per
+machine, not per simulator: the kernel trace facility it records through is a
+single lock, and the script refuses to start while another session holds it.
+
 Two things guard that fan-out against itself, because four clones booting,
 installing and first-launching at once make the machine slow enough that a test
 with a tight wait gives up. A bare `--all` **retries its failures** — failures

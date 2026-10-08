@@ -20,6 +20,7 @@ says which commands to run.
 - [ ] `xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes -destination 'platform=iOS Simulator,name=iPhone 18 Pro' -only-testing:OpenHikesTests -only-testing:OpenWidgetTests` passes
 - [ ] `swift test --package-path OpenHikesShared` and `swift test --package-path OpenHikesData` pass
 - [ ] `Scripts/run-ui-tests.sh --all` — needed for a change to recording, the map or the sheet
+- [ ] `Scripts/render-trace.sh` on `main` and on this branch, compared with `--baseline` — for a change on the render path; the counts that moved are in the description
 - [ ] New behaviour has a test that fails without the change
 
 ## Anything a reviewer should look at first

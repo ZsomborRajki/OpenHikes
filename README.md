@@ -110,6 +110,10 @@ swift test --package-path OpenHikesData
 # its own of both: --device <name|udid> and --derived-data <path>
 Scripts/run-ui-tests.sh --all
 
+# The same UI tests under Instruments: which SwiftUI bodies each step made the
+# app evaluate, and why. --baseline compares against another run's bodies.tsv
+Scripts/render-trace.sh --suite PlaceUITests --all
+
 # Strict SwiftLint, the same one CI runs; --fix applies what it can correct
 Scripts/lint.sh
 
@@ -168,7 +172,7 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | `OpenHikesWatchWidgets/` | The watch's complication and Smart Stack widget, drawn from the glance the watch's recorder writes. |
 | `OpenHikesTests/`, `OpenWidgetTests/` | App-hosted tests mirroring the app's domain folders. |
 | `OpenHikesUITests/` | Simulator UI automation, location spoofing, launch metrics. |
-| `Scripts/` | The gates and tools a contributor runs by hand: lint, the UI-test runner, the simulated hike, the App Store screenshot capture and its photo stamper, and the checks CI runs beside them. |
+| `Scripts/` | The gates and tools a contributor runs by hand: lint, the UI-test runner and its render trace, the simulated hike, the App Store screenshot capture and its photo stamper, and the checks CI runs beside them. |
 | `Screenshots/` | The App Store screenshot set: what each frame has to say, how it is captured, and where its photographs come from. |
 | `docs/` | The published GitHub Pages site — the privacy, terms and support pages the App Store listing links. Not a documentation folder. |
 | `ci_scripts/` | Xcode Cloud hooks, run automatically by name. |
