@@ -755,7 +755,8 @@ private extension OpenHikesModel {
             // refusal under test: a suite must not post banners. It is a
             // second instance rather than the controller's, because the two
             // share only the transport — the policy behind an alert is
-            // ``WeatherAlertWatch`` and has nothing to do with a walk's state.
+            // ``WeatherAlertWatch``, and the walk or recording it waits for
+            // is handed in by the poll loop rather than wired in here.
             notifier: AppLaunchEnvironment.isRunningTests
                 ? nil
                 : SystemMovementReminderNotifier(),

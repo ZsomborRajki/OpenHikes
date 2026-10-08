@@ -26,6 +26,14 @@
 //  line sits, and everything below it is still *drawn* in the detail sheet.
 //  Nothing is hidden; what is rationed is the interruption.
 //
+//  ## Why only while something is under way
+//
+//  The same rationing, by place rather than by grade: the banner is for a
+//  hiker out in the weather, and the app only knows one is while a walk or a
+//  recording runs. ``WeatherAlertSession`` is that rule. A subject it does not
+//  cover is not *observed* either, so an alert read about while browsing a
+//  trail is still news when the walk on that trail starts.
+//
 
 import Foundation
 
@@ -105,4 +113,45 @@ nonisolated struct WeatherAlertWatch: Equatable {
     /// Whether anything has been announced yet, for a caller deciding whether
     /// a standing banner is still this watch's.
     var hasAnnounced: Bool { !announced.isEmpty }
+}
+
+/// What the hiker is doing, for deciding whether an alert is theirs to hear.
+///
+/// The interruption is for weather a hiker is **out in**, and the app only
+/// knows that while something is under way: a walk following a trail, or a
+/// recording. Everywhere else the badge is about a place being *looked at* —
+/// a trail browsed from the sofa, a searched city — and a banner for a storm
+/// over a ridge somebody is only reading about spends the one notification
+/// that could matter on a hiker who is not there. The sheet still draws every
+/// alert for whatever the badge is about; what is gated is the banner.
+nonisolated enum WeatherAlertSession: Equatable, Sendable {
+    /// Nothing under way. No subject is where the hiker is.
+    case browsing
+    /// A recording is under way, which pins the badge to the hiker — see
+    /// ``WeatherFocus/pinToHiker(at:)``.
+    case recording
+    /// A walk is following `hikeID`.
+    case walking(hikeID: UUID)
+
+    /// Whether `subject` is where this hiker is, and so whether its alerts
+    /// may interrupt them.
+    ///
+    /// ``WeatherSubject/me`` under any session, and the walked trail under a
+    /// walk — never a searched place, and never another trail opened mid-walk,
+    /// because that is browsing again. A recording covers only `me` rather
+    /// than anything: the pin moves the subject there the moment it starts,
+    /// so anything else is a reading that landed for the place the hiker was
+    /// looking at just before.
+    func covers(_ subject: WeatherSubject) -> Bool {
+        switch (self, subject) {
+        case (.browsing, _):
+            false
+        case (.recording, .me), (.walking, .me):
+            true
+        case let (.walking(walked), .trail(_, hikeID, _)):
+            walked == hikeID
+        case (.recording, _), (.walking, .place):
+            false
+        }
+    }
 }
