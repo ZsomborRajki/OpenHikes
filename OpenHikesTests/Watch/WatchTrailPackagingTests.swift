@@ -77,14 +77,27 @@ struct WatchTrailPackagingTests {
     func totalsAreMeasuredOnTheWholeRoute() async throws {
         let package = try #require(await WatchTrailPackaging.package(from: Fixture.sawtoothInput))
 
-        // Every one of the fifty little rises is a metre, and every one of the
-        // fifty dips is a metre. A budget-sized decimation of this route drops
-        // most of them; measuring after it would report a fraction of the
-        // climb a hiker actually does.
+        // Every rise is five metres and so is every dip. A budget-sized
+        // decimation of this route drops most of them; measuring after it
+        // would report a fraction of the climb a hiker actually does.
         let gain = try #require(package.elevationGainMeters)
         #expect(gain.isApproximatelyEqual(to: Fixture.sawtoothGainMeters, absoluteTolerance: 0.001))
         let loss = try #require(package.elevationLossMeters)
         #expect(loss.isApproximatelyEqual(to: Fixture.sawtoothLossMeters, absoluteTolerance: 0.001))
+    }
+
+    /// What the watch says a trail climbs is what the phone says, because a
+    /// hiker reads both. Summed step by step, this route's one-metre altitude
+    /// wobble was 2,500 metres of climb on the watch while the phone, through
+    /// ``ElevationAccumulator``'s deadband, called it level.
+    @Test("the watch counts a trail's climb the way the phone does")
+    func climbIsThePhones() async throws {
+        let package = try #require(await WatchTrailPackaging.package(from: Fixture.jitterInput))
+        let phone = RouteProfile(route: Fixture.jitterRoute).elevation
+
+        #expect(package.elevationGainMeters == phone.gainMeters)
+        #expect(package.elevationLossMeters == phone.lossMeters)
+        #expect((package.elevationGainMeters ?? .infinity) < ElevationAccumulator.reversalThresholdMeters)
     }
 
     @Test("a route with one point is a place, and is not sent")
@@ -133,18 +146,28 @@ struct WatchTrailPackagingTests {
             )
         }
 
-        /// Fifty one-metre rises and fifty one-metre dips over a route long
-        /// enough that decimation throws most of them away.
-        static let sawtoothRoute: [RouteCoordinate] = (0..<5000).map { step in
-            RouteCoordinate(
-                latitude: baseLatitude + Double(step) * latitudeStep,
-                longitude: longitude,
-                elevation: 600 + (step.isMultiple(of: 2) ? 0 : 1)
-            )
-        }
+        /// A five-metre rise and dip at every point — past
+        /// ``ElevationAccumulator/reversalThresholdMeters``, so each one is
+        /// climb rather than noise — over a route long enough that decimation
+        /// throws most of them away.
+        static let sawtoothRoute = alternating(byMeters: 5)
 
-        static let sawtoothGainMeters = 2500.0
-        static let sawtoothLossMeters = 2499.0
+        static let sawtoothGainMeters = 2500 * 5.0
+        static let sawtoothLossMeters = 2499 * 5.0
+
+        /// The same shape at one metre, which is a GPS altitude wandering
+        /// around one height rather than a trail going anywhere.
+        static let jitterRoute = alternating(byMeters: 1)
+
+        private static func alternating(byMeters step: Double) -> [RouteCoordinate] {
+            (0..<5000).map { index in
+                RouteCoordinate(
+                    latitude: baseLatitude + Double(index) * latitudeStep,
+                    longitude: longitude,
+                    elevation: 600 + (index.isMultiple(of: 2) ? 0 : step)
+                )
+            }
+        }
 
         static let flatlessRoute: [RouteCoordinate] = (0..<10).map { step in
             RouteCoordinate(
@@ -156,6 +179,7 @@ struct WatchTrailPackagingTests {
         @MainActor static var longInput: HikeRouteInput { input(route: longRoute) }
         @MainActor static var shortInput: HikeRouteInput { input(route: shortRoute) }
         @MainActor static var sawtoothInput: HikeRouteInput { input(route: sawtoothRoute) }
+        @MainActor static var jitterInput: HikeRouteInput { input(route: jitterRoute) }
         @MainActor static var flatlessInput: HikeRouteInput { input(route: flatlessRoute) }
         @MainActor static var singlePointInput: HikeRouteInput {
             input(route: [RouteCoordinate(latitude: baseLatitude, longitude: longitude)])
