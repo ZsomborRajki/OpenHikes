@@ -83,6 +83,21 @@ final class TrailPlaceAnnotation: NSObject, MKAnnotation {
     /// ``isCandidate``.
     static let candidatePinAlpha: CGFloat = 0.5
 
+    /// Where a place the trail holds stands among the map's pins: one step in
+    /// front of an unselected photograph's.
+    ///
+    /// A place's own photographs are pinned *at* the place — a place's screen
+    /// is a statement of where a picture belongs, see
+    /// ``PickedPhotoPlacement`` — so every place with a photograph had a
+    /// camera balloon drawn exactly over its own, hiding the kind's colour and
+    /// glyph behind a pin that only previews a picture. The pictures are one
+    /// tap away on the place's screen either way. A selected photograph still
+    /// comes to the front, since MapKit raises a selection to
+    /// `.defaultSelected`.
+    static let heldPinZPriority = MKAnnotationViewZPriority(
+        rawValue: MKAnnotationViewZPriority.defaultUnselected.rawValue + 1
+    )
+
     func matches(_ row: TrailPlaceRow, belongsToDraft: Bool) -> Bool {
         place == row.place && anchor == row.anchor && self.belongsToDraft == belongsToDraft
     }
@@ -136,8 +151,9 @@ extension MapView.Coordinator {
             annotation.isCandidate ? "hike-place-candidate" : "hike-place"
         }
         #endif
-        // The ones not on the trail stand behind the ones that are.
-        view.zPriority = annotation.isCandidate ? .min : .defaultUnselected
+        // The ones not on the trail stand behind the ones that are, and the
+        // ones that are stand in front of the photographs.
+        view.zPriority = annotation.isCandidate ? .min : TrailPlaceAnnotation.heldPinZPriority
         // Neither kind shows a callout: the drawing's opens the place sheet
         // and a saved hike's opens the place's screen — see
         // ``selectHikePlaceAnnotation(_:on:)``.
