@@ -18,6 +18,7 @@
 //  for that reason, and looks the same in both.
 //
 
+import Algorithms
 import OpenHikesData
 import SwiftUI
 
@@ -207,9 +208,9 @@ struct WalkShareStatsBox: View {
                 .frame(maxWidth: Self.titleWidth * metric, alignment: .leading)
                 .fixedSize()
             Grid(alignment: .leading, horizontalSpacing: Self.columnSpacing * metric, verticalSpacing: 10 * metric) {
-                ForEach(Array(stride(from: 0, to: rows.count, by: 2)), id: \.self) { start in
+                ForEach(rows.chunks(ofCount: 2), id: \.startIndex) { pair in
                     GridRow {
-                        ForEach(rows[start..<min(start + 2, rows.count)], id: \.0) { stat, value in
+                        ForEach(pair, id: \.0) { stat, value in
                             figure(stat, value)
                         }
                     }

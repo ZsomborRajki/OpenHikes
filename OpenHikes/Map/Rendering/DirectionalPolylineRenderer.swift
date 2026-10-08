@@ -29,6 +29,7 @@
 //  opposed chevrons on every metre of it. That file carries the reasoning.
 //
 
+import Algorithms
 import MapKit
 import OpenHikesData
 import os
@@ -456,7 +457,7 @@ nonisolated extension DirectionalPolylineRenderer {
             let bounds = polyline.boundingMapRect.insetBy(dx: -tolerance, dy: -tolerance)
             guard bounds.contains(point) else { return false }
             let squared = tolerance * tolerance
-            return zip(points, points.dropFirst()).contains { a, b in
+            return points.adjacentPairs().contains { a, b in
                 Self.squaredDistance(from: point, toSegmentFrom: a, to: b) <= squared
             }
         }

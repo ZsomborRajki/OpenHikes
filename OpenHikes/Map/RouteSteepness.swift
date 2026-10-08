@@ -140,18 +140,14 @@ nonisolated enum RouteSteepness {
     /// height.
     private static func smoothStretch(_ stretch: ArraySlice<RouteCoordinate>, into smoothed: inout [Double?]) {
         let heights = stretch.map { $0.elevation ?? 0 }
-        var along = [0.0]
-        for (previous, point) in zip(stretch, stretch.dropFirst()) {
-            along.append(along[along.count - 1] + RouteGeometry.distanceMeters(
-                from: previous.clCoordinate,
-                to: point.clCoordinate
-            ))
+        let along = stretch.adjacentPairs().reductions(0.0) { travelled, leg in
+            travelled + RouteGeometry.distanceMeters(from: leg.0.clCoordinate, to: leg.1.clCoordinate)
         }
         // The area under the profile up to each point, the height running
         // straight between neighbours.
-        var areas = [0.0]
-        for (index, (start, end)) in along.adjacentPairs().enumerated() {
-            areas.append(areas[index] + (end - start) * (heights[index] + heights[index + 1]) / 2)
+        let areas = zip(along.adjacentPairs(), heights.adjacentPairs()).reductions(0.0) { area, step in
+            let ((start, end), (startHeight, endHeight)) = step
+            return area + (end - start) * (startHeight + endHeight) / 2
         }
         func area(upTo distance: Double) -> Double {
             let next = along.partitioningIndex { $0 > distance }
