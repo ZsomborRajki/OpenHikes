@@ -362,7 +362,7 @@ struct OpenHikesView: View {
                 }
             }
             .task { await importRequestedGPXFixture() }
-            .task { seedRequestedLaunchFixtures() }
+            .task { await seedRequestedLaunchFixtures() }
             .sheet(isPresented: $showSheet) {
                 mapSheet(
                     onSheetTopChange: { topY in
@@ -760,12 +760,12 @@ extension OpenHikesView {
     }
 
     /// The launch fixtures that belong to no imported hike: a library of bare
-    /// hikes and a weather reading.
+    /// hikes, a weather reading and a recording under way.
     ///
-    /// Separate from the GPX task because neither depends on an import having
-    /// happened, and making them wait on a fixture they do not use would tie
-    /// two unrelated scenarios together.
-    func seedRequestedLaunchFixtures() {
+    /// Separate from the GPX task because none of them depends on an import
+    /// having happened, and making them wait on a fixture they do not use
+    /// would tie two unrelated scenarios together.
+    func seedRequestedLaunchFixtures() async {
         #if DEBUG
         // First, so a scenario that also imports a GPX gets the imported hike
         // *above* these: it is the newest, and the list is newest-first.
@@ -776,8 +776,22 @@ extension OpenHikesView {
         if AppLaunchEnvironment.stubsWeather {
             appModel.weatherManager.applyUITestSnapshot()
         }
+        await seedRequestedRecording()
         #endif
     }
+
+    #if DEBUG
+    /// Leaves the journal a recording under way would have, and hands it to
+    /// the recorder's own recovery — which a UI-testing launch otherwise
+    /// skips, since its recorder is built without automatic recovery. See
+    /// ``SeededRecordingFixture``.
+    private func seedRequestedRecording() async {
+        guard let name = AppLaunchEnvironment.seededRecordingFixtureName,
+              let directory = AppLaunchEnvironment.recordingJournalDirectory(),
+              await SeededRecordingFixture.write(fixture: name, into: directory) else { return }
+        await appModel.hikeRecorder.recoverOpenSession(automaticallyResume: true)
+    }
+    #endif
 }
 
 private struct SelectedHikeState: Equatable {

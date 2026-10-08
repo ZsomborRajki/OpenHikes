@@ -39,6 +39,12 @@ nonisolated enum AppLaunchEnvironment {
         /// `nil` unless a launch asked for a walk fixture — see
         /// ``AppLaunchEnvironment/seededWalkFixtureName``.
         let seededWalkFixtureName: String?
+        /// `nil` unless a launch asked for a recording under way — see
+        /// ``AppLaunchEnvironment/seededRecordingFixtureName``.
+        let seededRecordingFixtureName: String?
+        /// `nil` unless a launch asked for one route colour — see
+        /// ``AppLaunchEnvironment/routeHue``.
+        let routeHue: Double?
         let failsFirstSave: Bool
         let losesImportSelection: Bool
         let stubsWeather: Bool
@@ -74,6 +80,8 @@ nonisolated enum AppLaunchEnvironment {
             seededPhotoCount = 0
             seededLibraryHikeCount = 0
             seededWalkFixtureName = nil
+            seededRecordingFixtureName = nil
+            routeHue = nil
             failsFirstSave = false
             losesImportSelection = false
             stubsWeather = false
@@ -94,6 +102,8 @@ nonisolated enum AppLaunchEnvironment {
         private static let seedPhotosPrefix = "--ui-test-seed-photos="
         private static let seedHikesPrefix = "--ui-test-seed-hikes="
         private static let seedWalksPrefix = "--ui-test-seed-walks="
+        private static let seedRecordingPrefix = "--ui-test-seed-recording="
+        private static let routeHuePrefix = "--ui-test-route-hue="
         private static let failFirstSaveArgument = "--ui-test-fail-first-save"
         private static let loseImportSelectionArgument =
             "--ui-test-lose-import-selection"
@@ -162,6 +172,10 @@ nonisolated enum AppLaunchEnvironment {
                 prefix: Self.seedWalksPrefix,
                 isUITesting: isUITesting
             )
+            seededRecordingFixtureName = Self.fixtureName(
+                in: arguments, prefix: Self.seedRecordingPrefix, isUITesting: isUITesting
+            )
+            routeHue = Self.hue(in: arguments, isUITesting: isUITesting)
             failsFirstSave = isUITesting
                 && arguments.contains(Self.failFirstSaveArgument)
             losesImportSelection = isUITesting
@@ -198,6 +212,16 @@ nonisolated enum AppLaunchEnvironment {
                 isUITesting: isUITesting,
                 limit: Self.maximumStubbedLibraryPhotos
             )
+        }
+
+        /// A place on the route colour wheel, 0…1, read out of
+        /// `--ui-test-route-hue=`. Refused rather than wrapped when it is off
+        /// the wheel: a scenario asking for 68 meant something, and it was not
+        /// whatever colour 68 wraps round to.
+        private static func hue(in arguments: [String], isUITesting: Bool) -> Double? {
+            fixtureName(in: arguments, prefix: Self.routeHuePrefix, isUITesting: isUITesting)
+                .flatMap(Double.init)
+                .flatMap { hue in (0...1).contains(hue) ? hue : nil }
         }
 
         /// A bounded count read out of a `--flag=N` argument. Clamped rather
@@ -343,6 +367,30 @@ nonisolated enum AppLaunchEnvironment {
     /// through the real store, so what is read afterwards is the shipping
     /// query and the shipping cascade; only the walk is invented.
     static let seededWalkFixtureName = configuration.seededWalkFixtureName
+
+    /// The name of a bundled GPX whose opening stretch should be a recording
+    /// under way when the app comes up, or `nil` for none — see
+    /// `SeededRecordingFixture`.
+    ///
+    /// A recording's figures are what its screen is about, and a recording a
+    /// test starts reads zero for all of them until a walk's worth of fixes
+    /// has gone in at a walk's pace, which is minutes per scenario. Fed
+    /// faster, they read as a run: twenty fixes 22 m apart at four seconds
+    /// was 18 km/h and no climb at all. This writes the journal a crash
+    /// would have left behind and lets the recorder's own recovery pick it
+    /// up, so what the screen shows is the shipping recovery path over a
+    /// track with a walker's clock and heights in it.
+    static let seededRecordingFixtureName = configuration.seededRecordingFixtureName
+
+    /// One hue, 0…1 around ``RouteTint``'s wheel, for every route colour this
+    /// launch would otherwise draw at random — or `nil` to draw them at random.
+    ///
+    /// For a set of pictures of one hike, which each import afresh: drawn at
+    /// random, the same walk was orange in one frame, green in the next and
+    /// pink in a third, and a green or orange draw sank its pins into the
+    /// route's own steepness colours. Still a colour from the palette, so the
+    /// frames show one a hiker could have been given.
+    static let routeHue = configuration.routeHue
 
     /// Whether the first attempt to save a recording should fail.
     ///
