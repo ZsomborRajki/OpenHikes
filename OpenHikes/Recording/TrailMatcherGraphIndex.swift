@@ -303,7 +303,7 @@ nonisolated extension TrailMatcherGraphIndex {
                     options.append(
                         PathOption(
                             distance: startEndpoint.cost + path.distance + endEndpoint.cost,
-                            coordinates: deduplicated(coordinates),
+                            coordinates: TrailMatcher.deduplicated(coordinates),
                             signature: pathSignature(
                                 start: start,
                                 startEndpoint: startEndpoint,
@@ -359,23 +359,6 @@ nonisolated extension TrailMatcherGraphIndex {
             trailNames: best.trailNames,
             alternatives: alternatives
         )
-    }
-
-    func deduplicated(
-        _ coordinates: [CLLocationCoordinate2D]
-    ) -> [CLLocationCoordinate2D] {
-        var result: [CLLocationCoordinate2D] = []
-        for coordinate in coordinates {
-            guard let previous = result.last else {
-                result.append(coordinate)
-                continue
-            }
-            if RouteGeometry.distanceMeters(from: previous, to: coordinate)
-                > TrailMatcher.minimumCoordinateDistanceMeters {
-                result.append(coordinate)
-            }
-        }
-        return result
     }
 
     func pathSignature(
