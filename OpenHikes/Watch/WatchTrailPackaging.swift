@@ -13,8 +13,10 @@
 //  arithmetic, so it carries an order of magnitude more points and the trail's
 //  own elevations.
 //
-//  What they must agree on is the trail's *length*, and they do, because both
-//  read `Hike.distanceMeters` rather than measuring the line they send.
+//  What they must agree on is the trail's *length* and its *climb*, and they
+//  do: both read `Hike.distanceMeters` rather than measuring the line they
+//  send, and both count the climb over the whole route with
+//  `ElevationAccumulator` — the snapshot through `RouteProfile`, this directly.
 //
 //  ## Off the main actor
 //
@@ -27,7 +29,6 @@
 //  same one the widget's snapshot starts from.
 //
 
-import Algorithms
 import Foundation
 import OpenHikesData
 import OpenHikesShared
@@ -62,40 +63,32 @@ nonisolated enum WatchTrailPackaging {
                 elevationMeters: coordinate.elevation.flatMap { $0.isFinite ? $0 : nil }
             )
         }
-        let totals = RouteElevationTotals(of: input.route)
+        let climb = Self.climb(of: input.route)
         return WatchTrailPackage(
             hikeID: input.hikeID,
             title: input.title,
             tintHex: input.tintHex,
             totalDistanceMeters: input.totalDistanceMeters,
             points: points,
-            elevationGainMeters: totals.gainMeters,
-            elevationLossMeters: totals.lossMeters
+            elevationGainMeters: climb.gainMeters,
+            elevationLossMeters: climb.lossMeters
         )
     }
 
     /// Climb and descent over the *whole* route.
     ///
-    /// Summed between consecutive points that carry an elevation rather than
-    /// taken as high minus low, which a rolling trail understates by every
-    /// descent it makes on the way up — the argument
-    /// ``SharedTrailSnapshot/elevationGainMeters`` already makes. Measured
-    /// before decimation, because dropping points removes the little rises
-    /// they spanned.
-    private struct RouteElevationTotals {
-        let gainMeters: Double?
-        let lossMeters: Double?
-
-        init(of route: [RouteCoordinate]) {
-            let elevations = route.compactMap(\.elevation).filter(\.isFinite)
-            var gain = 0.0
-            var loss = 0.0
-            for (last, elevation) in elevations.adjacentPairs() {
-                let change = elevation - last
-                if change > 0 { gain += change } else { loss -= change }
-            }
-            gainMeters = elevations.isEmpty ? nil : gain
-            lossMeters = elevations.isEmpty ? nil : loss
-        }
+    /// Summed run by run rather than taken as high minus low, which a rolling
+    /// trail understates by every descent it makes on the way up — the
+    /// argument ``SharedTrailSnapshot/elevationGainMeters`` already makes —
+    /// and through ``ElevationAccumulator``'s deadband, like every other climb
+    /// in the app. This used to sum every step instead, which counts each
+    /// metre a GPX altitude wobbles as climb — so the watch's trail screen
+    /// stated a figure the phone's never would for the same hike. Measured
+    /// before decimation, because dropping points removes the rises they
+    /// spanned.
+    private static func climb(of route: [RouteCoordinate]) -> RouteElevationSummary {
+        var accumulator = ElevationAccumulator()
+        for point in route { accumulator.record(point.elevation) }
+        return RouteElevationSummary(accumulator)
     }
 }
