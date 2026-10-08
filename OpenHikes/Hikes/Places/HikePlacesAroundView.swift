@@ -82,7 +82,7 @@ struct HikePlacesAroundView: View {
         }
         .onChange(of: search.reach) { searchIfNeeded() }
         .onChange(of: filter.hidden) { searchIfNeeded() }
-        .sheet(isPresented: isShowingCard) {
+        .sheet(isPresented: $search.selection.isPresent()) {
             HikePlaceAroundCard(search: search, hike: hike, onAdd: add) { photo in
                 // The card goes first: a push under a presented sheet lands
                 // behind it.
@@ -179,10 +179,6 @@ struct HikePlacesAroundView: View {
         )
         .font(.footnote)
         .foregroundStyle(.secondary)
-    }
-
-    private var isShowingCard: Binding<Bool> {
-        Binding(get: { search.selection != nil }, set: { if !$0 { search.selection = nil } })
     }
 
     // MARK: - What the screen does

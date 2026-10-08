@@ -803,13 +803,10 @@ private struct SelectedHikeState: Equatable {
 private extension OpenHikesView {
     /// Whether this launch is on temporary storage. The alert's dismissal
     /// clears the model's own issue rather than a second flag the two could
-    /// disagree on — the same arrangement ``MapScreenAlerts`` uses for the
-    /// two failures it owns a value for.
+    /// disagree on — ``Binding/isPresent()``, as for the two failures
+    /// ``MapScreenAlerts`` owns a value for.
     var showingStorageStartupIssue: Binding<Bool> {
-        Binding(
-            get: { appModel.startupIssue != nil },
-            set: { if !$0 { appModel.startupIssue = nil } }
-        )
+        Bindable(appModel).startupIssue.isPresent()
     }
 }
 

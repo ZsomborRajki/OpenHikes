@@ -215,7 +215,7 @@ struct TrailDraftView: View {
         }
         .alert(
             "Name Your Trail",
-            isPresented: showingNamePrompt,
+            isPresented: $namingStartedAt.isPresent(),
             // The date comes through the presentation rather than off the
             // state above, because dismissing an alert clears its `isPresented`
             // binding *before* the button's action runs — so a Save that read
@@ -237,7 +237,7 @@ struct TrailDraftView: View {
         } message: { _ in
             Text("Give this trail a name, or leave it blank to keep the default.")
         }
-        .alert(isPresented: showingRefusal, error: refusal) {
+        .alert(isPresented: $refusal.isPresent(), error: refusal) {
             Button("OK", role: .cancel) { /* dismisses */ }
         }
         // Inside this screen, like the dialogs and alerts above, and it cannot
@@ -402,17 +402,6 @@ struct TrailDraftView: View {
         maker.reorderWaypoints(
             fromOffsets: IndexSet(integer: sourceIndex),
             toOffset: destinationIndex
-        )
-    }
-
-    private var showingRefusal: Binding<Bool> {
-        Binding(get: { refusal != nil }, set: { if !$0 { refusal = nil } })
-    }
-
-    private var showingNamePrompt: Binding<Bool> {
-        Binding(
-            get: { namingStartedAt != nil },
-            set: { if !$0 { namingStartedAt = nil } }
         )
     }
 
