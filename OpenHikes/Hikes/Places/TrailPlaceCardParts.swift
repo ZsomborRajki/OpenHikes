@@ -2,13 +2,15 @@
 //  TrailPlaceCardParts.swift
 //  OpenHikes
 //
-//  The pieces a place's card is built from, shared by the two cards there
-//  are: the maker's sheet over the map (``TrailPlaceSheet``), and a saved
-//  hike's pushed place screen (``HikePlaceView``). Split out of the first when
-//  the second arrived, rather than drawn twice, because they say the same
-//  things about the same kind of place — what OpenStreetMap knows, where it
-//  is — and a fact row that reads one way in the maker and another on the
-//  saved trail would be the app contradicting itself about one spring.
+//  The pieces a place's card is built from, shared by the cards there are:
+//  the maker's sheet over the map (``TrailPlaceSheet``), a saved hike's
+//  pushed place screen (``HikePlaceView``), and the card and *Add Place* form
+//  the Places screens raise (``HikePlaceAroundCard``, ``HikePlaceAdder``).
+//  Split out of the first when the second arrived, rather than drawn twice,
+//  because they say the same things about the same kind of place — what
+//  OpenStreetMap knows, where it is — and a fact row that reads one way in
+//  the maker and another on the saved trail would be the app contradicting
+//  itself about one spring.
 //
 
 import CoreLocation
@@ -112,6 +114,35 @@ struct TrailPlaceActionLabelStyle: LabelStyle {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, 6)
+    }
+}
+
+/// The two ways a photograph reaches a place — the camera, prominent, and the
+/// library beside it — as each place screen that takes one offers them: a
+/// saved hike's place, a place around the trail, and *Add Place*.
+///
+/// Two buttons rather than a row of its own, so they sit in the screen's row
+/// beside whatever else it offers and share its width with the rest. What
+/// each one does, and the name automation finds it by, is the screen's.
+struct TrailPlacePhotoButtons: View {
+    let cameraIdentifier: String
+    let libraryIdentifier: String
+    let onCamera: () -> Void
+    let onLibrary: () -> Void
+
+    var body: some View {
+        Button(action: onCamera) {
+            Label("Take Photo", systemImage: "camera")
+                .labelStyle(TrailPlaceActionLabelStyle())
+        }
+        .buttonStyle(.borderedProminent)
+        .accessibilityIdentifier(cameraIdentifier)
+        Button(action: onLibrary) {
+            Label("Add Photos", systemImage: "photo.on.rectangle")
+                .labelStyle(TrailPlaceActionLabelStyle())
+        }
+        .buttonStyle(.bordered)
+        .accessibilityIdentifier(libraryIdentifier)
     }
 }
 

@@ -170,23 +170,15 @@ private struct HikePlaceAroundCardContent: View {
     private func actions(title: String) -> some View {
         HStack(spacing: 8) {
             if content.isOnHike {
-                Button {
-                    Task { await openCamera() }
-                } label: {
-                    Label("Take Photo", systemImage: "camera")
-                        .labelStyle(TrailPlaceActionLabelStyle())
-                }
-                .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("places-around-card-camera")
-                Button {
-                    capture.pickedPhotos = []
-                    capture.showLibraryPicker = true
-                } label: {
-                    Label("Add Photos", systemImage: "photo.on.rectangle")
-                        .labelStyle(TrailPlaceActionLabelStyle())
-                }
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("places-around-card-library")
+                TrailPlacePhotoButtons(
+                    cameraIdentifier: "places-around-card-camera",
+                    libraryIdentifier: "places-around-card-library",
+                    onCamera: { Task { await openCamera() } },
+                    onLibrary: {
+                        capture.pickedPhotos = []
+                        capture.showLibraryPicker = true
+                    }
+                )
             } else {
                 Button { onAdd(place.id) } label: {
                     Label("Add", systemImage: "plus")

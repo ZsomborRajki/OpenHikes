@@ -145,22 +145,12 @@ struct HikePlaceView: View {
 
     private func actions(_ card: HikePlaceCard) -> some View {
         HStack(spacing: 8) {
-            Button {
-                photoCapture?.requestCamera()
-            } label: {
-                Label("Take Photo", systemImage: "camera")
-                    .labelStyle(TrailPlaceActionLabelStyle())
-            }
-            .buttonStyle(.borderedProminent)
-            .accessibilityIdentifier("hike-place-camera")
-            Button {
-                photoCapture?.requestLibrary()
-            } label: {
-                Label("Add Photos", systemImage: "photo.on.rectangle")
-                    .labelStyle(TrailPlaceActionLabelStyle())
-            }
-            .buttonStyle(.bordered)
-            .accessibilityIdentifier("hike-place-library")
+            TrailPlacePhotoButtons(
+                cameraIdentifier: "hike-place-camera",
+                libraryIdentifier: "hike-place-library",
+                onCamera: { photoCapture?.requestCamera() },
+                onLibrary: { photoCapture?.requestLibrary() }
+            )
             Button {
                 onShowOnMap()
                 mapController.showPhotoSpot(card.coordinate)
