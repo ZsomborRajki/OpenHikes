@@ -29,6 +29,7 @@
 //  There is no second importer to drift from the first.
 //
 
+import Algorithms
 import OpenHikesData
 import SwiftData
 import SwiftUI
@@ -138,7 +139,7 @@ struct HikePlaceView: View {
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("hike-place-title")
         } subtitle: {
-            Text([card.subtitle, card.provenance].compactMap(\.self).joined(separator: " · "))
+            Text([card.subtitle, card.provenance].compacted().joined(separator: " · "))
         }
     }
 

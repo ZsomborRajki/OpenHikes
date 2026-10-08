@@ -52,6 +52,7 @@
 //  by ``TrailStopNamer`` lands seconds after a tap, one point at a time.
 //
 
+import Algorithms
 import SwiftUI
 
 /// The dotted stem that joins one stop to the next.
@@ -236,7 +237,7 @@ struct TrailStopRowView: View {
             Self.length(draft.distanceAlongLine(toWaypointAt: index)),
             draft.leg(arrivingAtWaypointAt: index)?.snap.notice?.text,
         ]
-        .compactMap(\.self)
+        .compacted()
         .joined(separator: ", ")
     }
 

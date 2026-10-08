@@ -13,6 +13,7 @@
 //  `Scripts/coverage-exclusions.txt`.
 //
 
+import Algorithms
 import CoreLocation
 import OpenHikesData
 import OpenHikesShared
@@ -101,7 +102,7 @@ struct TrailPlaceCard: Equatable {
                 .formatted(.measurement(width: .abbreviated, usage: .road))
             return String(localized: "\(length) along the route")
         }
-        let parts = [kind, along].compactMap(\.self)
+        let parts = [kind, along].compacted()
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }

@@ -23,6 +23,7 @@
 //  stops.
 //
 
+import Algorithms
 import Observation
 import OpenHikesData
 import SwiftUI
@@ -260,7 +261,7 @@ struct TrailDraftLineHeader: View {
                 String(localized: "\(Self.spokenHeight(loss)) of descent")
             },
         ]
-        return parts.compactMap(\.self).joined(separator: ", ")
+        return parts.compacted().joined(separator: ", ")
     }
 }
 
