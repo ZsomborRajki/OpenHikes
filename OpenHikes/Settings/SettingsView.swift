@@ -639,8 +639,7 @@ private extension SettingsView {
 // rather than more of the footer's closure, which is over
 // `closure_body_length`'s limit with it inline.
 extension SettingsView {
-    /// Whether the map draws the hiking routes: the switch, through the
-    /// build's gate — see ``TileLayer/isOffered``.
+    /// Whether the map draws the hiking routes.
     private var drawsHikingRoutes: Bool { TileLayer.shown(isOn: showsHikingRoutes) != nil }
 
     /// What the selected map costs in tiles, where that is worth saying.

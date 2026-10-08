@@ -25,9 +25,6 @@
 //  the subscription is for — rather than turning the shared setting to a
 //  colouring this drawing cannot have. See ``TrailDraftShading``.
 //
-//  The section goes when neither row is there, rather than leaving a heading
-//  over nothing.
-//
 //  Its own `View` for the reason ``TrailPlaceFilterSection`` is one: what it
 //  reads stays out of ``TrailDraftView``'s body.
 //
@@ -43,26 +40,24 @@ struct TrailDraftMapSection: View {
 
     var body: some View {
         let showsColoring = maker.draft.travelMode == .hiking && !maker.shading.offered.isEmpty
-        if TileLayer.isOffered || showsColoring {
-            Section {
-                HikingRoutesToggle()
-                if showsColoring {
-                    RouteColoringPicker(
-                        unlockElevation: maker.shading.isElevationUnlocked ? nil : { showsPaywall = true }
-                    )
-                    .accessibilityIdentifier("trail-draft-coloring")
-                }
-            } header: {
-                Text("On the Map")
+        Section {
+            HikingRoutesToggle()
+            if showsColoring {
+                RouteColoringPicker(
+                    unlockElevation: maker.shading.isElevationUnlocked ? nil : { showsPaywall = true }
+                )
+                .accessibilityIdentifier("trail-draft-coloring")
             }
-            .sheet(isPresented: $showsPaywall) {
-                MapPaywallView(store: appModel.entitlement)
-            }
-            // A purchase made from the paywall above: the heights this line
-            // was refused are asked for now, or *Elevation* would draw nothing.
-            .onChange(of: maker.shading.isElevationUnlocked) { _, unlocked in
-                if unlocked { maker.elevationDidUnlock() }
-            }
+        } header: {
+            Text("On the Map")
+        }
+        .sheet(isPresented: $showsPaywall) {
+            MapPaywallView(store: appModel.entitlement)
+        }
+        // A purchase made from the paywall above: the heights this line
+        // was refused are asked for now, or *Elevation* would draw nothing.
+        .onChange(of: maker.shading.isElevationUnlocked) { _, unlocked in
+            if unlocked { maker.elevationDidUnlock() }
         }
     }
 }
