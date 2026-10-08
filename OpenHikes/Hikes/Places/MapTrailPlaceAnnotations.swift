@@ -28,6 +28,7 @@
 //  decluttering are already drawn, and what is app-specific is the glyph.
 //
 
+import Algorithms
 import MapKit
 import OpenHikesData
 import OpenHikesShared
@@ -66,7 +67,7 @@ final class TrailPlaceAnnotation: NSObject, MKAnnotation {
             Measurement(value: measured.distanceAlongRouteMeters, unit: UnitLength.meters)
                 .formatted(.measurement(width: .abbreviated, usage: .road))
         }
-        let parts = [kind, distance].compactMap(\.self)
+        let parts = [kind, distance].compacted()
         guard !parts.isEmpty else { return nil }
         return parts.joined(separator: " · ")
     }

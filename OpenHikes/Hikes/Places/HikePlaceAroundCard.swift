@@ -29,6 +29,7 @@
 //  full screen — see ``HikePlaceView`` — where it is edited and removed.
 //
 
+import Algorithms
 import OpenHikesData
 import PhotosUI
 import SwiftUI
@@ -157,7 +158,7 @@ private struct HikePlaceAroundCardContent: View {
                 TrailPlaceRowView.offTrail(content.row),
                 content.isOnHike ? String(localized: "On this hike") : nil,
             ]
-            Text(parts.compactMap(\.self).joined(separator: " · "))
+            Text(parts.compacted().joined(separator: " · "))
         } trailing: {
             Button("Close", systemImage: "xmark", action: onClose)
                 .glassButtonStyle()

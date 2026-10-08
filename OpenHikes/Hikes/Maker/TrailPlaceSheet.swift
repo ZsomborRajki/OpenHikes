@@ -22,6 +22,7 @@
 //  first, the way Apple Maps behaves.
 //
 
+import Algorithms
 import CoreLocation
 import MapKit
 import OpenHikesShared
@@ -222,7 +223,7 @@ private struct TrailPlaceCardView: View {
 
     private var shareMessage: String {
         [card.title, address, TrailPlaceCoordinates.text(card.coordinate)]
-            .compactMap(\.self)
+            .compacted()
             .joined(separator: "\n")
     }
 

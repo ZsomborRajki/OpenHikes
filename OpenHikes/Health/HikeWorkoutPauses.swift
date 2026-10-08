@@ -27,6 +27,7 @@
 //  complement of the route's segments is, by construction, the same figure.
 //
 
+import Algorithms
 import Foundation
 import OpenHikesData
 
@@ -41,7 +42,7 @@ nonisolated enum HikeWorkoutPauses {
         route: [RouteCoordinate]
     ) -> Date {
         let lastPoint = route.last { $0.timestamp != nil }?.timestamp
-        return [stoppedAt, lastPoint, startedAt].compactMap(\.self).max() ?? startedAt
+        return [stoppedAt, lastPoint, startedAt].compacted().max() ?? startedAt
     }
 
     /// The stretches between `start` and `end` the route was not recording:
