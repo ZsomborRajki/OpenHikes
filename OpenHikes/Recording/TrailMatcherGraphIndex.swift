@@ -5,6 +5,7 @@
 //  HMM candidate index used by TrailMatcher.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import HeapModule
@@ -109,9 +110,7 @@ nonisolated struct TrailMatcherGraphIndex {
     var shortestPathCache: [NodePair: NodePath] = [:]
 
     init(graph: TrailGraph, network: Network = .trails) {
-        let nodeMap = Dictionary(
-            uniqueKeysWithValues: graph.nodes.map { node in (node.id, node) }
-        )
+        let nodeMap = graph.nodes.keyed(by: \.id)
         var validEdges: [TrailGraphEdge] = []
         var endpoints: [EdgeEndpoints] = []
         validEdges.reserveCapacity(graph.edges.count)

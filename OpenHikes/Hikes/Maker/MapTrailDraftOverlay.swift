@@ -63,6 +63,7 @@
 //  a tap that adds a point moves MapKit and no SwiftUI view.
 //
 
+import Algorithms
 import MapKit
 import OpenHikesData
 import SwiftUI
@@ -395,10 +396,7 @@ extension MapView.Coordinator {
     /// redrawn when a role changes, which it does for the old destination
     /// every time a point is appended.
     private func syncTrailDraftPins(_ facts: [TrailDraftPinFacts], on mapView: MKMapView) {
-        var existing: [UUID: TrailDraftWaypointAnnotation] = [:]
-        for pin in trailDraftAnnotations where existing[pin.waypointID] == nil {
-            existing[pin.waypointID] = pin
-        }
+        var existing = trailDraftAnnotations.keyed(by: \.waypointID, resolvingConflictsWith: { _, first, _ in first })
         var kept: [TrailDraftWaypointAnnotation] = []
         var added: [TrailDraftWaypointAnnotation] = []
         kept.reserveCapacity(facts.count)

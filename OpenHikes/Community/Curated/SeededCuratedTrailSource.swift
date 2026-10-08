@@ -56,6 +56,7 @@
 //  ``XCTestCase/awaitCommunityAnswer(_:in:)``.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -142,11 +143,9 @@ nonisolated struct SeededCuratedTrailSource: CuratedTrailSourcing {
 
     func trails(of relationIDs: [Int64]) -> [Int64: CuratedTrail] {
         let wanted = Set(relationIDs)
-        return Dictionary(
-            uniqueKeysWithValues: served
-                .filter { wanted.contains($0.relationID) }
-                .map { ($0.relationID, $0) }
-        )
+        return served
+            .filter { wanted.contains($0.relationID) }
+            .keyed(by: \.relationID)
     }
 }
 
