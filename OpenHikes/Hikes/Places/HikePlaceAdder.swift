@@ -144,23 +144,15 @@ struct HikePlaceAdder: View {
 
     private var actions: some View {
         HStack(spacing: 8) {
-            Button {
-                Task { await openCamera() }
-            } label: {
-                Label("Take Photo", systemImage: "camera")
-                    .labelStyle(TrailPlaceActionLabelStyle())
-            }
-            .buttonStyle(.borderedProminent)
-            .accessibilityIdentifier("hike-place-adder-camera")
-            Button {
-                capture.pickedPhotos = []
-                capture.showLibraryPicker = true
-            } label: {
-                Label("Add Photos", systemImage: "photo.on.rectangle")
-                    .labelStyle(TrailPlaceActionLabelStyle())
-            }
-            .buttonStyle(.bordered)
-            .accessibilityIdentifier("hike-place-adder-library")
+            TrailPlacePhotoButtons(
+                cameraIdentifier: "hike-place-adder-camera",
+                libraryIdentifier: "hike-place-adder-library",
+                onCamera: { Task { await openCamera() } },
+                onLibrary: {
+                    capture.pickedPhotos = []
+                    capture.showLibraryPicker = true
+                }
+            )
         }
         .buttonBorderShape(.roundedRectangle(radius: TrailPlaceActionLabelStyle.cornerRadius))
         .fixedSize(horizontal: false, vertical: true)
