@@ -235,6 +235,9 @@ struct OfflineQuotaShortfallTests {
         )
         #expect(nothing.contains("are full"))
         #expect(nothing.contains("delete another saved map"))
+        // The holder is a company called "… Maps", so a sentence that puts
+        // "maps" after its name says it twice.
+        #expect(!nothing.contains("\(Self.licence.holder) maps"))
     }
 
     /// Under the ceiling, a failure is a network failure, and trying again is

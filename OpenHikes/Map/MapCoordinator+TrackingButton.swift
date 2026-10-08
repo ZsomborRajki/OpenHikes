@@ -315,8 +315,9 @@ extension MapView {
     /// anywhere else, because the accent follows the *interface* appearance
     /// while these tiles do not follow anything: `openStreetMap`,
     /// `stadiaOutdoors`, `stamenTerrain` and `thunderforestOutdoors` are
-    /// light-styled at every hour and in either mode, so dark mode put a bright green arrow
-    /// (`#44EE6E`, 1.5:1) on a white map. Reported by the user 2026-09-18.
+    /// light-styled at every hour and in either mode, so dark mode put a
+    /// bright green arrow (`#44EE6E`, 1.5:1) on a white map. Reported by the
+    /// user 2026-09-18.
     ///
     /// So the contrast is carried by a surface rather than by the glyph, which
     /// is what the camera pill and *Search this area* already do — same
