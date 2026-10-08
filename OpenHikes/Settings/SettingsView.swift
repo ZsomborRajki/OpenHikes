@@ -186,9 +186,10 @@ struct SettingsView: View {
             // Edge to edge, so the row scrolls out from under the section's
             // rounded corners rather than stopping short of them.
             .listRowInsets(EdgeInsets())
-            if TileLayer.isOffered {
-                hikingRoutesToggle
-            }
+            // Waymarked Trails' hiking routes over whichever map is chosen
+            // above — a layer rather than a sixth card, because it is drawn
+            // with any of them.
+            HikingRoutesToggle()
             if entitlement.isEntitled {
                 manageSubscriptionRow
             }
@@ -232,20 +233,6 @@ struct SettingsView: View {
                 }
             }
         }
-    }
-
-    /// Waymarked Trails' hiking routes over whichever map is chosen above —
-    /// a layer rather than a sixth card, because it is drawn with any of them.
-    private var hikingRoutesToggle: some View {
-        Toggle(isOn: $showsHikingRoutes) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Hiking Routes")
-                Text("Marked trails from Waymarked Trails, drawn over any map when zoomed in.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityIdentifier("hiking-routes-toggle")
     }
 
     /// The way out, shown to a subscriber in the section their money unlocks.

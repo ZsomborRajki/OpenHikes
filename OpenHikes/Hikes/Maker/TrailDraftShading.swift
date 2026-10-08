@@ -33,7 +33,7 @@
 //  *Elevation* on the shared control would leave their line plain while an
 //  imported hike — whose file brought its own heights — is coloured by it.
 //  So in the maker the control's *Elevation* is locked without the
-//  subscription (see ``TrailDraftColoringSection``) and the line is drawn by
+//  subscription (see ``TrailDraftMapSection``) and the line is drawn by
 //  difficulty instead, through ``drawnColoring(for:)``. The shared setting is
 //  left alone: it is still right for every imported hike.
 //
