@@ -40,6 +40,10 @@ nonisolated enum RouteShadeBlend {
         /// From the first stretch's colour at the start to the second's at
         /// the end.
         let gradient: CGGradient
+        /// ``gradient`` at full alpha, for recolouring a dashed or dotted
+        /// line's own dashes, which keep the alpha they were drawn at — see
+        /// ``DirectionalPolylineRenderer/drawBlend(_:zoomScale:context:)``.
+        let opaqueGradient: CGGradient
     }
 
     /// One entry per pair of neighbouring `shades`, in order: the piece where
@@ -65,10 +69,10 @@ nonisolated enum RouteShadeBlend {
         let after = points(of: next.polyline)
         guard let end = before.last, let start = after.first, end.x == start.x, end.y == start.y,
               previous.color != next.color,
-              let gradient = CGGradient(
-                  colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
-                  colors: [previous.color, next.color] as CFArray,
-                  locations: [0, 1]
+              let gradient = linearGradient(from: previous.color, to: next.color),
+              let opaqueGradient = linearGradient(
+                  from: previous.color.copy(alpha: 1) ?? previous.color,
+                  to: next.color.copy(alpha: 1) ?? next.color
               )
         else { return nil }
         // In map points, the unit the line is drawn in. A hike spans too
@@ -79,7 +83,15 @@ nonisolated enum RouteShadeBlend {
         let line = Array(tail.reversed() + head.dropFirst())
         guard line.count > 1 else { return nil }
         let bounds = MKPolyline(points: line, count: line.count).boundingMapRect
-        return Piece(points: line, bounds: bounds, gradient: gradient)
+        return Piece(points: line, bounds: bounds, gradient: gradient, opaqueGradient: opaqueGradient)
+    }
+
+    private static func linearGradient(from start: CGColor, to end: CGColor) -> CGGradient? {
+        CGGradient(
+            colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
+            colors: [start, end] as CFArray,
+            locations: [0, 1]
+        )
     }
 
     private static func points(of polyline: MKPolyline) -> [MKMapPoint] {

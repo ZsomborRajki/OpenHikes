@@ -33,6 +33,13 @@ nonisolated extension DirectionalPolylineRenderer {
     /// there is to recolour; a dash reaching past the piece's end keeps the
     /// colour the gradient ends in there, which is its own.
     ///
+    /// That recolouring paints the piece's gradient at full alpha. A
+    /// translucent route's stretches carry its alpha, and `.sourceAtop`
+    /// keeps as much of the dash under it as the source lets through — so
+    /// the gradient at the stretches' own alpha came out mixed half and
+    /// half with the flat colour beneath, and the change of colour half as
+    /// gradual as on an opaque line.
+    ///
     /// The gradient runs straight from the piece's first point to its last.
     /// A piece is a few tens of metres, so a bend inside one shifts where the
     /// mix falls by a little and never colours it outside the two it joins.
@@ -44,7 +51,8 @@ nonisolated extension DirectionalPolylineRenderer {
         context.saveGState()
         context.setLineJoin(.round)
         context.setLineDash(phase: 0, lengths: [])
-        if pattern.dashLengths(forWidth: Double(lineWidth)).isEmpty {
+        let gapped = !pattern.dashLengths(forWidth: Double(lineWidth)).isEmpty
+        if !gapped {
             context.setLineWidth(width)
             context.setLineCap(pattern.lineCap)
         } else {
@@ -58,7 +66,7 @@ nonisolated extension DirectionalPolylineRenderer {
         context.replacePathWithStrokedPath()
         context.clip()
         context.drawLinearGradient(
-            piece.gradient,
+            gapped ? piece.opaqueGradient : piece.gradient,
             start: point(for: start),
             end: point(for: end),
             options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
