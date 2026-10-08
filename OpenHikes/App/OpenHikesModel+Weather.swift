@@ -67,13 +67,17 @@ extension OpenHikesModel {
             dueDatesContinuation.finish()
         }
 
-        // Nested because `merge` takes at most three.
+        // Nested because `merge` takes at most three. The session is
+        // de-duplicated because `isActive` reads the recorder's phase, and a
+        // pause or a resume is not a session starting.
         let wakes = merge(
             weatherFocus.subjects.map { _ in WeatherWake.focus },
             significantLocations.movements.map { _ in WeatherWake.movement },
             merge(
                 dueDates.map { _ in WeatherWake.expiry },
-                Observations { self.weatherAlertSession }.map { _ in WeatherWake.session }
+                Observations { self.weatherAlertSession }
+                    .removeDuplicates()
+                    .map { _ in WeatherWake.session }
             )
         )
 
