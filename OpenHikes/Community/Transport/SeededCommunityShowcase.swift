@@ -111,15 +111,7 @@ nonisolated extension SeededCommunityTransport {
     /// up's heights and spends as long as it took, which is generous to the
     /// descent and makes no difference to anything this frame shows.
     private static func outAndBack(_ route: [RouteCoordinate], turningAt meters: Double) -> [RouteCoordinate] {
-        var walked = 0.0
-        var outward: [RouteCoordinate] = []
-        for point in route {
-            if let previous = outward.last {
-                walked += RouteGeometry.distanceMeters(from: previous.clCoordinate, to: point.clCoordinate)
-                guard walked <= meters else { break }
-            }
-            outward.append(point)
-        }
+        let outward = route.prefix(walking: meters)
         guard let turn = outward.last?.timestamp else { return outward }
         let back = outward.reversed().dropFirst().map { point in
             var returning = point

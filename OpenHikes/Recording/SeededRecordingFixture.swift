@@ -74,15 +74,7 @@ nonisolated enum SeededRecordingFixture {
         upTo meters: Double,
         endingAt end: Date
     ) -> [RecordingPoint] {
-        var walked = 0.0
-        var stretch: [RouteCoordinate] = []
-        for point in route {
-            if let previous = stretch.last {
-                walked += RouteGeometry.distanceMeters(from: previous.clCoordinate, to: point.clCoordinate)
-                guard walked <= meters else { break }
-            }
-            stretch.append(point)
-        }
+        let stretch = route.prefix(walking: meters)
         guard let last = stretch.last?.timestamp,
               stretch.allSatisfy({ $0.timestamp != nil }) else { return [] }
         let shift = end.timeIntervalSince(last)
@@ -97,6 +89,26 @@ nonisolated enum SeededRecordingFixture {
                 )
             }
         }
+    }
+}
+
+nonisolated extension [RouteCoordinate] {
+    /// The route as far as `meters` along it: its first point, and every one
+    /// after it up to the last that is no further than that. How the seeded
+    /// fixtures cut a bundled GPX short — this file's recording in progress,
+    /// and the out-and-back walk ``SeededCommunityTransport``'s showcase
+    /// publishes.
+    func prefix(walking meters: Double) -> Self {
+        var walked = 0.0
+        var kept: Self = []
+        for point in self {
+            if let previous = kept.last {
+                walked += RouteGeometry.distanceMeters(from: previous.clCoordinate, to: point.clCoordinate)
+                guard walked <= meters else { break }
+            }
+            kept.append(point)
+        }
+        return kept
     }
 }
 #endif
