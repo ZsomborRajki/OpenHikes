@@ -1147,7 +1147,7 @@ extension CommunityHikeView {
     static func prepare(_ detail: CommunityHikeDetail) async -> HikeDetailPreparedContent? {
         try? await HikeDetailPreparation.prepare(
             route: detail.route,
-            distanceMeters: CommunityImport.routeLength(of: detail.route)
+            distanceMeters: detail.route.lengthMeters
         )
     }
 

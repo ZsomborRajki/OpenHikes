@@ -48,7 +48,6 @@
 //  hiker could see it.
 //
 
-import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -123,7 +122,10 @@ nonisolated enum CommunityImport {
         let listing = detail.listing
         let hike = Hike(
             title: listing.title,
-            distanceMeters: routeLength(of: detail.route),
+            // The route's own length, measured as ``GPXImport`` measures an
+            // imported file's — see this file's header for why the listing's
+            // figure is not trusted.
+            distanceMeters: detail.route.lengthMeters,
             // A curated route carries no date, because nobody walked it. The
             // day it was saved is the only honest value: ``Hike/date`` means
             // *when this walk happened*, and the hikes list is sorted by it, so
@@ -552,16 +554,5 @@ nonisolated enum CommunityImport {
     @concurrent
     private static func readFile(at url: URL) async -> Data? {
         try? Data(contentsOf: url, options: .mappedIfSafe)
-    }
-
-    /// The route's own length, summed the way ``GPXImport`` sums an imported
-    /// file's — see this file's header for why the listing's figure is not
-    /// trusted.
-    static func routeLength(of route: [RouteCoordinate]) -> Double {
-        var total = 0.0
-        for (start, end) in route.adjacentPairs() {
-            total += RouteGeometry.distanceMeters(from: start.clCoordinate, to: end.clCoordinate)
-        }
-        return total
     }
 }

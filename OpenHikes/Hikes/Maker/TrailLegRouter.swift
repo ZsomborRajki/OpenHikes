@@ -355,7 +355,10 @@ nonisolated private extension OverpassTrailLegRouter {
         let paths = shapes.map { shape in
             TrailLegPath(
                 coordinates: shape.map { RouteCoordinate(latitude: $0.latitude, longitude: $0.longitude) },
-                distanceMeters: length(of: shape)
+                // Measured along the drawn shape rather than reported by the
+                // router, so the number in the header is the length of the
+                // line on the screen.
+                distanceMeters: RouteGeometry.lengthMeters(of: shape)
             )
         }
         return TrailLegRoute(
@@ -567,13 +570,5 @@ nonisolated private extension OverpassTrailLegRouter {
             )
         }
         return best
-    }
-
-    /// Measured along the drawn shape rather than reported by the router,
-    /// so the number in the header is the length of the line on the screen.
-    static func length(of shape: [CLLocationCoordinate2D]) -> Double {
-        shape.adjacentPairs().reduce(0) { total, pair in
-            total + RouteGeometry.distanceMeters(from: pair.0, to: pair.1)
-        }
     }
 }

@@ -7,6 +7,7 @@
 //  geometry every route-matching path shares.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 
@@ -221,6 +222,18 @@ nonisolated public extension [RouteCoordinate] {
         }
         return coordinates
     }
+
+    /// The length of the line through these points, in metres — the sum
+    /// ``RouteGeometry/lengthMeters(of:)`` takes, over a stored route.
+    ///
+    /// A pause is walked through like any other leg: this is how long the
+    /// line is, which is what an imported file's or a downloaded route's
+    /// distance states, not how far a hiker covered along it.
+    var lengthMeters: Double {
+        adjacentPairs().reduce(0) { total, leg in
+            total + RouteGeometry.distanceMeters(from: leg.0.clCoordinate, to: leg.1.clCoordinate)
+        }
+    }
 }
 
 nonisolated public enum RouteGeometry {
@@ -261,6 +274,14 @@ nonisolated public enum RouteGeometry {
             + cos(startLatitude) * cos(endLatitude) * longitudeTerm * longitudeTerm
         let bounded = min(max(haversine, 0), 1)
         return 2 * earthRadiusMeters * atan2(sqrt(bounded), sqrt(1 - bounded))
+    }
+
+    /// The length of the line through `coordinates`: each consecutive pair's
+    /// ``distanceMeters(from:to:)``, summed. Zero for fewer than two points.
+    public static func lengthMeters(of coordinates: [CLLocationCoordinate2D]) -> Double {
+        coordinates.adjacentPairs().reduce(0) { total, leg in
+            total + distanceMeters(from: leg.0, to: leg.1)
+        }
     }
 
     /// Local tangent-plane offset in metres. Accurate enough for projecting a

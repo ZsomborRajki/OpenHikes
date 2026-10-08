@@ -46,12 +46,6 @@ struct RouteShadingTests {
         return defaults
     }
 
-    private static func length(of coordinates: [CLLocationCoordinate2D]) -> Double {
-        zip(coordinates, coordinates.dropFirst()).reduce(0) { total, pair in
-            total + RouteGeometry.distanceMeters(from: pair.0, to: pair.1)
-        }
-    }
-
     @Test("following a graded hike publishes its graded stretches, and only those")
     func followingMeasuresTheHike() async throws {
         let context = try Fixture.modelContext()
@@ -81,7 +75,7 @@ struct RouteShadingTests {
 
         var drawn: [RouteShade: Double] = [:]
         for stretch in shading.stretches {
-            drawn[stretch.shade, default: 0] += Self.length(of: stretch.coordinates)
+            drawn[stretch.shade, default: 0] += RouteGeometry.lengthMeters(of: stretch.coordinates)
         }
         for share in breakdown.shares {
             guard let shade = share.category.shade else { continue }

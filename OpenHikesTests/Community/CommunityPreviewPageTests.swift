@@ -66,10 +66,9 @@ struct CommunityPreviewPageTests {
     /// submitting app wrote beside the route, while both the preview and the
     /// imported hike measure the route that was actually uploaded.
     ///
-    /// Asserted against the imported hike rather than against
-    /// ``CommunityImport/routeLength(of:)`` directly, because agreeing with
-    /// that function is not the claim — agreeing with the hike the Add button
-    /// makes is.
+    /// Asserted against the imported hike rather than against the route's
+    /// `lengthMeters` directly, because agreeing with that sum is not the
+    /// claim — agreeing with the hike the Add button makes is.
     @Test("the page states the route's length, not the listing's")
     func statedDistanceMatchesTheImportedHike() async throws {
         let context = try Fixture.modelContext()

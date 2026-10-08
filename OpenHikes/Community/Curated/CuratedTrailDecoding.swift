@@ -44,7 +44,6 @@
 //  where that line is drawn, and it costs six of 97 in the measured box.
 //
 
-import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -80,7 +79,7 @@ nonisolated struct CuratedTrail: Codable, Hashable, Sendable {
     /// 2% of relations and is sometimes a string like `"4.6 km"`. Zero until
     /// the geometry pass has run.
     var distanceMeters: Double {
-        CommunityImport.routeLength(of: route)
+        route.lengthMeters
     }
 
     /// What OpenStreetMap says about this route besides its line.
@@ -275,7 +274,7 @@ nonisolated extension CuratedTrailDecoding {
             runs.append(grow(from: ways[seed], ways: ways, endsByKey: endsByKey, used: &used))
         }
 
-        let lengths = runs.map(routeLength)
+        let lengths = runs.map(RouteGeometry.lengthMeters(of:))
         let total = lengths.reduce(0, +)
         guard total > 0,
               let best = zip(runs, lengths).max(by: { $0.1 < $1.1 }),
@@ -361,13 +360,6 @@ nonisolated private extension CuratedTrailDecoding {
             return ways[index]
         }
         return []
-    }
-
-    static func routeLength(_ points: [CLLocationCoordinate2D]) -> Double {
-        guard points.count > 1 else { return 0 }
-        return points.adjacentPairs().reduce(0) { total, pair in
-            total + RouteGeometry.distanceMeters(from: pair.0, to: pair.1)
-        }
     }
 }
 

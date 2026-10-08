@@ -57,12 +57,6 @@ struct TrailCategoryRunTests {
         latitudes.map { RouteCoordinate(latitude: $0, longitude: longitude) }
     }
 
-    private static func length(of coordinates: [CLLocationCoordinate2D]) -> Double {
-        zip(coordinates, coordinates.dropFirst()).reduce(0) { total, pair in
-            total + RouteGeometry.distanceMeters(from: pair.0, to: pair.1)
-        }
-    }
-
     @Test("a route over two graded ways is two runs, in route order, meeting at the junction")
     func splitsAtTheJunction() async throws {
         let walked = Self.route((0...4).map { Self.south + Double($0) * 0.0005 })
@@ -108,7 +102,7 @@ struct TrailCategoryRunTests {
 
         var drawn: [TrailDifficulty: Double] = [:]
         for run in runs {
-            drawn[run.category, default: 0] += Self.length(of: run.coordinates)
+            drawn[run.category, default: 0] += RouteGeometry.lengthMeters(of: run.coordinates)
         }
         #expect(Set(drawn.keys) == Set(breakdown.shares.map(\.category)))
         for share in breakdown.shares {

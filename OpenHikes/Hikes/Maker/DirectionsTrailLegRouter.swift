@@ -1,4 +1,3 @@
-import Algorithms
 import CoreLocation
 import Foundation
 import MapKit
@@ -91,8 +90,7 @@ actor DirectionsTrailLegRouter: TrailLegRouting {
 
     private static func path(along ends: TrailLegEnds, _ answer: Answer) -> TrailLegPath {
         let shape = [ends.start] + answer.coordinates + [ends.end]
-        let length = shape.adjacentPairs().reduce(0) { $0 + distance($1.0, $1.1) }
-        return TrailLegPath(coordinates: shape, distanceMeters: length, travelTime: answer.travelTime)
+        return TrailLegPath(coordinates: shape, distanceMeters: shape.lengthMeters, travelTime: answer.travelTime)
     }
 
     private static func distance(_ from: RouteCoordinate, _ to: RouteCoordinate) -> Double {
