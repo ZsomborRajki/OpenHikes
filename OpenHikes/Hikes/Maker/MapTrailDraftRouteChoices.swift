@@ -116,7 +116,12 @@ final class TrailDraftTravelTimeView: MKAnnotationView {
         label.text = annotation.title
         label.textColor = isChosen ? .white : .label
         backgroundColor = isChosen ? UIColor(Color.accentColor) : .systemBackground
-        displayPriority = isChosen ? .defaultHigh : .defaultLow
+        // The route's own time never gives way; an alternative's always can.
+        // At `.defaultHigh` the route's lost its collision with whatever
+        // `.required` stood beside it — the start's pin, or the hiker's dot
+        // on it — and the alternative's, drawn on its own, read as the
+        // route's time: "4 hrs, 21 min" over a header saying 4 hrs, 11 min.
+        displayPriority = isChosen ? .required : .defaultLow
         accessibilityLabel = annotation.spokenDescription
         accessibilityTraits = isChosen ? .staticText : .button
         accessibilityIdentifier = isChosen ? "trail-draft-route-time" : "trail-draft-alternative-time"
