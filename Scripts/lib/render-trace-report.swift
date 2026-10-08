@@ -329,25 +329,26 @@ func table(
 /// sees every simulator on the machine: SwiftUI's tracepoints are collected
 /// host-wide, so a second simulator running the app — another session's UI
 /// tests — puts its bodies into this report under the same view names. The
-/// tracepoints themselves do name the thread that fired them, and a body
-/// starts at exactly the instant of one, so the instant is the join. Which
-/// process ids are the app on the recorded simulator is the one thing the
-/// trace cannot say; `Scripts/render-trace.sh` watches for them while it
-/// records, and hands them over as a file.
+/// events underneath them do name the thread that fired them, so the instant
+/// is the join — and the two tables are joined to different sources, because
+/// they are recorded differently: a body starts at exactly the instant of a
+/// `kdebug` tracepoint, and a property update at exactly the instant of one of
+/// SwiftUI's `os-signpost` events, never a tracepoint's. Measured on a 2026-10-08
+/// recording: 5,214 of 5,214 bodies joined `kdebug`, and 0 of 1,930 property
+/// events did, every one of which joined `os-signpost`. Which process ids are
+/// the app on the recorded simulator is the one thing the trace cannot say;
+/// `Scripts/render-trace.sh` watches for them while it records, and hands them
+/// over as a file.
 struct ProcessFilter {
-    /// Each tracepoint's instant, as the raw nanoseconds the tables print, and
-    /// the process that fired it.
+    /// Each event's instant, as the raw nanoseconds the tables print, and the
+    /// process that fired it.
     let processAt: [String: Int32]
     let appProcesses: Set<Int32>
 
-    /// `nil` for an instant no tracepoint fired at, which is kept: the join
-    /// failing is not evidence that the event came from elsewhere.
+    /// `nil` for an instant no event fired at, which is kept: the join failing
+    /// is not evidence that the event came from elsewhere.
     func process(at time: String) -> Int32? {
         processAt[time]
-    }
-
-    func admits(_ time: String) -> Bool {
-        process(at: time).map(appProcesses.contains) ?? true
     }
 
     /// - Parameter instants: The raw times of the events to be filtered. Only
@@ -364,11 +365,13 @@ struct ProcessFilter {
         let appProcesses = Set(text.split(whereSeparator: \.isNewline).compactMap { Int32($0) })
         var processAt: [String: Int32] = [:]
         // Only the thread is remembered between rows, for the same reason:
-        // almost every instant and argument in this table is unique.
-        table("kdebug", in: trace, exportingInto: directory, remembering: ["thread"]) { row in
-            guard let time = row["time"]?.raw, instants.contains(time),
-                  let pid = processID(in: row["thread"]?.display) else { return }
-            processAt[time] = pid
+        // almost every instant and argument in these tables is unique.
+        for schema in ["kdebug", "os-signpost"] {
+            table(schema, in: trace, exportingInto: directory, remembering: ["thread"]) { row in
+                guard let time = row["time"]?.raw, instants.contains(time), processAt[time] == nil,
+                      let pid = processID(in: row["thread"]?.display) else { return }
+                processAt[time] = pid
+            }
         }
         return Self(processAt: processAt, appProcesses: appProcesses)
     }
@@ -496,18 +499,42 @@ struct PropertyUpdate {
     let narrative: String
 }
 
+/// What `ProcessFilter` turned away, and what it could not place.
+struct Excluded {
+    /// Bodies from another process, by process.
+    var bodies: [Int32: Int] = [:]
+    /// Property updates from another process, by process.
+    var updates: [Int32: Int] = [:]
+    /// Events no instant in the trace named a process for, which were kept.
+    var unmatched = 0
+
+    /// Sorts one event, and says whether it belongs to the app.
+    mutating func admits(_ time: String, into foreign: WritableKeyPath<Self, [Int32: Int]>, filter: ProcessFilter?) -> Bool {
+        guard let filter else { return true }
+        guard let process = filter.process(at: time) else {
+            unmatched += 1
+            return true
+        }
+        guard filter.appProcesses.contains(process) else {
+            self[keyPath: foreign][process, default: 0] += 1
+            return false
+        }
+        return true
+    }
+}
+
 /// Every update of an app view's dynamic property, labelled, with the
 /// first-value "updates" a newly built view reports left out.
 func propertyUpdates(
     _ properties: TableReader,
     origin: Double,
     modulePrefix: String,
-    filter: ProcessFilter?
+    filter: ProcessFilter?,
+    excluded: inout Excluded
 ) -> [PropertyUpdate] {
     let updates: [PropertyUpdate] = properties.rows.compactMap { row in
         guard row["event"]?.display == "Update",
               row["view-module"]?.display.hasPrefix(modulePrefix) == true,
-              filter?.admits(row["time"]?.raw ?? "") ?? true,
               let view = row["view-type"]?.display,
               let property = row["link-type"]?.display,
               let narrative = row["narrative"]?.display else { return nil }
@@ -520,7 +547,10 @@ func propertyUpdates(
         if narrative.hasPrefix(prefix), narrative.hasSuffix(suffix), narrative.count >= prefix.count + suffix.count {
             oldValue = String(narrative.dropFirst(prefix.count).dropLast(suffix.count))
         }
-        if oldValue == "<initialState>" { return nil }
+        // A first value is not an update, so it is neither counted nor
+        // filtered: the counts below are of the updates the report reads.
+        guard oldValue != "<initialState>",
+              excluded.admits(row["time"]?.raw ?? "", into: \.updates, filter: filter) else { return nil }
         var label = trimmed(property, keeping: 2)
         if oldValue == newValue { label += " (prints unchanged)" }
         return PropertyUpdate(
@@ -534,24 +564,21 @@ func propertyUpdates(
 }
 
 /// The app's bodies, in time order, each given the property updates that
-/// preceded it. `foreign` counts what `filter` turned away, by process.
+/// preceded it.
 func evaluations(
     _ bodies: TableReader,
     updates: [PropertyUpdate],
     origin: Double,
     modulePrefix: String,
     filter: ProcessFilter?,
-    foreign: inout [Int32: Int]
+    excluded: inout Excluded
 ) -> [Evaluation] {
     var result: [Evaluation] = []
     for row in bodies.rows {
         guard row["view-module"]?.display.hasPrefix(modulePrefix) == true,
               let view = row["view-type"]?.display else { continue }
         let start = row["start"]?.raw ?? ""
-        if let filter, let process = filter.process(at: start), !filter.appProcesses.contains(process) {
-            foreign[process, default: 0] += 1
-            continue
-        }
+        guard excluded.admits(start, into: \.bodies, filter: filter) else { continue }
         result.append(Evaluation(
             time: origin + (Double(start) ?? 0) / 1_000_000_000,
             view: trimmed(view, keeping: 0),
@@ -693,20 +720,21 @@ func main() {
         let instants = bodies.rows.compactMap { $0["start"]?.raw } + properties.rows.compactMap { $0["time"]?.raw }
         return ProcessFilter.load(trace: options.trace, processes: file, at: Set(instants), exportingInto: exports)
     }
+    var excluded = Excluded()
     let updates = propertyUpdates(
         properties,
         origin: origin,
         modulePrefix: options.modulePrefix,
-        filter: filter
+        filter: filter,
+        excluded: &excluded
     )
-    var foreign: [Int32: Int] = [:]
     let all = evaluations(
         bodies,
         updates: updates,
         origin: origin,
         modulePrefix: options.modulePrefix,
         filter: filter,
-        foreign: &foreign
+        excluded: &excluded
     )
     let runs = testRuns(in: options.resultBundle)
     guard !runs.isEmpty else { fail("the result bundle names no test that ran") }
@@ -763,10 +791,20 @@ func main() {
     if filter == nil {
         report += "No process ids were given, so a second simulator running the app during the recording "
         report += "is counted here as if it were this one.\n\n"
-    } else if !foreign.isEmpty {
-        let left = foreign.values.reduce(0, +)
-        report += "**\(left) bodies from \(foreign.count) other process(es) were left out**: another simulator "
-        report += "was running these views while this one was recorded.\n\n"
+    } else {
+        if !excluded.bodies.isEmpty || !excluded.updates.isEmpty {
+            let bodies = excluded.bodies.values.reduce(0, +)
+            let updates = excluded.updates.values.reduce(0, +)
+            let processes = Set(excluded.bodies.keys).union(excluded.updates.keys).count
+            report += "**\(bodies) bodies and \(updates) property updates from \(processes) other process(es) "
+            report += "were left out**: another simulator was running these views while this one was recorded.\n\n"
+        }
+        // The filter's own health: an event no instant in the trace places is
+        // kept, so a join that has stopped matching would otherwise quietly
+        // turn the filter off.
+        if excluded.unmatched > 0 {
+            report += "\(excluded.unmatched) event(s) could not be placed in a process and were kept.\n\n"
+        }
     }
     report += "*Why* names the dynamic properties of a view's type updated since its previous body. "
     report += "*Prints unchanged* is an update whose old and new values print identically. "

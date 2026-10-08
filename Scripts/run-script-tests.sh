@@ -114,6 +114,7 @@ if [[ -n "${STUB_TRACE_DIR:-}" ]]; then
         "xctrace export"*"swiftui-body-interval"*) cat "$STUB_TRACE_DIR/bodies.xml" ;;
         "xctrace export"*"swiftui-link-event"*) cat "$STUB_TRACE_DIR/properties.xml" ;;
         "xctrace export"*"kdebug"*) cat "$STUB_TRACE_DIR/kdebug.xml" ;;
+        "xctrace export"*"os-signpost"*) cat "$STUB_TRACE_DIR/os-signpost.xml" ;;
         "xcresulttool get test-results tests"*) cat "$STUB_TRACE_DIR/tests.json" ;;
         "xcresulttool get test-results activities"*) cat "$STUB_TRACE_DIR/activities.json" ;;
     esac
@@ -2105,8 +2106,12 @@ fi
 # Instruments collects SwiftUI's tracepoints from every simulator on the
 # machine, so the third alert body in the tap — fired by process 5151, which
 # is not one of the app's on the recorded simulator — is another session's and
-# must not be counted. The join is the instant: a body starts exactly when a
-# tracepoint fires, and the tracepoint names its thread's process.
+# must not be counted, and neither is the second binding update before it,
+# which the same process sent. The join is the instant, from a different table
+# for each: a body starts exactly when a `kdebug` tracepoint fires, and a
+# property update exactly when one of SwiftUI's signposts does, and both name
+# their thread's process. The last update is in neither, and is kept and
+# counted rather than guessed at.
 cat > "$trace_fixture/kdebug.xml" <<'XML'
 <?xml version="1.0"?>
 <trace-query-result>
@@ -2119,6 +2124,14 @@ cat > "$trace_fixture/kdebug.xml" <<'XML'
 <row><event-time id="15" fmt="00:03.800.000">3800000000</event-time><thread ref="2"/></row>
 </node></trace-query-result>
 XML
+cat > "$trace_fixture/os-signpost.xml" <<'XML'
+<?xml version="1.0"?>
+<trace-query-result>
+<node xpath='//trace-toc[1]/run[1]/data[1]/table[6]'><schema name="os-signpost"><col><mnemonic>time</mnemonic><name>Time</name></col><col><mnemonic>thread</mnemonic><name>Thread</name></col><col><mnemonic>process</mnemonic><name>Process</name></col><col><mnemonic>name</mnemonic><name>Name</name></col></schema><row><event-time id="1" fmt="00:01.400.000">1400000000</event-time><thread id="2" fmt="Main Thread (0x1) (OpenHikes, pid: 4242)"><tid id="3" fmt="0x1">1</tid><process id="4" fmt="OpenHikes (4242)"><pid id="5" fmt="4242">4242</pid></process></thread><process ref="4"/><signpost-name id="6" fmt="LinkUpdate">LinkUpdate</signpost-name></row>
+<row><event-time id="7" fmt="00:03.450.000">3450000000</event-time><thread ref="2"/><process ref="4"/><signpost-name ref="6"/></row>
+<row><event-time id="8" fmt="00:03.550.000">3550000000</event-time><thread id="9" fmt="Main Thread (0x9) (OpenHikes, pid: 5151)"><tid id="10" fmt="0x9">9</tid><process id="11" fmt="OpenHikes (5151)"><pid id="12" fmt="5151">5151</pid></process></thread><process ref="11"/><signpost-name ref="6"/></row>
+</node></trace-query-result>
+XML
 filtered_run="$trace_fixture/filtered"
 mkdir -p "$filtered_run/render.trace" "$filtered_run/run.xcresult"
 printf '4242\n' > "$filtered_run/processes.txt"
@@ -2127,8 +2140,10 @@ STUB_TRACE_DIR="$trace_fixture" \
         "$render_trace" --report "$filtered_run"
 report="$(cat "$filtered_run/report.md" 2>/dev/null || true)"
 if expect_status 0 \
-    && expect_contains "$report" "**1 bodies from 1 other process(es) were left out**" "the report" \
-    && expect_contains "$report" "| MapScreenAlerts | 3 | 3.0 | Binding<Bool> (prints unchanged) ×2, unexplained ×1 |" "the per-view table" \
+    && expect_contains "$report" "**1 bodies and 1 property updates from 1 other process(es) were left out**" "the report" \
+    && expect_contains "$report" "1 event(s) could not be placed in a process and were kept." "the report" \
+    && expect_contains "$report" "| MapScreenAlerts | 3 | 3.0 | Binding<Bool> (prints unchanged) ×1, unexplained ×2 |" "the per-view table" \
+    && expect_contains "$report" "| OpenHikesView | 2 | 2.0 | State<Optional<Hike>> ×1, unexplained ×1 |" "the per-view table" \
     && expect_absent "$report" "| 3 | MapScreenAlerts |" "the hot spots"; then
     pass
 fi

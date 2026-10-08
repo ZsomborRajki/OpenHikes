@@ -228,7 +228,11 @@ fi
 # fails with "could not lock kperf" — after posting the notice this script
 # waits for, so without this the tests would run for nothing and the report
 # would say no body ran. Another session's recording is the usual holder.
-if holder="$(pgrep -f 'xctrace record' | head -n 1)" && [[ -n "$holder" ]]; then
+#
+# Anchored to the executable, because `-f` matches the whole command line: a
+# shell whose command merely mentions the words — a `pgrep` for them, a loop
+# that waits on a sweep — would otherwise read as a recording and refuse.
+if holder="$(pgrep -f '(^|/)xctrace record' | head -n 1)" && [[ -n "$holder" ]]; then
     echo "Another Instruments recording is running (pid $holder)." >&2
     echo "Only one can hold the kernel's trace facility at a time; wait for it to finish." >&2
     exit 1
