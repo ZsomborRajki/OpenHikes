@@ -64,6 +64,15 @@ import OpenHikesData
 
 /// A stand-in for Overpass with two routes in it.
 nonisolated struct SeededCuratedTrailSource: CuratedTrailSourcing {
+    /// The two this source answers with: the shaped pair below, or the
+    /// showcase's two waymarked routes around the Königssee — see
+    /// `SeededCommunityShowcase.swift`.
+    let served: [CuratedTrail]
+
+    init(showcase: Bool = false) {
+        served = showcase ? Self.showcaseTrails : Self.seededTrails
+    }
+
     /// Near ``UITestFixture/trailheadLatitude``, so one search answers with
     /// these and the seeded published hikes together.
     private static let baseLatitude = 47.6500
@@ -106,7 +115,7 @@ nonisolated struct SeededCuratedTrailSource: CuratedTrailSourcing {
         // simulator's map settled would turn a UI assertion into a geography
         // assertion — the failure being an empty list with nothing to say
         // about why.
-        Array(Self.seededTrails.prefix(max(0, limit)))
+        Array(served.prefix(max(0, limit)))
     }
 
     /// Already complete, because these two never went over a wire.
@@ -125,7 +134,7 @@ nonisolated struct SeededCuratedTrailSource: CuratedTrailSourcing {
             .localizedLowercase
         guard !needle.isEmpty, limit > 0 else { return [] }
         return Array(
-            Self.seededTrails
+            served
                 .filter { $0.name.localizedLowercase.contains(needle) }
                 .prefix(limit)
         )
@@ -134,7 +143,7 @@ nonisolated struct SeededCuratedTrailSource: CuratedTrailSourcing {
     func trails(of relationIDs: [Int64]) -> [Int64: CuratedTrail] {
         let wanted = Set(relationIDs)
         return Dictionary(
-            uniqueKeysWithValues: Self.seededTrails
+            uniqueKeysWithValues: served
                 .filter { wanted.contains($0.relationID) }
                 .map { ($0.relationID, $0) }
         )

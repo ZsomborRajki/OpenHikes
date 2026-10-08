@@ -88,6 +88,10 @@ nonisolated enum SeededCommunityScenario: String {
     /// what the *server* gives everybody who is not a reviewer.
     case reviewing = "reviewing"
     case seeded = "seeded"
+    /// Two walks and two waymarked routes around the Königssee, along lines
+    /// mapped on the ground — the App Store frame of the nearby list, and
+    /// nothing else; no suite asserts on it.
+    case showcase = "showcase"
     /// ``published``, and then not — one yes from `publication(of:)` and `nil`
     /// after it. The only way automation reaches a hike that was believed live
     /// and then found gone. Mirrors ``SeededCommunityTransport/Scenario``.

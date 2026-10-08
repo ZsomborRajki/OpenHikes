@@ -108,6 +108,10 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         case reviewing = "reviewing"
         /// Three published hikes, one of them with photographs.
         case seeded = "seeded"
+        /// Two published walks and two waymarked routes around the Königssee,
+        /// along lines mapped on the ground — the App Store frame of the
+        /// nearby list. See `SeededCommunityShowcase.swift`.
+        case showcase = "showcase"
         /// ``published``, and then not.
         ///
         /// The one scenario whose answer changes over a launch: yes once, and
@@ -127,16 +131,16 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         /// ``publication(of:)`` says.
         var servesListings: Bool {
             self == .seeded || self == .published || self == .reviewing
-                || self == .curated
+                || self == .curated || self == .showcase
         }
 
         /// Whether OpenStreetMap's half of the list has anything in it.
         ///
-        /// One scenario, and behind the same door as the rest: a launch that
-        /// does not name this gets no curated source at all, so no suite
-        /// reaches Overpass by default any more than it reaches CloudKit. See
+        /// Two scenarios, and behind the same door as the rest: a launch that
+        /// names neither gets no curated source at all, so no suite reaches
+        /// Overpass by default any more than it reaches CloudKit. See
         /// ``OpenHikesModel/makeCommunityTransport()``.
-        var servesCuratedTrails: Bool { self == .curated }
+        var servesCuratedTrails: Bool { self == .curated || self == .showcase }
 
         /// Whether a reviewer's queue has anything in it. One scenario, for
         /// the reason ``reviewing`` gives.
@@ -175,7 +179,7 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         // being an empty list with nothing to say about why.
         CommunityNearbyAnswer(
             listings: try answer(
-                Self.seededListings.filter { listing in
+                Self.listings(servedBy: scenario).filter { listing in
                     listing.blockableAuthorID.map { !excluding.contains($0) } ?? true
                 }
             )
@@ -190,7 +194,7 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
     ) async throws -> [CommunityListing] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return try answer(
-            Self.seededListings.filter { listing in
+            Self.listings(servedBy: scenario).filter { listing in
                 (listing.blockableAuthorID.map { !excluding.contains($0) } ?? true)
                     && listing.title.localizedCaseInsensitiveContains(trimmed)
             }
@@ -528,7 +532,7 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
     /// put under a test.
     private func answer(_ listings: [CommunityListing]) throws -> [CommunityListing] {
         switch scenario {
-        case .seeded, .published, .reviewing, .curated, .takenDown: listings
+        case .seeded, .published, .reviewing, .curated, .takenDown, .showcase: listings
         case .empty: []
         case .failing: throw CommunityFailure.unreachable
         }
@@ -834,7 +838,11 @@ nonisolated private extension SeededCommunityTransport {
     /// a preview of a different screen: the stat tiles, the elevation chart
     /// and the duration all come off these, and leaving them out would mean
     /// asserting on a page the real one never shows.
+    ///
+    /// The showcase's walks follow lines mapped on the ground instead — see
+    /// ``showcaseRoute(of:)``.
     static func route(of listing: CommunityListing) -> [RouteCoordinate] {
+        guard showcaseRoute(of: listing).isEmpty else { return showcaseRoute(of: listing) }
         let index = Double(spreadIndex(title: listing.title))
         let offset = index * listingSpreadLatitude
         let longitudeOffset = index.truncatingRemainder(dividingBy: 2) * listingSpreadLongitude
