@@ -186,7 +186,9 @@ struct SettingsView: View {
             // Edge to edge, so the row scrolls out from under the section's
             // rounded corners rather than stopping short of them.
             .listRowInsets(EdgeInsets())
-            hikingRoutesToggle
+            if TileLayer.isOffered {
+                hikingRoutesToggle
+            }
             if entitlement.isEntitled {
                 manageSubscriptionRow
             }
@@ -653,13 +655,17 @@ private extension SettingsView {
 // rather than more of the footer's closure, which is over
 // `closure_body_length`'s limit with it inline.
 extension SettingsView {
+    /// Whether the map draws the hiking routes: the switch, through the
+    /// build's gate — see ``TileLayer/isOffered``.
+    private var drawsHikingRoutes: Bool { TileLayer.shown(isOn: showsHikingRoutes) != nil }
+
     /// What the selected map costs in tiles, where that is worth saying.
     @ViewBuilder private var mapTilesCostNote: some View {
         // "Apart from the previews": the cards above fetch every
         // source's tiles whichever map is selected. Neither sentence
         // is true with the hiking routes drawn — those are tiles, and
         // they are cached and auto-saved like any map's.
-        switch showsHikingRoutes ? nil : selectedProvider.systemStyle {
+        switch drawsHikingRoutes ? nil : selectedProvider.systemStyle {
         case .standard:
             Text(
                 "Apart from the previews above, OpenHikes downloads, caches and auto-saves"
@@ -678,7 +684,7 @@ extension SettingsView {
                 + " Tiles already saved by other sources are kept, and listed below."
             )
         case nil:
-            if showsHikingRoutes, selectedProvider.usesSystemBaseMap {
+            if drawsHikingRoutes, selectedProvider.usesSystemBaseMap {
                 Text(
                     "The hiking routes are the only map tiles OpenHikes downloads, caches"
                     + " and auto-saves while this is selected."
