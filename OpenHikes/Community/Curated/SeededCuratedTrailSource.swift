@@ -214,20 +214,29 @@ private extension SeededCuratedTrailSource {
                 longitude: baseLongitude + offset.1
             )
         }
-        let latitudes = route.map(\.latitude)
-        let longitudes = route.map(\.longitude)
         return CuratedTrail(
             relationID: relationID,
             name: name,
             tags: tags,
-            box: CuratedTrailQuery.BoundingBox(
-                south: latitudes.min() ?? baseLatitude,
-                west: longitudes.min() ?? baseLongitude,
-                north: latitudes.max() ?? baseLatitude,
-                east: longitudes.max() ?? baseLongitude
+            box: box(enclosing: route) ?? CuratedTrailQuery.BoundingBox(
+                south: baseLatitude,
+                west: baseLongitude,
+                north: baseLatitude,
+                east: baseLongitude
             ),
             route: route
         )
+    }
+}
+
+nonisolated extension SeededCuratedTrailSource {
+    /// The box `route` fills, as an Overpass relation's `bounds` would state
+    /// it, or `nil` for a route with no points. Every seeded trail's box,
+    /// here and in the App Store showcase's.
+    static func box(enclosing route: [RouteCoordinate]) -> CuratedTrailQuery.BoundingBox? {
+        guard let (south, north) = route.lazy.map(\.latitude).minAndMax(),
+              let (west, east) = route.lazy.map(\.longitude).minAndMax() else { return nil }
+        return CuratedTrailQuery.BoundingBox(south: south, west: west, north: north, east: east)
     }
 }
 

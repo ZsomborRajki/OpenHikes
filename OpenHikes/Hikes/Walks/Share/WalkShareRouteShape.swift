@@ -13,6 +13,7 @@
 //  — without the route being projected again.
 //
 
+import Algorithms
 import CoreGraphics
 import CoreLocation
 import Foundation
@@ -38,17 +39,10 @@ nonisolated struct WalkShareRouteShape: Equatable, Sendable {
     /// projection exactly because nothing has to line up with it: there is no
     /// map under this line, only a photograph.
     init(fitting trail: [CLLocationCoordinate2D], walked: [[CLLocationCoordinate2D]]) {
-        guard let first = trail.first else {
+        guard let (minLatitude, maxLatitude) = trail.lazy.map(\.latitude).minAndMax(),
+              let (minLongitude, maxLongitude) = trail.lazy.map(\.longitude).minAndMax() else {
             self = .empty
             return
-        }
-        var minLatitude = first.latitude, maxLatitude = first.latitude
-        var minLongitude = first.longitude, maxLongitude = first.longitude
-        for point in trail {
-            minLatitude = min(minLatitude, point.latitude)
-            maxLatitude = max(maxLatitude, point.latitude)
-            minLongitude = min(minLongitude, point.longitude)
-            maxLongitude = max(maxLongitude, point.longitude)
         }
         // Floored for the reason `TrailGlyphView` floors it: a trail near a
         // pole must not divide its width by nothing.

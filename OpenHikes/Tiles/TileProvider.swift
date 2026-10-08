@@ -8,6 +8,7 @@
 //  `App/Configuration/SettingsKey.swift`.
 //
 
+import Algorithms
 import Foundation
 
 /// A raster tile source the map can render. Add new sources to ``all``.
@@ -121,11 +122,7 @@ nonisolated struct DurableTileQuota: Hashable, Sendable {
     /// Every quota the catalog uses, each once however many styles share it,
     /// in the order its first style is listed.
     static var all: [Self] {
-        var quotas: [Self] = []
-        for quota in TileProvider.all.compactMap(\.durableQuota) where !quotas.contains(quota) {
-            quotas.append(quota)
-        }
-        return quotas
+        Array(TileProvider.all.compactMap(\.durableQuota).uniqued())
     }
 }
 

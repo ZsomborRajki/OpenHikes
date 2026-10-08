@@ -179,15 +179,12 @@ nonisolated extension SeededCuratedTrailSource {
         tags: [String: String]
     ) -> CuratedTrail? {
         let route = SeededCommunityTransport.bundledRoute(fixture)
-        let latitudes = route.map(\.latitude)
-        let longitudes = route.map(\.longitude)
-        guard let south = latitudes.min(), let north = latitudes.max(),
-              let west = longitudes.min(), let east = longitudes.max() else { return nil }
+        guard let box = box(enclosing: route) else { return nil }
         return CuratedTrail(
             relationID: relationID,
             name: tags["name"] ?? "",
             tags: tags,
-            box: CuratedTrailQuery.BoundingBox(south: south, west: west, north: north, east: east),
+            box: box,
             route: route
         )
     }
