@@ -73,14 +73,15 @@ struct TileProviderTests {
         }
     }
 
-    /// The commercial sources are the paid ones, and the two that cost nothing
-    /// to serve must never become paid. OpenStreetMap in particular: gating it
+    /// The commercial sources are the paid ones, and the three that cost
+    /// nothing to serve must never become paid. OpenStreetMap in particular: gating it
     /// would put a paid feature on donated infrastructure, which its usage
     /// policy exists to prevent.
     @Test("only the commercial sources are gated")
     func paidSources() {
         #expect(!TileProvider.openStreetMap.requiresPaidAccess)
         #expect(!TileProvider.appleMaps.requiresPaidAccess)
+        #expect(!TileProvider.appleSatellite.requiresPaidAccess)
         #expect(TileProvider.stadiaOutdoors.requiresPaidAccess)
         #expect(TileProvider.thunderforestOutdoors.requiresPaidAccess)
         #expect(!TileProvider.default.requiresPaidAccess)
@@ -166,34 +167,66 @@ struct TileProviderTests {
     /// A template would be enough to build an overlay from by accident, and an
     /// overlay is what fetches, caches and auto-saves — so the absence of one
     /// is the mechanism, not a detail of it.
-    @Test("the system base map fetches nothing")
-    func systemBaseMapHasNoTilePipeline() {
-        let apple = TileProvider.appleMaps
+    @Test(
+        "a system base map fetches nothing",
+        arguments: [TileProvider.appleMaps, .appleSatellite]
+    )
+    func systemBaseMapHasNoTilePipeline(apple: TileProvider) throws {
         #expect(apple.usesSystemBaseMap)
         #expect(apple.urlTemplate.isEmpty)
         #expect(apple.apiKeyPlistKey == nil)
         #expect(!apple.supportsBulkDownload)
+        #expect(apple.durableByteLimit == nil)
         #expect(apple.renderedSource == nil)
+        let style = try #require(apple.systemStyle)
+        #expect(apple.renderedBase == .system(style))
         #expect(!TileProvider.rasterSources.contains(apple))
+    }
+
+    /// Each of Apple's entries draws its own map: two entries that asked for
+    /// the same one would be a choice that changed nothing.
+    @Test("the two Apple entries draw the standard and the satellite map")
+    func systemBaseMapStyles() {
+        #expect(TileProvider.appleMaps.systemStyle == .standard)
+        #expect(TileProvider.appleSatellite.systemStyle == .hybrid)
+        #expect(TileProvider.all.compactMap(\.systemStyle) == [.standard, .hybrid])
     }
 
     /// Every real tile source still resolves to something the map can draw —
     /// the `nil` above has exactly one origin.
-    @Test("only the system base map has no rendered source", arguments: TileProvider.rasterSources)
+    @Test("only the system base maps have no rendered source", arguments: TileProvider.rasterSources)
     func rasterSourcesRender(provider: TileProvider) {
+        #expect(provider.systemStyle == nil)
         #expect(provider.renderedSource != nil)
         #expect(provider.renderedSource?.providerID == provider.id)
+        #expect(provider.renderedBase.tileSource == provider.renderedSource)
     }
 
     /// Its position is a product decision — the cheapest map sits directly
     /// under the default rather than at the bottom of the list — and its id is
     /// a storage contract, like every other one here.
-    @Test("the system base map is the second choice, under a stable id")
+    ///
+    /// The satellite map sits beside it as the other free Apple map, and a
+    /// build from before it existed reads its id as the default, which is a
+    /// working map rather than a blank one.
+    @Test("the system base maps are the second and third choices, under stable ids")
     func systemBaseMapPlacement() {
         #expect(TileProvider.appleMaps.id == "apple_maps")
-        #expect(TileProvider.all.count >= 2)
+        #expect(TileProvider.appleSatellite.id == "apple_satellite")
+        #expect(TileProvider.all.count >= 3)
         #expect(TileProvider.all[1].id == TileProvider.appleMaps.id)
+        #expect(TileProvider.all[2].id == TileProvider.appleSatellite.id)
         #expect(TileProvider.all.first?.id == TileProvider.default.id)
+        #expect(TileProvider.provider(id: "apple_satellite") == .appleSatellite)
+    }
+
+    /// Apple's own map works offline where the system has cached it; imagery
+    /// does not, and there is no public way to download it. The summary is
+    /// the one place the picker says so.
+    @Test("the satellite summary says it needs a connection")
+    func satelliteSummaryWarnsOffline() {
+        #expect(TileProvider.appleSatellite.summary.contains("connection"))
+        #expect(!TileProvider.appleSatellite.summary.contains("saves nothing"))
     }
 
     /// Cache keys are namespaced by provider id, so a duplicate id would make

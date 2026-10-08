@@ -3,8 +3,8 @@
 //  OpenHikes
 //
 //  A full-screen MKMapView that renders raster tiles from the selected
-//  provider — or, when the selection is the system base map, MapKit's own
-//  cartography with no overlay at all — and shows the user's location.
+//  provider — or, when the selection is one of MapKit's own maps, that map
+//  with no overlay at all — and shows the user's location.
 //
 
 import MapKit
@@ -20,11 +20,15 @@ typealias MapViewRepresentable = UIViewRepresentable
 struct MapView: MapViewRepresentable, Equatable {
     private static let logger = Logger(subsystem: "OpenHikes", category: "MapView")
 
-    /// The `tileSourceKey` standing for "no overlay". A sentinel rather than
-    /// `nil` so the coordinator can tell "the system base map is installed"
-    /// apart from "nothing has been applied yet", which is what stops the very
-    /// first update pass from removing an overlay it never added.
-    private static let systemBaseMapKey = "system-base-map"
+    /// The `tileSourceKey` standing for "no overlay, and this one of MapKit's
+    /// maps". A key rather than `nil` so the coordinator can tell "the system
+    /// base map is installed" apart from "nothing has been applied yet", which
+    /// is what stops the very first update pass from removing an overlay it
+    /// never added — and one per style, so switching between Apple's two maps
+    /// is a change like any other.
+    private static func systemBaseMapKey(_ style: SystemMapStyle) -> String {
+        "system-base-map|\(style.rawValue)"
+    }
 
     /// Source of the user's live location. Observed directly by the map (not
     /// via SwiftUI), the same technique `highlight`/`sheetMetrics` use, so the
@@ -66,10 +70,12 @@ struct MapView: MapViewRepresentable, Equatable {
     /// repositions the "my location" button without re-rendering any view.
     var sheetMetrics: SheetMetrics
 
-    /// The selected tile source (provider + resolved template), or `nil` when
-    /// the selected map draws no raster tiles and MapKit's own base map is left
-    /// in place. Changing it rebuilds (or removes) the overlay on the next update.
-    var tileSource: ActiveTileSource?
+    /// What is drawn under everything else: the selected tile source
+    /// (provider + resolved template), or which of MapKit's own maps is left
+    /// in place when the selection draws no raster tiles. Changing it
+    /// rebuilds (or removes) the overlay, or reconfigures the map, on the next
+    /// update — on the same `MKMapView` either way.
+    var base: MapBase
 
     /// Observed directly by the map so the detail view's Zoom button can re-fit
     /// the route without re-rendering any view.
@@ -173,7 +179,9 @@ struct MapView: MapViewRepresentable, Equatable {
         let mapView = MKMapView()
         mapView.delegate = coordinator
         mapView.showsUserLocation = true
-        mapView.pointOfInterestFilter = .includingAll
+        // Every point of interest is shown — but by the configuration that
+        // `applyTileSource(to:_:)` installs, not here: a new configuration
+        // replaces the filter rather than keeping it. See ``SystemMapStyle``.
         coordinator.observeHighlight(highlight, on: mapView)
         coordinator.observeWalkHighlight(walkHighlight, on: mapView)
         coordinator.observeRecordingTrace(recordingTrace, on: mapView)
@@ -265,12 +273,15 @@ struct MapView: MapViewRepresentable, Equatable {
     }
 
     /// Rebuilds the tile overlay when the selected provider changes, and removes
-    /// it entirely when the selection is the system base map. No-op while the
-    /// same source is already installed, so unrelated updates don't churn it.
+    /// it entirely when the selection is one of MapKit's own maps — whose
+    /// configuration it applies in the overlay's place. No-op while the same
+    /// base is already installed, so unrelated updates don't churn it.
     private func applyTileSource(to mapView: MKMapView, _ coordinator: Coordinator) {
-        let key = tileSource.map { source in
-            "\(source.providerID)|\(source.urlTemplate)|\(source.maximumZ)"
-        } ?? Self.systemBaseMapKey
+        let tileSource = base.tileSource
+        let key = switch base {
+        case let .tiles(source): "\(source.providerID)|\(source.urlTemplate)|\(source.maximumZ)"
+        case let .system(style): Self.systemBaseMapKey(style)
+        }
         guard coordinator.tileSourceKey != key else { return }
         coordinator.tileSourceKey = key
         // Apple's labels are only tappable where they are drawn.
@@ -292,7 +303,9 @@ struct MapView: MapViewRepresentable, Equatable {
         // `.unspecified` for the system base map, and that is the whole reason
         // this is decided here rather than once at build time: `appleMaps` is
         // the one provider that *does* turn over with the appearance, so it is
-        // also the one whose chrome should.
+        // also the one whose chrome should. `appleSatellite` draws dark
+        // imagery at every hour, and its chrome follows the phone all the
+        // same, as Apple Maps' does, rather than being forced dark.
         mapView.overrideUserInterfaceStyle = tileSource == nil ? .unspecified : .light
         #endif
 
@@ -311,6 +324,15 @@ struct MapView: MapViewRepresentable, Equatable {
         if let existing = coordinator.tileOverlay {
             mapView.removeOverlay(existing)
             coordinator.tileOverlay = nil
+        }
+
+        // Set on the map that is already there rather than by building a new
+        // one: a configuration is a property MapKit applies live, and a new
+        // `MKMapView` would throw away the camera, every overlay and every
+        // observation made on this one.
+        mapView.preferredConfiguration = switch base {
+        case let .system(style): style.configuration
+        case .tiles: SystemMapStyle.underTiles
         }
 
         // No overlay at all, rather than an empty one: `canReplaceMapContent`
@@ -444,7 +466,7 @@ struct MapView: MapViewRepresentable, Equatable {
                 constant: -Self.controlInset
             ),
         ])
-        attribution.update(with: tileSource?.attribution)
+        attribution.update(with: base.tileSource?.attribution)
     }
     #endif
 
@@ -550,8 +572,8 @@ struct MapView: MapViewRepresentable, Equatable {
             // and naming the tile overlay here would slide this line
             // underneath theirs. See `MapCommunityRoutes.swift`, which keeps
             // the topmost of them last.
-            let base: any MKOverlay = coordinator.communityRoutes.last?.polyline ?? tileOverlay
-            mapView.insertOverlay(polyline, above: base)
+            let below: any MKOverlay = coordinator.communityRoutes.last?.polyline ?? tileOverlay
+            mapView.insertOverlay(polyline, above: below)
         } else {
             mapView.addOverlay(polyline, level: .aboveLabels)
         }
@@ -745,7 +767,7 @@ extension MapView {
             && lhs.routeShading === rhs.routeShading
             && lhs.recordingTrace === rhs.recordingTrace
             && lhs.sheetMetrics === rhs.sheetMetrics
-            && lhs.tileSource == rhs.tileSource
+            && lhs.base == rhs.base
             && lhs.mapController === rhs.mapController
             && lhs.drawnRouteTap === rhs.drawnRouteTap
             && lhs.locationAccessPrompt === rhs.locationAccessPrompt

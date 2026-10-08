@@ -104,8 +104,8 @@ nonisolated struct TilePreviewFrame: Hashable, Sendable {
 
 /// What a catalog entry's card is drawn from.
 nonisolated enum TilePreviewSource: Equatable, Sendable {
-    /// MapKit's own map, snapshotted over the same block.
-    case systemMap
+    /// One of MapKit's own maps, snapshotted over the same block.
+    case systemMap(SystemMapStyle)
     /// The provider's raster tiles, through the tile cache under its own id.
     case tiles(providerID: String, urlTemplate: String)
     /// Nothing can be drawn: a key-gated source whose key did not resolve in
@@ -116,8 +116,8 @@ nonisolated enum TilePreviewSource: Equatable, Sendable {
     /// ``TileProvider/isUsable(withKey:)`` does, so the rule is testable
     /// without a bundle to read it from.
     init(_ provider: TileProvider, apiKey: String?) {
-        if provider.usesSystemBaseMap {
-            self = .systemMap
+        if let style = provider.systemStyle {
+            self = .systemMap(style)
         } else if provider.isUsable(withKey: apiKey) {
             self = .tiles(
                 providerID: provider.id,

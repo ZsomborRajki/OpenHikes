@@ -53,7 +53,7 @@ extension MapCoordinatorTests {
     ) throws -> (map: MKMapView, renderer: DirectionalPolylineRenderer) {
         let view = mapView(
             route: DisplayedRoute(id: id, coordinates: Fixture.coordinates(route)),
-            tileSource: nil,
+            base: .system(.standard),
             routeShading: shading
         )
         let map = makeMap(view, coordinator)

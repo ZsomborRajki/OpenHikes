@@ -107,7 +107,7 @@ extension MapCoordinatorTests {
         #if os(iOS)
         let maker = TrailDraftController()
         let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(tileSource: nil, trailMaker: maker), coordinator)
+        let map = makeMap(mapView(base: .system(.standard), trailMaker: maker), coordinator)
         defer { detach(map) }
         #expect(map.selectableMapFeatures.isEmpty, "a label means nothing to the app outside the maker")
 
@@ -146,7 +146,7 @@ extension MapCoordinatorTests {
         let maker = TrailDraftController()
         maker.setEditing(true)
         let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(tileSource: nil, trailMaker: maker), coordinator)
+        let map = makeMap(mapView(base: .system(.standard), trailMaker: maker), coordinator)
         defer { detach(map) }
 
         let spot = TrailDraftDroppedPinSpot(coordinate: Line.at(Line.first), leg: nil, name: "Watzmann")
@@ -178,7 +178,7 @@ extension MapCoordinatorTests {
         let maker = TrailDraftController()
         maker.setEditing(true)
         let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(tileSource: nil, trailMaker: maker), coordinator)
+        let map = makeMap(mapView(base: .system(.standard), trailMaker: maker), coordinator)
         defer { detach(map) }
         map.setRegion(
             MKCoordinateRegion(center: Line.at(Line.second), latitudinalMeters: 2000, longitudinalMeters: 2000),

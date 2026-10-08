@@ -44,6 +44,7 @@ struct MapEntitlementTests {
         for state in [MapEntitlementState.unknown, .entitled, .notEntitled] {
             #expect(state.allows(.openStreetMap))
             #expect(state.allows(.appleMaps))
+            #expect(state.allows(.appleSatellite))
         }
     }
 
@@ -136,6 +137,7 @@ struct MapEntitlementTests {
         for state in [MapEntitlementState.unknown, .entitled, .notEntitled] {
             #expect(state.tapAction(for: .openStreetMap) == .allow)
             #expect(state.tapAction(for: .appleMaps) == .allow)
+            #expect(state.tapAction(for: .appleSatellite) == .allow)
         }
     }
 

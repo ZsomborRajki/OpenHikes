@@ -4,7 +4,7 @@
 //
 //  Draws the map cards in Settings: four of a provider's own tiles, through
 //  the same cache the map reads, or a MapKit snapshot of the same ground for
-//  the entry that draws Apple's map.
+//  the entries that draw Apple's maps.
 //
 
 import MapKit
@@ -53,7 +53,7 @@ enum TilePreviewRenderer {
 
         let image: UIImage? = switch source {
         case .unavailable: nil
-        case .systemMap: await snapshot(frame, style: style, side: side)
+        case let .systemMap(map): await snapshot(map, over: frame, style: style, side: side)
         case .tiles: await composite(source, in: frame, cache: cache)
         }
         if let key, let image {
@@ -74,7 +74,7 @@ enum TilePreviewRenderer {
         case .unavailable: nil
         // The snapshot is drawn at the card's size, which Dynamic Type
         // changes; one taken at a smaller size would be stretched.
-        case .systemMap: "system/\(style.rawValue)/\(Int(side.rounded()))/\(block)"
+        case let .systemMap(map): "system/\(map.rawValue)/\(style.rawValue)/\(Int(side.rounded()))/\(block)"
         case let .tiles(providerID, _): "\(providerID)/\(block)"
         }
     }
@@ -122,10 +122,12 @@ enum TilePreviewRenderer {
         }
     }
 
-    /// Apple's map over the same block, in the appearance the card is shown
-    /// in — the map itself follows the system appearance for this entry.
+    /// One of Apple's maps over the same block, in the appearance the card is
+    /// shown in — the map itself follows the system appearance for both
+    /// entries.
     private static func snapshot(
-        _ frame: TilePreviewFrame,
+        _ map: SystemMapStyle,
+        over frame: TilePreviewFrame,
         style: UIUserInterfaceStyle,
         side: CGFloat
     ) async -> UIImage? {
@@ -140,6 +142,7 @@ enum TilePreviewRenderer {
         )
         options.size = CGSize(width: side, height: side)
         options.traitCollection = UITraitCollection(userInterfaceStyle: style)
+        options.preferredConfiguration = map.configuration
         return try? await MKMapSnapshotter(options: options).start().image
     }
 }

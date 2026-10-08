@@ -103,7 +103,7 @@ struct MapCoordinatorTests {
     /// happens to have. See `MapCoordinatorTests+LocationAccess.swift`.
     func mapView(
         route: DisplayedRoute? = nil,
-        tileSource: ActiveTileSource? = osm,
+        base: MapBase = .tiles(osm),
         sidePanelInset: CGFloat = 0,
         isCoveredByPanel: Bool = false,
         community: CommunityBrowser = CommunityBrowser(transport: nil, blockList: .scratch()),
@@ -127,7 +127,7 @@ struct MapCoordinatorTests {
             routeShading: routeShading ?? self.routeShading,
             recordingTrace: recordingTrace,
             sheetMetrics: sheetMetrics,
-            tileSource: tileSource,
+            base: base,
             mapController: mapController,
             drawnRouteTap: drawnRouteTap,
             locationAccessPrompt: locationAccessPrompt,
@@ -255,7 +255,7 @@ extension MapCoordinatorTests {
         defer { detach(map) }
         let first = try #require(coordinator.tileOverlay)
 
-        mapView(tileSource: Self.other).update(map, coordinator)
+        mapView(base: .tiles(Self.other)).update(map, coordinator)
 
         let second = try #require(coordinator.tileOverlay)
         #expect(second !== first)
@@ -276,7 +276,7 @@ extension MapCoordinatorTests {
         defer { detach(map) }
         let installed = try #require(coordinator.tileOverlay)
 
-        mapView(tileSource: nil).update(map, coordinator)
+        mapView(base: .system(.standard)).update(map, coordinator)
 
         #expect(coordinator.tileOverlay == nil)
         #expect(map.overlays.isEmpty)
@@ -293,10 +293,10 @@ extension MapCoordinatorTests {
         defer { detach(map) }
         view.update(map, coordinator)
 
-        mapView(route: Self.route(), tileSource: nil).update(map, coordinator)
+        mapView(route: Self.route(), base: .system(.standard)).update(map, coordinator)
         #expect(coordinator.tileOverlay == nil)
 
-        let restored = mapView(route: Self.route(), tileSource: Self.other)
+        let restored = mapView(route: Self.route(), base: .tiles(Self.other))
         restored.update(map, coordinator)
 
         let overlay = try #require(coordinator.tileOverlay)

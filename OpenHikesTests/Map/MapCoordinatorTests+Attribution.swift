@@ -138,7 +138,7 @@ extension MapCoordinatorTests {
     func cameraPillClosesTheGapWithoutACreditLine() throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(tileSource: nil), coordinator)
+        let map = makeMap(mapView(base: .system(.standard)), coordinator)
         defer { detach(map) }
         let credit = try #require(coordinator.attributionView)
         let pill = try #require(coordinator.photoControls)
@@ -161,7 +161,7 @@ extension MapCoordinatorTests {
     func cameraPillMakesRoomWhenACreditArrives() throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
-        let view = mapView(tileSource: nil)
+        let view = mapView(base: .system(.standard))
         let map = makeMap(view, coordinator)
         defer { detach(map) }
         let credit = try #require(coordinator.attributionView)
