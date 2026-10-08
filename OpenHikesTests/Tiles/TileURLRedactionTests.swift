@@ -3,7 +3,7 @@
 //  OpenHikesTests
 //
 //  The DEBUG tile logs are the one place a resolved tile URL is written down,
-//  and two of the four providers bill against a key carried in that URL's
+//  and three of the five providers bill against a key carried in that URL's
 //  query. A leak here doesn't break the app — it hands out a live credential
 //  in any sysdiagnose or screen-shared debug session, which is why the rule is
 //  pinned rather than left to a reviewer noticing the next `absoluteString`.

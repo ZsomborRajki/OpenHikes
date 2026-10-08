@@ -74,8 +74,8 @@ struct TileDurableAccountingTests {
     /// The maintained total, read without measuring — `durableSpace` would
     /// paper over a dropped measurement by taking a fresh one, and whether the
     /// measurement survived is half of what these tests are about.
-    private static func maintainedBytes(_ cache: TileCache, _ providerID: String = stadia) -> Int64? {
-        cache.durableProviderBytes.withLock { $0[providerID] }
+    private static func maintainedBytes(_ cache: TileCache) -> Int64? {
+        cache.durableQuotaBytes.withLock { $0[DurableTileQuota.stadia.id] }
     }
 
     /// What a full walk of the durable directory says the provider holds —
@@ -188,7 +188,7 @@ struct TileDurableAccountingTests {
 
         #expect(await sandbox.cache.loadTile(forKey: stale, url: Self.url(0)) != nil)
         #expect(sandbox.isSaved(stale), "precondition: the refresh went back into the durable tier")
-        #expect(Self.maintainedBytes(sandbox.cache, Self.osm) == nil)
+        #expect(sandbox.cache.durableQuotaBytes.withLock { $0.isEmpty })
     }
 
     // MARK: The durable re-fetch write

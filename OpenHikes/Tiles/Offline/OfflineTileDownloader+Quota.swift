@@ -3,8 +3,8 @@
 //  OpenHikes
 //
 //  What a bulk download does about a provider whose terms cap how much may be
-//  kept on the device — today Stadia's 100 MB, see
-//  ``TileProvider/durableByteLimit``.
+//  kept on the device — today Stadia's 100 MB, shared by every Stadia style;
+//  see ``TileProvider/durableQuota``.
 //
 //  A capped provider changes a download in three places, and all three are
 //  here. Its budget is clamped, so a plan never asks for more than the ceiling
@@ -40,10 +40,12 @@ extension OfflineTileDownloader {
     /// make room. Carries the numbers the confirmation has to name: deleting a
     /// hike's saved map is not something to ask about in the abstract.
     struct SpaceShortfall: Equatable, Sendable {
-        let providerName: String
+        /// Whose licence sets the ceiling — "Stadia Maps", not the style being
+        /// saved, because the limit is shared by every style it covers.
+        let licenceHolder: String
         /// Bytes to free from *other* saved maps for this download to fit.
         let bytesToFree: Int64
-        /// The provider's device-wide ceiling, quoted so the message can
+        /// The licence's device-wide ceiling, quoted so the message can
         /// explain that this is a licence term rather than a full disk.
         let limit: Int64
     }
@@ -117,20 +119,23 @@ extension OfflineTileDownloader {
         tiles: [Tile],
         source: ActiveTileSource
     ) async -> SpaceShortfall? {
-        guard let space = await quota.space(source.providerID) else { return nil }
+        guard let space = await quota.space(source.providerID),
+              let licence = TileCache.durableQuota(forProviderID: source.providerID)
+        else { return nil }
         let required = Int64(tiles.count) * TileCache.estimatedTileBytes
         let available = max(0, space.limit - space.used)
         guard required > available else { return nil }
 
         // This download's own tiles are never candidates: re-saving a hike
-        // must not evict the copy of it already on disk.
+        // must not evict the copy of it already on disk. Every other style the
+        // licence covers is, because it is their shared ceiling that is short.
         let plannedKeys = Set(tiles.map { $0.cacheKey(providerID: source.providerID) })
         let reclaimable = await quota.reclaimable(source.providerID, plannedKeys)
         let shortfall = min(required - available, reclaimable)
         guard shortfall > 0 else { return nil }
 
         return SpaceShortfall(
-            providerName: TileProvider.provider(id: source.providerID).name,
+            licenceHolder: licence.holder,
             bytesToFree: shortfall,
             limit: space.limit
         )
@@ -156,14 +161,16 @@ extension OfflineTileDownloader {
         source: ActiveTileSource
     ) async -> String {
         if let space = await quota.space(source.providerID),
-           space.used >= space.limit {
-            let name = TileProvider.provider(id: source.providerID).name
+           space.used >= space.limit,
+           let licence = TileCache.durableQuota(forProviderID: source.providerID) {
+            let name = licence.holder
             let limit = ByteCountFormatter.string(fromByteCount: space.limit, countStyle: .file)
             return savedCount == 0
-                ? "\(name) maps are full. Its licence allows \(limit) of saved tiles on this device — "
-                    + "delete another saved map to make room."
+                ? "Saved \(name) maps are full. Its licence allows \(limit) of saved tiles on this "
+                    + "device, across all its map styles — delete another saved map to make room."
                 : "Saved \(savedCount) of \(plannedCount) tiles, then reached the \(limit) "
-                    + "\(name) allows on this device. Delete another saved map to make room."
+                    + "\(name) allows on this device across all its map styles. Delete another "
+                    + "saved map to make room."
         }
         return savedCount == 0
             ? "Couldn't save any tiles. Check your connection and try again."

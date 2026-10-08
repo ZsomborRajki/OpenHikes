@@ -3,6 +3,8 @@
 //  OpenHikesTests
 //
 //  The 100 MB per-device ceiling Stadia's terms set, and what happens at it.
+//  It is one ceiling for every Stadia style; `TileDurableQuotaStyleTests`
+//  puts both styles' tiles on disk together.
 //
 //  Every suite here builds its own ``TileSandbox`` with a shrunken ceiling —
 //  `durableByteLimitScale` — so the boundary is reachable with a few tiles
@@ -38,8 +40,8 @@ struct TileDurableQuotaTests {
     }
 
     /// The maintained total, read without measuring.
-    private static func maintainedBytes(_ cache: TileCache, _ providerID: String = stadia) -> Int64? {
-        cache.durableProviderBytes.withLock { $0[providerID] }
+    private static func maintainedBytes(_ cache: TileCache) -> Int64? {
+        cache.durableQuotaBytes.withLock { $0[DurableTileQuota.stadia.id] }
     }
 
     // MARK: Ownership of a tile file
@@ -50,6 +52,8 @@ struct TileDurableQuotaTests {
     func fileOwnership() {
         #expect(TileCache.providerID(forKey: "stadia_outdoors/14/1/2@2x") == "stadia_outdoors")
         #expect(TileCache.providerID(forDiskName: "stadia_outdoors_14_1_2_2x") == "stadia_outdoors")
+        #expect(TileCache.providerID(forDiskName: "stadia_stamen_terrain_14_1_2_2x")
+            == "stadia_stamen_terrain")
         #expect(TileCache.providerID(forDiskName: "osm_14_1_2_2x") == "osm")
         #expect(TileCache.providerID(forDiskName: "thunderforest_outdoors_14_1_2_2x")
             == "thunderforest_outdoors")
@@ -323,7 +327,9 @@ struct TileDurableQuotaTests {
             try sandbox.age(key: key, byDays: Double(tileCount - index))
         }
         _ = await offMain { sandbox.cache.durableSpace(forProviderID: Self.stadia) }
-        sandbox.cache.durableProviderBytes.withLock { $0[Self.stadia, default: 0] += TileStore.tileByteCount }
+        sandbox.cache.durableQuotaBytes.withLock { bytes in
+            bytes[DurableTileQuota.stadia.id, default: 0] += TileStore.tileByteCount
+        }
         try await body(sandbox)
     }
 

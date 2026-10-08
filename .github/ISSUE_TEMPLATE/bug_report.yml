@@ -61,7 +61,7 @@ body:
     attributes:
       label: Tile provider
       description: Only if the problem involves the map.
-      placeholder: OpenStreetMap / Apple Maps / Apple Satellite / Stadia Outdoors / Thunderforest Outdoors
+      placeholder: OpenStreetMap / Apple Maps / Apple Satellite / Stadia Outdoors / Stamen Terrain / Thunderforest Outdoors
 
   - type: textarea
     id: extra

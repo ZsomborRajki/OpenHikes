@@ -66,6 +66,7 @@ struct MapAttributionViewTests {
         arguments: [
             (TileProvider.openStreetMap, "© OpenStreetMap"),
             (TileProvider.stadiaOutdoors, "© Stadia Maps, OpenMapTiles, OpenStreetMap"),
+            (TileProvider.stamenTerrain, "© Stadia Maps, Stamen Design, OpenMapTiles, OpenStreetMap"),
             (TileProvider.thunderforestOutdoors, "© Thunderforest, OpenStreetMap"),
         ]
     )
