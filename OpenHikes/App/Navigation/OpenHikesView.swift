@@ -130,14 +130,20 @@ struct OpenHikesView: View {
     private var panelCoversMap: Bool { usesSidePanel && sheet.isShowingFullHeightScreen }
 
     /// The selected tile provider, persisted by the settings sheet.
-    @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
+    ///
+    /// This and the two below are read from ``StoredSettings`` and never held
+    /// as `@AppStorage`, which re-runs the view declaring it on every write any
+    /// part of the app makes to its defaults — for this view, the whole map
+    /// screen. See that type.
+    private var tileProviderID: String { appModel.storedSettings.tileProviderID }
     /// Whether the hiking-route layer is drawn over that map, set in Settings.
-    @AppStorage(SettingsKey.showsHikingRoutes) private var showsHikingRoutes = SettingsDefault.showsHikingRoutes
+    private var showsHikingRoutes: Bool { appModel.storedSettings.showsHikingRoutes }
 
     /// Opt-in second copy of every photo in the system photo library. Off by
     /// default, and the only reason the app ever asks for photo-library
-    /// access — see ``PhotoLibraryWriter``.
-    @AppStorage(SettingsKey.savePhotosToLibrary) var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
+    /// access — see ``PhotoLibraryWriter``. Read when a photo is filed, so
+    /// nothing in this body depends on it.
+    var savePhotosToLibrary: Bool { appModel.storedSettings.savesPhotosToLibrary }
 
     /// The route drawn on the map — always the currently selected hike, if any.
     /// Geometry only: its appearance reaches the map through ``routeStyle``,

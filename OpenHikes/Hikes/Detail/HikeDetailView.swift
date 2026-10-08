@@ -25,6 +25,10 @@ struct HikeDetailView: View {
     /// snapshot that cannot invalidate this body is a snapshot that lets a
     /// lapsed subscription start a bulk download against a paid key.
     let entitlement: MapEntitlementStore
+    /// The map the hiker chose and whether its route layer is on, which decide
+    /// what this screen offers to save. Handed in rather than held as
+    /// `@AppStorage` — see ``StoredSettings``.
+    let settings: StoredSettings
     /// Source of the user's live location. Auto-follow consumes
     /// ``LocationManager/fixes``, so it is driven per published fix, not by a timer.
     let locationManager: LocationManager
@@ -81,10 +85,10 @@ struct HikeDetailView: View {
 
     /// The active tile source, mirrored from Settings so offline downloads use the
     /// same provider (and API key) the map is currently drawing.
-    @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
+    private var tileProviderID: String { settings.tileProviderID }
     /// Whether the hiking-route layer is drawn too, which is a map that
     /// fetches tiles — and so has tiles to auto-save — even over Apple's.
-    @AppStorage(SettingsKey.showsHikingRoutes) private var showsHikingRoutes = SettingsDefault.showsHikingRoutes
+    private var showsHikingRoutes: Bool { settings.showsHikingRoutes }
     // Shared with the offline-storage and community helpers in the
     // companion extension files.
     // swiftlint:disable private_swiftui_state
@@ -160,14 +164,6 @@ struct HikeDetailView: View {
     /// ``TrackerState``. Drawn on the chart as two separate markers so a manual
     /// scrub and the live position can both be visible at once.
     @State private var tracker = TrackerState()
-    /// Focus for the header's name field, so tapping the pencil puts the
-    /// keyboard up on the field rather than asking for a second tap.
-    ///
-    /// Raised from the field's own `onAppear` rather than from the button that
-    /// flips ``HikeDetailInteraction/isEditingTitle``: the field does not
-    /// exist yet at the moment of the tap, and focus asked for before then is
-    /// dropped.
-    @FocusState private var isTitleFieldFocused: Bool
     /// True while a finger is actively dragging the elevation chart — pauses
     /// auto-follow's own updates to `trackerDistance` so it doesn't fight the drag.
     @State private var isScrubbing = false
@@ -564,50 +560,16 @@ private extension HikeDetailView {
 
     /// The same place-card title row the recording screen opens with, so a
     /// hike looks the same while it is recorded as after it is saved.
+    ///
+    /// The title is a view of its own, and must stay one: this is built inside
+    /// the card's `ScrollViewReader`, and the rename field's binding made here
+    /// would subscribe the whole card to every keystroke — see
+    /// ``HikeTitleEditor``.
     private var header: some View {
         PlaceCardHeader {
             HikeHeaderSymbol(hike: hike)
         } title: {
-            if interaction.isEditingTitle {
-                TextField(hike.title, text: $interaction.titleDraft)
-                    .accessibilityLabel("Hike name")
-                    .accessibilityIdentifier("hike-title-field")
-                    .focused($isTitleFieldFocused)
-                    .onAppear { isTitleFieldFocused = true }
-                    // The return key is the whole of how a rename is
-                    // confirmed here, and the keyboard toolbar that used
-                    // to carry a *Done* beside it is deliberately gone.
-                    //
-                    // A `ToolbarItemGroup(placement: .keyboard)` on this
-                    // field is what stopped the app ever reporting itself
-                    // idle, which XCUITest pays for at 60 seconds a
-                    // gesture. On a simulator in the state that provokes
-                    // it, `testRenamingAHikeUpdatesItsRow` took 677.9s
-                    // across eight of those waits; with this accessory
-                    // removed and nothing else changed, 28.3s. Nothing is
-                    // spinning — the app sits at 0% CPU throughout — so
-                    // what is left over is an animation that never
-                    // reports completion, not work.
-                    //
-                    // It is the accessory arriving and leaving *with the
-                    // field* that does it rather than the accessory
-                    // itself, and both halves cost 60s. Declared here, the
-                    // app stalls from the moment the pencil is tapped.
-                    // Hoisted onto the always-present header and gated on
-                    // `isEditingTitle`, the keyboard rises clean and the
-                    // commit stalls instead, because the button leaves as
-                    // the keyboard does — 138.8s, which is the shape #539
-                    // was filed on. ``CommunityReviewView`` keeps its own
-                    // keyboard *Done*, where it is the only way to reach
-                    // the decision, and measures clean at 20.5s on the
-                    // same simulator: there both the field and the
-                    // accessory are always in the hierarchy.
-                    .submitLabel(.done)
-                    .onSubmit { commitTitleEdit() }
-            } else {
-                Text(hike.displayTitle)
-                    .accessibilityAddTraits(.isHeader)
-            }
+            HikeTitleEditor(hike: hike, interaction: interaction)
         } subtitle: {
             Text(hike.date.formatted(date: .abbreviated, time: .omitted))
         }
@@ -626,12 +588,6 @@ private extension HikeDetailView {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Rename hike")
-    }
-
-    private func commitTitleEdit() {
-        hike.customName = HikeTitle.bounded(interaction.titleDraft)
-        isTitleFieldFocused = false
-        interaction.isEditingTitle = false
     }
 
     // MARK: Stats

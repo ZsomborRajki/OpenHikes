@@ -166,6 +166,9 @@ final class OpenHikesModel {
     var startupIssue: StorageStartupIssue?
 
     let defaults: UserDefaults
+    /// The settings the always-on screens read, published only when they
+    /// change — see ``StoredSettings`` for why not `@AppStorage`.
+    let storedSettings: StoredSettings
 
     /// Distinguishes the `.inactive` step of leaving the foreground from the
     /// one on the way back, which are otherwise identical.
@@ -238,6 +241,7 @@ final class OpenHikesModel {
         weatherFocus = WeatherFocus(subject: weatherManager.state.subject)
         self.trailGraphProvider = trailGraphProvider
         self.defaults = defaults
+        storedSettings = StoredSettings(defaults: defaults)
         self.startupIssue = startupIssue
         // `storageIsDurable` is the whole of what a failed store means to
         // sync: the fallback container is in-memory, and an in-memory store
