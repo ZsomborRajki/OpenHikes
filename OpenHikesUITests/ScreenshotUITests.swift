@@ -35,61 +35,6 @@ import CoreLocation
 import XCTest
 
 nonisolated final class ScreenshotUITests: XCTestCase {
-    /// The fixture route: OpenStreetMap relation 222517, heights from Stadia,
-    /// a synthesised walking clock. See the file's `<metadata>`.
-    private static let routeFixture = "KoenigsseeRinnkendlsteig"
-    /// The `<trk><name>` the fixture imports under — `GPXImport` titles a hike
-    /// from the first track's name, so this and the file have to agree.
-    private static let routeTitle =
-        "Königssee – Kühroint – Rinnkendlsteig – St. Bartholomä"
-
-    /// The fixture route's first `<trkpt>`, which is the Königssee boat
-    /// landing the walk starts from.
-    private static let trailhead = CLLocationCoordinate2D(
-        latitude: 47.599436,
-        longitude: 12.984916
-    )
-
-    /// The route's opening stretch, interpolated along the fixture's own line
-    /// at 22 m — on the trail rather than near it, so the recorded line sits
-    /// where the map draws the path.
-    ///
-    /// Twenty of them, 418 m in all, and the length is the point: the frame is
-    /// *of* the line the recorder has drawn so far, and six fixes covering a
-    /// hundred metres is a smear a reader cannot see at the zoom the recording
-    /// map sits at. It costs the walk's own time — the fixes go in at
-    /// ``UITestFixture/paceSeconds`` because that is what the recorder accepts
-    /// — which is why this is the slowest frame in the set.
-    ///
-    /// 22 m and not the fixture's own point spacing, which runs to 40 m in
-    /// places. At ``UITestFixture/paceSeconds`` a 40 m step is 36 km/h, and
-    /// `RecordingFixPolicy` throws it out as a sprint — which arrives as
-    /// "the recorder never accepted fix 3" rather than as anything about
-    /// speed. It is the same 22 m ``UITestFixture/trailPoints`` uses, for the
-    /// same reason.
-    private static let openingStretch = [
-        trailhead,
-        CLLocationCoordinate2D(latitude: 47.599327, longitude: 12.984674),
-        CLLocationCoordinate2D(latitude: 47.599147, longitude: 12.984559),
-        CLLocationCoordinate2D(latitude: 47.598960, longitude: 12.984463),
-        CLLocationCoordinate2D(latitude: 47.598773, longitude: 12.984367),
-        CLLocationCoordinate2D(latitude: 47.598586, longitude: 12.984271),
-        CLLocationCoordinate2D(latitude: 47.598400, longitude: 12.984173),
-        CLLocationCoordinate2D(latitude: 47.598213, longitude: 12.984076),
-        CLLocationCoordinate2D(latitude: 47.598029, longitude: 12.983970),
-        CLLocationCoordinate2D(latitude: 47.597845, longitude: 12.983861),
-        CLLocationCoordinate2D(latitude: 47.597668, longitude: 12.983729),
-        CLLocationCoordinate2D(latitude: 47.597494, longitude: 12.983590),
-        CLLocationCoordinate2D(latitude: 47.597320, longitude: 12.983452),
-        CLLocationCoordinate2D(latitude: 47.597146, longitude: 12.983311),
-        CLLocationCoordinate2D(latitude: 47.596979, longitude: 12.983153),
-        CLLocationCoordinate2D(latitude: 47.596811, longitude: 12.982998),
-        CLLocationCoordinate2D(latitude: 47.596642, longitude: 12.982846),
-        CLLocationCoordinate2D(latitude: 47.596473, longitude: 12.982694),
-        CLLocationCoordinate2D(latitude: 47.596304, longitude: 12.982542),
-        CLLocationCoordinate2D(latitude: 47.596134, longitude: 12.982391),
-    ]
-
     /// How many times ``revealCommunityPins(in:atLeast:)`` re-measures and
     /// pans before giving up.
     private static let centringPasses = 5
@@ -98,16 +43,6 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// because one pin says "a hike is here" and two say "the list and the map
     /// are the same answer", which is what the screen is for.
     private static let minimumVisiblePins = 2
-
-    /// Which of the stamped photographs the hero frame pins to the map.
-    ///
-    /// Four rather than all of them, spread across the walk. The stamper
-    /// spaces every photograph it is given evenly along the track, so eight of
-    /// them at the zoom that fits a ten-kilometre route draw as one unbroken
-    /// column of markers — and the trail the frame is *of* is behind it. Four
-    /// leaves the line showing between them and still reads as "photographs
-    /// all along the walk".
-    private static let pinnedPhotoIndexes = [0, 2, 5, 7]
 
     /// Where the walk's middle is aimed, as a share of the screen width.
     ///
@@ -136,9 +71,12 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// purpose, because a tap on the drawn route opens its hike.
     private static let zoomTapPoint = CGVector(dx: heroRouteCentreX + 0.2, dy: heroRouteCentre)
 
-    /// How far up the recording frame drags its map, as a share of the screen,
-    /// to bring the fresh end of the line out from under the sheet.
-    private static let recordingLift: CGFloat = 0.2
+    /// Where on the elevation chart the photographs frame leaves its tracker,
+    /// as a share of the chart element's width: the high point by the alm,
+    /// five kilometres of the walk's ten and a half, so the card under the
+    /// chart reads as part of a walk rather than a grey 0%. The plot ends at
+    /// about 0.88 of the element, where the height labels begin.
+    private static let summitChartPosition: CGFloat = 0.42
 
     /// Long enough for the drag to be taken as a drag rather than a tap.
     private static let dragPressDuration = 0.1
@@ -171,6 +109,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
             "--ui-test-expanded-sheet",
             "--ui-test-import-gpx=\(Self.routeFixture)",
             "--ui-test-weather",
+            Self.routeHueArgument,
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
         try importDiscoveredPhotos(in: app, selecting: Self.pinnedPhotoIndexes)
@@ -190,12 +129,14 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         )
         expandRouteIntoTheFreedSpace(in: app)
 
-        // The callout is drawn *above* its pin, so it is opened on one from
-        // the lower half of the line — opening the topmost would push it off
-        // the top edge.
+        // The callout is drawn *above* its pin, so it is opened on the
+        // topmost: the trailhead's, where what it covers is the village the
+        // walk sets out from. Opened halfway down, it hid the climb to the
+        // alm — the stretch the whole frame is of — and a pin poked out over
+        // its top edge.
         let pins = photoPins(in: app)
         XCTAssertFalse(pins.isEmpty, "the map should be showing photo pins")
-        pins[pins.count / 2].tap()
+        pins[0].tap()
         XCTAssertTrue(
             element("photo-pin-preview", in: app)
                 .waitForExistence(timeout: UITestTimeout.existence),
@@ -223,9 +164,17 @@ nonisolated final class ScreenshotUITests: XCTestCase {
             "--ui-test-expanded-sheet",
             "--ui-test-import-gpx=\(Self.routeFixture)",
             "--ui-test-weather",
+            Self.routeHueArgument,
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
         try importDiscoveredPhotos(in: app)
+        // The tracker to the alm, so the chart points at somewhere and the
+        // progress card under it has a distance to report.
+        let chart = element("elevation-chart", in: app)
+        XCTAssertTrue(scrollIntoView(chart, in: app), "the hike should draw its elevation chart")
+        let atStart = chart.value as? String ?? ""
+        chart.coordinate(withNormalizedOffset: CGVector(dx: Self.summitChartPosition, dy: 0.5)).tap()
+        XCTAssertTrue(waitUntilValueChanges(from: atStart, on: chart), "a tap should move the tracker")
         scrollIntoView(element("hike-photo-strip", in: app), in: app)
         capture(as: .photos)
     }
@@ -241,9 +190,23 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// lower deliberately — the list is most of what this screenshot is of,
     /// and ``revealCommunityPins(in:atLeast:)`` pans the pins into the band
     /// above the sheet rather than making the band bigger.
+    ///
+    /// The `showcase` database rather than the seeded one the suites use:
+    /// theirs draws straight steps and squares a test can predict, which on a
+    /// map of real paths is exactly what reads as fake. This one's lines are
+    /// mapped paths around the Königssee — see `SeededCommunityShowcase.swift`
+    /// — and the hiker is put in Schönau beside them.
     @MainActor
     func testCapturesNearbyTrails() {
-        let app = launchCommunity(scenario: .curated)
+        let app = makeApp(arguments: [
+            "--ui-test-expanded-sheet",
+            "--ui-test-enable-location",
+            "--ui-test-community=\(SeededCommunityScenario.showcase.rawValue)",
+        ])
+        addLocationPermissionMonitor()
+        setSimulatedLocation(Self.schoenau)
+        defer { XCUIDevice.shared.location = nil }
+        launch(app)
         selectCommunityTab(in: app)
         let anyRow = app.descendants(matching: .any)
             .matching(identifier: "community-hike-row")
@@ -252,95 +215,9 @@ nonisolated final class ScreenshotUITests: XCTestCase {
             awaitCommunityAnswer(anyRow, in: app),
             "the nearby search never answered with a row to photograph"
         )
+        frameCommunityPins(in: app)
         revealCommunityPins(in: app, atLeast: Self.minimumVisiblePins)
         capture(as: .nearby)
-    }
-
-    /// The statistics and the elevation profile — the screen that answers
-    /// "is this a walk or a day out".
-    @MainActor
-    func testCapturesStatisticsAndProfile() {
-        let app = launchApp(arguments: [
-            "--ui-test-expanded-sheet",
-            "--ui-test-import-gpx=\(Self.routeFixture)",
-        ])
-        openHikeDetail(in: app, titled: Self.routeTitle)
-        scrollIntoView(element("elevation-chart", in: app), in: app)
-        capture(as: .statistics)
-    }
-
-    /// A recording in progress.
-    ///
-    /// The live figures are the whole point of the screen, and a recorder that
-    /// has only just started reads zero for every one of them — so this walks
-    /// the opening stretch of the fixture route before it shoots, and the
-    /// frame shows a distance, a climb and a clock that are all doing
-    /// something. The fixes go in at ``UITestFixture/paceSeconds``, which is a
-    /// walk rather than a sprint `RecordingFixPolicy` turns down.
-    @MainActor
-    func testCapturesRecordingAHike() {
-        let app = makeApp(arguments: [
-            "--ui-test-expanded-sheet",
-            "--ui-test-enable-location",
-            "--ui-test-weather",
-        ])
-        // No `resetAuthorizationStatus`: the script grants location before the
-        // run, so no prompt lands on this frame's first gesture. The monitor
-        // stays for a run started some other way.
-        addLocationPermissionMonitor()
-        setSimulatedLocation(Self.trailhead)
-        defer { XCUIDevice.shared.location = nil }
-
-        launch(app)
-        startRecording(in: app)
-
-        let points = element("recording-point-count", in: app)
-        XCTAssertTrue(
-            points.waitForExistence(timeout: UITestTimeout.existence),
-            "the recording screen never drew its point count"
-        )
-        walkRecordedTrace(Self.openingStretch, countedBy: points)
-        liftRecordedLineClearOfTheSheet(in: app)
-        capture(as: .recording)
-    }
-
-    /// Offline maps: a whole route's tiles saved for a walk with no signal.
-    ///
-    /// Stadia Outdoors has to be selected first, and that is a fact about the
-    /// feature rather than a step for the test's convenience. OpenStreetMap's
-    /// tile policy forbids bulk download, so on the default provider the
-    /// button this frame is *of* does not exist — it is absent rather than
-    /// disabled, which `SettingsUITests` asserts from the other direction.
-    /// `--ui-test-entitled` grants the Pro entitlement but selects nothing.
-    ///
-    /// The first version of this frame skipped the selection and shot whatever
-    /// the scroll landed on, which was the line-style picker, and the run went
-    /// green: `scrollIntoView` reports its failure in a return value that was
-    /// being discarded. Hence the assertion below.
-    @MainActor
-    func testCapturesOfflineMaps() {
-        let app = launchApp(arguments: [
-            "--ui-test-expanded-sheet",
-            "--ui-test-import-gpx=\(Self.routeFixture)",
-            "--ui-test-entitled",
-        ])
-        element("settings-button", in: app).tap()
-        let stadia = element("provider-row-stadia_outdoors", in: app)
-        XCTAssertTrue(
-            stadia.waitForExistence(timeout: UITestTimeout.navigation),
-            "an entitled launch should offer Stadia Outdoors — check that "
-                + "OpenHikes/Secrets.plist carries a Stadia key"
-        )
-        stadia.tap()
-        app.buttons["settings-close"].tap()
-
-        openHikeDetail(in: app, titled: Self.routeTitle)
-        let download = element("offline-download-button", in: app)
-        XCTAssertTrue(
-            scrollIntoView(download, in: app),
-            "a provider that permits bulk download should offer the button"
-        )
-        capture(as: .offline)
     }
 
     /// A finished walk in the trail's History.
@@ -357,6 +234,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
             "--ui-test-expanded-sheet",
             "--ui-test-import-gpx=\(Self.routeFixture)",
             "--ui-test-seed-walks=FullLoop,HalfLoop",
+            Self.routeHueArgument,
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
         app.segmentedControls["walk-segment"].buttons["History"].tap()
@@ -393,7 +271,8 @@ extension ScreenshotUITests {
     // MARK: - Support
 
     // Here rather than in the class body, where `test_case_accessibility`
-    // would have it private: frame 08 reads it from its own file.
+    // would have them private: the frames in the other
+    // `ScreenshotUITests+*.swift` files read them from their own.
 
     /// Written beside the run so `Scripts/screenshots.sh` can lift them out of
     /// the `.xcresult` by name. Numbered because App Store Connect orders
@@ -403,13 +282,43 @@ extension ScreenshotUITests {
         case route = "01-trail-and-its-photos"
         case photos = "02-photos-along-the-trail"
         case nearby = "03-nearby-trails"
-        case statistics = "04-statistics-and-profile"
+        case following = "04-following-the-trail"
         case recording = "05-recording-a-hike"
-        case offline = "06-offline-maps"
+        case maps = "06-a-map-for-the-mountains"
         case walkHistory = "07-walk-summary"
         case trailMaker = "08-draw-your-own-trail"
         case place = "09-a-place-and-its-photos"
+        case share = "10-share-a-hike"
     }
+
+    /// The fixture route: OpenStreetMap relation 222517, heights from Stadia,
+    /// a synthesised walking clock. See the file's `<metadata>`.
+    static let routeFixture = "KoenigsseeRinnkendlsteig"
+    /// The `<trk><name>` the fixture imports under — `GPXImport` titles a hike
+    /// from the first track's name, so this and the file have to agree.
+    static let routeTitle = "Königssee – Kühroint – Rinnkendlsteig – St. Bartholomä"
+
+    /// One colour for the walk in every frame that imports it — see
+    /// `AppLaunchEnvironment.routeHue`. Indigo: a hue none of the route's own
+    /// steepness colours come near, from green through red to black, so the
+    /// photo pins and the start dot stand off the line rather than into it.
+    static let routeHueArgument = "--ui-test-route-hue=0.68"
+
+    /// The middle of Schönau am Königssee, where the frames that need a hiker
+    /// somewhere put them: beside the landing, at the foot of the walk.
+    static let schoenau = CLLocationCoordinate2D(latitude: 47.592975, longitude: 12.987199)
+
+    /// Which of the stamped photographs the two full-map frames pin to it.
+    ///
+    /// Four rather than all of them, spread across the walk. The stamper
+    /// spaces every photograph it is given evenly along the track, so eight of
+    /// them at the zoom that fits a ten-kilometre route draw as one unbroken
+    /// column of markers — and the trail the frame is *of* is behind it. Four
+    /// leaves the line showing between them and still reads as "photographs
+    /// all along the walk". They are also what the framing measures: the line
+    /// is drawn rather than exposed, and the pins are the part of it XCUITest
+    /// can see.
+    static let pinnedPhotoIndexes = [0, 2, 5, 7]
 
     /// Whether `Scripts/screenshots.sh` seeded this simulator's photo library
     /// and granted access to it.
@@ -452,7 +361,7 @@ extension ScreenshotUITests {
     /// simulator's library and grants access to it before this runs, so what
     /// the sheet offers here is what `LibraryPhotoMatch` made of them.
     @MainActor
-    private func importDiscoveredPhotos(
+    func importDiscoveredPhotos(
         in app: XCUIApplication,
         selecting indexes: [Int] = []
     ) throws {
@@ -553,8 +462,42 @@ extension ScreenshotUITests {
         )
     }
 
-    /// Pans the map so the community pins sit in the middle of the band the
-    /// sheet is not over.
+    /// How many steps out the nearby frame takes from where the map opens on
+    /// the hiker: one, from the streets of Schönau to the end of the lake,
+    /// which is the scale a walk up to the alm and one round the landing both
+    /// read at. Two put the whole valley on screen and the lines went thin.
+    static let nearbyZoomOutSteps = 1
+
+    /// The walks the nearby frame centres on, by the titles the `showcase`
+    /// database gives them. Its two waymarked routes are pinned at the middle
+    /// of their own lines, kilometres off to the west and the south-east, and
+    /// framing all four put the northmost pin under *Search this area*.
+    static let nearbyWalkTitles = ["Kührointalm and Back", "Malerwinkel Loop"]
+
+    /// Zooms the map out around a community pin, with MapKit's own two-finger
+    /// tap, and pans the published walks' pins into the middle of the band
+    /// above the sheet, with their lines running south from them.
+    ///
+    /// On a pin rather than on the map, because the map element spans the
+    /// window and its centre is under the sheet — the reason the pinch was
+    /// given up above. A pin stands in the band above it, and the tap reaches
+    /// the map's own recognizer through it; a two-finger tap selects nothing.
+    /// A tap rather than a pinch for the reason the hero frame gives: it
+    /// zooms and does not turn the map.
+    @MainActor
+    func frameCommunityPins(in app: XCUIApplication) {
+        for _ in 0..<Self.nearbyZoomOutSteps {
+            guard let pin = visibleCommunityPins(in: app).first else { return }
+            pin.twoFingerTap()
+        }
+        // Once. A second pass is a correction of a few points, short enough
+        // for the map to take as a tap — and a tap on a line opens that hike,
+        // which is how one run photographed AV Weg 493's screen instead.
+        centreCommunityPins(in: app, titled: Self.nearbyWalkTitles)
+    }
+
+    /// Pans the map so the community pins — or the ones with `titles`, when it
+    /// is given — sit in the middle of the band the sheet is not over.
     ///
     /// They are not there on their own. The sheet rests at its middle detent
     /// here and the pins landed six points *under* its top edge — on the map,
@@ -563,7 +506,7 @@ extension ScreenshotUITests {
     /// rather than at the middle of the screen, because half the screen is
     /// sheet.
     @MainActor
-    private func centreCommunityPins(in app: XCUIApplication) {
+    private func centreCommunityPins(in app: XCUIApplication, titled titles: [String] = []) {
         let map = mapElement(in: app)
         let screen = app.frame
         let sheet = element("map-sheet", in: app)
@@ -573,6 +516,7 @@ extension ScreenshotUITests {
         let pins = app.descendants(matching: .any)
             .matching(identifier: "community-hike-pin")
             .allElementsBoundByIndex
+            .filter { pin in titles.isEmpty || titles.contains { pin.label.hasSuffix($0) } }
         guard let bounds = Self.bounds(of: pins), screen.height > 0, bandBottom > 0 else { return }
 
         let dx = 0.5 - bounds.midX / screen.width
@@ -643,7 +587,7 @@ extension ScreenshotUITests {
     /// and pinching the application element would pivot around a point the
     /// sheet is sitting on.
     @MainActor
-    private func mapElement(in app: XCUIApplication) -> XCUIElement {
+    func mapElement(in app: XCUIApplication) -> XCUIElement {
         let map = app.maps.firstMatch
         XCTAssertTrue(
             map.waitForExistence(timeout: UITestTimeout.navigation),
@@ -687,7 +631,7 @@ extension ScreenshotUITests {
     /// to where the frame wants it, the map zoomed one step beside it, and
     /// the doubled offset that leaves is panned back out.
     @MainActor
-    private func expandRouteIntoTheFreedSpace(in app: XCUIApplication) {
+    func expandRouteIntoTheFreedSpace(in app: XCUIApplication) {
         centrePhotoPins(in: app)
         zoomMapInOneStep(in: app)
         // Up to twice, because a drag lands short of the vector it is given,
@@ -695,28 +639,6 @@ extension ScreenshotUITests {
         // ``centringTolerance`` spends no gesture.
         centrePhotoPins(in: app)
         centrePhotoPins(in: app)
-    }
-
-    /// Drags the map up so the recorded line sits in the middle of the band
-    /// the sheet is not over.
-    ///
-    /// A fixed pan, unlike every other framing gesture here, and not for want
-    /// of trying: the recorded line is an `MKPolyline`, which is drawn rather
-    /// than exposed, so there is no element to measure and nothing to correct
-    /// against. What is known is the geometry — the recording map keeps the
-    /// walker at the *window's* centre, which is behind a sheet resting at its
-    /// middle detent, so the freshest end of the line is the part a reader
-    /// cannot see.
-    @MainActor
-    private func liftRecordedLineClearOfTheSheet(in app: XCUIApplication) {
-        let map = mapElement(in: app)
-        map.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.34))
-            .press(
-                forDuration: Self.dragPressDuration,
-                thenDragTo: map.coordinate(
-                    withNormalizedOffset: CGVector(dx: 0.7, dy: 0.34 - Self.recordingLift)
-                )
-            )
     }
 
     /// This hike's photo pins, top to bottom.
@@ -788,7 +710,7 @@ extension ScreenshotUITests {
     }
 
     @MainActor
-    private func collapseSheet(in app: XCUIApplication) {
+    func collapseSheet(in app: XCUIApplication) {
         dragSheet(in: app, to: Self.dragTarget)
         let sheet = element("map-sheet", in: app)
         let collapsed = NSPredicate { _, _ in

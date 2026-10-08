@@ -1802,15 +1802,15 @@ if expect_status 1 \
 fi
 
 run_script "screenshots shoots map frames without location, and retries only what did not come out" \
-    "$screenshots_light" --frame 4 --frame 3 --no-photos --device "$pro_udid" \
+    "$screenshots_light" --frame 7 --frame 3 --no-photos --device "$pro_udid" \
     --derived-data "$screens_dd" --output "$work/screens-out"
 reset_at="$(call_line "simctl privacy $pro_udid reset location")"
-plain_at="$(call_line "testCapturesStatisticsAndProfile")"
+plain_at="$(call_line "testCapturesWalkHistory")"
 grant_at="$(call_line "simctl privacy $pro_udid grant location-always")"
 located_at="$(call_line "testCapturesNearbyTrails")"
 runs="$(printf '%s\n' "$calls" | grep -c "xcodebuild test-without-building" || true)"
 if expect_status 1 \
-    && expect_contains "$output" "not shot: 04 03 — retrying those once" "the output" \
+    && expect_contains "$output" "not shot: 07 03 — retrying those once" "the output" \
     && expect_contains "$calls" "simctl ui $pro_udid appearance light" "the recorded calls"; then
     if (( reset_at > 0 && reset_at < plain_at && plain_at < grant_at && grant_at < located_at )) \
         && [[ "$runs" == 4 ]]; then

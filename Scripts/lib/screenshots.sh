@@ -40,6 +40,10 @@
 # clean up. `simctl status_bar override` is what fixes it, and it has to be
 # re-applied after every erase because an erase takes it with everything else.
 #
+# Full and *discharging*, not `charged`. `charged` is the state of a phone that
+# is plugged in, and the status bar draws it that way: a green battery with a
+# bolt through it, in the corner of every frame.
+#
 # ## The locale
 #
 # A simulator inherits the host's region, and every figure in this app is
@@ -73,18 +77,19 @@ readonly screenshot_bundle_id="tappium.com.OpenHikes"
 
 # Frame number to the test that shoots it. The number is the file name's
 # prefix and the listing's order; `--frame 03` is how one frame is re-shot on
-# its own while it is being debugged, which a full pass makes a nine-minute
-# wait for.
+# its own while it is being debugged, which a full pass makes a wait of
+# several minutes for.
 readonly screenshot_frames=(
     "01:testCapturesTrailWithPhotoPins"
     "02:testCapturesPhotosAlongTheTrail"
     "03:testCapturesNearbyTrails"
-    "04:testCapturesStatisticsAndProfile"
+    "04:testCapturesFollowingTheTrail"
     "05:testCapturesRecordingAHike"
-    "06:testCapturesOfflineMaps"
+    "06:testCapturesMapsForTheMountains"
     "07:testCapturesWalkHistory"
     "08:testCapturesDrawingATrail"
     "09:testCapturesAPlaceAndItsPhotos"
+    "10:testCapturesSharingAHike"
 )
 
 # The frames that use the hiker's location, and are shot with it granted.
@@ -95,11 +100,12 @@ readonly screenshot_frames=(
 # hero frame and on the map behind every other one. The frames used to get
 # away without that only because the prompt was answered *Allow Once*, which
 # lapses when the app quits. So the rest are shot first, with location reset
-# to never asked, and these after it is granted.
-readonly screenshot_location_frames=" 03 05 08 "
+# to never asked, and these after it is granted. Frame 04 is one of them
+# because a hiker on the trail is what it is of.
+readonly screenshot_location_frames=" 03 04 05 08 "
 
 # The frames that import the stamped photographs, and skip without them.
-readonly screenshot_library_frames=" 01 02 09 "
+readonly screenshot_library_frames=" 01 02 06 09 10 "
 
 # How long `simctl addmedia` gets for the whole stamped library. It took 31s
 # for eight photographs on a freshly erased device, and once — one photograph
@@ -109,9 +115,9 @@ readonly screenshot_library_frames=" 01 02 09 "
 readonly addmedia_timeout_seconds=180
 
 # How long one frame may run before XCTest kills it and moves on. The slowest,
-# the recording frame, walks twenty fixes at four seconds each; a frame still
-# going after five minutes is stuck rather than slow, and an allowance is what
-# makes it fail with a spindump instead of holding the pass until someone
+# the routed walk, waits on Apple and Stadia and takes under a minute; a frame
+# still going after five minutes is stuck rather than slow, and an allowance is
+# what makes it fail with a spindump instead of holding the pass until someone
 # notices.
 readonly frame_time_allowance_seconds=300
 
@@ -123,7 +129,7 @@ Captures the App Store screenshot set in $screenshot_appearance appearance on a
 dedicated 6.9" simulator.
 
 Options:
-  --frame <nn>       Shoot only this frame (01-09); repeat for more. Existing
+  --frame <nn>       Shoot only this frame (01-10); repeat for more. Existing
                      PNGs of the other frames are left alone.
   --output <dir>     Where the PNGs land (default: Screenshots/Output)
   --photos <dir>     JPEGs to put in the simulator's photo library first
@@ -202,7 +208,7 @@ prepare_screenshot_device() {
         --wifiBars 3 \
         --cellularMode active \
         --cellularBars 4 \
-        --batteryState charged \
+        --batteryState discharging \
         --batteryLevel 100
 
     # After the erase, which takes these with everything else, and before the
@@ -441,7 +447,7 @@ screenshots_main() {
             # "3" and "03" both mean frame 03.
             if [[ "$frame" =~ ^[0-9]+$ ]]; then frame="$(printf '%02d' "$((10#$frame))")"; fi
             if ! screenshot_test_for_frame "$frame" >/dev/null; then
-                echo "Unknown frame: $frame (expected 01-09)" >&2
+                echo "Unknown frame: $frame (expected 01-10)" >&2
                 exit 2
             fi
             frames+=("$frame")
@@ -500,7 +506,7 @@ screenshots_main() {
 
     # Retried once, and only the frames that did not come out. The community
     # frame waits on a seeded browse answering, and that wait can lose to a
-    # busy machine rather than to a bug; re-running the eight frames that
+    # busy machine rather than to a bug; re-running every frame that
     # already passed to give it a second chance used to double the pass.
     local shot=() missing=("${frames[@]}") attempt
     for attempt in 1 2; do
