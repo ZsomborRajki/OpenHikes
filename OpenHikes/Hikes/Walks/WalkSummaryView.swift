@@ -134,14 +134,36 @@ struct WalkSummaryView: View {
             ProgressView(value: walk.coveredFraction)
                 .progressViewStyle(.linear)
                 .tint(tint)
-            Text("\(Self.length(walk.uncoveredMeters)) of the trail not hiked")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if let left = Self.leftUnhiked(walk.uncoveredMeters) {
+                Text("\(Self.length(left)) of the trail not hiked")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Completion")
-        .accessibilityValue("\(percent) percent complete, \(Self.length(walk.uncoveredMeters)) remaining")
+        .accessibilityValue(spokenCompletion)
         .accessibilityIdentifier("walk-completion")
+    }
+
+    /// The completion as VoiceOver reads it, with the remainder only when
+    /// there is one — the same rule ``leftUnhiked(_:)`` sets for the caption.
+    private var spokenCompletion: Text {
+        if let left = Self.leftUnhiked(walk.uncoveredMeters) {
+            Text("\(percent) percent complete, \(Self.length(left)) remaining")
+        } else {
+            Text("\(percent) percent complete")
+        }
+    }
+
+    /// The part of the trail a walk did not cover, or `nil` when it left none.
+    ///
+    /// A walk that covered all of it used to say so anyway, as "0 m of the
+    /// trail not hiked" under *100% Completed* — a sentence about nothing,
+    /// which read like a bug. Under a metre is none: the formatter would print
+    /// it as zero.
+    nonisolated static func leftUnhiked(_ uncoveredMeters: Double) -> Double? {
+        uncoveredMeters >= 1 ? uncoveredMeters : nil
     }
 
     /// The walk's own two figures in the strip, and the trail's and the
