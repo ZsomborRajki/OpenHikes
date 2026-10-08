@@ -663,8 +663,9 @@ nonisolated extension DirectionalPolylineRenderer {
 
     /// How much wider a dashed or dotted stretch's hole is than what it
     /// clears — and a blend's recolouring, see
-    /// ``drawBlend(_:zoomScale:context:)`` — in the pixels a renderer's width is measured in once it is scaled by
-    /// `contentScaleFactor`: a pixel each side. A hole exactly as wide
+    /// ``drawBlend(_:zoomScale:context:)`` — in the pixels a renderer's
+    /// width is measured in once it is scaled by `contentScaleFactor`: a
+    /// pixel each side. A hole exactly as wide
     /// clears the anti-aliased rim of the line's edge only as far as it
     /// covers it, and leaves a quarter of it behind: a hairline of the
     /// line, or of its border, along both sides of every gap.

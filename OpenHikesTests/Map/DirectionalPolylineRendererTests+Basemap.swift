@@ -173,6 +173,31 @@ extension DirectionalPolylineRendererTests {
         #expect(differing == 0, "the blend moved where the dashes are")
     }
 
+    /// The stretches carry the route's alpha, and a blend on a dashed line
+    /// paints over the dashes beneath it rather than replacing them — so a
+    /// translucent gradient mixed with the flat colour under it, and the
+    /// change of colour came out half as gradual as an opaque line's. Laid
+    /// over the grey at half alpha, every pixel's red less its green is half
+    /// what it is on the opaque line, the gradient's included.
+    @Test("a translucent dashed line blends its colours as fully as an opaque one")
+    func translucentDashedBlendKeepsItsColours() throws {
+        let opaque = try Self.renderOverBasemap(.dashed, shades: Self.meetingShades(alpha: 1))
+        let faded = try Self.renderOverBasemap(
+            .dashed,
+            shades: Self.meetingShades(alpha: Self.translucent),
+            stroke: UIColor.blue.withAlphaComponent(Self.translucent)
+        )
+        let row = opaque.context.height / 2
+        let tolerance = 12.0
+        let differing = (0..<opaque.context.width).count { column in
+            let solid = Self.basemapPixel(in: opaque, x: column, y: row)
+            let faint = Self.basemapPixel(in: faded, x: column, y: row)
+            let expected = Double(Int(solid.red) - Int(solid.green)) * Self.translucent
+            return abs(Double(Int(faint.red) - Int(faint.green)) - expected) > tolerance
+        }
+        #expect(differing == 0, "the gradient was mixed with the stretches' flat colours")
+    }
+
     /// Whether a pixel is the canvas's own grey — the "map" — rather than
     /// anything the line drew.
     private static func isGrey(_ pixel: (red: UInt8, green: UInt8, blue: UInt8)) -> Bool {
