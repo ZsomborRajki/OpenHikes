@@ -247,7 +247,7 @@ nonisolated extension TileProvider {
     /// source this device isn't entitled to — in either case the (keyless,
     /// free) default.
     ///
-    /// Settings won't let such a provider be *selected* — see `providerRow` —
+    /// Settings won't let such a provider be *selected* — see `MapStylePicker` —
     /// but a build that once had a `Secrets.plist` can leave the id behind in
     /// `UserDefaults` after the key is gone, and a lapsed subscription (or a
     /// choice synced from a device that still has one) leaves a paid id behind

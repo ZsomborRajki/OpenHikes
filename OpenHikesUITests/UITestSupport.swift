@@ -474,13 +474,17 @@ extension XCTestCase {
 
     /// The screen's scrolling container, whichever kind SwiftUI built it from.
     /// Falls back to the application itself, which accepts the same swipe.
+    ///
+    /// The tallest of them rather than the first found: a screen can carry a
+    /// row that scrolls sideways inside the one that scrolls down — Settings'
+    /// map cards are a `ScrollView` inside a `Form`'s collection view — and a
+    /// vertical swipe on that row moves nothing.
     @MainActor
     func scrollContainer(in app: XCUIApplication) -> XCUIElement {
-        for query in [app.scrollViews, app.collectionViews, app.tables] {
-            let first = query.firstMatch
-            if first.exists { return first }
-        }
-        return app
+        let found = [app.scrollViews, app.collectionViews, app.tables]
+            .map(\.firstMatch)
+            .filter(\.exists)
+        return found.max { $0.frame.height < $1.frame.height } ?? app
     }
 
     /// Scrolls looking for something that may not be on the screen *yet*.

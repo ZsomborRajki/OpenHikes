@@ -180,7 +180,7 @@ nonisolated final class SettingsUITests: XCTestCase {
     /// without `Secrets.plist` disables it.
     ///
     /// `MapPaywallView` was reached only from a locked row in Map Tiles, and
-    /// `providerRow` disables any source whose key did not resolve — which is
+    /// `MapStylePicker` disables any source whose key did not resolve — which is
     /// every source in a build without the gitignored plist. An archive cut on
     /// a machine that lacks it therefore sells a subscription nobody can buy,
     /// and hides **Restore Purchases** from a subscriber reinstalling, since
