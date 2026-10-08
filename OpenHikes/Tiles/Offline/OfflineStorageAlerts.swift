@@ -87,9 +87,9 @@ private struct OfflineStorageAlerts: ViewModifier {
         )
         return "\(shortfall.licenceHolder) allows \(limit) of saved maps on this device, across all"
             + " its map styles, and that’s already in use. Saving this route will delete about"
-            + " \(freeing) of your least-recently-used saved tiles from other saved maps."
-            + "\n\nThose hikes keep their routes, and their maps refill the next time you view"
-            + " them online."
+            + " \(freeing) of your least-recently-used saved tiles, whichever of its styles they"
+            + " were saved in.\n\nThe hikes they belong to keep their routes, and their maps"
+            + " refill the next time you view them online."
     }
 }
 

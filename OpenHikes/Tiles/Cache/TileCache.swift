@@ -799,7 +799,8 @@ nonisolated extension TileCache {
     /// when it already was, which is what lets a second hike over the same
     /// ground claim tiles the first one saved.
     ///
-    /// Refuses when the provider is at its ``TileProvider/durableByteLimit``.
+    /// Refuses when the ceiling the provider's ``TileProvider/durableQuota``
+    /// sets is reached — by this style's tiles and every other it covers.
     /// The tile keeps its browsing-tier copy and still draws; it simply isn't
     /// promoted to coverage. ``AutoSaveTileStore`` treats that refusal exactly
     /// as it treats a missing cached copy — the claim is given back, so the

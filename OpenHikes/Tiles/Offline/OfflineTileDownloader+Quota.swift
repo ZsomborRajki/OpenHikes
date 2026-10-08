@@ -166,8 +166,8 @@ extension OfflineTileDownloader {
             let name = licence.holder
             let limit = ByteCountFormatter.string(fromByteCount: space.limit, countStyle: .file)
             return savedCount == 0
-                ? "Saved \(name) maps are full. Its licence allows \(limit) of saved tiles on this "
-                    + "device, across all its map styles — delete another saved map to make room."
+                ? "Saved maps from \(name) are full. Its licence allows \(limit) of saved tiles on "
+                    + "this device, across all its map styles — delete another saved map to make room."
                 : "Saved \(savedCount) of \(plannedCount) tiles, then reached the \(limit) "
                     + "\(name) allows on this device across all its map styles. Delete another "
                     + "saved map to make room."

@@ -302,9 +302,9 @@ struct MapView: MapViewRepresentable, Equatable {
         // `openStreetMap`, `stadiaOutdoors`, `stamenTerrain` and
         // `thunderforestOutdoors` all draw a light page in either appearance —
         // so in dark mode the controls over them were resolving dark against
-        // light tiles. The
-        // tracking button's glass came out mid-grey with a white arrow on it,
-        // 2.25:1, and the camera and *Search this area* pills did the same.
+        // light tiles. The tracking button's glass came out mid-grey with a
+        // white arrow on it, 2.25:1, and the camera and *Search this area*
+        // pills did the same.
         // Forcing the light appearance for as long as those tiles are drawn
         // puts every control back on the side of the contrast it was designed
         // for: 17.5:1 for that arrow, measured.
