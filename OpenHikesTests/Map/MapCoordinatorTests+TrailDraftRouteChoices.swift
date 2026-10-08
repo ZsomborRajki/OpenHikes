@@ -95,6 +95,25 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// MapKit hides the lower of two colliding annotations, and a stop's pin
+    /// and the hiker's dot are both `.required`. The route's time is the one
+    /// bubble that must not be the one hidden: losing it left an alternative's
+    /// time on the map alone, where it read as the route's.
+    @Test("the route's time never gives way to a pin, and an alternative's always can")
+    func routeTimeIsNeverHidden() async throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = await routedWithAnAlternative(coordinator)
+        defer { detach(map) }
+
+        let times = coordinator.trailDraftRouteChoices.times
+        let route = try #require(times.first { $0.choice == nil })
+        let alternative = try #require(times.first { $0.choice != nil })
+        #expect(coordinator.mapView(map, viewFor: route)?.displayPriority == .required)
+        #expect(coordinator.mapView(map, viewFor: alternative)?.displayPriority == .defaultLow)
+        #endif
+    }
+
     /// Apple Maps' gesture: a tap on the grey line draws it instead, and what
     /// was drawn becomes the grey one.
     @Test("a tap on an alternative chooses it")
