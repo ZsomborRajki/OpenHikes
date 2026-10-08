@@ -54,6 +54,7 @@
 //  ordinary to assert.
 //
 
+import Algorithms
 import Foundation
 import OpenHikesData
 import SwiftData
@@ -231,7 +232,7 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
     }
 
     private static func byID(_ hikes: [LibraryHikeFacts]) -> [UUID: LibraryHikeFacts] {
-        Dictionary(hikes.map { ($0.hikeID, $0) }) { first, _ in first }
+        hikes.keyed(by: \.hikeID, resolvingConflictsWith: { _, first, _ in first })
     }
 
     private static func months(of outings: [LibraryOuting], in year: Int, calendar: Calendar) -> [Double] {

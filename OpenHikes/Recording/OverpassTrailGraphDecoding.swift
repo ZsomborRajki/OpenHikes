@@ -52,11 +52,7 @@ extension OverpassTrailGraphProvider {
     nonisolated static func buildElementIndex(
         from elements: [OverpassElement]
     ) -> [String: OverpassElement] {
-        var index: [String: OverpassElement] = [:]
-        for element in elements {
-            index["\(element.type)/\(element.id)"] = element
-        }
-        return index
+        elements.keyed(by: { "\($0.type)/\($0.id)" })
     }
 
     nonisolated static func extractNodeCoordinates(

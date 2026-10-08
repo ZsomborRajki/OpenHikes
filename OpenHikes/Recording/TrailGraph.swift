@@ -6,6 +6,7 @@
 //  shared node identifiers naturally become routable junctions.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 
@@ -96,17 +97,11 @@ nonisolated struct TrailGraph: Codable, Equatable, Sendable {
         nodes.isEmpty || edges.isEmpty
     }
 
+    /// Both graphs, each node and edge once: where the two hold the same id,
+    /// `other`'s copy, because `keyed(by:)` keeps the last value it meets.
     func merging(_ other: Self) -> Self {
-        var nodesByID = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
-        for node in other.nodes {
-            nodesByID[node.id] = node
-        }
-
-        var edgesByID = Dictionary(uniqueKeysWithValues: edges.map { ($0.id, $0) })
-        for edge in other.edges {
-            edgesByID[edge.id] = edge
-        }
-
+        let nodesByID = chain(nodes, other.nodes).keyed(by: \.id)
+        let edgesByID = chain(edges, other.edges).keyed(by: \.id)
         return Self(
             nodes: nodesByID.values.sorted { lhs, rhs in lhs.id < rhs.id },
             edges: edgesByID.values.sorted { lhs, rhs in

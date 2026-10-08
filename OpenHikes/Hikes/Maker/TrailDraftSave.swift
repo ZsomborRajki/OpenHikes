@@ -55,6 +55,7 @@
 //  recording serializes.
 //
 
+import Algorithms
 import Foundation
 import OpenHikesData
 import os
@@ -336,7 +337,7 @@ enum TrailDraftSave {
     /// Everything that survives still has to pass the line, like any save.
     static func places(of hike: Hike, drawn: [TrailPlace], atOpen: Set<UUID>) -> [TrailPlace] {
         let held = hike.places
-        let heldByID = Dictionary(held.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let heldByID = held.keyed(by: \.id, resolvingConflictsWith: { _, first, _ in first })
         let drawnIDs = Set(drawn.map(\.id))
         let fromDrawing = drawn.compactMap { place in
             heldByID[place.id] ?? (atOpen.contains(place.id) ? nil : place)

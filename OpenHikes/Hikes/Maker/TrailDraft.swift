@@ -532,8 +532,7 @@ final class TrailDraft {
     /// it back to a hiker who has turned path-following off would put a path
     /// on a line they asked to be straight.
     private func rebuildLegs() {
-        var resolved: [TrailLegEnds: TrailLeg] = [:]
-        for leg in legs { resolved[leg.ends] = leg }
+        let resolved = legs.keyed(by: \.ends)
         var rebuilt: [TrailLeg] = []
         rebuilt.reserveCapacity(max(0, waypoints.count - 1))
         for (previous, next) in waypoints.adjacentPairs() {
@@ -799,7 +798,7 @@ extension TrailDraft {
     /// the draft; the list keeps that order itself. A list that does not name
     /// every point changes nothing, and one naming a point twice counts it once.
     func arrangeRows(_ order: [String]) {
-        let byRow = Dictionary(uniqueKeysWithValues: waypoints.map { ($0.id.uuidString, $0) })
+        let byRow = waypoints.keyed(by: \.id.uuidString)
         // Unique first, so every point below is a different waypoint and
         // naming as many as there are means naming each exactly once.
         let points = order.uniqued().compactMap { byRow[$0] }
