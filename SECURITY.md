@@ -104,8 +104,9 @@ enumerable, but a name rather than a permission. What would be new is a way to
 ## What is not in scope
 
 - Anything requiring physical access to an unlocked, already-trusted device.
-- Map data and tiles served by OpenStreetMap, Stadia Maps or Thunderforest —
-  those are the providers' to secure. Report abuse to them.
+- Map data and tiles served by OpenStreetMap, Stadia Maps, Thunderforest or
+  Waymarked Trails — those are the providers' to secure. Report abuse to
+  them.
 - Vulnerabilities in Apple's frameworks. Report those to
   [Apple](https://security.apple.com/).
 

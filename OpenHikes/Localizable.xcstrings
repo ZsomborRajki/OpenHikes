@@ -1094,6 +1094,9 @@
     "Hiking" : {
 
     },
+    "Hiking Routes" : {
+
+    },
     "Hours" : {
 
     },
@@ -1267,6 +1270,9 @@
 
     },
     "Maps marked “Needs API key” aren't available in this build." : {
+
+    },
+    "Marked trails from Waymarked Trails, drawn over any map when zoomed in." : {
 
     },
     "matched by both time and place" : {

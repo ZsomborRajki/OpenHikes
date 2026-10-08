@@ -369,26 +369,6 @@ struct MapView: MapViewRepresentable, Equatable {
         #endif
     }
 
-    /// Puts the hiking-route layer on, takes it off, and credits it either
-    /// way. No-op while nothing about it changed.
-    private func applyTileLayer(to mapView: MKMapView, _ coordinator: Coordinator) {
-        guard coordinator.applyTileLayer(tileLayer, on: mapView) else { return }
-        #if os(iOS)
-        // A layer over Apple's map is the one case where the line comes back
-        // although the map's own credit is MapKit's: the layer's are owed
-        // whatever it is drawn over.
-        coordinator.attributionView?.update(with: drawnAttribution)
-        coordinator.applyCreditLineClearance()
-        #endif
-    }
-
-    /// Everything the line on the map has to credit: the selected map's
-    /// parties, then the layer's, each once — see
-    /// ``TileAttribution/drawn(base:layer:)``.
-    private var drawnAttribution: TileAttribution? {
-        TileAttribution.drawn(base: base.tileSource?.attribution, layer: tileLayer?.attribution)
-    }
-
     /// Enables MapKit's standard controls. Compass and scale are built-in flags;
     /// the "my location" button has no flag on iOS, so it's added as a subview —
     /// and so is the camera pill facing it across the map.
@@ -770,6 +750,33 @@ struct MapView: MapViewRepresentable, Equatable {
     func updateUIView(_ mapView: MKMapView, context: Context) { update(mapView, context.coordinator) }
     #endif
 
+}
+
+// MARK: - The hiking-route layer
+
+// A same-file extension for the reason the comparison below is one: the
+// struct's body is at `type_body_length`'s limit, and these read its private
+// members.
+extension MapView {
+    /// Puts the hiking-route layer on, takes it off, and credits it either
+    /// way. No-op while nothing about it changed.
+    private func applyTileLayer(to mapView: MKMapView, _ coordinator: Coordinator) {
+        guard coordinator.applyTileLayer(tileLayer, on: mapView) else { return }
+        #if os(iOS)
+        // A layer over Apple's map is the one case where the line comes back
+        // although the map's own credit is MapKit's: the layer's are owed
+        // whatever it is drawn over.
+        coordinator.attributionView?.update(with: drawnAttribution)
+        coordinator.applyCreditLineClearance()
+        #endif
+    }
+
+    /// Everything the line on the map has to credit: the selected map's
+    /// parties, then the layer's, each once — see
+    /// ``TileAttribution/drawn(base:layer:)``.
+    private var drawnAttribution: TileAttribution? {
+        TileAttribution.drawn(base: base.tileSource?.attribution, layer: tileLayer?.attribution)
+    }
 }
 
 // MARK: - When an update is worth running

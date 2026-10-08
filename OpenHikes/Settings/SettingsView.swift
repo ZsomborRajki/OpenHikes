@@ -202,36 +202,7 @@ struct SettingsView: View {
                 ) {
                     TileAttributionView(attribution: drawn)
                 }
-                // "Apart from the previews": the cards above fetch every
-                // source's tiles whichever map is selected. Neither sentence
-                // is true with the hiking routes drawn — those are tiles, and
-                // they are cached and auto-saved like any map's.
-                switch showsHikingRoutes ? nil : selectedProvider.systemStyle {
-                case .standard:
-                    Text(
-                        "Apart from the previews above, OpenHikes downloads, caches and auto-saves"
-                        + " no map tiles while this is selected, so it uses the least battery and"
-                        + " data — but the map needs"
-                        + " a signal where the system hasn't already cached it."
-                        + " Tiles already saved by other sources are kept, and listed below."
-                    )
-                case .hybrid:
-                    // Not the wording above: imagery is the heaviest thing
-                    // the map can stream, and MapKit offers no way to keep it.
-                    Text(
-                        "Apart from the previews above, OpenHikes downloads, caches and auto-saves"
-                        + " no map tiles while this is selected. Apple streams the imagery itself"
-                        + " and none of it can be saved for offline use, so the map needs a signal."
-                        + " Tiles already saved by other sources are kept, and listed below."
-                    )
-                case nil:
-                    if showsHikingRoutes, selectedProvider.usesSystemBaseMap {
-                        Text(
-                            "The hiking routes are the only map tiles OpenHikes downloads, caches"
-                            + " and auto-saves while this is selected."
-                        )
-                    }
-                }
+                mapTilesCostNote
                 if TileProvider.all.contains(where: { !Secrets.canLoadTiles($0) }) {
                     // A sentence a hiker can act on, and — under `#if DEBUG`
                     // — the one a contributor needs. It used to be the second
@@ -674,4 +645,45 @@ private extension SettingsView {
         cloudSync: CloudSyncCoordinator(defaults: .standard, isSyncingThisLaunch: false),
         entitlement: MapEntitlementStore(currentEntitlements: { false })
     )
+}
+
+// MARK: - Map tiles footer
+
+// A same-file extension, so it can read the view's private settings, and one
+// rather than more of the footer's closure, which is over
+// `closure_body_length`'s limit with it inline.
+extension SettingsView {
+    /// What the selected map costs in tiles, where that is worth saying.
+    @ViewBuilder private var mapTilesCostNote: some View {
+        // "Apart from the previews": the cards above fetch every
+        // source's tiles whichever map is selected. Neither sentence
+        // is true with the hiking routes drawn — those are tiles, and
+        // they are cached and auto-saved like any map's.
+        switch showsHikingRoutes ? nil : selectedProvider.systemStyle {
+        case .standard:
+            Text(
+                "Apart from the previews above, OpenHikes downloads, caches and auto-saves"
+                + " no map tiles while this is selected, so it uses the least battery and"
+                + " data — but the map needs"
+                + " a signal where the system hasn't already cached it."
+                + " Tiles already saved by other sources are kept, and listed below."
+            )
+        case .hybrid:
+            // Not the wording above: imagery is the heaviest thing
+            // the map can stream, and MapKit offers no way to keep it.
+            Text(
+                "Apart from the previews above, OpenHikes downloads, caches and auto-saves"
+                + " no map tiles while this is selected. Apple streams the imagery itself"
+                + " and none of it can be saved for offline use, so the map needs a signal."
+                + " Tiles already saved by other sources are kept, and listed below."
+            )
+        case nil:
+            if showsHikingRoutes, selectedProvider.usesSystemBaseMap {
+                Text(
+                    "The hiking routes are the only map tiles OpenHikes downloads, caches"
+                    + " and auto-saves while this is selected."
+                )
+            }
+        }
+    }
 }

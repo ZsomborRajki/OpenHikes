@@ -100,6 +100,42 @@ nonisolated final class SettingsUITests: XCTestCase {
         XCTAssertTrue(note.exists, "the note should name \(name)")
     }
 
+    /// The hiking routes are tiles, drawn over Apple's satellite map as over
+    /// any other — so with them on there *is* something to auto-save there,
+    /// and still nothing to bulk-download: the layer's server discourages it,
+    /// and Apple's imagery cannot be kept at all.
+    @MainActor
+    func testHikingRoutesOverSatelliteOfferAutoSaveOnly() {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+            ]
+        )
+
+        element("settings-button", in: app).tap()
+        let row = element("provider-row-apple_satellite", in: app)
+        XCTAssertTrue(row.waitForExistence(timeout: UITestTimeout.navigation))
+        row.tap()
+        let routes = toggle("hiking-routes-toggle", in: app)
+        XCTAssertTrue(scrollIntoView(routes, in: app))
+        XCTAssertFalse(toggleIsOn(routes), "the layer is off until it is asked for")
+        flip(routes)
+        XCTAssertTrue(waitUntilToggle(routes, is: true))
+        app.buttons["settings-close"].tap()
+
+        openHikeDetail(in: app)
+        scrollIntoView(element("route-style-row", in: app), in: app)
+        XCTAssertTrue(
+            app.switches["Auto-Save Tiles"].exists,
+            "the routes drawn over the imagery are tiles worth keeping"
+        )
+        XCTAssertFalse(
+            element("offline-download-button", in: app).exists,
+            "the layer has no bulk download path"
+        )
+    }
+
     /// The settings toggle, flipped and then found still flipped after the
     /// screen has been left and re-entered.
     ///
