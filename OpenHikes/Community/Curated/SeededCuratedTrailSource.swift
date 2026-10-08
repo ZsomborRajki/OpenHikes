@@ -130,15 +130,7 @@ nonisolated struct SeededCuratedTrailSource: CuratedTrailSourcing {
     }
 
     func trails(matching query: String, limit: Int) -> [CuratedTrail] {
-        let needle = query
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .localizedLowercase
-        guard !needle.isEmpty, limit > 0 else { return [] }
-        return Array(
-            served
-                .filter { $0.name.localizedLowercase.contains(needle) }
-                .prefix(limit)
-        )
+        served.named(query, limit: limit)
     }
 
     func trails(of relationIDs: [Int64]) -> [Int64: CuratedTrail] {

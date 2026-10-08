@@ -174,6 +174,21 @@ nonisolated extension CuratedTrailSourcing {
     }
 }
 
+nonisolated extension [CuratedTrail] {
+    /// The trails whose name holds `query`, ignoring case and the space around
+    /// it, in their own order and no more than `limit` of them: the local
+    /// search ``CuratedTrailSourcing/trails(matching:limit:)`` describes, over
+    /// whatever rows a source has in hand — the real one's last answer, or a
+    /// seeded scenario's — so the two are matched by the same rule.
+    func named(_ query: String, limit: Int) -> [CuratedTrail] {
+        let needle = query
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .localizedLowercase
+        guard !needle.isEmpty, limit > 0 else { return [] }
+        return Array(filter { $0.name.localizedLowercase.contains(needle) }.prefix(limit))
+    }
+}
+
 /// Curated hikes from the public Overpass API.
 actor CuratedTrailSource: CuratedTrailSourcing {
     typealias Transport = @Sendable (URLRequest) async throws -> OverpassHTTPResponse
@@ -425,15 +440,7 @@ extension CuratedTrailSource {
     }
 
     func trails(matching query: String, limit: Int) -> [CuratedTrail] {
-        let needle = query
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .localizedLowercase
-        guard !needle.isEmpty, limit > 0 else { return [] }
-        return Array(
-            lastAnswer
-                .filter { $0.name.localizedLowercase.contains(needle) }
-                .prefix(limit)
-        )
+        lastAnswer.named(query, limit: limit)
     }
 
     func trails(of relationIDs: [Int64]) async throws -> [Int64: CuratedTrail] {
