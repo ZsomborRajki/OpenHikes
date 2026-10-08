@@ -19,7 +19,6 @@
 //
 
 import Algorithms
-import OpenHikesData
 import SwiftUI
 
 /// What a card is made of, fixed once the photograph is chosen.
