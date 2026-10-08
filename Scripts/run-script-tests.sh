@@ -30,6 +30,10 @@
 # Scripts/sim-pool.sh is here because what it decides — which device a session
 # lands on, and whether that device is erased first — is invisible until two
 # sessions' tests collide on one simulator or somebody's device is wiped.
+# Scripts/render-trace.sh is here for what its report concludes: Scripts/lib/
+# render-trace-report.swift turns Instruments' tables into claims about which
+# view ran its body in which step of which test, and why, and a table misread
+# is a confident wrong answer about the render path rather than an error.
 #
 # `xcrun`, `xcodebuild`, `swiftlint` and `periphery` are replaced with
 # recording stubs on PATH and the scripts are run for real against them.
@@ -101,6 +105,19 @@ mkdir -p "$stub_bin"
 cat > "$stub_bin/xcrun" <<'STUB'
 #!/usr/bin/env bash
 printf 'xcrun %s\n' "$*" >> "$STUB_CALL_LOG"
+# A recording, read back: `xctrace export` and `xcresulttool` answer from the
+# fixture files in STUB_TRACE_DIR, the table of contents or whichever table
+# the export names.
+if [[ -n "${STUB_TRACE_DIR:-}" ]]; then
+    case "$*" in
+        "xctrace export"*"--toc"*) cat "$STUB_TRACE_DIR/toc.xml" ;;
+        "xctrace export"*"swiftui-body-interval"*) cat "$STUB_TRACE_DIR/bodies.xml" ;;
+        "xctrace export"*"swiftui-link-event"*) cat "$STUB_TRACE_DIR/properties.xml" ;;
+        "xctrace export"*"kdebug"*) cat "$STUB_TRACE_DIR/kdebug.xml" ;;
+        "xcresulttool get test-results tests"*) cat "$STUB_TRACE_DIR/tests.json" ;;
+        "xcresulttool get test-results activities"*) cat "$STUB_TRACE_DIR/activities.json" ;;
+    esac
+fi
 [[ "${1:-}" == "simctl" ]] || exit 0
 shift
 case "${1:-}" in
@@ -1974,6 +1991,213 @@ run_script "sim-pool refuses to adopt a booted simulator" \
 if expect_status 1 \
     && expect_contains "$output" "only an idle, shut-down simulator" "the error" \
     && expect_absent "$calls" "simctl rename" "the recorded calls"; then
+    pass
+fi
+
+echo "Render trace"
+
+# Scripts/render-trace.sh records with Instruments and cannot record here, but
+# what it concludes is all in Scripts/lib/render-trace-report.swift, and that
+# is where a wrong answer would come from: a `ref` resolved to the wrong value
+# names the wrong view, a body credited to the wrong step points a reader at
+# the wrong tap, and a view's first value read as an update reports every
+# screen as rebuilt for a reason. So --report is run against tables written
+# here, in the shape `xctrace export` writes them — every value after its
+# first a `ref`, each word of a narrative its own element, and one generic
+# view name cut off mid-parameter the way Instruments cuts a long one.
+render_trace="$repository_root/Scripts/render-trace.sh"
+trace_fixture="$work/render-trace"
+mkdir -p "$trace_fixture/run/render.trace" "$trace_fixture/run/run.xcresult"
+
+# Recording began at 1791484382.817; the steps below begin at 383, 384 and
+# 386, so a body at 1.5s is the launch's and one at 3.5s is the tap's.
+cat > "$trace_fixture/toc.xml" <<'XML'
+<?xml version="1.0"?>
+<trace-toc><run number="1"><info><summary><start-date>2026-10-08T20:33:02.817+02:00</start-date></summary></info></run></trace-toc>
+XML
+
+cat > "$trace_fixture/bodies.xml" <<'XML'
+<?xml version="1.0"?>
+<trace-query-result>
+<node xpath='//trace-toc[1]/run[1]/data[1]/table[8]'><schema name="swiftui-body-interval"><col><mnemonic>start</mnemonic><name>Start</name></col><col><mnemonic>duration</mnemonic><name>Duration</name></col><col><mnemonic>view-type</mnemonic><name>View Type</name></col><col><mnemonic>view-module</mnemonic><name>Module</name></col><col><mnemonic>severity</mnemonic><name>Classification</name></col></schema><row><start-time id="1" fmt="00:01.500.000">1500000000</start-time><duration id="2" fmt="1.00 ms">1000000</duration><string id="3" fmt="OpenHikesView">OpenHikesView</string><string id="4" fmt="OpenHikes.debug.dylib">OpenHikes.debug.dylib</string><event-concept id="5" fmt="Low">Low</event-concept></row>
+<row><start-time id="6" fmt="00:01.600.000">1600000000</start-time><duration ref="2"/><string id="7" fmt="MapScreenAlerts">MapScreenAlerts</string><string ref="4"/><event-concept ref="5"/></row>
+<row><start-time id="8" fmt="00:01.700.000">1700000000</start-time><duration ref="2"/><string id="9" fmt="GlassStack&lt;HStack&lt;TupleContent&lt;Pack{Image, Text">GlassStack&lt;HStack&lt;TupleContent&lt;Pack{Image, Text</string><string ref="4"/><event-concept ref="5"/></row>
+<row><start-time id="10" fmt="00:01.800.000">1800000000</start-time><duration ref="2"/><string id="11" fmt="MainMenuItemHost.RootView">MainMenuItemHost.RootView</string><string id="12" fmt="SwiftUI">SwiftUI</string><event-concept ref="5"/></row>
+<row><start-time id="13" fmt="00:03.500.000">3500000000</start-time><duration ref="2"/><string ref="7"/><string ref="4"/><event-concept ref="5"/></row>
+<row><start-time id="14" fmt="00:03.600.000">3600000000</start-time><duration ref="2"/><string ref="7"/><string ref="4"/><event-concept ref="5"/></row>
+<row><start-time id="15" fmt="00:03.700.000">3700000000</start-time><duration ref="2"/><string ref="7"/><string ref="4"/><event-concept ref="5"/></row>
+<row><start-time id="16" fmt="00:03.800.000">3800000000</start-time><duration ref="2"/><string ref="3"/><string ref="4"/><event-concept ref="5"/></row>
+</node></trace-query-result>
+XML
+
+cat > "$trace_fixture/properties.xml" <<'XML'
+<?xml version="1.0"?>
+<trace-query-result>
+<node xpath='//trace-toc[1]/run[1]/data[1]/table[2]'><schema name="swiftui-link-event"><col><mnemonic>time</mnemonic><name>Time</name></col><col><mnemonic>link-type</mnemonic><name>Property Type</name></col><col><mnemonic>view-type</mnemonic><name>View Type</name></col><col><mnemonic>view-module</mnemonic><name>Module</name></col><col><mnemonic>value</mnemonic><name>Value</name></col><col><mnemonic>event</mnemonic><name>Event</name></col><col><mnemonic>narrative</mnemonic><name>Transition</name></col></schema><row><event-time id="1" fmt="00:01.400.000">1400000000</event-time><string id="2" fmt="State&lt;Bool&gt;">State&lt;Bool&gt;</string><string id="3" fmt="OpenHikesView">OpenHikesView</string><string id="4" fmt="OpenHikes.debug.dylib">OpenHikes.debug.dylib</string><string id="5" fmt="false">false</string><string id="6" fmt="Update">Update</string><narrative id="7" fmt="State&lt;Bool&gt; in OpenHikesView updated from &lt;initialState&gt; to false"><string ref="2"/><narrative-text id="8" fmt=" in "> in </narrative-text><string ref="3"/><narrative-text id="9" fmt=" updated from "> updated from </narrative-text><string id="10" fmt="&lt;initialState&gt;">&lt;initialState&gt;</string><narrative-text id="11" fmt=" to "> to </narrative-text><string ref="5"/></narrative></row>
+<row><event-time id="12" fmt="00:03.450.000">3450000000</event-time><string id="13" fmt="Binding&lt;Bool&gt;">Binding&lt;Bool&gt;</string><string id="14" fmt="MapScreenAlerts">MapScreenAlerts</string><string ref="4"/><string ref="5"/><string ref="6"/><narrative id="15" fmt="Binding&lt;Bool&gt; in MapScreenAlerts updated from false to false"><string ref="13"/><narrative-text ref="8"/><string ref="14"/><narrative-text ref="9"/><string ref="5"/><narrative-text ref="11"/><string ref="5"/></narrative></row>
+<row><event-time id="16" fmt="00:03.550.000">3550000000</event-time><string ref="13"/><string ref="14"/><string ref="4"/><string ref="5"/><string ref="6"/><narrative ref="15"/></row>
+<row><event-time id="17" fmt="00:03.750.000">3750000000</event-time><string id="18" fmt="State&lt;Optional&lt;Hike&gt;&gt;">State&lt;Optional&lt;Hike&gt;&gt;</string><string ref="3"/><string ref="4"/><string id="19" fmt="Optional(OpenHikesData.Hike)">Optional(OpenHikesData.Hike)</string><string ref="6"/><narrative id="20" fmt="State&lt;Optional&lt;Hike&gt;&gt; in OpenHikesView updated from nil to Optional(OpenHikesData.Hike)"><string ref="18"/><narrative-text ref="8"/><string ref="3"/><narrative-text ref="9"/><string id="21" fmt="nil">nil</string><narrative-text ref="11"/><string ref="19"/></narrative></row>
+</node></trace-query-result>
+XML
+
+cat > "$trace_fixture/tests.json" <<'JSON'
+{"testNodes":[{"children":[{"children":[{"children":[{"name":"testOne()","nodeIdentifier":"OpenHikesUITests/testOne()","nodeType":"Test Case","result":"Passed"}],"name":"OpenHikesUITests","nodeType":"Test Suite","result":"Passed"}],"name":"OpenHikesUITests","nodeType":"UI test bundle","result":"Passed"}],"name":"OpenHikes","nodeType":"Test Plan","result":"Passed"}]}
+JSON
+
+cat > "$trace_fixture/activities.json" <<'JSON'
+{"testIdentifier":"OpenHikesUITests/testOne()","testRuns":[{"activities":[{"title":"Start Test at 2026-10-08 20:33:03.000","startTime":1791484383.0},{"title":"Open tappium.com.OpenHikes","startTime":1791484384.0,"childActivities":[{"title":"Wait for tappium.com.OpenHikes to idle","startTime":1791484384.5}]},{"title":"Tap \"Done\" Button","startTime":1791484386.0}]}]}
+JSON
+
+trace_run="$trace_fixture/run"
+STUB_TRACE_DIR="$trace_fixture" \
+    run_script "render-trace --report credits each body to its step and its cause" \
+        "$render_trace" --report "$trace_run"
+report="$(cat "$trace_run/report.md" 2>/dev/null || true)"
+# The tap re-evaluated the alerts three times: twice after a binding that
+# printed the same before and after, once with nothing named at all.
+if expect_status 0 \
+    && expect_contains "$output" "Report: $trace_run/report.md" "the output" \
+    && expect_contains "$output" "| MapScreenAlerts | 4 | 4.0 |" "the summary printed" \
+    && expect_contains "$report" '| 3 | MapScreenAlerts | OpenHikesUITests/testOne() | 2. Tap "Done" Button | Binding<Bool> (prints unchanged) ×2, unexplained ×1 |' "the hot spots" \
+    && expect_contains "$report" "| OpenHikesView | 2 | 2.0 | State<Optional<Hike>> ×1, unexplained ×1 |" "the per-view table" \
+    && expect_contains "$report" "| GlassStack<…> | 1 |" "the per-view table" \
+    && expect_absent "$report" "MainMenuItemHost" "the report" \
+    && expect_absent "$report" "State<Bool>" "the report"; then
+    pass
+fi
+
+expected_tsv="test	step	view	bodies	nanoseconds	unexplained
+OpenHikesUITests/testOne()	1. Open tappium.com.OpenHikes	GlassStack<…>	1	1000000	1
+OpenHikesUITests/testOne()	1. Open tappium.com.OpenHikes	MapScreenAlerts	1	1000000	1
+OpenHikesUITests/testOne()	1. Open tappium.com.OpenHikes	OpenHikesView	1	1000000	1
+OpenHikesUITests/testOne()	2. Tap \"Done\" Button	MapScreenAlerts	3	3000000	1
+OpenHikesUITests/testOne()	2. Tap \"Done\" Button	OpenHikesView	1	1000000	0"
+current="render-trace --report writes one bodies.tsv row per test, step and view"
+actual_tsv="$(cat "$trace_run/bodies.tsv" 2>/dev/null || true)"
+if [[ "$actual_tsv" == "$expected_tsv" ]]; then
+    pass
+else
+    fail "bodies.tsv is not what the fixture holds" "$(diff <(printf '%s\n' "$expected_tsv") <(printf '%s\n' "$actual_tsv") || true)"
+fi
+
+# The baseline is summed per test and view, so a body that moved from one
+# step to another is not a change and a view that appeared is.
+cat > "$trace_fixture/baseline.tsv" <<'TSV'
+test	step	view	bodies	nanoseconds	unexplained
+OpenHikesUITests/testOne()	1. Open tappium.com.OpenHikes	MapScreenAlerts	1	1000000	1
+OpenHikesUITests/testOne()	2. Tap "Done" Button	MapScreenAlerts	1	1000000	1
+OpenHikesUITests/testOne()	2. Tap "Done" Button	OpenHikesView	2	2000000	0
+OpenHikesUITests/testGone()	2. Tap "Done" Button	OpenHikesView	9	9000000	0
+TSV
+STUB_TRACE_DIR="$trace_fixture" \
+    run_script "render-trace --baseline reports each view whose count moved, and only those" \
+        "$render_trace" --report "$trace_run" --baseline "$trace_fixture/baseline.tsv"
+report="$(cat "$trace_run/report.md" 2>/dev/null || true)"
+if expect_status 0 \
+    && expect_contains "$report" "1 test(s) compared. Across the views that changed: 2 → 5 bodies." "the comparison" \
+    && expect_contains "$report" "| OpenHikesUITests/testOne() | MapScreenAlerts | 2 | 4 | +2 |" "the comparison" \
+    && expect_contains "$report" "| OpenHikesUITests/testOne() | GlassStack<…> | 0 | 1 | +1 |" "the comparison" \
+    && expect_absent "$report" "| OpenHikesUITests/testOne() | OpenHikesView |" "the comparison" \
+    && expect_absent "$report" "testGone" "the comparison"; then
+    pass
+fi
+
+# Instruments collects SwiftUI's tracepoints from every simulator on the
+# machine, so the third alert body in the tap — fired by process 5151, which
+# is not one of the app's on the recorded simulator — is another session's and
+# must not be counted. The join is the instant: a body starts exactly when a
+# tracepoint fires, and the tracepoint names its thread's process.
+cat > "$trace_fixture/kdebug.xml" <<'XML'
+<?xml version="1.0"?>
+<trace-query-result>
+<node xpath='//trace-toc[1]/run[1]/data[1]/table[1]'><schema name="kdebug"><col><mnemonic>time</mnemonic><name>Timestamp</name></col><col><mnemonic>thread</mnemonic><name>Thread</name></col></schema><row><event-time id="1" fmt="00:01.500.000">1500000000</event-time><thread id="2" fmt="Main Thread (0x1) (OpenHikes, pid: 4242)"><tid id="3" fmt="0x1">1</tid><process id="4" fmt="OpenHikes (4242)"><pid id="5" fmt="4242">4242</pid></process></thread></row>
+<row><event-time id="6" fmt="00:01.600.000">1600000000</event-time><thread ref="2"/></row>
+<row><event-time id="7" fmt="00:01.700.000">1700000000</event-time><thread ref="2"/></row>
+<row><event-time id="8" fmt="00:03.500.000">3500000000</event-time><thread ref="2"/></row>
+<row><event-time id="9" fmt="00:03.600.000">3600000000</event-time><thread ref="2"/></row>
+<row><event-time id="10" fmt="00:03.700.000">3700000000</event-time><thread id="11" fmt="Main Thread (0x9) (OpenHikes, pid: 5151)"><tid id="12" fmt="0x9">9</tid><process id="13" fmt="OpenHikes (5151)"><pid id="14" fmt="5151">5151</pid></process></thread></row>
+<row><event-time id="15" fmt="00:03.800.000">3800000000</event-time><thread ref="2"/></row>
+</node></trace-query-result>
+XML
+filtered_run="$trace_fixture/filtered"
+mkdir -p "$filtered_run/render.trace" "$filtered_run/run.xcresult"
+printf '4242\n' > "$filtered_run/processes.txt"
+STUB_TRACE_DIR="$trace_fixture" \
+    run_script "render-trace leaves out another simulator's bodies" \
+        "$render_trace" --report "$filtered_run"
+report="$(cat "$filtered_run/report.md" 2>/dev/null || true)"
+if expect_status 0 \
+    && expect_contains "$report" "**1 bodies from 1 other process(es) were left out**" "the report" \
+    && expect_contains "$report" "| MapScreenAlerts | 3 | 3.0 | Binding<Bool> (prints unchanged) ×2, unexplained ×1 |" "the per-view table" \
+    && expect_absent "$report" "| 3 | MapScreenAlerts |" "the hot spots"; then
+    pass
+fi
+
+# A closure SwiftUI runs for the app — a ScrollViewReader's — is counted
+# against SwiftUI's own view, so the one way to see it is to keep them.
+STUB_TRACE_DIR="$trace_fixture" \
+    run_script "render-trace --all-modules keeps SwiftUI's own views in the report" \
+        "$render_trace" --report "$trace_run" --all-modules
+report="$(cat "$trace_run/report.md" 2>/dev/null || true)"
+if expect_status 0 \
+    && expect_contains "$report" "8 bodies of every view" "the report" \
+    && expect_contains "$report" "| MainMenuItemHost.RootView | 1 |" "the per-view table"; then
+    pass
+fi
+
+run_script "render-trace refuses to run without being told what to run" \
+    "$render_trace" --device "iPhone 17 Pro"
+if expect_status 2 \
+    && expect_contains "$output" "Name what to run" "the error" \
+    && expect_absent "$calls" "xctrace" "the recorded calls"; then
+    pass
+fi
+
+run_script "render-trace --report refuses a test selection it would ignore" \
+    "$render_trace" --report "$trace_run" --test testOne
+if expect_status 2 && expect_contains "$output" "does not take a test selection" "the error"; then
+    pass
+fi
+
+run_script "render-trace --report refuses a directory that holds no recording" \
+    "$render_trace" --report "$work"
+if expect_status 2 && expect_contains "$output" "holds no render.trace and run.xcresult" "the error"; then
+    pass
+fi
+
+run_script "render-trace refuses a baseline that is not there" \
+    "$render_trace" --report "$trace_run" --baseline "$work/no-such.tsv"
+if expect_status 2 && expect_contains "$output" "No baseline at" "the error"; then
+    pass
+fi
+
+# The kernel trace facility is one lock per machine: a second recording fails
+# to start, but only after posting the notice the script waits for, and would
+# have the tests run for nothing. A process that reads as a recording — this
+# stand-in, or another session's real one — is refused before anything runs.
+(exec -a "xctrace record --stand-in" sleep 60) &
+stand_in=$!
+STUB_DEVICES="$work/devices-two-booted.txt" \
+    run_script "render-trace refuses to start while another recording holds the machine" \
+        "$render_trace" --test "$recording_test" --device "iPhone 17 Pro" --output "$work/second-recording"
+kill "$stand_in" 2>/dev/null || true
+wait "$stand_in" 2>/dev/null || true
+if expect_status 1 \
+    && expect_contains "$output" "Another Instruments recording is running" "the error" \
+    && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
+    pass
+fi
+
+# xctrace will not write over a trace and xcodebuild will not write over a
+# result bundle, so an earlier run's directory is refused before Instruments
+# is started rather than failing half-way through a run.
+STUB_DEVICES="$work/devices-two-booted.txt" \
+    run_script "render-trace refuses an output that already holds a recording" \
+        "$render_trace" --test "$recording_test" --device "iPhone 17 Pro" --output "$trace_run"
+if expect_status 2 \
+    && expect_contains "$output" "already holds a recording" "the error" \
+    && expect_absent "$calls" "xctrace record" "the recorded calls" \
+    && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
     pass
 fi
 

@@ -85,6 +85,18 @@ you touch recording, the map, or anything on the render path:
 Scripts/run-ui-tests.sh --all
 ```
 
+A change on the render path is measured rather than argued: run the tests that
+reach it under the render trace on `main` and on your branch, and compare. The
+report says which SwiftUI bodies each step of each test made the app evaluate,
+and which property made them; *Render isolation, in practice* in the
+instructions file says how to read it.
+
+```sh
+Scripts/render-trace.sh --suite PlaceUITests --all --output TestResults/render-trace/branch
+Scripts/render-trace.sh --report TestResults/render-trace/branch \
+  --baseline TestResults/render-trace/main/bodies.tsv
+```
+
 ## Writing code here
 
 The conventions live in
