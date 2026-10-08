@@ -48,7 +48,7 @@ enum TilePreviewRenderer {
         side: CGFloat,
         cache: TileCache = .shared
     ) async -> UIImage? {
-        let key = finishedKey(for: source, in: frame, style: style)
+        let key = finishedKey(for: source, in: frame, style: style, side: side)
         if let key, let image = finished[key] { return image }
 
         let image: UIImage? = switch source {
@@ -66,12 +66,15 @@ enum TilePreviewRenderer {
     private static func finishedKey(
         for source: TilePreviewSource,
         in frame: TilePreviewFrame,
-        style: UIUserInterfaceStyle
+        style: UIUserInterfaceStyle,
+        side: CGFloat
     ) -> String? {
         let block = "\(frame.z)/\(frame.x)/\(frame.y)"
         return switch source {
         case .unavailable: nil
-        case .systemMap: "system/\(style.rawValue)/\(block)"
+        // The snapshot is drawn at the card's size, which Dynamic Type
+        // changes; one taken at a smaller size would be stretched.
+        case .systemMap: "system/\(style.rawValue)/\(Int(side.rounded()))/\(block)"
         case let .tiles(providerID, _): "\(providerID)/\(block)"
         }
     }

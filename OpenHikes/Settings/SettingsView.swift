@@ -194,9 +194,12 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 TileAttributionView(attribution: selectedProvider.attribution)
                 if selectedProvider.usesSystemBaseMap {
+                    // "Apart from the previews": the cards above fetch every
+                    // source's tiles whichever map is selected.
                     Text(
-                        "OpenHikes downloads, caches and auto-saves no map tiles while this is"
-                        + " selected, so it uses the least battery and data — but the map needs"
+                        "Apart from the previews above, OpenHikes downloads, caches and auto-saves"
+                        + " no map tiles while this is selected, so it uses the least battery and"
+                        + " data — but the map needs"
                         + " a signal where the system hasn't already cached it."
                         + " Tiles already saved by other sources are kept, and listed below."
                     )
