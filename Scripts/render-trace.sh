@@ -330,10 +330,19 @@ watcher_pid=$!
 
 # Serial whatever the selection, because the recording is of this one device:
 # a parallel run's clones are simulators Instruments is not watching.
+#
+# And retried, because under the recording a class's first launch after its
+# fresh install occasionally fails before the app has a process at all —
+# "Simulator device failed to launch … did not return a process handle nor
+# launch error" — which four of 34 class runs did on 2026-10-08, every one the
+# class's first test, and every one of those tests passing when run again. A
+# retry re-runs failures only; the report names an earlier attempt apart, so
+# it and a baseline read the attempt that counted.
 ui_tests=(
     "$repository_root/Scripts/run-ui-tests.sh"
     --device "$device_udid"
     --serial
+    --retry
     --result-bundle "$output/run.xcresult"
 )
 if [[ -n "$derived_data" ]]; then
