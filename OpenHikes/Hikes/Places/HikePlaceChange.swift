@@ -159,7 +159,7 @@ extension View {
     /// retry.
     func hikePlaceRefusalAlert(_ refusal: Binding<HikePlaceRefusal?>) -> some View {
         alert(
-            isPresented: Binding(get: { refusal.wrappedValue != nil }, set: { if !$0 { refusal.wrappedValue = nil } }),
+            isPresented: refusal.isPresent(),
             error: refusal.wrappedValue
         ) {
             Button("OK", role: .cancel) { /* dismisses */ }

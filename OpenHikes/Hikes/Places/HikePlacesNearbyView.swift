@@ -89,7 +89,7 @@ struct HikePlacesNearbyView: View {
             if let token { around.show(rows, token: token) }
         }
         .onChange(of: filter.hidden) { askAgainIfWider() }
-        .sheet(isPresented: isShowingCard) {
+        .sheet(isPresented: $search.selection.isPresent()) {
             HikePlaceAroundCard(search: search, hike: hike, onAdd: add) { photo in
                 // The card goes first: a push under a presented sheet lands
                 // behind it.
@@ -130,10 +130,6 @@ struct HikePlacesNearbyView: View {
         )
         .font(.footnote)
         .foregroundStyle(.secondary)
-    }
-
-    private var isShowingCard: Binding<Bool> {
-        Binding(get: { search.selection != nil }, set: { if !$0 { search.selection = nil } })
     }
 
     private static func length(_ meters: Double) -> String {

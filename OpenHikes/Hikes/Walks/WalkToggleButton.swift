@@ -109,7 +109,7 @@ private struct WalkPhaseRefusalAlert: ViewModifier {
     func body(content: Content) -> some View {
         content.alert(
             "Could not change this hike",
-            isPresented: Binding(get: { refused != nil }, set: { if !$0 { refused = nil } })
+            isPresented: $refused.isPresent()
         ) {
             Button("OK", role: .cancel) { /* no-op */ }
         } message: {

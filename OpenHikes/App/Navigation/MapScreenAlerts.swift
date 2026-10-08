@@ -85,11 +85,11 @@ private struct MapScreenAlerts: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .alert(isPresented: presence(of: $importFailure), error: importFailure) {
+            .alert(isPresented: $importFailure.isPresent(), error: importFailure) {
                 Button("OK", role: .cancel) { /* dismiss */ }
             }
             // A silent search is indistinguishable from a broken one.
-            .alert(isPresented: presence(of: $searchFailure), error: searchFailure) {
+            .alert(isPresented: $searchFailure.isPresent(), error: searchFailure) {
                 Button("OK", role: .cancel) { /* dismiss */ }
             }
             .alert("Saved Hikes Unavailable", isPresented: $startupIssue) {
@@ -110,14 +110,5 @@ private struct MapScreenAlerts: ViewModifier {
             } message: {
                 Text("Its record could not be saved, so the hike is still under way. Try ending it again.")
             }
-    }
-
-    /// Presents while `error` holds something, and clears it on dismissal, so
-    /// there is never a second flag the two could disagree on.
-    private func presence<E>(of error: Binding<E?>) -> Binding<Bool> {
-        Binding(
-            get: { error.wrappedValue != nil },
-            set: { if !$0 { error.wrappedValue = nil } }
-        )
     }
 }
