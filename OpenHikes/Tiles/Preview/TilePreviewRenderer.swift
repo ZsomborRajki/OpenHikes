@@ -36,7 +36,7 @@ enum TilePreviewRenderer {
     /// reads as a broken map, where the placeholder reads as "not loaded".
     ///
     /// - Parameters:
-    ///   - style: only the system map has one; raster tiles are the same
+    ///   - style: only the system maps have one; raster tiles are the same
     ///     bytes in both appearances, as they are on the map.
     ///   - side: the card's edge in points, for the snapshotter. A tile block
     ///     is composed at its native pixels and scaled down by the view.

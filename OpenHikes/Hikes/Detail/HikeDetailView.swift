@@ -498,7 +498,7 @@ private extension HikeDetailView {
                 autoSave: autoSave,
                 downloader: downloader,
                 storedBytes: storedBytes,
-                mapRendersTiles: !activeProvider.usesSystemBaseMap,
+                systemMapName: activeProvider.usesSystemBaseMap ? activeProvider.name : nil,
                 scheduleStoredBytesRefresh: scheduleStoredBytesRefresh,
                 deleteStoredTiles: deleteStoredTiles
             )
