@@ -32,4 +32,16 @@ nonisolated public extension RouteProfile {
         guard accumulator.hasChange else { return nil }
         return (accumulator.gainMeters, accumulator.lossMeters)
     }
+
+    /// What `stretches` climb and drop between them: each one's
+    /// ``climb(from:to:)``, added up — the part of a route a walk has covered
+    /// is rarely one stretch. `nil` when none of them had two heights to
+    /// compare.
+    func climb(over stretches: [ClosedRange<Double>]) -> (gainMeters: Double, lossMeters: Double)? {
+        let climbs = stretches.compactMap { climb(from: $0.lowerBound, to: $0.upperBound) }
+        guard !climbs.isEmpty else { return nil }
+        return climbs.reduce((gainMeters: 0, lossMeters: 0)) { total, climb in
+            (total.gainMeters + climb.gainMeters, total.lossMeters + climb.lossMeters)
+        }
+    }
 }

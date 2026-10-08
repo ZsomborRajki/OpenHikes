@@ -108,21 +108,6 @@ nonisolated struct WalkShareFigures: Equatable, Sendable {
             return startedAt.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(locale))
         }
     }
-
-    /// What the covered stretches climb and drop, summed stretch by stretch
-    /// through ``RouteProfile/climb(from:to:)`` — the same deadband every
-    /// other climb in the app is counted with. `nil` when no stretch had two
-    /// heights to compare.
-    static func climb(
-        over ranges: [ClosedRange<Double>],
-        along profile: RouteProfile
-    ) -> (gainMeters: Double, lossMeters: Double)? {
-        let climbs = ranges.compactMap { profile.climb(from: $0.lowerBound, to: $0.upperBound) }
-        guard !climbs.isEmpty else { return nil }
-        return climbs.reduce((gainMeters: 0, lossMeters: 0)) { total, climb in
-            (total.gainMeters + climb.gainMeters, total.lossMeters + climb.lossMeters)
-        }
-    }
 }
 
 extension WalkShareFigures {
@@ -134,7 +119,7 @@ extension WalkShareFigures {
     ///   climb on another would be measuring somewhere else.
     init(walk: HikeWalk, title: String, profile: RouteProfile?) {
         let coverage = walk.coverage
-        let climb = profile.flatMap { Self.climb(over: coverage.ranges, along: $0) }
+        let climb = profile.flatMap { $0.climb(over: coverage.ranges) }
         self.init(
             title: title,
             walkedMeters: coverage.coveredMeters,

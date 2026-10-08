@@ -101,22 +101,11 @@ nonisolated enum WalkTimeLeft {
         let coveredMeters = covered.reduce(0) { $0 + ($1.upperBound - $1.lowerBound) }
         guard coveredMeters >= calibrationMeters,
               activeSeconds >= calibrationSeconds else { return nil }
-        var gain = 0.0
-        var loss = 0.0
-        for stretch in covered {
-            guard let stretchClimb = climb(
-                profile,
-                from: stretch.lowerBound,
-                to: stretch.upperBound,
-                reversed: reversed
-            ) else { continue }
-            gain += stretchClimb.gainMeters
-            loss += stretchClimb.lossMeters
-        }
+        let walked = profile.climb(over: covered).map { turned($0, reversed: reversed) }
         let expected = WalkingTimeEstimate.seconds(
             distanceMeters: coveredMeters,
-            ascentMeters: gain,
-            descentMeters: loss
+            ascentMeters: walked?.gainMeters ?? 0,
+            descentMeters: walked?.lossMeters ?? 0
         )
         guard expected > 0 else { return nil }
         return min(max(activeSeconds / expected, paceFactorBounds.lowerBound), paceFactorBounds.upperBound)
@@ -147,7 +136,14 @@ nonisolated enum WalkTimeLeft {
         to end: Double,
         reversed: Bool
     ) -> (gainMeters: Double, lossMeters: Double)? {
-        guard let climb = profile.climb(from: start, to: end) else { return nil }
-        return reversed ? (climb.lossMeters, climb.gainMeters) : climb
+        profile.climb(from: start, to: end).map { turned($0, reversed: reversed) }
+    }
+
+    /// A climb as the hiker meets it — see ``climb(_:from:to:reversed:)``.
+    private static func turned(
+        _ climb: (gainMeters: Double, lossMeters: Double),
+        reversed: Bool
+    ) -> (gainMeters: Double, lossMeters: Double) {
+        reversed ? (climb.lossMeters, climb.gainMeters) : climb
     }
 }
