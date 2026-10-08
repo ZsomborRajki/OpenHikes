@@ -465,8 +465,9 @@ struct OfflineStorageStatus: View {
     let autoSave: AutoSaveController
     let downloader: OfflineTileDownloader
     let storedBytes: Int64?
-    /// The selected map's name when it is one of MapKit's own, which fetch no
-    /// tiles at all; `nil` for a tile source. A name replaces the auto-save
+    /// The selected map's name when it is one of MapKit's own and nothing on
+    /// the map fetches tiles; `nil` for a tile source, or for Apple's map with
+    /// the hiking routes drawn over it. A name replaces the auto-save
     /// note, which would otherwise invite the hiker to turn on a switch that
     /// is no longer drawn and could save nothing if it were — and it is the
     /// name, not a fixed one, because there are two such maps to be on.
