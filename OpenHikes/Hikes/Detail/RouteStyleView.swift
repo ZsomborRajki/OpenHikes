@@ -158,7 +158,7 @@ struct RouteStyleRow: View {
 /// Its own view so the control's position is read here and not by
 /// ``RouteStyleView``: moving it redraws one row rather than the colour
 /// wells beside it. The trail maker shows the same one, bound to the same
-/// setting — see ``TrailDraftColoringSection``.
+/// setting — see ``TrailDraftMapSection``.
 struct RouteColoringPicker: View {
     /// How faded the key is at *None*: still there to say what the other
     /// positions would do, but plainly not what the map is showing.

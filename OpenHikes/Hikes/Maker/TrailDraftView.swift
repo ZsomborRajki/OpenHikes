@@ -128,9 +128,10 @@ struct TrailDraftView: View {
                 TrailDraftSnapToggle(maker: maker)
             }
 
-            // Above the places, and withheld until the line has colours to
-            // show — see ``TrailDraftColoringSection``.
-            TrailDraftColoringSection(maker: maker)
+            // The hike detail's *On the Map* card: the hiking routes, and the
+            // line's colours once it has some. Above the places — see
+            // ``TrailDraftMapSection``.
+            TrailDraftMapSection(maker: maker)
 
             // Withheld with the pill it explains — a launch with no place
             // source, which is a preview or a UI-test run.

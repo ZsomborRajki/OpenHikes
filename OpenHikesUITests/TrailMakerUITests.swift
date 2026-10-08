@@ -282,6 +282,45 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         )
     }
 
+    /// *Hiking Routes* in the maker's *On the Map* section, under *Follow
+    /// Paths*, and the same setting as Settings' switch: flipped here, it is
+    /// found on there.
+    @MainActor
+    func testHikingRoutesSwitchUnderFollowPathsIsTheSettingsOne() {
+        let app = launchApp(
+            arguments: ["--ui-test-trail-graph=\(UITestFixture.trailGraphName)"]
+        )
+        openTrailMaker(in: app)
+
+        let snap = element("trail-draft-snap", in: app)
+        XCTAssertTrue(snap.waitForExistence(timeout: UITestTimeout.navigation))
+        // The switch rather than its row, which carries the identifier too
+        // and has no value to read.
+        let routes = app.switches.matching(identifier: "hiking-routes-toggle").firstMatch
+        XCTAssertTrue(scrollIntoView(routes, in: app))
+        XCTAssertGreaterThan(
+            routes.frame.minY,
+            snap.frame.minY,
+            "the routes switch should sit under Follow Paths"
+        )
+        XCTAssertEqual(routes.value as? String, "0", "the layer is off until it is asked for")
+        // At the control's end of the row: a tap in the middle of a
+        // `Toggle` row is inert.
+        routes.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertTrue(waitUntil { (routes.value as? String) == "1" })
+
+        popScreen(in: app)
+        XCTAssertTrue(waitUntil { element("map-sheet", in: app).exists })
+        element("settings-button", in: app).tap()
+        let inSettings = app.switches.matching(identifier: "hiking-routes-toggle").firstMatch
+        XCTAssertTrue(scrollIntoView(inSettings, in: app))
+        XCTAssertEqual(
+            inSettings.value as? String,
+            "1",
+            "the maker's switch should be the one in Settings"
+        )
+    }
+
     // MARK: - Helpers
 
     /// Presses the ✕ and answers the question it asks about the drawing.
