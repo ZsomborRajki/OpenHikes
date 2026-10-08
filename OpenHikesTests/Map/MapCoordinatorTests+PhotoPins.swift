@@ -375,6 +375,38 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// A place's photographs are pinned at the place, so its camera balloon
+    /// lands exactly on the place's own. The place is the one drawn in front:
+    /// its kind and its name are the more useful pin, and its screen holds
+    /// the photographs anyway.
+    @Test("a place stands in front of a photograph pinned at the same spot")
+    func aPlaceStandsInFrontOfItsPhotograph() async throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+
+        photoPins.attach([Self.photo(at: Self.bend, offset: 0)]) { _ in /* unused */ }
+        let place = TrailPlaceRow(
+            place: TrailPlace(coordinate: Self.bend, name: "Bend", symbol: .viewpoint),
+            anchor: TrailPlaceAnchor(distanceAlongRouteMeters: 800, offRouteMeters: 0)
+        )
+        placePins.attach([place]) { _ in /* unused */ }
+        await settle(until: "both pins to reach the map") {
+            !coordinator.photoAnnotations.isEmpty && !coordinator.hikePlaceAnnotations.isEmpty
+        }
+
+        let photoAnnotation = try #require(coordinator.photoAnnotations.first)
+        let placeAnnotation = try #require(coordinator.hikePlaceAnnotations.first)
+        let photoView = try #require(coordinator.mapView(map, viewFor: photoAnnotation))
+        let placeView = try #require(coordinator.mapView(map, viewFor: placeAnnotation))
+        #expect(placeView.zPriority.rawValue > photoView.zPriority.rawValue)
+        // And still behind a photograph somebody has selected, whose callout
+        // has to come out on top.
+        #expect(placeView.zPriority.rawValue < MKAnnotationViewZPriority.defaultSelected.rawValue)
+        #endif
+    }
+
     private static func photo(
         at coordinate: CLLocationCoordinate2D,
         offset: TimeInterval
