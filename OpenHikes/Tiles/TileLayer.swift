@@ -78,28 +78,9 @@ nonisolated extension TileLayer {
     /// disk — see `TileCache+DurableQuota.swift`.
     static let all: [TileLayer] = [waymarkedHiking]
 
-    /// Whether this build offers the hiking routes at all.
-    ///
-    /// Not a shipping one yet, and that is a condition of the feature rather
-    /// than an unfinished part of it. The policy quoted on
-    /// ``waymarkedHiking`` is written for websites, and an App Store app
-    /// sending its hikers' tile requests to a volunteer's server waits on the
-    /// maintainer's written agreement (#804). Until it arrives a Debug build
-    /// offers the layer, so it is built and tested like everything else, and
-    /// a Release build neither shows the switch nor draws or fetches a tile —
-    /// whatever the synced setting says, since another device's Debug build
-    /// can have turned it on. The agreement is this becoming `true` for both.
-    #if DEBUG
-    static let isOffered = true
-    #else
-    static let isOffered = false
-    #endif
-
-    /// The layer to draw for the stored switch, or `nil` when it is off or
-    /// this build does not offer it — see ``isOffered``. Every read of the
-    /// switch goes through here, so that holds everywhere at once.
-    static func shown(isOn: Bool, offered: Bool = isOffered) -> TileLayer? {
-        isOn && offered ? .waymarkedHiking : nil
+    /// The layer to draw for the stored switch, or `nil` when it is off.
+    static func shown(isOn: Bool) -> TileLayer? {
+        isOn ? .waymarkedHiking : nil
     }
 
     /// The layer the map is drawing, read from `defaults`.

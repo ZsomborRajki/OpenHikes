@@ -89,14 +89,4 @@ struct TileLayerTests {
         defaults.set(true, forKey: SettingsKey.showsHikingRoutes)
         #expect(TileLayer.selected(in: defaults) == .waymarkedHiking)
     }
-
-    /// A Release build holds the layer back until Waymarked Trails' maintainer
-    /// has agreed in writing, and the synced switch can arrive on from a Debug
-    /// build on another device — so the switch alone must draw nothing.
-    @Test("a build that does not offer the layer draws none, whatever the switch says")
-    func gateOverridesTheSwitch() {
-        #expect(TileLayer.shown(isOn: true, offered: false) == nil)
-        #expect(TileLayer.shown(isOn: false, offered: true) == nil)
-        #expect(TileLayer.shown(isOn: true, offered: true) == .waymarkedHiking)
-    }
 }

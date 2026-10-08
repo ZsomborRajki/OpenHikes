@@ -557,9 +557,8 @@ private extension HikeDetailView {
 
     /// Whether anything on the map is fetched as tiles: the selected map, or
     /// the hiking-route layer over it. Never a reason to offer a *download* —
-    /// the layer has none, so ``canDownload`` asks the provider alone. The
-    /// switch counts only where the build offers the layer: ``TileLayer/isOffered``.
-    private var mapRendersTiles: Bool { !activeProvider.usesSystemBaseMap || showsHikingRoutes && TileLayer.isOffered }
+    /// the layer has none, so ``canDownload`` asks the provider alone.
+    private var mapRendersTiles: Bool { !activeProvider.usesSystemBaseMap || showsHikingRoutes }
 
     // MARK: Header
 
