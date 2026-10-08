@@ -26,6 +26,7 @@
 //  refuse it, and they need the six numbers rather than a `Date`.
 //
 
+import Algorithms
 import Foundation
 import ImageIO
 
@@ -82,14 +83,12 @@ nonisolated enum CameraCaptureMetadata {
         in properties: [String: Any],
         timeZone: TimeZone = .current
     ) -> Date? {
-        for source in sources {
+        sources.firstNonNil { source in
             guard let nested = properties[source.dictionary] as? [String: Any],
-                  let text = nested[source.key] as? String,
-                  let date = date(from: text, in: timeZone)
-            else { continue }
-            return date
+                  let text = nested[source.key] as? String
+            else { return nil }
+            return date(from: text, in: timeZone)
         }
-        return nil
     }
 
     /// `yyyy:MM:dd HH:mm:ss` — the only shape EXIF has for a time.

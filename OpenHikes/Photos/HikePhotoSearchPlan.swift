@@ -26,6 +26,7 @@
 //  photograph the user has ever taken.
 //
 
+import Algorithms
 import Foundation
 import OpenHikesData
 
@@ -111,12 +112,11 @@ nonisolated struct HikePhotoSearchPlan: Sendable {
         // are afternoons apart in every ordinary case; two that genuinely
         // overlap are a walk that was never ended and one begun inside it,
         // and the earlier of those is the one the photograph was taken during.
-        for walk in walks where walk.searchWindow.contains(asset.createdAt) {
-            if let match = LibraryPhotoMatcher.match(asset, walk: walk, profile: profile) {
-                return match
-            }
+        return walks.firstNonNil { walk in
+            walk.searchWindow.contains(asset.createdAt)
+                ? LibraryPhotoMatcher.match(asset, walk: walk, profile: profile)
+                : nil
         }
-        return nil
     }
 }
 

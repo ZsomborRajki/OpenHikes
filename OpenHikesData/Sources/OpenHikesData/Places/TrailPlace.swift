@@ -269,9 +269,8 @@ nonisolated public struct TrailPlaceFact: Codable, Hashable, Sendable {
     /// keyword is, because they arrive off the wire.
     public static func facts(in tags: [String: String]) -> [Self] {
         Kind.allCases.compactMap { kind in
-            kind.tagKeys.lazy
-                .compactMap { BoundedText.bounded(tags[$0], to: .keywords) }
-                .first
+            kind.tagKeys
+                .firstNonNil { BoundedText.bounded(tags[$0], to: .keywords) }
                 .map { Self(kind: kind, value: $0) }
         }
     }

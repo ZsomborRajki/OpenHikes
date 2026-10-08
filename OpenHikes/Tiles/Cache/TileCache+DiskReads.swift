@@ -14,6 +14,7 @@
 //  the one already on disk.
 //
 
+import Algorithms
 import Foundation
 import os
 
@@ -35,15 +36,14 @@ nonisolated extension TileCache {
     /// fallback.
     func freshDiskImage(forKey key: String) -> (image: TileImage, storedAt: Date)? {
         let name = diskName(for: key)
-        for tier in [StorageTier.browsing, .durable] {
+        return [StorageTier.browsing, .durable].firstNonNil { tier in
             let file = directory(for: tier).appendingPathComponent(name)
             guard let storedAt = storedModificationDate(for: file, in: tier),
-                  !isExpired(storedAt)
-            else { continue }
-            guard let image = decodedTile(at: file) else { continue }
+                  !isExpired(storedAt),
+                  let image = decodedTile(at: file)
+            else { return nil }
             return (image, storedAt)
         }
-        return nil
     }
 
     /// The durable tile for `key` whatever its age — the saved coverage a hike
