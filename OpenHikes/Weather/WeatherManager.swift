@@ -601,7 +601,6 @@ final class WeatherManager {
             remember(snapshot, for: subject)
             publish(.reading(snapshot, subject: subject))
             store?.save(snapshot: snapshot, subject: subject)
-            await announceAlerts(in: snapshot, for: subject)
             return true
         } catch {
             // WeatherKit's failure modes are the opaque ones — a missing
@@ -625,7 +624,35 @@ final class WeatherManager {
         }
     }
 
-    /// Interrupts the hiker for anything severe that has not been said yet.
+    /// Interrupts the hiker for anything severe standing over the reading on
+    /// the badge, if that reading is about where they are.
+    ///
+    /// **Only while a walk or a recording is under way** — see
+    /// ``WeatherAlertSession``. Browsing trails moves the badge from one
+    /// ridge to the next, and none of those is weather anybody is out in.
+    ///
+    /// Asked by the poll loop on every pass rather than from ``update(for:)``,
+    /// because the moment an alert becomes the hiker's is not always a fetch:
+    /// starting a walk on the trail already showing changes nothing the poll
+    /// would request for, and the reading that came in while they were
+    /// browsing it is the one with the storm in it. Repeating the call costs
+    /// nothing — the watch says each alert once.
+    ///
+    /// A stale reading is not announced. The restored one at launch is
+    /// usually last night's, and a walk adopted on relaunch should hear about
+    /// the storm from the fetch that follows, not from a warning that may
+    /// already have lapsed.
+    func announceStandingAlerts(
+        during session: WeatherAlertSession,
+        asOf now: Date = .now
+    ) async {
+        guard case let .reading(snapshot, subject) = state,
+              session.covers(subject),
+              !snapshot.isStale(asOf: now) else { return }
+        await announceAlerts(in: snapshot, for: subject)
+    }
+
+    /// Posts the worst alert not said yet over `subject`.
     ///
     /// Everything about *whether* is in ``WeatherAlertWatch``, which is a
     /// value type with no clock and no framework in it; this is the call that

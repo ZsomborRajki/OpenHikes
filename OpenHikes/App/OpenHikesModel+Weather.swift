@@ -12,17 +12,20 @@
 //  The loop used to be about the hiker's position, waking on every accepted
 //  fix and rounding it onto a grid to decide whether that position was news.
 //  It is now about ``WeatherFocus/subject`` — see ``WeatherSubject`` for why —
-//  and wakes on three things:
+//  and wakes on four things:
 //
 //  - the subject changed, because a recording started, a hike was selected or
 //    a search resolved;
 //  - the hiker moved appreciably, via significant-change delivery, and the
 //    subject is one that follows them;
 //  - the reading for the current subject came due, which is one sleep to an
-//    exact deadline re-armed after each pass rather than a tick.
+//    exact deadline re-armed after each pass rather than a tick;
+//  - a walk or a recording started or ended, which asks for nothing and only
+//    re-reads the badge for a severe-weather alert that has just become the
+//    hiker's — see ``WeatherAlertSession``.
 //
-//  Which of the three it was is carried into ``WeatherRequestState`` as a
-//  ``WeatherRequestReason``, because they do not deserve the same answer: a
+//  Which of the first three it was is carried into ``WeatherRequestState`` as
+//  a ``WeatherRequestReason``, because they do not deserve the same answer: a
 //  search the user just typed is owed a request now, and a cell handoff is
 //  not.
 //
@@ -38,9 +41,21 @@ private enum WeatherWake: Sendable {
     case expiry
     case focus
     case movement
+    case session
 }
 
 extension OpenHikesModel {
+    /// Whether the hiker is out in the weather, and on what — the gate on the
+    /// severe-weather banner.
+    ///
+    /// A recording first, because the two never run together and the
+    /// recorder is the one that pins the badge.
+    var weatherAlertSession: WeatherAlertSession {
+        if hikeRecorder.isActive { return .recording }
+        if let hikeID = walkSession.walkedHikeID { return .walking(hikeID: hikeID) }
+        return .browsing
+    }
+
     func pollWeather(policy: WeatherPollingPolicy = .standard) async {
         var state = WeatherRequestState()
         let (dueDates, dueDatesContinuation) = AsyncStream<Void>.makeStream(
@@ -52,13 +67,24 @@ extension OpenHikesModel {
             dueDatesContinuation.finish()
         }
 
+        // Nested because `merge` takes at most three.
         let wakes = merge(
             weatherFocus.subjects.map { _ in WeatherWake.focus },
             significantLocations.movements.map { _ in WeatherWake.movement },
-            dueDates.map { _ in WeatherWake.expiry }
+            merge(
+                dueDates.map { _ in WeatherWake.expiry },
+                Observations { self.weatherAlertSession }.map { _ in WeatherWake.session }
+            )
         )
 
         for await wake in wakes {
+            // A session starting or ending changes whose weather the badge
+            // is, not whether it is current — nothing to fetch.
+            guard let reason = wake.requestReason else {
+                await weatherManager.announceStandingAlerts(during: weatherAlertSession)
+                continue
+            }
+
             // Applied before the subject is read, so a movement wake asks
             // about where the hiker is now rather than where they were.
             // Ignore movements that leave a searched place or distant trail
@@ -76,7 +102,7 @@ extension OpenHikesModel {
             let key = subject.key
             let willRequest = state.shouldRequest(
                 key: key,
-                reason: wake.requestReason,
+                reason: reason,
                 at: .now,
                 policy: policy
             )
@@ -93,6 +119,10 @@ extension OpenHikesModel {
                     state.recordFailure(key: key, at: .now, policy: policy)
                 }
             }
+            // Every pass too, and after the fetch: a focus that lands on a
+            // cached reading is as much news to a hiker who just started
+            // recording as a fresh one.
+            await weatherManager.announceStandingAlerts(during: weatherAlertSession)
 
             // Re-armed against whatever the subject is *now*, which after an
             // await may not be the one this pass started with. Cancelling
@@ -111,11 +141,13 @@ extension OpenHikesModel {
 }
 
 private extension WeatherWake {
-    var requestReason: WeatherRequestReason {
+    /// `nil` for a wake that is not a reason to ask WeatherKit anything.
+    var requestReason: WeatherRequestReason? {
         switch self {
         case .expiry: .expiry
         case .focus: .focus
         case .movement: .movement
+        case .session: nil
         }
     }
 }
