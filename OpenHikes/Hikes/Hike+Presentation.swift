@@ -26,6 +26,13 @@ extension Hike {
     /// draws from too — by identity rather than by chance, since a listing has
     /// nowhere to keep the answer.
     nonisolated static func randomTintHex() -> String {
+        #if DEBUG
+        // A launch that asked for one colour gets it every time — see
+        // ``AppLaunchEnvironment/routeHue``.
+        if let hue = AppLaunchEnvironment.routeHue {
+            return RouteTint.color(hue: hue).hexRGBA
+        }
+        #endif
         var generator = SystemRandomNumberGenerator()
         return randomTintHex(using: &generator)
     }

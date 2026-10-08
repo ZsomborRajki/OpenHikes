@@ -249,6 +249,34 @@ struct AppLaunchEnvironmentTests {
         #expect(!quiet.asksLiveMakerServices)
     }
 
+    @Test("a recording under way and one route colour are read by name and value")
+    func seededRecordingAndRouteHue() {
+        let configuration = AppLaunchEnvironment.Configuration(
+            arguments: [
+                "OpenHikes",
+                "--ui-testing",
+                "--ui-test-seed-recording=KoenigsseeRinnkendlsteig",
+                "--ui-test-route-hue=0.68",
+            ]
+        )
+
+        #expect(configuration.seededRecordingFixtureName == "KoenigsseeRinnkendlsteig")
+        #expect(configuration.routeHue == 0.68)
+    }
+
+    /// A hue is a place on the wheel, so anything that is not one is refused
+    /// outright rather than wrapped: a typo asking for 68 would otherwise
+    /// come out as some colour nobody chose.
+    @Test("a route hue off the wheel is refused")
+    func routeHueOffTheWheel() {
+        for value in ["68", "-0.1", "nan", "blue", ""] {
+            let configuration = AppLaunchEnvironment.Configuration(
+                arguments: ["OpenHikes", "--ui-testing", "--ui-test-route-hue=\(value)"]
+            )
+            #expect(configuration.routeHue == nil, "\(value) is not a hue")
+        }
+    }
+
     /// Every test-only option is inert without `--ui-testing`, which is what
     /// stops a stray argument on a shipping launch from seeding a hiker's
     /// library or faking their weather.
@@ -263,6 +291,8 @@ struct AppLaunchEnvironmentTests {
                 "--ui-test-lose-import-selection",
                 "--ui-test-weather",
                 "--ui-test-live-maker",
+                "--ui-test-seed-recording=KoenigsseeRinnkendlsteig",
+                "--ui-test-route-hue=0.68",
             ]
         )
 
@@ -272,5 +302,7 @@ struct AppLaunchEnvironmentTests {
         #expect(!configuration.losesImportSelection)
         #expect(!configuration.stubsWeather)
         #expect(!configuration.asksLiveMakerServices)
+        #expect(configuration.seededRecordingFixtureName == nil)
+        #expect(configuration.routeHue == nil)
     }
 }

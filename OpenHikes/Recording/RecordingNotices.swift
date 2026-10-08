@@ -38,6 +38,7 @@ struct RecordingRecoveryNotice: View {
                 .labelStyle(.iconOnly)
                 .font(.caption.weight(.semibold))
                 .minimumTapTarget()
+                .accessibilityIdentifier("recording-recovery-dismiss")
             }
             .padding(noticePadding)
             // Orange-tinted glass rather than a flat 12% orange wash: the
