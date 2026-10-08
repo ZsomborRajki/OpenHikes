@@ -75,13 +75,6 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.keepScreenAwake) private var keepScreenAwake = SettingsDefault.keepScreenAwake
     @AppStorage(SettingsKey.savesHikesToHealth) private var savesHikesToHealth = SettingsDefault.savesHikesToHealth
 
-    private static let disabledOpacity: Double = 0.55
-    private static let badgeHorizontalPadding: CGFloat = 7
-    private static let badgeVerticalPadding: CGFloat = 3
-    /// Behind a settings badge's label. Raised for the reason ``HikeRow``'s
-    /// is: Settings is pushed into the same glass sheet.
-    private static let badgeTintOpacity: Double = 0.25
-
     /// Tile bytes on disk, split into offline coverage and browsing residue;
     /// `nil` until measured.
     @State private var usage: TileCache.DiskUsage?
@@ -96,7 +89,7 @@ struct SettingsView: View {
 
     /// The provider the map is really drawing with, which is not always the
     /// stored one — see ``TileProvider/renderable(id:entitlement:)``. The
-    /// attribution and the checkmark both follow this: showing Stadia's
+    /// attribution and the selected card both follow this: showing Stadia's
     /// attribution over OpenStreetMap tiles would be wrong twice over.
     ///
     /// Reads `entitlement.state` rather than letting `renderable` default to
@@ -182,9 +175,16 @@ struct SettingsView: View {
 
     private var mapProviderSection: some View {
         Section {
-            ForEach(TileProvider.all) { provider in
-                providerRow(provider)
-            }
+            MapStylePicker(
+                tileProviderID: $tileProviderID,
+                selected: selectedProvider,
+                entitlement: entitlement,
+                locationManager: locationManager,
+                showPaywall: { showPaywall = true }
+            )
+            // Edge to edge, so the row scrolls out from under the section's
+            // rounded corners rather than stopping short of them.
+            .listRowInsets(EdgeInsets())
             if entitlement.isEntitled {
                 manageSubscriptionRow
             }
@@ -210,7 +210,7 @@ struct SettingsView: View {
                     // appear in a build where the paid rows are dead, which
                     // is the build this text most needs to not read like a
                     // half-finished app.
-                    Text("Sources marked \u{201C}Needs API key\u{201D} aren't available in this build.")
+                    Text("Maps marked \u{201C}Needs API key\u{201D} aren't available in this build.")
                     #if DEBUG
                     // Verbatim: only a contributor reads it, so it is not
                     // for translation, and Xcode's own catalog sync leaves
@@ -221,7 +221,7 @@ struct SettingsView: View {
                 if !entitlement.isEntitled,
                    TileProvider.all.contains(where: \.requiresPaidAccess) {
                     Text(
-                        "Sources marked \u{201C}Pro\u{201D} are commercial map services that bill"
+                        "Maps with a lock are commercial map services that bill"
                         + " OpenHikes for every map view, every month. Subscribing pays for that,"
                         + " and keeps the free OpenStreetMap option free."
                     )
@@ -346,106 +346,6 @@ struct SettingsView: View {
         .accessibilityLabel(title)
         // "…" is a placeholder a screen reader has no way to interpret.
         .accessibilityValue(bytes.map(Self.byteText) ?? "Measuring")
-    }
-
-    /// A provider whose key didn't resolve is shown, but not selectable: it can
-    /// only ever draw a blank map, and the previous behaviour — letting it be
-    /// picked and leaving the user staring at nothing — gave no hint that a
-    /// missing key was the reason.
-    ///
-    /// A locked commercial source is shown for the opposite reason: it *is*
-    /// available, just not yet bought, so tapping it opens the paywall rather
-    /// than doing nothing. Locking still waits for a resolved entitlement, so
-    /// a paying user's row never flips from unlocked to locked under their
-    /// finger while StoreKit is still answering.
-    ///
-    /// A paid row in that unresolved window is neither: it is dimmed and
-    /// disabled, because the one thing it must not do is *select*. The id is
-    /// persisted and synced, so a tap taken before StoreKit answers would
-    /// outlive the window on every device — see
-    /// ``MapEntitlementState/tapAction(for:)``. Disabled rather than a tap
-    /// that quietly does nothing, which is the same dead end the keyless rows
-    /// were fixed for.
-    private func providerRow(_ provider: TileProvider) -> some View {
-        let isUsable = Secrets.canLoadTiles(provider)
-        let tap = entitlement.state.tapAction(for: provider)
-        let isLocked = tap == .unlock
-        // Against the *effective* provider, so a stored id that has since lost
-        // its key doesn't leave a checkmark on a row the map is ignoring.
-        let isSelected = provider.id == selectedProvider.id
-        return Button {
-            switch tap {
-            case .allow: tileProviderID = provider.id
-            case .unlock: showPaywall = true
-            // Unreachable while the row is disabled below, and kept so the
-            // rule survives that `.disabled` ever being loosened.
-            case .wait: break
-            }
-        } label: {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 8) {
-                        Text(provider.name)
-                            .font(.body.weight(.medium))
-                        if !isUsable {
-                            badge("Needs API key")
-                        } else if isLocked {
-                            badge("Pro", tinted: true)
-                        }
-                    }
-                    Text(provider.summary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 0)
-            }
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.primary)
-        .opacity(isUsable && tap != .wait ? 1 : Self.disabledOpacity)
-        .disabled(!isUsable || tap == .wait)
-        // Which provider is in use was drawn as a checkmark and nothing else,
-        // and that checkmark is hidden from VoiceOver as decoration — so the
-        // selection was unreadable without it.
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-        // The badge is a `Text` inside a composite row, so it is spoken only
-        // if the row says it: "Pro" alone would also not explain that the
-        // tap opens a purchase screen rather than switching the map.
-        .accessibilityHint(Self.providerRowHint(tap))
-        .accessibilityIdentifier("provider-row-\(provider.id)")
-    }
-
-    /// Spoken after the row, because the badge is a `Text` inside a composite
-    /// element and the disabled state of a waiting row explains itself to
-    /// nobody.
-    private static func providerRowHint(_ tap: PaidFeatureTap) -> String {
-        switch tap {
-        case .allow: ""
-        case .unlock: "Requires OpenHikes Pro. Opens the unlock screen."
-        case .wait: "Checking your subscription."
-        }
-    }
-
-    private func badge(_ title: String, tinted: Bool = false) -> some View {
-        Text(title)
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(tinted ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-            .padding(.horizontal, Self.badgeHorizontalPadding)
-            .padding(.vertical, Self.badgeVerticalPadding)
-            .background(
-                tinted
-                    ? AnyShapeStyle(.tint.opacity(Self.badgeTintOpacity))
-                    : AnyShapeStyle(.quaternary),
-                in: Capsule()
-            )
     }
 }
 

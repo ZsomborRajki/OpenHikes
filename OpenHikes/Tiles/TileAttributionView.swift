@@ -17,12 +17,32 @@ import SwiftUI
 struct TileAttributionView: View {
     let attribution: TileAttribution
 
+    @Environment(\.openURL) private var openURL
+
     var body: some View {
         Text(attributedCredits)
             // The links inherit this; without it they render in the footer's
             // secondary grey and read as plain text.
             .tint(.accentColor)
             .fixedSize(horizontal: false, vertical: true)
+            // One element rather than a node per link. Each inline link is
+            // its own run of caption text — 16pt tall — and Switch Control and
+            // Voice Control aim at nodes, so a link node is a target nobody
+            // can hit; the audit says so. Combined, the line is one target of
+            // at least the minimum size, and each licence stays reachable as
+            // a named action. It sat below the fold in Settings until the map
+            // choice became one row of cards, which is when the audit saw it.
+            .frame(minHeight: AccessibilityMetrics.minimumTapTarget, alignment: .leading)
+            .contentShape(.rect)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(attribution.plainText)
+            .accessibilityActions {
+                ForEach(attribution.credits.filter { $0.url != nil }) { credit in
+                    Button(credit.title) {
+                        if let url = credit.url { openURL(url) }
+                    }
+                }
+            }
             .accessibilityIdentifier("tile-attribution")
     }
 

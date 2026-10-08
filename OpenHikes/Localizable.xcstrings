@@ -1266,6 +1266,9 @@
     "Maps" : {
 
     },
+    "Maps marked “Needs API key” aren't available in this build." : {
+
+    },
     "matched by both time and place" : {
 
     },
@@ -1330,6 +1333,9 @@
 
     },
     "Nearby" : {
+
+    },
+    "Needs API key" : {
 
     },
     "New place" : {
@@ -2179,9 +2185,6 @@
 
     },
     "Sort hikes" : {
-
-    },
-    "Sources marked “Needs API key” aren't available in this build." : {
 
     },
     "SSE" : {
