@@ -71,7 +71,7 @@ struct WalkShareFiguresTests {
     @Test("a walk over the whole route climbs what the route climbs")
     func wholeRouteClimbIsTheRoutes() throws {
         let profile = RouteProfile(route: Fixture.ridgeRoute)
-        let climb = try #require(WalkShareFigures.climb(over: [0...profile.totalDistanceMeters], along: profile))
+        let climb = try #require(profile.climb(over: [0...profile.totalDistanceMeters]))
         let route = try #require(profile.climb(from: 0, to: profile.totalDistanceMeters))
 
         #expect(climb.gainMeters.isApproximatelyEqual(to: route.gainMeters, absoluteTolerance: 1e-9))
@@ -84,11 +84,11 @@ struct WalkShareFiguresTests {
         let total = profile.totalDistanceMeters
         let first = 0...(total * 0.45)
         let second = (total * 0.55)...total
-        let summed = try #require(WalkShareFigures.climb(over: [first, second], along: profile))
+        let summed = try #require(profile.climb(over: [first, second]))
         let a = try #require(profile.climb(from: first.lowerBound, to: first.upperBound))
         let b = try #require(profile.climb(from: second.lowerBound, to: second.upperBound))
 
         #expect(summed.gainMeters.isApproximatelyEqual(to: a.gainMeters + b.gainMeters, absoluteTolerance: 1e-9))
-        #expect(WalkShareFigures.climb(over: [], along: profile) == nil)
+        #expect(profile.climb(over: []) == nil)
     }
 }
