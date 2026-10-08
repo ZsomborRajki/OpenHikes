@@ -29,20 +29,25 @@ nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
     let attribution: TileAttribution
     /// Whether the provider's usage policy permits pre-downloading tiles for offline use.
     let supportsBulkDownload: Bool
-    /// Device-wide ceiling on this provider's *durably* stored tiles, where its
-    /// terms impose one. `nil` means the provider sets no such limit.
+    /// The device-wide ceiling this provider's *durably* stored tiles count
+    /// against, where its terms impose one. `nil` means the provider sets no
+    /// such limit.
     ///
     /// Not a storage preference. Stadia's terms permit offline caching only
     /// "not to exceed 100MB cached at a time per device", so this is the same
     /// kind of promise ``supportsBulkDownload`` is: exceeding it is a licensing
     /// problem, not a full disk. Enforced by ``TileCache`` at every durable
     /// write, because that is the one place both write paths meet.
-    let durableByteLimit: Int64?
+    ///
+    /// A quota rather than a figure because the limit is the licence
+    /// holder's, not the style's: every Stadia style shares one 100 MB, so
+    /// two entries carrying ``DurableTileQuota/stadia`` are counted together.
+    let durableQuota: DurableTileQuota?
     /// Whether selecting this source requires the paid Pro unlock.
     ///
     /// The app is usable, and fully offline-capable, without ever paying: the
     /// two keyless sources carry no flag here. What the unlock buys is access
-    /// to the two commercial sources, whose own plans the app pays for per
+    /// to the commercial sources, whose own plans the app pays for per
     /// tile served — which is the reason a gate exists at all.
     let requiresPaidAccess: Bool
     /// `Secrets.plist` key holding this provider's API key, for providers that need one. `nil` if keyless.
@@ -68,6 +73,12 @@ nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
         urlTemplate.replacingOccurrences(of: "{key}", with: apiKey)
     }
 
+    /// The ceiling ``durableQuota`` sets, for the places that only need the
+    /// figure.
+    var durableByteLimit: Int64? {
+        durableQuota?.byteLimit
+    }
+
     /// Whether this source can actually load tiles given the key resolved for
     /// it. Keyless providers always can; a key-gated one without a key renders
     /// nothing but 401s, so selecting it would leave the map blank forever.
@@ -80,15 +91,48 @@ nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
     }
 }
 
-nonisolated extension TileProvider {
+/// A ceiling on durably stored tiles that one licence sets for the device,
+/// across every style it covers.
+///
+/// `nonisolated` for the same reason ``TileProvider`` is: the cache that
+/// enforces it runs off the main actor.
+nonisolated struct DurableTileQuota: Hashable, Sendable {
+    /// What the running totals are kept under. Shared by every provider the
+    /// licence covers, which is what makes their tiles count together.
+    let id: String
+    /// Whose licence sets the ceiling, as the messages about it name them.
+    let holder: String
+    let byteLimit: Int64
+
     /// Stadia's terms of service, §8.4: bulk downloading is prohibited "except
     /// for the purpose of caching small amounts of data for offline use in a
     /// mobile application, **not to exceed 100MB cached at a time per device**".
     ///
-    /// Device-wide and provider-wide — not per hike — which is why it is
-    /// enforced against a running total of everything Stadia has durably on
-    /// disk rather than against any one download.
-    static let stadiaDurableByteLimit: Int64 = 100 * 1024 * 1024
+    /// Device-wide and licence-wide — not per hike, and not per style — which
+    /// is why it is enforced against a running total of everything any Stadia
+    /// style has durably on disk rather than against any one download.
+    static let stadia = Self(id: "stadia", holder: "Stadia Maps", byteLimit: 100 * 1024 * 1024)
+
+    /// The catalog entries that count against this quota, in display order.
+    var providers: [TileProvider] {
+        TileProvider.all.filter { $0.durableQuota == self }
+    }
+
+    /// Every quota the catalog uses, each once however many styles share it,
+    /// in the order its first style is listed.
+    static var all: [Self] {
+        var quotas: [Self] = []
+        for quota in TileProvider.all.compactMap(\.durableQuota) where !quotas.contains(quota) {
+            quotas.append(quota)
+        }
+        return quotas
+    }
+}
+
+nonisolated extension TileProvider {
+    /// The figure ``DurableTileQuota/stadia`` sets, under the name the tests
+    /// that shrink it reason from.
+    static var stadiaDurableByteLimit: Int64 { DurableTileQuota.stadia.byteLimit }
 }
 
 nonisolated extension TileProvider {
@@ -105,7 +149,7 @@ nonisolated extension TileProvider {
         maximumZ: osmMaximumZ,
         attribution: TileAttribution([.openStreetMap]),
         supportsBulkDownload: false,
-        durableByteLimit: nil,
+        durableQuota: nil,
         requiresPaidAccess: false,
         apiKeyPlistKey: nil,
         systemStyle: nil
@@ -132,7 +176,7 @@ nonisolated extension TileProvider {
         maximumZ: 0,
         attribution: TileAttribution([.apple]),
         supportsBulkDownload: false,
-        durableByteLimit: nil,
+        durableQuota: nil,
         requiresPaidAccess: false,
         apiKeyPlistKey: nil,
         systemStyle: .standard
@@ -161,24 +205,52 @@ nonisolated extension TileProvider {
         maximumZ: 0,
         attribution: TileAttribution([.apple]),
         supportsBulkDownload: false,
-        durableByteLimit: nil,
+        durableQuota: nil,
         requiresPaidAccess: false,
         apiKeyPlistKey: nil,
         systemStyle: .hybrid
     )
+
+    private static let stadiaMaximumZ = 20
 
     /// A topographic source tuned for hiking that permits offline downloads,
     /// within the 100 MB per-device ceiling its terms set.
     static let stadiaOutdoors = TileProvider(
         id: "stadia_outdoors",
         name: "Stadia Outdoors",
-        summary: "Topographic map tuned for hiking. Offline downloads are allowed, "
-            + "up to 100 MB of saved tiles on this device.",
+        summary: "Topographic map tuned for hiking, with contour lines and trails. Offline "
+            + "downloads are allowed, sharing Stadia's 100 MB of saved tiles on this device "
+            + "with Stamen Terrain.",
         urlTemplate: "https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}.png?api_key={key}",
-        maximumZ: 20,
+        maximumZ: stadiaMaximumZ,
         attribution: TileAttribution([.stadiaMaps, .openMapTiles, .openStreetMap]),
         supportsBulkDownload: true,
-        durableByteLimit: stadiaDurableByteLimit,
+        durableQuota: .stadia,
+        requiresPaidAccess: true,
+        apiKeyPlistKey: "StadiaAPIKey",
+        systemStyle: nil
+    )
+
+    /// Stamen Design's terrain style, served by Stadia: hillshading in natural
+    /// colours, a softer page than ``stadiaOutdoors``.
+    ///
+    /// The same key, the same terms and the same offline permission as
+    /// Outdoors — and therefore the same 100 MB. Stadia's ceiling is one
+    /// figure for every Stadia tile on the device, so this entry shares
+    /// ``DurableTileQuota/stadia`` rather than bringing a second hundred
+    /// megabytes with it. Stamen styles add Stamen Design to the credits
+    /// Stadia's attribution page requires, ahead of OpenMapTiles.
+    static let stamenTerrain = TileProvider(
+        id: "stadia_stamen_terrain",
+        name: "Stamen Terrain",
+        summary: "Hillshaded terrain in natural colours, a softer look than Stadia Outdoors. "
+            + "Offline downloads are allowed, sharing Stadia's 100 MB of saved tiles on this "
+            + "device with Stadia Outdoors.",
+        urlTemplate: "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png?api_key={key}",
+        maximumZ: stadiaMaximumZ,
+        attribution: TileAttribution([.stadiaMaps, .stamenDesign, .openMapTiles, .openStreetMap]),
+        supportsBulkDownload: true,
+        durableQuota: .stadia,
         requiresPaidAccess: true,
         apiKeyPlistKey: "StadiaAPIKey",
         systemStyle: nil
@@ -203,7 +275,7 @@ nonisolated extension TileProvider {
         maximumZ: thunderforestMaximumZ,
         attribution: TileAttribution([.thunderforest, .openStreetMapData]),
         supportsBulkDownload: false,
-        durableByteLimit: nil,
+        durableQuota: nil,
         requiresPaidAccess: true,
         apiKeyPlistKey: "ThunderforestAPIKey",
         systemStyle: nil
@@ -211,7 +283,7 @@ nonisolated extension TileProvider {
 
     /// All selectable providers, in display order.
     static let all: [TileProvider] = [
-        openStreetMap, appleMaps, appleSatellite, stadiaOutdoors, thunderforestOutdoors,
+        openStreetMap, appleMaps, appleSatellite, stadiaOutdoors, stamenTerrain, thunderforestOutdoors,
     ]
 
     /// The entries that actually fetch raster tiles — ``all`` minus both

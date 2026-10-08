@@ -299,9 +299,10 @@ struct MapView: MapViewRepresentable, Equatable {
         // The chrome on this map follows the *map*, not the interface.
         //
         // Every raster provider here is light-styled at every hour —
-        // `openStreetMap`, `stadiaOutdoors` and `thunderforestOutdoors` all
-        // draw a whiteish page in either appearance — so in dark mode the
-        // controls over them were resolving dark against light tiles. The
+        // `openStreetMap`, `stadiaOutdoors`, `stamenTerrain` and
+        // `thunderforestOutdoors` all draw a light page in either appearance —
+        // so in dark mode the controls over them were resolving dark against
+        // light tiles. The
         // tracking button's glass came out mid-grey with a white arrow on it,
         // 2.25:1, and the camera and *Search this area* pills did the same.
         // Forcing the light appearance for as long as those tiles are drawn

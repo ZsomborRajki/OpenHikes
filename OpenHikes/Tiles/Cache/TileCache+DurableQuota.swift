@@ -2,8 +2,8 @@
 //  TileCache+DurableQuota.swift
 //  OpenHikes
 //
-//  Enforces the per-provider ceiling on durably stored tiles that
-//  ``TileProvider/durableByteLimit`` declares.
+//  Enforces the ceiling on durably stored tiles that
+//  ``TileProvider/durableQuota`` declares.
 //
 //  This exists because of one clause. Stadia's terms of service permit bulk
 //  downloading only "for the purpose of caching small amounts of data for
@@ -12,6 +12,12 @@
 //  ``TileProvider/supportsBulkDownload`` is, so it is kept by the code that
 //  does the writing rather than by the UI that offers it — and it is
 //  device-wide, so it cannot be kept by any per-hike cap.
+//
+//  It is licence-wide too. The clause covers every Stadia tile on the device,
+//  whichever style it was drawn in, so totals are kept per
+//  ``DurableTileQuota`` and every provider sharing one is counted, refused,
+//  reclaimed and trimmed together. A provider id is still what callers pass:
+//  each of them holds a tile or a source, and the quota is looked up from it.
 //
 //  The policy splits by intent. Auto-save *refuses*: at the ceiling a passively
 //  browsed tile is simply not promoted — it stays in the browsing tier, still
@@ -34,7 +40,7 @@ import Synchronization
 
 nonisolated extension TileCache {
 
-    /// How far under a provider's ceiling ``enforceDurableByteLimits()`` trims.
+    /// How far under a quota's ceiling ``enforceDurableByteLimits()`` trims.
     /// Leaves room for a session's worth of saves before the ceiling binds
     /// again, so this is an occasional job rather than a per-tile one.
     private static var durableTrimTargetFraction: Double { 4.0 / 5.0 }
@@ -63,6 +69,26 @@ nonisolated extension TileCache {
         (TileProvider.all.map(\.id) + TileLayer.all.map(\.id)).sorted { $0.count > $1.count }
     }
 
+    /// The quota `providerID`'s durable tiles count against, or `nil` where
+    /// its terms set none.
+    static func durableQuota(forProviderID providerID: String?) -> DurableTileQuota? {
+        guard let providerID else { return nil }
+        return TileProvider.all.first { $0.id == providerID }?.durableQuota
+    }
+
+    /// Whether the durable tile file `name` counts against `quota` — true for
+    /// every style the quota's licence covers, not just the one asking.
+    static func diskName(_ name: String, countsAgainst quota: DurableTileQuota) -> Bool {
+        durableQuota(forProviderID: providerID(forDiskName: name)) == quota
+    }
+
+    /// The providers whose durable tiles a reclaim for `providerID` may take:
+    /// every style its quota covers, or only its own where it has none.
+    static func providerIDs(sharingCeilingWith providerID: String) -> Set<String> {
+        guard let quota = durableQuota(forProviderID: providerID) else { return [providerID] }
+        return Set(quota.providers.map(\.id))
+    }
+
     /// The ceiling for `providerID`, or `nil` where its terms set none.
     ///
     /// The provider catalog's own figure — the licensed one. Instances use
@@ -70,43 +96,46 @@ nonisolated extension TileCache {
     /// scale; this static form is for the pure provider facts, like
     /// ``OfflineTileDownloader/tileBudget(forProviderID:)``.
     static func durableByteLimit(forProviderID providerID: String?) -> Int64? {
-        guard let providerID else { return nil }
-        return TileProvider.all.first { $0.id == providerID }?.durableByteLimit
+        durableQuota(forProviderID: providerID)?.byteLimit
     }
 
-    /// This cache's effective ceiling for `providerID`.
+    /// This cache's effective ceiling for `quota`.
+    func durableByteLimit(for quota: DurableTileQuota) -> Int64 {
+        guard durableByteLimitScale != 1 else { return quota.byteLimit }
+        return max(1, Int64(Double(quota.byteLimit) * durableByteLimitScale))
+    }
+
+    /// This cache's effective ceiling for `providerID`'s quota.
     func durableByteLimit(forProviderID providerID: String?) -> Int64? {
-        guard let licensed = Self.durableByteLimit(forProviderID: providerID) else { return nil }
-        guard durableByteLimitScale != 1 else { return licensed }
-        return max(1, Int64(Double(licensed) * durableByteLimitScale))
+        Self.durableQuota(forProviderID: providerID).map(durableByteLimit(for:))
     }
 
     // MARK: Measurement
 
-    /// Ensures `providerID`'s durable total is known, walking the durable
+    /// Ensures `quota`'s durable total is known, walking the durable
     /// directory once if it isn't.
     ///
     /// **Call with no other lock held.** This is the directory walk the
     /// reservation below must not perform inline. Two threads racing here both
     /// measure and install the same total, which is wasteful but not wrong.
-    func ensureDurableMeasurement(forProviderID providerID: String) {
+    func ensureDurableMeasurement(for quota: DurableTileQuota) {
         assertOffMainThread(
             "ensureDurableMeasurement enumerates the durable tile directory — call it off the main thread"
         )
-        let measured = durableProviderBytes.withLock { $0[providerID] != nil }
+        let measured = durableQuotaBytes.withLock { $0[quota.id] != nil }
         guard !measured else { return }
 
         var total: Int64 = 0
         for file in allTileFiles(in: durableDirectory)
-        where Self.providerID(forDiskName: file.lastPathComponent) == providerID {
+        where Self.diskName(file.lastPathComponent, countsAgainst: quota) {
             total += fileSize(file)
         }
-        durableProviderBytes.withLock { bytes in
+        durableQuotaBytes.withLock { bytes in
             // Another thread may have measured and then had writes recorded
             // against its total while this walk was running. Its answer is at
             // least as current as this one.
-            guard bytes[providerID] == nil else { return }
-            bytes[providerID] = total
+            guard bytes[quota.id] == nil else { return }
+            bytes[quota.id] = total
         }
     }
 
@@ -129,11 +158,11 @@ nonisolated extension TileCache {
     /// walk and, during a bulk download over stale coverage, one walk per tile
     /// saved.
     func invalidateDurableMeasurements() {
-        durableProviderBytes.withLock { $0.removeAll() }
+        durableQuotaBytes.withLock { $0.removeAll() }
     }
 
-    /// Moves a *measured* provider's total by `delta`, and does nothing at all
-    /// when there is no measurement to move.
+    /// Moves the *measured* total of `providerID`'s quota by `delta`, and does
+    /// nothing at all when there is no measurement to move.
     ///
     /// The no-op is the point: a partial total is worse than no total. An
     /// unmeasured provider is re-measured by the next reservation, and that
@@ -143,23 +172,20 @@ nonisolated extension TileCache {
     /// ceiling be overrun.
     ///
     /// Safe to call with ``mutationVersions`` held: it takes
-    /// ``durableProviderBytes`` — the inner lock of the two, and never the
+    /// ``durableQuotaBytes`` — the inner lock of the two, and never the
     /// other way round — and never measures, so no directory walk happens
     /// under a lock.
     func adjustDurableBytes(forProviderID providerID: String?, by delta: Int64) {
         guard delta != 0,
-              let providerID,
-              durableByteLimit(forProviderID: providerID) != nil
+              let quota = Self.durableQuota(forProviderID: providerID)
         else { return }
 
-        durableProviderBytes.withLock { bytes in
-            guard let current = bytes[providerID] else { return }
-            bytes[providerID] = max(0, current + delta)
+        durableQuotaBytes.withLock { bytes in
+            guard let current = bytes[quota.id] else { return }
+            bytes[quota.id] = max(0, current + delta)
         }
     }
 
-    /// Durable bytes currently attributed to `providerID`, if measured.
-    ///
     /// A rough per-tile size, used only to decide *up front* whether a planned
     /// download can fit under a provider's ceiling.
     ///
@@ -170,16 +196,17 @@ nonisolated extension TileCache {
     static var estimatedTileBytes: Int64 { 30 * 1024 }
 
     /// How much of `providerID`'s ceiling is spent, or `nil` where its terms
-    /// set no ceiling.
+    /// set no ceiling. `used` is the whole quota's: every style sharing it.
     func durableSpace(forProviderID providerID: String) -> (limit: Int64, used: Int64)? {
-        guard let limit = durableByteLimit(forProviderID: providerID) else { return nil }
-        ensureDurableMeasurement(forProviderID: providerID)
-        let used = durableProviderBytes.withLock { $0[providerID] ?? 0 }
-        return (limit, used)
+        guard let quota = Self.durableQuota(forProviderID: providerID) else { return nil }
+        ensureDurableMeasurement(for: quota)
+        let used = durableQuotaBytes.withLock { $0[quota.id] ?? 0 }
+        return (durableByteLimit(for: quota), used)
     }
 
-    /// Bytes of `providerID`'s durable tiles that eviction could reach — that
-    /// is, everything except the keys `protecting` names.
+    /// Bytes of durable tiles under `providerID`'s quota that eviction could
+    /// reach — that is, every style's tiles except the keys `protecting`
+    /// names. See ``providerIDs(sharingCeilingWith:)``.
     func reclaimableDurableBytes(
         forProviderID providerID: String,
         protecting protectedKeys: Set<String>
@@ -187,19 +214,26 @@ nonisolated extension TileCache {
         assertOffMainThread(
             "reclaimableDurableBytes enumerates the durable tile directory — call it off the main thread"
         )
+        let scope = Self.providerIDs(sharingCeilingWith: providerID)
         let protectedNames = Set(protectedKeys.map(diskName(for:)))
         var total: Int64 = 0
         for file in allTileFiles(in: durableDirectory)
-        where Self.providerID(forDiskName: file.lastPathComponent) == providerID
+        where Self.providerID(forDiskName: file.lastPathComponent).map(scope.contains) == true
             && !protectedNames.contains(file.lastPathComponent) {
             total += fileSize(file)
         }
         return total
     }
 
-    /// Frees at least `byteCount` of `providerID`'s durable tiles, oldest
-    /// first, never touching a key `protecting` names. Returns the bytes freed,
-    /// which falls short only when there was nothing left to take.
+    /// Frees at least `byteCount` of the durable tiles under `providerID`'s
+    /// quota, oldest first, never touching a key `protecting` names. Returns
+    /// the bytes freed, which falls short only when there was nothing left to
+    /// take.
+    ///
+    /// Across the quota, not just the provider: a Stamen Terrain download that
+    /// does not fit may take Stadia Outdoors tiles, because it is the shared
+    /// 100 MB that is short, and freeing only Terrain's own tiles could leave
+    /// it short however much the user agreed to give up.
     ///
     /// The one path in the app that deletes offline coverage a hike still
     /// claims, and it exists because the alternative is worse: a 100 MB
@@ -221,11 +255,12 @@ nonisolated extension TileCache {
             "reclaimDurableBytes stats and deletes tile files synchronously — call it off the main thread"
         )
         guard byteCount > 0 else { return 0 }
+        let scope = Self.providerIDs(sharingCeilingWith: providerID)
         let protectedNames = Set(protectedKeys.map(diskName(for:)))
 
         var candidates: [(url: URL, size: Int64, modified: Date)] = []
         for file in allTileFiles(in: durableDirectory)
-        where Self.providerID(forDiskName: file.lastPathComponent) == providerID
+        where Self.providerID(forDiskName: file.lastPathComponent).map(scope.contains) == true
             && !protectedNames.contains(file.lastPathComponent) {
             let values = try? file.resourceValues(
                 forKeys: [.fileSizeKey, .contentModificationDateKey]
@@ -251,17 +286,19 @@ nonisolated extension TileCache {
             freed += tile.size
         }
 
-        durableProviderBytes.withLock { bytes in
-            guard let current = bytes[providerID] else { return }
-            bytes[providerID] = max(0, current - freed)
+        if let quota = Self.durableQuota(forProviderID: providerID) {
+            durableQuotaBytes.withLock { bytes in
+                guard let current = bytes[quota.id] else { return }
+                bytes[quota.id] = max(0, current - freed)
+            }
         }
         return freed
     }
 
     // MARK: Reservation
 
-    /// Claims `byteCount` of `key`'s provider's ceiling, or reports that there
-    /// is no room. There is no commit call: a `true` reservation *is* the
+    /// Claims `byteCount` of the ceiling `key`'s provider counts against, or
+    /// reports that there is no room. There is no commit call: a `true` reservation *is* the
     /// accounting for those bytes, so a caller whose write lands is already
     /// balanced and does nothing further.
     ///
@@ -273,19 +310,20 @@ nonisolated extension TileCache {
     /// tile.
     ///
     /// Returns `true` immediately for a provider with no ceiling, which is
-    /// every provider but Stadia — so the common path is one dictionary lookup
+    /// every provider but Stadia's — so the common path is one catalog lookup
     /// and no directory walk ever.
     func reserveDurableBytes(forKey key: String, byteCount: Int64) -> Bool {
-        guard let providerID = Self.providerID(forKey: key),
-              let limit = durableByteLimit(forProviderID: providerID)
-        else { return true }
+        guard let quota = Self.durableQuota(forProviderID: Self.providerID(forKey: key)) else {
+            return true
+        }
+        let limit = durableByteLimit(for: quota)
 
-        ensureDurableMeasurement(forProviderID: providerID)
+        ensureDurableMeasurement(for: quota)
 
-        return durableProviderBytes.withLock { bytes in
-            let current = bytes[providerID] ?? 0
+        return durableQuotaBytes.withLock { bytes in
+            let current = bytes[quota.id] ?? 0
             guard current + byteCount <= limit else { return false }
-            bytes[providerID] = current + byteCount
+            bytes[quota.id] = current + byteCount
             return true
         }
     }
@@ -294,37 +332,40 @@ nonisolated extension TileCache {
     /// for — because it failed, or because the bytes were already on disk
     /// and already counted by the writer that put them there.
     func releaseDurableBytes(forKey key: String, byteCount: Int64) {
-        guard let providerID = Self.providerID(forKey: key),
-              durableByteLimit(forProviderID: providerID) != nil
-        else { return }
+        guard let quota = Self.durableQuota(forProviderID: Self.providerID(forKey: key)) else {
+            return
+        }
 
-        durableProviderBytes.withLock { bytes in
-            guard let current = bytes[providerID] else { return }
-            bytes[providerID] = max(0, current - byteCount)
+        durableQuotaBytes.withLock { bytes in
+            guard let current = bytes[quota.id] else { return }
+            bytes[quota.id] = max(0, current - byteCount)
         }
     }
 
-    /// Whether `key`'s provider is at its ceiling. Used to explain a refusal,
+    /// Whether the ceiling `key`'s provider counts against is reached. Used to explain a refusal,
     /// not to decide one — ``reserveDurableBytes(forKey:byteCount:)`` is the
     /// decision, and it is atomic.
     func isDurableLimitReached(forKey key: String) -> Bool {
-        guard let providerID = Self.providerID(forKey: key),
-              let limit = durableByteLimit(forProviderID: providerID)
-        else { return false }
-        ensureDurableMeasurement(forProviderID: providerID)
-        return durableProviderBytes.withLock { ($0[providerID] ?? 0) >= limit }
+        guard let quota = Self.durableQuota(forProviderID: Self.providerID(forKey: key)) else {
+            return false
+        }
+        let limit = durableByteLimit(for: quota)
+        ensureDurableMeasurement(for: quota)
+        return durableQuotaBytes.withLock { ($0[quota.id] ?? 0) >= limit }
     }
 
     // MARK: Enforcement
 
-    /// Brings any provider that is already over its ceiling back under it,
-    /// oldest tile first. Returns the bytes freed.
+    /// Brings any quota that is already over its ceiling back under it,
+    /// oldest tile first and whichever style it belongs to. Returns the bytes
+    /// freed.
     ///
     /// Runs at launch, and normally frees nothing: the reservation above stops
     /// a store reaching the ceiling in the first place. It is what corrects an
     /// install whose tiles were saved before the ceiling existed, and what
     /// would correct one whose ceiling is lowered by a future change in a
-    /// provider's terms.
+    /// provider's terms — and one holding a full 100 MB for each of two
+    /// Stadia styles, from a build that counted them apart.
     ///
     /// Unlike ``trimCache(claimedBy:limit:)`` this *does* delete tiles a hike
     /// claims, because there is no other way to come back under a limit the
@@ -334,26 +375,23 @@ nonisolated extension TileCache {
         assertOffMainThread(
             "enforceDurableByteLimits() stats and deletes tile files synchronously — call it off the main thread"
         )
-        let capped = TileProvider.all.filter { $0.durableByteLimit != nil }
-        guard !capped.isEmpty else { return 0 }
-
+        // Each quota once, however many styles share it — trimming per
+        // provider would give each style the whole ceiling.
         var freed: Int64 = 0
-
-        for provider in capped {
-            guard let limit = durableByteLimit(forProviderID: provider.id) else { continue }
-            freed += trimDurableTiles(forProviderID: provider.id, limit: limit)
+        for quota in DurableTileQuota.all {
+            freed += trimDurableTiles(for: quota, limit: durableByteLimit(for: quota))
         }
         return freed
     }
 
-    /// Deletes `providerID`'s oldest durable tiles until its total is under
+    /// Deletes the oldest durable tiles under `quota` until its total is under
     /// `limit` with headroom. No-op when it already is.
-    private func trimDurableTiles(forProviderID providerID: String, limit: Int64) -> Int64 {
+    private func trimDurableTiles(for quota: DurableTileQuota, limit: Int64) -> Int64 {
         var tiles: [(url: URL, size: Int64, modified: Date)] = []
         var total: Int64 = 0
 
         for file in allTileFiles(in: durableDirectory)
-        where Self.providerID(forDiskName: file.lastPathComponent) == providerID {
+        where Self.diskName(file.lastPathComponent, countsAgainst: quota) {
             let values = try? file.resourceValues(
                 forKeys: [.fileSizeKey, .contentModificationDateKey]
             )
@@ -368,9 +406,9 @@ nonisolated extension TileCache {
             // reservation or promotion has installed one since this walk
             // began, in which case that total already accounts for bytes
             // this walk could not have seen and must not be overwritten.
-            durableProviderBytes.withLock { bytes in
-                guard bytes[providerID] == nil else { return }
-                bytes[providerID] = total
+            durableQuotaBytes.withLock { bytes in
+                guard bytes[quota.id] == nil else { return }
+                bytes[quota.id] = total
             }
             return 0
         }
@@ -385,7 +423,7 @@ nonisolated extension TileCache {
             // here for the same reason it does during browsing.
             let removed = removeTileInvalidatingToken(
                 at: tile.url,
-                operation: "trim durable tile over provider limit"
+                operation: "trim durable tile over licence limit"
             )
             guard removed else { continue }
             freed += tile.size
@@ -397,16 +435,16 @@ nonisolated extension TileCache {
         // current total but absent from `total`, so installing `total - freed`
         // absolutely would erase it and let the ceiling over-admit. Only when
         // no measurement is live does the freshly walked figure stand in.
-        durableProviderBytes.withLock { bytes in
-            if let current = bytes[providerID] {
-                bytes[providerID] = max(0, current - freed)
+        durableQuotaBytes.withLock { bytes in
+            if let current = bytes[quota.id] {
+                bytes[quota.id] = max(0, current - freed)
             } else {
-                bytes[providerID] = max(0, total - freed)
+                bytes[quota.id] = max(0, total - freed)
             }
         }
         Self.logger.notice(
             // swiftlint:disable:next line_length
-            "Trimmed \(freed, privacy: .public) durable bytes for \(providerID, privacy: .public) (was \(total, privacy: .public), limit \(limit, privacy: .public))"
+            "Trimmed \(freed, privacy: .public) durable bytes for \(quota.id, privacy: .public) (was \(total, privacy: .public), limit \(limit, privacy: .public))"
         )
         return freed
     }

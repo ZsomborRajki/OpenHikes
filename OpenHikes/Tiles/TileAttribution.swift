@@ -138,6 +138,14 @@ nonisolated extension TileAttribution.Credit {
         url: URL(string: "https://stadiamaps.com/")!
     )
 
+    /// Stadia's attribution page adds this credit for every Stamen style,
+    /// alongside its own, OpenMapTiles' and OpenStreetMap's.
+    static let stamenDesign = Self(
+        title: "Stamen Design",
+        prefix: "©",
+        url: URL(string: "https://stamen.com/")!
+    )
+
     static let openMapTiles = Self(
         title: "OpenMapTiles",
         prefix: "©",

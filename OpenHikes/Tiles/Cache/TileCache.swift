@@ -277,15 +277,16 @@ nonisolated final class TileCache: @unchecked Sendable {
     let monitor = NWPathMonitor()
     private let monitorsNetwork: Bool
 
-    /// Durable bytes held per provider id, for the providers whose terms cap
-    /// them. Measured lazily by one directory walk and maintained
-    /// incrementally after; see `TileCache+DurableQuota.swift`.
+    /// Durable bytes held per ``DurableTileQuota/id``, for the providers whose
+    /// terms cap them — keyed by quota rather than provider, so every style one
+    /// licence covers adds to one total. Measured lazily by one directory walk
+    /// and maintained incrementally after; see `TileCache+DurableQuota.swift`.
     ///
     /// Its own lock rather than a field under `mutationVersions`: the walk that
     /// fills it must not happen with that lock held, for the same reason
     /// `trimCache` does not enumerate under it. Where both are taken,
     /// `mutationVersions` is the outer one — never the reverse.
-    let durableProviderBytes = Mutex<[String: Int64]>([:])
+    let durableQuotaBytes = Mutex<[String: Int64]>([:])
     /// See the `durableByteLimitScale` parameter on ``init``.
     let durableByteLimitScale: Double
 

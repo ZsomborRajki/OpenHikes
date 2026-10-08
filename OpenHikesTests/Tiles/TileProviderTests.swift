@@ -83,6 +83,7 @@ struct TileProviderTests {
         #expect(!TileProvider.appleMaps.requiresPaidAccess)
         #expect(!TileProvider.appleSatellite.requiresPaidAccess)
         #expect(TileProvider.stadiaOutdoors.requiresPaidAccess)
+        #expect(TileProvider.stamenTerrain.requiresPaidAccess)
         #expect(TileProvider.thunderforestOutdoors.requiresPaidAccess)
         #expect(!TileProvider.default.requiresPaidAccess)
     }
@@ -96,15 +97,14 @@ struct TileProviderTests {
         #expect(!TileProvider.thunderforestOutdoors.supportsBulkDownload)
     }
 
-    /// The copy that depends on there being exactly one.
+    /// The copy that depends on which sources these are.
     ///
     /// The paywall header, the Thunderforest feature row, the Subscriptions
     /// section of `docs/terms/index.html`, the subscription's description in
-    /// `OpenHikes.storekit` and the same paragraph in the README all name
-    /// Stadia Outdoors in the singular as the style a route can be downloaded
-    /// on. They used to say Pro "saves them to your phone", which sold the
-    /// wrong half of the subscription to anybody who bought it for
-    /// Thunderforest.
+    /// `OpenHikes.storekit` and the same paragraph in the README all say a
+    /// route can be downloaded on Stadia's styles and not on Thunderforest's.
+    /// They used to say Pro "saves them to your phone", which sold the wrong
+    /// half of the subscription to anybody who bought it for Thunderforest.
     ///
     /// So this is a copy check wearing a data check's clothes: a source added
     /// with `supportsBulkDownload`, or Thunderforest gaining it under a plan
@@ -113,17 +113,18 @@ struct TileProviderTests {
     /// sixth copy that nothing here can read, and it is the one a customer
     /// sees on the subscription page and in Manage Subscriptions — so a change
     /// that reaches this assertion has to reach that field by hand.
-    @Test("exactly one source may be downloaded ahead of a walk")
+    @Test("only Stadia's styles may be downloaded ahead of a walk")
     func onlyStadiaMayBeDownloadedAhead() {
         let downloadable = TileProvider.all.filter(\.supportsBulkDownload)
-        #expect(downloadable.map(\.id) == [TileProvider.stadiaOutdoors.id])
+        #expect(downloadable.map(\.id) == [TileProvider.stadiaOutdoors.id, TileProvider.stamenTerrain.id])
     }
 
     /// Stadia permits offline caching only up to "100MB cached at a time per
-    /// device", and it is the only source with a ceiling. A limit that grew
+    /// device", and it is the only licence with a ceiling. A limit that grew
     /// past that figure, or spread to a source whose terms don't set one,
-    /// would both be wrong.
-    @Test("only Stadia caps durable storage, at 100 MB")
+    /// would both be wrong — and so would a second Stadia style carrying a
+    /// quota of its own, which would let the device hold 100 MB per style.
+    @Test("only Stadia caps durable storage, at one 100 MB for all its styles")
     func durableCeilings() {
         // Hoisted rather than written inline: `#expect` decomposes the
         // comparison, and a literal arithmetic chain on the right of one is
@@ -131,10 +132,35 @@ struct TileProviderTests {
         // fail while printing two identical numbers.
         let hundredMegabytes: Int64 = 100 * 1024 * 1024
         #expect(TileProvider.stadiaDurableByteLimit == hundredMegabytes)
-        #expect(TileProvider.stadiaOutdoors.durableByteLimit == hundredMegabytes)
-        for provider in TileProvider.all where provider.id != TileProvider.stadiaOutdoors.id {
-            #expect(provider.durableByteLimit == nil)
+        #expect(DurableTileQuota.all == [.stadia])
+        let stadiaStyles = TileProvider.all.filter { $0.apiKeyPlistKey == "StadiaAPIKey" }
+        #expect(stadiaStyles.count >= 2)
+        #expect(DurableTileQuota.stadia.providers == stadiaStyles)
+        for provider in TileProvider.all where !stadiaStyles.contains(provider) {
+            #expect(provider.durableQuota == nil)
         }
+    }
+
+    /// Stamen Terrain is Stadia's in every respect that is a term of use: the
+    /// key, the paid gate, the offline permission, and the credits — which
+    /// for a Stamen style add Stamen Design, in the order Stadia's attribution
+    /// page gives.
+    @Test("Stamen Terrain is a Stadia style, credited to Stamen Design too")
+    func stamenTerrainIsStadia() {
+        let terrain = TileProvider.stamenTerrain
+        #expect(terrain.id == "stadia_stamen_terrain")
+        #expect(terrain.apiKeyPlistKey == TileProvider.stadiaOutdoors.apiKeyPlistKey)
+        #expect(terrain.urlTemplate.hasPrefix("https://tiles.stadiamaps.com/tiles/stamen_terrain/"))
+        #expect(terrain.durableQuota == TileProvider.stadiaOutdoors.durableQuota)
+        #expect(terrain.attribution.credits.map(\.title) == [
+            "Stadia Maps", "Stamen Design", "OpenMapTiles", "OpenStreetMap",
+        ])
+        #expect(terrain.summary != TileProvider.stadiaOutdoors.summary)
+        // Listed beside the other Stadia style rather than at the end.
+        #expect(
+            TileProvider.all.firstIndex(of: terrain)
+                == TileProvider.all.firstIndex(of: .stadiaOutdoors).map { $0 + 1 }
+        )
     }
 
     /// A capped provider's download budget has to fit under its ceiling, or
@@ -291,7 +317,7 @@ struct TileProviderTests {
     /// The blank-map case: a key-gated provider with nothing to substitute can
     /// only ever 401, so it isn't offered.
     @Test("a key-gated provider is usable only with a non-empty key", arguments: [
-        TileProvider.stadiaOutdoors, TileProvider.thunderforestOutdoors
+        TileProvider.stadiaOutdoors, TileProvider.stamenTerrain, TileProvider.thunderforestOutdoors
     ])
     func gatedProviderNeedsAKey(provider: TileProvider) {
         #expect(!provider.isUsable(withKey: nil))

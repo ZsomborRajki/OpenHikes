@@ -75,6 +75,11 @@ struct MapPaywallView: View {
             "Hillshading, contour lines and trail-focused styling, at high resolution."
         ),
         (
+            "mountain.2",
+            "Stamen Terrain",
+            "Hillshaded terrain in natural colours, a softer page for reading the shape of the land."
+        ),
+        (
             "map.fill",
             "Thunderforest Outdoors",
             "Bright, high-contrast trail cartography that stays readable in sunlight. It keeps "
@@ -190,16 +195,16 @@ struct MapPaywallView: View {
             Text("Read the ground you hike on")
                 .font(.title2.weight(.semibold))
             // Named rather than collapsed into "them", which is what this
-            // used to say. Two styles are unlocked and exactly one of them may
-            // be downloaded ahead of a walk: `TileProvider.stadiaOutdoors` sets
-            // `supportsBulkDownload`, and Thunderforest does not, because their
-            // licence reserves pre-caching for a plan this app is not on. A
-            // header promising that Pro "saves them to your phone" sold the
-            // wrong half of the subscription to anybody who bought it for
-            // Thunderforest.
+            // used to say. Three styles are unlocked and only Stadia's two may
+            // be downloaded ahead of a walk: `TileProvider.stadiaOutdoors` and
+            // `stamenTerrain` set `supportsBulkDownload`, and Thunderforest
+            // does not, because their licence reserves pre-caching for a plan
+            // this app is not on. A header promising that Pro "saves them to
+            // your phone" sold the wrong half of the subscription to anybody
+            // who bought it for Thunderforest.
             Text(
-                "OpenStreetMap stays free and stays the default. Pro adds two commercial "
-                + "outdoor map styles built for trails, and Stadia Outdoors downloads a "
+                "OpenStreetMap stays free and stays the default. Pro adds three commercial "
+                + "outdoor map styles built for trails, and both Stadia styles download a "
                 + "whole route to your phone for a hike with no signal."
             )
             .font(.subheadline)

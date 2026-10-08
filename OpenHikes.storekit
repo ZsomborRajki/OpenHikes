@@ -76,7 +76,7 @@
           ],
           "localizations" : [
             {
-              "description" : "Unlock the Stadia Outdoors and Thunderforest Outdoors map styles, save a whole route's Stadia map to your phone for offline use, and see elevation for trails you draw and hikes imported without it.",
+              "description" : "Unlock the Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors map styles, save a whole route's Stadia map to your phone for offline use, and see elevation for trails you draw and hikes imported without it.",
               "displayName" : "OpenHikes Pro",
               "locale" : "en_US"
             }

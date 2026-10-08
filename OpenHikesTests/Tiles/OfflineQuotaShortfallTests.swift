@@ -26,6 +26,8 @@ import Testing
 struct OfflineQuotaShortfallTests {
     private static let stadia = TileProvider.stadiaOutdoors
     private static let osm = TileProvider.openStreetMap
+    /// Who the messages have to name: the licence, not the style being saved.
+    private static let licence = DurableTileQuota.stadia
 
     private static func source(_ provider: TileProvider) -> ActiveTileSource {
         ActiveTileSource(
@@ -135,7 +137,29 @@ struct OfflineQuotaShortfallTests {
 
         #expect(shortfall.bytesToFree == Self.bytes(forTiles: 2))
         #expect(shortfall.limit == limit)
-        #expect(shortfall.providerName == Self.stadia.name)
+        #expect(shortfall.licenceHolder == Self.licence.holder)
+    }
+
+    /// The ceiling is Stadia's, not the style's, so whichever Stadia style is
+    /// being saved is short against the same figure and names the same party.
+    @Test(
+        "every Stadia style asks against the one shared licence",
+        arguments: DurableTileQuota.stadia.providers
+    )
+    func everyStadiaStyleNamesTheLicence(provider: TileProvider) async throws {
+        let downloader = Self.downloader(
+            Self.broker(
+                limit: Self.bytes(forTiles: 4),
+                used: Self.bytes(forTiles: 4),
+                reclaimable: Self.bytes(forTiles: 4)
+            )
+        )
+
+        let shortfall = try #require(
+            await downloader.spaceShortfall(tiles: Self.tiles(2), source: Self.source(provider))
+        )
+        #expect(shortfall.licenceHolder == Self.licence.holder)
+        #expect(shortfall.limit == Self.bytes(forTiles: 4))
     }
 
     /// A ceiling with nothing reclaimable under it cannot be made to fit, and
@@ -200,7 +224,7 @@ struct OfflineQuotaShortfallTests {
             plannedCount: 9,
             source: Self.source(Self.stadia)
         )
-        #expect(partial.contains(Self.stadia.name))
+        #expect(partial.contains(Self.licence.holder))
         #expect(partial.contains("Saved 3 of 9"))
         #expect(partial.contains("Delete another saved map"))
 
@@ -228,7 +252,7 @@ struct OfflineQuotaShortfallTests {
         )
         #expect(partial.contains("Saved 2 of 9"))
         #expect(partial.contains("Try again"))
-        #expect(!partial.contains(Self.stadia.name))
+        #expect(!partial.contains(Self.licence.holder))
 
         let nothing = await downloader.failureMessage(
             savedCount: 0,

@@ -36,7 +36,7 @@ set -euo pipefail
 # against a tree it cannot compile and a name it could not resolve would make
 # it pass rather than fail.
 required_keys=(
-    "StadiaAPIKey	Stadia Outdoors"
+    "StadiaAPIKey	Stadia Outdoors and Stamen Terrain"
     "ThunderforestAPIKey	Thunderforest Outdoors"
 )
 

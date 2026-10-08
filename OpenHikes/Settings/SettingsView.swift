@@ -331,25 +331,22 @@ struct SettingsView: View {
                     + " and clearing it costs you nothing offline."
                     + " Photos are only removed when you delete them, or the hike they belong to."
                 )
-                if let capped = Self.cappedProviders.first {
+                if let quota = DurableTileQuota.all.first {
                     // Named rather than described in general terms: a ceiling
                     // that isn't the phone's free space needs to say whose it
-                    // is, or it reads as a bug.
+                    // is, or it reads as a bug. And the styles are listed,
+                    // because one figure covering two of them is the part
+                    // nobody would guess.
                     Text(
-                        "\(capped.name)'s licence allows"
-                        + " \(Self.byteText(capped.durableByteLimit ?? 0)) of saved tiles on this"
-                        + " device. Once that's used, saving a new route asks before replacing"
+                        "The \(quota.holder) licence allows"
+                        + " \(Self.byteText(quota.byteLimit)) of saved tiles on this device,"
+                        + " shared by \(quota.providers.map(\.name).formatted(.list(type: .and)))."
+                        + " Once that's used, saving a new route asks before replacing"
                         + " your least-recently-used saved tiles. Other sources are unlimited."
                     )
                 }
             }
         }
-    }
-
-    /// The sources whose terms cap durable storage. A tuple of `TileProvider`
-    /// rather than a `Bool`, so the footer can name the one it means.
-    private static var cappedProviders: [TileProvider] {
-        TileProvider.all.filter { $0.durableByteLimit != nil }
     }
 
     private func usageRow(_ title: String, systemImage: String, bytes: Int64?) -> some View {
