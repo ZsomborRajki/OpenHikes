@@ -806,7 +806,9 @@ func main() {
             report += "\(excluded.unmatched) event(s) could not be placed in a process and were kept.\n\n"
         }
     }
-    report += "*Why* names the dynamic properties of a view's type updated since its previous body. "
+    report += "*Why* names the dynamic properties of a view's type updated since its previous body, "
+    report += "each counted once per body it preceded — one body can have several, so a row's causes "
+    report += "do not add up to its bodies. "
     report += "*Prints unchanged* is an update whose old and new values print identically. "
     report += "*Unexplained* is a body with no update: an `@Observable` it read, or a new value from its parent — "
     report += "where `Self._logChanges()` goes next.\n\n"
