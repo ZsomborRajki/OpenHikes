@@ -21,6 +21,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Trail matcher degenerate input")
@@ -184,8 +185,8 @@ struct TrailMatcherDegenerateTests {
         #expect(result.points.count == 2)
         #expect(result.points.allSatisfy(isFinite))
         #expect(result.points.allSatisfy { $0.timestamp == stationary.timestamp })
-        #expect(result.points.allSatisfy { abs($0.latitude - 47.6300) < 0.00001 })
-        #expect(result.points.allSatisfy { abs($0.longitude - 12.8610) < 0.00001 })
+        #expect(result.points.allSatisfy { $0.latitude.isApproximatelyEqual(to: 47.6300, absoluteTolerance: 0.00001) })
+        #expect(result.points.allSatisfy { $0.longitude.isApproximatelyEqual(to: 12.8610, absoluteTolerance: 0.00001) })
         #expect(result.legs.count == 1)
     }
 

@@ -7,6 +7,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 /// What a finished hike says it was, against what the hiker watched it become.
@@ -204,7 +205,7 @@ struct SavedRouteDistanceTests {
         )
 
         #expect(
-            abs(prepared.distanceMeters - live.distanceMeters) < 5,
+            prepared.distanceMeters.isApproximatelyEqual(to: live.distanceMeters, absoluteTolerance: 5),
             """
             the saved hike reports \(prepared.distanceMeters) m where the \
             hiker watched \(live.distanceMeters) m accumulate
@@ -240,7 +241,7 @@ struct SavedRouteDistanceTests {
         )
 
         #expect(
-            abs(prepared.distanceMeters - live.distanceMeters) < 5,
+            prepared.distanceMeters.isApproximatelyEqual(to: live.distanceMeters, absoluteTolerance: 5),
             """
             the saved hike reports \(prepared.distanceMeters) m where the \
             hiker watched \(live.distanceMeters) m accumulate

@@ -16,6 +16,7 @@ import CoreLocation
 import Foundation
 import ImageIO
 @testable import OpenHikes
+import RealModule
 import Testing
 
 #if canImport(UIKit)
@@ -44,8 +45,18 @@ struct PickedPhotoMetadataTests {
 
         #expect(metadata.capturedAt == Self.capturedAt)
         let coordinate = try #require(metadata.coordinate)
-        #expect(abs(coordinate.latitude - Self.southWest.latitude) < Self.coordinateTolerance)
-        #expect(abs(coordinate.longitude - Self.southWest.longitude) < Self.coordinateTolerance)
+        #expect(
+            coordinate.latitude.isApproximatelyEqual(
+                to: Self.southWest.latitude,
+                absoluteTolerance: Self.coordinateTolerance
+            )
+        )
+        #expect(
+            coordinate.longitude.isApproximatelyEqual(
+                to: Self.southWest.longitude,
+                absoluteTolerance: Self.coordinateTolerance
+            )
+        )
     }
 
     /// Location off for the camera, or stripped by the picker's own option:

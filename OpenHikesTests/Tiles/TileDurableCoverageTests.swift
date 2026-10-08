@@ -25,6 +25,7 @@
 
 import Foundation
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @Suite("Durable tile coverage", .serialized)
@@ -60,7 +61,7 @@ struct TileDurableCoverageTests {
     /// Foundation rather than which of two files was kept. A second is far
     /// finer than the seven days the answer turns on.
     private static func isDated(_ file: URL, like date: Date) throws -> Bool {
-        try abs(modificationDate(of: file).timeIntervalSince(date)) < 1
+        try modificationDate(of: file).timeIntervalSince(date).isApproximatelyEqual(to: 0, absoluteTolerance: 1)
     }
 
     /// A sandbox holding one piece of saved coverage that went stale a day past

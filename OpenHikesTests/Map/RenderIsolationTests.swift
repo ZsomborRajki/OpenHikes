@@ -31,6 +31,7 @@ import CoreLocation
 import Foundation
 import MapKit
 @testable import OpenHikes
+import RealModule
 import SwiftUI
 import Testing
 
@@ -129,7 +130,7 @@ struct RecordingIsolationTests {
         ))
         #expect(trace.tail.count == 2)
         #expect(trace.tail.allSatisfy { coord in
-            abs(coord.longitude - 12.8599) < 0.000001
+            coord.longitude.isApproximatelyEqual(to: 12.8599, absoluteTolerance: 0.000001)
         })
 
         trace.replace(with: [])

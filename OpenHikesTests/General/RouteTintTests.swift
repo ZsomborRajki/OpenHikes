@@ -20,6 +20,7 @@
 //
 
 @testable import OpenHikes
+import RealModule
 import SwiftUI
 import Testing
 
@@ -138,11 +139,17 @@ struct RouteTintTests {
         for step in 0..<degrees {
             let parts = components(RouteTint.color(hue: Double(step) / Double(degrees)))
             #expect(
-                abs(parts.saturation - Self.paletteSaturation) < Self.componentTolerance,
+                parts.saturation.isApproximatelyEqual(
+                    to: Self.paletteSaturation,
+                    absoluteTolerance: Self.componentTolerance
+                ),
                 "hue \(step) came out at saturation \(parts.saturation)"
             )
             #expect(
-                abs(parts.brightness - Self.paletteBrightness) < Self.componentTolerance,
+                parts.brightness.isApproximatelyEqual(
+                    to: Self.paletteBrightness,
+                    absoluteTolerance: Self.componentTolerance
+                ),
                 "hue \(step) came out at brightness \(parts.brightness)"
             )
             #expect(parts.alpha == 1, "a route colour is never transparent on its own account")
@@ -162,11 +169,17 @@ struct RouteTintTests {
         for _ in 0..<200 {
             let parts = components(RouteTint.random(using: &generator))
             #expect(
-                abs(parts.saturation - Self.paletteSaturation) < Self.componentTolerance,
+                parts.saturation.isApproximatelyEqual(
+                    to: Self.paletteSaturation,
+                    absoluteTolerance: Self.componentTolerance
+                ),
                 "seed \(generator.seed) produced saturation \(parts.saturation)"
             )
             #expect(
-                abs(parts.brightness - Self.paletteBrightness) < Self.componentTolerance,
+                parts.brightness.isApproximatelyEqual(
+                    to: Self.paletteBrightness,
+                    absoluteTolerance: Self.componentTolerance
+                ),
                 "seed \(generator.seed) produced brightness \(parts.brightness)"
             )
         }

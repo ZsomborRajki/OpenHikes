@@ -25,6 +25,7 @@ import CoreLocation
 import Foundation
 import MapKit
 @testable import OpenHikes
+import RealModule
 import Testing
 
 extension MapCoordinatorTests {
@@ -278,11 +279,14 @@ extension MapCoordinatorTests {
             map.setNeedsLayout()
             map.layoutIfNeeded()
             #expect(
-                abs(credit.frame.maxY - button.frame.maxY) < 1,
+                credit.frame.maxY.isApproximatelyEqual(to: button.frame.maxY, absoluteTolerance: 1),
                 "the credit line left the row at a sheet top of \(topY)"
             )
             #expect(
-                abs(credit.frame.minY - pill.frame.maxY - MapView.creditLineSpacing) < 1,
+                (credit.frame.minY - pill.frame.maxY).isApproximatelyEqual(
+                    to: MapView.creditLineSpacing,
+                    absoluteTolerance: 1
+                ),
                 "the camera pill left the credit line at a sheet top of \(topY)"
             )
             // And it is covered by the sheet exactly when they are, so it

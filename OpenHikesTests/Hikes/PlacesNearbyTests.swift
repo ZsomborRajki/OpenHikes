@@ -13,6 +13,7 @@ import Foundation
 import MapKit
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Synchronization
 import Testing
 
@@ -76,7 +77,7 @@ struct PlacesNearbyTests {
 
         #expect(span.latitude >= PlacesNearbyFrame.minimumSpanMeters * Self.projectionSlack)
         #expect(span.longitude >= PlacesNearbyFrame.minimumSpanMeters * Self.projectionSlack)
-        #expect(abs(region.center.latitude - Self.here.latitude) < 0.01)
+        #expect(region.center.latitude.isApproximatelyEqual(to: Self.here.latitude, absoluteTolerance: 0.01))
     }
 
     /// Framed whole and padded, so both ends are inside the frame rather than
@@ -99,14 +100,14 @@ struct PlacesNearbyTests {
         let start = Self.metres(east: -25_000, of: Self.here)
         let region = try #require(PlacesNearbyFrame.region(line: [start, Self.here], position: Self.here))
 
-        #expect(abs(region.center.longitude - Self.here.longitude) < 0.0001)
+        #expect(region.center.longitude.isApproximatelyEqual(to: Self.here.longitude, absoluteTolerance: 0.0001))
         #expect(Self.spanMeters(region).longitude < PlacesNearbyFrame.minimumSpanMeters / Self.projectionSlack)
     }
 
     @Test("without a fix the frame is the walk's own last stretch")
     func noFixFramesTheLine() throws {
         let region = try #require(PlacesNearbyFrame.region(line: [Self.here], position: nil))
-        #expect(abs(region.center.latitude - Self.here.latitude) < 0.0001)
+        #expect(region.center.latitude.isApproximatelyEqual(to: Self.here.latitude, absoluteTolerance: 0.0001))
     }
 
     // MARK: - The first search
@@ -220,6 +221,6 @@ struct PlacesNearbyTests {
 
         #expect(entries.map(\.entry.row.place.name) == ["Spring", "Bench", "Hut"])
         #expect(entries.map(\.entry.isAdded) == [false, true, false])
-        #expect(abs((entries.first?.meters ?? 0) - 100) < 1)
+        #expect(100.0.isApproximatelyEqual(to: entries.first?.meters ?? 0, absoluteTolerance: 1))
     }
 }

@@ -15,6 +15,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftData
 import Testing
 
@@ -63,11 +64,11 @@ extension HikeRecorderTests {
 
         #expect(hike.route.count == 2)
         #expect(hike.route.allSatisfy { coordinate in
-            abs(coordinate.longitude - 12.8599) < 0.00001
+            coordinate.longitude.isApproximatelyEqual(to: 12.8599, absoluteTolerance: 0.00001)
         })
         #expect(hike.rawRoute.count == 2)
         #expect(hike.rawRoute.allSatisfy { coordinate in
-            abs(coordinate.longitude - 12.86) < 0.00001
+            coordinate.longitude.isApproximatelyEqual(to: 12.86, absoluteTolerance: 0.00001)
         })
         #expect(recorder.phase == .idle)
         #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
@@ -82,18 +83,18 @@ extension HikeRecorderTests {
         await settleDelegateHop(until: "the preview to redraw as the recorded trace") {
             let segment = recorder.trace.reviewSegment
             return !segment.isEmpty && segment.allSatisfy { coordinate in
-                abs(coordinate.longitude - 12.86) < 0.00001
+                coordinate.longitude.isApproximatelyEqual(to: 12.86, absoluteTolerance: 0.00001)
             }
         }
         let previewedLongitudes = recorder.trace.reviewSegment.map(\.longitude)
         let hike = try await recorder.saveReviewedRecording()
 
         #expect(previewedLongitudes.allSatisfy { longitude in
-            abs(longitude - 12.86) < 0.00001
+            longitude.isApproximatelyEqual(to: 12.86, absoluteTolerance: 0.00001)
         })
         #expect(hike.route.count == 2)
         #expect(hike.route.allSatisfy { coordinate in
-            abs(coordinate.longitude - 12.86) < 0.00001
+            coordinate.longitude.isApproximatelyEqual(to: 12.86, absoluteTolerance: 0.00001)
         })
         #expect(
             hike.rawRoute.isEmpty,
@@ -144,7 +145,7 @@ extension HikeRecorderTests {
 
         #expect(hike.customName == "Retried Reviewed Hike")
         #expect(hike.route.allSatisfy { coordinate in
-            abs(coordinate.longitude - 12.86) < 0.00001
+            coordinate.longitude.isApproximatelyEqual(to: 12.86, absoluteTolerance: 0.00001)
         })
         #expect(hike.rawRoute.isEmpty)
         #expect(recorder.phase == .idle)
