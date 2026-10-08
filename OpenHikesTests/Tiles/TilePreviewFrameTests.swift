@@ -84,13 +84,17 @@ struct TilePreviewFrameTests {
 
     // MARK: Source
 
-    /// The system map draws through a snapshotter, never through a template:
-    /// it has none, and a URL built from an empty one would be a request to
-    /// nowhere.
-    @Test("Apple Maps is snapshotted, not fetched")
-    func systemMapIsSnapshotted() {
-        let source = TilePreviewSource(.appleMaps, apiKey: nil)
-        #expect(source == .systemMap)
+    /// The system maps draw through a snapshotter, never through a template:
+    /// they have none, and a URL built from an empty one would be a request to
+    /// nowhere. Each in its own style, or the satellite card would show the
+    /// street map.
+    @Test(
+        "Apple's maps are snapshotted, not fetched",
+        arguments: [(TileProvider.appleMaps, SystemMapStyle.standard), (.appleSatellite, .hybrid)]
+    )
+    func systemMapIsSnapshotted(provider: TileProvider, style: SystemMapStyle) {
+        let source = TilePreviewSource(provider, apiKey: nil)
+        #expect(source == .systemMap(style))
         let tile = TilePreviewFrame(around: TilePreviewFrame.fallbackCoordinate).tiles[0]
         #expect(source.url(for: tile) == nil)
         #expect(source.cacheKey(for: tile) == nil)

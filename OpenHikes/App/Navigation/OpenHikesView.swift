@@ -175,9 +175,9 @@ struct OpenHikesView: View {
         return .trail(id: hike.id, name: hike.displayTitle, along: route.coordinates)
     }
 
-    /// Resolves the selected provider (with API key substituted) for the map.
-    /// `nil` when the selection draws MapKit's own base map, which installs no
-    /// overlay and starts none of the tile pipeline.
+    /// Resolves the selected provider (with API key substituted) for the map,
+    /// or which of MapKit's own maps to draw when the selection is one of
+    /// those — which installs no overlay and starts none of the tile pipeline.
     ///
     /// Reads `entitlement.state` rather than letting `renderable` default to
     /// the process-wide ``MapEntitlement``, and that is what the parameter is
@@ -189,11 +189,11 @@ struct OpenHikesView: View {
     /// body that calls it, which is precisely what makes the overlay be
     /// replaced. Not a render-isolation cost: entitlement settles once per
     /// launch and changes at most on a purchase or a lapse.
-    private var activeTileSource: ActiveTileSource? {
+    private var activeBase: MapBase {
         TileProvider.renderable(
             id: tileProviderID,
             entitlement: appModel.entitlement.state
-        ).renderedSource
+        ).renderedBase
     }
 
     var body: some View {
@@ -293,7 +293,7 @@ struct OpenHikesView: View {
             routeShading: appModel.routeShading,
             recordingTrace: appModel.hikeRecorder.trace,
             sheetMetrics: sheetMetrics,
-            tileSource: activeTileSource,
+            base: activeBase,
             mapController: mapController,
             drawnRouteTap: drawnRouteTap,
             locationAccessPrompt: locationAccessPrompt,

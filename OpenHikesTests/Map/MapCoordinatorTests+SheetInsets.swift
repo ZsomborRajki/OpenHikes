@@ -301,7 +301,7 @@ extension MapCoordinatorTests {
     func noCreditLineWithoutASourceOfOurs() throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(tileSource: nil), coordinator)
+        let map = makeMap(mapView(base: .system(.standard)), coordinator)
         defer { detach(map) }
         let constraint = try #require(coordinator.trackingBottomConstraint)
         let credit = try #require(coordinator.attributionView)

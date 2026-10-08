@@ -193,9 +193,10 @@ struct SettingsView: View {
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
                 TileAttributionView(attribution: selectedProvider.attribution)
-                if selectedProvider.usesSystemBaseMap {
-                    // "Apart from the previews": the cards above fetch every
-                    // source's tiles whichever map is selected.
+                // "Apart from the previews": the cards above fetch every
+                // source's tiles whichever map is selected.
+                switch selectedProvider.systemStyle {
+                case .standard:
                     Text(
                         "Apart from the previews above, OpenHikes downloads, caches and auto-saves"
                         + " no map tiles while this is selected, so it uses the least battery and"
@@ -203,6 +204,17 @@ struct SettingsView: View {
                         + " a signal where the system hasn't already cached it."
                         + " Tiles already saved by other sources are kept, and listed below."
                     )
+                case .hybrid:
+                    // Not the wording above: imagery is the heaviest thing
+                    // the map can stream, and MapKit offers no way to keep it.
+                    Text(
+                        "Apart from the previews above, OpenHikes downloads, caches and auto-saves"
+                        + " no map tiles while this is selected. Apple streams the imagery itself"
+                        + " and none of it can be saved for offline use, so the map needs a signal."
+                        + " Tiles already saved by other sources are kept, and listed below."
+                    )
+                case nil:
+                    EmptyView()
                 }
                 if TileProvider.all.contains(where: { !Secrets.canLoadTiles($0) }) {
                     // A sentence a hiker can act on, and — under `#if DEBUG`

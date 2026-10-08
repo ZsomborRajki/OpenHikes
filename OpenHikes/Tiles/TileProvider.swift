@@ -2,8 +2,8 @@
 //  TileProvider.swift
 //  OpenHikes
 //
-//  The selectable raster tile sources the map can render, plus the one entry
-//  that renders none of them and leaves MapKit's own base map in place. The
+//  The selectable raster tile sources the map can render, plus the two entries
+//  that render none of them and leave MapKit's own base map in place. The
 //  settings keys that persist the user's choice live in
 //  `App/Configuration/SettingsKey.swift`.
 //
@@ -47,16 +47,21 @@ nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
     let requiresPaidAccess: Bool
     /// `Secrets.plist` key holding this provider's API key, for providers that need one. `nil` if keyless.
     let apiKeyPlistKey: String?
-    /// Whether this entry draws MapKit's own base map instead of raster tiles.
+    /// Which of MapKit's own maps this entry draws, or `nil` for a raster
+    /// tile source.
     ///
-    /// The one such entry isn't a tile source at all — it has no template, no
-    /// zoom ceiling and nothing to fetch — but it is still a *choice of map*,
-    /// so it lives in the same catalog the settings screen lists and the same
-    /// `UserDefaults` key it persists. Everything downstream reads this flag
-    /// rather than testing the id: it decides whether an overlay is installed
-    /// (``TileProvider/renderedSource``), whether auto-save runs, and whether
-    /// the offline controls are offered at all.
-    let usesSystemBaseMap: Bool
+    /// Such an entry isn't a tile source at all — it has no template, no zoom
+    /// ceiling and nothing to fetch — but it is still a *choice of map*, so it
+    /// lives in the same catalog the settings screen lists and the same
+    /// `UserDefaults` key it persists. Everything downstream reads this rather
+    /// than testing the id: it decides whether an overlay is installed
+    /// (``TileProvider/renderedBase``), whether auto-save runs, whether the
+    /// offline controls are offered at all, and which configuration the map
+    /// is given in place of an overlay.
+    let systemStyle: SystemMapStyle?
+
+    /// Whether this entry draws MapKit's own base map instead of raster tiles.
+    var usesSystemBaseMap: Bool { systemStyle != nil }
 
     /// The template with `{key}` replaced by `apiKey`. Keyless providers ignore it.
     func resolvedTemplate(apiKey: String) -> String {
@@ -103,7 +108,7 @@ nonisolated extension TileProvider {
         durableByteLimit: nil,
         requiresPaidAccess: false,
         apiKeyPlistKey: nil,
-        usesSystemBaseMap: false
+        systemStyle: nil
     )
 
     /// MapKit's own base map: no raster tiles, and therefore no tile pipeline.
@@ -130,7 +135,36 @@ nonisolated extension TileProvider {
         durableByteLimit: nil,
         requiresPaidAccess: false,
         apiKeyPlistKey: nil,
-        usesSystemBaseMap: true
+        systemStyle: .standard
+    )
+
+    /// Apple's satellite imagery, with its road, place and peak labels drawn
+    /// over it: what MapKit calls the hybrid map.
+    ///
+    /// Imagery shows what a topographic map reduces to contour lines — forest
+    /// edges, clearings, scree, bare rock — which is what a hiker finds their
+    /// way by on the ground.
+    ///
+    /// Free for the reason ``appleMaps`` is: ``requiresPaidAccess`` exists
+    /// because the commercial sources bill per tile served, and this draws no
+    /// tile of anybody's. Nothing is fetched, cached or auto-saved by the app.
+    /// Unlike ``appleMaps``, though, it is not cheap to look at and it is not
+    /// there offline: MapKit streams the imagery itself and offers no public
+    /// way to download it, so the summary says it needs a connection rather
+    /// than borrowing Apple Maps' "saves nothing" wording.
+    static let appleSatellite = TileProvider(
+        id: "apple_satellite",
+        name: "Apple Satellite",
+        summary: "Satellite imagery with road and place names. Shows forest, rock and clearings, "
+            + "but needs a connection: none of it can be saved for offline use.",
+        urlTemplate: "",
+        maximumZ: 0,
+        attribution: TileAttribution([.apple]),
+        supportsBulkDownload: false,
+        durableByteLimit: nil,
+        requiresPaidAccess: false,
+        apiKeyPlistKey: nil,
+        systemStyle: .hybrid
     )
 
     /// A topographic source tuned for hiking that permits offline downloads,
@@ -147,7 +181,7 @@ nonisolated extension TileProvider {
         durableByteLimit: stadiaDurableByteLimit,
         requiresPaidAccess: true,
         apiKeyPlistKey: "StadiaAPIKey",
-        usesSystemBaseMap: false
+        systemStyle: nil
     )
 
     /// A hiking-focused source with deep native zoom, so close-in views stay sharp.
@@ -172,14 +206,16 @@ nonisolated extension TileProvider {
         durableByteLimit: nil,
         requiresPaidAccess: true,
         apiKeyPlistKey: "ThunderforestAPIKey",
-        usesSystemBaseMap: false
+        systemStyle: nil
     )
 
     /// All selectable providers, in display order.
-    static let all: [TileProvider] = [openStreetMap, appleMaps, stadiaOutdoors, thunderforestOutdoors]
+    static let all: [TileProvider] = [
+        openStreetMap, appleMaps, appleSatellite, stadiaOutdoors, thunderforestOutdoors,
+    ]
 
-    /// The entries that actually fetch raster tiles — ``all`` minus whatever
-    /// draws through the system base map.
+    /// The entries that actually fetch raster tiles — ``all`` minus both
+    /// entries that draw through the system base map.
     ///
     /// A view, not a chokepoint: today only the tests take it. Production code
     /// that reasons about cache keys and download ceilings still filters
@@ -231,7 +267,8 @@ extension ActiveTileSource {
     ///
     /// Not the entry point for deciding what the map draws: a provider that
     /// uses the system base map has no template to resolve. Go through
-    /// ``TileProvider/renderedSource``, which answers `nil` for it.
+    /// ``TileProvider/renderedBase``, which answers ``MapBase/system(_:)``
+    /// for it.
     init(_ provider: TileProvider) {
         self.init(
             providerID: provider.id,
@@ -303,5 +340,28 @@ extension TileProvider {
     /// ever need one.
     var renderedSource: ActiveTileSource? {
         usesSystemBaseMap ? nil : ActiveTileSource(self)
+    }
+
+    /// What the map draws underneath everything else for this provider: one
+    /// of MapKit's own maps, or this provider's tiles.
+    var renderedBase: MapBase {
+        systemStyle.map(MapBase.system) ?? .tiles(ActiveTileSource(self))
+    }
+}
+
+/// What the map draws underneath the routes, pins and controls: one of
+/// MapKit's own maps, or a raster tile source over it.
+///
+/// One value rather than an optional tile source beside a style, so there is
+/// no way to ask for tiles *and* a satellite map — the overlay replaces
+/// MapKit's content, so one of the two would be silently ignored.
+enum MapBase: Equatable {
+    case system(SystemMapStyle)
+    case tiles(ActiveTileSource)
+
+    /// The overlay source, or `nil` when MapKit's own map is drawn.
+    var tileSource: ActiveTileSource? {
+        guard case let .tiles(source) = self else { return nil }
+        return source
     }
 }

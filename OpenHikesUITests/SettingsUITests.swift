@@ -53,6 +53,19 @@ nonisolated final class SettingsUITests: XCTestCase {
     /// a control left on screen is what a user would actually experience.
     @MainActor
     func testSystemBaseMapOffersNoTileControls() {
+        assertOffersNoTileControls(selecting: "apple_maps")
+    }
+
+    /// The same for Apple's satellite map, which fetches no tile of ours
+    /// either — and which, unlike Apple Maps, cannot be kept offline at all,
+    /// so a download button there would be a promise nothing could keep.
+    @MainActor
+    func testSatelliteMapOffersNoTileControls() {
+        assertOffersNoTileControls(selecting: "apple_satellite")
+    }
+
+    @MainActor
+    private func assertOffersNoTileControls(selecting providerID: String) {
         let app = launchApp(
             arguments: [
                 "--ui-test-expanded-sheet",
@@ -61,12 +74,12 @@ nonisolated final class SettingsUITests: XCTestCase {
         )
 
         element("settings-button", in: app).tap()
-        let appleMaps = element("provider-row-apple_maps", in: app)
+        let row = element("provider-row-\(providerID)", in: app)
         XCTAssertTrue(
-            appleMaps.waitForExistence(timeout: UITestTimeout.navigation)
+            row.waitForExistence(timeout: UITestTimeout.navigation)
         )
-        appleMaps.tap()
-        XCTAssertTrue(appleMaps.isSelected, "the tapped source should become the selected one")
+        row.tap()
+        XCTAssertTrue(row.isSelected, "the tapped source should become the selected one")
         app.buttons["settings-close"].tap()
 
         openHikeDetail(in: app)
