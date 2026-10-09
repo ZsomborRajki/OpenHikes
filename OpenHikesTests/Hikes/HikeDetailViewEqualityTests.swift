@@ -103,4 +103,35 @@ struct HikeDetailViewEqualityTests {
         #expect(screen != dependencies.screen(of: hike, interaction: HikeDetailInteraction()))
         #expect(screen != dependencies.screen(of: hike, interaction: interaction, mapController: MapController()))
     }
+
+    /// The inputs `==` compares, by name.
+    private static let compared: Set = [
+        "hike", "isSheetCompact", "highlight", "mapController", "autoSave", "entitlement",
+        "settings", "locationManager", "backgroundTracker", "walkSession",
+        "photoCapture", "photoPins", "placePins", "trailMaker",
+    ]
+    /// The inputs it leaves out, each for the reason
+    /// `HikeDetailView+Equatable.swift` gives.
+    private static let leftOut: Set = ["trailGraphProvider", "communityTransport"]
+
+    /// A comparison written out by hand is a list somebody has to remember to
+    /// extend, and an input it forgets fails quietly: a copy that differs only
+    /// there compares equal, and the screen goes on drawing the one it was
+    /// first handed. So a new input fails here until `==` has an answer for
+    /// it, compared or left out on purpose.
+    @Test("every input the screen is handed is compared or left out on purpose")
+    func everyInputIsAccountedFor() throws {
+        let dependencies = try Dependencies()
+        let hike = Fixture.hike(in: dependencies.container.mainContext)
+        let screen = dependencies.screen(of: hike, interaction: HikeDetailInteraction())
+
+        // Plain stored properties only: SwiftUI's wrappers are stored as
+        // `_name`, and the closures are left out by design.
+        let inputs = Set(Mirror(reflecting: screen).children.compactMap { child -> String? in
+            guard let label = child.label, !label.hasPrefix("_") else { return nil }
+            return String(describing: type(of: child.value)).contains("->") ? nil : label
+        })
+
+        #expect(inputs == Self.compared.union(Self.leftOut))
+    }
 }

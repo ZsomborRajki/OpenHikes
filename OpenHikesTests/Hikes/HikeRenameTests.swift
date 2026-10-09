@@ -61,10 +61,10 @@ struct HikeRenameTests {
         #expect(hike.displayTitle == "Ridge Loop")
     }
 
-    // MARK: commitTitleEdit logic
+    // MARK: Commit logic
 
-    /// The whole of what `HikeDetailView.commitTitleEdit()` does to the draft,
-    /// rather than a copy of it.
+    /// The whole of what ``HikeTitleEditor`` does to the draft when a rename is
+    /// committed, rather than a copy of it.
     ///
     /// It used to be a copy — the rule was spelled out inline in the view, so
     /// a test could only restate it and hope the two stayed the same. Now that

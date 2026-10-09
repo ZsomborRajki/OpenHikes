@@ -382,7 +382,7 @@ nonisolated extension TileProvider {
     ///
     /// The one lookup for callers outside SwiftUI — ``AutoSaveController`` and
     /// ``OpenHikesModel`` — so "which map is selected" is answered the same way
-    /// there as it is by the `@AppStorage` bindings in the views.
+    /// there as it is by the screens reading ``StoredSettings``.
     static func selected(
         in defaults: UserDefaults,
         entitlement: MapEntitlementState = MapEntitlement.current

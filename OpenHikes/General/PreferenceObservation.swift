@@ -83,13 +83,28 @@ final class PreferenceObservation {
             }
         )
         #endif
+        observe(defaults: defaults, onChange: onDefaultsChange)
+    }
+
+    /// The defaults half alone, for an owner with no system switch to re-ask —
+    /// ``StoredSettings``.
+    ///
+    /// - Parameters:
+    ///   - defaults: The suite whose changes matter, scoped for the reason
+    ///     the method above gives.
+    ///   - onChange: Run when the suite changes, already on the main actor.
+    ///     A write made on the main thread is delivered before it returns.
+    func observe(
+        defaults: UserDefaults,
+        onChange: @escaping @MainActor @Sendable () -> Void
+    ) {
         defaultsObservers.append(
             NotificationCenter.default.addObserver(
                 forName: UserDefaults.didChangeNotification,
                 object: defaults,
                 queue: nil
             ) { _ in
-                onMainActor { onDefaultsChange() }
+                onMainActor { onChange() }
             }
         )
     }

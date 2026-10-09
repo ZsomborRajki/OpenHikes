@@ -92,7 +92,7 @@ struct HikeSearchTests {
     /// key has to include the names and not just which hikes are present.
     ///
     /// Renaming through the UI writes ``Hike/customName`` and leaves `title`
-    /// alone, so this goes through the same property `commitTitleEdit` does:
+    /// alone, so this goes through the same property ``HikeTitleEditor`` does:
     /// keying the cache on `title` would leave this pass answered from the
     /// stale ranking.
     @Test("renaming a hike re-ranks")
