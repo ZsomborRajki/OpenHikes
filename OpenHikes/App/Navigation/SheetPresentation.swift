@@ -449,10 +449,23 @@ final class SheetPresentation {
         isAtMiddleDetent = initial == .medium
     }
 
-    /// Drives `NavigationStack`. A binding rather than the property itself
-    /// because building one reads nothing: the stack calls the getter during
-    /// its own update, which registers the dependency on the stack and not on
-    /// whichever body happened to construct it.
+    /// Drives `NavigationStack`. A binding rather than the property itself so
+    /// that the path is read where the stack reads it: the stack calls the
+    /// getter during its own update, which registers the dependency on the
+    /// stack and not on whichever body handed it the binding.
+    ///
+    /// **Except while it is being made**, which is why the getter answers
+    /// that one call from untracked storage. `Binding(get:set:)` calls the
+    /// getter it is given as it is built, to hold the value it starts from,
+    /// and this binding is first asked for inside `MapSheet`'s body — so a
+    /// getter reading ``path`` there made the body that builds the sheet's
+    /// navigation stack a reader of the path, and pushes ran that body again
+    /// for nothing — the first after launch, in every UI test that pushes.
+    /// Every call after the first is the stack's own, and tracked: that is how
+    /// a path written from outside the stack reaches it.
+    ///
+    /// ``detentBinding`` is the opposite case and is left reading in the open
+    /// on purpose; see there.
     ///
     /// **Made once and kept**, rather than built by a computed property as
     /// ``detentBinding`` is. `MapSheet`'s body hands this to the stack on every
@@ -475,11 +488,34 @@ final class SheetPresentation {
     /// converting a `@MainActor` closure to `@isolated(any)`. In a
     /// main-actor method they inherit the isolation, as ``detentBinding``'s do.
     private func makePathBinding() -> Binding<[SheetRoute]> {
-        Binding(get: { [weak self] in self?.path ?? [] }, set: { [weak self] in self?.path = $0 })
+        isMakingPathBinding = true
+        defer { isMakingPathBinding = false }
+        return Binding(
+            get: { [weak self] in
+                guard let self else { return [] }
+                return isMakingPathBinding ? storedPath : path
+            },
+            set: { [weak self] in self?.path = $0 }
+        )
     }
 
-    /// Drives `.presentationDetents(_:selection:)`, and a binding for the same
-    /// reason.
+    /// True only while ``makePathBinding()`` is running, which is when
+    /// `Binding(get:set:)` makes the one call to the getter that must not be
+    /// tracked. See ``pathBinding``.
+    @ObservationIgnored private var isMakingPathBinding = false
+
+    /// Drives `.presentationDetents(_:selection:)`, which writes the detent
+    /// back through it when the sheet is dragged.
+    ///
+    /// **Built afresh on every pass and read as it is built, on purpose** —
+    /// the two things ``pathBinding`` does not do. The body that builds this
+    /// one is the `.sheet` modifier's, around the whole of the sheet's
+    /// content, and the read the binding makes as it is built makes that body
+    /// a reader of ``detent``: a detent written from code runs it again, and
+    /// the presentation is handed a binding made since. That is what moves
+    /// the sheet. Made once with that read hidden, as ``pathBinding`` is, the
+    /// model moved and the sheet did not — an imported hike was selected and
+    /// its row never shown, because the sheet stayed at the compact detent.
     var detentBinding: Binding<PresentationDetent> {
         Binding(get: { self.detent }, set: { self.detent = $0 })
     }

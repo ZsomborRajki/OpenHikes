@@ -18,7 +18,9 @@
 //  Observation's: whether a `NavigationStack` driven by a binding onto that
 //  path makes its *enclosing* body a reader of the path. `MapSheet` is the
 //  navigation stack, so the answer decides whether one body pass per push is
-//  avoidable or is simply the price of having one.
+//  avoidable or is simply the price of having one. It is avoidable: the stack
+//  reads the binding in its own update, and the reader that body used to be
+//  charged for was the binding being made — see `SheetPresentation.pathBinding`.
 //
 
 import Foundation
