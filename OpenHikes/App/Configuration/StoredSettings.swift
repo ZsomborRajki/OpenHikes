@@ -46,10 +46,10 @@ final class StoredSettings {
     private(set) var savesPhotosToLibrary: Bool
 
     @ObservationIgnored private let defaults: UserDefaults
-    /// Removed by the deinit: a block-based observer is retained by the
-    /// notification centre until it is, and the app-hosted test bundles build
-    /// a model, and so one of these, per suite.
-    @ObservationIgnored private var observer: (any NSObjectProtocol)?
+    /// Holds the suite's change notification, and takes it down with this —
+    /// the app-hosted test bundles build a model, and so one of these, per
+    /// suite.
+    @ObservationIgnored private let preferenceObservation = PreferenceObservation()
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
@@ -61,17 +61,9 @@ final class StoredSettings {
         // made on the main thread is delivered before it returns, so an
         // `@AppStorage` binding in Settings and the screens reading this move
         // in the same update.
-        observer = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification,
-            object: defaults,
-            queue: nil
-        ) { [weak self] _ in
-            onMainActor { self?.refresh() }
+        preferenceObservation.observe(defaults: defaults) { [weak self] in
+            self?.refresh()
         }
-    }
-
-    isolated deinit {
-        if let observer { NotificationCenter.default.removeObserver(observer) }
     }
 
     /// Puts the hikes list in another order, and remembers it.
