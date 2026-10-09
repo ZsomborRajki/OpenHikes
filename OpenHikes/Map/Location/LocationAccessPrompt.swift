@@ -76,17 +76,19 @@ enum LocationAccessNeed {
 /// ``isShowing`` is the only thing on it, and it changes twice per refusal
 /// the hiker actually taps into. It is presented by ``MapScreenAlerts``, from
 /// inside the sheet's contents — see that file for why the root view is the
-/// one place this alert cannot be attached, and ``isShowingBinding`` for why
-/// attaching it there costs no body a dependency on this flag.
+/// one place this alert cannot be attached, and ``isShowingBinding`` for which
+/// body attaching it there makes a reader of this flag.
 @MainActor
 @Observable
 final class LocationAccessPrompt {
     var isShowing = false
 
-    /// Drives `.alert(isPresented:)`. A binding rather than the property
-    /// itself, for the reason ``WeatherDetailPresentation/isPresentedBinding``
-    /// is one: building it reads nothing, so the body that attaches the alert
-    /// does not become a reader of this flag.
+    /// Drives `.alert(isPresented:)`. Building it reads the flag —
+    /// `Binding(get:set:)` calls its getter as it is made — so whichever body
+    /// builds it is a reader of this flag. In portrait that is the `.sheet`
+    /// modifier's, around the sheet's contents, which runs again on the two
+    /// changes a refusal makes; the root view's own body is not. See *Render
+    /// isolation, in practice* in the repository instructions.
     var isShowingBinding: Binding<Bool> {
         Binding(get: { self.isShowing }, set: { self.isShowing = $0 })
     }

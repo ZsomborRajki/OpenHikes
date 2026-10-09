@@ -14,9 +14,11 @@ import SwiftUI
 import Testing
 
 /// Builds the stack the way `MapSheet` does, and counts the body passes its
-/// enclosing view is charged for.
+/// enclosing view is charged for — and, so that a count that stays put means
+/// something, the passes of the screen the stack pushes.
 private struct NavigationStackProbe: View {
     let counter: BodyCounter
+    let pushedCounter: BodyCounter
     let presentation: SheetPresentation
 
     var body: some View {
@@ -24,9 +26,19 @@ private struct NavigationStackProbe: View {
         return NavigationStack(path: presentation.pathBinding) {
             Text(verbatim: "root")
                 .navigationDestination(for: SheetRoute.self) { _ in
-                    Text(verbatim: "pushed")
+                    PushedProbe(counter: pushedCounter)
                 }
         }
+    }
+}
+
+/// The screen a push puts up, which counts that it was drawn.
+private struct PushedProbe: View {
+    let counter: BodyCounter
+
+    var body: some View {
+        counter.record()
+        return Text(verbatim: "pushed")
     }
 }
 
@@ -59,25 +71,31 @@ struct NavigationStackBodyCostTests {
         window.rootViewController = nil
     }
 
-    /// What a push actually costs the view that holds the stack.
+    /// What a push actually costs the view that holds the stack: nothing.
     ///
-    /// Recorded rather than asserted in one direction, because the number is
-    /// SwiftUI's to decide and the app has no way to argue with it: a
-    /// `NavigationStack` reads the binding it was given while its enclosing
-    /// body is being evaluated, so that body is a reader of the path no matter
-    /// where the path is stored. One pass per push is therefore the floor for
-    /// `MapSheet`, and the point of ``SheetPresentation`` is everything *above*
-    /// it — the root view and the hikes list — which this suite's sibling
-    /// covers.
+    /// This expected one pass per push, put down to the stack reading the
+    /// binding it was handed while its enclosing body was being evaluated. It
+    /// was not the stack. `Binding(get:set:)` calls its getter as it is made,
+    /// and ``SheetPresentation/pathBinding`` was first made inside this body,
+    /// so that one read of the path made the body a reader of it. Made with
+    /// that read untracked, the body reads nothing the stack changes.
+    /// Measured against the old binding: a push and a pop cost this body one
+    /// pass between them.
     ///
-    /// If a future SwiftUI stops reading the binding eagerly this fails, and
-    /// the right response is to delete the expectation rather than to restore
-    /// the pass.
-    @Test("a push costs the view that holds the stack exactly one body pass")
-    func pushingCostsTheEnclosingBodyOnePass() async throws {
+    /// The pushed screen is counted as the precondition rather than as decor:
+    /// the path is written from outside the stack, the way a widget tap or a
+    /// saved recording writes it, and the screen appearing is the stack
+    /// hearing about it through a read of its own. Both directions, so a
+    /// reader that lasted past one change is caught as well as one that
+    /// does not.
+    @Test("a push and a pop cost the view that holds the stack nothing")
+    func pushingCostsTheEnclosingBodyNothing() async throws {
         let presentation = SheetPresentation(detent: .large)
         let counter = BodyCounter()
-        let window = try host(NavigationStackProbe(counter: counter, presentation: presentation))
+        let pushedCounter = BodyCounter()
+        let window = try host(
+            NavigationStackProbe(counter: counter, pushedCounter: pushedCounter, presentation: presentation)
+        )
         defer { dismiss(window) }
         await settle(window)
 
@@ -86,10 +104,14 @@ struct NavigationStackBodyCostTests {
 
         presentation.path = [.recording]
         await settle(window)
+        #expect(pushedCounter.count > 0, "precondition: the stack pushed the screen the path asked for")
+
+        presentation.path = []
+        await settle(window)
 
         #expect(
-            counter.count == before + 1,
-            "the stack reads its binding inside this body, so a push is one pass and never more"
+            counter.count == before,
+            "the stack reads the path through the binding in its own update, so neither a push nor a pop is a pass here"
         )
     }
 }

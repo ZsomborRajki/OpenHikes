@@ -44,10 +44,11 @@ final class WeatherDetailPresentation {
 
     private(set) var isPresented = false
 
-    /// Drives `.sheet(isPresented:)`. A binding rather than the property
-    /// itself because building one reads nothing: the presentation calls the
-    /// getter during its own update, which registers the dependency there and
-    /// not on whichever body happened to construct it.
+    /// Drives `.sheet(isPresented:)`. Building it reads the flag —
+    /// `Binding(get:set:)` calls its getter as it is made — so the modifier
+    /// below, which builds it in its body, is a reader of this flag: the one
+    /// view whose business the flag is. See *Render isolation, in practice*
+    /// in the repository instructions.
     var isPresentedBinding: Binding<Bool> {
         Binding(get: { self.isPresented }, set: { self.isPresented = $0 })
     }
