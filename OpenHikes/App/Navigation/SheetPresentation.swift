@@ -19,11 +19,12 @@
 //
 //  Held in a reference type instead, for the reason ``SheetMetrics``,
 //  ``RouteStyle`` and ``MapController`` are. The difference is what is
-//  published: ``path`` and ``detent`` are driven through bindings that no body
-//  reads, and everything a view actually needs to *know* is a derived flag
-//  beside them. Observation is per-property, so a push from one screen to
-//  another inside the same hike changes none of those flags and re-evaluates
-//  nothing above the navigation stack.
+//  published: ``path`` and ``detent`` are driven through bindings, which no
+//  body reads but the one that hands the detent to the sheet's presentation —
+//  on purpose; see ``detentBinding`` — and everything a view actually needs
+//  to *know* is a derived flag beside them. Observation is per-property, so a
+//  push from one screen to another inside the same hike changes none of those
+//  flags and re-evaluates nothing above the navigation stack.
 //
 //  A flag here earns its place by being coarser than the thing it is derived
 //  from. `hasPushedScreen` is not `path`, and `isCompact` is not `detent`:
