@@ -479,12 +479,25 @@ extension XCTestCase {
     /// row that scrolls sideways inside the one that scrolls down — Settings'
     /// map cards are a `ScrollView` inside a `Form`'s collection view — and a
     /// vertical swipe on that row moves nothing.
+    ///
+    /// Measured through a snapshot, which throws when the element has gone,
+    /// rather than through `frame`, which fails the test: "No matches found
+    /// for … CollectionView". A container can leave the screen between being
+    /// found and being measured — the list a push is replacing stays in the
+    /// element tree while the pushed screen slides in — and it takes a machine
+    /// slow enough to stretch the push to land there. One running the render
+    /// trace is: the curated route's profile test failed on it in both
+    /// recorded runs that got as far as the push. Still found through
+    /// `exists` first, because a snapshot of an element that is not there
+    /// waits two seconds before it throws, and most screens lack at least one
+    /// of the three kinds.
     @MainActor
     func scrollContainer(in app: XCUIApplication) -> XCUIElement {
-        let found = [app.scrollViews, app.collectionViews, app.tables]
+        let measured = [app.scrollViews, app.collectionViews, app.tables]
             .map(\.firstMatch)
             .filter(\.exists)
-        return found.max { $0.frame.height < $1.frame.height } ?? app
+            .compactMap { found in (try? found.snapshot()).map { (element: found, height: $0.frame.height) } }
+        return measured.max { $0.height < $1.height }?.element ?? app
     }
 
     /// Scrolls looking for something that may not be on the screen *yet*.

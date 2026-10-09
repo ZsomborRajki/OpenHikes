@@ -362,6 +362,14 @@ extension XCTestCase {
     /// Opens a published hike and waits for the preview to have finished
     /// loading — which is the route, the photographs and the page built off
     /// them, not merely the screen being pushed.
+    ///
+    /// The push is waited out first, and that is what makes the second wait
+    /// mean anything. The loading row is drawn only by the pushed screen, so
+    /// asked before the push has landed, "is it still loading?" is answered by
+    /// the list, which never is — the wait passed at once and handed the
+    /// caller a screen still sliding in over a list still in the element
+    /// tree. The tapped row leaving the tree is the push finishing: until
+    /// then the list is on screen, and nothing about the preview is settled.
     @MainActor
     func openCommunityHike(titled title: String, in app: XCUIApplication) {
         let row = communityRow(titled: title, in: app)
@@ -370,6 +378,10 @@ extension XCTestCase {
             "\"\(title)\" should be listed before it can be opened"
         )
         row.tap()
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.navigation) { !row.exists },
+            "tapping \"\(title)\" should push its preview over the list"
+        )
         XCTAssertTrue(
             waitUntil(timeout: UITestTimeout.trace) {
                 !element("community-hike-loading", in: app).exists
