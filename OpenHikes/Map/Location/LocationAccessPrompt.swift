@@ -85,9 +85,12 @@ final class LocationAccessPrompt {
 
     /// Drives `.alert(isPresented:)`. Building it reads the flag —
     /// `Binding(get:set:)` calls its getter as it is made — so whichever body
-    /// builds it is a reader of this flag. In portrait that is the `.sheet`
-    /// modifier's, around the sheet's contents, which runs again on the two
-    /// changes a refusal makes; the root view's own body is not. See *Render
+    /// builds it is a reader of this flag, and runs again on the two changes
+    /// a refusal makes. It is built with the sheet's contents. In portrait
+    /// that is inside the `.sheet` modifier's body, around them, and the root
+    /// view's own body is not a reader; in landscape it is the root view's
+    /// body, because ``MapSidePanel`` takes its contents as a view built
+    /// there rather than as a closure of its own to call. See *Render
     /// isolation, in practice* in the repository instructions.
     var isShowingBinding: Binding<Bool> {
         Binding(get: { self.isShowing }, set: { self.isShowing = $0 })
