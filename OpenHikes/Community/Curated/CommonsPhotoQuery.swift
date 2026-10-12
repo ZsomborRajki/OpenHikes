@@ -85,6 +85,16 @@ nonisolated enum CommonsPhotoQuery {
     /// The only type of file kept: a photograph. See this file's header.
     static let photographType = "image/jpeg"
 
+    /// The hosts a thumbnail is downloaded from: Wikimedia's image servers,
+    /// as the API names them. Measured in 2026, a thumbnail is served from
+    /// `thumb.wikimedia.org` and an original narrower than
+    /// ``thumbnailWidth`` from `upload.wikimedia.org`.
+    ///
+    /// Checked rather than trusted, because the privacy policy names these two
+    /// as the only addresses a photograph is fetched from, and a URL the API
+    /// hands back is the one thing here this app did not build itself.
+    static let imageHosts: Set<String> = ["thumb.wikimedia.org", "upload.wikimedia.org"]
+
     /// The `File:` namespace, where every image on Commons lives.
     private static let fileNamespace = 6
     private static let successRange = 200..<300
@@ -205,6 +215,8 @@ nonisolated enum CommonsPhotoQuery {
               (info.width ?? 0) >= minimumWidth,
               field(.restrictions)?.isEmpty ?? true,
               let thumbnail = info.thumburl.flatMap(URL.init(string:)),
+              thumbnail.scheme == "https",
+              thumbnail.host().map(imageHosts.contains) == true,
               let source = info.descriptionurl.flatMap(URL.init(string:)),
               let licenceName = field(.licenceName).flatMap(CommonsLicence.accepted),
               let capturedAt = CommonsDate.capturedAt(
