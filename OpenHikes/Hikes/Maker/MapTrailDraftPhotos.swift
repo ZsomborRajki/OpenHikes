@@ -57,10 +57,13 @@ extension MapView.Coordinator {
     ///
     /// What is drawn is read back off the map rather than kept beside it: a
     /// pass over a few hundred annotations a few times a session costs less
-    /// than another stored property on a coordinator at its length limit.
+    /// than another stored property on a coordinator at its length limit. It
+    /// comes back in no particular order, so the guard compares the two as
+    /// sets: compared as arrays, a pass that changed nothing re-dropped every
+    /// thumbnail whenever MapKit's order differed from the search's.
     func applyTrailDraftPhotos(_ photos: [CommonsPhoto], on mapView: MKMapView) {
         let drawn = mapView.annotations.compactMap { $0 as? TrailDraftPhotoAnnotation }
-        guard drawn.map(\.photo) != photos else { return }
+        guard drawn.count != photos.count || Set(drawn.map(\.photo)) != Set(photos) else { return }
         if !drawn.isEmpty {
             mapView.removeAnnotations(drawn)
         }
