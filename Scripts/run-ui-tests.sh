@@ -29,6 +29,7 @@ suites=(
   RouteColoringUITests
   CommunityUITests
   CommunityCuratedUITests
+  CommunityCommonsPhotosUITests
   CommunityPhotoUITests
   CommunityPhotoPinUITests
   CommunityPublishedPhotosUITests

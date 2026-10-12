@@ -32,11 +32,18 @@ nonisolated struct CommunityPhotoCopy: Equatable, Sendable {
     /// from — the preview holding both — so a set renumbered on the server
     /// between the two attempts is not a case this has to meet.
     struct Source: Hashable, Sendable {
-        /// `nil` for the author's own submission, and a contribution's
-        /// ``CommunityPhotoContribution/id`` for somebody else's set.
+        /// `nil` for the author's own submission, a contribution's
+        /// ``CommunityPhotoContribution/id`` for somebody else's set, and
+        /// ``CommunityPhotoCopy/commonsSet`` for the Wikimedia Commons
+        /// photographs.
         let contributionID: String?
         let index: Int
     }
+
+    /// The set a curated route's Wikimedia Commons photographs are recorded
+    /// under. Not a record name, and cannot collide with one: CloudKit names
+    /// the records this app creates by UUID, and this is not one.
+    static let commonsSet = "wikimedia-commons"
 
     /// On the saved hike, from this attempt or an earlier one.
     ///

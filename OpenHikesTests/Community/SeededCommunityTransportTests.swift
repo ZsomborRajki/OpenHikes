@@ -59,20 +59,20 @@ struct SeededCommunityTransportTests {
     /// answers is which *screens* a scenario can reach — and a scenario that
     /// silently stopped serving rows would leave the suites that name it green
     /// against an empty list.
-    @Test("five scenarios serve rows, one serves a queue and two serve curated trails")
+    @Test("six scenarios serve rows, one serves a queue and three serve curated trails")
     func scenarioCapabilities() {
         let serving = SeededCommunityTransport.Scenario.allCases.filter(\.servesListings)
-        #expect(Set(serving) == [.seeded, .published, .reviewing, .curated, .showcase])
+        #expect(Set(serving) == [.seeded, .published, .reviewing, .curated, .showcase, .commons])
 
         let queueing = SeededCommunityTransport.Scenario.allCases.filter(\.servesQueue)
         #expect(queueing == [.reviewing])
 
-        // Two, and behind the same door as the rest: a launch that names
-        // neither gets no curated source, so no suite reaches Overpass by
-        // default any more than it reaches CloudKit. See
+        // Three, and behind the same door as the rest: a launch that names
+        // none of them gets no curated source, so no suite reaches Overpass
+        // by default any more than it reaches CloudKit. See
         // ``OpenHikesModel/makeCommunityTransport()``.
         let curating = SeededCommunityTransport.Scenario.allCases.filter(\.servesCuratedTrails)
-        #expect(Set(curating) == [.curated, .showcase])
+        #expect(Set(curating) == [.curated, .showcase, .commons])
     }
 
     /// The App Store frame's list: two walks along mapped paths, neither of

@@ -71,6 +71,16 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
     /// screen that has never been seen empty or broken is a screen whose empty
     /// and broken states were written blind.
     enum Scenario: String, CaseIterable {
+        /// ``curated``, plus photographs from Wikimedia Commons along its
+        /// OpenStreetMap routes — see ``SeededCommonsPhotoSource``.
+        ///
+        /// The only way automation reaches a curated preview's Commons
+        /// photographs, and a scenario of its own rather than part of
+        /// ``curated`` for the reason the suites on that one give: a curated
+        /// route's strip there is the photographs somebody *contributed*, and
+        /// a test asserting that a contribution reached it must not be able to
+        /// pass on a picture from somewhere else.
+        case commons = "commons"
         /// ``seeded``, plus curated routes from OpenStreetMap.
         ///
         /// The only way to reach a *mixed* list from automation, which is the
@@ -129,18 +139,15 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         /// Whether this scenario has a database behind it at all, as opposed
         /// to being empty or broken. The two that do differ only in what
         /// ``publication(of:)`` says.
-        var servesListings: Bool {
-            self == .seeded || self == .published || self == .reviewing
-                || self == .curated || self == .showcase
-        }
+        var servesListings: Bool { servesCuratedTrails || [.seeded, .published, .reviewing].contains(self) }
 
         /// Whether OpenStreetMap's half of the list has anything in it.
         ///
-        /// Two scenarios, and behind the same door as the rest: a launch that
-        /// names neither gets no curated source at all, so no suite reaches
-        /// Overpass by default any more than it reaches CloudKit. See
+        /// Three scenarios, and behind the same door as the rest: a launch
+        /// that names none of them gets no curated source at all, so no suite
+        /// reaches Overpass by default any more than it reaches CloudKit. See
         /// ``OpenHikesModel/makeCommunityTransport()``.
-        var servesCuratedTrails: Bool { self == .curated || self == .showcase }
+        var servesCuratedTrails: Bool { self == .curated || self == .showcase || self == .commons }
 
         /// Whether a reviewer's queue has anything in it. One scenario, for
         /// the reason ``reviewing`` gives.
@@ -532,7 +539,7 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
     /// put under a test.
     private func answer(_ listings: [CommunityListing]) throws -> [CommunityListing] {
         switch scenario {
-        case .seeded, .published, .reviewing, .curated, .takenDown, .showcase: listings
+        case .seeded, .published, .reviewing, .curated, .takenDown, .showcase, .commons: listings
         case .empty: []
         case .failing: throw CommunityFailure.unreachable
         }

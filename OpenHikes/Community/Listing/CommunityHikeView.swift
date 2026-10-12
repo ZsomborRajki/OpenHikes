@@ -302,6 +302,11 @@ struct CommunityHikeView: View {
     /// `CommunityHikeView+Contributions.swift`, and nothing outside this type
     /// touches it.
     @State var contributionsTask: Task<Void, Never>?
+    /// The Wikimedia Commons photographs of a curated route, held for the
+    /// reason ``contributionsTask`` is and in the same wait list: it writes
+    /// files into the download directory. Owned by
+    /// `CommunityHikeView+CommonsPhotos.swift`.
+    @State var commonsTask: Task<Void, Never>?
     // swiftlint:enable private_swiftui_state
     /// Whether this author was blocked while the screen was up.
     ///
@@ -451,11 +456,12 @@ struct CommunityHikeView: View {
             // Before the discard, so a download still running is told to stop
             // rather than raced to the directory it is writing into.
             loadTask?.cancel()
-            // And the other download, for the same reason and the same
-            // order: it writes into the directory two lines down, and an
-            // unstructured `Task` does not inherit the load's cancellation
-            // however closely the two are started together.
+            // And the other two downloads, for the same reason and the same
+            // order: they write into the directory below, and an unstructured
+            // `Task` does not inherit the load's cancellation however closely
+            // the three are started together.
             contributionsTask?.cancel()
+            commonsTask?.cancel()
             // Nothing waits for this one; it is cancelled because a screen
             // that has gone has no use for an answer and no right to keep
             // asking Overpass for it.
@@ -756,6 +762,7 @@ private extension CommunityHikeView {
         // nothing for exactly the case the feature exists for.
         if !detail.galleryPhotos.isEmpty {
             photoStrip(detail)
+            commonsAttribution(detail)
         }
 
         // Where the hike's own screen puts them: under the photographs. What
@@ -988,6 +995,11 @@ private extension CommunityHikeView {
             // hiker is waiting for, and none of them should be held behind a
             // request that may return nothing.
             loadContributions()
+            // And, for a route from OpenStreetMap, what Wikimedia Commons has
+            // along it — a third request on a third service, started for the
+            // same reason and absent for the same reason when it fails. See
+            // ``CommonsPhoto``.
+            loadCommonsPhotos(along: detail.route)
             prepared = await Self.prepare(detail)
         } catch is CancellationError {
             // The screen has gone. There is nothing to report a failure on and
@@ -1007,14 +1019,18 @@ private extension CommunityHikeView {
     /// the transport made on open and was refused, made again now that it
     /// would not be. Onto the detail too, so *Save* keeps them.
     func fetchHeights() {
-        guard case .loaded(var detail) = phase,
+        guard case .loaded(let detail) = phase,
               let source = OpenHikesModel.makeTrailElevationSource() else { return }
         Task {
             let filled = await source.filled(detail.route)
-            guard filled != detail.route, case .loaded = phase else { return }
-            detail.route = filled
-            phase = .loaded(detail)
-            prepared = await Self.prepare(detail)
+            // The detail on screen *now*, not the one read before the wait:
+            // the contributions and the Commons photographs land on `phase`
+            // while the heights are out, and writing back the earlier copy
+            // would take them off the screen again.
+            guard filled != detail.route, case .loaded(var latest) = phase else { return }
+            latest.route = filled
+            phase = .loaded(latest)
+            prepared = await Self.prepare(latest)
         }
     }
 
@@ -1068,18 +1084,18 @@ private extension CommunityHikeView {
         //
         // The contributions fetch is the third and is here for the *writing*
         // reason: it downloads other hikers' photographs into a subdirectory
-        // of this one. The trail analysis is deliberately still absent — it
-        // touches no file here, and making a stranger's photographs wait on a
-        // trail graph would couple two unrelated things through one `for`
-        // loop.
+        // of this one. The Commons fetch is the fourth, for the same reason.
+        // The trail analysis is deliberately still absent — it touches no file
+        // here, and making a stranger's photographs wait on a trail graph
+        // would couple two unrelated things through one `for` loop.
         //
-        // All three are this visit's, and so is the path — see
+        // All four are this visit's, and so is the path — see
         // ``previewSession``. What is waited for and what is removed have to
         // belong to the same screen, or the wait is for one visit's work and
         // the remove lands on another's.
         Self.discardDownloads(
             at: downloadDirectory,
-            after: [loadTask, importTask, contributionsTask]
+            after: [loadTask, importTask, contributionsTask, commonsTask]
         )
     }
 }

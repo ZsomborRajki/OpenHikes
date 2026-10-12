@@ -571,12 +571,19 @@ private extension OpenHikesModel {
         ) {
             let seeded = SeededCommunityTransport(scenario: scenario)
             guard scenario.servesCuratedTrails else { return seeded }
+            // Photographs for the scenario that asks for them and no other —
+            // see ``SeededCommunityTransport/Scenario/commons`` for why
+            // `curated` is not it.
+            let commons: any CommonsPhotoSourcing = scenario == .commons
+                ? SeededCommonsPhotoSource()
+                : DormantCommonsPhotoSource()
             return MergedCommunityTransport(
                 published: seeded,
                 curated: SeededCuratedTrailSource(showcase: scenario == .showcase),
                 // Heights that reached no network either, so the chart a
                 // curated hike now draws is reachable from automation.
-                elevation: SeededElevationSource()
+                elevation: SeededElevationSource(),
+                commons: commons
             )
         }
         #endif
@@ -587,7 +594,9 @@ private extension OpenHikesModel {
             // The one launch that may spend a billable call: a real one, with
             // a key. Every other path here keeps the dormant default — see
             // ``MergedCommunityTransport/elevation``.
-            elevation: StadiaElevationSource()
+            elevation: StadiaElevationSource(),
+            // The one launch that asks Wikimedia, for the same reason.
+            commons: WikimediaCommonsSource()
         )
     }
 

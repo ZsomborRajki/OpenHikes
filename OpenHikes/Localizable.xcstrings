@@ -419,6 +419,9 @@
     "About" : {
 
     },
+    "About the %@ Licence" : {
+
+    },
     "Access" : {
 
     },
@@ -1684,6 +1687,9 @@
     "Photo" : {
 
     },
+    "Photo · %@" : {
+
+    },
     "Photo %lld" : {
 
     },
@@ -1721,6 +1727,16 @@
     },
     "Photo by %@" : {
 
+    },
+    "Photo by %@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo by %1$@ · %2$@"
+          }
+        }
+      }
     },
     "Photo library access is turned off for this device, so OpenHikes can’t look for pictures of this hike." : {
 
@@ -1773,6 +1789,9 @@
 
     },
     "Photos from %@" : {
+
+    },
+    "Photos from Wikimedia Commons, each under its own licence. Open one to see who took it." : {
 
     },
     "Photos of This Hike" : {
@@ -2181,6 +2200,9 @@
     "Shows this box's options" : {
 
     },
+    "Shows where this photo comes from and its licence" : {
+
+    },
     "Smaller" : {
 
     },
@@ -2510,6 +2532,9 @@
 
     },
     "View on OpenStreetMap" : {
+
+    },
+    "View on Wikimedia Commons" : {
 
     },
     "View or correct it on OpenStreetMap" : {

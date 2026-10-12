@@ -115,7 +115,7 @@ extension CommunityHikeView {
         // requires anyway.
         importTask = Task {
             let outcome = await CommunityImport.importHike(
-                await withContributedSets(detail),
+                await withLatePhotographs(detail),
                 into: context
             )
             isImporting = false
@@ -147,15 +147,15 @@ extension CommunityHikeView {
     ///
     /// Held in ``importTask`` for the reason the import is: it reads out of
     /// the downloads ``discardDownloads()`` removes. Reads the same detail the
-    /// import did — the screen's, contributed sets included — so every
-    /// photograph is found at the position ``CommunityPhotoCopy`` recorded it
-    /// under.
+    /// import did — the screen's, contributed sets and Commons photographs
+    /// included — so every photograph is found at the position
+    /// ``CommunityPhotoCopy`` recorded it under.
     func retryPhotos(of detail: CommunityHikeDetail) {
         guard let existingHike, let previous = photoCopy else { return }
         isImporting = true
         importTask = Task {
             let copy = await CommunityImport.copyPhotos(
-                of: await withContributedSets(detail),
+                of: await withLatePhotographs(detail),
                 onto: existingHike,
                 after: previous
             )
@@ -164,30 +164,33 @@ extension CommunityHikeView {
         }
     }
 
-    /// `detail` once the contributed sets have had their chance to land.
+    /// `detail` once the contributed sets and the Commons photographs have had
+    /// their chance to land.
     ///
-    /// The trail is two requests, and the second is deliberately not awaited
-    /// by the first — see ``loadContributions()`` — so this screen is
-    /// tappable while the contributed photographs are still in flight.
-    /// Importing on that tap used to be harmless, because the import ignored
-    /// those sets entirely. Now that it copies them, a hiker quick on the
-    /// button would get a hike missing exactly the photographs that copy
-    /// exists for, *some* of the time, with nothing to tell the fast tap from
-    /// the slow one — which is the worst shape a bug of this kind can take.
+    /// The trail is three requests, and the last two are deliberately not
+    /// awaited by the first — see ``loadContributions()`` and
+    /// ``loadCommonsPhotos(along:)`` — so this screen is tappable while those
+    /// photographs are still in flight. Importing on that tap used to be
+    /// harmless, because the import ignored them. Now that it copies them, a
+    /// hiker quick on the button would get a hike missing exactly the
+    /// photographs that copy exists for, *some* of the time, with nothing to
+    /// tell the fast tap from the slow one — which is the worst shape a bug of
+    /// this kind can take.
     ///
     /// So it waits, and then reads the detail the **screen** ended up with
-    /// rather than the one captured at the tap: the fetch hangs its answer on
-    /// ``phase``, where a value copied out before it landed cannot see it.
-    /// Filtered on the way out for the reason everything drawn from `phase` is
-    /// — see ``visible(_:)``.
+    /// rather than the one captured at the tap: the fetches hang their answers
+    /// on ``phase``, where a value copied out before they landed cannot see
+    /// them. Filtered on the way out for the reason everything drawn from
+    /// `phase` is — see ``visible(_:)``.
     ///
     /// A fetch that fails, finds nothing or is cancelled changes nothing: the
     /// wait ends and what comes back is the detail already on screen, which is
     /// what makes this safe to wait on unconditionally rather than only when
     /// something is known to be coming. The button is showing a spinner by the
     /// time this runs, so the wait reads as part of the import it is part of.
-    func withContributedSets(_ detail: CommunityHikeDetail) async -> CommunityHikeDetail {
+    func withLatePhotographs(_ detail: CommunityHikeDetail) async -> CommunityHikeDetail {
         await contributionsTask?.value
+        await commonsTask?.value
         guard case .loaded(let latest) = phase else { return detail }
         return visible(latest)
     }

@@ -52,6 +52,8 @@ nonisolated enum HikePhotoImport {
     ///   and checked here before anything is written.
     /// - Parameter matchEvidence: How the coordinate above was arrived at, for
     ///   the same case. `nil` for every photo the app itself placed.
+    /// - Parameter licence: The open licence a Wikimedia Commons photograph was
+    ///   copied under — see ``HikePhotoLicence``. `nil` for everything else.
     /// - Parameter libraryWriter: The seam the mirrored copy goes through, so
     ///   a test can watch what it was handed without a photo library to write
     ///   into.
@@ -79,6 +81,7 @@ nonisolated enum HikePhotoImport {
         matchEvidence: PhotoMatchEvidence? = nil,
         importedFromListingID: String? = nil,
         importedAuthorName: String? = nil,
+        licence: HikePhotoLicence? = nil,
         placeID: UUID? = nil,
         store: HikePhotoStore = .shared,
         libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter(),
@@ -102,7 +105,8 @@ nonisolated enum HikePhotoImport {
                 assetLocalIdentifier: assetLocalIdentifier,
                 matchEvidence: matchEvidence,
                 importedFromListingID: importedFromListingID,
-                importedAuthorName: importedAuthorName
+                importedAuthorName: importedAuthorName,
+                licence: licence
             ),
             in: store
         ) else { return nil }

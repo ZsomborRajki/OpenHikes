@@ -103,6 +103,13 @@ nonisolated struct MergedCommunityTransport: CommunityTransporting {
     /// call or reach the network from a suite. The composition root opts in;
     /// see ``OpenHikesModel/makeCommunityTransport()``.
     var elevation: any CuratedElevationSourcing = DormantElevationSource()
+    /// Where a curated route's photographs come from, asked once when one is
+    /// opened — see ``CommonsPhoto``.
+    ///
+    /// Defaulted to the source that answers nothing, for the reason
+    /// ``elevation`` is: a caller that has not thought about it cannot reach
+    /// Wikimedia from a suite. The composition root opts in.
+    var commons: any CommonsPhotoSourcing = DormantCommonsPhotoSource()
 }
 
 // MARK: - Browsing
@@ -429,6 +436,21 @@ nonisolated extension MergedCommunityTransport {
             excluding: excluding,
             downloadingInto: directory
         )
+    }
+
+    /// Asks Commons about a curated route, and nothing about anything else.
+    ///
+    /// Routed on the origin, like every per-listing method here: a published
+    /// hike carries the photographs its author took, and Wikimedia is not
+    /// asked about a stranger's walk on the strength of where it went.
+    @concurrent
+    func commonsPhotos(
+        for listing: CommunityListing,
+        along route: [RouteCoordinate],
+        downloadingInto directory: URL
+    ) async throws -> [CommonsPhoto] {
+        guard listing.isCurated else { return [] }
+        return try await commons.photos(along: route, downloadingInto: directory)
     }
 
     @concurrent
