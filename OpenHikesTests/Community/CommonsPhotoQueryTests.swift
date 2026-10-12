@@ -139,13 +139,15 @@ struct CommonsPhotoQueryTests {
 
     // MARK: - Imageinfo answers
 
-    /// One page per reason a file is left out, and one that is kept.
+    /// One page per reason a file is left out, and one that is kept. The last
+    /// two are left out for where their thumbnail is, not what it is: off
+    /// Wikimedia's image servers, and over plain HTTP.
     private static let imageInfoAnswer = Data(
         #"""
         {"batchcomplete":true,"query":{"pages":[
             {"pageid":1,"ns":6,"title":"File:Kept.jpg","imageinfo":[{
                 "timestamp":"2007-03-24T18:36:20Z","width":2592,"height":1944,
-                "thumburl":"https://upload.wikimedia.org/thumb/kept/960px-Kept.jpg",
+                "thumburl":"https://thumb.wikimedia.org/wikipedia/commons/thumb/kept/960px-Kept.jpg",
                 "descriptionurl":"https://commons.wikimedia.org/wiki/File:Kept.jpg","mime":"image/jpeg",
                 "extmetadata":{
                     "Artist":{"value":"<a href=\"//commons.wikimedia.org/wiki/User:Anna\">User:Anna</a>"},
@@ -177,7 +179,17 @@ struct CommonsPhotoQueryTests {
                 "timestamp":"2007-03-24T18:36:20Z","width":2000,"mime":"image/jpeg",
                 "thumburl":"https://upload.wikimedia.org/thumb/b/960px-Bare.jpg",
                 "descriptionurl":"https://commons.wikimedia.org/wiki/File:Bare.jpg","extmetadata":[]}]},
-            {"pageid":7,"ns":6,"title":"File:Gone.jpg","missing":true}
+            {"pageid":7,"ns":6,"title":"File:Gone.jpg","missing":true},
+            {"pageid":8,"ns":6,"title":"File:Elsewhere.jpg","imageinfo":[{
+                "timestamp":"2007-03-24T18:36:20Z","width":2000,"mime":"image/jpeg",
+                "thumburl":"https://images.example.org/960px-Elsewhere.jpg",
+                "descriptionurl":"https://commons.wikimedia.org/wiki/File:Elsewhere.jpg",
+                "extmetadata":{"LicenseShortName":{"value":"CC0"}}}]},
+            {"pageid":9,"ns":6,"title":"File:Plain.jpg","imageinfo":[{
+                "timestamp":"2007-03-24T18:36:20Z","width":2000,"mime":"image/jpeg",
+                "thumburl":"http://upload.wikimedia.org/plain.jpg",
+                "descriptionurl":"https://commons.wikimedia.org/wiki/File:Plain.jpg",
+                "extmetadata":{"LicenseShortName":{"value":"CC0"}}}]}
         ]}}
         """#.utf8
     )
@@ -192,7 +204,7 @@ struct CommonsPhotoQueryTests {
     func keptPhotographIsCredited() throws {
         let file = try #require(try CommonsPhotoQuery.files(from: Self.imageInfoAnswer, timeZone: Self.utc).first)
 
-        #expect(file.thumbnailURL.absoluteString == "https://upload.wikimedia.org/thumb/kept/960px-Kept.jpg")
+        #expect(file.thumbnailURL.absoluteString == "https://thumb.wikimedia.org/wikipedia/commons/thumb/kept/960px-Kept.jpg")
         #expect(file.credit.author == "Anna")
         #expect(file.credit.licence.name == "CC BY-SA 3.0")
         #expect(file.credit.licence.url?.absoluteString == "https://creativecommons.org/licenses/by-sa/3.0/")

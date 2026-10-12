@@ -54,8 +54,9 @@ nonisolated enum CommonsTrailPhotos {
     /// ``CommonsPhotoQuery/geosearchLimit`` files nearest its centre, and a
     /// popular valley holds more than that within a few kilometres — measured,
     /// every 7 × 6 km tile over the Berchtesgaden box answered its full 500. A
-    /// circle a kilometre across loses its far edge to that cap only in a
-    /// town, where the trail is rarely the point.
+    /// circle a kilometre in radius — two and a bit across, with the corridor
+    /// — loses its far edge to that cap only in a town, where the trail is
+    /// rarely the point.
     static let stretchRadiusMeters: Double = 1000
 
     /// The most geosearches one route makes, and the circle none of them may
