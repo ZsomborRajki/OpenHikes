@@ -55,17 +55,22 @@ extension MapCoordinatorTests {
         let photos = [Self.commonsPhoto(0), Self.commonsPhoto(1)]
 
         coordinator.applyTrailDraftPhotos(photos, on: map)
+        // `annotations` is in no particular order, so neither is this.
         let drawn = map.annotations.compactMap { $0 as? TrailDraftPhotoAnnotation }
-        #expect(drawn.map(\.photo) == photos)
+        #expect(drawn.count == photos.count)
+        #expect(Set(drawn.map(\.photo)) == Set(photos))
 
         // The same photographs again move nothing — an unrelated pass over the
-        // draft must not re-drop every thumbnail.
+        // draft must not re-drop every thumbnail — and nor does the same set
+        // in another order, which is how the map hands them back.
         coordinator.applyTrailDraftPhotos(photos, on: map)
+        coordinator.applyTrailDraftPhotos(photos.reversed(), on: map)
         let again = map.annotations.compactMap { $0 as? TrailDraftPhotoAnnotation }
         #expect(again.count == 2)
         #expect(Set(again.map(ObjectIdentifier.init)) == Set(drawn.map(ObjectIdentifier.init)))
 
-        let view = drawn.first.flatMap { coordinator.makerAnnotationView(for: $0, on: map) }
+        let first = drawn.first { $0.photo == photos[0] }
+        let view = first.flatMap { coordinator.makerAnnotationView(for: $0, on: map) }
         #expect(view is TrailDraftPhotoAnnotationView)
         #expect(view?.accessibilityLabel == "Photo by Hiker 0 · CC0")
 
