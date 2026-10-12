@@ -16,6 +16,11 @@
 //  screen: that the strip says where its photographs came from, and that each
 //  Commons photograph is shown with who took it and under what licence.
 //
+//  The same scenario seeds the *Community* tab's own *Search this area*,
+//  which stands three photographs across the north of the area — see
+//  ``SeededCommonsPhotoSource``. The last case follows one of them from its
+//  pin to its screen and on into the trail maker.
+//
 
 import XCTest
 
@@ -75,6 +80,41 @@ nonisolated final class CommunityCommonsPhotosUITests: XCTestCase {
             app.buttons["Photo by \(SeededCommons.firstAuthor) · \(SeededCommons.licence)"]
                 .waitForExistence(timeout: UITestTimeout.existence),
             "a Commons photograph should carry its licence, and the way to it, over the picture"
+        )
+    }
+
+    /// A photograph the tab's search found opens its own screen, credited,
+    /// and *Plan a Trail Here* opens the maker with the camera's spot as the
+    /// destination and the start still to choose.
+    @MainActor
+    func testAnAreaPhotographPlansATrailToItself() {
+        let app = launchCommunity(scenario: .commons)
+        selectCommunityTab(in: app)
+
+        let pin = element("community-commons-photo-pin", in: app)
+        XCTAssertTrue(
+            pin.waitForExistence(timeout: UITestTimeout.trace),
+            "the tab's search should put the area's photographs on the map"
+        )
+        pin.tap()
+
+        XCTAssertTrue(
+            element("commons-photo-screen", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "a photo pin should open the photograph's screen"
+        )
+        XCTAssertTrue(
+            element("photo-licence-credit", in: app).waitForExistence(timeout: UITestTimeout.existence),
+            "and credit who took it, as every Commons photograph is"
+        )
+
+        tapWhenReady(element("commons-photo-plan-trail", in: app))
+        XCTAssertTrue(
+            element("trail-draft-point-1", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "Plan a Trail Here should open the maker with the photograph's spot down"
+        )
+        XCTAssertTrue(
+            element("trail-draft-open-start", in: app).exists,
+            "as the destination, with the start left to choose"
         )
     }
 }

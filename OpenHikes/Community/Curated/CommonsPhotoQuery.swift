@@ -265,7 +265,11 @@ nonisolated struct CommonsPhotoCandidate: Equatable, Sendable {
 
 /// One file this app may show: a photograph, its thumbnail, its credit and
 /// when it was taken.
-nonisolated struct CommonsFile: Equatable, Sendable {
+///
+/// `Codable` because ``CommonsPhotoStore`` writes it down: the answer to
+/// *what is this file* changes when somebody edits the file page, which is
+/// rarely enough to keep for as long as an OpenStreetMap answer is kept.
+nonisolated struct CommonsFile: Codable, Equatable, Sendable {
     var pageID: Int
     var thumbnailURL: URL
     var credit: CommonsPhotoCredit

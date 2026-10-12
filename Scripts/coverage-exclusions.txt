@@ -132,6 +132,13 @@
 # saved is `TrailDraftPhotos`; both stay measured, with
 # `TrailDraftPhotoControllerTests` and `TrailDraftPhotosTests`.
 #
+# `CommonsPhotoView` arrived the same day: the screen a *Community* tab photo
+# pin opens, headed by that same header, entirely body code. What it does is
+# `TrailDraftController.plan(to:)` and `TrailDraftPhotos.adopt(_:)`, measured
+# by `TrailDraftPlanToPhotoTests`; what it is opened from is
+# `CommunityCommonsPhotos` and `SheetPresentation.showCommonsPhoto(_:)`,
+# measured by `CommunityCommonsPhotosTests` and `SheetCommonsPhotoTests`.
+#
 # Six arrived with the place overhaul on 2026-09-24, and they are the
 # ordinary case: `HikePlaceView` (a saved hike's place screen),
 # `HikePlaceEditor`, `HikePlaceSearchSheet` (since replaced, below) and
@@ -170,6 +177,7 @@
 #
 #   Scripts/run-ui-tests.sh --all
 
+OpenHikes/Community/Browse/CommonsPhotoView.swift
 OpenHikes/Community/CommunityFailureSections.swift
 OpenHikes/Community/Browse/CommunityHikeRow.swift
 OpenHikes/Community/Listing/CommunityHikeView+CommonsPhotos.swift

@@ -139,15 +139,25 @@ extension OpenHikesModel {
     /// — and what it buys is a heading that says the same thing on a machine
     /// with no signal as on one with, which is the only kind a test can assert
     /// against anyway.
+    ///
+    /// The photographs *Search this area* finds ask through the maker's
+    /// source and answer to the maker's *Photos* chip, so one switch and one
+    /// gate on Wikimedia cover both — see ``CommunityCommonsPhotos``.
     static func makeCommunityBrowser(
         transport: (any CommunityTransporting)?,
-        blocks: CommunityBlockList
+        blocks: CommunityBlockList,
+        maker: TrailDraftController
     ) -> CommunityBrowser {
         let namesAreas = transport != nil && !AppLaunchEnvironment.isUITesting
         return CommunityBrowser(
             transport: transport,
             blockList: blocks,
-            areaNames: namesAreas ? GeocodedAreaNames() : nil
+            areaNames: namesAreas ? GeocodedAreaNames() : nil,
+            areaPhotos: CommunityCommonsPhotos(
+                source: maker.photos.source,
+                filter: maker.finder.filter,
+                isHidden: { [weak maker] in maker?.isEditing ?? false }
+            )
         )
     }
 
@@ -334,15 +344,26 @@ extension OpenHikesModel {
     /// fell into it would be spending its patience on a stub's worth of
     /// pictures. The one way past it is the same scenario name, so a launch
     /// that seeds the places seeds the photographs with them — see
-    /// ``SeededCommonsPhotoSource``.
+    /// ``SeededCommonsPhotoSource``. `--ui-test-community=commons` is the
+    /// other: it seeds Commons for the curated preview, and the *Community*
+    /// tab's *Search this area* asks through this source too.
+    ///
+    /// Also the *Community* tab's — see ``makeCommunityBrowser(transport:blocks:maker:)``.
     static func makeTrailPhotoSource() -> (any CommonsPhotoSourcing)? {
         #if DEBUG
-        if SeededTrailPointSource.Scenario(argument: AppLaunchEnvironment.trailPointScenarioName) == .seeded {
+        if SeededTrailPointSource.Scenario(argument: AppLaunchEnvironment.trailPointScenarioName) == .seeded
+            || SeededCommunityTransport.Scenario(argument: AppLaunchEnvironment.communityScenarioName) == .commons {
             return SeededCommonsPhotoSource()
         }
         #endif
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
-        return WikimediaCommonsSource()
+        return makeLiveCommonsSource()
+    }
+
+    /// Wikimedia Commons, with what it said about each file kept in `Caches`
+    /// for every launch that asks it — see ``CommonsPhotoStore``.
+    static func makeLiveCommonsSource() -> WikimediaCommonsSource {
+        WikimediaCommonsSource(store: CommonsPhotoStore.defaultDirectory().map { CommonsPhotoStore(directory: $0) })
     }
 }
 
@@ -616,7 +637,7 @@ private extension OpenHikesModel {
             // ``MergedCommunityTransport/elevation``.
             elevation: StadiaElevationSource(),
             // The one launch that asks Wikimedia, for the same reason.
-            commons: WikimediaCommonsSource()
+            commons: makeLiveCommonsSource()
         )
     }
 

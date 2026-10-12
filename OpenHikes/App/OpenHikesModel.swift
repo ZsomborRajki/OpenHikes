@@ -225,7 +225,7 @@ final class OpenHikesModel {
         routeShading = RouteShading(provider: trailGraphProvider, defaults: defaults)
         watchLink = Self.makeWatchLink(container: container, recorder: hikeRecorder, defaults: defaults)
         communityBlocks = CommunityBlockList(defaults: defaults)
-        community = Self.makeCommunityBrowser(transport: communityTransport, blocks: communityBlocks)
+        community = Self.makeCommunityBrowser(transport: communityTransport, blocks: communityBlocks, maker: trailMaker)
         // The same transport the browser got, or the same `nil`: a launch that
         // must not reach CloudKit must not reach it for this either, and a
         // queue with no transport simply never asks.

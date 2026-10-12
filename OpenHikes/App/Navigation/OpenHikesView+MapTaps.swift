@@ -44,6 +44,11 @@ extension OpenHikesView {
                 selectedHike: &selection.wrappedValue
             )
         }
+        // And the photographs the tab found, which open their own screen —
+        // see ``CommonsPhotoView``.
+        appModel.community.onOpenCommonsPhoto { [sheet] photo in
+            sheet.showCommonsPhoto(photo)
+        }
         // And the hiker's own line, which the same recognizer answers for —
         // see `MapCoordinator+RouteTap.swift`. The selection is read when the
         // tap arrives rather than captured by value, because the line drawn is

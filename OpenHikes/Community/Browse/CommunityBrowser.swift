@@ -388,6 +388,14 @@ final class CommunityBrowser {
     /// Where a tapped map pin goes. Set once by ``OpenHikesView``, which owns
     /// the sheet's navigation path; see ``open(_:)``.
     @ObservationIgnored private var openListing: ((CommunityListing) -> Void)?
+    /// Where a tapped photo pin goes, on the same terms — see
+    /// `CommunityBrowser+CommonsPhotos.swift`.
+    @ObservationIgnored var openCommonsPhoto: ((CommonsPhoto) -> Void)?
+
+    /// What Wikimedia Commons has photographed in the area the list answers
+    /// about, asked by the same confirmed questions — see
+    /// ``CommunityCommonsPhotos``.
+    @ObservationIgnored let areaPhotos: CommunityCommonsPhotos
 
     /// - Parameter transport: `nil` for a launch that must not reach CloudKit
     ///   — a hosted test bundle, or UI automation. Every entry point is then a
@@ -395,14 +403,18 @@ final class CommunityBrowser {
     ///   those launches rather than stubbed.
     /// - Parameter areaNames: `nil` for those same launches, and for any
     ///   caller that does not care what the searched area is called.
+    /// - Parameter areaPhotos: `nil` for one that never asks, which is every
+    ///   suite that is not about the photographs.
     init(
         transport: (any CommunityTransporting)?,
         blockList: CommunityBlockList,
-        areaNames: (any CommunityAreaNaming)? = nil
+        areaNames: (any CommunityAreaNaming)? = nil,
+        areaPhotos: CommunityCommonsPhotos? = nil
     ) {
         self.transport = transport
         self.blockList = blockList
         self.areaNames = areaNames
+        self.areaPhotos = areaPhotos ?? CommunityCommonsPhotos()
     }
 
     /// Requests that reached the transport. The policy above is what makes
@@ -816,6 +828,10 @@ final class CommunityBrowser {
         areaPrompt = .settled
         nameArea(area)
         requestNearby(area, from: scope)
+        // A question the hiker confirmed, so Commons is asked about the part
+        // of it on screen — never by the block refill, which does not come
+        // through here. See ``photoArea(of:showing:)``.
+        if scope == .withCuratedTrails { areaPhotos.search(in: Self.photoArea(of: area, showing: latestRegion)) }
     }
 
     /// Asks the transport about `area`, and nothing else.
