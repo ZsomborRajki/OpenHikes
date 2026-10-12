@@ -85,6 +85,20 @@ struct TrailPlaceFilterTests {
         #expect(!TrailPlaceFilter(defaults: defaults).placesShown)
     }
 
+    /// The maker's *Photos* chip starts on — the user's call — and is kept
+    /// like the kinds beside it.
+    @Test("the photos chip starts on and is kept")
+    func thePhotosChipIsKept() throws {
+        let defaults = try Self.defaults()
+        let first = TrailPlaceFilter(defaults: defaults)
+        #expect(first.photosShown)
+
+        first.setPhotosShown(false)
+
+        #expect(!TrailPlaceFilter(defaults: defaults).photosShown)
+        #expect(defaults.bool(forKey: SettingsKey.trailPhotosHidden), "what is stored is the off position")
+    }
+
     /// A place that claims no symbol has no switch to be turned off by.
     @Test("a place with no symbol is always admitted")
     func aPlaceWithNoSymbolIsAdmitted() {

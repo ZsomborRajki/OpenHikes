@@ -246,6 +246,10 @@ extension MapView.Coordinator {
             // And whether they are shown at all — the switch beside *Search
             // This Area*, which hides them without taking them off the trail.
             _ = controller.finder.filter.placesShown
+            // The photographs *Search this area* found, under the same switch
+            // and their own chip — see `MapTrailDraftPhotos.swift`.
+            _ = controller.photos.photos
+            _ = controller.finder.filter.photosShown
             // The route's time bubble counts the climb once it is measured,
             // which lands on its own schedule, two seconds after the drawing
             // settles — see ``TrailDraftElevation``.
@@ -276,6 +280,8 @@ extension MapView.Coordinator {
         // without a leg moving. Each has a guard of its own.
         let showsPlaces = isDrawing && controller.finder.filter.placesShown
         applyTrailDraftPlaces(showsPlaces ? draft.placeRows : [], on: mapView)
+        let showsPhotos = showsPlaces && controller.finder.filter.photosShown
+        applyTrailDraftPhotos(showsPhotos ? controller.photos.photos : [], on: mapView)
         applyTrailDraftDroppedPin(isDrawing ? controller.droppedPin : nil, on: mapView)
         // And the strip at the top of the map, which the maker takes from the
         // *Community* tab for as long as it is up — the one exclusion in this

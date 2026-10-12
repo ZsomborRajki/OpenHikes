@@ -32,6 +32,15 @@
 //  all back, because nothing was taken away. App-wide and on this device for
 //  the reasons the kinds are.
 //
+//  ## And photographs beside the kinds
+//
+//  ``photosShown`` is one more chip in the row, and the maker's alone: on, the
+//  same tap of *Search this area* also asks Wikimedia Commons for photographs
+//  taken in the area — see ``TrailDraftPhotos``. Off takes the ones found off
+//  the map, like a kind switched off. On by default, the user's call of
+//  2026-10-12. Under the switch above it like every kind: with places hidden
+//  there is no pill to ask with and nothing found is drawn.
+//
 
 import Foundation
 import Observation
@@ -51,6 +60,10 @@ final class TrailPlaceFilter {
     /// switched off.
     private(set) var placesShown: Bool
 
+    /// Whether the maker's *Search this area* asks for photographs too, and
+    /// draws the ones it found. See the file header.
+    private(set) var photosShown: Bool
+
     /// Where the choice is kept, or `nil` for one that lives only as long as
     /// this object — a preview, and every suite that does not ask for one.
     @ObservationIgnored private let defaults: UserDefaults?
@@ -61,6 +74,7 @@ final class TrailPlaceFilter {
         // What is stored is the switch turned *off*, so an empty store is the
         // default: places are shown.
         placesShown = !(defaults?.bool(forKey: SettingsKey.trailPlacesHidden) ?? false)
+        photosShown = !(defaults?.bool(forKey: SettingsKey.trailPhotosHidden) ?? false)
     }
 
     nonisolated deinit { /* intentionally empty */ }
@@ -95,6 +109,12 @@ final class TrailPlaceFilter {
         guard placesShown != shown else { return }
         placesShown = shown
         defaults?.set(!shown, forKey: SettingsKey.trailPlacesHidden)
+    }
+
+    func setPhotosShown(_ shown: Bool) {
+        guard photosShown != shown else { return }
+        photosShown = shown
+        defaults?.set(!shown, forKey: SettingsKey.trailPhotosHidden)
     }
 
     // MARK: - Storage

@@ -510,6 +510,9 @@
     "Already Sent · Sharing" : {
 
     },
+    "Also finds photos from Wikimedia Commons" : {
+
+    },
     "Also Save to Photos" : {
 
     },
@@ -1615,6 +1618,9 @@
     "Opens the map licence in your browser" : {
 
     },
+    "Opens the photo full screen" : {
+
+    },
     "Opens the subscription screen, where purchases can also be restored." : {
 
     },
@@ -1827,7 +1833,7 @@
     "Places" : {
 
     },
-    "Places are hidden from the map and won't be saved with this trail. Turn this on to show them and search for more." : {
+    "Places and photos are hidden from the map and won't be saved with this trail. Turn this on to show them and search for more." : {
 
     },
     "Places Around Trail" : {
@@ -2299,6 +2305,9 @@
     "Take this hike down?" : {
 
     },
+    "Taken %@" : {
+
+    },
     "taken on a recorded point of this hike" : {
 
     },
@@ -2366,7 +2375,7 @@
     "The route and photographs are deleted for good. The hiker is not told, and their app goes on reading “waiting for review”." : {
 
     },
-    "The Search this area button on the map adds what OpenStreetMap has mapped near your trail as pins you can tap. Choose what it looks for. Turning a kind off also removes its pins from the map." : {
+    "The Search this area button on the map adds what OpenStreetMap has mapped near your trail as pins you can tap, and photos from Wikimedia Commons taken there. Choose what it looks for. Turning one off also removes its pins from the map." : {
 
     },
     "The shared copy shows the route before your edit. Ask for its removal, then share this one." : {
@@ -2607,6 +2616,9 @@
 
     },
     "White" : {
+
+    },
+    "Wikimedia Commons" : {
 
     },
     "Within" : {

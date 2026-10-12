@@ -166,6 +166,14 @@ nonisolated enum SettingsKey {
     /// Deliberately not synced through ``SyncedSettingsMirror``, for the
     /// reason ``trailStopRecents`` is not: it is about this device's map.
     static let trailPlacesHidden = "maker.placesHidden"
+    /// Whether the *Photos* chip under the maker's *Search This Area* has
+    /// been turned off, which stops that search asking Wikimedia Commons —
+    /// see ``TrailPlaceFilter/photosShown``. The *off* position is stored, so
+    /// a missing key shows them.
+    ///
+    /// Deliberately not synced through ``SyncedSettingsMirror``, for the
+    /// reason ``trailStopRecents`` is not: it is about this device's map.
+    static let trailPhotosHidden = "maker.photosHidden"
     /// Whether the switch beside a saved hike's *Places* heading has taken
     /// its places off the map — see ``TrailPlacePinController/showsPins``.
     /// The *off* position is stored, so a missing key draws them.

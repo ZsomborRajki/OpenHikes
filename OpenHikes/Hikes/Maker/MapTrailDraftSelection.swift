@@ -117,6 +117,8 @@ extension MapView.Coordinator {
             controller.select(.stop(stop.waypointID))
         case let place as TrailPlaceAnnotation where place.belongsToDraft:
             controller.select(.place(place.place.id))
+        case let photo as TrailDraftPhotoAnnotation:
+            controller.select(.photo(photo.photo.fileURL))
         case let time as TrailDraftTravelTimeAnnotation:
             guard let choice = time.choice else { break }
             controller.chooseRoute(choice.alternativeIndex, forLegAt: choice.legIndex)
@@ -174,6 +176,8 @@ extension MapView.Coordinator {
             trailDraftRoutingView(for: routing, on: mapView)
         case let dropped as TrailDraftDroppedPin:
             trailDraftDroppedPinView(for: dropped, on: mapView)
+        case let photo as TrailDraftPhotoAnnotation:
+            trailDraftPhotoView(for: photo, on: mapView)
         default:
             nil
         }
