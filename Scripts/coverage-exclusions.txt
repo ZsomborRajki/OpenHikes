@@ -125,6 +125,13 @@
 # measured and have `TrailPlaceFilterTests`. No UI suite reaches it either — it
 # is withheld with the pill on a launch that has no place source.
 #
+# `TrailPlacePhotoHeader` arrived on 2026-10-12 with the maker's *Photos* chip:
+# a Wikimedia Commons photograph at the head of the place card and the cover
+# it opens, entirely body code. What decides which photograph a card is about
+# and what *Add Stop* does there is `TrailPlaceCard`, and what is found and
+# saved is `TrailDraftPhotos`; both stay measured, with
+# `TrailDraftPhotoControllerTests` and `TrailDraftPhotosTests`.
+#
 # Six arrived with the place overhaul on 2026-09-24, and they are the
 # ordinary case: `HikePlaceView` (a saved hike's place screen),
 # `HikePlaceEditor`, `HikePlaceSearchSheet` (since replaced, below) and
@@ -208,6 +215,7 @@ OpenHikes/Hikes/Maker/TrailDraftMapSection.swift
 OpenHikes/Hikes/Maker/TrailDraftFields.swift
 OpenHikes/Hikes/Maker/TrailDraftView.swift
 OpenHikes/Hikes/Maker/TrailPlaceFilterSection.swift
+OpenHikes/Hikes/Maker/TrailPlacePhotoHeader.swift
 OpenHikes/Hikes/Maker/TrailPlaceSheet.swift
 OpenHikes/Hikes/Maker/TrailStopRow.swift
 OpenHikes/Hikes/Maker/TrailStopSearch.swift

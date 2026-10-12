@@ -51,6 +51,19 @@ nonisolated protocol CommonsPhotoSourcing: Sendable {
     /// it, which is the guard the preview's discard depends on.
     @concurrent
     func photos(along route: [RouteCoordinate], downloadingInto directory: URL) async throws -> [CommonsPhoto]
+
+    /// Openly licensed photographs whose camera stood inside `area`, leaving
+    /// out any whose Commons page is in `shown`, downloaded into `directory`
+    /// and returned nearest the middle of the area first.
+    ///
+    /// The trail maker's *Search this area* — see ``TrailDraftPhotos``. The
+    /// caller owns `directory` on the terms the route's question sets.
+    @concurrent
+    func photos(
+        in area: CommunitySearchArea,
+        avoiding shown: Set<URL>,
+        downloadingInto directory: URL
+    ) async throws -> [CommonsPhoto]
 }
 
 /// A source that answers nothing, for every launch that has not opted in.
@@ -61,6 +74,15 @@ nonisolated protocol CommonsPhotoSourcing: Sendable {
 nonisolated struct DormantCommonsPhotoSource: CommonsPhotoSourcing {
     @concurrent
     func photos(along route: [RouteCoordinate], downloadingInto directory: URL) async -> [CommonsPhoto] {
+        []
+    }
+
+    @concurrent
+    func photos(
+        in area: CommunitySearchArea,
+        avoiding shown: Set<URL>,
+        downloadingInto directory: URL
+    ) async -> [CommonsPhoto] {
         []
     }
 }
@@ -139,6 +161,37 @@ nonisolated struct WikimediaCommonsSource: CommonsPhotoSourcing {
             limit: CommonsTrailPhotos.photoLimit,
             over: length
         )
+        return try await download(chosen.map(\.spot), described: files, into: directory)
+    }
+
+    /// One geosearch over the area rather than one per stretch, because the
+    /// area *is* one circle — the one the maker's pill was tapped over, and
+    /// never wider than ``CommonsTrailPhotos/maximumRadiusMeters``. Then the
+    /// same two steps the route takes, spread over a grid rather than along a
+    /// line — see ``CommonsAreaPhotos``.
+    @concurrent
+    func photos(
+        in area: CommunitySearchArea,
+        avoiding shown: Set<URL>,
+        downloadingInto directory: URL
+    ) async throws -> [CommonsPhoto] {
+        let asked = CommonsAreaPhotos.asked(area)
+        let found = try await candidates(around: asked)
+        let shortlist = CommonsAreaPhotos.spread(found, in: asked, limit: CommonsPhotoQuery.imageInfoBatch)
+        guard !shortlist.isEmpty else { return [] }
+        try Task.checkCancellation()
+        // What is already on the map is left out after the metadata rather
+        // than before it: the page is what names a photograph, and the
+        // geosearch knows only page ids. So a second tap over the same valley
+        // offers the next photographs along rather than the same ones again.
+        let files = try await files(for: shortlist.map(\.pageID))
+            .filter { !shown.contains($0.value.credit.licence.sourceURL) }
+        let chosen = CommonsAreaPhotos.chosen(
+            shortlist.filter { files[$0.pageID] != nil },
+            authors: files.compactMapValues(\.credit.author),
+            limit: CommonsAreaPhotos.photoLimit,
+            in: asked
+        )
         return try await download(chosen, described: files, into: directory)
     }
 }
@@ -177,37 +230,37 @@ nonisolated private extension WikimediaCommonsSource {
     /// at a time: a thumbnail that does not arrive, or arrives as something
     /// other than an image, costs itself.
     func download(
-        _ chosen: [CommonsTrailPhotos.Placed],
+        _ chosen: [CommonsPhotoCandidate],
         described files: [Int: CommonsFile],
         into directory: URL
     ) async throws -> [CommonsPhoto] {
-        let work = chosen.compactMap { placed in files[placed.pageID].map { (placed, $0) } }
+        let work = chosen.compactMap { spot in files[spot.pageID].map { (spot, $0) } }
         return try await withThrowingTaskGroup(of: (Int, CommonsPhoto?).self) { group in
             var queued = work.enumerated().makeIterator()
             var landed: [Int: CommonsPhoto] = [:]
             for _ in 0..<Self.parallelDownloads {
-                guard let (index, (placed, file)) = queued.next() else { break }
-                group.addTask { (index, try await photo(placed, described: file, into: directory)) }
+                guard let (index, (spot, file)) = queued.next() else { break }
+                group.addTask { (index, try await photo(spot, described: file, into: directory)) }
             }
             while let (finished, arrived) = try await group.next() {
                 landed[finished] = arrived
-                if let (index, (placed, file)) = queued.next() {
-                    group.addTask { (index, try await photo(placed, described: file, into: directory)) }
+                if let (index, (spot, file)) = queued.next() {
+                    group.addTask { (index, try await photo(spot, described: file, into: directory)) }
                 }
             }
             return work.indices.compactMap { landed[$0] }
         }
     }
 
-    /// One thumbnail, written into `directory` — or `nil` when it did not
-    /// arrive as an image or could not be written.
+    /// One thumbnail, written into `directory` and pinned at `spot` — or `nil`
+    /// when it did not arrive as an image or could not be written.
     ///
     /// Throws only a cancellation, and checks for one before the write: the
     /// check ``CloudKitCommunityTransport`` makes before its own copies, so a
     /// hiker who backed out has nothing written into a directory their screen
     /// has already deleted.
     func photo(
-        _ placed: CommonsTrailPhotos.Placed,
+        _ spot: CommonsPhotoCandidate,
         described file: CommonsFile,
         into directory: URL
     ) async throws -> CommonsPhoto? {
@@ -216,10 +269,10 @@ nonisolated private extension WikimediaCommonsSource {
               ImageDataFormat.detect(in: data) != nil
         else { return nil }
         try Task.checkCancellation()
-        let url = directory.appendingPathComponent("commons-\(placed.pageID).jpeg", isDirectory: false)
+        let url = directory.appendingPathComponent("commons-\(spot.pageID).jpeg", isDirectory: false)
         guard (try? Self.write(data, to: url)) != nil else { return nil }
         return CommonsPhoto(
-            pin: CommunityPhotoPin(capturedAt: file.capturedAt, coordinate: placed.coordinate),
+            pin: CommunityPhotoPin(capturedAt: file.capturedAt, coordinate: spot.coordinate),
             fileURL: url,
             credit: file.credit
         )

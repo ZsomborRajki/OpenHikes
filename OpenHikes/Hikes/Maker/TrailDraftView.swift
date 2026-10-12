@@ -254,7 +254,7 @@ struct TrailDraftView: View {
             )
         }
         // What a tap on the map opens — see ``TrailPlaceSheet``.
-        .modifier(TrailPlaceSheetPresenter(maker: maker))
+        .modifier(TrailPlaceSheetPresenter(maker: maker, mapController: mapController))
     }
 
     /// The route: where it starts, what it passes through, where it ends, and
@@ -584,7 +584,17 @@ struct TrailDraftView: View {
             // Not the walk tier: a drawn trail has not been walked, and those
             // seven patterns are for a phone in a pocket.
             HapticMoment.outcomeSucceeded.play()
+            // The photographs the saved line passes, taken before the discard
+            // below deletes their files, and copied into the hike once it is
+            // on screen — a dozen pictures are not worth holding the button
+            // for. None while the switch beside *Search This Area* has hidden
+            // them, for the reason no place is saved then. See
+            // ``TrailDraftPhotos``.
+            let photos = maker.finder.filter.placesShown ? maker.photos.handOff(along: hike.route) : nil
             maker.discard()
+            if let photos {
+                Task { await photos.attach(to: hike) }
+            }
             name.clear()
             onSaved(hike)
         case .refused(let refused):

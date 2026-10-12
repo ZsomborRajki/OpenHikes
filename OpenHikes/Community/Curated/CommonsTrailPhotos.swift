@@ -97,6 +97,13 @@ nonisolated enum CommonsTrailPhotos {
         var coordinate: CLLocationCoordinate2D {
             CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
         }
+
+        /// The page and its pin, which is all a download needs to know — the
+        /// shape an area's photographs are chosen in, so both reach one
+        /// download. See ``CommonsAreaPhotos``.
+        var spot: CommonsPhotoCandidate {
+            CommonsPhotoCandidate(pageID: pageID, latitude: latitude, longitude: longitude)
+        }
     }
 
     /// The circles one route's geosearches ask about, in walking order.

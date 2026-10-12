@@ -36,19 +36,22 @@ import SwiftUI
 /// `View` is.
 struct TrailPlaceSheetPresenter: ViewModifier {
     let maker: TrailDraftController
+    /// For a photograph's full-screen viewer, whose *Show on Map* moves it.
+    let mapController: MapController
 
     func body(content: Content) -> some View {
         content.sheet(isPresented: Binding(
             get: { maker.selection != nil },
             set: { if !$0 { maker.select(nil) } }
         )) {
-            TrailPlaceSheet(maker: maker)
+            TrailPlaceSheet(maker: maker, mapController: mapController)
         }
     }
 }
 
 struct TrailPlaceSheet: View {
     let maker: TrailDraftController
+    let mapController: MapController
 
     // periphery:ignore - read only as `$detent`, the binding
     // `.presentationDetents(_:selection:)` takes.
@@ -61,8 +64,13 @@ struct TrailPlaceSheet: View {
     var body: some View {
         Group {
             if let selection = maker.selection,
-               let card = TrailPlaceCard(selection, in: maker.draft, droppedPin: maker.droppedPin) {
-                TrailPlaceCardView(maker: maker, card: card)
+               let card = TrailPlaceCard(
+                   selection,
+                   in: maker.draft,
+                   droppedPin: maker.droppedPin,
+                   photos: maker.photos.photos
+               ) {
+                TrailPlaceCardView(maker: maker, card: card, mapController: mapController)
             } else {
                 // What the card was about has gone — a stop deleted from the
                 // list under it — so there is nothing left to say about it.
@@ -87,6 +95,7 @@ struct TrailPlaceSheet: View {
 private struct TrailPlaceCardView: View {
     let maker: TrailDraftController
     let card: TrailPlaceCard
+    let mapController: MapController
 
     /// The address MapKit found, `nil` until it answers and for a spot it
     /// cannot place. Asked once per coordinate.
@@ -101,6 +110,9 @@ private struct TrailPlaceCardView: View {
     /// contents about under the grabber instead of resizing the sheet.
     var body: some View {
         VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
+            if let photo = card.photo {
+                TrailPlacePhotoHeader(photo: photo, maker: maker, mapController: mapController)
+            }
             header
             actions
             TrailPlaceFactsAndLocation(
@@ -181,7 +193,9 @@ private struct TrailPlaceCardView: View {
                 }
             }
             shareButton
-            if case .addStop = card.primary { removeButton }
+            // A photograph is not the maker's to remove: the *Photos* chip
+            // is what takes them off the map.
+            if case .addStop = card.primary, card.photo == nil { removeButton }
         }
         // One height for the row, whichever button's word needs the most room
         // at the hiker's type size.

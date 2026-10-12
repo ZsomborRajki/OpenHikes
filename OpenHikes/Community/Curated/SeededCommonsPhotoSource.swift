@@ -20,6 +20,7 @@
 //  it: the licence and the link, with nobody in front of them.
 //
 
+import CoreLocation
 import Foundation
 import OpenHikesData
 
@@ -51,13 +52,57 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
     func photos(along route: [RouteCoordinate], downloadingInto directory: URL) async throws -> [CommonsPhoto] {
         guard route.count > 1 else { return [] }
         let profile = RouteProfile(route: route)
+        let spots = Self.positions.map { profile.coordinate(atDistance: profile.totalDistanceMeters * $0) }
+        return try await Self.photos(at: spots, downloadingInto: directory)
+    }
+
+    /// The same three, across the northern half of the area on screen rather
+    /// than along a route — the trail maker's *Search this area* under
+    /// `--ui-test-trail-points=seeded`. North of the middle because the area
+    /// is the whole map's and its lower half is under the sheet, where a pin
+    /// can be neither seen nor tapped. A second search over the same area
+    /// finds the three already shown and adds nothing, which is what the real
+    /// source does too.
+    @concurrent
+    func photos(
+        in area: CommunitySearchArea,
+        avoiding shown: Set<URL>,
+        downloadingInto directory: URL
+    ) async throws -> [CommonsPhoto] {
+        let degrees = area.radiusMeters / Self.metresPerDegree
+        let eastDegrees = degrees / cos(area.latitude * .pi / 180)
+        let spots: [CLLocationCoordinate2D?] = zip(Self.areaNorths, Self.areaEasts).map { north, east in
+            CLLocationCoordinate2D(
+                latitude: area.latitude + north * degrees,
+                longitude: area.longitude + east * eastDegrees
+            )
+        }
+        return try await Self.photos(at: spots, downloadingInto: directory)
+            .filter { !shown.contains($0.credit.licence.sourceURL) }
+    }
+
+    /// Where an area's three stand, as shares of its radius north and east of
+    /// its middle: apart enough that no two thumbnails overlap.
+    private static let sideNorth = 0.45
+    private static let middleNorth = 0.55
+    private static let sideEast = 0.3
+    private static let areaNorths = [sideNorth, middleNorth, sideNorth]
+    private static let areaEasts = [-sideEast, 0, sideEast]
+    private static let metresPerDegree = 111_320.0
+
+    /// One photograph per spot that has one, each its own Commons page so
+    /// that a viewer and a save can tell them apart.
+    private static func photos(
+        at spots: [CLLocationCoordinate2D?],
+        downloadingInto directory: URL
+    ) async throws -> [CommonsPhoto] {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var photos: [CommonsPhoto] = []
-        for (index, share) in Self.positions.enumerated() {
-            guard let coordinate = profile.coordinate(atDistance: profile.totalDistanceMeters * share),
+        for (index, spot) in spots.enumerated() {
+            guard let coordinate = spot,
                   let data = await SeededPhotoFixture.encodedImage(
-                      index: Self.firstFrame + index,
-                      size: Self.frameSize
+                      index: firstFrame + index,
+                      size: frameSize
                   )
             else { continue }
             try Task.checkCancellation()
@@ -68,11 +113,11 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
                     pin: CommunityPhotoPin(capturedAt: SeededCommunityTransport.hikeDate, coordinate: coordinate),
                     fileURL: url,
                     credit: CommonsPhotoCredit(
-                        author: Self.authors[index],
+                        author: authors[index],
                         licence: HikePhotoLicence(
-                            name: Self.licenceName,
-                            url: Self.licenceURL,
-                            sourceURL: Self.filePage
+                            name: licenceName,
+                            url: licenceURL,
+                            sourceURL: filePage.appending(queryItems: [URLQueryItem(name: "seeded", value: "\(index)")])
                         )
                     )
                 )

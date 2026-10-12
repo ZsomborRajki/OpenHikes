@@ -104,10 +104,14 @@ extension MapView.Coordinator {
         reobserving(self, controller) {
             _ = controller.isEditing
             _ = controller.finder.isSearching
+            // The photographs are the same tap's other question, so their
+            // search spins the same pill — see ``TrailDraftPhotos``.
+            _ = controller.photos.isSearching
             _ = controller.finder.searchableArea
             _ = controller.finder.notice
-            // Every switch off disables the pill — see `canSearch`.
+            // Every switch off disables the pill — see `canSearchArea`.
             _ = controller.finder.filter.hidden
+            _ = controller.finder.filter.photosShown
             // And the one above them withdraws it.
             _ = controller.finder.filter.placesShown
         } onChange: { coordinator, model in
@@ -136,12 +140,12 @@ extension MapView.Coordinator {
         // pins nobody can see.
         let visible = controller.isEditing && finder.isAvailable && finder.filter.placesShown
             && !hasOpenCallout
-        trailPointSearchControl.isSearching = finder.isSearching
+        trailPointSearchControl.isSearching = controller.isSearchingArea
         // Busy and out of range are different states and only one of them is a
         // policy — see ``MapCommunitySearchControl``, where the same pair of
         // reasons shares one `isEnabled` for the same reason: a control can
         // only be tapped or not, and the spinner is what tells them apart.
-        trailPointSearchControl.isEnabled = finder.canSearch
+        trailPointSearchControl.isEnabled = controller.canSearchArea
         // Cleared along with the pill, so a caption never outlives the maker
         // it is about.
         trailPointSearchControl.notice = visible ? finder.notice?.caption : nil

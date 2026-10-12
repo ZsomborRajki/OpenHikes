@@ -44,6 +44,16 @@ struct MergedCommunityCommonsTests {
                 ),
             ]
         }
+
+        /// The maker's question, which the merged transport never asks.
+        @concurrent
+        func photos(
+            in area: CommunitySearchArea,
+            avoiding shown: Set<URL>,
+            downloadingInto directory: URL
+        ) async -> [CommonsPhoto] {
+            []
+        }
     }
 
     private static let directory = FileManager.default.temporaryDirectory

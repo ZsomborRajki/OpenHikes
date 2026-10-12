@@ -52,7 +52,11 @@ struct PhotoLicenceCredit: View {
         .accessibilityIdentifier("photo-licence-credit")
     }
 
-    private var line: String {
+    private var line: String { Self.line(author: author, licence: licence) }
+
+    /// The credit in words — also what the maker's photo pins are called to
+    /// VoiceOver, since it is the one thing about the picture this app knows.
+    static func line(author: String?, licence: HikePhotoLicence) -> String {
         guard let author else { return String(localized: "Photo · \(licence.name)") }
         return String(localized: "Photo by \(author) · \(licence.name)")
     }
