@@ -165,6 +165,7 @@
 
 OpenHikes/Community/CommunityFailureSections.swift
 OpenHikes/Community/Browse/CommunityHikeRow.swift
+OpenHikes/Community/Listing/CommunityHikeView+CommonsPhotos.swift
 OpenHikes/Community/Listing/CommunityHikeView+Contributions.swift
 OpenHikes/Community/Listing/CommunityHikeView+Curated.swift
 OpenHikes/Community/Listing/CommunityHikeView+Import.swift
@@ -223,6 +224,7 @@ OpenHikes/Photos/HikePhotoSection.swift
 OpenHikes/Photos/HikePhotoViewer.swift
 OpenHikes/Photos/PhotoDiscoverySheet.swift
 OpenHikes/Photos/PhotoGalleryChrome.swift
+OpenHikes/Photos/PhotoLicenceCredit.swift
 OpenHikes/Photos/PhotoStepButton.swift
 OpenHikes/Purchases/ElevationProPrompt.swift
 OpenHikes/Purchases/MapPaywallView.swift

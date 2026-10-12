@@ -127,7 +127,9 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     public var importedFromListingID: String?
 
     /// Who took this photograph, for one copied out of a *contribution* to a
-    /// shared trail rather than out of the hike its author published.
+    /// shared trail rather than out of the hike its author published — or out
+    /// of Wikimedia Commons, where it is the author the file page names and
+    /// ``licence`` says what they shared it under.
     ///
     /// `nil` for almost every photograph, and the absence means two different
     /// innocent things rather than one: the hiker took it themselves, or it
@@ -228,6 +230,21 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// ``Hike/photos(ofPlace:)`` is only ever asked about places that exist.
     public var placeID: UUID?
 
+    /// The open licence this photograph was copied under, for a copy of a
+    /// Wikimedia Commons photograph — `nil` for every other row.
+    ///
+    /// Saved with an OpenStreetMap trail, whose preview draws the Commons
+    /// photographs taken along it; see ``HikePhotoLicence``. What the licence
+    /// asks of anybody showing the picture is a credit, a link to the licence
+    /// and a link to the source, and the copy has to keep being able to give
+    /// all three for as long as the hiker keeps it. The author is
+    /// ``importedAuthorName``, as for any photograph somebody else took.
+    ///
+    /// A new key in the `CD_photos` blob, so no mirrored column — the shape
+    /// ``placeID`` took — and optional for the reason ``sentToCommunityAt``
+    /// is.
+    public var licence: HikePhotoLicence?
+
     public init(
         id: UUID = UUID(),
         capturedAt: Date = .now,
@@ -237,7 +254,8 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
         matchEvidence: PhotoMatchEvidence? = nil,
         importedFromListingID: String? = nil,
         importedAuthorName: String? = nil,
-        isPlaceOnly: Bool? = nil // swiftlint:disable:this discouraged_optional_boolean
+        isPlaceOnly: Bool? = nil, // swiftlint:disable:this discouraged_optional_boolean
+        licence: HikePhotoLicence? = nil
     ) {
         self.id = id
         self.capturedAt = capturedAt
@@ -249,6 +267,7 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
         self.importedFromListingID = importedFromListingID
         self.importedAuthorName = importedAuthorName
         self.isPlaceOnly = isPlaceOnly
+        self.licence = licence
     }
 
     /// Whether this photograph is the hiker's own to publish.
@@ -256,7 +275,13 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// The question every community path asks, written once so no caller has
     /// to remember which way the optional runs. See
     /// ``importedFromListingID``.
-    public var isOwn: Bool { importedFromListingID == nil }
+    ///
+    /// And ``licence``, which answers it on its own: a photograph somebody
+    /// shared on Wikimedia Commons is theirs under a licence, whichever hike
+    /// it was saved onto and however it got there. The listing stamp already
+    /// keeps today's copies out — they arrive with an OpenStreetMap trail —
+    /// and this is what keeps a copy out that ever arrives some other way.
+    public var isOwn: Bool { importedFromListingID == nil && licence == nil }
 
     /// Whether this row is a place on the trail rather than a picture.
     ///
@@ -266,10 +291,10 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
 
     /// Where a photograph came from, as against where it sits on the trail.
     ///
-    /// The four fields above that describe the *source* rather than the
-    /// picture, gathered so they travel together: they are filled in by the
-    /// surface that produced the photograph, read by nothing on the way to
-    /// disk, and are the only part of ``HikePhoto`` that
+    /// The fields above that describe the *source* rather than the picture,
+    /// gathered so they travel together: they are filled in by the surface
+    /// that produced the photograph, read by nothing on the way to disk, and
+    /// are the only part of ``HikePhoto`` that
     /// ``HikePhotoStore/store(_:capturedAt:coordinate:origin:)`` does not work
     /// out for itself. Gathering them also keeps that call and the hop in
     /// front of it inside the parameter count the linter allows, which is a
@@ -279,6 +304,7 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
         public var matchEvidence: PhotoMatchEvidence?
         public var importedFromListingID: String?
         public var importedAuthorName: String?
+        public var licence: HikePhotoLicence?
 
         /// A photograph with nothing to say about where it came from: one the
         /// app watched being taken. The ordinary case, and the reason every
@@ -289,12 +315,14 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
             assetLocalIdentifier: String? = nil,
             matchEvidence: PhotoMatchEvidence? = nil,
             importedFromListingID: String? = nil,
-            importedAuthorName: String? = nil
+            importedAuthorName: String? = nil,
+            licence: HikePhotoLicence? = nil
         ) {
             self.assetLocalIdentifier = assetLocalIdentifier
             self.matchEvidence = matchEvidence
             self.importedFromListingID = importedFromListingID
             self.importedAuthorName = importedAuthorName
+            self.licence = licence
         }
     }
 
