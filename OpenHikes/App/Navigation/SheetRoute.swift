@@ -8,6 +8,12 @@ import OpenHikesData
 import SwiftData
 
 enum SheetRoute: Hashable {
+    /// A Wikimedia Commons photograph the *Community* tab found, on its own
+    /// screen: the picture, its credit, where it was taken, and *Plan a Trail
+    /// Here*. Carries the photograph for the reason ``communityHike(_:)``
+    /// carries a listing — it is a value with no store behind it. See
+    /// ``CommonsPhotoView``.
+    case commonsPhoto(CommonsPhoto)
     /// A published hike, before it is imported. Carries the listing rather
     /// than a `Hike` because there is no `Hike` yet — that is the whole
     /// question the screen is asking — and the listing is a `Sendable` value
@@ -111,7 +117,8 @@ enum SheetRoute: Hashable {
         // deleted. A community preview — and the gallery over it — is about a
         // hike that is not in the library at all, which is exactly the state a
         // deletion puts one back into.
-        case .communityHike, .communityPhoto, .pendingPhotos, .pendingSubmission, .recording, .totals, .trailDraft:
+        case .commonsPhoto, .communityHike, .communityPhoto, .pendingPhotos, .pendingSubmission, .recording, .totals,
+            .trailDraft:
             false
         }
     }
@@ -147,9 +154,13 @@ enum SheetRoute: Hashable {
     /// What ``SheetPresentation/showCommunityHike(_:)`` clears when a
     /// different trail is tapped, so one preview replaces the last rather
     /// than stacking onto it.
+    ///
+    /// A Commons photograph's screen counts too: it is the same kind of jump
+    /// from a pin on the same map, so a hike tapped over a photograph replaces
+    /// it, and a photograph tapped over a hike's preview replaces that.
     var isCommunityPreview: Bool {
         switch self {
-        case .communityHike, .communityPhoto: true
+        case .commonsPhoto, .communityHike, .communityPhoto: true
         case .hike, .newPlace, .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .placesNearby,
             .recording, .routeStyle, .totals, .trailDraft, .walk:
             false
@@ -162,8 +173,8 @@ enum SheetRoute: Hashable {
     var prefersFullHeight: Bool {
         switch self {
         case .communityPhoto, .photo: true
-        case .communityHike, .hike, .newPlace, .pendingPhotos, .pendingSubmission, .place, .placesAround,
-            .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
+        case .commonsPhoto, .communityHike, .hike, .newPlace, .pendingPhotos, .pendingSubmission, .place,
+            .placesAround, .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
             false
         }
     }
@@ -179,8 +190,8 @@ enum SheetRoute: Hashable {
     var revealsMapBeside: Bool {
         switch self {
         case .photo: true
-        case .communityHike, .communityPhoto, .hike, .newPlace, .pendingPhotos, .pendingSubmission, .place,
-            .placesAround, .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
+        case .commonsPhoto, .communityHike, .communityPhoto, .hike, .newPlace, .pendingPhotos, .pendingSubmission,
+            .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
             false
         }
     }
@@ -208,6 +219,10 @@ enum SheetRoute: Hashable {
             left.id == right.id && leftIndex == rightIndex
         case let (.pendingSubmission(left), .pendingSubmission(right)): left.id == right.id
         case let (.pendingPhotos(left), .pendingPhotos(right)): left.id == right.id
+        // By its Commons page, which is what names a photograph; the file it
+        // was downloaded into is a fact about one search.
+        case let (.commonsPhoto(left), .commonsPhoto(right)):
+            left.credit.licence.sourceURL == right.credit.licence.sourceURL
         default: false
         }
     }
@@ -246,7 +261,7 @@ enum SheetRoute: Hashable {
         case let .walk(walk):
             hasher.combine(3)
             hasher.combine(walk.persistentModelID)
-        case .communityHike, .communityPhoto, .pendingSubmission, .pendingPhotos:
+        case .commonsPhoto, .communityHike, .communityPhoto, .pendingSubmission, .pendingPhotos:
             hashCommunity(into: &hasher)
         case .trailDraft:
             hasher.combine(8)
@@ -297,6 +312,9 @@ enum SheetRoute: Hashable {
         case let .pendingPhotos(pending):
             hasher.combine(7)
             hasher.combine(pending.id)
+        case let .commonsPhoto(photo):
+            hasher.combine(15)
+            hasher.combine(photo.credit.licence.sourceURL)
         case .hike, .newPlace, .photo, .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals,
             .trailDraft, .walk:
             break

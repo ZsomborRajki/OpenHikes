@@ -4,7 +4,9 @@
 //
 //  The two places a Wikimedia Commons photograph is drawn on a route from
 //  OpenStreetMap: the preview's strip with the sentence under it, and the
-//  gallery page with its credit over the picture.
+//  gallery page with its credit over the picture. And the screen a photograph
+//  the *Community* tab's search found opens: the picture, its credit, the
+//  place and *Plan a Trail Here*.
 //
 //  An extension of `AccessibilityUITests` rather than a class of its own, for
 //  the reason `AccessibilityUITests+Community.swift` gives: `single_test_class`
@@ -45,6 +47,21 @@ extension AccessibilityUITests {
             app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Photo by'")).firstMatch
                 .waitForExistence(timeout: UITestTimeout.existence),
             "the gallery should be on a Commons photograph, with its credit drawn, before it is swept"
+        )
+        try audit(app)
+    }
+
+    /// The photograph screen a *Community* pin opens. Its row of three
+    /// buttons shares the width with the longest word here, *Plan a Trail
+    /// Here*, which is what the clipped-text check has something to say about.
+    @MainActor
+    func testCommonsPhotoScreenPassesAccessibilityAudit() throws {
+        let app = launchCommunity(scenario: .commons)
+        selectCommunityTab(in: app)
+        tapWhenReady(element("community-commons-photo-pin", in: app), timeout: UITestTimeout.trace)
+        XCTAssertTrue(
+            element("commons-photo-plan-trail", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "the audit is worth nothing before the photograph's screen is up"
         )
         try audit(app)
     }

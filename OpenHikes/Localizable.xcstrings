@@ -1401,6 +1401,9 @@
     "No hikes yet" : {
 
     },
+    "No Location" : {
+
+    },
     "No Location Yet" : {
 
     },
@@ -1618,10 +1621,16 @@
     "Opens the map licence in your browser" : {
 
     },
+    "Opens the photo" : {
+
+    },
     "Opens the photo full screen" : {
 
     },
     "Opens the subscription screen, where purchases can also be restored." : {
+
+    },
+    "Opens the trail maker with this spot as the destination" : {
 
     },
     "Opens the trail, where the hike can be paused or ended." : {
@@ -1846,6 +1855,9 @@
 
     },
     "Places Nearby" : {
+
+    },
+    "Plan a Trail Here" : {
 
     },
     "Press and hold the map to add a stop, or tap a grey route to take it instead. Press and hold a stop to drag it somewhere else." : {

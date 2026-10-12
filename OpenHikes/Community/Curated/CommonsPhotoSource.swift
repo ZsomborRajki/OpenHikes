@@ -124,13 +124,21 @@ nonisolated struct WikimediaCommonsSource: CommonsPhotoSourcing {
 
     private let transport: Transport
     private let pause: Pause
+    /// What earlier searches learned about each file, or `nil` to keep
+    /// nothing — see ``CommonsPhotoStore``.
+    private let store: CommonsPhotoStore?
 
-    init(transport: Transport? = nil, pause: Pause? = nil) {
+    /// - Parameter store: `nil` keeps nothing, which is what a suite about the
+    ///   wire format wants and why it is the default here. The composition
+    ///   root hands the live source the one in `Caches` — see
+    ///   ``OpenHikesModel/makeTrailPhotoSource()``.
+    init(transport: Transport? = nil, pause: Pause? = nil, store: CommonsPhotoStore? = nil) {
         self.transport = transport ?? { request in
             let (data, response) = try await Self.session.data(for: request)
             return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
         }
         self.pause = pause ?? { try await Task.sleep(for: $0) }
+        self.store = store
     }
 
     @concurrent
@@ -154,7 +162,10 @@ nonisolated struct WikimediaCommonsSource: CommonsPhotoSourcing {
         )
         guard !shortlist.isEmpty else { return [] }
         try Task.checkCancellation()
-        let files = try await files(for: shortlist.map(\.pageID))
+        // Asked about by where the camera stood rather than the pin on the
+        // line, which is what ``CommonsPhotoStore`` files a page under.
+        let cameras = Dictionary(found.map { ($0.pageID, $0) }) { first, _ in first }
+        let files = try await files(for: shortlist.compactMap { cameras[$0.pageID] })
         let chosen = CommonsTrailPhotos.chosen(
             shortlist.filter { files[$0.pageID] != nil },
             authors: files.compactMapValues(\.credit.author),
@@ -184,7 +195,7 @@ nonisolated struct WikimediaCommonsSource: CommonsPhotoSourcing {
         // than before it: the page is what names a photograph, and the
         // geosearch knows only page ids. So a second tap over the same valley
         // offers the next photographs along rather than the same ones again.
-        let files = try await files(for: shortlist.map(\.pageID))
+        let files = try await files(for: shortlist)
             .filter { !shown.contains($0.value.credit.licence.sourceURL) }
         let chosen = CommonsAreaPhotos.chosen(
             shortlist.filter { files[$0.pageID] != nil },
@@ -199,28 +210,65 @@ nonisolated struct WikimediaCommonsSource: CommonsPhotoSourcing {
 // MARK: - The three steps
 
 nonisolated private extension WikimediaCommonsSource {
-    /// The files whose camera stood inside `area`, or none when the stretch
-    /// could not be asked about — logged, and the rest of the route goes on.
+    /// The files whose camera stood inside `area`.
+    ///
+    /// When the geosearch cannot be asked — busy twice, refused, offline —
+    /// these are the files earlier searches on this device found there, which
+    /// may be none. The failure is logged and the rest of the route goes on.
+    /// See ``CommonsPhotoStore`` for why a partial answer beats none here.
     func candidates(around area: CommunitySearchArea) async throws -> [CommonsPhotoCandidate] {
         do {
             return try await answer(CommonsPhotoQuery.geosearch(around: area)) { data in
                 try CommonsPhotoQuery.candidates(from: data)
             }
         } catch let error where !(error is CancellationError) {
+            let known = store?.pages(near: area, limit: CommonsPhotoQuery.geosearchLimit) ?? []
             Self.logger.info(
-                "A stretch of a route asked Commons nothing: \(error.localizedDescription, privacy: .public)"
+                """
+                A Commons geosearch failed, \(known.count) files known from before: \
+                \(error.localizedDescription, privacy: .public)
+                """
             )
-            return []
+            return known.map(\.candidate)
         }
     }
 
-    /// What Commons says about each of `pageIDs` that this app may show,
+    /// What Commons says about each of `candidates` that this app may show,
     /// keyed by page id.
-    func files(for pageIDs: [Int]) async throws -> [Int: CommonsFile] {
-        let files = try await answer(CommonsPhotoQuery.imageInfo(of: pageIDs)) { data in
-            try CommonsPhotoQuery.files(from: data)
+    ///
+    /// Only the pages ``CommonsPhotoStore`` has no answer for are asked
+    /// about, and their answers are written down — the ones this app may not
+    /// show as well. A request that fails costs the unknown pages and keeps
+    /// the known ones; it is thrown only when nothing was known, which is how
+    /// it behaved before anything was kept.
+    func files(for candidates: [CommonsPhotoCandidate]) async throws -> [Int: CommonsFile] {
+        var known: [Int: CommonsFile] = [:]
+        var unknown: [CommonsPhotoCandidate] = []
+        for candidate in candidates {
+            if let page = store?.page(candidate.pageID) {
+                known[candidate.pageID] = page.file
+            } else {
+                unknown.append(candidate)
+            }
         }
-        return Dictionary(files.map { ($0.pageID, $0) }) { first, _ in first }
+        guard !unknown.isEmpty else { return known }
+        let fetched: [CommonsFile]
+        do {
+            fetched = try await answer(CommonsPhotoQuery.imageInfo(of: unknown.map(\.pageID))) { data in
+                try CommonsPhotoQuery.files(from: data)
+            }
+        } catch let error where !(error is CancellationError) && !known.isEmpty {
+            Self.logger.info(
+                "Commons file details failed, showing known files: \(error.localizedDescription, privacy: .public)"
+            )
+            return known
+        }
+        let answered = Dictionary(fetched.map { ($0.pageID, $0) }) { first, _ in first }
+        // Only the pages that went out in the request: `imageInfo(of:)` asks
+        // about a batch at most, and a page past it was not answered *no*.
+        let asked = unknown.prefix(CommonsPhotoQuery.imageInfoBatch)
+        store?.save(asked.map { CommonsPage($0, file: answered[$0.pageID]) })
+        return known.merging(answered) { first, _ in first }
     }
 
     /// Each of `chosen`'s thumbnails, written into `directory`, in the order

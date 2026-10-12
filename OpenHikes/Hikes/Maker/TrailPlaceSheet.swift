@@ -111,7 +111,7 @@ private struct TrailPlaceCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
             if let photo = card.photo {
-                TrailPlacePhotoHeader(photo: photo, maker: maker, mapController: mapController)
+                TrailPlacePhotoHeader(photo: photo, gallery: { maker.photos.photos }, mapController: mapController)
             }
             header
             actions

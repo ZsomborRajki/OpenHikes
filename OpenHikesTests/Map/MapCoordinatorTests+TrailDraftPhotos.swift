@@ -71,7 +71,7 @@ extension MapCoordinatorTests {
 
         let first = drawn.first { $0.photo == photos[0] }
         let view = first.flatMap { coordinator.makerAnnotationView(for: $0, on: map) }
-        #expect(view is TrailDraftPhotoAnnotationView)
+        #expect(view is CommonsPhotoPinView)
         #expect(view?.accessibilityLabel == "Photo by Hiker 0 · CC0")
 
         coordinator.applyTrailDraftPhotos([], on: map)

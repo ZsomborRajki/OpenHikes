@@ -933,6 +933,41 @@ extension TrailDraftController {
     /// Whether either half of *Search this area* is out — the pill's spinner.
     var isSearchingArea: Bool { finder.isSearching || photos.isSearching }
 
+    /// *Plan a Trail Here*, on a Commons photograph the *Community* tab found:
+    /// where the camera stood becomes the destination, and the maker opens on
+    /// it. See ``CommonsPhotoView``.
+    ///
+    /// Into whatever is half-drawn rather than over it — the user's call of
+    /// 2026-10-12. An empty drawing gets a destination with its start left
+    /// open, as Apple Maps' Directions does, and so does one whose destination
+    /// field is still open. One that already ends somewhere ends here instead,
+    /// and the old end becomes the stop before it. The point is named like a
+    /// dropped pin, by its address, rather than from the file's title, for the
+    /// reason the maker's own photographs are — see ``TrailPlaceCard``.
+    ///
+    /// The photograph goes onto the maker's map with it, so a save whose line
+    /// passes it keeps it, credited — see ``TrailDraftPhotos/adopt(_:)``.
+    ///
+    /// Not gated on ``isAvailable``, for the reason ``edit(_:)`` is not: the
+    /// request comes from a pushed screen, and the push that follows replaces
+    /// it.
+    func plan(to photo: CommonsPhoto) {
+        guard let camera = photo.pin.coordinate else { return }
+        // A drawing left from an earlier launch is the one this joins, and it
+        // is otherwise only read back when the screen opens — after this.
+        restoreIfNeeded()
+        editLine {
+            if draft.slots.contains(.open(.end)) {
+                draft.fill(.end, with: camera)
+            } else {
+                draft.append(camera)
+            }
+        }
+        photos.adopt(photo)
+        selection = nil
+        openFeed.send(())
+    }
+
     /// Whether the pill can be tapped: the map is narrow enough, nothing is
     /// out, and there is something left to ask for — a kind of place, or
     /// photographs from a launch that can ask for them.

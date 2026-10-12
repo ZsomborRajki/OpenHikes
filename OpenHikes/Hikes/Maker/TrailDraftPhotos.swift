@@ -141,6 +141,33 @@ final class TrailDraftPhotos {
         directory = Self.freshDirectory(in: root)
     }
 
+    /// Takes a photograph found somewhere else onto this drawing's map — the
+    /// *Community* tab's, whose *Plan a Trail Here* made it the destination.
+    /// See ``TrailDraftController/plan(to:)``.
+    ///
+    /// The file is copied into this drawing's directory, off the main actor,
+    /// so it outlives the tab's next search, which deletes the one it came
+    /// from. Nothing happens for a photograph already here (by its Commons
+    /// page), or when the copy fails — the destination is still set, and the
+    /// picture is only missing from the map.
+    @discardableResult func adopt(_ photo: CommonsPhoto) -> Task<Void, Never> {
+        let page = photo.credit.licence.sourceURL
+        let target = directory
+        return Task { [weak self] in
+            guard self?.photos.contains(where: { $0.credit.licence.sourceURL == page }) == false,
+                  let copy = await Self.copy(photo.fileURL, into: target),
+                  let self,
+                  // Cleared while the copy was being made: the chip went
+                  // off, or the drawing was thrown away.
+                  target == directory,
+                  !photos.contains(where: { $0.credit.licence.sourceURL == page })
+            else { return }
+            var adopted = photo
+            adopted.fileURL = copy
+            photos.append(adopted)
+        }
+    }
+
     /// Hands the photographs the saved line passes to whatever copies them
     /// into the hike, and forgets them here without deleting their files —
     /// the hand-off owns those now. `nil` when the line passes none.
@@ -188,6 +215,20 @@ final class TrailDraftPhotos {
         let added = found.filter { !held.contains($0.fileURL) }
         guard !added.isEmpty else { return }
         photos += added
+    }
+
+    /// A copy of `file` in `directory`, or `nil` when it could not be made.
+    @concurrent
+    nonisolated private static func copy(_ file: URL, into directory: URL) async -> URL? {
+        let manager = FileManager.default
+        let copy = directory.appending(path: "adopted-\(UUID().uuidString)-\(file.lastPathComponent)")
+        do {
+            try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+            try manager.copyItem(at: file, to: copy)
+            return copy
+        } catch {
+            return nil
+        }
     }
 
     private static func freshDirectory(in root: URL) -> URL {
