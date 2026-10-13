@@ -255,7 +255,8 @@ extension MapView.Coordinator {
         ) else { return }
         appliedPhotoPinSelection = selection.token
         photoPinAwaitingSlide = nil
-        if selection.slidesIntoView, slideIntoView(annotation.coordinate, on: mapView) {
+        if selection.slidesIntoView,
+           slideIntoView(annotation.coordinate, on: mapView, clearance: Self.photoPinClearance) {
             // Opened when the map settles: a callout asked for mid-slide is
             // scrolled by MapKit against where the pin was, not where it is
             // going.
@@ -272,36 +273,6 @@ extension MapView.Coordinator {
         photoPinAwaitingSlide = nil
         guard photoAnnotations.contains(where: { $0 === annotation }) else { return }
         mapView.selectAnnotation(annotation, animated: true)
-    }
-
-    /// Slides the map, at the zoom it is at, so `coordinate` stands in the
-    /// middle of the part nothing is drawn over — or does nothing, and says
-    /// so, when it is already standing in it.
-    ///
-    /// The same slide *Add Place* makes under its pin — see
-    /// `MapPlacePlacement.swift` — measured on the map as drawn, so a map the
-    /// hiker has turned slides the right way. Only the camera's centre moves:
-    /// the hiker chose the zoom, and a page turn is not a request to change
-    /// it.
-    ///
-    /// A tilted map can put either end of that measurement past the horizon,
-    /// where MapKit answers with a non-finite point or an invalid coordinate —
-    /// and `setCenter` raises on an invalid one. Those pins are opened where
-    /// they stand instead, as they were before paging slid anything.
-    private func slideIntoView(_ coordinate: CLLocationCoordinate2D, on mapView: MKMapView) -> Bool {
-        let point = mapView.convert(coordinate, toPointTo: mapView)
-        guard point.x.isFinite, point.y.isFinite else { return false }
-        let area = focusArea(in: mapView)
-        let clear = area.insetBy(dx: Self.photoPinClearance, dy: Self.photoPinClearance)
-        guard !clear.isEmpty, !clear.contains(point) else { return false }
-        let centre = CGPoint(
-            x: mapView.bounds.midX + point.x - area.midX,
-            y: mapView.bounds.midY + point.y - area.midY
-        )
-        let target = mapView.convert(centre, toCoordinateFrom: mapView)
-        guard CLLocationCoordinate2DIsValid(target) else { return false }
-        mapView.setCenter(target, animated: true)
-        return true
     }
 
     /// How far inside the uncovered part of the map a pin has to stand to
