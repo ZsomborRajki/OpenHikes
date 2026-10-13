@@ -35,6 +35,11 @@ struct CommonsPhotoView: View {
     /// The address MapKit found, `nil` until it answers and for a spot it
     /// cannot place.
     @State private var address: String?
+    /// The photograph the map was last moved to, so the move is made once.
+    /// `.task` runs again when the full-screen viewer closes, and that
+    /// viewer's own *Show on Map* has just put the camera on whichever
+    /// picture it was paged to.
+    @State private var framed: URL?
 
     init(_ photo: CommonsPhoto, among found: CommunityCommonsPhotos, map: MapController, maker: TrailDraftController) {
         self.photo = photo
@@ -78,11 +83,16 @@ struct CommonsPhotoView: View {
         .softScrollEdgeEffect(for: .top)
         .accessibilityIdentifier("commons-photo-screen")
         .task(id: photo.fileURL) {
-            // Up from under the sheet, where a pin near the bottom of the
-            // search area would otherwise be hidden behind the screen it
-            // opened.
-            mapController.showPhotoSpot(camera)
-            address = nil
+            if framed != photo.fileURL {
+                framed = photo.fileURL
+                // Up from under the sheet, where a pin near the bottom of the
+                // search area would otherwise be hidden behind the screen it
+                // opened.
+                mapController.showPhotoSpot(camera)
+                address = nil
+            }
+            // Asked again only if the viewer opening cancelled the last ask.
+            guard address == nil else { return }
             address = await maker.address(at: camera)
         }
     }
