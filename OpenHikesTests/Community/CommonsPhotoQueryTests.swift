@@ -189,7 +189,8 @@ struct CommonsPhotoQueryTests {
                 "timestamp":"2007-03-24T18:36:20Z","width":2000,"mime":"image/jpeg",
                 "thumburl":"http://upload.wikimedia.org/plain.jpg",
                 "descriptionurl":"https://commons.wikimedia.org/wiki/File:Plain.jpg",
-                "extmetadata":{"LicenseShortName":{"value":"CC0"}}}]}
+                "extmetadata":{"LicenseShortName":{"value":"CC0"}}}]},
+            {"pageid":10,"ns":6,"title":"File:Unsaid.jpg"}
         ]}}
         """#.utf8
     )
@@ -198,6 +199,16 @@ struct CommonsPhotoQueryTests {
     func onlyUsablePhotographsAreKept() throws {
         let files = try CommonsPhotoQuery.files(from: Self.imageInfoAnswer, timeZone: Self.utc)
         #expect(files.map(\.pageID) == [1])
+    }
+
+    /// Every page but the last came back with details or as missing — each
+    /// an answer. The last came back with nothing, which is what an answer
+    /// Commons cut short leaves, and must not be written down as a *no*.
+    @Test("a page the answer says nothing about is not counted as answered")
+    func silentPagesAreNotAnswered() throws {
+        let answer = try CommonsPhotoQuery.imageInfo(from: Self.imageInfoAnswer, timeZone: Self.utc)
+        #expect(answer.files.map(\.pageID) == [1])
+        #expect(answer.answered == Set(1...9))
     }
 
     @Test("the kept photograph carries its author, its licence and both links")

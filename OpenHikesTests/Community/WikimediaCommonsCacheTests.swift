@@ -37,27 +37,32 @@ struct WikimediaCommonsCacheTests {
             return Data(#"{"batchcomplete":true,"query":{"geosearch":[\#(hits.joined(separator: ","))]}}"#.utf8)
         }()
 
-        /// Details for the first two only: the third is a file this app may
-        /// not show, which Commons answers by leaving it out.
-        static let imageInfo: Data = {
-            let pages = cameras.prefix(2).map { camera in
-                """
+        /// Details for all three, the third a drawing this app may not show
+        /// — and nothing at all for any page in `silent`, as an answer cut
+        /// short by Commons' own limits leaves it.
+        static func imageInfo(silentAbout silent: Set<Int>) -> Data {
+            let pages = cameras.filter { !silent.contains($0.id) }.map { camera in
+                let mime = camera.id == 3 ? "image/svg+xml" : "image/jpeg"
+                return """
                 {"pageid":\(camera.id),"ns":6,"title":"File:\(camera.id).jpg","imageinfo":[{\
-                "timestamp":"2020-06-0\(camera.id)T10:00:00Z","width":3000,"mime":"image/jpeg",\
+                "timestamp":"2020-06-0\(camera.id)T10:00:00Z","width":3000,"mime":"\(mime)",\
                 "thumburl":"https://upload.wikimedia.org/thumb/\(camera.id)/960px-\(camera.id).jpg",\
                 "descriptionurl":"https://commons.wikimedia.org/wiki/File:\(camera.id).jpg",\
                 "extmetadata":{"Artist":{"value":"Hiker \(camera.id)"},"LicenseShortName":{"value":"CC BY 4.0"}}}]}
                 """
             }
-            return Data(#"{"batchcomplete":true,"query":{"pages":[\#(pages.joined(separator: ","))]}}"#.utf8)
-        }()
+            let unsaid = silent.sorted().map { #"{"pageid":\#($0),"ns":6,"title":"File:\#($0).jpg"}"# }
+            return Data(#"{"batchcomplete":true,"query":{"pages":[\#((pages + unsaid).joined(separator: ","))]}}"#.utf8)
+        }
     }
 
     /// Commons, answering from memory, writing down what it was asked, and
-    /// refusing whichever question it is told to.
+    /// refusing whichever question it is told to — or answering one with
+    /// nothing about some of its pages.
     nonisolated private final class StubCommons: Sendable {
         private let asked = Mutex<[URL]>([])
         private let refusing = Mutex<Set<String>>([])
+        private let silent = Mutex<Set<Int>>([])
 
         var requests: [URL] { asked.withLock { $0 } }
 
@@ -69,6 +74,10 @@ struct WikimediaCommonsCacheTests {
             refusing.withLock { _ = $0.insert(marker) }
         }
 
+        func sayNothing(about pageID: Int) {
+            silent.withLock { _ = $0.insert(pageID) }
+        }
+
         var transport: WikimediaCommonsSource.Transport {
             { [self] request in
                 let url = request.url ?? URL(filePath: "/")
@@ -76,7 +85,9 @@ struct WikimediaCommonsCacheTests {
                 let text = url.absoluteString
                 if refusing.withLock({ $0.contains { text.contains($0) } }) { return (Data(), 503) }
                 if text.contains("list=geosearch") { return (Answers.geosearch, 200) }
-                if text.contains("prop=imageinfo") { return (Answers.imageInfo, 200) }
+                if text.contains("prop=imageinfo") {
+                    return (Answers.imageInfo(silentAbout: silent.withLock { $0 }), 200)
+                }
                 return (PhotoDiscoveryFixture.sampleImageData(), 200)
             }
         }
@@ -135,6 +146,30 @@ struct WikimediaCommonsCacheTests {
         let kept = try #require(scratch.store.page(3))
         #expect(kept.file == nil)
         #expect(kept.latitude == Answers.cameras[2].latitude)
+    }
+
+    /// What an answer cut short leaves: the page asked about, and nothing
+    /// said about it. Not a *no*, so the next search asks again and can find
+    /// the photograph it is.
+    @Test("a page the answer says nothing about is not remembered, and is asked about again")
+    func silentPagesAreAskedAgain() async throws {
+        let commons = StubCommons()
+        let scratch = Scratch()
+        let source = Self.source(commons, scratch)
+        commons.sayNothing(about: 2)
+
+        let first = try await source.photos(in: Self.area, avoiding: [], downloadingInto: scratch.downloads())
+        #expect(first.map(\.credit.author) == ["Hiker 1"])
+        #expect(scratch.store.page(2) == nil, "not written down as a page this app may not show")
+        #expect(scratch.store.page(3) != nil, "while the drawing Commons did answer about is")
+
+        let again = StubCommons()
+        let second = try await Self.source(again, scratch)
+            .photos(in: Self.area, avoiding: [], downloadingInto: scratch.downloads())
+
+        #expect(Set(second.compactMap(\.credit.author)) == ["Hiker 1", "Hiker 2"])
+        let asked = try #require(again.requests.first { $0.absoluteString.contains(Self.imageInfo) })
+        #expect(asked.absoluteString.contains("pageids=2"), "only the page left unanswered goes out")
     }
 
     @Test("a geosearch that fails falls back to the files found there before")
