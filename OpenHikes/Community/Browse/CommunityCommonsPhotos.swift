@@ -43,7 +43,9 @@
 //  Like the maker's, the downloads live in a directory under the temporary
 //  directory: a fresh one per answer, the one before kept until the next
 //  lands — a photograph's screen may still be reading it — and all of them
-//  swept at the next launch. What Commons *said* about the files is kept, for thirty days —
+//  swept at the next launch. Every answer's directory is inside one of this
+//  launch's own, because the sweep runs while the first search may already
+//  be writing, and it can only keep what it knows the name of. What Commons *said* about the files is kept, for thirty days —
 //  see ``CommonsPhotoStore``.
 //
 
@@ -73,8 +75,9 @@ final class CommunityCommonsPhotos {
     /// aside while it is up — see `MapCommunityCommonsPhotos.swift`.
     @ObservationIgnored private let isHidden: () -> Bool
     @ObservationIgnored private var task: Task<Void, Never>?
-    /// Where every launch's directories go — see the file header.
-    @ObservationIgnored private let root: URL
+    /// This launch's directory, which every answer's goes inside — see the
+    /// file header for why.
+    @ObservationIgnored private let launch: URL
     /// The directory ``photos`` are in.
     @ObservationIgnored private(set) var directory: URL
     /// The answer before, kept until the next one lands: a photograph's
@@ -97,11 +100,11 @@ final class CommunityCommonsPhotos {
         self.source = source
         self.filter = filter
         self.isHidden = isHidden
-        self.root = root
-        directory = Self.freshDirectory(in: root)
+        launch = Self.freshDirectory(in: root)
+        directory = Self.freshDirectory(in: launch)
         // One with nowhere to ask writes nothing, and every suite's browser
         // is one of those, so it leaves the directory to the one that does.
-        if source != nil { Self.sweep(root, keeping: directory) }
+        if source != nil { Self.sweep(root, keeping: launch) }
     }
 
     nonisolated deinit { /* intentionally empty */ }
@@ -132,7 +135,7 @@ final class CommunityCommonsPhotos {
         isSearching = true
         // A directory per search, so a superseded one still writing cannot
         // put a file beside the answer that replaced it.
-        let target = Self.freshDirectory(in: root)
+        let target = Self.freshDirectory(in: launch)
         task = Task { [weak self] in
             let found: [CommonsPhoto]
             do {
@@ -162,7 +165,7 @@ final class CommunityCommonsPhotos {
         Self.remove(directory)
         if let retired { Self.remove(retired) }
         retired = nil
-        directory = Self.freshDirectory(in: root)
+        directory = Self.freshDirectory(in: launch)
     }
 
     /// Waits for the search that is out, if any — the effect a suite waits on.
