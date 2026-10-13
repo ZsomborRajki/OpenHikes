@@ -268,7 +268,8 @@ nonisolated private extension WikimediaCommonsSource {
     ///
     /// Only the pages ``CommonsPhotoStore`` has no answer for are asked
     /// about, and their answers are written down — the ones this app may not
-    /// show as well. A request that fails costs the unknown pages and keeps
+    /// show as well, but only the ones Commons actually answered about; see
+    /// ``CommonsImageInfo``. A request that fails costs the unknown pages and keeps
     /// the known ones; it is thrown only when nothing was known, which is how
     /// it behaved before anything was kept.
     func files(for candidates: [CommonsPhotoCandidate]) async throws -> [Int: CommonsFile] {
@@ -282,10 +283,10 @@ nonisolated private extension WikimediaCommonsSource {
             }
         }
         guard !unknown.isEmpty else { return known }
-        let fetched: [CommonsFile]
+        let fetched: CommonsImageInfo
         do {
             fetched = try await answer(CommonsPhotoQuery.imageInfo(of: unknown.map(\.pageID))) { data in
-                try CommonsPhotoQuery.files(from: data)
+                try CommonsPhotoQuery.imageInfo(from: data)
             }
         } catch let error where !(error is CancellationError) && !known.isEmpty {
             Self.logger.info(
@@ -293,11 +294,12 @@ nonisolated private extension WikimediaCommonsSource {
             )
             return known
         }
-        let answered = Dictionary(fetched.map { ($0.pageID, $0) }) { first, _ in first }
-        // Only the pages that went out in the request: `imageInfo(of:)` asks
-        // about a batch at most, and a page past it was not answered *no*.
-        let asked = unknown.prefix(CommonsPhotoQuery.imageInfoBatch)
-        store?.save(asked.map { CommonsPage($0, file: answered[$0.pageID]) })
+        let answered = Dictionary(fetched.files.map { ($0.pageID, $0) }) { first, _ in first }
+        // Only the pages the answer spoke about. One past the batch
+        // `imageInfo(of:)` sends was never asked, and one the answer is
+        // silent about was asked and not answered — neither is a *no*.
+        let spoken = unknown.filter { fetched.answered.contains($0.pageID) }
+        store?.save(spoken.map { CommonsPage($0, file: answered[$0.pageID]) })
         return known.merging(answered) { first, _ in first }
     }
 
