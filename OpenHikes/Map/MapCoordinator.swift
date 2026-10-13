@@ -444,15 +444,7 @@ extension MapView {
             reobserving(self, mapView, controller) {
                 _ = controller.showRegionRequest
             } onChange: { coordinator, map, model in
-                if let region = model.region {
-                    // Through the coordinator rather than `setRegion`, so a
-                    // searched place and a photograph's pin land in the map
-                    // the hiker can see rather than in the window — see
-                    // `MapCoordinator+RouteFitting.swift`. `setRegion` has no
-                    // edge padding at all, which is what put a result's
-                    // centre behind the sheet.
-                    coordinator.show(region, on: map, animated: true)
-                }
+                coordinator.applyRegionRequest(of: model, on: map)
                 coordinator.observeShowRegion(model, on: map)
             }
         }
