@@ -227,6 +227,7 @@ extension OpenHikesModel {
             // recents in the scratch domain rather than the developer's.
             recents: TrailStopRecents(defaults: defaults),
             placeFilter: TrailPlaceFilter(defaults: defaults),
+            photos: TrailDraftPhotos(source: Self.makeTrailPhotoSource()),
             // The same answer the elevation source asks before it spends a
             // call, read through the store so a purchase repaints the line.
             elevationUnlocked: { entitlement.isEntitled }
@@ -323,6 +324,25 @@ extension OpenHikesModel {
         #endif
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
         return TrailPointSource()
+    }
+
+    /// Where the maker's *Search this area* asks for photographs, or `nil`
+    /// for a launch that must not ask.
+    ///
+    /// The guard ``makeTrailPointSource()`` makes, beside it and on its terms:
+    /// Wikimedia's API is run for everybody on donations, and a suite that
+    /// fell into it would be spending its patience on a stub's worth of
+    /// pictures. The one way past it is the same scenario name, so a launch
+    /// that seeds the places seeds the photographs with them — see
+    /// ``SeededCommonsPhotoSource``.
+    static func makeTrailPhotoSource() -> (any CommonsPhotoSourcing)? {
+        #if DEBUG
+        if SeededTrailPointSource.Scenario(argument: AppLaunchEnvironment.trailPointScenarioName) == .seeded {
+            return SeededCommonsPhotoSource()
+        }
+        #endif
+        guard !AppLaunchEnvironment.isRunningTests else { return nil }
+        return WikimediaCommonsSource()
     }
 }
 
@@ -571,12 +591,19 @@ private extension OpenHikesModel {
         ) {
             let seeded = SeededCommunityTransport(scenario: scenario)
             guard scenario.servesCuratedTrails else { return seeded }
+            // Photographs for the scenario that asks for them and no other —
+            // see ``SeededCommunityTransport/Scenario/commons`` for why
+            // `curated` is not it.
+            let commons: any CommonsPhotoSourcing = scenario == .commons
+                ? SeededCommonsPhotoSource()
+                : DormantCommonsPhotoSource()
             return MergedCommunityTransport(
                 published: seeded,
                 curated: SeededCuratedTrailSource(showcase: scenario == .showcase),
                 // Heights that reached no network either, so the chart a
                 // curated hike now draws is reachable from automation.
-                elevation: SeededElevationSource()
+                elevation: SeededElevationSource(),
+                commons: commons
             )
         }
         #endif
@@ -587,7 +614,9 @@ private extension OpenHikesModel {
             // The one launch that may spend a billable call: a real one, with
             // a key. Every other path here keeps the dormant default — see
             // ``MergedCommunityTransport/elevation``.
-            elevation: StadiaElevationSource()
+            elevation: StadiaElevationSource(),
+            // The one launch that asks Wikimedia, for the same reason.
+            commons: WikimediaCommonsSource()
         )
     }
 

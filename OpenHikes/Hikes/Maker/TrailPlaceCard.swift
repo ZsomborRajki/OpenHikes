@@ -42,13 +42,23 @@ struct TrailPlaceCard: Equatable {
     /// Whether this is the dropped pin's card — the one whose *Add Stop* also
     /// takes the pin away, since it has become the stop.
     var isDroppedPin = false
+    /// The Commons photograph this card is about, drawn at its head with its
+    /// credit, or `nil` for every other card.
+    var photo: CommonsPhoto?
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
+    /// - Parameter photos: What *Search this area* has found, which a
+    ///   photograph's card is resolved against — see ``TrailDraftPhotos``.
     @MainActor
-    init?(_ selection: TrailDraftSelection, in draft: TrailDraft, droppedPin: TrailDraftDroppedPinSpot?) {
+    init?(
+        _ selection: TrailDraftSelection,
+        in draft: TrailDraft,
+        droppedPin: TrailDraftDroppedPinSpot?,
+        photos: [CommonsPhoto] = []
+    ) {
         switch selection {
         case .droppedPin:
             guard let spot = droppedPin else { return nil }
@@ -93,6 +103,25 @@ struct TrailPlaceCard: Equatable {
             latitude = waypoint.latitude
             longitude = waypoint.longitude
             primary = .removeStop(id)
+        case .photo(let url):
+            guard let found = photos.first(where: { $0.fileURL == url }),
+                  let camera = found.pin.coordinate
+            else { return nil }
+            photo = found
+            title = String(localized: "Photo")
+            subtitle = [
+                String(localized: "Taken \(found.pin.capturedAt.formatted(date: .abbreviated, time: .omitted))"),
+                String(localized: "Wikimedia Commons"),
+            ].joined(separator: " · ")
+            systemImage = "photo"
+            tint = .purple
+            // Where the camera stood, which is the spot the picture is of the
+            // view *from* — the one a hiker walks to.
+            latitude = camera.latitude
+            longitude = camera.longitude
+            // Named by its address once it is a stop, as a dropped pin is: a
+            // Commons file name is a camera's `IMG_2041` as often as a place.
+            primary = .addStop(name: "", preferredLeg: nil)
         }
     }
 

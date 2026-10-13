@@ -60,7 +60,7 @@ import Observation
 import OpenHikesData
 
 /// What the place sheet is about: the dropped pin, one of the trail's places,
-/// or one of its stops.
+/// one of its stops, or a photograph *Search this area* found.
 ///
 /// Held by the controller because the map raises it and the sheet — a screen
 /// inside the map's sheet — presents it, and neither can see the other.
@@ -69,6 +69,10 @@ nonisolated enum TrailDraftSelection: Equatable, Sendable {
     /// ``TrailDraftController/droppedPin``, which is where it is. Not part of
     /// the trail until *Add Stop*.
     case droppedPin
+    /// A Wikimedia Commons photograph, by its downloaded copy — see
+    /// ``TrailDraftPhotos/photo(at:)``. Not part of the trail either; its
+    /// *Add Stop* puts a stop where the camera stood.
+    case photo(URL)
     case place(UUID)
     case stop(UUID)
 }
@@ -121,6 +125,14 @@ final class TrailDraftController {
     /// only that three places that cannot see each other read it — see
     /// ``TrailPointFinder``.
     let finder: TrailPointFinder
+
+    /// The Wikimedia Commons photographs of the areas searched, and the same
+    /// pill's question to Commons.
+    ///
+    /// Held here for the reason ``finder`` is and on its terms: nothing it
+    /// holds is written down or restored. What a save takes from it is handed
+    /// over rather than read — see ``TrailDraftPhotos/handOff(along:)``.
+    let photos: TrailDraftPhotos
 
     /// What the line climbs and drops, asked for once the drawing settles.
     ///
@@ -266,6 +278,7 @@ final class TrailDraftController {
         travelRouters: [TrailTravelMode: any TrailLegRouting] = [:],
         recents: TrailStopRecents? = nil,
         placeFilter: TrailPlaceFilter? = nil,
+        photos: TrailDraftPhotos? = nil,
         elevationUnlocked: @escaping () -> Bool = { true }
     ) {
         self.store = store
@@ -275,6 +288,7 @@ final class TrailDraftController {
         let drawing = TrailDraft()
         draft = drawing
         finder = TrailPointFinder(source: placeSource, filter: placeFilter ?? TrailPlaceFilter(defaults: nil))
+        self.photos = photos ?? TrailDraftPhotos()
         elevation = elevationPause.map { pause in
             TrailDraftElevation(draft: drawing, source: elevationSource, pause: pause)
         } ?? TrailDraftElevation(draft: drawing, source: elevationSource)
@@ -353,6 +367,10 @@ final class TrailDraftController {
             // A search in flight has no screen left to add to, and the sheet
             // it would be read on is gone. See ``TrailPointFinder/clear()``.
             finder.clear()
+            // The photographs already found stay, as the places do: a hiker
+            // who opens a hike over the maker and comes back finds them where
+            // they were.
+            photos.cancelSearch()
             selection = nil
             droppedPin = nil
             // A height question is cancelled on the way out too:
@@ -384,6 +402,8 @@ final class TrailDraftController {
         if editingHikeID != hike.id {
             cancelRouting()
             finder.clear()
+            // Photographs of wherever the last drawing was.
+            photos.clear()
             forgetMeasurements()
             namer.clear()
             selection = nil
@@ -538,6 +558,11 @@ final class TrailDraftController {
         if selection == .droppedPin, droppedPin == nil { return }
         // A place whose pin is hidden has nothing on the map to be about.
         if case .place = selection, !finder.filter.placesShown { return }
+        // Nor a photograph whose pin is hidden, or that is no longer found.
+        if case .photo(let url) = selection,
+           !finder.filter.placesShown || !finder.filter.photosShown || photos.photo(at: url) == nil {
+            return
+        }
         self.selection = selection
     }
 
@@ -583,61 +608,6 @@ final class TrailDraftController {
     /// is none or no way to ask.
     func address(at coordinate: CLLocationCoordinate2D) async -> String? {
         await geocoder?.mapItem(at: coordinate).flatMap(TrailStopName.address(of:))
-    }
-
-    // MARK: - Places from OpenStreetMap
-
-    /// Asks what is on the ground near the drawing: what the maker's *Search
-    /// this area* pill runs. What comes back is added to the trail — see
-    /// ``TrailPointFinder``.
-    ///
-    /// Guarded on ``isEditing`` like every mutation here: the pill is on the
-    /// map, the map's controls outlive the screen they belong to by the length
-    /// of a pop animation, and a search that landed after the maker closed
-    /// would be places added to a drawing nobody is looking at.
-    func searchNearbyPlaces() {
-        guard isEditing, finder.filter.placesShown else { return }
-        finder.search(along: draft.routeCoordinates, avoiding: draft.places)
-    }
-
-    /// Turns one of *Search this area*'s kinds on or off — a switch on the
-    /// maker's screen.
-    ///
-    /// Off also takes every place of that kind off the trail, so the map
-    /// matches the switch at once rather than at the next search; on brings
-    /// nothing back, and the next search is what does. The choice itself is
-    /// kept whether or not the maker is up — it is about every trail, not this
-    /// one — but the drawing is only touched while it is, like every other
-    /// mutation here.
-    func setShowsPlaces(_ shows: Bool, of symbol: TrailPlaceSymbol) {
-        finder.filter.setShows(shows, symbol)
-        guard !shows, isEditing else { return }
-        let removed = draft.removePlaces(drawnAs: symbol)
-        guard !removed.isEmpty else { return }
-        if case .place(let id) = selection, removed.contains(id) { selection = nil }
-        persist()
-    }
-
-    /// Shows the trail's places or hides them — the switch beside *Search
-    /// This Area*.
-    ///
-    /// Off hides rather than removes: the places stay on the drawing and on
-    /// disk, so on brings every one of them back. What off does take away is
-    /// everything that would act on them — a search still out, whose answer
-    /// would land on pins nobody can see, and a place card about one of them.
-    /// A save made while it is off attaches none of them; see
-    /// ``TrailDraftSave``.
-    func setPlacesShown(_ shown: Bool) {
-        finder.filter.setPlacesShown(shown)
-        guard !shown else { return }
-        finder.clear()
-        if case .place = selection { selection = nil }
-    }
-
-    private func addPlaces(_ places: [TrailPlace]) {
-        guard isEditing else { return }
-        draft.addPlaces(places)
-        persist()
     }
 
     // MARK: - A point under a finger
@@ -706,6 +676,10 @@ final class TrailDraftController {
         // A search still out would land on the emptied drawing and write its
         // places down as a new one, which the next opening would restore.
         finder.clear()
+        // And the photographs go with the drawing they were found for — a
+        // save has already taken the ones it keeps. See
+        // ``TrailDraftPhotos/handOff(along:)``.
+        photos.clear()
         draft.clear()
         store?.clear()
         // The heights go with the line they were read for. Nothing else would
@@ -927,5 +901,101 @@ extension TrailDraftController {
         )
         editingHikeID = stored.editingHikeID
         editingPlaceIDs = Set(stored.editingPlaceIDs)
+    }
+}
+
+// MARK: - Places and photographs from *Search this area*
+
+// An extension in the same file for the reason the one above is one.
+extension TrailDraftController {
+    /// Asks what is on the ground near the drawing: what the maker's *Search
+    /// this area* pill runs. What comes back is added to the trail — see
+    /// ``TrailPointFinder``.
+    ///
+    /// Guarded on ``isEditing`` like every mutation here: the pill is on the
+    /// map, the map's controls outlive the screen they belong to by the length
+    /// of a pop animation, and a search that landed after the maker closed
+    /// would be places added to a drawing nobody is looking at.
+    ///
+    /// And, with the *Photos* chip on, what Wikimedia Commons has photographed
+    /// in the same area — one tap, two questions, each to its own service and
+    /// each landing on its own. See ``TrailDraftPhotos``.
+    func searchNearbyPlaces() {
+        guard isEditing, finder.filter.placesShown, canSearchArea else { return }
+        if !finder.filter.shown.isEmpty {
+            finder.search(along: draft.routeCoordinates, avoiding: draft.places)
+        }
+        if finder.filter.photosShown, let area = finder.searchableArea {
+            photos.search(in: area)
+        }
+    }
+
+    /// Whether either half of *Search this area* is out — the pill's spinner.
+    var isSearchingArea: Bool { finder.isSearching || photos.isSearching }
+
+    /// Whether the pill can be tapped: the map is narrow enough, nothing is
+    /// out, and there is something left to ask for — a kind of place, or
+    /// photographs from a launch that can ask for them.
+    var canSearchArea: Bool {
+        finder.searchableArea != nil && !isSearchingArea
+            && (!finder.filter.shown.isEmpty || (finder.filter.photosShown && photos.isAvailable))
+    }
+
+    /// Turns the *Photos* chip on or off.
+    ///
+    /// Off forgets the photographs found and deletes their files, as a kind
+    /// switched off takes its pins away; on brings nothing back, and the next
+    /// search is what does. Kept whether or not the maker is up, like the
+    /// kinds.
+    func setShowsPhotos(_ shows: Bool) {
+        finder.filter.setPhotosShown(shows)
+        guard !shows else { return }
+        photos.clear()
+        if case .photo = selection { selection = nil }
+    }
+
+    /// Turns one of *Search this area*'s kinds on or off — a switch on the
+    /// maker's screen.
+    ///
+    /// Off also takes every place of that kind off the trail, so the map
+    /// matches the switch at once rather than at the next search; on brings
+    /// nothing back, and the next search is what does. The choice itself is
+    /// kept whether or not the maker is up — it is about every trail, not this
+    /// one — but the drawing is only touched while it is, like every other
+    /// mutation here.
+    func setShowsPlaces(_ shows: Bool, of symbol: TrailPlaceSymbol) {
+        finder.filter.setShows(shows, symbol)
+        guard !shows, isEditing else { return }
+        let removed = draft.removePlaces(drawnAs: symbol)
+        guard !removed.isEmpty else { return }
+        if case .place(let id) = selection, removed.contains(id) { selection = nil }
+        persist()
+    }
+
+    /// Shows the trail's places or hides them — the switch beside *Search
+    /// This Area*.
+    ///
+    /// Off hides rather than removes: the places stay on the drawing and on
+    /// disk, so on brings every one of them back. What off does take away is
+    /// everything that would act on them — a search still out, whose answer
+    /// would land on pins nobody can see, and a place card about one of them.
+    /// A save made while it is off attaches none of them; see
+    /// ``TrailDraftSave``.
+    func setPlacesShown(_ shown: Bool) {
+        finder.filter.setPlacesShown(shown)
+        guard !shown else { return }
+        finder.clear()
+        // The photographs are hidden with the places, and kept like them.
+        photos.cancelSearch()
+        switch selection {
+        case .place, .photo: selection = nil
+        default: break
+        }
+    }
+
+    private func addPlaces(_ places: [TrailPlace]) {
+        guard isEditing else { return }
+        draft.addPlaces(places)
+        persist()
     }
 }

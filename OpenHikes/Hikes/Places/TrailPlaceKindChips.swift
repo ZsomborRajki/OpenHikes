@@ -13,6 +13,11 @@
 //  `onChange`: the maker also takes that kind's pins off the drawing — see
 //  ``TrailDraftController/setShowsPlaces(_:of:)``.
 //
+//  The maker adds one more at the end, *Photos*, which is not a kind of place
+//  but sits with them because it is the same tap's other question — see
+//  ``TrailPlaceFilter/photosShown``. *Places Around Trail* asks no such thing,
+//  so it passes no `onPhotosChange` and draws no such chip.
+//
 //  Its own `View` so a tap redraws the chips and not the screen around them —
 //  the reason ``TrailDraftSnapToggle`` is one.
 //
@@ -25,12 +30,18 @@ struct TrailPlaceKindChips: View {
     /// What a tap does, or `nil` to switch the kind on the filter and nothing
     /// else.
     var onChange: ((TrailPlaceSymbol, Bool) -> Void)?
+    /// What a tap on the *Photos* chip does, or `nil` for a screen that has
+    /// no such chip.
+    var onPhotosChange: ((Bool) -> Void)?
 
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 ForEach(TrailPointQuery.searchableSymbols, id: \.self) { kind in
                     chip(kind, isOn: filter.shows(kind))
+                }
+                if let onPhotosChange {
+                    photosChip(isOn: filter.photosShown, onChange: onPhotosChange)
                 }
             }
             .padding(.vertical, 2)
@@ -56,6 +67,27 @@ struct TrailPlaceKindChips: View {
         .buttonBorderShape(.capsule)
         .accessibilityAddTraits(isOn ? .isSelected : [])
         .accessibilityIdentifier("trail-place-kind-\(kind.rawValue)")
+    }
+
+    /// Drawn as a kind is, in a colour no kind wears.
+    @ViewBuilder
+    private func photosChip(isOn: Bool, onChange: @escaping (Bool) -> Void) -> some View {
+        let label = Label("Photos", systemImage: "photo.on.rectangle")
+            .font(.subheadline.weight(.medium))
+        Group {
+            if isOn {
+                Button { onChange(false) } label: { label }
+                    .prominentGlassButtonStyle()
+                    .tint(.purple)
+            } else {
+                Button { onChange(true) } label: { label }
+                    .glassButtonStyle()
+            }
+        }
+        .buttonBorderShape(.capsule)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+        .accessibilityHint("Also finds photos from Wikimedia Commons")
+        .accessibilityIdentifier("trail-place-kind-photos")
     }
 
     private func set(_ kind: TrailPlaceSymbol, shown: Bool) {

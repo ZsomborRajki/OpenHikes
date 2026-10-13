@@ -29,6 +29,11 @@
 //  the hike's ``Hike/importedAuthorName`` names whoever published the walk,
 //  which for a contributed picture is the wrong person.
 //
+//  A curated route's Wikimedia Commons photographs come too, and they are the
+//  same argument a third time: the strip showed them, so the saved hike holds
+//  them — credited, under the licence each came with, and stamped so that no
+//  form ever offers one for publishing. See ``CommonsPhoto``.
+//
 //  This used to copy only the author's own submission, and that was wrong in
 //  the one way a hiker could see. The trail's preview draws the two sets
 //  merged, deliberately — a hiker looking at a trail is looking at pictures of
@@ -248,7 +253,8 @@ nonisolated enum CommunityImport {
     }
 
     /// Copies the downloaded photographs into this hiker's own store: the
-    /// hike author's, and then everybody else's.
+    /// hike author's, then everybody else's, then a curated route's Wikimedia
+    /// Commons photographs.
     ///
     /// **What the saved hike holds is what the preview drew.** The strip on
     /// that screen merges the submission's photographs and the contributed
@@ -304,6 +310,14 @@ nonisolated enum CommunityImport {
         // pictures that are perfectly well described because somebody else's
         // are not.
         await attachContributedPhotos(
+            of: detail,
+            to: hike,
+            copy: &copy,
+            store: store,
+            libraryWriter: libraryWriter,
+            save: save
+        )
+        await attachCommonsPhotos(
             of: detail,
             to: hike,
             copy: &copy,
@@ -463,6 +477,63 @@ nonisolated enum CommunityImport {
         }
     }
 
+    /// The Wikimedia Commons photographs of a curated route.
+    ///
+    /// Copied for the reason the other two sets are: the strip the hiker
+    /// pressed *Add to My Hikes* under showed them, and a saved hike holding
+    /// fewer pictures than that screen is a loss nothing on it accounts for.
+    ///
+    /// Three things are stamped on each copy, and each is owed by the licence
+    /// the picture came under rather than chosen here. **The listing**, so
+    /// ``HikePhoto/isOwn`` is false and no form ever offers it for publishing
+    /// — it is somebody else's photograph, and the licence lets this hiker
+    /// keep and look at it, not send it on under their name. **The author**,
+    /// on ``HikePhoto/importedAuthorName``, as for a contributed picture.
+    /// **The licence and its links**, on ``HikePhoto/licence``, so the saved
+    /// hike's own gallery can go on giving the credit the preview gave — see
+    /// ``PhotoLicenceCredit``.
+    ///
+    /// Each one is stamped as its own set of one, because the credit differs
+    /// from picture to picture where a contribution's is the set's. And each
+    /// is placed by ``PhotoMatchEvidence/place`` — the camera's own position,
+    /// snapped onto the route — which is exactly how it was pinned.
+    @MainActor
+    private static func attachCommonsPhotos(
+        of detail: CommunityHikeDetail,
+        to hike: Hike,
+        copy: inout CommunityPhotoCopy,
+        store: HikePhotoStore,
+        libraryWriter: any PhotoLibraryWriting,
+        save: (ModelContext) throws -> Void
+    ) async {
+        let photos = detail.commonsPhotos
+        let pending = copy.pending(
+            photos.map { ($0.pin, $0.fileURL) },
+            from: CommunityPhotoCopy.commonsSet
+        )
+        var landed: Set<CommunityPhotoCopy.Source> = []
+        for photo in pending {
+            let credit = photos[photo.source.index].credit
+            landed.formUnion(
+                await attachSet(
+                    [photo],
+                    stampedAs: Stamp(
+                        listingID: detail.listing.id,
+                        authorName: credit.author,
+                        places: [:],
+                        licence: credit.licence,
+                        evidence: .place
+                    ),
+                    to: hike,
+                    store: store,
+                    libraryWriter: libraryWriter,
+                    save: save
+                )
+            )
+        }
+        copy.attempted(pending, landed: landed)
+    }
+
     /// How a copied photograph is stamped: the listing it came from, and who
     /// took it where that is somebody other than the hike's own author.
     private struct Stamp {
@@ -475,6 +546,12 @@ nonisolated enum CommunityImport {
         /// A photograph whose pin names a place not in here is filed under
         /// none.
         let places: [UUID: UUID]
+        /// The open licence a Wikimedia Commons photograph came under, and
+        /// `nil` for everything published on this app.
+        var licence: HikePhotoLicence?
+        /// How the pin was arrived at, for a photograph whose pin this app
+        /// worked out — `nil` for the ones that arrived with their own.
+        var evidence: PhotoMatchEvidence?
     }
 
     /// Copies one paired set of pins and files onto the hike, whoever took
@@ -526,6 +603,7 @@ nonisolated enum CommunityImport {
                 // Never the hiker's setting — see this file's header.
                 savesToPhotoLibrary: false,
                 capturedAt: pin.capturedAt,
+                matchEvidence: stamp.evidence,
                 // Stamped as somebody else's, which is the one thing that
                 // keeps it out of a contribution back to the same trail: the
                 // saved hike is exactly the one the *Add Photos* form opens
@@ -533,6 +611,7 @@ nonisolated enum CommunityImport {
                 // author's own pictures. See ``HikePhoto/importedFromListingID``.
                 importedFromListingID: stamp.listingID,
                 importedAuthorName: stamp.authorName,
+                licence: stamp.licence,
                 placeID: pin.placeID.flatMap { stamp.places[$0] },
                 store: store,
                 libraryWriter: libraryWriter,

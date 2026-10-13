@@ -9,6 +9,9 @@
 //  under *Follow Paths*, and where a hiker who never wants parking pins says
 //  so once — see ``TrailPlaceFilter`` for why the choice is app-wide.
 //
+//  The *Photos* chip is the maker's own, after the kinds — see
+//  ``TrailPlaceFilter/photosShown``.
+//
 //  The switch beside the heading is the one above the kinds: off hides the
 //  trail's places, withdraws the pill and keeps them out of the save — see
 //  ``TrailPlaceFilter/placesShown``. The chips go with it, because there is
@@ -33,9 +36,13 @@ struct TrailPlaceFilterSection: View {
             // app-wide choice — see ``TrailPlaceKindChips``. Here a kind
             // switched off also leaves the drawing.
             if placesShown {
-                TrailPlaceKindChips(filter: filter) { symbol, shows in
-                    maker.setShowsPlaces(shows, of: symbol)
-                }
+                TrailPlaceKindChips(
+                    filter: filter,
+                    onChange: { symbol, shows in maker.setShowsPlaces(shows, of: symbol) },
+                    // Only for a launch that can ask Commons — a chip that
+                    // could find nothing would be a promise.
+                    onPhotosChange: maker.photos.isAvailable ? { maker.setShowsPhotos($0) } : nil
+                )
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
             }
@@ -62,16 +69,17 @@ struct TrailPlaceFilterSection: View {
                         Text(
                             """
                             The Search this area button on the map adds what \
-                            OpenStreetMap has mapped near your trail as pins you can tap. \
-                            Choose what it looks for. Turning a kind off also removes its \
-                            pins from the map.
+                            OpenStreetMap has mapped near your trail as pins you can tap, \
+                            and photos from Wikimedia Commons taken there. Choose what it \
+                            looks for. Turning one off also removes its pins from the map.
                             """
                         )
                     } else {
                         Text(
                             """
-                            Places are hidden from the map and won't be saved with \
-                            this trail. Turn this on to show them and search for more.
+                            Places and photos are hidden from the map and won't be \
+                            saved with this trail. Turn this on to show them and search \
+                            for more.
                             """
                         )
                     }

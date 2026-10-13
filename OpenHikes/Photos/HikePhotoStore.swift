@@ -153,7 +153,8 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
             assetLocalIdentifier: origin.assetLocalIdentifier,
             matchEvidence: origin.matchEvidence,
             importedFromListingID: origin.importedFromListingID,
-            importedAuthorName: origin.importedAuthorName
+            importedAuthorName: origin.importedAuthorName,
+            licence: origin.licence
         )
         do {
             try createDirectories()

@@ -88,12 +88,38 @@ nonisolated enum TrailPlaceCorridorSearch {
         along route: [RouteCoordinate],
         reaching reach: Double = TrailPlaceAnchor.touchedOffRouteMeters
     ) -> [CommunitySearchArea] {
+        areas(
+            along: route,
+            stretchRadius: stretchRadiusMeters - marginMeters,
+            margin: marginMeters(reaching: reach),
+            maximumAreas: maximumAreas,
+            ceiling: TrailPointQuery.maximumRadiusMeters
+        )
+    }
+
+    /// The same cut at sizes the caller chooses, for a search with a ceiling
+    /// and a reach of its own — the Wikimedia Commons photographs along a
+    /// curated route ask smaller circles than Overpass does, for the reason
+    /// ``CommonsTrailPhotos/stretchRadiusMeters`` gives.
+    ///
+    /// - Parameters:
+    ///   - stretchRadius: How much of the line one circle covers, in metres
+    ///     of radius before `margin` is added.
+    ///   - margin: How far past the line every circle reaches.
+    ///   - maximumAreas: The most circles one search makes before they grow
+    ///     rather than multiply.
+    ///   - ceiling: The widest circle the service asked will answer.
+    static func areas(
+        along route: [RouteCoordinate],
+        stretchRadius: Double,
+        margin: Double,
+        maximumAreas: Int,
+        ceiling: Double
+    ) -> [CommunitySearchArea] {
         guard route.count > 1 else { return [] }
-        let margin = marginMeters(reaching: reach)
-        var radius = stretchRadiusMeters + margin - marginMeters
+        var radius = stretchRadius + margin
         while true {
             let cut = areas(along: route, radius: radius, margin: margin)
-            let ceiling = TrailPointQuery.maximumRadiusMeters
             if cut.count <= maximumAreas || radius >= ceiling {
                 return Array(cut.prefix(maximumAreas))
             }

@@ -72,6 +72,11 @@ nonisolated enum SeededContribution {
 /// Which stand-in database a scenario asks for. Mirrors
 /// ``SeededCommunityTransport.Scenario``.
 nonisolated enum SeededCommunityScenario: String {
+    /// ``curated``, plus photographs from Wikimedia Commons along its two
+    /// routes — the only way to reach them from automation, and kept out of
+    /// ``curated`` so a contributed photograph there cannot be mistaken for
+    /// one of these.
+    case commons = "commons"
     /// ``seeded``, plus the two OpenStreetMap routes.
     ///
     /// The only way to reach a *mixed* list from automation, which is the one

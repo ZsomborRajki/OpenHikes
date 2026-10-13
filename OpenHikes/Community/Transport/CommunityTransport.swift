@@ -637,6 +637,26 @@ nonisolated protocol CommunityTransporting: Sendable {
     /// never at risk from it.
     @concurrent
     func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws
+
+    /// Openly licensed photographs from Wikimedia Commons taken along
+    /// `route`, downloaded into `directory`, for a curated route — and none
+    /// for anything else.
+    ///
+    /// A route from OpenStreetMap has no photographs of its own, and this is
+    /// where its strip comes from until somebody contributes one; see
+    /// ``CommonsPhoto``. A third request on open, beside the detail and the
+    /// contributions and awaited by neither: the route, the numbers and the
+    /// published photographs are what the hiker is waiting for.
+    ///
+    /// Only the conformance that knows there are two sources answers it —
+    /// see ``MergedCommunityTransport``. Every other conformance has no
+    /// curated routes to answer about, and the default below says so.
+    @concurrent
+    func commonsPhotos(
+        for listing: CommunityListing,
+        along route: [RouteCoordinate],
+        downloadingInto directory: URL
+    ) async throws -> [CommonsPhoto]
 }
 
 // `nonisolated` for the reason ``MergedCommunityTransport``'s extensions spell
@@ -661,5 +681,15 @@ nonisolated extension CommunityTransporting {
             excluding: excluding,
             scope: scope
         )
+    }
+
+    /// No curated routes, so no photographs of them. See the requirement.
+    @concurrent
+    func commonsPhotos(
+        for listing: CommunityListing,
+        along route: [RouteCoordinate],
+        downloadingInto directory: URL
+    ) async -> [CommonsPhoto] {
+        []
     }
 }

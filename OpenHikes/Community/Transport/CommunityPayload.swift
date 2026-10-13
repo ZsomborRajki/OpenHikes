@@ -136,6 +136,14 @@ nonisolated struct CommunityGalleryPhoto: Identifiable, Hashable, Sendable {
     /// down. One with an attribution is a second person's, and every one of
     /// those four is a different record — see ``CommunityPhotoAttribution``.
     var contribution: CommunityPhotoAttribution?
+    /// Who took this picture and what they shared it under, for one that came
+    /// from Wikimedia Commons rather than from anybody on this app — see
+    /// ``CommonsPhoto``.
+    ///
+    /// Never beside a ``contribution``: a Commons photograph has no record
+    /// here to report, block or take down, and what can be done about one is
+    /// done on its own page there, which the credit links.
+    var commons: CommonsPhotoCredit?
 
     var id: Int { index }
 
@@ -143,7 +151,7 @@ nonisolated struct CommunityGalleryPhoto: Identifiable, Hashable, Sendable {
 
     /// What to put beside the picture, or `nil` when it is the hike's own and
     /// the screen has already credited its author.
-    var credit: String? { contribution?.credit }
+    var credit: String? { contribution?.credit ?? commons?.author }
 }
 
 /// The decoded contents of the two asset fields on a submission.
@@ -510,6 +518,16 @@ nonisolated struct CommunityHikeDetail: Sendable, CommunityReviewSubject {
     /// download that failed leaves none, and nothing about the screen changes
     /// when there are none.
     var contributions: [CommunityPhotoContribution] = []
+    /// Openly licensed photographs from Wikimedia Commons taken along the
+    /// route, in walking order — a curated route's only pictures until
+    /// somebody contributes one. See ``CommonsPhoto``.
+    ///
+    /// A third set beside the submission's and the contributions, for the
+    /// reason those two are kept apart: nobody published these here, so there
+    /// is nothing for a reviewer to rewrite and nobody to block, and the
+    /// gallery is the one place they meet the others. Asked for on open, after
+    /// the route, and never part of ``CommunityTransporting/detail(for:downloadingInto:)``.
+    var commonsPhotos: [CommonsPhoto] = []
 
     /// This detail with the contributed sets a hiker may no longer see taken
     /// out.
@@ -584,7 +602,7 @@ nonisolated struct CommunityHikeDetail: Sendable, CommunityReviewSubject {
     /// detail that cannot support it draws no pins at all rather than pins
     /// that might each be about the picture next door.
     var previewPhotos: [CommunityPreviewPhoto] {
-        ownPreviewPhotos + contributedPreviewPhotos
+        ownPreviewPhotos + contributedPreviewPhotos + commonsPreviewPhotos
     }
 
     /// ``CommunityReviewSubject``'s spelling.
@@ -646,9 +664,11 @@ nonisolated struct CommunityHikeDetail: Sendable, CommunityReviewSubject {
     /// photograph was taken where, pairing by index is the entirety of what
     /// backs that claim, and a detail that cannot support it makes none.
     var galleryPhotos: [CommunityGalleryPhoto] {
-        ownGalleryPhotos + zip(contributions, contributedOffsets).flatMap { contribution, offset in
-            contribution.galleryPhotos(startingAt: offset)
-        }
+        ownGalleryPhotos
+            + zip(contributions, contributedOffsets).flatMap { contribution, offset in
+                contribution.galleryPhotos(startingAt: offset)
+            }
+            + commonsGalleryPhotos
     }
 
     /// The hike author's own photographs, which is what the review screen

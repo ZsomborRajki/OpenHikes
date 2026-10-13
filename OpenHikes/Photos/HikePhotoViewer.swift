@@ -270,9 +270,16 @@ struct HikePhotoViewer: View {
     /// is the point at which the picture stops sitting under the name of the
     /// person who took it. A hike's own *Shared by* row names whoever
     /// published the route, which for these is the wrong person.
+    ///
+    /// A copy of a Wikimedia Commons photograph is owed more than a name — its
+    /// licence, and links to it and to the photograph's page — so it gets the
+    /// capsule the curated route's own gallery drew it with. See
+    /// ``PhotoLicenceCredit``.
     @ViewBuilder
     private func credit(_ photo: HikePhoto?) -> some View {
-        if let name = photo?.importedAuthorName, !name.isEmpty {
+        if let photo, let licence = photo.licence {
+            PhotoLicenceCredit(author: photo.importedAuthorName, licence: licence)
+        } else if let name = photo?.importedAuthorName, !name.isEmpty {
             Text("Photo by \(name)")
                 .font(.footnote)
                 .padding(.horizontal, 14)
@@ -451,6 +458,7 @@ private struct SharePhotoButton: View {
                     pathExtension: store.url(for: photo).pathExtension
                 )
             ),
+            message: attribution,
             preview: SharePreview(
                 // What the viewer's own title says, so the sheet's header and
                 // the screen behind it agree about which picture is going.
@@ -462,5 +470,18 @@ private struct SharePhotoButton: View {
         }
         .accessibilityLabel("Share photo")
         .accessibilityIdentifier("photo-share-button")
+    }
+
+    /// The credit a copy of a Wikimedia Commons photograph goes out with, and
+    /// `nil` for every other photograph.
+    ///
+    /// The licence it came under asks for the author, the licence and a link
+    /// to the source wherever the picture is passed on, and the file alone
+    /// carries none of them. So they go as the message beside it — the same
+    /// line the viewer draws over it, and the photograph's page on Commons.
+    private var attribution: Text? {
+        guard let licence = photo.licence else { return nil }
+        let credit = PhotoLicenceCredit.line(author: photo.importedAuthorName, licence: licence)
+        return Text(verbatim: "\(credit)\n\(licence.sourceURL.absoluteString)")
     }
 }
