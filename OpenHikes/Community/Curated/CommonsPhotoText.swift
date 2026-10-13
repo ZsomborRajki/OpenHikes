@@ -53,8 +53,13 @@ nonisolated enum CommonsText {
 
     /// The entities that turn up in author fields, and what each stands for.
     /// Numeric ones are decoded separately.
+    ///
+    /// In order, with `&amp;` last: decoded first, it would turn an escaped
+    /// `&amp;lt;` into a `&lt;` the next pass reads as `<`. A dictionary has
+    /// no order of its own, so it decoded those twice on some launches and
+    /// once on others.
     private static let namedEntities = [
-        "&amp;": "&", "&apos;": "'", "&gt;": ">", "&lt;": "<", "&nbsp;": " ", "&quot;": "\"",
+        ("&apos;", "'"), ("&gt;", ">"), ("&lt;", "<"), ("&nbsp;", " "), ("&quot;", "\""), ("&amp;", "&"),
     ]
 
     /// The author an `Artist` field names, as a credit — or `nil` when it names

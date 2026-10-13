@@ -70,6 +70,13 @@ struct CommonsPhotoTextTests {
         #expect(CommonsText.author("M&#252;ller &#x26; S&ouml;hne") == "Müller & S&ouml;hne")
     }
 
+    /// An escaped entity is one entity, decoded once: `&amp;lt;` is the text
+    /// `&lt;`, never `<`.
+    @Test("an escaped entity is decoded once")
+    func escapedEntityIsDecodedOnce() {
+        #expect(CommonsText.plain("Gruber &amp;lt;Studio&amp;gt;") == "Gruber &lt;Studio&gt;")
+    }
+
     @Test("an author that is only markup, or absent, names nobody")
     func emptyAuthorIsNobody() {
         #expect(CommonsText.author("<a href=\"x\"></a>") == nil)
