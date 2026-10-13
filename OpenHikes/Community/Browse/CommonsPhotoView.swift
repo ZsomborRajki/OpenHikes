@@ -40,6 +40,9 @@ struct CommonsPhotoView: View {
     /// that viewer's own *Show on Map* has just put the camera on whichever
     /// picture it was paged to.
     @State private var framed: URL?
+    /// The photograph with a file still on disk, once the one this screen
+    /// opened on has lost its own — see ``CommunityCommonsPhotos/usable(_:)``.
+    @State private var restored: CommonsPhoto?
 
     init(_ photo: CommonsPhoto, among found: CommunityCommonsPhotos, map: MapController, maker: TrailDraftController) {
         self.photo = photo
@@ -47,6 +50,9 @@ struct CommonsPhotoView: View {
         mapController = map
         self.maker = maker
     }
+
+    /// What the picture, its viewer and *Plan a Trail Here* read.
+    private var current: CommonsPhoto { restored ?? photo }
 
     var body: some View {
         Group {
@@ -67,10 +73,10 @@ struct CommonsPhotoView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
                 TrailPlacePhotoHeader(
-                    photo: photo,
+                    photo: current,
                     // The tab's answer to page through, unless a newer one
                     // has replaced the answer this photograph came from.
-                    gallery: { [found, photo] in found.photos.contains(photo) ? found.photos : [photo] },
+                    gallery: { [found, current] in found.photos.contains(current) ? found.photos : [current] },
                     mapController: mapController,
                     accessibilityIdentifier: "commons-photo-header"
                 )
@@ -98,6 +104,13 @@ struct CommonsPhotoView: View {
             guard address == nil else { return }
             address = await maker.address(at: camera)
         }
+        // Again for every answer that lands while the screen is up, each of
+        // which can delete the file — and on the way back from the viewer.
+        // Read here, by the pushed screen alone, a search at a time.
+        .task(id: found.revision) {
+            guard let usable = await found.usable(current), usable != current else { return }
+            restored = usable
+        }
     }
 
     private var header: some View {
@@ -121,7 +134,7 @@ struct CommonsPhotoView: View {
     private func actions(at camera: CLLocationCoordinate2D) -> some View {
         HStack(spacing: 8) {
             Button {
-                maker.plan(to: photo)
+                maker.plan(to: current)
                 HapticMoment.targetHit.play()
             } label: {
                 Label("Plan a Trail Here", systemImage: "point.topleft.down.to.point.bottomright.curvepath")

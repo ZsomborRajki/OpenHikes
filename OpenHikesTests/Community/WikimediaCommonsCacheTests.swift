@@ -5,7 +5,8 @@
 //  What ``WikimediaCommonsSource`` does with a ``CommonsPhotoStore``: the file
 //  details it already holds are not asked for again, and a geosearch that
 //  cannot be asked falls back to the files this device found there before.
-//  The thumbnails are downloaded every time either way. Driven through
+//  The thumbnails are downloaded every time either way, and once more for a
+//  screen whose copy was deleted under it. Driven through
 //  ``WikimediaCommonsSource/Transport``, as the other Commons suites are.
 //
 
@@ -161,6 +162,39 @@ struct WikimediaCommonsCacheTests {
 
         #expect(photos.isEmpty)
         #expect(commons.count(Self.imageInfo) == 0)
+    }
+
+    @Test("a photograph's thumbnail is fetched again from where it came, and nothing else is asked")
+    func downloadAgain() async throws {
+        let commons = StubCommons()
+        let scratch = Scratch()
+        let source = Self.source(commons, scratch)
+        let found = try await source.photos(in: Self.area, avoiding: [], downloadingInto: scratch.downloads())
+        let first = try #require(found.first)
+        #expect(first.thumbnailURL?.absoluteString.contains(Self.thumbnails) == true)
+
+        let again = try #require(try await source.download(first, into: scratch.downloads()))
+
+        #expect(again.fileURL != first.fileURL)
+        #expect(again.credit == first.credit)
+        #expect(again.pin == first.pin)
+        #expect(FileManager.default.fileExists(atPath: again.fileURL.path))
+        #expect(commons.count(Self.thumbnails) == found.count + 1)
+        #expect(commons.count(Self.geosearch) == 1)
+        #expect(commons.count(Self.imageInfo) == 1)
+    }
+
+    @Test("a photograph with nowhere to fetch from is not fetched again")
+    func noThumbnailNoDownload() async throws {
+        let commons = StubCommons()
+        let scratch = Scratch()
+        let source = Self.source(commons, scratch)
+        let found = try await source.photos(in: Self.area, avoiding: [], downloadingInto: scratch.downloads())
+        var first = try #require(found.first)
+        first.thumbnailURL = nil
+
+        #expect(try await source.download(first, into: scratch.downloads()) == nil)
+        #expect(commons.count(Self.thumbnails) == found.count)
     }
 
     @Test("without a store, every search asks for the details again")
