@@ -861,6 +861,10 @@ struct ImportSelectionGate {
         /// names come from different record types and mean different things,
         /// even though no two of them would ever collide.
         case pendingSubmission(String)
+        /// A Wikimedia Commons photograph's screen, keyed by its Commons page.
+        /// Its own case for the reason ``communityHike(_:)`` has one: the
+        /// hiker is deciding whether to plan a walk to it.
+        case commonsPhoto(URL)
     }
 
     private(set) var revision: UInt64 = 0

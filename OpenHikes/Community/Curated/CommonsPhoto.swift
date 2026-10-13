@@ -37,6 +37,11 @@ nonisolated struct CommonsPhoto: Hashable, Sendable {
     /// The downloaded copy, in the directory the preview owns and deletes.
     var fileURL: URL
     var credit: CommonsPhotoCredit
+    /// Where the copy at ``fileURL`` was downloaded from, so one deleted with
+    /// the directory it was in can be fetched again — see
+    /// ``CommonsPhotoSourcing/download(_:into:)``. `nil` for a photograph
+    /// nothing can fetch twice: the seeded ones UI automation draws.
+    var thumbnailURL: URL?
 }
 
 /// Who took a Commons photograph, and what they shared it under.
@@ -44,7 +49,7 @@ nonisolated struct CommonsPhoto: Hashable, Sendable {
 /// Carried onto every gallery page and every saved copy, because the licence
 /// is the only reason the app may show the picture at all — see
 /// ``HikePhotoLicence``.
-nonisolated struct CommonsPhotoCredit: Hashable, Sendable {
+nonisolated struct CommonsPhotoCredit: Codable, Hashable, Sendable {
     /// The author as the file page names them, as text — or `nil` when it
     /// names nobody, and the source page is then the whole of the credit.
     var author: String?

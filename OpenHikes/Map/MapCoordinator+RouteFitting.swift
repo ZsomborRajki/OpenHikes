@@ -220,6 +220,61 @@ extension MapView.Coordinator {
         return CGRect(x: left, y: top, width: max(0, right - left), height: max(0, bottom - top))
     }
 
+    /// Carries out ``MapController``'s last region request: a region framed
+    /// in the focus area, or a spot slid into it at the zoom the map is at.
+    ///
+    /// The region goes through ``show(_:on:animated:)`` rather than
+    /// `setRegion`, so a searched place and a photograph's pin land in the
+    /// map the hiker can see rather than in the window. `setRegion` has no
+    /// edge padding at all, which is what put a result's centre behind the
+    /// sheet.
+    func applyRegionRequest(of controller: MapController, on mapView: MKMapView) {
+        if let region = controller.region {
+            show(region, on: mapView, animated: true)
+        } else if let spot = controller.revealedSpot {
+            slideIntoView(spot, on: mapView, clearance: Self.revealedSpotClearance)
+        }
+    }
+
+    /// How far inside the focus area a revealed spot has to stand to count as
+    /// in view: the height of a Commons thumbnail, which stands on its spot
+    /// rather than around it — see `CommonsPhotoPinView.swift`.
+    static let revealedSpotClearance: CGFloat = 44
+
+    /// Slides the map, at the zoom it is at, so `coordinate` stands in the
+    /// middle of the part nothing is drawn over — or does nothing, and says
+    /// so, when it already stands `clearance` points inside it.
+    ///
+    /// The same slide *Add Place* makes under its pin — see
+    /// `MapPlacePlacement.swift` — measured on the map as drawn, so a map the
+    /// hiker has turned slides the right way. Only the camera's centre moves:
+    /// the hiker chose the zoom, and neither a gallery's page turn nor a
+    /// screen opened from a pin is a request to change it.
+    ///
+    /// A tilted map can put either end of that measurement past the horizon,
+    /// where MapKit answers with a non-finite point or an invalid coordinate —
+    /// and `setCenter` raises on an invalid one. Those spots are left where
+    /// they stand.
+    @discardableResult func slideIntoView(
+        _ coordinate: CLLocationCoordinate2D,
+        on mapView: MKMapView,
+        clearance: CGFloat
+    ) -> Bool {
+        let point = mapView.convert(coordinate, toPointTo: mapView)
+        guard point.x.isFinite, point.y.isFinite else { return false }
+        let area = focusArea(in: mapView)
+        let clear = area.insetBy(dx: clearance, dy: clearance)
+        guard !clear.isEmpty, !clear.contains(point) else { return false }
+        let centre = CGPoint(
+            x: mapView.bounds.midX + point.x - area.midX,
+            y: mapView.bounds.midY + point.y - area.midY
+        )
+        let target = mapView.convert(centre, toCoordinateFrom: mapView)
+        guard CLLocationCoordinate2DIsValid(target) else { return false }
+        mapView.setCenter(target, animated: true)
+        return true
+    }
+
     /// The map's own layout margins, per *physical* edge.
     ///
     /// The map's are directional — ``MapView/applyBuiltInControlMargins(to:)``

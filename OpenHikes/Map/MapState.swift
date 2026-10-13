@@ -233,6 +233,9 @@ final class MapController {
     private(set) var showRegionRequest: Int = 0
     private(set) var followUserRequest: Int = 0
     private(set) var region: MKCoordinateRegion?
+    /// A spot to bring into view at the zoom the map is at, or `nil` when the
+    /// last request was a ``region`` — see ``reveal(_:)``.
+    private(set) var revealedSpot: CLLocationCoordinate2D?
 
     /// Ask the map to zoom to fit the currently drawn route.
     func fitToRoute() { fitRouteRequest += 1 }
@@ -240,6 +243,24 @@ final class MapController {
     /// Ask the map to zoom to a region (e.g. a search result).
     func show(_ region: MKCoordinateRegion) {
         self.region = region
+        revealedSpot = nil
+        showRegionRequest += 1
+    }
+
+    /// Ask the map to bring `coordinate` out from under whatever is drawn
+    /// over it, at the zoom it is at — or to stay put when it is already in
+    /// view.
+    ///
+    /// What a screen opened from a pin on the map wants: the pin was tapped
+    /// where the hiker could see it, and the sheet rising to make room may
+    /// have covered it. Zooming in as well would be answering a question
+    /// nobody asked, and Back would find every pin around it off screen.
+    /// The same request token as ``show(_:)``, because the two are one kind
+    /// of camera move and the map's file has no room for another observation
+    /// — see `MapCoordinator+RouteFitting.swift`.
+    func reveal(_ coordinate: CLLocationCoordinate2D) {
+        region = nil
+        revealedSpot = coordinate
         showRegionRequest += 1
     }
 

@@ -12,14 +12,22 @@
 //  ``PhotoLicenceCredit``. A tap opens it full screen in the gallery a curated
 //  route's preview uses, paging through everything the searches found.
 //
+//  The *Community* tab's photograph screen is headed by the same thing — see
+//  ``CommonsPhotoView`` — so it takes the gallery to page through rather than
+//  the maker it was first written for.
+//
 
 import OpenHikesData
 import SwiftUI
 
 struct TrailPlacePhotoHeader: View {
     let photo: CommonsPhoto
-    let maker: TrailDraftController
+    /// Every photograph the full-screen viewer pages through. Read when the
+    /// viewer opens rather than when this is built, so a search landing
+    /// behind the card does not redraw it.
+    let gallery: () -> [CommonsPhoto]
     let mapController: MapController
+    var accessibilityIdentifier = "trail-place-photo"
 
     @State private var image: Image?
     @State private var isViewing = false
@@ -48,7 +56,7 @@ struct TrailPlacePhotoHeader: View {
         .buttonStyle(.plain)
         .accessibilityLabel(PhotoLicenceCredit.line(author: photo.credit.author, licence: photo.credit.licence))
         .accessibilityHint("Opens the photo full screen")
-        .accessibilityIdentifier("trail-place-photo")
+        .accessibilityIdentifier(accessibilityIdentifier)
         // Beside the button rather than inside it, so a tap on the credit
         // opens its menu and not the viewer.
         .overlay(alignment: .bottomLeading) {
@@ -64,7 +72,7 @@ struct TrailPlacePhotoHeader: View {
         }
         .fullScreenCover(isPresented: $isViewing) {
             TrailDraftPhotoViewer(
-                photos: maker.photos.photos,
+                photos: gallery(),
                 opening: photo,
                 mapController: mapController
             ) {

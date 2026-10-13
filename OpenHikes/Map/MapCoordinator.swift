@@ -444,15 +444,7 @@ extension MapView {
             reobserving(self, mapView, controller) {
                 _ = controller.showRegionRequest
             } onChange: { coordinator, map, model in
-                if let region = model.region {
-                    // Through the coordinator rather than `setRegion`, so a
-                    // searched place and a photograph's pin land in the map
-                    // the hiker can see rather than in the window — see
-                    // `MapCoordinator+RouteFitting.swift`. `setRegion` has no
-                    // edge padding at all, which is what put a result's
-                    // centre behind the sheet.
-                    coordinator.show(region, on: map, animated: true)
-                }
+                coordinator.applyRegionRequest(of: model, on: map)
                 coordinator.observeShowRegion(model, on: map)
             }
         }
@@ -786,9 +778,9 @@ extension MapView.Coordinator {
         if let communityPhoto = annotation as? CommunityPhotoMapAnnotation {
             return communityPhotoAnnotationView(for: communityPhoto, on: mapView)
         }
-        // The maker's kinds in one question — see
-        // ``makerAnnotationView(for:on:)``.
-        if let maker = makerAnnotationView(for: annotation, on: mapView) { return maker }
+        // The maker's kinds and the *Community* tab's photographs in one
+        // question — see ``ownedAnnotationView(for:on:)``.
+        if let owned = ownedAnnotationView(for: annotation, on: mapView) { return owned }
 
         let view = mapView.reusableView(MKAnnotationView.self, for: annotation, reuseIdentifier: "routeHighlight")
         view.canShowCallout = false
@@ -832,8 +824,9 @@ extension MapView.Coordinator {
             // The maker's own pins open its place sheet rather than a callout —
             // see `MapTrailDraftSelection.swift` — and a saved hike's places
             // open the place's screen — or, for one found around it, its card
-            // on *Places Around Trail*.
-            if selectTrailDraftAnnotation(view, on: mapView) || selectHikePlaceAnnotation(view, on: mapView) { return }
+            // on *Places Around Trail* — and a *Community* photograph opens
+            // its own. See ``selectOwnedAnnotation(_:on:)``.
+            if selectOwnedAnnotation(view, on: mapView) { return }
             // `canShowCallout` because a selection is not a callout: the route
             // highlight's own dots are selectable and draw nothing, and a tap
             // on one that took *Search this area* away would be the pill

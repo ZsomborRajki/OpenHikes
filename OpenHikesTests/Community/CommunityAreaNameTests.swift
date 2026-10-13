@@ -148,7 +148,7 @@ struct CommunityAreaNameTests {
     }
 
     /// A launch that must not reach CloudKit must not reach MapKit's geocoder
-    /// either — see ``OpenHikesModel/makeCommunityBrowser(transport:blocks:)``.
+    /// either — see ``OpenHikesModel/makeCommunityBrowser(transport:blocks:maker:)``.
     @Test("a browser with no namer heads its list with nothing")
     func anAbsentNamerIsInert() async {
         let browser = CommunityBrowser(

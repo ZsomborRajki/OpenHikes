@@ -110,8 +110,13 @@ extension MapView.Coordinator {
 
     private func trackCommunityPins(_ browser: CommunityBrowser, on mapView: MKMapView) {
         applyCommunityPins(browser.nearbyListings, on: mapView)
+        // And the area's photographs, which come and go with the rows — see
+        // `MapCommunityCommonsPhotos.swift`. Each apply has its own guard, so
+        // one changing does not redraw the other.
+        applyCommunityCommonsPhotos(browser.commonsPins, on: mapView)
         reobserving(self, mapView, browser) {
             _ = browser.nearbyListings
+            _ = browser.commonsPins
         } onChange: { coordinator, map, model in
             coordinator.trackCommunityPins(model, on: map)
         }

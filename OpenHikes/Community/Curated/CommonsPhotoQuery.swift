@@ -197,12 +197,25 @@ nonisolated enum CommonsPhotoQuery {
     /// - Parameter timeZone: The zone a capture time with none of its own is
     ///   read in, as a camera's EXIF time is.
     static func files(from data: Data, timeZone: TimeZone = .current) throws -> [CommonsFile] {
+        try imageInfo(from: data, timeZone: timeZone).files
+    }
+
+    /// The files an `imageinfo` answer describes that this app may show, and
+    /// every page it answered about at all — what ``CommonsPhotoStore`` may
+    /// write down as *not one this app may show*. See ``CommonsImageInfo``.
+    static func imageInfo(from data: Data, timeZone: TimeZone = .current) throws -> CommonsImageInfo {
         let answer = try JSONDecoder().decode(ImageInfoAnswer.self, from: data)
         if let error = answer.error { throw failure(for: error) }
-        return (answer.query?.pages ?? []).compactMap { page in
-            guard let pageID = page.pageid, let info = page.imageinfo.first else { return nil }
-            return file(pageID: pageID, info: info, timeZone: timeZone)
-        }
+        let pages = answer.query?.pages ?? []
+        return CommonsImageInfo(
+            files: pages.compactMap { page in
+                guard let pageID = page.pageid, let info = page.imageinfo.first else { return nil }
+                return file(pageID: pageID, info: info, timeZone: timeZone)
+            },
+            answered: Set(pages.compactMap { page in
+                page.imageinfo.isEmpty && !page.missing ? nil : page.pageid
+            })
+        )
     }
 
     private static func failure(for error: APIError) -> CommonsPhotoFailure {
@@ -251,6 +264,22 @@ nonisolated enum CommonsPhotoQuery {
     }
 }
 
+/// What an `imageinfo` answer said: the files this app may show, and which
+/// pages it said anything about at all.
+///
+/// Two sets because *not one of the files* means two things. A page whose
+/// details came back and fail a check — a diagram, a tile too narrow, a
+/// licence this app cannot honour — is answered *no*, and stays that way for
+/// as long as the file page does. A page the answer is silent about, or
+/// lists with no details, was not answered: that is what an answer cut short
+/// by Commons' own limits leaves, and writing it down as *no* would hide a
+/// photograph that may be fine for thirty days. A page Commons calls missing
+/// is answered — it is gone.
+nonisolated struct CommonsImageInfo: Equatable, Sendable {
+    var files: [CommonsFile]
+    var answered: Set<Int>
+}
+
 /// A geotagged file near a stretch of a route, before anything is known about
 /// it but where its camera stood.
 nonisolated struct CommonsPhotoCandidate: Equatable, Sendable {
@@ -265,7 +294,11 @@ nonisolated struct CommonsPhotoCandidate: Equatable, Sendable {
 
 /// One file this app may show: a photograph, its thumbnail, its credit and
 /// when it was taken.
-nonisolated struct CommonsFile: Equatable, Sendable {
+///
+/// `Codable` because ``CommonsPhotoStore`` writes it down: the answer to
+/// *what is this file* changes when somebody edits the file page, which is
+/// rarely enough to keep for as long as an OpenStreetMap answer is kept.
+nonisolated struct CommonsFile: Codable, Equatable, Sendable {
     var pageID: Int
     var thumbnailURL: URL
     var credit: CommonsPhotoCredit
@@ -322,20 +355,24 @@ nonisolated private struct ImageInfoAnswer: Decodable {
 
     /// One page of the answer. A page id that does not exist comes back with
     /// no `imageinfo` at all, which reads as no file rather than as a failed
-    /// answer.
+    /// answer — and is marked `missing`, which is what tells it apart from a
+    /// page an answer cut short said nothing about.
     struct Page: Decodable {
         let pageid: Int?
         let imageinfo: [ImageInfo]
+        let missing: Bool
 
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             imageinfo = try container.decodeIfPresent([ImageInfo].self, forKey: .imageinfo) ?? []
             pageid = try container.decodeIfPresent(Int.self, forKey: .pageid)
+            missing = try container.decodeIfPresent(Bool.self, forKey: .missing) ?? false
         }
 
         enum CodingKeys: String, CodingKey {
             case imageinfo = "imageinfo"
             case pageid = "pageid"
+            case missing = "missing"
         }
     }
 
