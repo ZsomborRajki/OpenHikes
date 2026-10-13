@@ -458,6 +458,7 @@ private struct SharePhotoButton: View {
                     pathExtension: store.url(for: photo).pathExtension
                 )
             ),
+            message: attribution,
             preview: SharePreview(
                 // What the viewer's own title says, so the sheet's header and
                 // the screen behind it agree about which picture is going.
@@ -469,5 +470,18 @@ private struct SharePhotoButton: View {
         }
         .accessibilityLabel("Share photo")
         .accessibilityIdentifier("photo-share-button")
+    }
+
+    /// The credit a copy of a Wikimedia Commons photograph goes out with, and
+    /// `nil` for every other photograph.
+    ///
+    /// The licence it came under asks for the author, the licence and a link
+    /// to the source wherever the picture is passed on, and the file alone
+    /// carries none of them. So they go as the message beside it — the same
+    /// line the viewer draws over it, and the photograph's page on Commons.
+    private var attribution: Text? {
+        guard let licence = photo.licence else { return nil }
+        let credit = PhotoLicenceCredit.line(author: photo.importedAuthorName, licence: licence)
+        return Text(verbatim: "\(credit)\n\(licence.sourceURL.absoluteString)")
     }
 }
