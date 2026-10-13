@@ -64,6 +64,24 @@ nonisolated protocol CommonsPhotoSourcing: Sendable {
         avoiding shown: Set<URL>,
         downloadingInto directory: URL
     ) async throws -> [CommonsPhoto]
+
+    /// `photo` with its thumbnail downloaded again into `directory`, or `nil`
+    /// when it has nowhere to be fetched from or did not arrive.
+    ///
+    /// For a photograph whose copy went with the answer it came in — see
+    /// ``CommunityCommonsPhotos/usable(_:)``. Only the picture is fetched:
+    /// what Commons says about it was already answered, and is on the value.
+    @concurrent
+    func download(_ photo: CommonsPhoto, into directory: URL) async throws -> CommonsPhoto?
+}
+
+nonisolated extension CommonsPhotoSourcing {
+    /// Nothing, for a source with no address to fetch from: the dormant
+    /// one, the seeded one, and every suite's stub that is not about this.
+    @concurrent
+    func download(_ photo: CommonsPhoto, into directory: URL) async -> CommonsPhoto? {
+        nil
+    }
 }
 
 /// A source that answers nothing, for every launch that has not opted in.
@@ -205,6 +223,18 @@ nonisolated struct WikimediaCommonsSource: CommonsPhotoSourcing {
         )
         return try await download(chosen, described: files, into: directory)
     }
+
+    @concurrent
+    func download(_ photo: CommonsPhoto, into directory: URL) async throws -> CommonsPhoto? {
+        guard let thumbnail = photo.thumbnailURL,
+              // A name of its own rather than the page's, so a copy fetched
+              // again never lands on a file a search may still be reading.
+              let url = try await fetch(thumbnail, into: directory, named: "commons-\(UUID().uuidString).jpeg")
+        else { return nil }
+        var again = photo
+        again.fileURL = url
+        return again
+    }
 }
 
 // MARK: - The three steps
@@ -312,18 +342,28 @@ nonisolated private extension WikimediaCommonsSource {
         described file: CommonsFile,
         into directory: URL
     ) async throws -> CommonsPhoto? {
-        try Task.checkCancellation()
-        guard let data = try? await once(CommonsPhotoQuery.download(file.thumbnailURL), reading: { $0 }),
-              ImageDataFormat.detect(in: data) != nil
+        guard let url = try await fetch(file.thumbnailURL, into: directory, named: "commons-\(spot.pageID).jpeg")
         else { return nil }
-        try Task.checkCancellation()
-        let url = directory.appendingPathComponent("commons-\(spot.pageID).jpeg", isDirectory: false)
-        guard (try? Self.write(data, to: url)) != nil else { return nil }
         return CommonsPhoto(
             pin: CommunityPhotoPin(capturedAt: file.capturedAt, coordinate: spot.coordinate),
             fileURL: url,
-            credit: file.credit
+            credit: file.credit,
+            thumbnailURL: file.thumbnailURL
         )
+    }
+
+    /// A thumbnail written into `directory` as `name` — or `nil` when it did
+    /// not arrive as an image or could not be written. Throws only a
+    /// cancellation, for the reason ``photo(_:described:into:)`` gives.
+    func fetch(_ thumbnail: URL, into directory: URL, named name: String) async throws -> URL? {
+        try Task.checkCancellation()
+        guard let data = try? await once(CommonsPhotoQuery.download(thumbnail), reading: { $0 }),
+              ImageDataFormat.detect(in: data) != nil
+        else { return nil }
+        try Task.checkCancellation()
+        let url = directory.appendingPathComponent(name, isDirectory: false)
+        guard (try? Self.write(data, to: url)) != nil else { return nil }
+        return url
     }
 
     /// One request read by `read`, asked once more after

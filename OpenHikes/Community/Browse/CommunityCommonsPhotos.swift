@@ -45,12 +45,18 @@
 //  lands — a photograph's screen may still be reading it — and all of them
 //  swept at the next launch. Every answer's directory is inside one of this
 //  launch's own, because the sweep runs while the first search may already
-//  be writing, and it can only keep what it knows the name of. What Commons *said* about the files is kept, for thirty days —
+//  be writing, and it can only keep what it knows the name of.
+//
+//  A screen can outlive two answers, and its photograph's file with them. So
+//  it asks ``usable(_:)`` again as each lands: the same page in the newest
+//  answer if it is there, and otherwise the thumbnail downloaded again into a
+//  directory of its own — see ``CommonsPhotoSourcing/download(_:into:)``. What Commons *said* about the files is kept, for thirty days —
 //  see ``CommonsPhotoStore``.
 //
 
 import Foundation
 import Observation
+import OpenHikesData
 import os
 
 @MainActor
@@ -64,6 +70,11 @@ final class CommunityCommonsPhotos {
 
     /// Whether a search is out.
     private(set) var isSearching = false
+
+    /// Counts the answers that landed and the clears, each of which can
+    /// delete a file an open screen is showing. What ``CommonsPhotoView``
+    /// keys its ``usable(_:)`` check on.
+    private(set) var revision = 0
 
     /// Where a search asks, or `nil` for a launch that must not — shared with
     /// the maker's, see ``OpenHikesModel/makeTrailPhotoSource()``.
@@ -84,6 +95,13 @@ final class CommunityCommonsPhotos {
     /// screen can be open while *Search this area* is tapped again, and its
     /// full-screen viewer and *Plan a Trail Here* both read the file.
     @ObservationIgnored private var retired: URL?
+    /// Where photographs downloaded again by ``usable(_:)`` go: deleted by
+    /// ``clear()`` and by the next launch's sweep, never by an answer
+    /// landing, so a copy fetched for a screen is not lost to the next tap.
+    @ObservationIgnored private var restored: URL
+    /// The download ``usable(_:)`` has out, by Commons page, so a screen that
+    /// asks twice while it is out waits for the one file.
+    @ObservationIgnored private var restoring: (page: URL, task: Task<CommonsPhoto?, Never>)?
 
     /// - Parameters:
     ///   - isHidden: Observed through whatever it reads, so the map hears
@@ -102,6 +120,7 @@ final class CommunityCommonsPhotos {
         self.isHidden = isHidden
         launch = Self.freshDirectory(in: root)
         directory = Self.freshDirectory(in: launch)
+        restored = Self.freshDirectory(in: launch)
         // One with nowhere to ask writes nothing, and every suite's browser
         // is one of those, so it leaves the directory to the one that does.
         if source != nil { Self.sweep(root, keeping: launch) }
@@ -166,6 +185,35 @@ final class CommunityCommonsPhotos {
         if let retired { Self.remove(retired) }
         retired = nil
         directory = Self.freshDirectory(in: launch)
+        restoring?.task.cancel()
+        restoring = nil
+        Self.remove(restored)
+        restored = Self.freshDirectory(in: launch)
+        revision += 1
+    }
+
+    /// `photo` with a file that is still on disk, or `nil` when there is
+    /// none to be had.
+    ///
+    /// Whether its file is gone is read off which directories this holds,
+    /// not off the disk: the deletes run off the main actor, so a file can
+    /// still be there with its directory already let go. Then, cheapest
+    /// first: the same Commons page in the newest answer, or the thumbnail
+    /// downloaded again.
+    func usable(_ photo: CommonsPhoto) async -> CommonsPhoto? {
+        let folder = photo.fileURL.deletingLastPathComponent().path
+        if [directory, retired, restored].contains(where: { $0?.path == folder }) { return photo }
+        let page = photo.credit.licence.sourceURL
+        if let again = photos.first(where: { $0.credit.licence.sourceURL == page }) { return again }
+        if let pending = restoring, pending.page == page { return await pending.task.value }
+        guard let source else { return nil }
+        let target = restored
+        let fetching = Task { try? await source.download(photo, into: target) }
+        restoring = (page, fetching)
+        let fetched = await fetching.value
+        if restoring?.task == fetching { restoring = nil }
+        // Cleared while it was out: the copy went with the directory.
+        return target == restored ? fetched : nil
     }
 
     /// Waits for the search that is out, if any — the effect a suite waits on.
@@ -182,6 +230,7 @@ final class CommunityCommonsPhotos {
         retired = directory
         directory = target
         if photos != found { photos = found }
+        revision += 1
     }
 
     private static func freshDirectory(in root: URL) -> URL {

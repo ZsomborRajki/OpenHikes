@@ -26,6 +26,7 @@ struct CommunityCommonsPhotosTests {
         static let held = 50.0
 
         private let areas = Mutex<[CommunitySearchArea]>([])
+        private let fetchedAgain = Mutex(0)
         private let gate: AsyncStream<Void>
         private let opener: AsyncStream<Void>.Continuation
 
@@ -34,6 +35,8 @@ struct CommunityCommonsPhotosTests {
         }
 
         var asked: [CommunitySearchArea] { areas.withLock { $0 } }
+        /// How many thumbnails ``download(_:into:)`` fetched a second time.
+        var downloads: Int { fetchedAgain.withLock { $0 } }
 
         func release() { opener.yield() }
 
@@ -57,6 +60,16 @@ struct CommunityCommonsPhotosTests {
             let photo = CommunityCommonsPhotosTests.photo(at: area.coordinate, in: directory)
             try PhotoDiscoveryFixture.sampleImageData().write(to: photo.fileURL)
             return [photo]
+        }
+
+        @concurrent
+        func download(_ photo: CommonsPhoto, into directory: URL) async throws -> CommonsPhoto? {
+            fetchedAgain.withLock { $0 += 1 }
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            var again = photo
+            again.fileURL = directory.appendingPathComponent("again-\(UUID().uuidString).jpeg")
+            try PhotoDiscoveryFixture.sampleImageData().write(to: again.fileURL)
+            return again
         }
     }
 
@@ -194,6 +207,66 @@ struct CommunityCommonsPhotosTests {
 
         #expect(photos.shown.isEmpty)
         #expect(photos.photos.count == 1, "only hidden, not forgotten")
+    }
+
+    // MARK: - A screen that outlives its answer
+
+    @Test("a photograph whose answer is still kept is used as it is")
+    func keptFileIsUsedAsItIs() async throws {
+        let root = Root()
+        let source = StubSource()
+        let photos = CommunityCommonsPhotos(source: source, root: root.url)
+        photos.search(in: Self.area(latitude: 47.6))
+        await photos.settle()
+        let first = try #require(photos.photos.first)
+        photos.search(in: Self.area(latitude: 47.7))
+        await photos.settle()
+
+        #expect(await photos.usable(first) == first, "one answer back is still on disk")
+        #expect(source.downloads == 0)
+    }
+
+    /// Two answers later the file is deleted — off the main actor, so
+    /// possibly not yet — and a screen still showing it needs another.
+    @Test("a photograph two answers old is downloaded again, once")
+    func deletedFileIsDownloadedAgain() async throws {
+        let root = Root()
+        let source = StubSource()
+        let photos = CommunityCommonsPhotos(source: source, root: root.url)
+        photos.search(in: Self.area(latitude: 47.6))
+        await photos.settle()
+        let first = try #require(photos.photos.first)
+        photos.search(in: Self.area(latitude: 47.7))
+        await photos.settle()
+        photos.search(in: Self.area(latitude: 47.8))
+        await photos.settle()
+
+        let again = try #require(await photos.usable(first))
+
+        #expect(again.fileURL != first.fileURL)
+        #expect(again.credit == first.credit)
+        #expect(FileManager.default.fileExists(atPath: again.fileURL.path))
+        #expect(await photos.usable(again) == again, "and kept past the next answer's tidying")
+        #expect(source.downloads == 1)
+    }
+
+    @Test("a photograph the newest answer found again is taken from it")
+    func samePageFromTheNewestAnswer() async throws {
+        let root = Root()
+        let source = StubSource()
+        let photos = CommunityCommonsPhotos(source: source, root: root.url)
+        photos.search(in: Self.area(latitude: 47.6))
+        await photos.settle()
+        let first = try #require(photos.photos.first)
+        photos.search(in: Self.area(latitude: 47.7))
+        await photos.settle()
+        photos.search(in: Self.area(latitude: 47.6))
+        await photos.settle()
+
+        let again = try #require(await photos.usable(first))
+
+        #expect(again == photos.photos.first)
+        #expect(source.downloads == 0)
     }
 
     // MARK: - The browser
