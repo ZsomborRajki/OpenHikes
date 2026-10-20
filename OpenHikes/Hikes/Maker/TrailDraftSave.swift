@@ -91,7 +91,7 @@ enum TrailDraftRefusal: LocalizedError, Equatable, Sendable {
     var errorDescription: String? {
         switch self {
         case .tooShort: String(localized: "This trail needs at least two points.")
-        case .notSaved: String(localized: "This trail couldn't be saved.")
+        case .notSaved: String(localized: "This trail couldn’t be saved.")
         }
     }
 
@@ -102,7 +102,7 @@ enum TrailDraftRefusal: LocalizedError, Equatable, Sendable {
         case .tooShort:
             String(localized: "Tap the map to add another point, then save again.")
         case .notSaved:
-            String(localized: "Your drawing wasn't lost. Check that the device has storage available, then save again.")
+            String(localized: "Your drawing wasn’t lost. Check that the device has storage available, then save again.")
         }
     }
 }

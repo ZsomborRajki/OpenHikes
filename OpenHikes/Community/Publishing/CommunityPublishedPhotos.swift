@@ -87,7 +87,7 @@ nonisolated extension CommunityPublishedPhotos {
     static func incompleteDownload(missing: Int) -> String {
         String(
             localized: """
-            \(missing) of this submission's photos didn't download, so none \
+            \(missing) of this submission’s photos didn’t download, so none \
             can be left out here — leaving one out rewrites the whole set \
             from the copies on this device. Publish it as it is, decline it, \
             or open it again.

@@ -332,7 +332,7 @@ private struct PlacesNearbyStatus: View {
         } else if case .outage(let outage) = finder.notice {
             if isEmpty {
                 ContentUnavailableView {
-                    Label("Couldn't Search", systemImage: "exclamationmark.triangle")
+                    Label("Couldn’t Search", systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(TrailPointNotice.outage(outage).caption.text)
                 } actions: {

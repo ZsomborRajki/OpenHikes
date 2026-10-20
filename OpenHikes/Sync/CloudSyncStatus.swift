@@ -142,9 +142,9 @@ final class CloudSyncStatus {
         case .noAccount:
             return "Sign in to iCloud in the Settings app to sync your hikes across your devices."
         case .restricted:
-            return "This device's settings don't allow iCloud, so hikes stay on this device."
+            return "This device’s settings don’t allow iCloud, so hikes stay on this device."
         case .unknown:
-            return "Asking iCloud whether it's available on this device."
+            return "Asking iCloud whether it’s available on this device."
         }
     }
 
@@ -174,9 +174,9 @@ final class CloudSyncStatus {
             "Your hikes stay on this device only."
         case .retrying:
             lastSyncedAt.map { date in
-                "iCloud hasn't finished this yet. It will catch up on its own. "
+                "iCloud hasn’t finished this yet. It will catch up on its own. "
                     + "Last synced \(HikeFormat.timestamp(date))."
-            } ?? "iCloud hasn't finished this yet. It will catch up on its own."
+            } ?? "iCloud hasn’t finished this yet. It will catch up on its own."
         case .working:
             "Sending and receiving your hikes and photo details."
         }

@@ -102,7 +102,7 @@ nonisolated enum CommunityReportReason: String, CaseIterable, Identifiable, Send
         switch self {
         case .objectionable: "Offensive or inappropriate content"
         case .privacy: "Reveals a private place or an identifiable person"
-        case .notTheirs: "Published without the owner's permission"
+        case .notTheirs: "Published without the owner’s permission"
         case .misleading: "Dangerous or misleading route"
         case .other: "Something else"
         }
@@ -190,7 +190,7 @@ nonisolated struct CommunityReport: Equatable, Sendable {
                 "Deleting the \(CommunitySchema.contributionType) record takes the photos off",
                 "the hike; deleting the \(CommunitySchema.photoSubmissionType) record removes",
                 "the photos themselves.",
-                "The hike below is somebody else's and is not part of this report.",
+                "The hike below is somebody else’s and is not part of this report.",
             ])
         }
         lines.append(contentsOf: [

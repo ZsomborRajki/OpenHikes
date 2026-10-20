@@ -92,7 +92,7 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
         case .notSignedIn:
             "Sharing a hike needs an Apple Account."
         case .unreachable:
-            "Couldn't reach iCloud."
+            "Couldn’t reach iCloud."
         case .notEligible(let reason):
             reason.title
         case .noPhotosToShare:
@@ -100,9 +100,9 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
         case .nothingToShare:
             "This hike has no route to share."
         case .notPermitted:
-            "This account can't review submissions."
+            "This account can’t review submissions."
         case .noLongerAvailable:
-            "This hike isn't available any more."
+            "This hike isn’t available any more."
         case .unavailable:
             "Something went wrong."
         }
@@ -118,8 +118,8 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
             reason.explanation()
         case .noPhotosToShare:
             """
-            Add photos to this hike first, or check that they aren't on the device \
-            they were taken on — a photo's file stays where it was added.
+            Add photos to this hike first, or check that they aren’t on the device \
+            they were taken on — a photo’s file stays where it was added.
             """
         case .nothingToShare:
             "Record or import a route first."

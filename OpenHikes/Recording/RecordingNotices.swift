@@ -111,7 +111,7 @@ struct RecordingConditionsNotice: View {
         }
         if UIApplication.shared.backgroundRefreshStatus != .available {
             warnings.append(
-                "Background App Refresh is off, so the track may be sparse while OpenHikes isn't open."
+                "Background App Refresh is off, so the track may be sparse while OpenHikes isn’t open."
             )
         }
         return warnings

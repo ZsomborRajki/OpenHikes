@@ -74,11 +74,11 @@ nonisolated struct SearchFailure: LocalizedError, Equatable, Sendable {
         case .noResults:
             String(localized: "No places matched that search.")
         case .offline:
-            String(localized: "Couldn't search for places.")
+            String(localized: "Couldn’t search for places.")
         case .throttled:
-            String(localized: "Couldn't search for places.")
+            String(localized: "Couldn’t search for places.")
         case .unavailable:
-            String(localized: "Couldn't search for places.")
+            String(localized: "Couldn’t search for places.")
         }
     }
 

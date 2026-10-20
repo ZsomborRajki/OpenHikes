@@ -198,8 +198,8 @@ struct GPXTrackChoiceSheet: View {
 
     private static func unplacedNote(_ count: Int) -> String {
         count == 1
-            ? "1 waypoint lies on none of these tracks and won't be imported."
-            : "\(count) waypoints lie on none of these tracks and won't be imported."
+            ? "1 waypoint lies on none of these tracks and won’t be imported."
+            : "\(count) waypoints lie on none of these tracks and won’t be imported."
     }
 }
 

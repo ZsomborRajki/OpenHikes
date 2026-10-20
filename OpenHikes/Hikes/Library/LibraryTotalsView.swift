@@ -38,9 +38,9 @@ struct LibraryTotalsView: View {
                     .padding()
             } else if couldNotRead {
                 ContentUnavailableView {
-                    Label("Couldn't Add Up Your Hikes", systemImage: "exclamationmark.triangle")
+                    Label("Couldn’t Add Up Your Hikes", systemImage: "exclamationmark.triangle")
                 } description: {
-                    Text("Your library couldn't be read just now.")
+                    Text("Your library couldn’t be read just now.")
                 } actions: {
                     Button("Try Again") { attempt += 1 }
                         .glassButtonStyle()

@@ -74,7 +74,7 @@ struct WalkShareFlow: View {
                     WalkShareEditor(model: editor)
                 }
             }
-            .alert("This photo couldn't be opened.", isPresented: $session.loadFailed) {
+            .alert("This photo couldn’t be opened.", isPresented: $session.loadFailed) {
                 Button("OK", role: .cancel) { /* the alert's own dismissal */ }
             }
         }
@@ -108,7 +108,7 @@ struct WalkShareFlow: View {
         let photos = Self.offered(hike?.orderedPhotos ?? [], walkedFrom: walk.startedAt, to: walk.endedAt)
         if !photos.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("This Hike's Photos")
+                Text("This Hike’s Photos")
                     .font(.headline)
                     .accessibilityAddTraits(.isHeader)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.thumbnailSide), spacing: 4)], spacing: 4) {

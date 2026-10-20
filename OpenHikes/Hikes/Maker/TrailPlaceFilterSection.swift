@@ -77,7 +77,7 @@ struct TrailPlaceFilterSection: View {
                     } else {
                         Text(
                             """
-                            Places and photos are hidden from the map and won't be \
+                            Places and photos are hidden from the map and won’t be \
                             saved with this trail. Turn this on to show them and search \
                             for more.
                             """

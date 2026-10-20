@@ -26,9 +26,9 @@ nonisolated enum RecordingFailure: LocalizedError, Equatable, Sendable {
         switch self {
         case .locationDenied: "Location access is needed to record a hike."
         case .preciseLocationRequired: "Precise Location is needed to record a hike."
-        case .save: "The recorded hike couldn't be saved."
+        case .save: "The recorded hike couldn’t be saved."
         case .storage: "The recording could not be written safely."
-        case .storageUnavailable: "The recording journal couldn't be created."
+        case .storageUnavailable: "The recording journal couldn’t be created."
         case .tooShort: "This recording has only one track point."
         }
     }

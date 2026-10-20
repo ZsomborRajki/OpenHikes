@@ -83,12 +83,12 @@ struct MapPaywallView: View {
             "map.fill",
             "Thunderforest Outdoors",
             "Bright, high-contrast trail cartography that stays readable in sunlight. It keeps "
-                + "the tiles you've looked at; downloading a route ahead is Stadia only."
+                + "the tiles you’ve looked at; downloading a route ahead is Stadia only."
         ),
         (
             "arrow.down.circle.fill",
             "Offline Stadia Maps",
-            "Save a route's map to your phone for a hike with no signal."
+            "Save a route’s map to your phone for a hike with no signal."
         ),
         (
             "chart.xyaxis.line",
@@ -100,7 +100,7 @@ struct MapPaywallView: View {
             "heart.fill",
             "Keeps OpenStreetMap Free",
             "The paid maps are billed per view. Paying for those is what keeps the free "
-                + "map on donated servers OpenHikes doesn't charge for."
+                + "map on donated servers OpenHikes doesn’t charge for."
         ),
     ]
 

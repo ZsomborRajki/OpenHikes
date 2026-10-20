@@ -93,7 +93,7 @@ private extension CommunityWithdrawalSheet {
                     : String(localized: "Waiting for review")
             )
         } header: {
-            Text("What you're asking about")
+            Text("What you’re asking about")
         } footer: {
             Text(
                 withdrawal.isPublished
@@ -113,7 +113,7 @@ private extension CommunityWithdrawalSheet {
         } footer: {
             // No reason is required and the footer says so outright: this is
             // the hiker's own route and their own photographs.
-            Text("You don't have to give a reason. It's your hike.")
+            Text("You don’t have to give a reason. It’s your hike.")
         }
     }
 

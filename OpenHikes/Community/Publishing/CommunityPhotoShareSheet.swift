@@ -303,9 +303,9 @@ private extension CommunityPhotoShareSheet {
             CommunityFootnoteLabel(
                 text: Text(
                     """
-                    You've already added photos from this hike. Sending again adds a \
-                    second set beside the first — it doesn't replace it, and this app \
-                    can't take that one down. Ask for it to be removed from this hike's \
+                    You’ve already added photos from this hike. Sending again adds a \
+                    second set beside the first — it doesn’t replace it, and this app \
+                    can’t take that one down. Ask for it to be removed from this hike’s \
                     own screen.
                     """
                 ),
@@ -364,7 +364,7 @@ private extension CommunityPhotoShareSheet {
 
     var sentSection: some View {
         CommunitySentSection(
-            detail: "They'll appear on this trail once they've been checked.",
+            detail: "They’ll appear on this trail once they’ve been checked.",
             identifier: "community-photos-sent"
         )
     }
@@ -433,7 +433,7 @@ private extension CommunityPhotoShareSheet {
     static var publishedExplanation: String {
         String(
             localized: """
-            You've already published this hike, and a published hike can't be \
+            You’ve already published this hike, and a published hike can’t be \
             amended — so its route, its name and its notes stay exactly as they \
             are, and these photos go on as an addition to it.
             """
@@ -449,7 +449,7 @@ private extension CommunityPhotoShareSheet {
     static func alreadySent(count: Int) -> String {
         String(
             localized: """
-            \(count) photos have already been sent from this hike, so they're \
+            \(count) photos have already been sent from this hike, so they’re \
             left out. Tap one to send it again anyway.
             """
         )
@@ -510,7 +510,7 @@ nonisolated enum CommunityPhotoDisclosure {
         return String(
             localized: """
             \(photos) — resized before sending, with camera details and original \
-            location data removed. Your route, your notes and this hike's name stay \
+            location data removed. Your route, your notes and this hike’s name stay \
             on your device.
             """
         )

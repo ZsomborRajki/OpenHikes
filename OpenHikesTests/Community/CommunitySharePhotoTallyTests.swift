@@ -150,10 +150,10 @@ struct CommunitySharePhotoTallyTests {
     @Test("the sentence about the pictures staying behind reads for one and for many")
     func theSentenceIsNumberNeutral() {
         let one = CommunitySharePhotoTally.onAnotherDevice(count: 1)
-        #expect(one.hasPrefix("One of this hike's photos is"))
+        #expect(one.hasPrefix("One of this hike’s photos is"))
         #expect(!one.contains("1 of"))
 
         let many = CommunitySharePhotoTally.onAnotherDevice(count: 4)
-        #expect(many.hasPrefix("4 of this hike's photos are"))
+        #expect(many.hasPrefix("4 of this hike’s photos are"))
     }
 }

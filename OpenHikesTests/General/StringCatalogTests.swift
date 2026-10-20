@@ -44,7 +44,7 @@ struct StringCatalogTests {
         func alreadySent(_ count: Int) -> String {
             String(
                 localized: """
-                \(count) photos have already been sent from this hike, so they're \
+                \(count) photos have already been sent from this hike, so they’re \
                 left out. Tap one to send it again anyway.
                 """
             )
@@ -53,8 +53,8 @@ struct StringCatalogTests {
         #expect(alreadySent(2).hasPrefix("2 photos have already been sent"))
         #expect(CommunityPublishedPhotos.removalWarning(count: 1).hasPrefix("Publishing deletes the faded photo "))
         #expect(CommunityPublishedPhotos.removalWarning(count: 2).hasPrefix("Publishing deletes the 2 faded photos"))
-        #expect(CommunityPublishedPhotos.incompleteDownload(missing: 1).hasPrefix("One of this submission's photos"))
-        #expect(CommunityPublishedPhotos.incompleteDownload(missing: 2).hasPrefix("2 of this submission's photos"))
+        #expect(CommunityPublishedPhotos.incompleteDownload(missing: 1).hasPrefix("One of this submission’s photos"))
+        #expect(CommunityPublishedPhotos.incompleteDownload(missing: 2).hasPrefix("2 of this submission’s photos"))
     }
 
     /// The singular drops the count but not the trail, so it names the trail
@@ -77,5 +77,31 @@ struct StringCatalogTests {
         let german = meters.formatted(style.locale(Locale(identifier: "de_DE")))
         let american = meters.formatted(style.locale(Locale(identifier: "en_US")))
         #expect(german != american)
+    }
+
+    /// One apostrophe, the typographic one (#848). The straight `'` is what a
+    /// string typed in a hurry gets, so the catalogs are read from the source
+    /// tree and every English value is held to the rule, and
+    /// `.swiftlint.yml` holds the literals that never reach a catalog.
+    @Test("no English value uses a straight apostrophe", arguments: ["OpenHikes", "OpenHikesWatch", "OpenWidget"])
+    func catalogsUseTypographicApostrophes(folder: String) throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let data = try Data(contentsOf: root.appending(path: "\(folder)/Localizable.xcstrings"))
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try #require(json["strings"] as? [String: Any])
+
+        func values(in node: Any) -> [String] {
+            guard let dictionary = node as? [String: Any] else { return [] }
+            var all = (dictionary["stringUnit"] as? [String: Any])?["value"].map { [$0 as? String ?? ""] } ?? []
+            for (key, child) in dictionary where key != "stringUnit" { all += values(in: child) }
+            return all
+        }
+
+        let offenders = strings.flatMap { key, entry -> [String] in
+            let english = (entry as? [String: Any])?["localizations"] as? [String: Any]
+            return ([key] + values(in: english?["en"] as Any)).filter { $0.contains("'") }
+        }
+        #expect(offenders.isEmpty, "straight apostrophes in \(folder): \(offenders.sorted())")
     }
 }

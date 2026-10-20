@@ -50,14 +50,14 @@ enum LocationAccessNeed {
         case .always:
             """
             Background Trail Tracking needs Always location access, which \
-            OpenHikes doesn't have. Without it your widget and Live Activity \
+            OpenHikes doesn’t have. Without it your widget and Live Activity \
             stop updating as soon as you close the app. You can grant it in \
             Settings.
             """
         case .whileUsing:
             """
-            OpenHikes can't show where you are, centre the map on you, or \
-            report the weather where you're standing. Turn on Location \
+            OpenHikes can’t show where you are, centre the map on you, or \
+            report the weather where you’re standing. Turn on Location \
             Access for OpenHikes in Settings to use the location button.
             """
         }

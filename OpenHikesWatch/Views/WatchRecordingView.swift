@@ -122,7 +122,7 @@ struct WatchRecordingView: View {
             Text(
                 """
                 Records on this watch, with or without your iPhone. \
-                The hike goes to your iPhone when it's back in range.
+                The hike goes to your iPhone when it’s back in range.
                 """
             )
             .font(.caption2)
@@ -164,7 +164,7 @@ struct WatchRecordingView: View {
             .accessibilityLabel("Stop recording")
         }
         if model.recorder.phase == .paused {
-            Text("Paused. The ground you cover now isn't part of the hike.")
+            Text("Paused. The ground you cover now isn’t part of the hike.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -179,7 +179,7 @@ struct WatchRecordingView: View {
                 .font(.title3.monospacedDigit())
             Text(
                 model.queuedWalkCount > 0
-                    ? "Waiting for your iPhone. It'll go across on its own."
+                    ? "Waiting for your iPhone. It’ll go across on its own."
                     : "Sent to your iPhone."
             )
             .font(.caption2)
@@ -265,7 +265,7 @@ private struct UnsavedWalkPanel: View {
         ) {
             Button("Discard Hike", role: .destructive) { model.discardUnsavedWalk() }
         } message: {
-            Text("It hasn't been saved anywhere, so it can't be recovered.")
+            Text("It hasn’t been saved anywhere, so it can’t be recovered.")
         }
     }
 }

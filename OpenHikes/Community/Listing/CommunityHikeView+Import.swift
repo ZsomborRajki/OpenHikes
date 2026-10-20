@@ -65,7 +65,7 @@ extension CommunityHikeView {
     /// have just left.
     func missingPhotos(_ copy: CommunityPhotoCopy, of detail: CommunityHikeDetail) -> some View {
         HStack(alignment: .firstTextBaseline) {
-            Text("\(copy.failed.count) photos couldn't be saved to this hike.")
+            Text("\(copy.failed.count) photos couldn’t be saved to this hike.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             Spacer()

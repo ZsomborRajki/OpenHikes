@@ -100,7 +100,7 @@ nonisolated extension LiveRecordingReport {
         let clock = HikeFormat.spokenDuration(elapsed)
         let lead = isPaused
             ? "Your hike is paused at \(length)"
-            : "You're \(length) in"
+            : "You’re \(length) in"
         guard let trailName, !trailName.isEmpty else {
             return "\(lead), \(clock) elapsed."
         }
@@ -131,7 +131,7 @@ nonisolated extension HikeTotalsReport {
     /// hike of no length" are different answers and the distance alone tells
     /// them apart only by accident.
     func spokenSummary(for label: String) -> String {
-        guard hikeCount > 0 else { return "You haven't recorded a hike \(label)." }
+        guard hikeCount > 0 else { return "You haven’t recorded a hike \(label)." }
         let length = distance.formatted(
             .measurement(width: .wide, usage: .road)
         )

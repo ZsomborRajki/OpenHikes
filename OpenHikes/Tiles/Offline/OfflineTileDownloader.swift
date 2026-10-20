@@ -212,7 +212,7 @@ final class OfflineTileDownloader {
     ) {
         guard phase != .downloading else { return }
         guard source.permitsBulkDownload else {
-            phase = .failed("This map source doesn't allow offline downloads.")
+            phase = .failed("This map source doesn’t allow offline downloads.")
             return
         }
         guard route.count > 1 else {
@@ -220,7 +220,7 @@ final class OfflineTileDownloader {
             return
         }
         guard isOnline() else {
-            phase = .failed("You're offline — connect to save tiles.")
+            phase = .failed("You’re offline — connect to save tiles.")
             return
         }
 

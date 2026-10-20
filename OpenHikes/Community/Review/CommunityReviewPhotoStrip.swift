@@ -136,7 +136,7 @@ struct CommunityReviewPhotoStrip<Subject: CommunityReviewSubject>: View {
             )
             .accessibilityIdentifier("review-photos-incomplete")
         } else if decisions.removedPhotos.isEmpty {
-            Text("Leave out any photo that shouldn't be published. The rest still go.")
+            Text("Leave out any photo that shouldn’t be published. The rest still go.")
         } else if decisions.keptPhotoCount == 0, let emptiedMessage {
             // Not a warning about a removal but a description of what the
             // screen has become.

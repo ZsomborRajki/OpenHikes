@@ -114,7 +114,7 @@ nonisolated extension GPXImport {
             case .noUsablePoints: "No track points were found in this file."
             case .tooLarge: "This GPX file is too large to import."
             case .tooShort: "This GPX file has only one track point."
-            case .unreadable: "This file couldn't be read."
+            case .unreadable: "This file couldn’t be read."
             }
         }
 
@@ -133,7 +133,7 @@ nonisolated extension GPXImport {
             case .tooLarge: "A single hike is a few megabytes at most, and a file holds a few dozen tracks at most. "
                 + "This one is past what can be imported at once."
             case .tooShort: "A hike needs at least two points to have a route."
-            case .unreadable: "Check that it's a .gpx file and isn't damaged."
+            case .unreadable: "Check that it’s a .gpx file and isn’t damaged."
             }
         }
     }

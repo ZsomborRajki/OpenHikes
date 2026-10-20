@@ -183,7 +183,7 @@ struct TrailStopSearchSheet: View {
 
     @ViewBuilder private var failureRow: some View {
         Section {
-            Label("That place couldn't be found. Try another search.", systemImage: "exclamationmark.triangle")
+            Label("That place couldn’t be found. Try another search.", systemImage: "exclamationmark.triangle")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .accessibilityIdentifier("trail-stop-search-failed")

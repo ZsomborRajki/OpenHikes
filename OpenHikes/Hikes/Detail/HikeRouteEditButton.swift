@@ -32,7 +32,7 @@ struct HikeRouteEditButton: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("hike-edit-route")
         .confirmationDialog(
-            "Replace the trail you're drawing?",
+            "Replace the trail you’re drawing?",
             isPresented: $isConfirmingReplace,
             titleVisibility: .visible
         ) {

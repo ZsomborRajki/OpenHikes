@@ -221,7 +221,7 @@ nonisolated enum CuratedElevationFailure: LocalizedError, Equatable {
         case .noKey: "This build has no elevation key."
         case .notEntitled: "Elevation for these routes comes with OpenHikes Pro."
         case .server(let statusCode): "The elevation service answered \(statusCode)."
-        case .unusable(let reason): "The elevation service's answer was unusable: \(reason)."
+        case .unusable(let reason): "The elevation service’s answer was unusable: \(reason)."
         }
     }
 }

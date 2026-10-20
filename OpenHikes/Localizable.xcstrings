@@ -4,7 +4,7 @@
     "%@" : {
 
     },
-    "%@ — resized before sending, with camera details and original location data removed. Your route, your notes and this hike's name stay on your device." : {
+    "%@ — resized before sending, with camera details and original location data removed. Your route, your notes and this hike’s name stay on your device." : {
 
     },
     "%@ · %@" : {
@@ -215,7 +215,7 @@
         }
       }
     },
-    "%lld of this hike's photos are on the device they were added on, so they can't be shared from here." : {
+    "%lld of this hike’s photos are on the device they were added on, so they can’t be shared from here." : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -223,13 +223,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "One of this hike's photos is on the device it was added on, so it can't be shared from here."
+                  "value" : "One of this hike’s photos is on the device it was added on, so it can’t be shared from here."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld of this hike's photos are on the device they were added on, so they can't be shared from here."
+                  "value" : "%lld of this hike’s photos are on the device they were added on, so they can’t be shared from here."
                 }
               }
             }
@@ -237,7 +237,7 @@
         }
       }
     },
-    "%lld of this submission's photos didn't download, so none can be left out here — leaving one out rewrites the whole set from the copies on this device. Publish it as it is, decline it, or open it again." : {
+    "%lld of this submission’s photos didn’t download, so none can be left out here — leaving one out rewrites the whole set from the copies on this device. Publish it as it is, decline it, or open it again." : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -245,13 +245,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "One of this submission's photos didn't download, so none can be left out here — leaving one out rewrites the whole set from the copies on this device. Publish it as it is, decline it, or open it again."
+                  "value" : "One of this submission’s photos didn’t download, so none can be left out here — leaving one out rewrites the whole set from the copies on this device. Publish it as it is, decline it, or open it again."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld of this submission's photos didn't download, so none can be left out here — leaving one out rewrites the whole set from the copies on this device. Publish it as it is, decline it, or open it again."
+                  "value" : "%lld of this submission’s photos didn’t download, so none can be left out here — leaving one out rewrites the whole set from the copies on this device. Publish it as it is, decline it, or open it again."
                 }
               }
             }
@@ -316,7 +316,7 @@
         }
       }
     },
-    "%lld photos couldn't be saved to this hike." : {
+    "%lld photos couldn’t be saved to this hike." : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -324,13 +324,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld photo couldn't be saved to this hike."
+                  "value" : "%lld photo couldn’t be saved to this hike."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld photos couldn't be saved to this hike."
+                  "value" : "%lld photos couldn’t be saved to this hike."
                 }
               }
             }
@@ -360,7 +360,7 @@
         }
       }
     },
-    "%lld photos have already been sent from this hike, so they're left out. Tap one to send it again anyway." : {
+    "%lld photos have already been sent from this hike, so they’re left out. Tap one to send it again anyway." : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -368,13 +368,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "One photo has already been sent from this hike, so it's left out. Tap it to send it again anyway."
+                  "value" : "One photo has already been sent from this hike, so it’s left out. Tap it to send it again anyway."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld photos have already been sent from this hike, so they're left out. Tap one to send it again anyway."
+                  "value" : "%lld photos have already been sent from this hike, so they’re left out. Tap one to send it again anyway."
                 }
               }
             }
@@ -621,7 +621,7 @@
     "Campsites" : {
 
     },
-    "Can't be shared" : {
+    "Can’t be shared" : {
 
     },
     "Cancel" : {
@@ -648,7 +648,7 @@
     "Check that the device has storage available, then try again." : {
 
     },
-    "Check Whether It's Still Live" : {
+    "Check Whether It’s Still Live" : {
 
     },
     "Choose a Photo" : {
@@ -705,7 +705,7 @@
     "Community Hikes" : {
 
     },
-    "Community hikes are ones worth someone else's day out — a whole route, hiked by you, that isn't already on the list." : {
+    "Community hikes are ones worth someone else’s day out — a whole route, hiked by you, that isn’t already on the list." : {
 
     },
     "Completed" : {
@@ -738,34 +738,34 @@
     "Couldn’t Add Photo" : {
 
     },
-    "Couldn't Add Up Your Hikes" : {
+    "Couldn’t Add Up Your Hikes" : {
 
     },
-    "Couldn't check" : {
+    "Couldn’t check" : {
 
     },
     "Couldn’t Delete Offline Tiles" : {
 
     },
-    "Couldn't finish" : {
+    "Couldn’t finish" : {
 
     },
-    "Couldn't reach the community list just now, so this hike still reads the way it did. Try again when you're back online." : {
+    "Couldn’t reach the community list just now, so this hike still reads the way it did. Try again when you’re back online." : {
 
     },
     "Couldn’t Save Photo" : {
 
     },
-    "Couldn't Search" : {
+    "Couldn’t Search" : {
 
     },
-    "Couldn't search for places." : {
+    "Couldn’t search for places." : {
 
     },
-    "Couldn't take it down" : {
+    "Couldn’t take it down" : {
 
     },
-    "Couldn't take them down" : {
+    "Couldn’t take them down" : {
 
     },
     "Credit" : {
@@ -828,7 +828,7 @@
     "Delete Photo" : {
 
     },
-    "Delete this hike's offline tiles" : {
+    "Delete this hike’s offline tiles" : {
 
     },
     "Delete this photograph?" : {
@@ -1127,13 +1127,13 @@
     "Issued by %@" : {
 
     },
-    "It stops appearing for everybody, and the route and photographs behind it are deleted for good. This can't be undone." : {
+    "It stops appearing for everybody, and the route and photographs behind it are deleted for good. This can’t be undone." : {
 
     },
-    "It'll appear for other hikers once it's been checked." : {
+    "It’ll appear for other hikers once it’s been checked." : {
 
     },
-    "Its photos stay in this hike's gallery." : {
+    "Its photos stay in this hike’s gallery." : {
 
     },
     "Its record could not be saved, so the hike is still under way. Try ending it again." : {
@@ -1173,7 +1173,7 @@
     "Keep the Screen On" : {
 
     },
-    "Keeps your Home Screen widget and Live Activity showing your progress along the selected trail even when OpenHikes isn't open, using occasional, low-power location updates." : {
+    "Keeps your Home Screen widget and Live Activity showing your progress along the selected trail even when OpenHikes isn’t open, using occasional, low-power location updates." : {
 
     },
     "Kind" : {
@@ -1185,7 +1185,7 @@
     "Last Hike" : {
 
     },
-    "Leave out any photo that shouldn't be published. The rest still go." : {
+    "Leave out any photo that shouldn’t be published. The rest still go." : {
 
     },
     "Leave photo %lld out" : {
@@ -1224,7 +1224,7 @@
     "Live Activity" : {
 
     },
-    "Live for other hikers. Add photos you've taken since, or ask for the hike to be taken down." : {
+    "Live for other hikers. Add photos you’ve taken since, or ask for the hike to be taken down." : {
 
     },
     "Live, and the photos you added are waiting for a person to check them. Opens a request to withdraw them, or the hike." : {
@@ -1278,7 +1278,7 @@
     "Maps" : {
 
     },
-    "Maps marked “Needs API key” aren't available in this build." : {
+    "Maps marked “Needs API key” aren’t available in this build." : {
 
     },
     "Marked trails from Waymarked Trails, drawn over any map when zoomed in." : {
@@ -1606,7 +1606,7 @@
     "Opens a search for somewhere to put this stop" : {
 
     },
-    "Opens an explanation of why this hike can't be shared." : {
+    "Opens an explanation of why this hike can’t be shared." : {
 
     },
     "Opens OpenHikes Pro." : {
@@ -1845,7 +1845,7 @@
     "Places" : {
 
     },
-    "Places and photos are hidden from the map and won't be saved with this trail. Turn this on to show them and search for more." : {
+    "Places and photos are hidden from the map and won’t be saved with this trail. Turn this on to show them and search for more." : {
 
     },
     "Places Around Trail" : {
@@ -2011,7 +2011,7 @@
     "Replace Drawing" : {
 
     },
-    "Replace the trail you're drawing?" : {
+    "Replace the trail you’re drawing?" : {
 
     },
     "Report Hike" : {
@@ -2215,10 +2215,10 @@
     "Shows the photo full screen" : {
 
     },
-    "Shows the place's card" : {
+    "Shows the place’s card" : {
 
     },
-    "Shows this box's options" : {
+    "Shows this box’s options" : {
 
     },
     "Shows where this photo comes from and its licence" : {
@@ -2351,7 +2351,7 @@
     "Text" : {
 
     },
-    "That place couldn't be found. Try another search." : {
+    "That place couldn’t be found. Try another search." : {
 
     },
     "The %@ reaches the reviewer only once you send it there." : {
@@ -2363,7 +2363,7 @@
     "The file behind this photo is here but couldn’t be read." : {
 
     },
-    "The hike itself isn't reported — only the photo somebody added to it." : {
+    "The hike itself isn’t reported — only the photo somebody added to it." : {
 
     },
     "The maker holds one trail at a time, and the one you left half-drawn will be discarded." : {
@@ -2396,13 +2396,13 @@
     "The shared copy shows the route before your edit. Ask for its removal, then share this one." : {
 
     },
-    "Their community hikes don't appear on this device. Blocking is kept on this device only, and doesn't remove anything for anyone else — to have a hike taken down, report it from the hike's own screen." : {
+    "Their community hikes don’t appear on this device. Blocking is kept on this device only, and doesn’t remove anything for anyone else — to have a hike taken down, report it from the hike’s own screen." : {
 
     },
-    "Their hikes stop appearing on this device. You can undo this in Settings. Blocking doesn't report the hike or take it down." : {
+    "Their hikes stop appearing on this device. You can undo this in Settings. Blocking doesn’t report the hike or take it down." : {
 
     },
-    "Their photos stop appearing on any hike, on this device. You can undo this in Settings. Blocking doesn't report them or take anything down." : {
+    "Their photos stop appearing on any hike, on this device. You can undo this in Settings. Blocking doesn’t report them or take anything down." : {
 
     },
     "Their places are on the map behind this sheet." : {
@@ -2411,10 +2411,10 @@
     "These are the hikes from the last search that worked." : {
 
     },
-    "They'll appear on this trail once they've been checked." : {
+    "They’ll appear on this trail once they’ve been checked." : {
 
     },
-    "They're removed for everybody and deleted for good. The hike itself isn't touched." : {
+    "They’re removed for everybody and deleted for good. The hike itself isn’t touched." : {
 
     },
     "This also removes it from your other devices." : {
@@ -2426,13 +2426,13 @@
     "This hike is already in your list." : {
 
     },
-    "This hike is still live for other hikers, so it's still somewhere your photos can go." : {
+    "This hike is still live for other hikers, so it’s still somewhere your photos can go." : {
 
     },
-    "This hike isn't in the community list any more. You can reset it here, which forgets that it was ever sent and lets you share a corrected hike — but it also forgets the details a removal request needs, so only do it if you no longer want this one back." : {
+    "This hike isn’t in the community list any more. You can reset it here, which forgets that it was ever sent and lets you share a corrected hike — but it also forgets the details a removal request needs, so only do it if you no longer want this one back." : {
 
     },
-    "This Hike's Photos" : {
+    "This Hike’s Photos" : {
 
     },
     "This hike’s route doesn’t record when each point was reached, so photos can’t be matched to it by time. Hike it with OpenHikes and they can." : {
@@ -2444,16 +2444,16 @@
     "This is wider than a search reaches." : {
 
     },
-    "This photo couldn't be opened." : {
+    "This photo couldn’t be opened." : {
 
     },
     "This photograph couldn’t be opened." : {
 
     },
-    "This place couldn't be added." : {
+    "This place couldn’t be added." : {
 
     },
-    "This place couldn't be removed." : {
+    "This place couldn’t be removed." : {
 
     },
     "This route is mapped by OpenStreetMap contributors." : {
@@ -2465,7 +2465,7 @@
     "This submission has no creator recorded, so nobody could block whoever sent it. It cannot be published." : {
 
     },
-    "This trail couldn't be saved." : {
+    "This trail couldn’t be saved." : {
 
     },
     "This trail is already in the community list. Opens a form to add your photos to it." : {
@@ -2618,16 +2618,16 @@
     "What was this hike?" : {
 
     },
-    "What you entered wasn't lost. Check that the device has storage available, then try again." : {
+    "What you entered wasn’t lost. Check that the device has storage available, then try again." : {
 
     },
-    "What you're asking about" : {
+    "What you’re asking about" : {
 
     },
-    "What you're reporting" : {
+    "What you’re reporting" : {
 
     },
-    "What's wrong" : {
+    "What’s wrong" : {
 
     },
     "White" : {
@@ -2654,28 +2654,28 @@
     "You appear to be offline. Saved hikes and downloaded maps still work." : {
 
     },
-    "You don't have to give a reason. It's your hike." : {
+    "You don’t have to give a reason. It’s your hike." : {
 
     },
-    "You've already added photos from this hike. Sending again adds a second set beside the first — it doesn't replace it, and this app can't take that one down. Ask for it to be removed from this hike's own screen." : {
+    "You’ve already added photos from this hike. Sending again adds a second set beside the first — it doesn’t replace it, and this app can’t take that one down. Ask for it to be removed from this hike’s own screen." : {
 
     },
-    "You've already published this hike, and a published hike can't be amended — so its route, its name and its notes stay exactly as they are, and these photos go on as an addition to it." : {
+    "You’ve already published this hike, and a published hike can’t be amended — so its route, its name and its notes stay exactly as they are, and these photos go on as an addition to it." : {
 
     },
-    "You've already shared this hike. Sending it again adds a second copy for other hikers — it doesn't replace or update the first, and this app can't take that one down. Ask for it to be removed by reporting it from its own screen." : {
+    "You’ve already shared this hike. Sending it again adds a second copy for other hikers — it doesn’t replace or update the first, and this app can’t take that one down. Ask for it to be removed by reporting it from its own screen." : {
 
     },
-    "Your changes to this place couldn't be saved." : {
+    "Your changes to this place couldn’t be saved." : {
 
     },
-    "Your drawing wasn't lost. Check that the device has storage available, then save again." : {
+    "Your drawing wasn’t lost. Check that the device has storage available, then save again." : {
 
     },
     "Your Hikes" : {
 
     },
-    "Your library couldn't be read just now." : {
+    "Your library couldn’t be read just now." : {
 
     },
     "Your own hike, already live for other hikers." : {
@@ -2687,7 +2687,7 @@
     "Your photographs are yours, and %@ is already in the list. They go on it with the spot each one was taken, and a person reviews them before anybody else sees them." : {
 
     },
-    "Your report opens in your mail app so you can send it. You don't need an account to report a hike." : {
+    "Your report opens in your mail app so you can send it. You don’t need an account to report a hike." : {
 
     },
     "Your request opens in your mail app so you can send it. It carries the record names a reviewer needs, which this hike is the only place holding. The hike stays on this device either way — deleting it here would not take the shared copy down." : {

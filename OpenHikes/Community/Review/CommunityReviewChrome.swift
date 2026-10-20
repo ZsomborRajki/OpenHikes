@@ -85,7 +85,7 @@ struct CommunityReviewChrome: ViewModifier {
             } message: {
                 Text(declineWarning)
             }
-            .communityFailureAlert("Couldn't finish", failure: $decisionFailure)
+            .communityFailureAlert("Couldn’t finish", failure: $decisionFailure)
     }
 }
 

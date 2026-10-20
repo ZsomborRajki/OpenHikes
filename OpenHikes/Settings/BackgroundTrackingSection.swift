@@ -57,7 +57,7 @@ struct BackgroundTrackingSection: View {
             // the only honest way to show that is a line that stays.
             if backgroundTrackingEnabled, !locationManager.hasAlwaysAccess {
                 warning(
-                    "OpenHikes doesn't have Always location access, so this can't run. "
+                    "OpenHikes doesn’t have Always location access, so this can’t run. "
                         + "Turn it on in Settings."
                 )
                 .accessibilityIdentifier("background-tracking-needs-always")
@@ -71,7 +71,7 @@ struct BackgroundTrackingSection: View {
             Text(
                 """
                 Keeps your Home Screen widget and Live Activity showing your \
-                progress along the selected trail even when OpenHikes isn't \
+                progress along the selected trail even when OpenHikes isn’t \
                 open, using occasional, low-power location updates.
                 """
             )

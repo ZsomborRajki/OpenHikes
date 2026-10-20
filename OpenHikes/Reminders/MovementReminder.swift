@@ -228,7 +228,7 @@ nonisolated enum MovementReminderWording {
             kind: .resumeRecording,
             title: "Still hiking?",
             body: "Your recording has been paused for \(HikeFormat.duration(pausedFor))"
-                + " and you've moved \(distance(movedMeters)) since."
+                + " and you’ve moved \(distance(movedMeters)) since."
                 + " Resume to put the rest of the hike on the track."
         )
     }
@@ -241,7 +241,7 @@ nonisolated enum MovementReminderWording {
         return MovementReminder(
             kind: .resumeWalk,
             title: "Still on the trail?",
-            body: "\(subject) is paused, but you've covered \(distance(movedMeters))"
+            body: "\(subject) is paused, but you’ve covered \(distance(movedMeters))"
                 + " of it since. Resume to keep your progress."
         )
     }
@@ -259,7 +259,7 @@ nonisolated enum MovementReminderWording {
         return MovementReminder(
             kind: .leftTheTrail,
             title: "Off the trail",
-            body: "You're about \(distance(offRouteMeters)) from \(subject)."
+            body: "You’re about \(distance(offRouteMeters)) from \(subject)."
         )
     }
 
@@ -273,8 +273,8 @@ nonisolated enum MovementReminderWording {
         return MovementReminder(
             kind: .afterDark,
             title: "Finishing after dark",
-            body: "At your pace you'll reach the end of \(subject) around \(finishAt.formatted(time)),"
-                + " and it's dark from \(civilDusk.formatted(time))."
+            body: "At your pace you’ll reach the end of \(subject) around \(finishAt.formatted(time)),"
+                + " and it’s dark from \(civilDusk.formatted(time))."
         )
     }
 
@@ -308,7 +308,7 @@ nonisolated enum MovementReminderWording {
         MovementReminder(
             kind: .pauseRecording,
             title: "Taking a break?",
-            body: "You haven't moved for \(HikeFormat.duration(stillFor))."
+            body: "You haven’t moved for \(HikeFormat.duration(stillFor))."
                 + " Pause the recording to keep the stop out of your moving time."
         )
     }
