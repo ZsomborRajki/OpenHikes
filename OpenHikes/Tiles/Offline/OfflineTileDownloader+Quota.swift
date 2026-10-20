@@ -115,14 +115,19 @@ extension OfflineTileDownloader {
     /// *whether to ask*; the per-tile reservation on the write path is what
     /// actually holds the line, so an estimate that runs high frees a little
     /// more than was needed rather than overrunning the limit.
+    ///
+    /// `tiles` is the whole plan and stays protected from reclaim; `fetching`
+    /// is what the run will actually write, which a resumed download makes
+    /// smaller — tiles already on disk are not charged a second time.
     func spaceShortfall(
         tiles: [Tile],
+        fetching: [Tile],
         source: ActiveTileSource
     ) async -> SpaceShortfall? {
         guard let space = await quota.space(source.providerID),
               let licence = TileCache.durableQuota(forProviderID: source.providerID)
         else { return nil }
-        let required = Int64(tiles.count) * TileCache.estimatedTileBytes
+        let required = Int64(fetching.count) * TileCache.estimatedTileBytes
         let available = max(0, space.limit - space.used)
         guard required > available else { return nil }
 
@@ -139,6 +144,14 @@ extension OfflineTileDownloader {
             bytesToFree: shortfall,
             limit: space.limit
         )
+    }
+
+    /// A fresh download fetches its whole plan.
+    func spaceShortfall(
+        tiles: [Tile],
+        source: ActiveTileSource
+    ) async -> SpaceShortfall? {
+        await spaceShortfall(tiles: tiles, fetching: tiles, source: source)
     }
 
     /// The shortfall a download is waiting on, when it is waiting.
