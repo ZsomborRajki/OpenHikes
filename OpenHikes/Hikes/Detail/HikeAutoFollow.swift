@@ -6,6 +6,7 @@
 //
 
 import CoreLocation
+import Foundation
 import Observation
 import OpenHikesData
 
@@ -27,6 +28,17 @@ final class TrackerState {
     /// `nil` when auto-follow is off, there's no fix, or the fix is too far
     /// from the trail to match.
     var liveTrackerDistance: Double?
+}
+
+/// Matching history changes per fix and is never drawn. Holding it by
+/// reference keeps those writes from invalidating the detail screen's body;
+/// only `TrackerState` publishes the resulting chart position.
+@Observable
+final class FollowState {
+    /// Independent of the finger-driven tracker: a scrub must not choose the
+    /// leg the next fix is matched onto. `nil` lets the first fix seed it.
+    @ObservationIgnored var anchor: FollowAnchor?
+    @ObservationIgnored var search = OffRouteSearchPolicy()
 }
 
 /// The tie-break anchor auto-follow carries from one fix to the next: where
@@ -52,10 +64,13 @@ struct FollowAnchor: Equatable {
     /// did. A hiker who has turned round keeps producing them; one who stopped
     /// to look back down the trail produces a few and then stops.
     var contraryFixes = 0
+    /// UI events can ask about the cached fix again. Only a newer receiver
+    /// timestamp supplies another piece of evidence about the hiker's course.
+    private var lastFixTimestamp: Date?
 
     /// Fixes whose course must keep contradicting continuity before the
-    /// course wins. Three is three seconds at the rate fixes are published:
-    /// a look over the shoulder is shorter than that, a walk home is not.
+    /// course wins. These must be distinct fixes: finishing a chart scrub or
+    /// enabling following can re-read the same cached location.
     static let contraryFixesToSwitch = 3
 
     /// The distance a fix carrying `course` should be matched against, or
@@ -65,15 +80,15 @@ struct FollowAnchor: Equatable {
     /// course: direction of travel is evidence, and the anchor it would be
     /// replacing is only an assumption. Giving up continuity for that one fix
     /// is the price of getting the leg right, and it's paid at most once —
-    /// ``matched(at:course:from:)`` confirms the anchor from then on.
+    /// ``matched(at:course:from:contraryFixes:)`` confirms the anchor from then on.
     static func tieBreak(_ anchor: Self?, course: CLLocationDirection?) -> Double? {
         guard let anchor else { return nil }
         if !anchor.isCourseConfirmed, course != nil { return nil }
         return anchor.distance
     }
 
-    /// Matches one fix, and returns the match with the run of contrary fixes
-    /// to hand to ``matched(at:course:from:contraryFixes:)``.
+    /// Matches one fix and carries its evidence into the next anchor. An
+    /// unusable or off-trail fix breaks the run without losing continuity.
     ///
     /// Continuity settles which leg a fix is on, so noise can't flip a hiker
     /// between two. But on a trail that retraces itself the two legs are
@@ -82,36 +97,54 @@ struct FollowAnchor: Equatable {
     /// confirmed, the course is asked as a second opinion; it takes over only
     /// after ``contraryFixesToSwitch`` fixes in a row have disagreed.
     static func advance(
-        _ anchor: Self?,
+        _ anchor: inout Self?,
         on profile: RouteProfile,
-        to coordinate: CLLocationCoordinate2D,
-        course: CLLocationDirection?,
+        to fix: RouteFix?,
         scope: RouteProfile.SearchScope
-    ) -> (match: (distanceAlongRoute: Double, offRouteMeters: Double)?, contraryFixes: Int) {
+    ) -> (distanceAlongRoute: Double, offRouteMeters: Double)? {
+        guard let fix else {
+            anchor?.contraryFixes = 0
+            return nil
+        }
         let steady = profile.nearestPoint(
-            to: coordinate,
-            near: tieBreak(anchor, course: course),
-            heading: course,
+            to: fix.coordinate,
+            near: tieBreak(anchor, course: fix.course),
+            heading: fix.course,
             scope: scope
         )
-        guard let anchor, anchor.isCourseConfirmed, let course, let steady,
+        guard let steady,
               steady.offRouteMeters <= RouteProfile.followMatchThresholdMeters else {
-            return (steady, 0)
+            anchor?.contraryFixes = 0
+            return steady
         }
-        let opinion = profile.nearestPoint(
-            to: coordinate,
-            near: anchor.distance,
-            heading: course,
-            headingOverridesReference: true,
-            scope: scope
-        )
-        guard let opinion,
-              abs(opinion.distanceAlongRoute - steady.distanceAlongRoute) > contraryDistanceMeters else {
-            return (steady, 0)
+        if let previousTimestamp = anchor?.lastFixTimestamp, fix.timestamp <= previousTimestamp {
+            return steady
         }
-        let count = anchor.contraryFixes + 1
-        guard count >= contraryFixesToSwitch else { return (steady, count) }
-        return (opinion, 0)
+
+        var match = steady
+        var count = 0
+        if let previous = anchor, previous.isCourseConfirmed, let course = fix.course {
+            let opinion = profile.nearestPoint(
+                to: fix.coordinate,
+                near: previous.distance,
+                heading: course,
+                headingOverridesReference: true,
+                scope: scope
+            )
+            if let opinion,
+               opinion.offRouteMeters <= RouteProfile.followMatchThresholdMeters,
+               abs(opinion.distanceAlongRoute - steady.distanceAlongRoute) > contraryDistanceMeters {
+                count = previous.contraryFixes + 1
+                if count >= contraryFixesToSwitch {
+                    match = opinion
+                    count = 0
+                }
+            }
+        }
+        var next = matched(at: match.distanceAlongRoute, course: fix.course, from: anchor, contraryFixes: count)
+        next.lastFixTimestamp = fix.timestamp
+        anchor = next
+        return match
     }
 
     /// How far apart the two answers must be to count as different legs. Two

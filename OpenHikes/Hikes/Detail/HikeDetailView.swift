@@ -167,19 +167,9 @@ struct HikeDetailView: View {
     /// True while a finger is actively dragging the elevation chart — pauses
     /// auto-follow's own updates to `trackerDistance` so it doesn't fight the drag.
     @State private var isScrubbing = false
-    /// Where auto-follow last matched a fix — the only thing allowed to anchor
-    /// the next match's tie-break.
-    ///
-    /// Deliberately not `tracker.trackerDistance`: that starts at 0 on every
-    /// selection (a placeholder, not a position) and is also driven by the
-    /// user's finger on the elevation chart. Anchoring on it let a scrub to
-    /// the far end of the trail decide where the next reacquired fix matched —
-    /// on an out-and-back, that is the difference between the start and the
-    /// finish. `nil` means no fix has been matched yet, which is what tells
-    /// ``RouteProfile/nearestPoint(to:near:heading:headingOverridesReference:scope:)`` to work out the
-    /// leg from scratch rather than continue from a position.
-    @State private var followAnchor: FollowAnchor?
-    @State private var offRouteSearch = OffRouteSearchPolicy()
+    /// Matcher history is updated only by event handlers, independently of
+    /// the chart's manual tracker and of this screen's render state.
+    @State private var follow = FollowState()
 
     var body: some View {
         // Auto-follow's per-fix tracker updates must NOT re-run this body —
@@ -253,8 +243,8 @@ struct HikeDetailView: View {
             // Place the tracker at the start of the track, on both graph and map.
             tracker.trackerDistance = 0
             tracker.liveTrackerDistance = nil
-            followAnchor = nil
-            offRouteSearch = OffRouteSearchPolicy()
+            follow.anchor = nil
+            follow.search = OffRouteSearchPolicy()
             highlight.move(to: built.coordinate(atDistance: 0))
             refreshStoredBytes()
             autoSave.hikeSelectionChanged(to: hike)
@@ -842,24 +832,28 @@ private extension HikeDetailView {
         // Before the match, so a walk left unmatched for six hours is closed
         // on the fix that would otherwise have quietly extended it.
         walkSession.endIfAbandoned()
-        guard hike.autoFollowEnabled || walkSession.isWalking(hike.id),
-              let fix = locationManager.routeFix(
+        let fix: RouteFix?
+        if hike.autoFollowEnabled || walkSession.isWalking(hike.id) {
+            fix = locationManager.routeFix(
                 maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters
-              ) else {
+            )
+        } else {
+            fix = nil
+        }
+        let searchScope = follow.search.scope
+        let match = FollowAnchor.advance(
+            &follow.anchor,
+            on: profile,
+            to: fix,
+            scope: searchScope
+        )
+        guard let fix else {
             clearLiveFollow(profile: profile)
             return
         }
-        let searchScope = offRouteSearch.scope
-        let (match, contraryFixes) = FollowAnchor.advance(
-            followAnchor,
-            on: profile,
-            to: fix.coordinate,
-            course: fix.course,
-            scope: searchScope
-        )
         let onRoute = (match?.offRouteMeters ?? .greatestFiniteMagnitude)
             <= RouteProfile.followMatchThresholdMeters
-        offRouteSearch.record(matched: onRoute, scope: searchScope)
+        follow.search.record(matched: onRoute, scope: searchScope)
         guard onRoute, let match else {
             // Leaving the route is what rearms auto-start after an End: the
             // hiker is off this trail, so coming back to it is a new walk.
@@ -867,12 +861,6 @@ private extension HikeDetailView {
             clearLiveFollow(profile: profile, offRoute: match)
             return
         }
-        followAnchor = .matched(
-            at: match.distanceAlongRoute,
-            course: fix.course,
-            from: followAnchor,
-            contraryFixes: contraryFixes
-        )
         // The walk is proposed here, on the first matched fix with following
         // on, starts once later ones show the hiker moving along the route,
         // and this is where every match after that extends it. Selection
