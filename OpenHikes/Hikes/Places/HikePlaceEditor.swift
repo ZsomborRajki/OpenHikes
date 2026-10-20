@@ -20,13 +20,14 @@ struct HikePlaceEditor: View {
     /// Saves the change. The form closes only once it has been kept.
     let onSave: (_ name: String, _ symbol: TrailPlaceSymbol?, _ note: String) throws(HikePlaceRefusal) -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var symbol: TrailPlaceSymbol?
     @State private var note = ""
     /// Set when *Save* was refused. The form stays up under it, as the hiker
     /// left it, so tapping *Save* again is the retry.
     @State private var refusal: HikePlaceRefusal?
+    /// Set once the change has been kept, which is what closes the form.
+    @State private var isSaved = false
 
     var body: some View {
         NavigationStack {
@@ -48,13 +49,13 @@ struct HikePlaceEditor: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(role: .cancel) { dismiss() }
+                    DismissButton(role: .cancel)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(role: .confirm) {
                         do throws(HikePlaceRefusal) {
                             try onSave(name, symbol, note)
-                            dismiss()
+                            isSaved = true
                         } catch {
                             refusal = error
                         }
@@ -63,6 +64,7 @@ struct HikePlaceEditor: View {
                 }
             }
             .hikePlaceRefusalAlert($refusal)
+            .dismiss(when: isSaved)
         }
         .onAppear {
             name = place.name

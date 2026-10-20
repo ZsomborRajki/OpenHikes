@@ -43,11 +43,20 @@ struct RecordingPlaceSheet: View {
     let onAddOwn: (CLLocationCoordinate2D) -> Void
 
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
     @State private var finder = NearbyPlaceFinder()
     /// Set when adding a mapped place was refused. The sheet stays up under
     /// it, so adding again is the retry.
     @State private var refusal: HikePlaceRefusal?
+    /// Why the sheet is closing, once it is. The sheet goes first and the map
+    /// is told after, so a screen pushed in answer opens over a map and not
+    /// under a sheet.
+    @State private var exit: Exit?
+
+    private enum Exit: Equatable {
+        case addOwn
+        /// The place to open, if the add found one.
+        case opened(UUID?)
+    }
 
     var body: some View {
         NavigationStack {
@@ -61,10 +70,16 @@ struct RecordingPlaceSheet: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(role: .cancel) { dismiss() }
+                    DismissButton(role: .cancel)
                 }
             }
             .hikePlaceRefusalAlert($refusal)
+        }
+        .dismiss(after: exit) { exit in
+            switch exit {
+            case .addOwn: onAddOwn(coordinate)
+            case .opened(let id): if let id { onAdded(id) }
+            }
         }
         .task {
             guard let source else { return }
@@ -109,8 +124,7 @@ struct RecordingPlaceSheet: View {
     private var ownSection: some View {
         Section {
             Button("Add Your Own Place", systemImage: "mappin.and.ellipse") {
-                dismiss()
-                onAddOwn(coordinate)
+                exit = .addOwn
             }
             .accessibilityIdentifier("recording-place-add-own")
         } header: {
@@ -131,16 +145,15 @@ struct RecordingPlaceSheet: View {
             refusal = error
             return
         }
-        dismiss()
         guard added else {
             let held = hike.places.first { held in
                 guard let osm = place.osm, let other = held.osm else { return false }
                 return osm.isSameElement(as: other)
             }
-            if let held { onAdded(held.id) }
+            exit = .opened(held?.id)
             return
         }
-        onAdded(place.id)
+        exit = .opened(place.id)
     }
 
     private static func distance(from coordinate: CLLocationCoordinate2D, to place: TrailPlace) -> String {

@@ -49,7 +49,6 @@ struct HikePlaceView: View {
     var onOpenPlace: (UUID) -> Void = { _ in /* no-op default */ }
 
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
     @State private var isEditing = false
     @State private var isConfirmingRemoval = false
     /// Set when *Remove*'s save was refused. The place is back on the screen
@@ -62,7 +61,7 @@ struct HikePlaceView: View {
                 content(card)
             } else {
                 // Removed — here, or on another device while this was open.
-                Color.clear.onAppear { dismiss() }
+                DismissOnAppear()
             }
         }
         .navigationTitle(Text("Place"))
