@@ -23,6 +23,13 @@
 //  than ``graceInterval`` either side, the answer is `nil` rather than a
 //  plausible-looking point halfway along a line nobody walked.
 //
+//  A pause is the same refusal made deliberately. The hiker told the
+//  recording to stop watching, so the leg between the fix before a pause and
+//  the fix that resumed it was never part of the walk at all — however short
+//  it was. Nothing is interpolated across one: either side of it is an end of
+//  a segment, held to the same grace as the ends of the walk, and the middle
+//  of a long one is `nil`.
+//
 //  ``secondsFromFix`` carries what is left of the doubt out to the caller, so
 //  a picture placed by interpolation can say how far it was interpolated
 //  rather than presenting itself as a measurement.
@@ -35,7 +42,8 @@ import OpenHikesData
 
 nonisolated struct HikePhotoTimeline: Sendable {
     /// How far outside a fix a photograph can be taken and still be placed at
-    /// it — at either end of the walk, or either side of a gap in the middle.
+    /// it — at either end of the walk, or either side of a gap or a pause in
+    /// the middle.
     ///
     /// Five minutes is roughly a quarter of a kilometre at walking pace, which
     /// is the largest error worth offering at all: past that the pin stops
@@ -52,6 +60,10 @@ nonisolated struct HikePhotoTimeline: Sendable {
         let timestamp: Date
         let latitude: Double
         let longitude: Double
+        /// Whether the recording was paused over the stretch arriving at this
+        /// fix — ``RouteCoordinate/isPauseBoundary`` carried across, so the
+        /// lookup can tell a resume from the next step of the same segment.
+        let resumesAfterPause: Bool
 
         var coordinate: CLLocationCoordinate2D {
             CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -97,13 +109,24 @@ nonisolated struct HikePhotoTimeline: Sendable {
     /// construction, but an imported one is whatever the file said, and a
     /// single out-of-order point would break every binary search below.
     init?(route: [RouteCoordinate]) {
-        let stamped = route.compactMap { point -> Fix? in
-            guard let timestamp = point.timestamp else { return nil }
-            return Fix(
-                timestamp: timestamp,
-                latitude: point.latitude,
-                longitude: point.longitude
+        var stamped: [Fix] = []
+        stamped.reserveCapacity(route.count)
+        // A pause describes the leg *arriving* at its point, so one on a
+        // point without a timestamp is not dropped with the point: it moves to
+        // the next fix that has one, whose arriving leg now spans that pause.
+        var pausedSinceLastFix = false
+        for point in route {
+            pausedSinceLastFix = pausedSinceLastFix || point.isPauseBoundary
+            guard let timestamp = point.timestamp else { continue }
+            stamped.append(
+                Fix(
+                    timestamp: timestamp,
+                    latitude: point.latitude,
+                    longitude: point.longitude,
+                    resumesAfterPause: pausedSinceLastFix
+                )
             )
+            pausedSinceLastFix = false
         }
         guard !stamped.isEmpty else { return nil }
         // Sorted by timestamp, and only the first of any duplicate kept: two
@@ -137,6 +160,14 @@ nonisolated struct HikePhotoTimeline: Sendable {
         let gap = later.timestamp.timeIntervalSince(earlier.timestamp)
         let sinceEarlier = date.timeIntervalSince(earlier.timestamp)
         let untilLater = later.timestamp.timeIntervalSince(date)
+        // A paused leg is not a stretch of the walk at all, so there is no
+        // line to interpolate along — only the segment that ended before it
+        // and the one that resumed after it, each placed at its own end.
+        if later.resumesAfterPause {
+            return sinceEarlier <= untilLater
+                ? endPosition(earlier, offsetTo: date)
+                : endPosition(later, offsetTo: date)
+        }
         let secondsFromFix = min(sinceEarlier, untilLater)
         // A gap the walk produced no fix across is a stretch whose route is
         // unknown, however straight the line drawn over it looks. Placing a
@@ -155,8 +186,9 @@ nonisolated struct HikePhotoTimeline: Sendable {
         )
     }
 
-    /// A photograph outside the walk's own span, placed at the end nearest to
-    /// it — but only while that end is within the grace.
+    /// A photograph outside a recorded segment — before the walk, after it, or
+    /// inside a pause — placed at the end nearest to it, but only while that
+    /// end is within the grace.
     private func endPosition(_ fix: Fix, offsetTo date: Date) -> Position? {
         let offset = abs(date.timeIntervalSince(fix.timestamp))
         guard offset <= Self.graceInterval else { return nil }
