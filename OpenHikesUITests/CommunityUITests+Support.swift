@@ -120,11 +120,14 @@ nonisolated enum SeededQueuedHike {
 
 /// What `--ui-test-community=commons` adds: three Wikimedia Commons
 /// photographs on every route, and across the north of the area the tab
-/// searches. Mirrors ``SeededCommonsPhotoSource``.
+/// searches — where the east one has two more beside it, which the map draws
+/// as one group. Mirrors ``SeededCommonsPhotoSource``.
 nonisolated enum SeededCommons {
     static let firstAuthor = "Anna Berger"
     static let licence = "CC BY-SA 4.0"
     static let count = 3
+    /// The east photograph and the two taken beside it.
+    static let groupCount = 3
 }
 
 /// How many screens ``XCTestCase/awaitCommunityAnswer(_:in:)`` walks before
@@ -385,6 +388,15 @@ extension XCTestCase {
         app.descendants(matching: .any)
             .matching(identifier: "community-commons-photo-pin")
             .matching(NSPredicate(format: "label BEGINSWITH %@", "Photo by \(SeededCommons.firstAuthor)"))
+            .firstMatch
+    }
+
+    /// The *Community* tab's map pin for the group of Commons photographs the
+    /// area search stands beside its east one — see ``SeededCommons``.
+    @MainActor
+    func communityCommonsPhotoGroup(in app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any)
+            .matching(identifier: "community-commons-photo-group")
             .firstMatch
     }
 

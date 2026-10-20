@@ -8,6 +8,7 @@
 
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import SwiftData
 import Testing
 
@@ -97,5 +98,36 @@ struct ImportSelectionGateTests {
         let hike = Fixture.hike(in: context)
 
         #expect(ImportSelectionGate().destination(for: [.recording, .placesNearby(hike)]) == .recording)
+    }
+
+    /// A tile of a Commons group's grid opens a photograph over it, and an
+    /// import finishing after that push must not take the map.
+    @Test("a Commons group's grid and a photograph opened over it are different screens")
+    func commonsGroupIsItsOwnScreen() {
+        let pages = (1...2).compactMap { URL(string: "https://commons.wikimedia.org/wiki/File:\($0).jpg") }
+        let photos = pages.map { page in
+            CommonsPhoto(
+                pin: CommunityPhotoPin(capturedAt: .distantPast, coordinate: nil),
+                fileURL: URL(filePath: "/tmp/\(page.lastPathComponent)"),
+                credit: CommonsPhotoCredit(
+                    author: nil,
+                    licence: HikePhotoLicence(name: "CC0", url: nil, sourceURL: page)
+                )
+            )
+        }
+        let gate = ImportSelectionGate()
+        let grid: [SheetRoute] = [.commonsPhotos(photos)]
+        let token = gate.token(selectedHikeID: nil, path: grid)
+
+        #expect(gate.destination(for: grid) == .commonsPhotos(pages))
+        #expect(
+            !gate.permits(
+                token: token,
+                selectedHikeID: nil,
+                path: grid + [.commonsPhoto(photos[0])],
+                currentRecordingHikeID: nil,
+                recordingPresented: false
+            )
+        )
     }
 }

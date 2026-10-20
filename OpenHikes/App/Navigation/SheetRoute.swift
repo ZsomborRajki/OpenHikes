@@ -14,6 +14,11 @@ enum SheetRoute: Hashable {
     /// carries a listing — it is a value with no store behind it. See
     /// ``CommonsPhotoView``.
     case commonsPhoto(CommonsPhoto)
+    /// Commons photographs standing too close together on the *Community*
+    /// tab's map to draw apart, as a grid whose tiles open the screen above.
+    /// Newest first, the order the map drew the group by. See
+    /// ``CommonsPhotoGroupView``.
+    case commonsPhotos([CommonsPhoto])
     /// A published hike, before it is imported. Carries the listing rather
     /// than a `Hike` because there is no `Hike` yet — that is the whole
     /// question the screen is asking — and the listing is a `Sendable` value
@@ -117,8 +122,8 @@ enum SheetRoute: Hashable {
         // deleted. A community preview — and the gallery over it — is about a
         // hike that is not in the library at all, which is exactly the state a
         // deletion puts one back into.
-        case .commonsPhoto, .communityHike, .communityPhoto, .pendingPhotos, .pendingSubmission, .recording, .totals,
-            .trailDraft:
+        case .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .pendingPhotos, .pendingSubmission,
+            .recording, .totals, .trailDraft:
             false
         }
     }
@@ -155,12 +160,13 @@ enum SheetRoute: Hashable {
     /// different trail is tapped, so one preview replaces the last rather
     /// than stacking onto it.
     ///
-    /// A Commons photograph's screen counts too: it is the same kind of jump
-    /// from a pin on the same map, so a hike tapped over a photograph replaces
-    /// it, and a photograph tapped over a hike's preview replaces that.
+    /// A Commons photograph's screen counts too, and a group's grid: each is
+    /// the same kind of jump from a pin on the same map, so a hike tapped over
+    /// a photograph replaces it, and a photograph tapped over a hike's preview
+    /// replaces that.
     var isCommunityPreview: Bool {
         switch self {
-        case .commonsPhoto, .communityHike, .communityPhoto: true
+        case .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto: true
         case .hike, .newPlace, .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .placesNearby,
             .recording, .routeStyle, .totals, .trailDraft, .walk:
             false
@@ -173,8 +179,8 @@ enum SheetRoute: Hashable {
     var prefersFullHeight: Bool {
         switch self {
         case .communityPhoto, .photo: true
-        case .commonsPhoto, .communityHike, .hike, .newPlace, .pendingPhotos, .pendingSubmission, .place,
-            .placesAround, .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
+        case .commonsPhoto, .commonsPhotos, .communityHike, .hike, .newPlace, .pendingPhotos, .pendingSubmission,
+            .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
             false
         }
     }
@@ -190,8 +196,9 @@ enum SheetRoute: Hashable {
     var revealsMapBeside: Bool {
         switch self {
         case .photo: true
-        case .commonsPhoto, .communityHike, .communityPhoto, .hike, .newPlace, .pendingPhotos, .pendingSubmission,
-            .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
+        case .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .hike, .newPlace, .pendingPhotos,
+            .pendingSubmission, .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals, .trailDraft,
+            .walk:
             false
         }
     }
@@ -203,6 +210,7 @@ enum SheetRoute: Hashable {
     // are the ones the synthesis would have used.
     static func == (lhs: Self, rhs: Self) -> Bool {
         if lhs.isAboutPlaces || rhs.isAboutPlaces { return placeRoutesEqual(lhs, rhs) }
+        if lhs.isAboutCommons || rhs.isAboutCommons { return commonsRoutesEqual(lhs, rhs) }
         return switch (lhs, rhs) {
         case let (.hike(left), .hike(right)): left == right
         case let (.routeStyle(left), .routeStyle(right)): left == right
@@ -219,10 +227,29 @@ enum SheetRoute: Hashable {
             left.id == right.id && leftIndex == rightIndex
         case let (.pendingSubmission(left), .pendingSubmission(right)): left.id == right.id
         case let (.pendingPhotos(left), .pendingPhotos(right)): left.id == right.id
+        default: false
+        }
+    }
+
+    /// Whether this is one of the two routes about Commons photographs.
+    private var isAboutCommons: Bool {
+        switch self {
+        case .commonsPhoto, .commonsPhotos: true
+        default: false
+        }
+    }
+
+    /// `==` for the two routes about Commons photographs — split from `==`
+    /// so that switch stays inside the complexity limit.
+    private static func commonsRoutesEqual(_ lhs: Self, _ rhs: Self) -> Bool {
+        switch (lhs, rhs) {
         // By its Commons page, which is what names a photograph; the file it
         // was downloaded into is a fact about one search.
         case let (.commonsPhoto(left), .commonsPhoto(right)):
             left.credit.licence.sourceURL == right.credit.licence.sourceURL
+        // A group by its photographs' pages, for the same reason.
+        case let (.commonsPhotos(left), .commonsPhotos(right)):
+            left.map(\.credit.licence.sourceURL) == right.map(\.credit.licence.sourceURL)
         default: false
         }
     }
@@ -261,7 +288,7 @@ enum SheetRoute: Hashable {
         case let .walk(walk):
             hasher.combine(3)
             hasher.combine(walk.persistentModelID)
-        case .commonsPhoto, .communityHike, .communityPhoto, .pendingSubmission, .pendingPhotos:
+        case .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .pendingSubmission, .pendingPhotos:
             hashCommunity(into: &hasher)
         case .trailDraft:
             hasher.combine(8)
@@ -287,9 +314,9 @@ enum SheetRoute: Hashable {
         }
     }
 
-    /// The four routes about the shared list, which hash by record names —
-    /// split from ``hash(into:)`` so that switch stays inside the complexity
-    /// limit.
+    /// The routes about the shared list, which hash by record names or
+    /// Commons pages — split from ``hash(into:)`` so that switch stays inside
+    /// the complexity limit.
     private func hashCommunity(into hasher: inout Hasher) {
         switch self {
         case let .communityHike(listing):
@@ -315,6 +342,9 @@ enum SheetRoute: Hashable {
         case let .commonsPhoto(photo):
             hasher.combine(15)
             hasher.combine(photo.credit.licence.sourceURL)
+        case let .commonsPhotos(photos):
+            hasher.combine(16)
+            for photo in photos { hasher.combine(photo.credit.licence.sourceURL) }
         case .hike, .newPlace, .photo, .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals,
             .trailDraft, .walk:
             break
