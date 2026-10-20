@@ -218,7 +218,10 @@ nonisolated enum CommunityRoutePayload {
         limits: Limits = .standard
     ) -> [RouteCoordinate] {
         guard route.count <= limits.maximumPointCount else { return [] }
-        let points = route.compactMap(usable)
+        // The spike rule needs the neighbours, so it runs over the route
+        // rather than point by point, and after the range check so a void
+        // run's neighbours are the real heights around it.
+        let points = PlausibleElevation.despiked(route.compactMap(usable))
         guard points.count >= 2 else { return [] }
         return points
     }
@@ -238,12 +241,13 @@ nonisolated enum CommunityRoutePayload {
     /// decodes to a `NaN` — both are ordinary JSON numbers — and either one
     /// poisons every figure walked out of the route afterwards, because a
     /// `NaN` loses every comparison it is in and so survives `min` and `max`
-    /// as the answer.
+    /// as the answer. A finite placeholder such as `-9999` is emptied by the
+    /// same ``PlausibleElevation`` rule an imported GPX gets.
     private static func usable(_ point: RouteCoordinate) -> RouteCoordinate? {
         guard Mercator.isRepresentable(latitude: point.latitude, longitude: point.longitude)
         else { return nil }
         var usable = point
-        if let elevation = point.elevation, !elevation.isFinite { usable.elevation = nil }
+        usable.elevation = PlausibleElevation.validated(point.elevation)
         usable.timestamp = PlausibleTimestamp.validated(point.timestamp)
         return usable
     }
