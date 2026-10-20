@@ -34,9 +34,10 @@ extension MapView.Coordinator {
     /// the two at a glance on a route that carries both.
     private static let pausedRouteDashPattern: [Int] = [1, 6]
 
-    /// The outline of the lines nobody styles — the trail being drawn and a
-    /// recording's — which is every hike's border until its owner picks one,
-    /// so all the lines on a map read against the basemap alike.
+    /// The outline of the lines nobody styles — the trail being drawn, a
+    /// recording's and the shared hikes' — which is every hike's border until
+    /// its owner picks one, so all the lines on a map read against the
+    /// basemap alike.
     static var defaultBorderColor: CGColor {
         #if os(macOS)
         NSColor(RouteStyle.defaultBorder).cgColor
