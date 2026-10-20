@@ -29,7 +29,9 @@ private final class RecordingBackgroundTime {
     /// `false` makes every reservation a refusal, which is what a device out
     /// of background time answers.
     var isAvailable = true
-    private var expirationHandler: (@MainActor () -> Void)?
+    /// Reuses an ended handle to exercise reservation identity.
+    var reusesToken = false
+    private(set) var expirationHandler: (@MainActor () -> Void)?
     private var nextToken = 1
 
     var reservation: BackgroundTimeReservation {
@@ -39,7 +41,7 @@ private final class RecordingBackgroundTime {
                 guard isAvailable else { return nil }
                 expirationHandler = handler
                 defer { nextToken += 1 }
-                return BackgroundTimeToken(rawValue: nextToken)
+                return BackgroundTimeToken(rawValue: reusesToken ? 1 : nextToken)
             },
             end: { [self] token in ended.append(token) }
         )
@@ -60,7 +62,7 @@ private final class RecordingBackgroundTime {
 /// test looks at what time it holds. The shape `SaveProbe` takes in
 /// `OfflineTileDownloaderTests+Window.swift`, for the reason it gives.
 private actor ParkedSaves {
-    private var arrived = false
+    private(set) var arrived = false
     private var isReleased = false
     private var parked: [CheckedContinuation<Void, Never>] = []
     private var arrivalWaiters: [CheckedContinuation<Void, Never>] = []
@@ -100,6 +102,14 @@ struct OfflineDownloadBackgroundTimeTests {
         urlTemplate: "http://127.0.0.1:9/{z}/{x}/{y}.png",
         maximumZ: 10
     )
+
+    private var reclaimingQuota: OfflineTileDownloader.QuotaBroker {
+        .init(
+            space: { _ in (limit: 0, used: 0) },
+            reclaimable: { _, _ in .max },
+            reclaim: { _, _, bytes in bytes }
+        )
+    }
 
     private func downloader(
         _ time: RecordingBackgroundTime
@@ -250,9 +260,10 @@ struct OfflineDownloadBackgroundTimeTests {
     /// after the restart has taken its grant. That tail used to end whatever
     /// the downloader held — the replacement's grant, with the replacement
     /// still downloading and now suspendable on lock (#876).
-    @Test("a cancelled run's late tail leaves its replacement's grant alone")
-    func supersededTailKeepsTheReplacementsGrant() async throws {
+    @Test("a cancelled run's late tail leaves its replacement's grant alone", arguments: [false, true])
+    func supersededTailKeepsTheReplacementsGrant(reusesToken: Bool) async throws {
         let time = RecordingBackgroundTime()
+        time.reusesToken = reusesToken
         let saves = ParkedSaves()
         let downloader = downloader(time, parkingIn: saves)
 
@@ -277,7 +288,10 @@ struct OfflineDownloadBackgroundTimeTests {
 
         await saves.release()
         await downloader.waitForCurrentRun()
-        #expect(time.ended == [BackgroundTimeToken(rawValue: 1), BackgroundTimeToken(rawValue: 2)])
+        #expect(time.ended == [
+            BackgroundTimeToken(rawValue: 1),
+            BackgroundTimeToken(rawValue: reusesToken ? 1 : 2),
+        ])
     }
 
     /// The grant `start` took went back when planning stopped to ask about
@@ -290,11 +304,7 @@ struct OfflineDownloadBackgroundTimeTests {
         let downloader = downloader(
             time,
             parkingIn: saves,
-            quota: .init(
-                space: { _ in (limit: 0, used: 0) },
-                reclaimable: { _, _ in .max },
-                reclaim: { _, _, bytes in bytes }
-            )
+            quota: reclaimingQuota
         )
         downloader.start(
             route: Fixture.ridgeRoute,
@@ -316,5 +326,87 @@ struct OfflineDownloadBackgroundTimeTests {
         await downloader.waitForCurrentRun()
         #expect(downloader.phase == .finished)
         #expect(!time.isOutstanding, "and gives its grant back when it ends")
+    }
+
+    @Test("an ended planning grant cannot cancel the space decision or its confirmed run", arguments: [false, true])
+    func planningExpiryLeavesItsSuccessorAlone(confirmFirst: Bool) async throws {
+        let time = RecordingBackgroundTime()
+        let saves = ParkedSaves()
+        let downloader = downloader(time, parkingIn: saves, quota: reclaimingQuota)
+        downloader.start(
+            route: Fixture.ridgeRoute,
+            source: unreachable,
+            claim: Fixture.unrecordedClaim
+        )
+        let planningExpiry = try #require(time.expirationHandler)
+        await downloader.waitForCurrentRun()
+        _ = try #require(downloader.pendingSpaceShortfall)
+
+        if confirmFirst {
+            downloader.confirmReclaimingSpace()
+            await saves.waitForFirstSave()
+        }
+
+        // Replay a callback already queued for the grant planning returned.
+        // Confirmation shares the plan's download generation, but owns a
+        // different reservation; neither it nor the prompt belongs to this
+        // ended grant's expiration handler.
+        planningExpiry()
+
+        if confirmFirst {
+            #expect(downloader.phase == .downloading)
+        } else {
+            #expect(downloader.pendingSpaceShortfall != nil)
+        }
+        #expect(time.isOutstanding == confirmFirst)
+        #expect(time.ended == [BackgroundTimeToken(rawValue: 1)])
+
+        if confirmFirst {
+            time.expire()
+            #expect(downloader.phase == .idle, "the confirmed run's own grant still expires it")
+        } else {
+            downloader.cancel()
+        }
+        await saves.release()
+        await downloader.waitForCurrentRun()
+        #expect(!time.isOutstanding)
+    }
+}
+
+extension OfflineDownloadBackgroundTimeTests {
+    @Test("a run returns its grant after its caller releases the downloader", arguments: [false, true])
+    func callerCanReleaseDownloader(reclaiming: Bool) async throws {
+        let time = RecordingBackgroundTime()
+        let saves = ParkedSaves()
+        var downloader: OfflineTileDownloader? = downloader(
+            time,
+            parkingIn: saves,
+            quota: reclaiming ? reclaimingQuota : .unlimited
+        )
+        downloader?.start(
+            route: Fixture.ridgeRoute,
+            source: unreachable,
+            claim: Fixture.unrecordedClaim
+        )
+        if reclaiming {
+            await downloader?.waitForCurrentRun()
+            _ = try #require(downloader?.pendingSpaceShortfall)
+            downloader?.confirmReclaimingSpace()
+        }
+        let run = try #require(downloader?.lastRun)
+        #expect(time.begun == (reclaiming ? 2 : 1))
+        weak let releasedDownloader = downloader
+
+        // The task has not started yet. The detail screen is allowed to
+        // leave immediately after either action; the run still owes the
+        // system its grant back, even without a screen keeping it alive.
+        downloader = nil
+        await saves.release()
+        await run.value
+
+        #expect(await saves.arrived, "the download outlives the screen that started it")
+        #expect(!time.isOutstanding)
+        #expect(time.ended.count == time.begun)
+        #expect(releasedDownloader == nil, "the completed task must release its owner")
     }
 }
