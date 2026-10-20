@@ -865,6 +865,9 @@ struct ImportSelectionGate {
         /// Its own case for the reason ``communityHike(_:)`` has one: the
         /// hiker is deciding whether to plan a walk to it.
         case commonsPhoto(URL)
+        /// A group of them as a grid, keyed by their pages: apart from the
+        /// photograph a tile opens over it, so that push is a move too.
+        case commonsPhotos([URL])
     }
 
     private(set) var revision: UInt64 = 0

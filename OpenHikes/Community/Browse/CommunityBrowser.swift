@@ -391,6 +391,8 @@ final class CommunityBrowser {
     /// Where a tapped photo pin goes, on the same terms — see
     /// `CommunityBrowser+CommonsPhotos.swift`.
     @ObservationIgnored var openCommonsPhoto: ((CommonsPhoto) -> Void)?
+    /// And a tapped group of them.
+    @ObservationIgnored var openCommonsPhotos: (([CommonsPhoto]) -> Void)?
 
     /// What Wikimedia Commons has photographed in the area the list answers
     /// about, asked by the same confirmed questions — see

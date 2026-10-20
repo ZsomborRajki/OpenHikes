@@ -6,7 +6,7 @@
 //  OpenStreetMap: the preview's strip with the sentence under it, and the
 //  gallery page with its credit over the picture. And the screen a photograph
 //  the *Community* tab's search found opens: the picture, its credit, the
-//  place and *Plan a Trail Here*.
+//  place and *Plan a Trail Here* — and the grid a group of them opens.
 //
 //  An extension of `AccessibilityUITests` rather than a class of its own, for
 //  the reason `AccessibilityUITests+Community.swift` gives: `single_test_class`
@@ -62,6 +62,21 @@ extension AccessibilityUITests {
         XCTAssertTrue(
             element("commons-photo-plan-trail", in: app).waitForExistence(timeout: UITestTimeout.navigation),
             "the audit is worth nothing before the photograph's screen is up"
+        )
+        try audit(app)
+    }
+
+    /// The grid a group of those pins opens. Its tiles are pictures and
+    /// nothing else, so each has to carry its own name — the credit and the
+    /// date — which is what the description check has something to say about.
+    @MainActor
+    func testCommonsPhotoGroupPassesAccessibilityAudit() throws {
+        let app = launchCommunity(scenario: .commons)
+        selectCommunityTab(in: app)
+        tapWhenReady(communityCommonsPhotoGroup(in: app), timeout: UITestTimeout.trace)
+        XCTAssertTrue(
+            element("commons-photo-group-0", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "the audit is worth nothing before the group's grid is up"
         )
         try audit(app)
     }

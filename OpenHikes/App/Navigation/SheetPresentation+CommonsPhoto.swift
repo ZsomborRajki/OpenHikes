@@ -3,7 +3,8 @@
 //  OpenHikes
 //
 //  Opening a Wikimedia Commons photograph the *Community* tab found — see
-//  ``CommonsPhotoView``. Split from the presentation for length.
+//  ``CommonsPhotoView`` — or a group of them too close together to draw apart
+//  — see ``CommonsPhotoGroupView``. Split from the presentation for length.
 //
 
 import Foundation
@@ -15,7 +16,17 @@ extension SheetPresentation {
     /// replaced rather than stacked onto. Each is a jump from a pin on the
     /// same map rather than a step deeper.
     func showCommonsPhoto(_ photo: CommonsPhoto) {
-        let route = SheetRoute.commonsPhoto(photo)
+        showCommons(.commonsPhoto(photo))
+    }
+
+    /// Opens a group's grid, on the same terms: a group is a pin on the same
+    /// map. A photograph opened from the grid is the one step deeper there is,
+    /// and the grid appends it itself — see `MapSheet+CommonsPhotos.swift`.
+    func showCommonsPhotos(_ photos: [CommonsPhoto]) {
+        showCommons(.commonsPhotos(photos))
+    }
+
+    private func showCommons(_ route: SheetRoute) {
         guard path.last != route else { return }
         makeRoomForTheMap()
         // Built aside and assigned once — see ``path``.

@@ -49,6 +49,11 @@ extension OpenHikesView {
         appModel.community.onOpenCommonsPhoto { [sheet] photo in
             sheet.showCommonsPhoto(photo)
         }
+        // And a group of them too close together to draw apart, which opens
+        // as a grid — see ``CommonsPhotoGroupView``.
+        appModel.community.onOpenCommonsPhotos { [sheet] photos in
+            sheet.showCommonsPhotos(photos)
+        }
         // And the hiker's own line, which the same recognizer answers for —
         // see `MapCoordinator+RouteTap.swift`. The selection is read when the
         // tap arrives rather than captured by value, because the line drawn is

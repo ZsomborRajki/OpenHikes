@@ -19,6 +19,12 @@
 //  page that names nobody is an ordinary case and the credit has a shape for
 //  it: the licence and the link, with nobody in front of them.
 //
+//  An area search finds two more, taken a few metres from the third, because
+//  a spot photographed from every side is the ordinary shape of a summit or a
+//  hut on Commons, and the *Community* tab draws such a group as one pin —
+//  see `MapCommunityCommonsPhotos.swift`. Metres rather than shares of the
+//  area, so they stay one group at whatever zoom the area was searched at.
+//
 
 import CoreLocation
 import Foundation
@@ -28,9 +34,10 @@ import OpenHikesData
 
 /// A stand-in for Wikimedia Commons with three photographs on every route.
 nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
-    /// Who took the three, in walking order — the last names nobody.
-    static let authors: [String?] = ["Anna Berger", "Lukas Moser", nil]
-    /// What all three are shared under.
+    /// Who took the three, in walking order — the last names nobody — and
+    /// then the two an area search finds beside the third.
+    static let authors: [String?] = ["Anna Berger", "Lukas Moser", nil, "Marta Huber", "Jonas Leitner"]
+    /// What all of them are shared under.
     static let licenceName = "CC BY-SA 4.0"
 
     /// Where along the route each stands, as a share of its length.
@@ -58,11 +65,11 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
 
     /// The same three, across the northern half of the area on screen rather
     /// than along a route — the trail maker's *Search this area* under
-    /// `--ui-test-trail-points=seeded`. North of the middle because the area
-    /// is the whole map's and its lower half is under the sheet, where a pin
-    /// can be neither seen nor tapped. A second search over the same area
-    /// finds the three already shown and adds nothing, which is what the real
-    /// source does too.
+    /// `--ui-test-trail-points=seeded` — and the two beside the third. North
+    /// of the middle because the area is the whole map's and its lower half
+    /// is under the sheet, where a pin can be neither seen nor tapped. A
+    /// second search over the same area finds the five already shown and adds
+    /// nothing, which is what the real source does too.
     @concurrent
     func photos(
         in area: CommunitySearchArea,
@@ -71,13 +78,20 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
     ) async throws -> [CommonsPhoto] {
         let degrees = area.radiusMeters / Self.metresPerDegree
         let eastDegrees = degrees / cos(area.latitude * .pi / 180)
-        let spots: [CLLocationCoordinate2D?] = zip(Self.areaNorths, Self.areaEasts).map { north, east in
+        let spots: [CLLocationCoordinate2D] = zip(Self.areaNorths, Self.areaEasts).map { north, east in
             CLLocationCoordinate2D(
                 latitude: area.latitude + north * degrees,
                 longitude: area.longitude + east * eastDegrees
             )
         }
-        return try await Self.photos(at: spots, downloadingInto: directory)
+        let third = spots[spots.count - 1]
+        let beside = Self.besideThird.map { north, east in
+            CLLocationCoordinate2D(
+                latitude: third.latitude + north / Self.metresPerDegree,
+                longitude: third.longitude + east / Self.metresPerDegree / cos(third.latitude * .pi / 180)
+            )
+        }
+        return try await Self.photos(at: spots + beside, downloadingInto: directory)
             .filter { !shown.contains($0.credit.licence.sourceURL) }
     }
 
@@ -88,6 +102,9 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
     private static let sideEast = 0.3
     private static let areaNorths = [sideNorth, middleNorth, sideNorth]
     private static let areaEasts = [-sideEast, 0, sideEast]
+    /// Where the two beside the third stand from it, in metres north and
+    /// east: close enough that no zoom a test searches at draws them apart.
+    private static let besideThird: [(north: Double, east: Double)] = [(12, 0), (0, 12)]
     private static let metresPerDegree = 111_320.0
 
     /// One photograph per spot that has one, each its own Commons page so

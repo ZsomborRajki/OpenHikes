@@ -17,9 +17,11 @@
 //  Commons photograph is shown with who took it and under what licence.
 //
 //  The same scenario seeds the *Community* tab's own *Search this area*,
-//  which stands three photographs across the north of the area — see
-//  ``SeededCommonsPhotoSource``. The last case follows one of them from its
-//  pin to its screen and on into the trail maker.
+//  which stands three photographs across the north of the area, and two more
+//  beside the east one — see ``SeededCommonsPhotoSource``. The last two cases
+//  follow one of them from its pin to its screen and on into the trail maker,
+//  and the group of three from its one pin to its grid and to a photograph's
+//  screen over it.
 //
 
 import XCTest
@@ -108,6 +110,49 @@ nonisolated final class CommunityCommonsPhotosUITests: XCTestCase {
         XCTAssertTrue(
             element("trail-draft-open-start", in: app).exists,
             "as the destination, with the start left to choose"
+        )
+    }
+
+    /// Photographs too close together to draw apart are one pin that says
+    /// how many it stands for, and it opens them as a grid; a tile opens the
+    /// photograph's own screen over the grid, and Back comes back to it.
+    @MainActor
+    func testAGroupOfAreaPhotographsOpensAsAGrid() {
+        let app = launchCommunity(scenario: .commons)
+        selectCommunityTab(in: app)
+
+        let group = communityCommonsPhotoGroup(in: app)
+        XCTAssertTrue(
+            group.waitForExistence(timeout: UITestTimeout.trace),
+            "photographs a few metres apart should be drawn as one pin"
+        )
+        XCTAssertEqual(group.label, "\(SeededCommons.groupCount) photos", "the pin should say how many it stands for")
+        group.tap()
+
+        XCTAssertTrue(
+            element("commons-photo-group-screen", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "a group's pin should open its photographs as a grid"
+        )
+        for index in 0..<SeededCommons.groupCount {
+            XCTAssertTrue(
+                element("commons-photo-group-\(index)", in: app).exists,
+                "the grid should hold every photograph of the group"
+            )
+        }
+        XCTAssertFalse(
+            element("commons-photo-group-\(SeededCommons.groupCount)", in: app).exists,
+            "and none the group does not"
+        )
+
+        tapWhenReady(element("commons-photo-group-0", in: app))
+        XCTAssertTrue(
+            element("commons-photo-plan-trail", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "a tile should open the photograph's own screen"
+        )
+        popScreen(in: app)
+        XCTAssertTrue(
+            element("commons-photo-group-0", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "Back from the photograph should land on the grid it was opened from"
         )
     }
 }

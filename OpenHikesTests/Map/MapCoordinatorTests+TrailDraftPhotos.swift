@@ -73,6 +73,9 @@ extension MapCoordinatorTests {
         let view = first.flatMap { coordinator.makerAnnotationView(for: $0, on: map) }
         #expect(view is CommonsPhotoPinView)
         #expect(view?.accessibilityLabel == "Photo by Hiker 0 · CC0")
+        // A stop goes on one photograph's spot, so the maker's stay apart —
+        // see `MapCommunityCommonsPhotos.swift`.
+        #expect(view?.clusteringIdentifier == nil, "the maker's thumbnails are never grouped")
 
         coordinator.applyTrailDraftPhotos([], on: map)
         #expect(!map.annotations.contains { $0 is TrailDraftPhotoAnnotation })

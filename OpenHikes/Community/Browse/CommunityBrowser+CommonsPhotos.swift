@@ -32,6 +32,19 @@ extension CommunityBrowser {
         openCommonsPhoto?(photo)
     }
 
+    /// Where a tapped group of photo pins goes — photographs standing too
+    /// close together to draw apart. Set by ``OpenHikesView`` with the other
+    /// two.
+    func onOpenCommonsPhotos(_ open: @escaping ([CommonsPhoto]) -> Void) {
+        openCommonsPhotos = open
+    }
+
+    /// Opens a group's grid, newest first. Called from the map's grouped
+    /// photo pins — see `MapCommunityCommonsPhotos.swift`.
+    func open(_ group: [CommonsPhoto]) {
+        openCommonsPhotos?(group)
+    }
+
     /// The part of a searched `area` the map is showing: what Commons is
     /// asked about.
     ///
