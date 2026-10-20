@@ -169,9 +169,9 @@ final class WatchModel {
     /// route has changed and the held copy is drawn and matched against in the
     /// meantime, in or out of range.
     func selectTrail(_ hikeID: UUID) {
-        selection.select(hikeID)
+        let request = selection.select(hikeID, holding: trail)
         if trail?.hikeID != hikeID { follow.clear() }
-        link.requestTrail(hikeID, holding: trail)
+        link.requestTrail(request)
     }
 
     /// Starts the live position feed for a trail being followed without a
@@ -345,7 +345,7 @@ final class WatchModel {
             // selection's to say: see
             // ``WatchTrailSelection/refreshTarget(holding:in:)``.
             if let hikeID = selection.refreshTarget(holding: trail, in: digest) {
-                link.requestTrail(hikeID, holding: trail)
+                link.requestTrail(selection.select(hikeID, holding: trail))
             }
         case .trail(let package):
             // An answer to a request the hiker has moved on from, or an older

@@ -72,13 +72,12 @@ struct WatchTrailRevisionTests {
         #expect(empty.needs(Fixture.package()))
     }
 
-    @Test("a request from a watch that names no revision still reads")
+    @Test("a request naming no held revision still reads")
     func requestWithoutRevisionDecodes() throws {
-        // A watch build from before the field existed, written by hand for the
-        // same reason `WatchLinkTests` writes its future-version body by hand.
-        let body = Data(#"{"schemaVersion":1,"hikeID":"\#(Fixture.hikeID.uuidString)"}"#.utf8)
-        let request = try WatchLink.trailRequest(from: ["kind": "trailRequest", "body": body])
+        let original = WatchTrailRequest(hikeID: Fixture.hikeID)
+        let request = try WatchLink.trailRequest(from: WatchLink.message(original))
 
+        #expect(request.id == original.id)
         #expect(request.heldRevision == nil)
         #expect(request.needs(Fixture.package()))
     }

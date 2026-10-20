@@ -125,10 +125,10 @@ final class PhoneLink: NSObject {
     /// time. Queued, tapping a trail out of range is a trail that arrives
     /// later rather than a button that did nothing.
     ///
-    /// - Parameter held: the trail this watch already has, which may be a
-    ///   different one. Named in the request so the phone can stay silent
-    ///   when the route has not changed — see ``WatchTrailRequest/heldRevision``.
-    func requestTrail(_ hikeID: UUID, holding held: WatchTrailPackage?) {
+    /// - Parameter request: the selection's request, including its identity
+    ///   and the revision held. Kept intact so an answer can be matched to it
+    ///   even when a later request needs no answer.
+    func requestTrail(_ request: WatchTrailRequest) {
         // Latest wins, the way it does for the library. The watch holds one
         // trail, so a request still queued from an earlier tap asks for
         // something that will be replaced the moment it lands — and a hiker
@@ -138,7 +138,7 @@ final class PhoneLink: NSObject {
         where WatchLink.kind(of: outstanding.userInfo) == .trailRequest {
             outstanding.cancel()
         }
-        transfer { try WatchLink.message(WatchTrailRequest(hikeID: hikeID, holding: held)) }
+        transfer { try WatchLink.message(request) }
     }
 
     /// Sends a finished walk. Guaranteed delivery, and the receipt is what

@@ -45,7 +45,7 @@ struct WatchLinkTests {
         // because what is being tested is a *newer watch* — a build that
         // cannot be compiled here — talking to this one.
         let body = Data(#"{"schemaVersion":99,"hikeID":"\#(Fixture.hikeID.uuidString)"}"#.utf8)
-        #expect(throws: WatchLinkFailure.unsupportedVersion(.trailRequest, found: 99, supported: 1)) {
+        #expect(throws: WatchLinkFailure.unsupportedVersion(.trailRequest, found: 99, supported: 2)) {
             try WatchLink.trailRequest(from: ["kind": "trailRequest", "body": body])
         }
     }
@@ -59,7 +59,7 @@ struct WatchLinkTests {
 
     @Test("The right format in the wrong shape is reported as malformed")
     func malformedBodyIsReported() throws {
-        let body = Data(#"{"schemaVersion":1}"#.utf8)
+        let body = Data(#"{"schemaVersion":2}"#.utf8)
         #expect(throws: WatchLinkFailure.self) {
             try WatchLink.trailRequest(from: ["kind": "trailRequest", "body": body])
         }

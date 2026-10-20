@@ -46,7 +46,11 @@ nonisolated enum WatchTrailPackaging {
     /// packaged concurrently and can finish in either order; the watch orders
     /// two copies of one trail by it — see `WatchTrailSelection`.
     @concurrent
-    static func package(from input: HikeRouteInput, readAt: Date = .now) async -> WatchTrailPackage? {
+    static func package(
+        from input: HikeRouteInput,
+        readAt: Date = .now,
+        requestID: UUID = UUID()
+    ) async -> WatchTrailPackage? {
         assertOffMainThread("Packaging a route for the watch must stay off the main thread")
         guard input.route.count > 1 else { return nil }
         // The same stride the widget's polyline uses, taken as *indices* so a
@@ -78,7 +82,8 @@ nonisolated enum WatchTrailPackaging {
             points: points,
             elevationGainMeters: climb.gainMeters,
             elevationLossMeters: climb.lossMeters,
-            sentAt: readAt
+            sentAt: readAt,
+            requestID: requestID
         )
     }
 
