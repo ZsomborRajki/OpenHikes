@@ -30,10 +30,26 @@ struct PlausibleTimestampTests {
         #expect(PlausibleTimestamp.validated(date, now: Self.now) == date)
     }
 
+    @Test("Non-finite timestamps are absent", arguments: [Double.nan, .infinity, -.infinity])
+    func nonFiniteStampsAreRefused(seconds: Double) {
+        let date = Date(timeIntervalSinceReferenceDate: seconds)
+        #expect(PlausibleTimestamp.validated(date, now: Self.now) == nil)
+    }
+
+    @Test("The earliest timestamp is included, and anything before it is absent")
+    func earliestBoundary() {
+        let earliest = PlausibleTimestamp.earliest
+        #expect(PlausibleTimestamp.validated(earliest, now: Self.now) == earliest)
+        #expect(PlausibleTimestamp.validated(earliest.addingTimeInterval(-1), now: Self.now) == nil)
+    }
+
     @Test("The window is a day wide past now, and a stamp beyond it is refused")
     func futureIsBounded() {
         #expect(PlausibleTimestamp.validated(Self.now.addingTimeInterval(3600), now: Self.now) != nil)
         #expect(PlausibleTimestamp.validated(Self.now.addingTimeInterval(2 * 86_400), now: Self.now) == nil)
+        let latest = Self.now.addingTimeInterval(PlausibleTimestamp.futureTolerance)
+        #expect(PlausibleTimestamp.validated(latest, now: Self.now) == latest)
+        #expect(PlausibleTimestamp.validated(latest.addingTimeInterval(1), now: Self.now) == nil)
     }
 
     @Test("No stamp stays no stamp")

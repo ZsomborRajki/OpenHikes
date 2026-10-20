@@ -175,17 +175,36 @@ struct CommunityRoutePayloadTests {
 
     /// The same for a timestamp, which decodes from a number the same way and
     /// poisons a duration the same way.
-    @Test("an impossible time is emptied and its point is kept")
-    func aNonFiniteTimestampIsEmptied() {
+    @Test("an impossible time is emptied and its point is kept", arguments: [Double.nan, .infinity, -.infinity])
+    func aNonFiniteTimestampIsEmptied(seconds: Double) {
         var published = route(3)
         published[0].timestamp = Date(timeIntervalSinceReferenceDate: 800_000_000)
-        published[1].timestamp = Date(timeIntervalSinceReferenceDate: .nan)
+        published[1].timestamp = Date(timeIntervalSinceReferenceDate: seconds)
 
         let read = CommunityRoutePayload.usable(published)
 
         #expect(read.count == 3)
         #expect(read[0].timestamp == published[0].timestamp)
         #expect(read[1].timestamp == nil)
+    }
+
+    @Test("placeholder and future times are emptied without losing route geometry")
+    func implausibleTimestampsAreEmptied() throws {
+        var published = route(4)
+        published[0].timestamp = Date(timeIntervalSince1970: 0)
+        published[1].timestamp = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        published[2].timestamp = published[1].timestamp?.addingTimeInterval(60)
+        published[3].timestamp = .distantFuture
+
+        let read = CommunityRoutePayload.route(from: try encoded(published))
+
+        var expected = published
+        expected[0].timestamp = nil
+        expected[3].timestamp = nil
+        #expect(read == expected)
+        let stats = HikeRouteStatistics(distanceMeters: read.lengthMeters, route: read)
+        #expect(stats.startDate == published[1].timestamp)
+        #expect(stats.duration == 60)
     }
 
     // MARK: - Budgets
