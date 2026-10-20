@@ -182,4 +182,45 @@ extension MapCoordinatorTests {
         #expect(!map.annotations.contains { $0 === firstDot })
         #expect(map.annotations.filter { $0 is CommunityPreviewHighlightAnnotation }.count == 1)
     }
+
+    #if canImport(UIKit)
+    /// MapKit recycles the dot's view between dots, and a view comes back at
+    /// whatever alpha the last dot on it was faded to. A preview opened at the
+    /// hiker's feet fades its dot; the next preview's dot, a valley away, must
+    /// not inherit that — and the move that fades a dot runs before MapKit has
+    /// made its view, so the fade has to be decided where the view is handed
+    /// out.
+    @Test("a recycled dot view is not left at the last dot's fade")
+    func aRecycledDotViewIsNotLeftFaded() throws {
+        let listing = CommunityListing.stub(id: "ridge")
+        let coordinator = MapView.Coordinator()
+        let map = RecyclingMapView()
+        let recycled = MKAnnotationView(
+            annotation: nil,
+            reuseIdentifier: CommunityPreviewHighlightAnnotation.reuseIdentifier
+        )
+        recycled.alpha = MapView.Coordinator.overlapFadedAlpha
+        map.recycled = recycled
+        let dot = CommunityPreviewHighlightAnnotation(listing: listing, coordinate: PreviewDot.partWay)
+
+        let view = try #require(coordinator.mapView(map, viewFor: dot))
+
+        #expect(view === recycled, "precondition: the dot was handed the faded view")
+        #expect(view.alpha == 1, "no location puck on this map, so nothing to fade against")
+    }
+    #endif
 }
+
+#if canImport(UIKit)
+/// A map whose reuse queue holds one view, which is how a test gets MapKit's
+/// recycling without putting a map on screen.
+private final class RecyclingMapView: MKMapView {
+    var recycled: MKAnnotationView?
+
+    override func dequeueReusableAnnotationView(withIdentifier identifier: String) -> MKAnnotationView? {
+        guard recycled?.reuseIdentifier == identifier else { return nil }
+        defer { recycled = nil }
+        return recycled
+    }
+}
+#endif
