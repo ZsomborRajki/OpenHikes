@@ -2,7 +2,9 @@
 //  GPXImport+Placeholders.swift
 //  OpenHikes
 //
-//  Fixes a logger writes for "no fix", which Web Mercator can still draw.
+//  Fixes a logger writes for "no fix", which Web Mercator can still draw, and
+//  the heights it writes for "no altitude", which the elevation figures can
+//  still add up.
 //
 
 import CoreLocation
@@ -16,7 +18,9 @@ nonisolated extension GPXImport {
     static let teleportNeighbourSpanMeters = 5000.0
 
     /// `points` without the placeholder fixes a logger writes for an epoch with
-    /// no satellites.
+    /// no satellites, and with the heights of the placeholder ones it writes
+    /// for an epoch with no altitude emptied (see
+    /// ``droppingPlaceholderHeights(from:)``).
     ///
     /// Two rules, and both drop rather than clamp, as ``point(_:)`` does for
     /// an unprojectable one: the neighbours are good geometry and the bad
@@ -33,6 +37,10 @@ nonisolated extension GPXImport {
     /// Planned routes and waypoint-only files can use widely spaced stops
     /// for a real out-and-back, so only the exact origin check applies to them.
     static func droppingPlaceholders(from points: [Point], isRecordedTrack: Bool) -> [Point] {
+        droppingPlaceholderHeights(from: droppingPlaceholderFixes(from: points, isRecordedTrack: isRecordedTrack))
+    }
+
+    private static func droppingPlaceholderFixes(from points: [Point], isRecordedTrack: Bool) -> [Point] {
         let located = points.filter { $0.coordinate.latitude != 0 || $0.coordinate.longitude != 0 }
         guard isRecordedTrack, located.count > 2 else { return located }
         var kept = [located[0]]
@@ -47,5 +55,22 @@ nonisolated extension GPXImport {
         }
         kept.append(located[located.count - 1])
         return kept
+    }
+
+    /// `points` with the heights of ``PlausibleElevation/spikes(in:)``
+    /// emptied: the stray `0` between two heights at 1 000 m that the range
+    /// check in ``point(_:)`` lets through.
+    ///
+    /// After the fixes are dropped, so a dropped fix is not anybody's
+    /// neighbour, and one segment at a time, so a height either side of a
+    /// pause is not a neighbour of the other.
+    private static func droppingPlaceholderHeights(from points: [Point]) -> [Point] {
+        let spikes = PlausibleElevation.spikes(in: points.map { ($0.coordinate, $0.elevation) })
+        guard !spikes.isEmpty else { return points }
+        return points.indices.map { index in
+            let point = points[index]
+            guard spikes.contains(index) else { return point }
+            return Point(coordinate: point.coordinate, elevation: nil, time: point.time)
+        }
     }
 }

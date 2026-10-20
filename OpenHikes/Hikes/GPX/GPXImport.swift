@@ -444,11 +444,14 @@ nonisolated enum GPXImport {
             // extremes, and the elevation chart's y-domain becomes `nan...nan`
             // — bounds `ClosedRange` traps on rather than draws badly.
             //
+            // So is a finite placeholder like `-9999`, which reads as eleven
+            // kilometres of climb; ``PlausibleElevation`` refuses both.
+            //
             // The point keeps its coordinate instead of being dropped whole,
             // unlike an unprojectable one above: a height is a field the route
             // does not need, so tearing a hole in the line to punish a bad
             // `<ele>` would cost geometry that was never in question.
-            elevation: waypoint.elevation.flatMap { $0.isFinite ? $0 : nil },
+            elevation: PlausibleElevation.validated(waypoint.elevation),
             time: waypoint.time
         )
     }

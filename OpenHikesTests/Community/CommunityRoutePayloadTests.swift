@@ -173,6 +173,32 @@ struct CommunityRoutePayloadTests {
         #expect(read[0].elevation == published[0].elevation)
     }
 
+    /// A stranger's route gets the same refusal of placeholder heights as an
+    /// imported GPX: the void marker by its range, the stray `0` between two
+    /// heights at 1 000 m by its neighbours. Either one alone used to read as
+    /// thousands of metres of climb on the preview and on the saved copy.
+    @Test("placeholder heights are emptied and the climb is the walk's")
+    func placeholderHeightsAreEmptied() throws {
+        var published = (0..<120).map { step in
+            RouteCoordinate(
+                latitude: 47.55 + Double(step) * 0.0005,
+                longitude: 12.86,
+                elevation: 1000 + Double(step)
+            )
+        }
+        published[30].elevation = -9999
+        published[90].elevation = 0
+
+        let read = CommunityRoutePayload.route(from: try encoded(published))
+
+        #expect(read.count == 120)
+        #expect(read[30].elevation == nil)
+        #expect(read[90].elevation == nil)
+        let stats = HikeRouteStatistics(distanceMeters: read.lengthMeters, route: read)
+        #expect(stats.elevationGain?.value == 119)
+        #expect(stats.minElevation?.value == 1000)
+    }
+
     /// The same for a timestamp, which decodes from a number the same way and
     /// poisons a duration the same way.
     @Test("an impossible time is emptied and its point is kept", arguments: [Double.nan, .infinity, -.infinity])
