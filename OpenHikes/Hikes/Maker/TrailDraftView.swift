@@ -588,12 +588,13 @@ struct TrailDraftView: View {
             // below deletes their files, and copied into the hike once it is
             // on screen — a dozen pictures are not worth holding the button
             // for. None while the switch beside *Search This Area* has hidden
-            // them, for the reason no place is saved then. See
-            // ``TrailDraftPhotos``.
+            // them, for the reason no place is saved then. Any it misses are
+            // said by the map's alert, which outlives this screen. See
+            // ``TrailDraftPhotos`` and ``TrailDraftPhotoCopy``.
             let photos = maker.finder.filter.placesShown ? maker.photos.handOff(along: hike.route) : nil
             maker.discard()
             if let photos {
-                Task { await photos.attach(to: hike) }
+                maker.photos.photoCopy.attach(photos, to: hike)
             }
             name.clear()
             onSaved(hike)

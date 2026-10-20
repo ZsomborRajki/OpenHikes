@@ -586,6 +586,7 @@ extension OpenHikesView {
                 photoCapture: $photoPresentation,
                 walkEndRefused: Bindable(appModel.recordingEntry).walkEndRefused
             )
+            .trailDraftPhotoCopyAlert(appModel.trailMaker.photos.photoCopy)
     }
 }
 

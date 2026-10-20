@@ -38,6 +38,12 @@
 //  both of which outlive every rebuild of the sheet, so a rebuild mid-alert
 //  loses the box and not the reason for it.
 //
+//  One more is attached beside these rather than through them, for the same
+//  reason and on the same contents: the trail maker's missed photographs —
+//  see ``TrailDraftPhotoCopy``, whose state lives on the app model's maker.
+//  Beside, because it carries an object rather than a binding, and a seventh
+//  argument is past what the linter allows here.
+//
 
 import SwiftUI
 
