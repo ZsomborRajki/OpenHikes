@@ -130,16 +130,12 @@ struct CommonsPhotoGroupView: View {
         return String(localized: "\(credit), taken \(taken)")
     }
 
-    /// Where the group stands: the middle of its cameras, which the map that
-    /// grouped them drew close together.
+    /// Where the group stands: the newest photograph's camera, the one its
+    /// pin drew — the rest stood within a thumbnail of it. Not the middle of
+    /// them all, which across the 180th meridian is the other side of the
+    /// world.
     static func spot(of photos: [CommonsPhoto]) -> CLLocationCoordinate2D? {
-        let cameras = photos.compactMap(\.pin.coordinate)
-        guard !cameras.isEmpty else { return nil }
-        let count = Double(cameras.count)
-        return CLLocationCoordinate2D(
-            latitude: cameras.map(\.latitude).reduce(0, +) / count,
-            longitude: cameras.map(\.longitude).reduce(0, +) / count
-        )
+        photos.lazy.compactMap(\.pin.coordinate).first
     }
 }
 

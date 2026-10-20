@@ -250,6 +250,38 @@ struct CommunityCommonsPhotosTests {
         #expect(source.downloads == 1)
     }
 
+    /// A group's grid asks for every tile at once, and the screen a tile
+    /// opens asks again with the photograph the grid holds — the one whose
+    /// file is gone.
+    @Test("each photograph is downloaded again once, however many ask and in whatever order")
+    func eachPageIsDownloadedAgainOnce() async throws {
+        let root = Root()
+        let source = StubSource()
+        let photos = CommunityCommonsPhotos(source: source, root: root.url)
+        var old: [CommonsPhoto] = []
+        for latitude in [47.6, 47.65] {
+            photos.search(in: Self.area(latitude: latitude))
+            await photos.settle()
+            old += photos.photos
+        }
+        for latitude in [47.7, 47.8] {
+            photos.search(in: Self.area(latitude: latitude))
+            await photos.settle()
+        }
+        let first = try #require(old.first)
+        let second = try #require(old.last)
+
+        async let tileOne = photos.usable(first)
+        async let tileTwo = photos.usable(second)
+        async let screen = photos.usable(first)
+        let (one, two, opened) = await (tileOne, tileTwo, screen)
+
+        #expect(one != nil && two != nil)
+        #expect(opened == one, "the screen shares the tile's copy")
+        #expect(await photos.usable(second) == two, "and asking again later downloads nothing")
+        #expect(source.downloads == 2)
+    }
+
     @Test("a photograph the newest answer found again is taken from it")
     func samePageFromTheNewestAnswer() async throws {
         let root = Root()

@@ -99,9 +99,14 @@ final class CommunityCommonsPhotos {
     /// ``clear()`` and by the next launch's sweep, never by an answer
     /// landing, so a copy fetched for a screen is not lost to the next tap.
     @ObservationIgnored private var restored: URL
-    /// The download ``usable(_:)`` has out, by Commons page, so a screen that
-    /// asks twice while it is out waits for the one file.
-    @ObservationIgnored private var restoring: (page: URL, task: Task<CommonsPhoto?, Never>)?
+    /// The downloads ``usable(_:)`` has out, by Commons page, so a screen that
+    /// asks twice while one is out waits for the one file — and a group's
+    /// grid, whose tiles ask for several at once, waits for each.
+    @ObservationIgnored private var restoring: [URL: Task<CommonsPhoto?, Never>] = [:]
+    /// What those downloads brought back, by Commons page, so a tile that
+    /// fetched a picture again and the screen it opens share the one copy.
+    /// Its files are in ``restored`` and go with it.
+    @ObservationIgnored private var restoredCopies: [URL: CommonsPhoto] = [:]
 
     /// - Parameters:
     ///   - isHidden: Observed through whatever it reads, so the map hears
@@ -185,8 +190,9 @@ final class CommunityCommonsPhotos {
         if let retired { Self.remove(retired) }
         retired = nil
         directory = Self.freshDirectory(in: launch)
-        restoring?.task.cancel()
-        restoring = nil
+        for download in restoring.values { download.cancel() }
+        restoring = [:]
+        restoredCopies = [:]
         Self.remove(restored)
         restored = Self.freshDirectory(in: launch)
         revision += 1
@@ -198,22 +204,25 @@ final class CommunityCommonsPhotos {
     /// Whether its file is gone is read off which directories this holds,
     /// not off the disk: the deletes run off the main actor, so a file can
     /// still be there with its directory already let go. Then, cheapest
-    /// first: the same Commons page in the newest answer, or the thumbnail
-    /// downloaded again.
+    /// first: the same Commons page in the newest answer, a copy already
+    /// downloaded again, or the thumbnail downloaded again.
     func usable(_ photo: CommonsPhoto) async -> CommonsPhoto? {
         let folder = photo.fileURL.deletingLastPathComponent().path
         if [directory, retired, restored].contains(where: { $0?.path == folder }) { return photo }
         let page = photo.credit.licence.sourceURL
         if let again = photos.first(where: { $0.credit.licence.sourceURL == page }) { return again }
-        if let pending = restoring, pending.page == page { return await pending.task.value }
+        if let kept = restoredCopies[page] { return kept }
+        if let pending = restoring[page] { return await pending.value }
         guard let source else { return nil }
         let target = restored
         let fetching = Task { try? await source.download(photo, into: target) }
-        restoring = (page, fetching)
+        restoring[page] = fetching
         let fetched = await fetching.value
-        if restoring?.task == fetching { restoring = nil }
+        if restoring[page] == fetching { restoring[page] = nil }
         // Cleared while it was out: the copy went with the directory.
-        return target == restored ? fetched : nil
+        guard target == restored else { return nil }
+        if let fetched { restoredCopies[page] = fetched }
+        return fetched
     }
 
     /// Waits for the search that is out, if any — the effect a suite waits on.
