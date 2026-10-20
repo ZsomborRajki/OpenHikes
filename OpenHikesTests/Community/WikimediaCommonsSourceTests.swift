@@ -77,6 +77,7 @@ struct WikimediaCommonsSourceTests {
             var busyGeosearches = 0
             var missingThumbnails: Set<Int> = []
             var holdsDownloads = false
+            var isUnreachable = false
             /// Kept so each held download's stream stays open until its task
             /// is cancelled, rather than finishing when nothing references it.
             var holds: [AsyncStream<Void>.Continuation] = []
@@ -93,6 +94,9 @@ struct WikimediaCommonsSourceTests {
         /// These files' thumbnails answer 404.
         func lose(_ pageID: Int) { state.withLock { _ = $0.missingThumbnails.insert(pageID) } }
 
+        /// Every request fails the way a timeout does, before any answer.
+        func goUnreachable() { state.withLock { $0.isUnreachable = true } }
+
         /// Every thumbnail asked for is held until its task is cancelled —
         /// the pictures still on their way when the hiker backs out.
         func holdDownloads() { state.withLock { $0.holdsDownloads = true } }
@@ -103,13 +107,19 @@ struct WikimediaCommonsSourceTests {
         }
 
         var transport: WikimediaCommonsSource.Transport {
-            { [self] request in await answer(request) }
+            { [self] request in
+                let unreachable = state.withLock { current in
+                    current.requests.append(request)
+                    return current.isUnreachable
+                }
+                if unreachable { throw URLError(.timedOut) }
+                return await answer(request)
+            }
         }
 
         private func answer(_ request: URLRequest) async -> (Data, Int) {
             let url = request.url?.absoluteString ?? ""
             let (busy, missing, holds) = state.withLock { current in
-                current.requests.append(request)
                 let busy = url.contains("list=geosearch") && current.busyGeosearches > 0
                 if busy { current.busyGeosearches -= 1 }
                 return (busy, current.missingThumbnails, current.holdsDownloads)
@@ -221,6 +231,38 @@ struct WikimediaCommonsSourceTests {
         let photos = try await Self.source(commons).photos(along: Self.route, downloadingInto: downloads.directory)
 
         #expect(photos.count == Self.photographed.count)
+    }
+
+    private static var longRoute: [RouteCoordinate] {
+        (0...150).map { step in
+            RouteCoordinate(latitude: Answers.startLatitude + Double(step) * Answers.kilometre, longitude: longitude)
+        }
+    }
+
+    @Test("a route that cannot reach Commons gives up after two stretches instead of paying for all of them")
+    func unreachableCommonsStopsTheSearch() async throws {
+        let commons = StubCommons()
+        commons.goUnreachable()
+        let downloads = Downloads()
+        #expect(CommonsTrailPhotos.areas(along: Self.longRoute).count > WikimediaCommonsSource.unreachableLimit)
+
+        let photos = try await Self.source(commons).photos(along: Self.longRoute, downloadingInto: downloads.directory)
+
+        #expect(photos.isEmpty)
+        #expect(commons.requests.count == WikimediaCommonsSource.unreachableLimit)
+    }
+
+    @Test("a busy answer is Commons answering, so it never trips the breaker")
+    func busyDoesNotTripTheBreaker() async throws {
+        let commons = StubCommons()
+        commons.beBusy(times: 6)
+        let downloads = Downloads()
+        let areas = CommonsTrailPhotos.areas(along: Self.longRoute).count
+
+        _ = try await Self.source(commons).photos(along: Self.longRoute, downloadingInto: downloads.directory)
+
+        let searches = commons.requests.filter { $0.url?.absoluteString.contains("list=geosearch") == true }
+        #expect(searches.count == areas + 3, "every stretch asked, and the three that were busy asked once more")
     }
 
     @Test("a thumbnail that does not arrive costs only itself")
