@@ -206,13 +206,14 @@ nonisolated enum GPXImport {
         // which is what keeps a file full of unprojectable `<trkpt>` reporting
         // that its track is unusable instead of quietly importing a route's
         // handful of turn markers in its place.
-        let hasGeometryOfItsOwn = document.trackSegments.contains { !$0.points.isEmpty }
+        let hasTrackPoints = document.trackSegments.contains { !$0.points.isEmpty }
+        let hasGeometryOfItsOwn = hasTrackPoints
             || document.routeSegments.contains { !$0.points.isEmpty }
         // The words go with the flavour the points came from: a segment's
         // container index counts `<rte>`s when the line is routes, so reading
         // it against the `<trk>` table would name a route after an empty
         // track that happened to share its number.
-        let (source, words) = if document.trackSegments.contains(where: { !$0.points.isEmpty }) {
+        let (source, words) = if hasTrackPoints {
             (document.trackSegments, document.trackWords)
         } else if document.routeSegments.contains(where: { !$0.points.isEmpty }) {
             (document.routeSegments, document.routeWords)
@@ -223,7 +224,10 @@ nonisolated enum GPXImport {
         }
 
         let usable: [(container: Int, points: [Point])] = source.compactMap { segment in
-            let points = droppingPlaceholders(from: segment.points.compactMap(point))
+            let points = droppingPlaceholders(
+                from: segment.points.compactMap(point),
+                isRecordedTrack: hasTrackPoints
+            )
             return points.isEmpty ? nil : (segment.containerIndex, points)
         }
         guard !usable.isEmpty else { throw .noUsablePoints }
