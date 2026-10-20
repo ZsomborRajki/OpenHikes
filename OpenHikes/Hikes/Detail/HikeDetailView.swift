@@ -176,7 +176,7 @@ struct HikeDetailView: View {
     /// the far end of the trail decide where the next reacquired fix matched —
     /// on an out-and-back, that is the difference between the start and the
     /// finish. `nil` means no fix has been matched yet, which is what tells
-    /// ``RouteProfile/nearestPoint(to:near:heading:scope:)`` to work out the
+    /// ``RouteProfile/nearestPoint(to:near:heading:headingOverridesReference:scope:)`` to work out the
     /// leg from scratch rather than continue from a position.
     @State private var followAnchor: FollowAnchor?
     @State private var offRouteSearch = OffRouteSearchPolicy()
@@ -850,10 +850,11 @@ private extension HikeDetailView {
             return
         }
         let searchScope = offRouteSearch.scope
-        let match = profile.nearestPoint(
+        let (match, contraryFixes) = FollowAnchor.advance(
+            followAnchor,
+            on: profile,
             to: fix.coordinate,
-            near: FollowAnchor.tieBreak(followAnchor, course: fix.course),
-            heading: fix.course,
+            course: fix.course,
             scope: searchScope
         )
         let onRoute = (match?.offRouteMeters ?? .greatestFiniteMagnitude)
@@ -866,7 +867,12 @@ private extension HikeDetailView {
             clearLiveFollow(profile: profile, offRoute: match)
             return
         }
-        followAnchor = .matched(at: match.distanceAlongRoute, course: fix.course, from: followAnchor)
+        followAnchor = .matched(
+            at: match.distanceAlongRoute,
+            course: fix.course,
+            from: followAnchor,
+            contraryFixes: contraryFixes
+        )
         // The walk is proposed here, on the first matched fix with following
         // on, starts once later ones show the hiker moving along the route,
         // and this is where every match after that extends it. Selection

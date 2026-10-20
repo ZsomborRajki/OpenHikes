@@ -42,12 +42,21 @@ struct FollowAnchor: Equatable {
     /// Whether that match was settled by a usable course.
     ///
     /// `false` while it rests on nothing better than
-    /// ``RouteProfile/nearestPoint(to:near:heading:scope:)``'s assumption that
+    /// ``RouteProfile/nearestPoint(to:near:heading:headingOverridesReference:scope:)``'s assumption that
     /// a hike starts at its start — which is what a hiker gets if they open
     /// the app *standing still* halfway round an out-and-back. They'd be
     /// placed on the outbound leg, and continuity would then hold them there
     /// for the rest of the walk however far they went.
     var isCourseConfirmed: Bool
+    /// Consecutive fixes whose course picked a different leg than continuity
+    /// did. A hiker who has turned round keeps producing them; one who stopped
+    /// to look back down the trail produces a few and then stops.
+    var contraryFixes = 0
+
+    /// Fixes whose course must keep contradicting continuity before the
+    /// course wins. Three is three seconds at the rate fixes are published:
+    /// a look over the shoulder is shorter than that, a walk home is not.
+    static let contraryFixesToSwitch = 3
 
     /// The distance a fix carrying `course` should be matched against, or
     /// `nil` to work the leg out from scratch.
@@ -63,6 +72,53 @@ struct FollowAnchor: Equatable {
         return anchor.distance
     }
 
+    /// Matches one fix, and returns the match with the run of contrary fixes
+    /// to hand to ``matched(at:course:from:contraryFixes:)``.
+    ///
+    /// Continuity settles which leg a fix is on, so noise can't flip a hiker
+    /// between two. But on a trail that retraces itself the two legs are
+    /// equidistant from the anchor at the turn, and continuity then keeps the
+    /// hiker on the outbound leg for the whole way home. So once the anchor is
+    /// confirmed, the course is asked as a second opinion; it takes over only
+    /// after ``contraryFixesToSwitch`` fixes in a row have disagreed.
+    static func advance(
+        _ anchor: Self?,
+        on profile: RouteProfile,
+        to coordinate: CLLocationCoordinate2D,
+        course: CLLocationDirection?,
+        scope: RouteProfile.SearchScope
+    ) -> (match: (distanceAlongRoute: Double, offRouteMeters: Double)?, contraryFixes: Int) {
+        let steady = profile.nearestPoint(
+            to: coordinate,
+            near: tieBreak(anchor, course: course),
+            heading: course,
+            scope: scope
+        )
+        guard let anchor, anchor.isCourseConfirmed, let course, let steady,
+              steady.offRouteMeters <= RouteProfile.followMatchThresholdMeters else {
+            return (steady, 0)
+        }
+        let opinion = profile.nearestPoint(
+            to: coordinate,
+            near: anchor.distance,
+            heading: course,
+            headingOverridesReference: true,
+            scope: scope
+        )
+        guard let opinion,
+              abs(opinion.distanceAlongRoute - steady.distanceAlongRoute) > contraryDistanceMeters else {
+            return (steady, 0)
+        }
+        let count = anchor.contraryFixes + 1
+        guard count >= contraryFixesToSwitch else { return (steady, count) }
+        return (opinion, 0)
+    }
+
+    /// How far apart the two answers must be to count as different legs. Two
+    /// projections on the same leg differ by metres of noise; two legs of a
+    /// retraced stretch differ by twice the distance to the turn.
+    private static let contraryDistanceMeters = 5.0
+
     /// The anchor left behind by a fix that matched at `distance`.
     ///
     /// Confirmation is sticky: once a course has settled which leg the hiker
@@ -71,11 +127,13 @@ struct FollowAnchor: Equatable {
     static func matched(
         at distance: Double,
         course: CLLocationDirection?,
-        from previous: Self?
+        from previous: Self?,
+        contraryFixes: Int = 0
     ) -> Self {
         Self(
             distance: distance,
-            isCourseConfirmed: previous?.isCourseConfirmed == true || course != nil
+            isCourseConfirmed: previous?.isCourseConfirmed == true || course != nil,
+            contraryFixes: contraryFixes
         )
     }
 }
