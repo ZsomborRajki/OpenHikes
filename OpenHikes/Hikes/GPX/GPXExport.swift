@@ -51,6 +51,10 @@ nonisolated enum GPXExport {
     /// case, and it is the default because the bare file is still what most
     /// shares hand over: the waypoint says *a photo was taken here* and
     /// nothing further. See ``HikeArchive`` for the other end.
+    ///
+    /// **A Commons copy's credit is written in both.** It is somebody else's
+    /// picture, and its waypoint is the one place in the file that speaks
+    /// about it — see ``credit``.
     struct Photograph: Sendable, Equatable {
         var coordinate: RouteCoordinate
         var capturedAt: Date
@@ -58,11 +62,21 @@ nonisolated enum GPXExport {
         /// `Photos/photo-1.jpeg`. `nil` when it is nowhere the reader can
         /// reach.
         var linkHref: String?
+        /// Who took a Wikimedia Commons copy and under what licence, written
+        /// as the waypoint's `<desc>` with a second `<link>` to its page on
+        /// Commons. `nil` for every other photograph.
+        var credit: CommonsPhotoCredit?
 
-        init(coordinate: RouteCoordinate, capturedAt: Date, linkHref: String? = nil) {
+        init(
+            coordinate: RouteCoordinate,
+            capturedAt: Date,
+            linkHref: String? = nil,
+            credit: CommonsPhotoCredit? = nil
+        ) {
             self.coordinate = coordinate
             self.capturedAt = capturedAt
             self.linkHref = linkHref
+            self.credit = credit
         }
     }
 
@@ -225,6 +239,11 @@ nonisolated private extension GPXExport {
     /// `<wpt>`'s children too — name, cmt, desc, src, link, sym, type — and a
     /// schema-validating reader refuses the file over the wrong order just as
     /// readily as it refuses waypoints after the track.
+    ///
+    /// A Commons copy's credit is the `<desc>` before them, and its page on
+    /// Commons a second `<link>` after the file's own: `link` may repeat, and
+    /// a reader that follows the first finds the picture. The licence's own
+    /// text is a link on that page rather than a third one here.
     static func appendPhotographs(_ track: Track, to xml: inout String) {
         for photograph in track.photographs {
             let latitude = photograph.coordinate.latitude.formatted(coordinateStyle)
@@ -240,8 +259,14 @@ nonisolated private extension GPXExport {
             // `<ele>`'s successors but after `<ele>` itself.
             xml += "    <time>\(timeStyle.format(photograph.capturedAt))</time>\n"
             xml += "    <name>\(escaped(photographName))</name>\n"
+            if let credit = photograph.credit {
+                xml += "    <desc>\(escaped(credit.line))</desc>\n"
+            }
             if let href = photograph.linkHref {
                 xml += "    <link href=\"\(escaped(href))\"/>\n"
+            }
+            if let source = photograph.credit?.licence.sourceURL {
+                xml += "    <link href=\"\(escaped(source.absoluteString))\"/>\n"
             }
             xml += "    <sym>\(escaped(photographSymbol))</sym>\n"
             xml += "  </wpt>\n"
@@ -695,7 +720,8 @@ extension GPXExport.Track {
                         latitude: coordinate.latitude,
                         longitude: coordinate.longitude
                     ),
-                    capturedAt: photo.capturedAt
+                    capturedAt: photo.capturedAt,
+                    credit: CommonsPhotoCredit(photo)
                 )
             },
             // In along-route order, which is the order the maker's list and
