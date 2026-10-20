@@ -211,6 +211,16 @@ final class CommunityBrowser {
     /// screen — the only thing that has the gallery to open. Retired with the
     /// pins, so a tap can never reach a screen that has gone.
     @ObservationIgnored private var previewPhotoOpener: ((Int) -> Void)?
+    /// Where the open preview's elevation chart is pointing on its route —
+    /// see ``previewScrubbed(to:of:)``, and ``previewHighlight`` for what the
+    /// map reads.
+    ///
+    /// A ``RouteHighlight`` for the reason the hike's own chart writes one: a
+    /// finger drags it at display rate, and it has to reach MapKit without
+    /// waking anything that reads this browser to draw the sheet. Its own
+    /// rather than the hike's, which belongs to the hiker's selected route —
+    /// see `MapCommunityPreviewHighlight.swift`.
+    private let previewScrub = RouteHighlight()
     /// Which preview is open, whether or not its route has arrived.
     ///
     /// Separate from ``previewedRoute`` because the two are set at different
@@ -1300,6 +1310,19 @@ extension CommunityBrowser {
         previewedPhotos
     }
 
+    /// The dot the map stands where the open preview's chart is pointing, and
+    /// the hike whose line it stands on.
+    ///
+    /// `nil` until both exist, which is the rule rather than a convenience: a
+    /// chart position is a point on the drawn route, and a dot with no line
+    /// under it would be a dot on nothing. Answering both here, where the map
+    /// reads them in one pass, is also what keeps the dot in its line's
+    /// colour whichever of the two arrived first.
+    var previewHighlight: (listing: CommunityListing, coordinate: CLLocationCoordinate2D)? {
+        guard let previewedRoute, let coordinate = previewScrub.coordinate else { return nil }
+        return (previewedRoute.listing, coordinate)
+    }
+
     // MARK: - The open preview
 
     /// A published hike's preview is on screen. Called from the screen itself.
@@ -1326,6 +1349,9 @@ extension CommunityBrowser {
         // directory, which that screen deletes on its way out.
         previewedPhotos = []
         previewPhotoOpener = nil
+        // And the dot its chart stood on that line, which would otherwise be
+        // moved onto the next hike's line by its first scrub.
+        previewScrub.move(to: nil)
     }
 
     /// The open preview has its route. The map draws this one properly.
@@ -1392,11 +1418,27 @@ extension CommunityBrowser {
         )
     }
 
+    /// The open preview's elevation chart is pointing at `coordinate` — under
+    /// the hiker's finger, or where the finger left it. The map stands a dot
+    /// there, on the previewed line, which is what the chart's own marker is
+    /// to the graph: a hike of the hiker's own has always had one, and
+    /// dragging a stranger's chart to its steepest stretch said how steep and
+    /// never where.
+    ///
+    /// Matched on the listing like the calls above, for their reason: a screen
+    /// on its way out behind its replacement must not put a dot on the
+    /// replacement's line.
+    func previewScrubbed(to coordinate: CLLocationCoordinate2D?, of listing: CommunityListing) {
+        guard previewedListingID == listing.id else { return }
+        previewScrub.move(to: coordinate)
+    }
+
     func previewClosed(_ listing: CommunityListing) {
         guard previewedListingID == listing.id else { return }
         previewedListingID = nil
         previewedRoute = nil
         previewedPhotos = []
         previewPhotoOpener = nil
+        previewScrub.move(to: nil)
     }
 }

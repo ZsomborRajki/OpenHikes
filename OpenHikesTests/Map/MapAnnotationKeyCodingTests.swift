@@ -38,6 +38,7 @@ struct MapAnnotationKeyCodingTests {
         ("TrailDraftRoutingAnnotation", TrailDraftRoutingAnnotation.self),
         ("CommunityMapAnnotation", CommunityMapAnnotation.self),
         ("CommunityPhotoMapAnnotation", CommunityPhotoMapAnnotation.self),
+        ("CommunityPreviewHighlightAnnotation", CommunityPreviewHighlightAnnotation.self),
         ("PhotoMapAnnotation", PhotoMapAnnotation.self),
     ]
 

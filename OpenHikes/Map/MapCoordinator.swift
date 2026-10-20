@@ -347,12 +347,18 @@ extension MapView {
         /// — see `MapCommunityRoutes.swift`, which owns everything that reads
         /// this.
         var communityRoutes: [CommunityRouteDrawing] = []
+        /// The dot on the open preview's line that stands for its elevation
+        /// chart's marker — see `MapCommunityPreviewHighlight.swift`, which
+        /// owns everything that reads this. `nil` whenever no preview is
+        /// showing a chart.
+        var communityPreviewHighlight: CommunityPreviewHighlightAnnotation?
         /// Guards `observeCommunityPins` the way the photo flags guard theirs —
         /// a second registration can never be cancelled.
         var isObservingCommunityPins = false
         /// The same, for the previewed hike's photo pins.
         var isObservingCommunityPhotoPins = false
-        /// The same, for the lines.
+        /// The same, for the lines — and for the dot on the previewed one,
+        /// which is started with them.
         var isObservingCommunityRoutes = false
         /// The same, for the *Search this area* pill's visibility.
         var isObservingAreaPrompt = false
@@ -781,32 +787,12 @@ extension MapView.Coordinator {
         // The maker's kinds and the *Community* tab's photographs in one
         // question — see ``ownedAnnotationView(for:on:)``.
         if let owned = ownedAnnotationView(for: annotation, on: mapView) { return owned }
+        // The dot an open preview's chart stands on its line — see
+        // `MapCommunityPreviewHighlight.swift`.
+        if let previewDot = communityPreviewHighlightView(for: annotation, on: mapView) { return previewDot }
 
-        let view = mapView.reusableView(MKAnnotationView.self, for: annotation, reuseIdentifier: "routeHighlight")
-        view.canShowCallout = false
-
-        // A small filled dot in the route tint with a white ring.
-        let diameter: CGFloat = 18
-        view.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
-        #if os(macOS)
-        view.wantsLayer = true
-        let layer = view.layer ?? CALayer()
-        view.layer = layer
-        layer.backgroundColor = NSColor(routeTint).withAlphaComponent(1).cgColor
-        layer.borderColor = NSColor.white.cgColor
-        #else
-        let layer = view.layer
-        layer.backgroundColor = UIColor(routeTint).withAlphaComponent(1).cgColor
-        layer.borderColor = UIColor.white.cgColor
-        #endif
-        layer.cornerRadius = diameter / 2
-        layer.borderWidth = 3
-        let annotationShadowOpacity: Float = 0.3
-        layer.shadowColor = CGColor(gray: 0, alpha: 1)
-        layer.shadowOpacity = annotationShadowOpacity
-        layer.shadowRadius = 2
-        layer.shadowOffset = .zero
-        return view
+        // What is left is the selected hike's own dot, in its route tint.
+        return highlightDotView(for: annotation, tint: routeTint, reuseIdentifier: "routeHighlight", on: mapView)
     }
 
     func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
