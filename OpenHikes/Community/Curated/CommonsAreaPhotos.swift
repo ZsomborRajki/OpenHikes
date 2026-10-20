@@ -25,6 +25,7 @@
 //  there is no line yet, and the spot is exactly what *Add Stop* is offered on.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 
@@ -67,12 +68,11 @@ nonisolated enum CommonsAreaPhotos {
                     nearerTheMiddle(lhs, rhs, ofCell: key, in: area, side: side)
                 } ?? members[0]
             }
-            .sorted(by: nearer)
-            .prefix(limit)
+            .min(count: limit, sortedBy: nearer)
         )
         if picked.count < limit {
             let taken = Set(picked.map(\.pageID))
-            picked += inside.filter { !taken.contains($0.pageID) }.sorted(by: nearer).prefix(limit - picked.count)
+            picked += inside.filter { !taken.contains($0.pageID) }.min(count: limit - picked.count, sortedBy: nearer)
         }
         return picked.sorted(by: nearer)
     }

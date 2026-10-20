@@ -65,9 +65,9 @@ nonisolated extension TileCache {
     /// Layers included: a layer's tiles are namespaced by its id exactly as a
     /// provider's are, and none of them carries a ceiling — but a layer file
     /// matched to no id at all would be one nothing can attribute.
-    private static var candidateProviderIDs: [String] {
+    private static let candidateProviderIDs: [String] = {
         (TileProvider.all.map(\.id) + TileLayer.all.map(\.id)).sorted { $0.count > $1.count }
-    }
+    }()
 
     /// The quota `providerID`'s durable tiles count against, or `nil` where
     /// its terms set none.

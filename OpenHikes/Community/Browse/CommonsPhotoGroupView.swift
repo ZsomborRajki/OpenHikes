@@ -19,6 +19,7 @@
 //  reader, and a grid of thumbnails has no room for sixteen of them.
 //
 
+import Algorithms
 import CoreLocation
 import OpenHikesData
 import SwiftUI
@@ -95,7 +96,7 @@ struct CommonsPhotoGroupView: View {
     /// When they were taken, as years, and where they come from.
     private var subtitle: String {
         let taken = photos.map(\.pin.capturedAt)
-        guard let oldest = taken.min(), let newest = taken.max() else { return String(localized: "Wikimedia Commons") }
+        guard let (oldest, newest) = taken.minAndMax() else { return String(localized: "Wikimedia Commons") }
         return [
             String(localized: "Taken \((oldest..<newest).formatted(.interval.year()))"),
             String(localized: "Wikimedia Commons"),
