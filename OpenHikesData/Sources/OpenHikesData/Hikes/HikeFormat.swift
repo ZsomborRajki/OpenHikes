@@ -35,7 +35,7 @@ nonisolated public enum HikeFormat {
     public static func duration(_ interval: TimeInterval) -> String {
         guard interval.isFinite else { return "—" }
         let duration = Duration.seconds(interval)
-        return interval >= 3600
+        return interval.rounded() >= 3600
             ? duration.formatted(longStyle)
             : duration.formatted(shortStyle)
     }
@@ -59,7 +59,7 @@ nonisolated public enum HikeFormat {
     public static func spokenDuration(_ interval: TimeInterval) -> String {
         guard interval.isFinite else { return "—" }
         let duration = Duration.seconds(interval)
-        return interval >= 3600
+        return interval.rounded() >= 3600
             ? duration.formatted(spokenLongStyle)
             : duration.formatted(spokenShortStyle)
     }
