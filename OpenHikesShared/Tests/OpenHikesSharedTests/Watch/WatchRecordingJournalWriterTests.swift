@@ -65,6 +65,59 @@ struct WatchRecordingJournalWriterTests {
         }
     }
 
+    @Test("A batch a failed write left waiting reaches disk with the next write")
+    func failedWriteKeepsItsBatch() throws {
+        try withWriter { writer in
+            try writer.begin(Fixture.header)
+            let count = WatchRecordingJournalBuffer.maximumPendingFixes
+            var failedWrites = 0
+            try withJournalMissing(writer.file) {
+                for step in 0..<count {
+                    do {
+                        try writer.record(.fix(Fixture.fix(step: step)), at: Fixture.time(step: step))
+                    } catch {
+                        failedWrites += 1
+                    }
+                }
+            }
+            #expect(failedWrites > 0)
+            try writer.record(.paused(Fixture.time(step: count)), at: Fixture.time(step: count))
+
+            let recovered = try #require(writer.file.recover())
+            #expect(recovered.accumulator.fixes.count == count)
+            #expect(recovered.wasPaused)
+        }
+    }
+
+    @Test("A pause and resume recorded together survive a failed write together")
+    func failedWriteKeepsPauseAndResume() throws {
+        try withWriter { writer in
+            try writer.begin(Fixture.header)
+            try writer.record(.fix(Fixture.fix(step: 0)), at: Fixture.time(step: 0))
+            try withJournalMissing(writer.file) {
+                #expect(throws: (any Error).self) {
+                    let breakAt = Fixture.time(step: 1)
+                    try writer.record(.paused(breakAt), .resumed(breakAt), at: breakAt)
+                }
+            }
+            try writer.flush()
+
+            let recovered = try #require(writer.file.recover())
+            #expect(recovered.accumulator.fixes.count == 1)
+            #expect(!recovered.wasPaused)
+            #expect(recovered.lastRecordedAt == Fixture.time(step: 1))
+        }
+    }
+
+    /// Moves the journal aside for `body`, so every append in it throws, and
+    /// puts it back.
+    private func withJournalMissing(_ file: WatchRecordingJournalFile, _ body: () throws -> Void) throws {
+        let aside = file.url.appendingPathExtension("aside")
+        try FileManager.default.moveItem(at: file.url, to: aside)
+        defer { try? FileManager.default.moveItem(at: aside, to: file.url) }
+        try body()
+    }
+
     private func withWriter(_ body: (inout WatchRecordingJournalWriter) throws -> Void) throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "writer-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
