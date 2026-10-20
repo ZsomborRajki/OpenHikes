@@ -15,7 +15,8 @@
 //  wherever the hiker has moved it. Never a search per pan — see
 //  ``TrailPointFinder`` on what Overpass allows.
 //
-//  Everything else is *Places Around Trail*'s: the kind chips, the pale pins
+//  Everything else is *Places Around Trail*'s, and drawn by the one screen
+//  both are — see ``PlacesAroundScreen``: the kind chips, the pale pins
 //  beside the walk's own, the card over the sheet that adds a place and then
 //  photographs it, and a press on the map for a place of the hiker's own. A
 //  place added here is on the recording at once, exactly as *Add Place* in the
@@ -26,7 +27,6 @@ import CoreLocation
 import MapKit
 import OpenHikesData
 import OpenHikesShared
-import SwiftData
 import SwiftUI
 
 struct HikePlacesNearbyView: View {
@@ -46,12 +46,7 @@ struct HikePlacesNearbyView: View {
     /// Opens *Add Place* at a spot the hiker pressed on the map.
     var onAddPlace: (HikePlaceSpot) -> Void = { _ in /* no-op default */ }
 
-    @Environment(\.modelContext) private var modelContext
     @State private var search = HikePlacesAroundSearch()
-    @State private var token: Int?
-    /// Set when an add was refused. The screen stays as it was under it, so
-    /// tapping ⊕ again is the retry.
-    @State private var refusal: HikePlaceRefusal?
     /// What the rows are measured from: the hiker as the screen opened, or
     /// the middle of the first search where there was no fix to read.
     @State private var origin: CLLocationCoordinate2D?
@@ -65,53 +60,41 @@ struct HikePlacesNearbyView: View {
     var body: some View {
         let candidates = search.candidates(showing: filter.shown, held: hike.places)
         let entries = PlacesNearbyEntry.sorted(held: hike.orderedPlaces, candidates: candidates, from: origin)
-        ScrollView {
-            VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
-                TrailPlaceKindChips(filter: filter)
-                PlacesNearbyStatus(finder: around.finder, isEmpty: entries.isEmpty, onRetry: retry)
-                list(entries)
-                footer
+        PlacesAroundScreen(
+            hike: hike,
+            around: around,
+            mapController: mapController,
+            placePins: placePins,
+            search: search,
+            candidates: candidates,
+            onShowMap: onShowMap,
+            onOpenPhoto: onOpenPhoto,
+            onAddPlace: onAddPlace,
+            onAttach: askFirst,
+            onSearchArea: {
+                if let area = around.finder.searchableArea { ask(area) }
+            },
+            onFound: receive,
+            content: { rows in
+                VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
+                    TrailPlaceKindChips(filter: filter)
+                    PlacesNearbyStatus(finder: around.finder, isEmpty: entries.isEmpty, onRetry: retry)
+                    list(entries, rows: rows)
+                    footer
+                }
             }
-            .padding()
-        }
-        .softScrollEdgeEffect(for: .top)
+        )
         .navigationTitle(Text("Places Nearby"))
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-        // The walk's own places stay on the map beside the pale ones, and a
-        // tap on one opens its card — the recording screen's claim, taken over
-        // while this one is on top.
-        .background(HikePlacePinClaim(hike: hike, controller: placePins, onOpen: select))
-        .onAppear(perform: attach)
-        .onDisappear(perform: detach)
-        .onChange(of: candidates, initial: true) { _, rows in
-            if let token { around.show(rows, token: token) }
-        }
         .onChange(of: filter.hidden) { askAgainIfWider() }
-        .sheet(isPresented: $search.selection.isPresent()) {
-            HikePlaceAroundCard(search: search, hike: hike, onAdd: add) { photo in
-                // The card goes first: a push under a presented sheet lands
-                // behind it.
-                search.selection = nil
-                onOpenPhoto(photo)
-            }
-        }
-        .hikePlaceRefusalAlert($refusal)
         .accessibilityIdentifier("places-nearby-screen")
     }
 
     @ViewBuilder
-    private func list(_ entries: [PlacesNearbyEntry]) -> some View {
+    private func list(_ entries: [PlacesNearbyEntry], rows: PlacesAroundRows) -> some View {
         if !entries.isEmpty {
             VStack(spacing: 0) {
                 ForEach(entries) { nearby in
-                    TrailPlaceAroundRow(
-                        entry: nearby.entry,
-                        distance: nearby.meters.map(Self.length),
-                        onOpen: { open(nearby.entry) },
-                        onAdd: { add(nearby.id) }
-                    )
+                    rows.row(nearby.entry, distance: nearby.meters.map(Self.length))
                     if nearby.id != entries.last?.id { Divider() }
                 }
             }
@@ -139,33 +122,12 @@ struct HikePlacesNearbyView: View {
 
     // MARK: - What the screen does
 
-    private func attach() {
-        token = around.attach(TrailPlacesAround.Handlers(
-            select: select,
-            searchArea: {
-                if let area = around.finder.searchableArea { ask(area) }
-            },
-            dropPin: { coordinate in
-                onAddPlace(HikePlaceSpot(coordinate))
-            }
-        ))
-        around.finder.onFound { [search, hike] places in
-            guard hike.isAttached else { return }
-            // No line to measure along: the rows are ordered by distance from
-            // the hiker instead — see ``PlacesNearbyEntry``.
-            search.receiveArea(places, along: [])
-            asked.answer(keeping: filter.shown)
-            // A kind switched on while this was out was refused then.
-            askAgainIfWider()
-        }
-        if let token {
-            around.show(search.candidates(showing: filter.shown, held: hike.places), token: token)
-        }
-        onShowMap()
-        // Back from a screen pushed over this one — *Add Place*, or a
-        // photograph — which took the claim and with it cancelled anything
-        // out. The map stays where the hiker left it, and only a search that
-        // never answered is asked again.
+    /// The frame around the walk and the hiker, asked about once. Back from
+    /// a screen pushed over this one — *Add Place*, or a photograph — which
+    /// took the claim and with it cancelled anything out, the map stays where
+    /// the hiker left it, and only a search that never answered is asked
+    /// again.
+    private func askFirst() {
         if asked.hasAsked {
             if let area = asked.interrupted { ask(area) }
             return
@@ -177,11 +139,13 @@ struct HikePlacesNearbyView: View {
         ask(PlacesNearbyFrame.area(of: region))
     }
 
-    private func detach() {
-        search.cancel()
-        guard let token else { return }
-        around.detach(token: token)
-        self.token = nil
+    private func receive(_ places: [TrailPlace]) {
+        // No line to measure along: the rows are ordered by distance from the
+        // hiker instead — see ``PlacesNearbyEntry``.
+        search.receiveArea(places, along: [])
+        asked.answer(keeping: filter.shown)
+        // A kind switched on while this was out was refused then.
+        askAgainIfWider()
     }
 
     private func ask(_ area: CommunitySearchArea) {
@@ -199,28 +163,6 @@ struct HikePlacesNearbyView: View {
     /// Switching one off only filters what was already found.
     private func askAgainIfWider() {
         if let area = asked.widened(showing: filter.shown) { ask(area) }
-    }
-
-    private func open(_ entry: TrailPlaceAroundEntry) {
-        select(entry.id)
-        mapController.showPhotoSpot(entry.row.place.clCoordinate)
-    }
-
-    /// Opens a place's card, with the map in view — the card is about a spot
-    /// on it.
-    private func select(_ id: UUID) {
-        search.selection = id
-        onShowMap()
-    }
-
-    private func add(_ id: UUID) {
-        do throws(HikePlaceRefusal) {
-            if try search.add(id, to: hike, in: modelContext) {
-                HapticMoment.targetHit.play()
-            }
-        } catch {
-            refusal = error
-        }
     }
 }
 

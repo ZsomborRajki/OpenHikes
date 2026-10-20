@@ -158,7 +158,9 @@
 # *Places Around Trail*, a screen and its card, entirely body code. What it
 # decides is `HikePlacesAroundSearch` and `TrailPlaceAroundListing`, and what
 # it tells the map is `TrailPlacesAround`, each measured with a suite of its
-# own.
+# own. `PlacesAroundScreen` is the chrome it and *Places Nearby* share, folded
+# out of both on 2026-10-20 (#852): the claim, the card and the refusal alert,
+# body code too.
 #
 # `HikePlaceAdder` followed the same day, *Add Place* from the camera pill: a
 # form, entirely body code. What it decides is `HikePlaceDraft` and what it
@@ -260,6 +262,7 @@ OpenHikes/Hikes/Places/HikePlaceView.swift
 OpenHikes/Hikes/Places/HikePlaceEditor.swift
 OpenHikes/Hikes/Places/HikePlaceAdder.swift
 OpenHikes/Hikes/Places/HikePlacesAroundView.swift
+OpenHikes/Hikes/Places/PlacesAroundScreen.swift
 OpenHikes/Hikes/Places/TrailPlaceKindChips.swift
 OpenHikes/Hikes/Places/HikePlaceAroundCard.swift
 OpenHikes/Hikes/Places/TrailPlaceCardParts.swift
