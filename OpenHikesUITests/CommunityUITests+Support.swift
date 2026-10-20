@@ -118,6 +118,15 @@ nonisolated enum SeededQueuedHike {
     static let photoCount = 2
 }
 
+/// What `--ui-test-community=commons` adds: three Wikimedia Commons
+/// photographs on every route, and across the north of the area the tab
+/// searches. Mirrors ``SeededCommonsPhotoSource``.
+nonisolated enum SeededCommons {
+    static let firstAuthor = "Anna Berger"
+    static let licence = "CC BY-SA 4.0"
+    static let count = 3
+}
+
 /// How many screens ``XCTestCase/awaitCommunityAnswer(_:in:)`` walks before
 /// turning round.
 ///
@@ -362,6 +371,21 @@ extension XCTestCase {
     @MainActor
     func communityPhotoTile(at index: Int, in app: XCUIApplication) -> XCUIElement {
         element("community-photo-\(index)", in: app)
+    }
+
+    /// The *Community* tab's map pin for the first Commons photograph of the
+    /// area search — the west one of the three.
+    ///
+    /// Named rather than taken as the first pin to match, because the middle
+    /// photograph stands where the seeded ``SeededHike/scrambleTitle`` starts:
+    /// a tap there lands on whichever of the two pins MapKit drew on top, and
+    /// that was the hike's, opening its callout instead of the photograph.
+    @MainActor
+    func communityCommonsPhotoPin(in app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any)
+            .matching(identifier: "community-commons-photo-pin")
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Photo by \(SeededCommons.firstAuthor)"))
+            .firstMatch
     }
 
     /// Opens a published hike and waits for the preview to have finished
