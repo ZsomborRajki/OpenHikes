@@ -412,7 +412,8 @@ final class TrailDraftController {
                 with: drawn.trailWaypoints,
                 places: hike.places,
                 snapsToPaths: drawn.snapsToPaths,
-                travelMode: drawn.travelMode
+                travelMode: drawn.travelMode,
+                chosenLegs: drawn.chosenLegs
             )
             editingHikeID = hike.id
             editingPlaceIDs = Set(hike.places.map(\.id))
@@ -599,8 +600,10 @@ final class TrailDraftController {
     func chooseRoute(_ alternative: Int, forLegAt legIndex: Int) {
         guard isEditing else { return }
         draft.chooseAlternative(alternative, forLegAt: legIndex)
-        // A different shape has a different climb; the stored draft is points
-        // and does not change, so nothing is written.
+        // Written down, because the choice is not re-derivable from the
+        // points — see ``TrailLegChoice``. And a different shape has a
+        // different climb.
+        persist()
         lineDidChange()
     }
 
@@ -750,7 +753,8 @@ final class TrailDraftController {
             travelMode: draft.travelMode,
             startIsOpen: draft.startIsOpen,
             editingHikeID: editingHikeID,
-            editingPlaceIDs: Array(editingPlaceIDs)
+            editingPlaceIDs: Array(editingPlaceIDs),
+            chosenLegs: draft.chosenLegs
         )
     }
 
@@ -897,7 +901,8 @@ extension TrailDraftController {
             places: stored.places,
             snapsToPaths: stored.snapsToPaths,
             travelMode: stored.travelMode,
-            startIsOpen: stored.startIsOpen
+            startIsOpen: stored.startIsOpen,
+            chosenLegs: stored.chosenLegs
         )
         editingHikeID = stored.editingHikeID
         editingPlaceIDs = Set(stored.editingPlaceIDs)

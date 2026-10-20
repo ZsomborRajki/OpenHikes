@@ -265,6 +265,23 @@ nonisolated struct TrailLeg: Identifiable, Equatable, Sendable {
         return chosen
     }
 
+    /// The same leg with `way` drawn: the alternative it matches if the
+    /// router offered it again, and otherwise `way` itself with the router's
+    /// answer offered in its place. What a hiker's earlier choice does to a
+    /// fresh answer — see ``TrailLegChoice``.
+    func taking(_ way: TrailLegPath) -> Self {
+        guard way.coordinates != coordinates else { return self }
+        if let index = alternatives.firstIndex(where: { $0.coordinates == way.coordinates }) {
+            return choosing(alternative: index) ?? self
+        }
+        var taken = self
+        taken.alternatives.insert(path, at: 0)
+        taken.coordinates = way.coordinates
+        taken.distanceMeters = way.distanceMeters
+        taken.travelTime = way.travelTime
+        return taken
+    }
+
     /// Legs end to end, each join once: every leg carries both of its ends, so
     /// the point where two meet is in the list twice before this runs. The
     /// shape a whole drawn line is saved, ranked against and labelled in.
@@ -316,5 +333,24 @@ nonisolated struct TrailLegRoute: Equatable, Sendable {
             distanceMeters: ends.straightDistanceMeters,
             snap: snap
         )
+    }
+}
+
+extension TrailLegChoice {
+    /// `way`, chosen for the leg between `ends`.
+    init(_ way: TrailLegPath, between ends: TrailLegEnds) {
+        self.init(
+            start: ends.start,
+            end: ends.end,
+            coordinates: way.coordinates,
+            distanceMeters: way.distanceMeters,
+            travelTime: way.travelTime
+        )
+    }
+
+    var ends: TrailLegEnds { TrailLegEnds(start: start, end: end) }
+
+    var way: TrailLegPath {
+        TrailLegPath(coordinates: coordinates, distanceMeters: distanceMeters, travelTime: travelTime)
     }
 }
