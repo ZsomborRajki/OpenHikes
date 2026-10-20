@@ -372,11 +372,13 @@ final class WeatherManager {
     /// is nothing.
     var current: WeatherSnapshot? { state.snapshot }
 
-    /// Readings by ``WeatherSubject/key``, least- to most-recently used.
+    /// Readings and their original subjects by ``WeatherSubject/key``, least-
+    /// to most-recently used. A moving focus must not move the cached
+    /// forecast's source: the walk's daylight check measures against it.
     ///
     /// Uses the same limit and focus recency as ``WeatherRequestState``, so
     /// revisiting a fresh subject keeps both its reading and request history.
-    @ObservationIgnored private var cache: OrderedDictionary<String, WeatherSnapshot> = [:]
+    @ObservationIgnored private var cache: OrderedDictionary<String, StoredWeatherReading> = [:]
 
     @ObservationIgnored private let service = WeatherService.shared
     /// The transport a severe-weather banner goes out through, or `nil` for a
@@ -523,8 +525,11 @@ final class WeatherManager {
     func restoreLastReading() {
         guard !hasRestored else { return }
         hasRestored = true
-        guard let restored = store?.load() else { return }
-        cache[restored.subject.key] = restored.snapshot
+        guard let stored = store?.load() else { return }
+        // A reading that arrived before the restore keeps its data and
+        // source location; the stored one only fills a missing cache entry.
+        let restored = cache[stored.subject.key] ?? stored
+        remember(restored.snapshot, for: restored.subject)
         guard state == .idle else { return }
         publish(.reading(restored.snapshot, subject: restored.subject))
     }
@@ -541,13 +546,25 @@ final class WeatherManager {
             return
         }
         if let cached = cache[subject.key] {
-            remember(cached, for: subject)
-            publish(.reading(cached, subject: subject))
+            remember(cached.snapshot, for: cached.subject)
+            publish(.reading(cached.snapshot, subject: subject))
         } else if willRequest {
             publish(.loading(subject))
         } else {
             publish(.unavailable(subject))
         }
+    }
+
+    /// Daylight for the walk, checked against where the reading was requested.
+    ///
+    /// The badge's subject follows the focus even while it shows a cached
+    /// forecast. Its current coordinate can be far from the reading's, so
+    /// proximity must use the cached subject until a new reading arrives.
+    func daylight(forWalkOn hikeID: UUID, at coordinate: CLLocationCoordinate2D?) -> WeatherDaylight? {
+        guard case .reading(_, let subject) = state,
+              let reading = cache[subject.key] else { return nil }
+        return WeatherBadgeState.reading(reading.snapshot, subject: reading.subject)
+            .daylight(forWalkOn: hikeID, at: coordinate)
     }
 
     /// Fetches current weather for `subject`, keeping the last reading for it
@@ -616,7 +633,7 @@ final class WeatherManager {
                 """
             )
             if let cached = cache[subject.key] {
-                publish(.reading(cached, subject: subject))
+                publish(.reading(cached.snapshot, subject: subject))
             } else {
                 publish(.unavailable(subject))
             }
@@ -738,7 +755,7 @@ final class WeatherManager {
         // `removeFirst` drop the least recently read subject. A subject not
         // cached before is appended by the subscript, so the move finds it
         // already last and does nothing.
-        cache[subject.key] = snapshot
+        cache[subject.key] = StoredWeatherReading(snapshot: snapshot, subject: subject)
         cache.move(keys: CollectionOfOne(subject.key), to: cache.count)
         if cache.count > WeatherRequestState.trackedSubjectLimit {
             cache.removeFirst()
