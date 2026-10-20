@@ -69,8 +69,8 @@ final class CommonsPhotoPinView: MKAnnotationView {
         // Standing on the spot rather than centred on it, like a pin.
         centerOffset = CGPoint(x: 0, y: -Self.side / 2)
         canShowCallout = false
-        // Below the pins that matter more, and hidden by its neighbours — see
-        // the file header.
+        // Below the pins that matter more, and hidden by them — see the file
+        // header.
         displayPriority = Self.priority
         collisionMode = .rectangle
         backgroundColor = .white
