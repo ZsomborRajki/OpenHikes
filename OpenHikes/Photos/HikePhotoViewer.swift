@@ -456,7 +456,8 @@ private struct SharePhotoButton: View {
                     hikeTitle: hikeTitle,
                     position: position,
                     pathExtension: store.url(for: photo).pathExtension
-                )
+                ),
+                credit: CommonsPhotoCredit(photo)
             ),
             message: attribution,
             preview: SharePreview(
@@ -476,12 +477,11 @@ private struct SharePhotoButton: View {
     /// `nil` for every other photograph.
     ///
     /// The licence it came under asks for the author, the licence and a link
-    /// to the source wherever the picture is passed on, and the file alone
-    /// carries none of them. So they go as the message beside it — the same
-    /// line the viewer draws over it, and the photograph's page on Commons.
+    /// to the source wherever the picture is passed on. The file carries them
+    /// in its own metadata — see ``HikePhotoFile`` — and they go as the
+    /// message beside it too, where a receiver shows a message: the same line
+    /// the viewer draws over it, and the links.
     private var attribution: Text? {
-        guard let licence = photo.licence else { return nil }
-        let credit = PhotoLicenceCredit.line(author: photo.importedAuthorName, licence: licence)
-        return Text(verbatim: "\(credit)\n\(licence.sourceURL.absoluteString)")
+        CommonsPhotoCredit(photo).map { Text(verbatim: $0.notice) }
     }
 }

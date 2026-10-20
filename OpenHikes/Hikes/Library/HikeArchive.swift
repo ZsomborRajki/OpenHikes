@@ -51,11 +51,23 @@
 //  still written, because *a photo was taken here* remains true and is the
 //  part GPX can carry; only the link is dropped.
 //
+//  **A Wikimedia Commons copy travels with its credit, three times over.**
+//  It is somebody else's picture, kept on the licence's terms — the author,
+//  the licence and the source page going wherever it goes — and those were
+//  stored on the photo's row, not in its bytes. So the copy in `Photos/` is
+//  rewritten with them (see ``PhotoMetadataStamp/credited(_:with:)``), a
+//  `Credits.txt` beside the `.gpx` lists every such photograph by file name
+//  for the reader who opens the folder rather than the pictures, and its
+//  waypoint carries the credit as ``GPXExport/Photograph/credit``. The file
+//  is the one that survives being copied out on its own; the list is the one
+//  that survives a format that drops metadata.
+//
 
 import CoreLocation
 import CoreTransferable
 import Foundation
 import OpenHikesData
+import os
 import UniformTypeIdentifiers
 
 /// One hike's worth of files, ready to be written and zipped.
@@ -82,6 +94,9 @@ nonisolated struct HikeArchive: Sendable, Equatable {
         /// zip, and only its position is missing, which was missing already.
         var coordinate: RouteCoordinate?
         var capturedAt: Date
+        /// The credit a Commons copy carries — see this file's header. `nil`
+        /// for every other photograph.
+        var credit: CommonsPhotoCredit?
     }
 
     /// The route, its metadata, and — once ``HikeArchive/write(_:store:)`` has
@@ -105,6 +120,9 @@ nonisolated struct HikeArchive: Sendable, Equatable {
 nonisolated extension HikeArchive {
     /// The directory inside the archive the pictures go in.
     static let photoDirectoryName = "Photos"
+    /// The list of Commons copies and their credits, beside the `.gpx`.
+    /// Written only for an archive that carries one.
+    static let creditsFileName = "Credits.txt"
 
     /// Builds the archive on disk and returns the `.zip`.
     ///
@@ -164,23 +182,55 @@ nonisolated extension HikeArchive {
         // The copies first, and the markup second, so the file can only link
         // pictures that are really beside it — see this file's header.
         var track = archive.track
+        var credits: [String] = []
         track.photographs = archive.photographs.compactMap { photograph in
-            let landed = store.exportOriginal(
+            let copy = store.exportOriginal(
                 of: photograph.files,
                 named: photograph.fileName,
                 into: photoDirectory
-            ) != nil
+            )
+            let href = "\(photoDirectoryName)/\(photograph.fileName)"
+            if let copy, let credit = photograph.credit {
+                writeCredit(credit, into: copy)
+                credits.append("\(href)\n\(credit.notice)")
+            }
             guard let coordinate = photograph.coordinate else { return nil }
             return GPXExport.Photograph(
                 coordinate: coordinate,
                 capturedAt: photograph.capturedAt,
-                linkHref: landed ? "\(photoDirectoryName)/\(photograph.fileName)" : nil
+                linkHref: copy != nil ? href : nil,
+                credit: photograph.credit
             )
         }
 
         let document = root.appending(path: "\(stem).gpx", directoryHint: .notDirectory)
         try GPXExport.data(for: track).write(to: document, options: .atomic)
+        if !credits.isEmpty {
+            try Data((credits.joined(separator: "\n\n") + "\n").utf8).write(
+                to: root.appending(path: creditsFileName, directoryHint: .notDirectory),
+                options: .atomic
+            )
+        }
         return root
+    }
+
+    /// Rewrites the copy at `url` with `credit` in its own metadata.
+    ///
+    /// A copy that cannot take it stays as it was rather than being dropped:
+    /// unlike a single shared photograph it does not travel alone, and the
+    /// credits file beside it names it either way. Dropping it would cost the
+    /// hiker the pixels to save a credit that is already written down.
+    private static func writeCredit(_ credit: CommonsPhotoCredit, into url: URL) {
+        guard let original = try? Data(contentsOf: url),
+              let credited = PhotoMetadataStamp.credited(original, with: credit)
+        else { return }
+        do {
+            try credited.write(to: url, options: .atomic)
+        } catch {
+            HikePhotoStore.logger.notice(
+                "Could not credit a photo in an archive: \(error.localizedDescription, privacy: .public)"
+            )
+        }
     }
 
     /// An archive is bigger than a `.gpx` and a share of one takes longer, so
@@ -260,7 +310,8 @@ extension HikeArchive {
                             longitude: coordinate.longitude
                         )
                     },
-                    capturedAt: photo.capturedAt
+                    capturedAt: photo.capturedAt,
+                    credit: CommonsPhotoCredit(photo)
                 )
             }
         )

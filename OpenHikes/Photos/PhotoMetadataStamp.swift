@@ -4,7 +4,7 @@
 //
 //  Writing what the app knows about a photograph into the photograph.
 //
-//  Only one path needs this, and it is the opt-in copy that leaves the app —
+//  Two paths need this. The first is the opt-in copy that leaves the app —
 //  see ``PhotoLibraryWriter``. A photo taken in OpenHikes is encoded from a
 //  `UIImage`, which is pixels and nothing else: no EXIF, no `DateTimeOriginal`,
 //  no GPS. Filed into the photo library as-is it lands in Recents under the
@@ -19,6 +19,13 @@
 //  in somebody's library. Export that photo, AirDrop it, sync it to a
 //  computer, and what travels is the file; a file whose bytes carry no
 //  metadata arrives stripped all over again. So the bytes get it too.
+//
+//  The second is a copy of somebody else's photograph leaving the app: a
+//  Wikimedia Commons picture saved with a trail, shared on its own or packed
+//  into an archive. Its credit — author, licence, source page — was kept on
+//  the photo's row rather than in its bytes, and a file that goes somewhere
+//  without it is a file whose licence has not been honoured. So the copy that
+//  leaves is rewritten with it; see ``credited(_:with:)``.
 //
 //  What this deliberately does not do is re-encode. The obvious way to write
 //  metadata — hand `CGImageDestinationAddImageFromSource` a merged properties
@@ -37,6 +44,7 @@ import CoreGraphics
 import CoreLocation
 import Foundation
 import ImageIO
+import OpenHikesData
 import os
 
 /// Adds capture time and place to encoded image bytes, without touching the
@@ -58,6 +66,67 @@ nonisolated enum PhotoMetadataStamp {
         _ data: Data,
         capturedAt: Date,
         coordinate: CLLocationCoordinate2D?
+    ) -> Data? {
+        copy(data) { source in
+            metadata(mergedInto: source, capturedAt: capturedAt, coordinate: coordinate)
+        }
+    }
+
+    /// `data` carrying the credit a Commons copy is owed, or `nil` when the
+    /// bytes are not an image ImageIO can rewrite or the credit could not be
+    /// written into them — a copy that would leave without it.
+    ///
+    /// Written as the copyright notice — TIFF `Copyright`, which is
+    /// `dc:rights` in XMP — because that is the one field every container the
+    /// store holds keeps and every viewer shows: measured, JPEG, PNG and HEIC
+    /// all read it back, where a PNG drops IPTC entirely. The notice carries
+    /// all three things the licence asks for, so that field alone is enough.
+    /// The author goes into `dc:creator` as well, the place a reader looks
+    /// for who took a picture, and the source page and licence into their own
+    /// IPTC and XMP Rights fields for software that reads those.
+    ///
+    /// Overwrites whatever the photograph already said in those fields. The
+    /// Commons file page is the authority on its licence, and a camera's
+    /// *all rights reserved* left in the copyright notice would contradict it.
+    static func credited(_ data: Data, with credit: CommonsPhotoCredit) -> Data? {
+        var complete = true
+        let rewritten = copy(data) { source in
+            let metadata = mutableMetadata(of: source)
+            complete = credit.author.map { setCreator($0, in: metadata) } ?? true
+            complete = complete && setting(
+                kCGImagePropertyTIFFDictionary,
+                kCGImagePropertyTIFFCopyright,
+                credit.notice as CFString,
+                in: metadata
+            )
+            complete = complete && setting(
+                kCGImagePropertyIPTCDictionary,
+                kCGImagePropertyIPTCSource,
+                credit.licence.sourceURL.absoluteString as CFString,
+                in: metadata
+            )
+            if let url = credit.licence.url {
+                complete = complete && CGImageMetadataSetValueWithPath(
+                    metadata,
+                    nil,
+                    "\(kCGImageMetadataPrefixXMPRights):WebStatement" as CFString,
+                    url.absoluteString as CFString
+                )
+            }
+            return metadata
+        }
+        guard complete else {
+            logger.error("Could not write a Commons credit into an image.")
+            return nil
+        }
+        return rewritten
+    }
+
+    /// `data` copied with `metadata(source)` merged into it, without touching
+    /// the pixels — see this file's header for why it is this API.
+    private static func copy(
+        _ data: Data,
+        adding metadata: (CGImageSource) -> CGMutableImageMetadata
     ) -> Data? {
         assertOffMainThread("Image metadata rewriting must stay off the main thread")
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
@@ -82,14 +151,10 @@ nonisolated enum PhotoMetadataStamp {
             destination,
             source,
             [
-                kCGImageDestinationMetadata: metadata(
-                    mergedInto: source,
-                    capturedAt: capturedAt,
-                    coordinate: coordinate
-                ),
+                kCGImageDestinationMetadata: metadata(source),
                 // Merge rather than replace: a photograph that arrived from
                 // the library already carries metadata of its own, and this is
-                // adding two facts to it rather than deciding what it says.
+                // adding facts to it rather than deciding what it says.
                 kCGImageDestinationMergeMetadata: true,
             ] as CFDictionary,
             &failure
@@ -118,9 +183,7 @@ nonisolated enum PhotoMetadataStamp {
         capturedAt: Date,
         coordinate: CLLocationCoordinate2D?
     ) -> CGMutableImageMetadata {
-        let metadata = CGImageSourceCopyMetadataAtIndex(source, 0, nil)
-            .flatMap { CGImageMetadataCreateMutableCopy($0) }
-            ?? CGImageMetadataCreateMutable()
+        let metadata = mutableMetadata(of: source)
 
         // EXIF timestamps are local wall-clock with no zone, which is what
         // every camera writes and what every reader expects.
@@ -200,6 +263,17 @@ nonisolated enum PhotoMetadataStamp {
         _ value: CFTypeRef,
         in metadata: CGMutableImageMetadata
     ) {
+        _ = setting(dictionary, property, value, in: metadata)
+    }
+
+    /// ``set(_:_:_:in:)`` for a caller that has to know: a credit missing one
+    /// of its fields is not a credit, where a date missing is only a date.
+    private static func setting(
+        _ dictionary: CFString,
+        _ property: CFString,
+        _ value: CFTypeRef,
+        in metadata: CGMutableImageMetadata
+    ) -> Bool {
         guard CGImageMetadataSetValueMatchingImageProperty(
             metadata,
             dictionary,
@@ -209,8 +283,44 @@ nonisolated enum PhotoMetadataStamp {
             logger.error(
                 "Could not set \(property as String, privacy: .public) on an image."
             )
-            return
+            return false
         }
+        return true
+    }
+
+    /// The source's own metadata, as a copy this can write into.
+    private static func mutableMetadata(of source: CGImageSource) -> CGMutableImageMetadata {
+        CGImageSourceCopyMetadataAtIndex(source, 0, nil)
+            .flatMap { CGImageMetadataCreateMutableCopy($0) }
+            ?? CGImageMetadataCreateMutable()
+    }
+
+    /// `dc:creator`, which XMP keeps as an ordered list of names.
+    ///
+    /// Set as a tag rather than through TIFF `Artist`: measured, the image
+    /// property form writes a plain string where XMP wants the list, and no
+    /// container reads it back. The list form is what ImageIO reconciles into
+    /// the IPTC byline on read.
+    private static func setCreator(_ author: String, in metadata: CGMutableImageMetadata) -> Bool {
+        guard let name = CGImageMetadataTagCreate(
+            kCGImageMetadataNamespaceDublinCore,
+            kCGImageMetadataPrefixDublinCore,
+            "creator" as CFString,
+            .string,
+            author as CFString
+        ), let list = CGImageMetadataTagCreate(
+            kCGImageMetadataNamespaceDublinCore,
+            kCGImageMetadataPrefixDublinCore,
+            "creator" as CFString,
+            .arrayOrdered,
+            [name] as CFArray
+        ) else { return false }
+        return CGImageMetadataSetTagWithPath(
+            metadata,
+            nil,
+            "\(kCGImageMetadataPrefixDublinCore):creator" as CFString,
+            list
+        )
     }
 
     /// `yyyy:MM:dd` and `HH:mm:ss`, the two halves EXIF keeps a timestamp in.

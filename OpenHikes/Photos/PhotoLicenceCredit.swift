@@ -56,7 +56,10 @@ struct PhotoLicenceCredit: View {
 
     /// The credit in words — also what the maker's photo pins are called to
     /// VoiceOver, since it is the one thing about the picture this app knows.
-    static func line(author: String?, licence: HikePhotoLicence) -> String {
+    ///
+    /// `nonisolated` because the exports that carry a copy out of the app
+    /// write it off the main actor — see ``CommonsPhotoCredit/notice``.
+    nonisolated static func line(author: String?, licence: HikePhotoLicence) -> String {
         guard let author else { return String(localized: "Photo · \(licence.name)") }
         return String(localized: "Photo by \(author) · \(licence.name)")
     }
