@@ -840,9 +840,15 @@ nonisolated private extension GPXImport {
         /// designator and would quietly ignore it.
         private func date(from value: String) -> Date? {
             guard !value.isEmpty else { return nil }
-            return (try? fractionalDateStrategy.parse(value))
-                ?? (try? dateStrategy.parse(value))
-                ?? (try? localDateStrategy.parse(value))
+            // A placeholder parses as readily as a real time, and one at the
+            // front of a file makes the walk decades long; see
+            // ``PlausibleTimestamp``. Here rather than at each caller because
+            // the metadata time and every point's time come through this.
+            return PlausibleTimestamp.validated(
+                (try? fractionalDateStrategy.parse(value))
+                    ?? (try? dateStrategy.parse(value))
+                    ?? (try? localDateStrategy.parse(value))
+            )
         }
     }
 }

@@ -111,6 +111,28 @@ struct GPXImportDateTests {
         )
     }
 
+    /// A first fix stamped `0001-01-01` parses as readily as a real time, and
+    /// left in it makes the hike's date the year one and its duration two
+    /// thousand years (#838).
+    @Test("a placeholder timestamp on the first fix is dropped, not trusted")
+    func placeholderFirstTimestampIsDropped() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx version="1.1" creator="OpenHikesTests" xmlns="http://www.topografix.com/GPX/1/1">
+            <trk><trkseg>
+            <trkpt lat="47.6300" lon="12.8600"><time>0001-01-01T00:00:00Z</time></trkpt>
+            <trkpt lat="47.6310" lon="12.8600"><time>2026-06-01T08:06:00Z</time></trkpt>
+            <trkpt lat="47.6320" lon="12.8600"><time>2026-06-01T08:07:00Z</time></trkpt>
+            </trkseg></trk>
+        </gpx>
+        """
+        let track = try GPXImport.load(from: try write(xml))
+        let strategy = Date.ISO8601FormatStyle()
+
+        #expect(track.points[0].time == nil)
+        #expect(track.startTime == (try strategy.parse("2026-06-01T08:06:00Z")))
+    }
+
     /// The fallback is a fallback. A string that does carry a designator has
     /// to keep being read by it, because the lenient grammar accepts one too
     /// and would silently drop the offset — which is the same bug as the one

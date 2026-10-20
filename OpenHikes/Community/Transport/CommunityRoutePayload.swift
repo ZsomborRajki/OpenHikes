@@ -246,6 +246,7 @@ nonisolated enum CommunityRoutePayload {
         if let elevation = point.elevation, !elevation.isFinite { usable.elevation = nil }
         if let timestamp = point.timestamp,
            !timestamp.timeIntervalSinceReferenceDate.isFinite { usable.timestamp = nil }
+        usable.timestamp = PlausibleTimestamp.validated(usable.timestamp)
         return usable
     }
 }
