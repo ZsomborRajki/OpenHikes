@@ -10,6 +10,7 @@
 import CoreLocation
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 import SwiftData
 import Testing
 

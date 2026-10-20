@@ -7,6 +7,7 @@ import CoreLocation
 import DequeModule
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 
 /// Distance accumulation that can retract a short window of GPS wander when
 /// the hiker has remained within one small area for long enough.

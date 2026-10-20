@@ -9,6 +9,7 @@
 
 import Algorithms
 import Foundation
+import OpenHikesShared
 
 nonisolated public extension RouteProfile {
     /// The ascent and descent between two distances along the route, walked
