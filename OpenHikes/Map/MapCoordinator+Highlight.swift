@@ -63,6 +63,13 @@ extension MapView.Coordinator {
         layer.shadowOpacity = annotationShadowOpacity
         layer.shadowRadius = 2
         layer.shadowOffset = .zero
+        // Faded here as well as on every move, for two views the move never
+        // reaches: a new dot's, which MapKit has not made yet when the move
+        // asks for it, and a recycled one, which comes back at whatever alpha
+        // the last dot on it was left at — a preview opened at the hiker's
+        // feet would otherwise hand its fade to the next preview's dot, a
+        // valley away. See ``updateHighlightOpacity(on:)``.
+        setAlpha(highlightAlpha(at: annotation.coordinate, on: mapView), on: view)
         return view
     }
 
@@ -113,14 +120,17 @@ extension MapView.Coordinator {
     private func updateOpacity(of annotation: (any MKAnnotation)?, on mapView: MKMapView) {
         guard let annotation,
               let view = mapView.view(for: annotation) else { return }
-        guard let userCoordinate = mapView.userLocation.location?.coordinate else {
-            setAlpha(1, on: view)
-            return
-        }
-        let selectionPoint = mapView.convert(annotation.coordinate, toPointTo: mapView)
+        setAlpha(highlightAlpha(at: annotation.coordinate, on: mapView), on: view)
+    }
+
+    /// Faded within ``overlapThresholdPoints`` of the location puck, and
+    /// opaque anywhere else or with no puck on the map.
+    private func highlightAlpha(at coordinate: CLLocationCoordinate2D, on mapView: MKMapView) -> CGFloat {
+        guard let userCoordinate = mapView.userLocation.location?.coordinate else { return 1 }
+        let selectionPoint = mapView.convert(coordinate, toPointTo: mapView)
         let userPoint = mapView.convert(userCoordinate, toPointTo: mapView)
         let distance = hypot(selectionPoint.x - userPoint.x, selectionPoint.y - userPoint.y)
-        setAlpha(distance < Self.overlapThresholdPoints ? Self.overlapFadedAlpha : 1, on: view)
+        return distance < Self.overlapThresholdPoints ? Self.overlapFadedAlpha : 1
     }
 
     func setAlpha(_ alpha: CGFloat, on view: MKAnnotationView) {
