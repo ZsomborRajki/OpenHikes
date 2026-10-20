@@ -64,6 +64,10 @@ final class WatchModel {
     @ObservationIgnored private let store: WatchStore
     /// Rebuilt whenever ``trail`` changes, and `nil` when there is none.
     @ObservationIgnored private var tracker: WatchRouteTracker?
+    /// The trail the hiker last opened, which decides whether an arriving
+    /// package is the answer the screen is waiting for or a late one — see
+    /// ``WatchTrailSelection``.
+    @ObservationIgnored private var selection = WatchTrailSelection()
     /// Whether a trail screen is asking for live position right now.
     ///
     /// Remembered rather than answered on the spot, because the feed and the
@@ -165,6 +169,7 @@ final class WatchModel {
     /// route has changed and the held copy is drawn and matched against in the
     /// meantime, in or out of range.
     func selectTrail(_ hikeID: UUID) {
+        selection.select(hikeID)
         if trail?.hikeID != hikeID { follow.clear() }
         link.requestTrail(hikeID, holding: trail)
     }
@@ -336,13 +341,20 @@ final class WatchModel {
             // A new list is the phone saying its library changed, and the
             // trail held here may be what changed. Asking costs one small
             // request and nothing comes back unless it did — see
-            // ``selectTrail(_:)``. A trail no longer on the list is left
-            // alone: it may have been deleted, and a hiker following it
-            // still has the line.
-            if let trail, digest.hikes.contains(where: { $0.id == trail.hikeID }) {
-                link.requestTrail(trail.hikeID, holding: trail)
+            // ``selectTrail(_:)``. Which trail to ask about is the
+            // selection's to say: see
+            // ``WatchTrailSelection/refreshTarget(holding:in:)``.
+            if let hikeID = selection.refreshTarget(holding: trail, in: digest) {
+                link.requestTrail(hikeID, holding: trail)
             }
         case .trail(let package):
+            // An answer to a request the hiker has moved on from, or an older
+            // copy of the trail held. Taken, it would put another trail under
+            // the screen that is open and leave it waiting for good.
+            guard selection.accepts(package, replacing: trail) else {
+                Self.logger.debug("Dropped a trail package that arrived after a newer selection or revision")
+                return
+            }
             trail = package
             tracker = WatchRouteTracker(package)
             follow.clear()

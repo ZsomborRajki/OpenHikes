@@ -39,8 +39,14 @@ nonisolated enum WatchTrailPackaging {
     /// A single-point route is a place rather than a trail, and every consumer
     /// on the watch wants a line: see ``WatchTrailPackage/isDrawable``. Sent
     /// anyway it would cost a transfer and draw nothing.
+    ///
+    /// `readAt` is when `input` was read off the hike, and becomes the
+    /// package's ``WatchTrailPackage/sentAt``. Stamped there rather than when
+    /// this finishes, because two requests either side of an edit are
+    /// packaged concurrently and can finish in either order; the watch orders
+    /// two copies of one trail by it — see `WatchTrailSelection`.
     @concurrent
-    static func package(from input: HikeRouteInput) async -> WatchTrailPackage? {
+    static func package(from input: HikeRouteInput, readAt: Date = .now) async -> WatchTrailPackage? {
         assertOffMainThread("Packaging a route for the watch must stay off the main thread")
         guard input.route.count > 1 else { return nil }
         // The same stride the widget's polyline uses, taken as *indices* so a
@@ -71,7 +77,8 @@ nonisolated enum WatchTrailPackaging {
             totalDistanceMeters: input.totalDistanceMeters,
             points: points,
             elevationGainMeters: climb.gainMeters,
-            elevationLossMeters: climb.lossMeters
+            elevationLossMeters: climb.lossMeters,
+            sentAt: readAt
         )
     }
 
