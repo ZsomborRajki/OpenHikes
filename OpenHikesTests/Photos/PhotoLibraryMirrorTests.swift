@@ -32,7 +32,7 @@ struct PhotoLibraryMirrorTests {
     /// Fixed and firmly in the past, so "the moment it was taken" is
     /// distinguishable from "the moment it was filed" — which is the whole
     /// difference being tested, and which a `.now` fixture would hide.
-    private static let capturedAt = Date(timeIntervalSince1970: 1_750_000_000)
+    static let capturedAt = Date(timeIntervalSince1970: 1_750_000_000)
 
     @Test("a mirrored photo carries the moment it was taken")
     func mirrorCarriesTheCaptureDate() async throws {
@@ -262,6 +262,9 @@ nonisolated final class StubPhotoLibraryWriter: PhotoLibraryWriting {
         /// asserted here so the failure names the executor instead of trapping
         /// inside a stub — see `mirroringStaysOffTheMainActor`.
         let onMainThread: Bool
+        /// The identifier this save answered with, as the library would name
+        /// the asset it created — `nil` for a stub standing in for a refusal.
+        let createdAsset: String?
     }
 
     /// Exposed as a plain array rather than as the `Mutex` itself: the testing
@@ -271,6 +274,13 @@ nonisolated final class StubPhotoLibraryWriter: PhotoLibraryWriting {
     var saves: [Save] { recorded.withLock { $0 } }
 
     private let recorded = Mutex<[Save]>([])
+    private let refuses: Bool
+
+    /// - Parameter refuses: Answer every save as a refused permission or a
+    ///   failed write would, with no asset created.
+    init(refuses: Bool = false) {
+        self.refuses = refuses
+    }
 
     // Async because the protocol is, not because this body suspends: the real
     // writer awaits an authorization prompt and a change request, this one
@@ -289,7 +299,7 @@ nonisolated final class StubPhotoLibraryWriter: PhotoLibraryWriting {
         fileExtension: String,
         capturedAt: Date,
         coordinate: CLLocationCoordinate2D?
-    ) async -> Bool {
+    ) async -> String? {
         // swiftlint:enable async_without_await
         record(
             fileExtension: fileExtension,
@@ -297,7 +307,6 @@ nonisolated final class StubPhotoLibraryWriter: PhotoLibraryWriting {
             coordinate: coordinate,
             byteCount: data.count
         )
-        return true
     }
 
     /// Split out of `save` only so `Thread.isMainThread` can be read at all:
@@ -309,8 +318,9 @@ nonisolated final class StubPhotoLibraryWriter: PhotoLibraryWriting {
         capturedAt: Date,
         coordinate: CLLocationCoordinate2D?,
         byteCount: Int
-    ) {
+    ) -> String? {
         recorded.withLock { saves in
+            let createdAsset = refuses ? nil : "mirrored-\(saves.count + 1)"
             saves.append(
                 Save(
                     fileExtension: fileExtension,
@@ -319,9 +329,11 @@ nonisolated final class StubPhotoLibraryWriter: PhotoLibraryWriting {
                     longitude: coordinate?.longitude,
                     byteCount: byteCount,
                     filedAt: .now,
-                    onMainThread: Thread.isMainThread
+                    onMainThread: Thread.isMainThread,
+                    createdAsset: createdAsset
                 )
             )
+            return createdAsset
         }
     }
 }
