@@ -22,9 +22,11 @@
 import Foundation
 
 nonisolated public enum PlausibleTimestamp {
+    private static let earliestUnixSeconds: TimeInterval = 631_152_000
+
     /// The first instant accepted: 1990-01-01T00:00:00Z. Early enough for any
     /// recorded GPS track, and after every placeholder named above.
-    public static let earliest = Date(timeIntervalSince1970: 631_152_000)
+    public static let earliest = Date(timeIntervalSince1970: earliestUnixSeconds)
 
     /// How far past `now` a stamp may be: a day, for a device whose clock is
     /// a time zone ahead of the one that is reading its file.
@@ -32,7 +34,10 @@ nonisolated public enum PlausibleTimestamp {
 
     /// `date` if it can be a moment a person walked, `nil` if it cannot.
     public static func validated(_ date: Date?, now: Date = .now) -> Date? {
-        guard let date, date >= earliest, date <= now.addingTimeInterval(futureTolerance)
+        // Date's derived >= and <= comparisons both accept a NaN, so the
+        // window alone cannot reject every unusable timestamp.
+        guard let date, date.timeIntervalSinceReferenceDate.isFinite,
+              date >= earliest, date <= now.addingTimeInterval(futureTolerance)
         else { return nil }
         return date
     }
