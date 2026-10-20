@@ -47,17 +47,40 @@ import SwiftUI
 /// The system draws it: a role-only `Button`, so its glyph, its styling and
 /// the word VoiceOver says are Apple's own. `.close` for a screen that has
 /// nothing to lose, `.cancel` for one that abandons what was typed into it.
+///
+/// `before` is the work a screen does on the way out — committing what was
+/// typed, say — run ahead of the dismissal. It is the screen's closure and it
+/// runs on the screen's behalf; only the environment read moves here.
 struct DismissButton: View {
     private let role: ButtonRole
+    private let before: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
 
-    init(role: ButtonRole = .close) {
+    init(role: ButtonRole = .close, before: (() -> Void)? = nil) {
         self.role = role
+        self.before = before
     }
 
     var body: some View {
-        Button(role: role) { dismiss() }
+        Button(role: role) {
+            before?()
+            dismiss()
+        }
+    }
+}
+
+/// A screen that is only ever on screen to close itself: it dismisses the
+/// presentation the moment it appears.
+///
+/// For the branch of a `body` that finds what it was opened for gone. A leaf
+/// of its own, because `Color.clear.onAppear { dismiss() }` written in the
+/// branch would make the whole screen the owner of the environment read.
+struct DismissOnAppear: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Color.clear.onAppear { dismiss() }
     }
 }
 
@@ -78,7 +101,35 @@ private struct DismissWhen: ViewModifier {
     }
 }
 
+/// Closes the presentation, then hands the screen what it asked for, the
+/// moment `exit` becomes non-`nil`.
+private struct DismissThen<Exit: Equatable>: ViewModifier {
+    let exit: Exit?
+    let then: (Exit) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    func body(content: Content) -> some View {
+        content.onChange(of: exit) { _, exit in
+            guard let exit else { return }
+            dismiss()
+            then(exit)
+        }
+    }
+}
+
 extension View {
+    /// Closes this presentation, and then runs `then` with the value, once
+    /// `exit` is set.
+    ///
+    /// For a screen that must be gone before the next thing happens — the one
+    /// that pushes another screen as it closes. The action sets the state; the
+    /// order the button used to hold, dismissal and then the follow-up, is
+    /// kept here.
+    func dismiss<Exit: Equatable>(after exit: Exit?, then: @escaping (Exit) -> Void) -> some View {
+        modifier(DismissThen(exit: exit, then: then))
+    }
+
     /// Closes this presentation the first time `condition` becomes true.
     ///
     /// Only on the transition, never on the initial value — a screen that

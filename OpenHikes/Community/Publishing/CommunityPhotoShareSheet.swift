@@ -58,7 +58,6 @@ struct CommunityPhotoShareSheet: View {
     /// pictures this device actually holds.
     var store: HikePhotoStore = .shared
 
-    @Environment(\.dismiss) private var dismiss
     @AppStorage(SettingsKey.communityAuthorName) private var authorName = ""
     @State private var phase: CommunitySendPhase = .editing
     /// The photographs struck off the strip, by id.
@@ -380,7 +379,7 @@ private extension CommunityPhotoShareSheet {
             // a send the next line of this screen is about to forbid.
             canConfirm: hasSomethingToSend && photos.hasCounted,
             offersConfirmation: true,
-            cancel: { dismiss() },
+            beforeCancel: nil,
             confirm: { send() }
         )
     }

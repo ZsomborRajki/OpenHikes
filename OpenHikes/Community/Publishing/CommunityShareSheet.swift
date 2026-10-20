@@ -46,7 +46,6 @@ struct CommunityShareSheet: View {
     /// like every other store this app hands a view.
     var store: HikePhotoStore = .shared
 
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @AppStorage(SettingsKey.communityAuthorName) private var authorName = ""
     @State private var phase: CommunitySendPhase = .editing
@@ -553,7 +552,6 @@ private extension CommunityShareSheet {
             // the notes reach the hike because the screen never went away.
             commitNotes()
             commitTitle()
-            dismiss()
         } confirm: {
             share()
         }

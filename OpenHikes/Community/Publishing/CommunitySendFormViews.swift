@@ -106,7 +106,7 @@ struct CommunitySendPhotoCountRow: View {
 
 /// The two toolbar items a send form has, in the states a send puts them in.
 ///
-/// The cancel action is handed in rather than assumed to be `dismiss()`:
+/// The work before the cancel is handed in rather than assumed to be none:
 /// ``CommunityShareSheet`` commits the title and the notes on the way out, and
 /// this is the one exit it can rely on — a sheet's content is not guaranteed
 /// to be torn down when it is dismissed, so `onDisappear` is a hook that
@@ -124,12 +124,12 @@ struct CommunitySendToolbar: ToolbarContent {
     /// Whether the confirmation is offered at all. A refusal takes it away
     /// outright rather than dimming it.
     let offersConfirmation: Bool
-    let cancel: () -> Void
+    let beforeCancel: (() -> Void)?
     let confirm: () -> Void
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button(role: phase.hasFinished ? .close : .cancel, action: cancel)
+            DismissButton(role: phase.hasFinished ? .close : .cancel, before: beforeCancel)
                 .disabled(phase.isSending)
                 .accessibilityIdentifier("community-send-dismiss")
         }
