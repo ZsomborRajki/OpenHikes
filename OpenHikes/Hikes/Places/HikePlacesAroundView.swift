@@ -26,7 +26,6 @@
 
 import OpenHikesData
 import OpenHikesShared
-import SwiftData
 import SwiftUI
 
 struct HikePlacesAroundView: View {
@@ -41,56 +40,49 @@ struct HikePlacesAroundView: View {
     /// Opens *Add Place* at a spot the hiker pressed on the map.
     var onAddPlace: (HikePlaceSpot) -> Void = { _ in /* no-op default */ }
 
-    @Environment(\.modelContext) private var modelContext
     @State private var search = HikePlacesAroundSearch()
-    @State private var token: Int?
-    /// Set when an add was refused. The screen stays as it was under it, so
-    /// tapping ⊕ again is the retry.
-    @State private var refusal: HikePlaceRefusal?
 
     private var filter: TrailPlaceFilter { around.finder.filter }
 
     var body: some View {
         let candidates = search.candidates(showing: filter.shown, held: hike.places)
         let listing = TrailPlaceAroundListing(held: hike.orderedPlaces, candidates: candidates)
-        ScrollView {
-            VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
-                VStack(alignment: .leading, spacing: 12) {
-                    TrailPlaceKindChips(filter: filter)
-                    reachPicker
+        PlacesAroundScreen(
+            hike: hike,
+            around: around,
+            mapController: mapController,
+            placePins: placePins,
+            search: search,
+            candidates: candidates,
+            onShowMap: onShowMap,
+            onOpenPhoto: onOpenPhoto,
+            onAddPlace: onAddPlace,
+            onAttach: {
+                mapController.fitToRoute()
+                searchIfNeeded()
+            },
+            onSearchArea: {
+                around.finder.search(along: hike.route, avoiding: hike.places)
+            },
+            onFound: { [search, hike] places in
+                search.receiveArea(places, along: hike.route)
+            },
+            content: { rows in
+                VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        TrailPlaceKindChips(filter: filter)
+                        reachPicker
+                    }
+                    status(listing)
+                    section("On This Trail", entries: listing.onTrail, rows: rows, identifier: "places-around-on-trail")
+                    section("Nearby", entries: listing.nearby, rows: rows, identifier: "places-around-nearby")
+                    footer
                 }
-                status(listing)
-                section("On This Trail", entries: listing.onTrail, identifier: "places-around-on-trail")
-                section("Nearby", entries: listing.nearby, identifier: "places-around-nearby")
-                footer
             }
-            .padding()
-        }
-        .softScrollEdgeEffect(for: .top)
+        )
         .navigationTitle(Text("Places Around Trail"))
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-        // The hike's own places stay on the map beside the pale ones, and a
-        // tap on one opens its card — the claim the hike's screen held, taken
-        // over while this one is on top.
-        .background(HikePlacePinClaim(hike: hike, controller: placePins, onOpen: select))
-        .onAppear(perform: attach)
-        .onDisappear(perform: detach)
-        .onChange(of: candidates, initial: true) { _, rows in
-            if let token { around.show(rows, token: token) }
-        }
         .onChange(of: search.reach) { searchIfNeeded() }
         .onChange(of: filter.hidden) { searchIfNeeded() }
-        .sheet(isPresented: $search.selection.isPresent()) {
-            HikePlaceAroundCard(search: search, hike: hike, onAdd: add) { photo in
-                // The card goes first: a push under a presented sheet lands
-                // behind it.
-                search.selection = nil
-                onOpenPhoto(photo)
-            }
-        }
-        .hikePlaceRefusalAlert($refusal)
         .accessibilityIdentifier("places-around-screen")
     }
 
@@ -147,6 +139,7 @@ struct HikePlacesAroundView: View {
     private func section(
         _ title: LocalizedStringKey,
         entries: [TrailPlaceAroundEntry],
+        rows: PlacesAroundRows,
         identifier: String
     ) -> some View {
         if !entries.isEmpty {
@@ -156,11 +149,7 @@ struct HikePlacesAroundView: View {
                     .accessibilityAddTraits(.isHeader)
                 VStack(spacing: 0) {
                     ForEach(entries) { entry in
-                        TrailPlaceAroundRow(
-                            entry: entry,
-                            onOpen: { open(entry) },
-                            onAdd: { add(entry.id) }
-                        )
+                        rows.row(entry)
                         if entry.id != entries.last?.id { Divider() }
                     }
                 }
@@ -183,37 +172,6 @@ struct HikePlacesAroundView: View {
 
     // MARK: - What the screen does
 
-    private func attach() {
-        token = around.attach(TrailPlacesAround.Handlers(
-            select: { id in
-                search.selection = id
-            },
-            searchArea: {
-                around.finder.search(along: hike.route, avoiding: hike.places)
-            },
-            dropPin: { coordinate in
-                onAddPlace(HikePlaceSpot(coordinate))
-            }
-        ))
-        around.finder.onFound { [search, hike] places in
-            guard hike.isAttached else { return }
-            search.receiveArea(places, along: hike.route)
-        }
-        if let token {
-            around.show(search.candidates(showing: filter.shown, held: hike.places), token: token)
-        }
-        onShowMap()
-        mapController.fitToRoute()
-        searchIfNeeded()
-    }
-
-    private func detach() {
-        search.cancel()
-        guard let token else { return }
-        around.detach(token: token)
-        self.token = nil
-    }
-
     private func searchIfNeeded() {
         guard search.needsSearch(showing: filter.shown) else { return }
         searchNow()
@@ -222,28 +180,6 @@ struct HikePlacesAroundView: View {
     private func searchNow() {
         guard let source = around.finder.source, hike.isAttached, !filter.shown.isEmpty else { return }
         search.search(along: hike.route, from: source, showing: filter.shown)
-    }
-
-    private func open(_ entry: TrailPlaceAroundEntry) {
-        select(entry.id)
-        mapController.showPhotoSpot(entry.row.place.clCoordinate)
-    }
-
-    /// Opens a place's card. The card is about a spot on the map, so the map
-    /// comes into view with it rather than staying under a full-height list.
-    private func select(_ id: UUID) {
-        search.selection = id
-        onShowMap()
-    }
-
-    private func add(_ id: UUID) {
-        do throws(HikePlaceRefusal) {
-            if try search.add(id, to: hike, in: modelContext) {
-                HapticMoment.targetHit.play()
-            }
-        } catch {
-            refusal = error
-        }
     }
 }
 
