@@ -110,4 +110,25 @@ struct LocationManagerConfigurationTests {
         #expect(source.requestWhenInUseAuthorizationCalls == 0)
         #expect(source.startUpdatingLocationCalls == 0)
     }
+
+    @Test("resume asks again when a grant lapsed to undetermined after start")
+    func resumeAsksAfterAGrantLapses() {
+        source.foregroundAuthorizationStatus = .authorizedWhenInUse
+        manager.start()
+        #expect(source.requestWhenInUseAuthorizationCalls == 0)
+
+        source.foregroundAuthorizationStatus = .notDetermined
+        manager.resume()
+
+        #expect(source.requestWhenInUseAuthorizationCalls == 1)
+    }
+
+    @Test("resume never asks before the map has started the feed")
+    func resumeNeverAsksBeforeStart() {
+        source.foregroundAuthorizationStatus = .notDetermined
+
+        manager.resume()
+
+        #expect(source.requestWhenInUseAuthorizationCalls == 0)
+    }
 }
