@@ -19,8 +19,8 @@ import Testing
 
 @Suite("Commons photo store")
 struct CommonsPhotoStoreTests {
-    private static let centre = CLLocationCoordinate2D(latitude: 47.6, longitude: 13.0)
-    private static let metresPerDegreeLatitude: Double = 111_320
+    private static let center = CLLocationCoordinate2D(latitude: 47.6, longitude: 13.0)
+    private static let metersPerDegreeLatitude: Double = 111_320
     private static let day: TimeInterval = 24 * 60 * 60
 
     /// A clock the case moves by hand.
@@ -41,11 +41,11 @@ struct CommonsPhotoStoreTests {
         deinit { try? FileManager.default.removeItem(at: directory) }
     }
 
-    private static func page(_ id: Int, metresNorth: Double, shown: Bool = true) throws -> CommonsPage {
+    private static func page(_ id: Int, metersNorth: Double, shown: Bool = true) throws -> CommonsPage {
         let candidate = CommonsPhotoCandidate(
             pageID: id,
-            latitude: centre.latitude + metresNorth / metresPerDegreeLatitude,
-            longitude: centre.longitude
+            latitude: center.latitude + metersNorth / metersPerDegreeLatitude,
+            longitude: center.longitude
         )
         let source = try #require(URL(string: "https://commons.wikimedia.org/wiki/File:\(id).jpg"))
         let thumbnail = try #require(URL(string: "https://upload.wikimedia.org/thumb/\(id).jpg"))
@@ -54,7 +54,7 @@ struct CommonsPhotoStoreTests {
             thumbnailURL: thumbnail,
             credit: CommonsPhotoCredit(
                 author: "Hiker \(id)",
-                licence: HikePhotoLicence(name: "CC BY 4.0", url: nil, sourceURL: source)
+                license: HikePhotoLicense(name: "CC BY 4.0", url: nil, sourceURL: source)
             ),
             capturedAt: Date(timeIntervalSince1970: 1_600_000_000)
         )
@@ -65,8 +65,8 @@ struct CommonsPhotoStoreTests {
     func pagesRoundTrip() throws {
         let scratch = Scratch()
         let store = CommonsPhotoStore(directory: scratch.directory)
-        let shown = try Self.page(1, metresNorth: 0)
-        let refused = try Self.page(2, metresNorth: 0, shown: false)
+        let shown = try Self.page(1, metersNorth: 0)
+        let refused = try Self.page(2, metersNorth: 0, shown: false)
 
         store.save([shown, refused])
 
@@ -80,7 +80,7 @@ struct CommonsPhotoStoreTests {
         let scratch = Scratch()
         let clock = Clock()
         let store = CommonsPhotoStore(directory: scratch.directory, clock: clock.read)
-        store.save([try Self.page(1, metresNorth: 0)])
+        store.save([try Self.page(1, metersNorth: 0)])
 
         clock.advance(by: 29 * Self.day)
         #expect(store.page(1) != nil)
@@ -95,13 +95,30 @@ struct CommonsPhotoStoreTests {
         let scratch = Scratch()
         let store = CommonsPhotoStore(directory: scratch.directory)
         store.save([
-            try Self.page(1, metresNorth: 800),
-            try Self.page(2, metresNorth: 100),
-            try Self.page(3, metresNorth: 5000),
+            try Self.page(1, metersNorth: 800),
+            try Self.page(2, metersNorth: 100),
+            try Self.page(3, metersNorth: 5000),
         ])
 
-        let near = store.pages(near: CommunitySearchArea(coordinate: Self.centre, radiusMeters: 1000), limit: 10)
+        let near = store.pages(near: CommunitySearchArea(coordinate: Self.center, radiusMeters: 1000), limit: 10)
 
         #expect(near.map(\.pageID) == [2, 1])
+    }
+
+    /// The credit is written down here and inside published community
+    /// payloads that older builds read, both under `licence` — the key it
+    /// had before the property was spelled `license` (#847).
+    @Test("a credit keeps the key its licence was first written under")
+    func creditKeyIsUnchanged() throws {
+        let written = try #require(try Self.page(1, metersNorth: 0).file?.credit)
+        let keys = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(written)) as? [String: Any]
+        ).keys
+
+        let saved = Data(#"{"author":"Anna","licence":{"name":"CC0","sourceURL":"https://commons.wikimedia.org/"}}"#.utf8)
+        let decoded = try JSONDecoder().decode(CommonsPhotoCredit.self, from: saved)
+
+        #expect(Set(keys) == ["author", "licence"])
+        #expect(decoded.license.name == "CC0")
     }
 }

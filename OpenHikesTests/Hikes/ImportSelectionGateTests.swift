@@ -111,7 +111,7 @@ struct ImportSelectionGateTests {
                 fileURL: URL(filePath: "/tmp/\(page.lastPathComponent)"),
                 credit: CommonsPhotoCredit(
                     author: nil,
-                    licence: HikePhotoLicence(name: "CC0", url: nil, sourceURL: page)
+                    license: HikePhotoLicense(name: "CC0", url: nil, sourceURL: page)
                 )
             )
         }

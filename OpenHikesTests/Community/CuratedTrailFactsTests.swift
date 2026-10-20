@@ -87,10 +87,10 @@ struct CuratedTrailFactsTests {
 
     private static func waymark(
         symbol: String? = nil,
-        colour: String? = nil,
+        color: String? = nil,
         reference: String? = nil
     ) -> TrailWaymark? {
-        TrailWaymark(osmcSymbol: symbol, colour: colour, reference: reference)
+        TrailWaymark(osmcSymbol: symbol, color: color, reference: reference)
     }
 
     /// A line running north whose two ends are `endGapMeters` apart.
@@ -113,18 +113,18 @@ struct CuratedTrailFactsTests {
     /// the raw value *is* the parser: a case renamed for how it reads on
     /// screen and not for how OSM spells it would silently stop matching, and
     /// the only symptom would be a swatch that quietly went missing.
-    @Test("every colour is reachable from the word OSM writes it as", arguments: WaymarkColour.allCases)
-    func everyColourRoundTripsThroughItsTag(colour: WaymarkColour) {
-        #expect(WaymarkColour(osmColour: colour.rawValue) == colour)
-        #expect(!colour.displayName.isEmpty)
+    @Test("every colour is reachable from the word OSM writes it as", arguments: WaymarkColor.allCases)
+    func everyColorRoundTripsThroughItsTag(color: WaymarkColor) {
+        #expect(WaymarkColor(osmColor: color.rawValue) == color)
+        #expect(!color.displayName.isEmpty)
     }
 
     /// Hand-edited text arrives shouted, padded and newline-terminated, and
     /// all three spellings are the same colour on the ground.
     @Test("a colour survives the casing and the padding it was typed with")
-    func colourIsTrimmedAndLowercased() {
-        #expect(WaymarkColour(osmColour: "  RED\n") == .red)
-        #expect(WaymarkColour(osmColour: "Yellow") == .yellow)
+    func colorIsTrimmedAndLowercased() {
+        #expect(WaymarkColor(osmColor: "  RED\n") == .red)
+        #expect(WaymarkColor(osmColor: "Yellow") == .yellow)
     }
 
     /// The case the closed vocabulary exists for. An unrecognised colour has
@@ -141,8 +141,8 @@ struct CuratedTrailFactsTests {
         "a colour outside the vocabulary is no colour rather than a default one",
         arguments: ["turquoise", "pink", "rot", "vert", "#c41e3a", "", "   ", nil] as [String?]
     )
-    func unknownColourIsNoColour(raw: String?) {
-        #expect(WaymarkColour(osmColour: raw) == nil)
+    func unknownColorIsNoColor(raw: String?) {
+        #expect(WaymarkColor(osmColor: raw) == nil)
     }
 
     // MARK: - What is painted on the rock
@@ -152,10 +152,10 @@ struct CuratedTrailFactsTests {
     /// after it describe a background, a shape and a foreground that this app
     /// draws none of.
     @Test("the first component of osmc:symbol is the colour")
-    func firstSymbolComponentIsTheColour() throws {
+    func firstSymbolComponentIsTheColor() throws {
         let waymark = try #require(Self.waymark(symbol: "red:red:white_bar:411:black", reference: "411"))
 
-        #expect(waymark.colour == .red)
+        #expect(waymark.color == .red)
         #expect(waymark.reference == "411")
     }
 
@@ -167,7 +167,7 @@ struct CuratedTrailFactsTests {
     /// shape name where the colour belongs.
     @Test("an osmc:symbol with an empty background still names its colour")
     func emptyBackgroundComponentStillParses() {
-        #expect(Self.waymark(symbol: "yellow::yellow_diamond")?.colour == .yellow)
+        #expect(Self.waymark(symbol: "yellow::yellow_diamond")?.color == .yellow)
     }
 
     /// The guard against reading the wrong component. Every part of
@@ -176,30 +176,30 @@ struct CuratedTrailFactsTests {
     /// answer white here and be wrong in a way nothing else would catch.
     @Test("a later component that looks like a colour is not the colour")
     func laterComponentsAreNotRead() {
-        #expect(Self.waymark(symbol: "blue:white:blue_bar")?.colour == .blue)
+        #expect(Self.waymark(symbol: "blue:white:blue_bar")?.color == .blue)
     }
 
     /// `osmc:symbol` is on roughly every named route, but `colour` alone is
     /// what a relation tagged by hand in one evening tends to carry.
     @Test("a route with no osmc:symbol falls back to its colour tag")
-    func colourTagIsTheFallback() {
-        #expect(Self.waymark(colour: " Green ")?.colour == .green)
+    func colorTagIsTheFallback() {
+        #expect(Self.waymark(color: " Green ")?.color == .green)
     }
 
     /// Two tags that disagree is an ordinary state for a relation several
     /// people have edited, so the order has to be decided rather than
     /// discovered. `osmc:symbol` is the waymarking vocabulary and wins.
     @Test("osmc:symbol wins over a colour tag that disagrees with it")
-    func symbolOutranksTheColourTag() {
-        #expect(Self.waymark(symbol: "red:red:white_bar", colour: "blue")?.colour == .red)
+    func symbolOutranksTheColorTag() {
+        #expect(Self.waymark(symbol: "red:red:white_bar", color: "blue")?.color == .red)
     }
 
     /// The fallback is a fallback for an *unusable* symbol as well as an
     /// absent one. A relation whose symbol names a colour there is no swatch
     /// for, beside a plain `colour` tag there is one for, keeps the swatch.
     @Test("an unusable osmc:symbol still falls back to the colour tag")
-    func unknownSymbolColourFallsBack() {
-        #expect(Self.waymark(symbol: "turquoise::bar", colour: "blue")?.colour == .blue)
+    func unknownSymbolColorFallsBack() {
+        #expect(Self.waymark(symbol: "turquoise::bar", color: "blue")?.color == .blue)
     }
 
     /// "" is not a waymark, and a row saying nothing is worse than no row. The
@@ -210,9 +210,9 @@ struct CuratedTrailFactsTests {
     @Test("a relation with nothing painted on it has no waymark")
     func nothingPaintedIsNoWaymark() {
         #expect(Self.waymark() == nil)
-        #expect(Self.waymark(symbol: "", colour: "", reference: "") == nil)
+        #expect(Self.waymark(symbol: "", color: "", reference: "") == nil)
         #expect(Self.waymark(symbol: "::white_bar", reference: "  ") == nil)
-        #expect(Self.waymark(symbol: "turquoise::bar", colour: "rot") == nil)
+        #expect(Self.waymark(symbol: "turquoise::bar", color: "rot") == nil)
     }
 
     /// Both halves are optional independently, and a signpost carrying one of
@@ -225,7 +225,7 @@ struct CuratedTrailFactsTests {
         let both = Self.waymark(symbol: "red:red:white_bar:411:black", reference: "411")
 
         #expect(both?.displayName == "Red waymark 411")
-        #expect(Self.waymark(colour: "red")?.displayName == "Red waymark")
+        #expect(Self.waymark(color: "red")?.displayName == "Red waymark")
         #expect(Self.waymark(reference: "411")?.displayName == "Waymark 411")
     }
 
@@ -238,8 +238,8 @@ struct CuratedTrailFactsTests {
     func emptyWaymarkIsRefusedAndRendersAsNothing() throws {
         #expect(Self.waymark() == nil)
 
-        var waymark = try #require(Self.waymark(colour: "red", reference: "411"))
-        waymark.colour = nil
+        var waymark = try #require(Self.waymark(color: "red", reference: "411"))
+        waymark.color = nil
         waymark.reference = nil
 
         #expect(waymark.displayName.isEmpty)

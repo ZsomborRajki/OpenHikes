@@ -36,7 +36,7 @@
 //     button that changes nothing. That was the whole of the argument while
 //     CloudKit was the whole of the list. It is not any more: an accepted
 //     offer now also spends an Overpass request, against a volunteer-run API
-//     that allows a handful of slots per address, so ``recentreFraction`` is
+//     that allows a handful of slots per address, so ``recenterFraction`` is
 //     set by the source that minds being asked rather than by the one that
 //     cannot tell the difference.
 //  2. **A country is not a place.** Zoomed out far enough, "near here" stops
@@ -115,7 +115,7 @@ struct CommunityQueryPolicy {
     /// up, so a tap with no offer standing still re-asks through
     /// ``CommunityBrowser/retry()``. What a refused offer withholds is the
     /// invitation, never the ability.
-    static let recentreFraction: Double = 0.5
+    static let recenterFraction: Double = 0.5
     /// How far the radius has to change before a zoom counts as a new
     /// question, either way.
     private static let zoomFactor: Double = 2
@@ -196,7 +196,7 @@ struct CommunityQueryPolicy {
             )
             let zoomed = area.radiusMeters > committed.radiusMeters * Self.zoomFactor
                 || area.radiusMeters < committed.radiusMeters / Self.zoomFactor
-            guard moved > committed.radiusMeters * Self.recentreFraction || zoomed else {
+            guard moved > committed.radiusMeters * Self.recenterFraction || zoomed else {
                 return .ignore
             }
         }

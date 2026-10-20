@@ -97,13 +97,13 @@ struct SavedRouteDistanceTests {
             ],
             ways: [(10, [1, 2], "Ridge Path")]
         )
-        let metre = 1 / 111_320.0
+        let meter = 1 / 111_320.0
         var points: [RecordingPoint] = []
         var latitude = 47.6300
         var offset: TimeInterval = 0
         for _ in 0..<6 {
             points.append(point(latitude, 12.86010, at: offset))
-            latitude += 15 * metre
+            latitude += 15 * meter
             offset += 15
         }
         // Ninety seconds of standing still: five metres of wander along the
@@ -112,7 +112,7 @@ struct SavedRouteDistanceTests {
         let standing = latitude
         for step in 0..<9 {
             points.append(point(
-                standing + Double((step % 2) * 2 - 1) * 5 * metre,
+                standing + Double((step % 2) * 2 - 1) * 5 * meter,
                 step.isMultiple(of: 2) ? 12.860075 : 12.860125,
                 at: offset
             ))
@@ -120,7 +120,7 @@ struct SavedRouteDistanceTests {
         }
         latitude = standing
         for _ in 0..<6 {
-            latitude += 15 * metre
+            latitude += 15 * meter
             offset += 15
             points.append(point(latitude, 12.86010, at: offset))
         }
@@ -138,13 +138,13 @@ struct SavedRouteDistanceTests {
         graph: TrailGraph,
         points: [RecordingPoint]
     ) {
-        let metre = 1 / 111_320.0
+        let meter = 1 / 111_320.0
         // Noded every five metres, the way a mapped path is: a matched leg
         // across it is interpolated through the nodes rather than left as the
         // pair of fixes it spans, which is what puts unflagged points in
         // between two the recorder flagged.
         let nodes = (0..<50).map { index in
-            (Int64(index + 1), 47.6300 + Double(index) * 5 * metre, 12.8600)
+            (Int64(index + 1), 47.6300 + Double(index) * 5 * meter, 12.8600)
         }
         let trail = graph(
             nodes: nodes,
@@ -155,7 +155,7 @@ struct SavedRouteDistanceTests {
         var offset: TimeInterval = 0
         for _ in 0..<6 {
             points.append(point(latitude, 12.86010, at: offset))
-            latitude += 15 * metre
+            latitude += 15 * meter
             offset += 15
         }
         for _ in 0..<12 {
@@ -167,7 +167,7 @@ struct SavedRouteDistanceTests {
                 elevation: 600 + offset / 60,
                 flags: [.motionStationary]
             ))
-            latitude += 6 * metre
+            latitude += 6 * meter
             offset += 10
         }
         return (trail, points)

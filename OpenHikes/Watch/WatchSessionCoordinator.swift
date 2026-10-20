@@ -122,7 +122,7 @@ final class WatchSessionCoordinator: NSObject {
     /// `activate()` has even been called, let alone finished. Without this the
     /// watch's list would miss the launch that produced it, and there is no
     /// second sweep behind it.
-    @ObservationIgnored private var pendingCatalogue: SharedHikeCatalogue?
+    @ObservationIgnored private var pendingCatalog: SharedHikeCatalog?
     #endif
 
     init(container: ModelContainer, healthExport: WatchWalkHealthExport? = nil) {
@@ -162,21 +162,21 @@ final class WatchSessionCoordinator: NSObject {
     ///
     /// The *application context* rather than a transfer, because there is one
     /// current answer and the ones in between are worthless — the same
-    /// argument `SharedStore.saveHikeCatalogue` makes for replacing the App
+    /// argument `SharedStore.saveHikeCatalog` makes for replacing the App
     /// Group's copy wholesale rather than writing per change.
     ///
     /// Silent on failure, like the catalogue sweep it rides beside: nothing a
     /// hiker does depends on this having worked this second, and the next
     /// sweep puts it right.
-    func publish(_ catalogue: SharedHikeCatalogue) {
+    func publish(_ catalog: SharedHikeCatalog) {
         #if canImport(WatchConnectivity)
         guard let session, session.activationState == .activated else {
-            pendingCatalogue = catalogue
+            pendingCatalog = catalog
             return
         }
-        pendingCatalogue = nil
+        pendingCatalog = nil
         let digest = WatchLibraryDigest(
-            hikes: Array(catalogue.hikes.prefix(WatchLibraryDigest.hikeBudget))
+            hikes: Array(catalog.hikes.prefix(WatchLibraryDigest.hikeBudget))
         )
         do {
             try session.updateApplicationContext(WatchLink.message(digest))
@@ -247,7 +247,7 @@ final class WatchSessionCoordinator: NSObject {
     ///
     /// A fresh *sweep* rather than a re-read of the App Group's copy, which is
     /// the difference between this working and this being a no-op:
-    /// `SharedHikeCataloguePublisher` has exactly one caller, at launch, so
+    /// `SharedHikeCatalogPublisher` has exactly one caller, at launch, so
     /// the file on disk is by construction the library as it stood *before*
     /// the walk that just arrived. Sending it again would send the same list
     /// without the new hike in it, and the watch would not see the walk it
@@ -267,7 +267,7 @@ final class WatchSessionCoordinator: NSObject {
         // `nonisolated async` call made from here would run on *this* actor
         // under approachable concurrency — which is the main one.
         await Task.detached(priority: .utility) { [weak self] in
-            await SharedHikeCataloguePublisher.publishCatalogue(from: coordinator, watch: self)
+            await SharedHikeCatalogPublisher.publishCatalog(from: coordinator, watch: self)
         }.value
     }
 
@@ -275,10 +275,10 @@ final class WatchSessionCoordinator: NSObject {
     ///
     /// Silent when there is none, and harmless when activation failed:
     /// ``publish(_:)`` simply holds it again.
-    private func flushPendingCatalogue() {
+    private func flushPendingCatalog() {
         #if canImport(WatchConnectivity)
-        guard let pending = pendingCatalogue else { return }
-        pendingCatalogue = nil
+        guard let pending = pendingCatalog else { return }
+        pendingCatalog = nil
         publish(pending)
         #endif
     }
@@ -386,7 +386,7 @@ nonisolated extension WatchSessionCoordinator: WCSessionDelegate {
             // mirror is otherwise started only by a *change* of reachability,
             // which a watch app already in the foreground when this process
             // launched never produces.
-            flushPendingCatalogue()
+            flushPendingCatalog()
             mirror?.reachabilityChanged(to: reachable)
         }
     }

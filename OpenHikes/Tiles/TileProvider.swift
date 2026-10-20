@@ -240,7 +240,7 @@ nonisolated extension TileProvider {
     static let stamenTerrain = TileProvider(
         id: "stadia_stamen_terrain",
         name: "Stamen Terrain",
-        summary: "Hillshaded terrain in natural colours, a softer look than Stadia Outdoors. "
+        summary: "Hillshaded terrain in natural colors, a softer look than Stadia Outdoors. "
             + "Offline downloads are allowed, sharing Stadia’s 100 MB of saved tiles on this "
             + "device with Stadia Outdoors.",
         urlTemplate: "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png?api_key={key}",

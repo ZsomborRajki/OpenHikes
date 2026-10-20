@@ -47,7 +47,7 @@ import Testing
 struct MergedCommunityTransportTests {
     /// The centre every search in this file is about — the Berchtesgaden box
     /// the whole feature was measured against.
-    private static let centre = CLLocationCoordinate2D(latitude: 47.6300, longitude: 12.9900)
+    private static let center = CLLocationCoordinate2D(latitude: 47.6300, longitude: 12.9900)
 
     /// Half of ``CuratedTrailQuery/maximumRadiusMeters``, so nothing here is
     /// accidentally testing the too-wide-to-ask refusal instead of the merge.
@@ -61,9 +61,9 @@ struct MergedCommunityTransportTests {
 
     /// What a degree of latitude is worth on the ground, so a fixture can be
     /// placed in metres and asserted on as an order.
-    private static let metresPerDegreeLatitude: Double = 111_320
+    private static let metersPerDegreeLatitude: Double = 111_320
 
-    /// Four distances from ``centre``, handed out alternately to the two
+    /// Four distances from ``center``, handed out alternately to the two
     /// halves so that a correct interleave is one the expected array states
     /// outright rather than one the reader has to compute.
     ///
@@ -125,10 +125,10 @@ extension MergedCommunityTransportTests {
         return tags
     }
 
-    /// A curated route whose pin stands `metresNorth` of ``centre``.
+    /// A curated route whose pin stands `metersNorth` of ``center``.
     ///
     /// Placed by its **box** and not by its line, because that is where a
-    /// curated pin actually stands — see ``CuratedTrailQuery/centre(of:)`` for
+    /// curated pin actually stands — see ``CuratedTrailQuery/center(of:)`` for
     /// why a relation's first member point is not a trailhead and must not be
     /// used as one. A fixture placed by its coordinates would make every
     /// ordering assertion here agree with a rule the feature does not follow.
@@ -139,15 +139,15 @@ extension MergedCommunityTransportTests {
     static func trail(
         _ relationID: Int64,
         named name: String,
-        metresNorth: Double
+        metersNorth: Double
     ) -> CuratedTrail {
         let halfSpan = 0.004
-        let latitude = centre.latitude + metresNorth / metresPerDegreeLatitude
+        let latitude = center.latitude + metersNorth / metersPerDegreeLatitude
         let box = CuratedTrailQuery.BoundingBox(
             south: latitude - halfSpan,
-            west: centre.longitude - halfSpan,
+            west: center.longitude - halfSpan,
             north: latitude + halfSpan,
-            east: centre.longitude + halfSpan
+            east: center.longitude + halfSpan
         )
         return CuratedTrail(
             relationID: relationID,
@@ -160,20 +160,20 @@ extension MergedCommunityTransportTests {
             route: [
                 RouteCoordinate(latitude: box.south, longitude: box.west),
                 RouteCoordinate(latitude: latitude, longitude: box.west),
-                RouteCoordinate(latitude: box.north, longitude: centre.longitude),
+                RouteCoordinate(latitude: box.north, longitude: center.longitude),
                 RouteCoordinate(latitude: box.north, longitude: box.east),
             ]
         )
     }
 
-    /// A published listing `metresNorth` of ``centre``, on the same meridian
+    /// A published listing `metersNorth` of ``center``, on the same meridian
     /// as every curated fixture, so distance is a function of one number.
-    static func published(_ id: String, metresNorth: Double) -> CommunityListing {
+    static func published(_ id: String, metersNorth: Double) -> CommunityListing {
         .stub(
             id: id,
             submissionID: "submission-\(id)",
-            latitude: centre.latitude + metresNorth / metresPerDegreeLatitude,
-            longitude: centre.longitude
+            latitude: center.latitude + metersNorth / metersPerDegreeLatitude,
+            longitude: center.longitude
         )
     }
 
@@ -184,8 +184,8 @@ extension MergedCommunityTransportTests {
         return CommunityHikeDetail(
             listing: listing,
             route: [
-                RouteCoordinate(latitude: centre.latitude, longitude: centre.longitude),
-                RouteCoordinate(latitude: centre.latitude + step, longitude: centre.longitude),
+                RouteCoordinate(latitude: center.latitude, longitude: center.longitude),
+                RouteCoordinate(latitude: center.latitude + step, longitude: center.longitude),
             ],
             trackDescription: nil,
             photoPins: [],
@@ -240,7 +240,7 @@ extension MergedCommunityTransportTests {
         publishedFirst: @escaping @Sendable ([CommunityListing]) async -> Void = { _ in /* only the whole answer */ }
     ) async throws -> CommunityNearbyAnswer {
         try await merged.transport.listings(
-            near: centre,
+            near: center,
             radiusMeters: radiusMeters,
             limit: limit,
             excluding: [],
@@ -267,13 +267,13 @@ extension MergedCommunityTransportTests {
         let step = 50.0
         let merged = Self.merged(
             published: (0..<Self.page).map { index in
-                Self.published("listing-\(index)", metresNorth: Double(index) * step)
+                Self.published("listing-\(index)", metersNorth: Double(index) * step)
             },
             curated: (0..<Self.page).map { index in
                 Self.trail(
                     Relation.base + Int64(index),
                     named: "Weg \(index)",
-                    metresNorth: Offset.nearest / Double(Self.page)
+                    metersNorth: Offset.nearest / Double(Self.page)
                 )
             }
         )
@@ -296,10 +296,10 @@ extension MergedCommunityTransportTests {
         let offered = Self.page + 5
         let merged = Self.merged(
             published: (0..<publishedCount).map { index in
-                Self.published("listing-\(index)", metresNorth: Offset.farthest)
+                Self.published("listing-\(index)", metersNorth: Offset.farthest)
             },
             curated: (0..<offered).map { index in
-                Self.trail(Relation.base + Int64(index), named: "Weg \(index)", metresNorth: Offset.nearest)
+                Self.trail(Relation.base + Int64(index), named: "Weg \(index)", metersNorth: Offset.nearest)
             }
         )
 
@@ -319,10 +319,10 @@ extension MergedCommunityTransportTests {
         let step = 50.0
         let merged = Self.merged(
             published: (0..<Self.page).map { index in
-                Self.published("listing-\(index)", metresNorth: Double(index) * step)
+                Self.published("listing-\(index)", metersNorth: Double(index) * step)
             },
             curated: (0..<Self.page).map { index in
-                Self.trail(Relation.base + Int64(index), named: "Weg \(index)", metresNorth: 10)
+                Self.trail(Relation.base + Int64(index), named: "Weg \(index)", metersNorth: 10)
             }
         )
 
@@ -345,10 +345,10 @@ extension MergedCommunityTransportTests {
         let offered = Self.page + 5
         let merged = Self.merged(
             published: (0..<publishedCount).map { index in
-                Self.published("listing-\(index)", metresNorth: Offset.farthest)
+                Self.published("listing-\(index)", metersNorth: Offset.farthest)
             },
             curated: (0..<offered).map { index in
-                Self.trail(Relation.base + Int64(index), named: "Weg \(index)", metresNorth: Offset.nearest)
+                Self.trail(Relation.base + Int64(index), named: "Weg \(index)", metersNorth: Offset.nearest)
             }
         )
 
@@ -368,13 +368,13 @@ extension MergedCommunityTransportTests {
         let limit = 4
         let merged = Self.merged(
             published: [
-                Self.published("listing-a", metresNorth: Offset.farthest),
-                Self.published("listing-b", metresNorth: Offset.far),
+                Self.published("listing-a", metersNorth: Offset.farthest),
+                Self.published("listing-b", metersNorth: Offset.far),
             ],
             curated: [
-                Self.trail(Relation.wimbach, named: "Wimbachweg", metresNorth: Offset.nearest),
-                Self.trail(Relation.almbach, named: "Almbachweg", metresNorth: Offset.near),
-                Self.trail(Relation.soleleitung, named: "Soleleitungsweg", metresNorth: Offset.near),
+                Self.trail(Relation.wimbach, named: "Wimbachweg", metersNorth: Offset.nearest),
+                Self.trail(Relation.almbach, named: "Almbachweg", metersNorth: Offset.near),
+                Self.trail(Relation.soleleitung, named: "Soleleitungsweg", metersNorth: Offset.near),
             ]
         )
 
@@ -402,8 +402,8 @@ extension MergedCommunityTransportTests {
     @Test("Overpass failing costs the curated rows and nothing else")
     func aCuratedFailureIsNotTheAnswerFailing() async throws {
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)],
-            curated: [Self.trail(Relation.wimbach, named: "Wimbachweg", metresNorth: Offset.nearest)]
+            published: [Self.published("listing-a", metersNorth: Offset.near)],
+            curated: [Self.trail(Relation.wimbach, named: "Wimbachweg", metersNorth: Offset.nearest)]
         )
         merged.overpass.nearbyResult = .failure(.rateLimited(retryAfter: 60))
 
@@ -418,7 +418,7 @@ extension MergedCommunityTransportTests {
     @Test("CloudKit failing still answers with the curated rows")
     func aPublishedFailureIsNotTheAnswerFailing() async throws {
         let merged = Self.merged(
-            curated: [Self.trail(Relation.wimbach, named: "Wimbachweg", metresNorth: Offset.nearest)]
+            curated: [Self.trail(Relation.wimbach, named: "Wimbachweg", metersNorth: Offset.nearest)]
         )
         merged.cloudKit.listingsResult = .failure(.unreachable)
 
@@ -463,8 +463,8 @@ extension MergedCommunityTransportTests {
         _ = try await Self.nearby(merged)
 
         let asked = try #require(merged.overpass.recording.areaRequests.first)
-        #expect(asked.area.latitude == Self.centre.latitude)
-        #expect(asked.area.longitude == Self.centre.longitude)
+        #expect(asked.area.latitude == Self.center.latitude)
+        #expect(asked.area.longitude == Self.center.longitude)
         #expect(asked.area.radiusMeters == Self.radiusMeters)
         #expect(asked.limit == Self.page)
         #expect(merged.cloudKit.recording.nearbyRequests.count == 1)
@@ -485,12 +485,12 @@ extension MergedCommunityTransportTests {
     func theTwoHalvesInterleaveByDistance() async throws {
         let merged = Self.merged(
             published: [
-                Self.published("nearest-published", metresNorth: Offset.nearest),
-                Self.published("far-published", metresNorth: Offset.far),
+                Self.published("nearest-published", metersNorth: Offset.nearest),
+                Self.published("far-published", metersNorth: Offset.far),
             ],
             curated: [
-                Self.trail(Relation.wimbach, named: "Wimbachweg", metresNorth: Offset.near),
-                Self.trail(Relation.almbach, named: "Almbachweg", metresNorth: Offset.farthest),
+                Self.trail(Relation.wimbach, named: "Wimbachweg", metersNorth: Offset.near),
+                Self.trail(Relation.almbach, named: "Almbachweg", metersNorth: Offset.farthest),
             ]
         )
 
@@ -517,7 +517,7 @@ extension MergedCommunityTransportTests {
     /// to not be attempted.
     @Test("opening a curated route never asks CloudKit about it")
     func curatedDetailNeverReachesCloudKit() async throws {
-        let trail = Self.trail(Relation.wimbach, named: "Wimbachweg", metresNorth: Offset.nearest)
+        let trail = Self.trail(Relation.wimbach, named: "Wimbachweg", metersNorth: Offset.nearest)
         let merged = Self.merged(curated: [trail])
         let listing = CommunityListing(curated: trail, editedAt: .now)
 
@@ -540,7 +540,7 @@ extension MergedCommunityTransportTests {
     /// not a failure anybody could diagnose from the screen it happened on.
     @Test("opening a published hike never asks Overpass about it")
     func publishedDetailNeverReachesOverpass() async throws {
-        let listing = Self.published("listing-a", metresNorth: Offset.nearest)
+        let listing = Self.published("listing-a", metersNorth: Offset.nearest)
         let merged = Self.merged(published: [listing])
         merged.cloudKit.detailResult = .success(Self.detail(of: listing))
 
@@ -557,7 +557,7 @@ extension MergedCommunityTransportTests {
     /// gone, not that something went wrong.
     @Test("a curated route OSM no longer has is gone rather than empty")
     func aMissingRelationIsNoLongerAvailable() async {
-        let trail = Self.trail(Relation.wimbach, named: "Wimbachweg", metresNorth: Offset.nearest)
+        let trail = Self.trail(Relation.wimbach, named: "Wimbachweg", metersNorth: Offset.nearest)
         // Seeded with nothing, so the source knows no relation at all.
         let merged = Self.merged()
         let listing = CommunityListing(curated: trail, editedAt: .now)
@@ -576,7 +576,7 @@ extension MergedCommunityTransportTests {
     /// identical from the caller's side.
     @Test("a curated route cannot be taken down, and no delete is attempted")
     func takingDownACuratedRouteIsRefused() async {
-        let trail = Self.trail(Relation.wimbach, named: "Wimbachweg", metresNorth: Offset.nearest)
+        let trail = Self.trail(Relation.wimbach, named: "Wimbachweg", metersNorth: Offset.nearest)
         let merged = Self.merged(curated: [trail])
         let listing = CommunityListing(curated: trail, editedAt: .now)
 
@@ -591,7 +591,7 @@ extension MergedCommunityTransportTests {
     func takingDownAPublishedHikeForwards() async throws {
         let merged = Self.merged()
 
-        try await merged.transport.takeDown(Self.published("listing-a", metresNorth: Offset.nearest))
+        try await merged.transport.takeDown(Self.published("listing-a", metersNorth: Offset.nearest))
 
         #expect(merged.cloudKit.recording.takenDown == ["listing-a"])
     }
@@ -607,14 +607,14 @@ extension MergedCommunityTransportTests {
     /// Overpass minted.
     @Test("one dictionary answers for both kinds, and CloudKit sees only its own ids")
     func outlinesAnswerForBothKinds() async throws {
-        let trail = Self.trail(Relation.wimbach, named: "Wimbachweg", metresNorth: Offset.near)
-        let publishedListing = Self.published("listing-a", metresNorth: Offset.nearest)
+        let trail = Self.trail(Relation.wimbach, named: "Wimbachweg", metersNorth: Offset.near)
+        let publishedListing = Self.published("listing-a", metersNorth: Offset.nearest)
         let curatedListing = CommunityListing(curated: trail, editedAt: .now)
         let merged = Self.merged(published: [publishedListing], curated: [trail])
         merged.cloudKit.outlinesResult = .success([
             "listing-a": [
-                RouteCoordinate(latitude: Self.centre.latitude, longitude: Self.centre.longitude),
-                RouteCoordinate(latitude: Self.centre.latitude, longitude: Self.centre.longitude),
+                RouteCoordinate(latitude: Self.center.latitude, longitude: Self.center.longitude),
+                RouteCoordinate(latitude: Self.center.latitude, longitude: Self.center.longitude),
             ],
         ])
 
@@ -632,7 +632,7 @@ extension MergedCommunityTransportTests {
     /// empty.
     @Test("a page of curated routes costs no CloudKit request at all")
     func curatedOnlyOutlinesAskNothing() async throws {
-        let trail = Self.trail(Relation.wimbach, named: "Wimbachweg", metresNorth: Offset.nearest)
+        let trail = Self.trail(Relation.wimbach, named: "Wimbachweg", metersNorth: Offset.nearest)
         let merged = Self.merged(curated: [trail])
         let listing = CommunityListing(curated: trail, editedAt: .now)
 
@@ -651,7 +651,7 @@ extension MergedCommunityTransportTests {
     @Test("a page of curated pins is one question, not one per pin")
     func curatedOutlinesAreAskedInOneGo() async throws {
         let trails = (0..<Self.page).map { index in
-            Self.trail(Relation.base + Int64(index), named: "Weg \(index)", metresNorth: Offset.near)
+            Self.trail(Relation.base + Int64(index), named: "Weg \(index)", metersNorth: Offset.near)
         }
         let merged = Self.merged(curated: trails)
         let listings = trails.map { CommunityListing(curated: $0, editedAt: .now) }
@@ -669,8 +669,8 @@ extension MergedCommunityTransportTests {
     /// failure from clearing the other's lines off the map.
     @Test("CloudKit failing costs its own lines and not the curated ones")
     func aFailedPublishedOutlineLeavesTheCuratedLines() async throws {
-        let trail = Self.trail(Relation.wimbach, named: "Wimbachweg", metresNorth: Offset.near)
-        let publishedListing = Self.published("listing-a", metresNorth: Offset.nearest)
+        let trail = Self.trail(Relation.wimbach, named: "Wimbachweg", metersNorth: Offset.near)
+        let publishedListing = Self.published("listing-a", metersNorth: Offset.nearest)
         let curatedListing = CommunityListing(curated: trail, editedAt: .now)
         let merged = Self.merged(published: [publishedListing], curated: [trail])
         merged.cloudKit.outlinesResult = .failure(.unreachable)
@@ -700,7 +700,7 @@ extension MergedCommunityTransportTests {
         let pending = CommunityPendingSubmission.stub()
         merged.cloudKit.pendingResult = .success(.hikes([pending]))
         merged.cloudKit.detailResult = .success(
-            Self.detail(of: Self.published("listing-a", metresNorth: Offset.nearest))
+            Self.detail(of: Self.published("listing-a", metersNorth: Offset.nearest))
         )
 
         let queue = try await merged.transport.reviewQueue()

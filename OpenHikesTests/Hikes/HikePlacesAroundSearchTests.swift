@@ -34,10 +34,10 @@ struct HikePlacesAroundSearchTests {
     private static func place(
         _ id: Int64,
         latitude: Double,
-        offEast metres: Double = 0,
+        offEast meters: Double = 0,
         symbol: TrailPlaceSymbol = .water
     ) -> TrailPlace {
-        let degrees = metres / (RouteGeometry.metersPerDegreeLatitude * cos(latitude * .pi / 180))
+        let degrees = meters / (RouteGeometry.metersPerDegreeLatitude * cos(latitude * .pi / 180))
         return TrailPlace(
             latitude: latitude,
             longitude: Line.longitude + degrees,

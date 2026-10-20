@@ -88,14 +88,14 @@ nonisolated extension TrailMatcherGraphIndex {
         ) {
             for index in alwaysScanned { body(index) }
             guard !cells.isEmpty else { return }
-            let centre = RouteGeometry.localOffset(from: origin, to: coordinate)
+            let center = RouteGeometry.localOffset(from: origin, to: coordinate)
             let expanded = radius + reachMeters + Self.marginMeters
             guard let minimum = Self.cell(
-                x: centre.x - expanded,
-                y: centre.y - expanded
+                x: center.x - expanded,
+                y: center.y - expanded
             ), let maximum = Self.cell(
-                x: centre.x + expanded,
-                y: centre.y + expanded
+                x: center.x + expanded,
+                y: center.y + expanded
             ) else { return }
             for x in minimum.x...maximum.x {
                 for y in minimum.y...maximum.y {

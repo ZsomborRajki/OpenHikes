@@ -77,8 +77,8 @@ struct OpenHikesApp: App {
             // The App Group's copy of the library, and a trail snapshot for
             // every hike a placed widget is pinned to. Beside the Spotlight
             // sweep because it is the same sweep argument — see
-            // ``SharedHikeCataloguePublisher``.
-            SharedHikeCataloguePublisher.publish(
+            // ``SharedHikeCatalogPublisher``.
+            SharedHikeCatalogPublisher.publish(
                 from: coordinator,
                 container: appModel.container,
                 watch: appModel.watchLink

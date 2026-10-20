@@ -87,7 +87,7 @@ nonisolated struct OpenHikesShortcuts: AppShortcutsProvider {
             phrases: [
                 "How long was my hike in \(.applicationName)",
                 "How far was my hike in \(.applicationName)",
-                "Summarise a hike in \(.applicationName)",
+                "Summarize a hike in \(.applicationName)",
             ],
             shortTitle: "Hike Summary",
             systemImageName: "figure.hiking.circle"

@@ -377,7 +377,7 @@ struct CuratedTrailDecodingTests {
         #expect(trail.name == "Almbachklamm")
         #expect(trail.tags["osmc:symbol"] == "red:red:white_bar:411:black")
         #expect(trail.tags["operator"] == "Alpenverein")
-        #expect(trail.facts.waymark?.colour == .red, "the first component of osmc:symbol, not the whole field")
+        #expect(trail.facts.waymark?.color == .red, "the first component of osmc:symbol, not the whole field")
         #expect(trail.facts.waymark?.reference == "411")
         #expect(trail.box.south == Self.boxSouth)
         #expect(trail.box.east == Self.boxEast)

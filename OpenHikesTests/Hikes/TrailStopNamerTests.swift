@@ -150,7 +150,7 @@ struct TrailStopNamerTests {
 
     /// The burst this queue exists to prevent.
     @Test("three points are three questions, asked one at a time")
-    func questionsAreSerialised() async {
+    func questionsAreSerialized() async {
         let stub = Stub()
         stub.answers = ["One", "Two", "Three"]
         let namer = TrailStopNamer(source: stub)

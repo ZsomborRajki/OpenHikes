@@ -33,10 +33,10 @@ struct TrailPlaceCorridorSearchTests {
         ]
     }
 
-    /// A straight line north, `kilometres` long, one point every 100 m.
-    private static func line(kilometres: Double) -> [RouteCoordinate] {
+    /// A straight line north, `kilometers` long, one point every 100 m.
+    private static func line(kilometers: Double) -> [RouteCoordinate] {
         let step = 100 / RouteGeometry.metersPerDegreeLatitude
-        let count = Int(kilometres * 10)
+        let count = Int(kilometers * 10)
         return (0...count).map { index in
             RouteCoordinate(latitude: Line.south + Double(index) * step, longitude: Line.longitude)
         }
@@ -45,10 +45,10 @@ struct TrailPlaceCorridorSearchTests {
     private static func place(
         _ id: Int64,
         latitude: Double,
-        offEast metres: Double = 0,
+        offEast meters: Double = 0,
         symbol: TrailPlaceSymbol = .water
     ) -> TrailPlace {
-        let degrees = metres / (RouteGeometry.metersPerDegreeLatitude * cos(latitude * .pi / 180))
+        let degrees = meters / (RouteGeometry.metersPerDegreeLatitude * cos(latitude * .pi / 180))
         return TrailPlace(
             latitude: latitude,
             longitude: Line.longitude + degrees,
@@ -68,7 +68,7 @@ struct TrailPlaceCorridorSearchTests {
 
     @Test("a long line is cut into circles no wider than a stretch, covering every point")
     func longLineIsCovered() {
-        let route = Self.line(kilometres: 40)
+        let route = Self.line(kilometers: 40)
         let areas = TrailPlaceCorridorSearch.areas(along: route)
 
         #expect(areas.count > 1)
@@ -83,7 +83,7 @@ struct TrailPlaceCorridorSearchTests {
 
     @Test("a very long line widens its stretches rather than asking without end")
     func veryLongLineIsCapped() {
-        let areas = TrailPlaceCorridorSearch.areas(along: Self.line(kilometres: 300))
+        let areas = TrailPlaceCorridorSearch.areas(along: Self.line(kilometers: 300))
         #expect(areas.count <= TrailPlaceCorridorSearch.maximumAreas)
         #expect(areas.allSatisfy { $0.radiusMeters <= TrailPointQuery.maximumRadiusMeters })
     }
@@ -101,15 +101,15 @@ struct TrailPlaceCorridorSearchTests {
 
         #expect(areas.count > 1)
         #expect(areas.allSatisfy { $0.radiusMeters <= TrailPlaceCorridorSearch.stretchRadiusMeters })
-        for kilometre in 0...30 {
+        for kilometer in 0...30 {
             let point = CLLocationCoordinate2D(
-                latitude: Line.south + Double(kilometre) * 1000 / RouteGeometry.metersPerDegreeLatitude,
+                latitude: Line.south + Double(kilometer) * 1000 / RouteGeometry.metersPerDegreeLatitude,
                 longitude: Line.longitude
             )
             let covered = areas.contains { area in
                 RouteGeometry.distanceMeters(from: area.coordinate, to: point) <= area.radiusMeters
             }
-            #expect(covered, "kilometre \(kilometre) is in no circle")
+            #expect(covered, "kilometre \(kilometer) is in no circle")
         }
     }
 
@@ -142,9 +142,9 @@ struct TrailPlaceCorridorSearchTests {
         #expect(!areas.isEmpty)
         #expect(areas.allSatisfy { $0.radiusMeters <= TrailPlaceCorridorSearch.stretchRadiusMeters })
         let length = RouteGeometry.distanceMeters(from: start, to: end)
-        let kilometres = Int(length / 1000)
-        for kilometre in 0...(kilometres + 1) {
-            let fraction = min(Double(kilometre) * 1000 / length, 1)
+        let kilometers = Int(length / 1000)
+        for kilometer in 0...(kilometers + 1) {
+            let fraction = min(Double(kilometer) * 1000 / length, 1)
             let point = RouteGeometry.interpolate(from: start, to: end, fraction: fraction)
             let covered = areas.contains { area in
                 RouteGeometry.distanceMeters(from: area.coordinate, to: point) <= area.radiusMeters
@@ -271,13 +271,13 @@ struct TrailPlaceCorridorSearchTests {
 
     @Test("a wider reach widens every circle so the band beside the line is asked about")
     func widerReachWidensTheCircles() {
-        let route = Self.line(kilometres: 20)
+        let route = Self.line(kilometers: 20)
         let areas = TrailPlaceCorridorSearch.areas(along: route, reaching: 1000)
 
         #expect(areas.allSatisfy { $0.radiusMeters <= TrailPointQuery.maximumRadiusMeters })
         for point in route {
-            let metresPerDegree = RouteGeometry.metersPerDegreeLatitude * cos(point.latitude * .pi / 180)
-            let beside = RouteCoordinate(latitude: point.latitude, longitude: point.longitude + 1000 / metresPerDegree)
+            let metersPerDegree = RouteGeometry.metersPerDegreeLatitude * cos(point.latitude * .pi / 180)
+            let beside = RouteCoordinate(latitude: point.latitude, longitude: point.longitude + 1000 / metersPerDegree)
             let covered = areas.contains { area in
                 RouteGeometry.distanceMeters(from: area.coordinate, to: beside.clCoordinate) <= area.radiusMeters
             }

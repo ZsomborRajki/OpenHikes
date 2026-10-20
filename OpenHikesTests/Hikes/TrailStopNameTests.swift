@@ -136,7 +136,7 @@ struct TrailStopNameTests {
     }
 
     @Test("an answer is a name up to a kilometre from the spot, and not beyond")
-    func theBoundIsAKilometre() throws {
+    func theBoundIsAKilometer() throws {
         let bound = TrailStopName.farthestAnswerMeters
         let near = MKMapItem(location: Self.east(of: Self.somewhere, by: bound - 10), address: Self.address)
         let far = MKMapItem(location: Self.east(of: Self.somewhere, by: bound + 10), address: Self.address)

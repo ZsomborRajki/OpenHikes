@@ -53,13 +53,13 @@ struct TrailMatcherReviewLoadTests {
     }
 
     /// The bundled GPX walk, re-timed as a dense recording and jittered by
-    /// `metres` of horizontal error.
+    /// `meters` of horizontal error.
     ///
     /// Three seconds between fixes puts every leg well inside both sparse
     /// thresholds — 90 s and 200 m — which is the point: this is the dense
     /// path, the one the sparse qualifier used to exclude from review
     /// entirely.
-    private func walk(noise metres: Double) throws -> [RecordingPoint] {
+    private func walk(noise meters: Double) throws -> [RecordingPoint] {
         let url = try #require(
             Bundle.main.url(
                 forResource: UITestTrailTagFixture.gpxName,
@@ -71,15 +71,15 @@ struct TrailMatcherReviewLoadTests {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         var noiseSource = SeededNoise()
         return route.enumerated().map { index, coordinate in
-            let metresPerDegreeLatitude = 111_320.0
-            let latitudeOffset = metres * noiseSource.gaussian() / metresPerDegreeLatitude
-            let longitudeOffset = metres * noiseSource.gaussian()
-                / (metresPerDegreeLatitude * cos(coordinate.latitude * .pi / 180))
+            let metersPerDegreeLatitude = 111_320.0
+            let latitudeOffset = meters * noiseSource.gaussian() / metersPerDegreeLatitude
+            let longitudeOffset = meters * noiseSource.gaussian()
+                / (metersPerDegreeLatitude * cos(coordinate.latitude * .pi / 180))
             return RecordingPoint(
                 latitude: coordinate.latitude + latitudeOffset,
                 longitude: coordinate.longitude + longitudeOffset,
                 timestamp: start.addingTimeInterval(Double(index) * 3),
-                horizontalAccuracy: max(5, metres),
+                horizontalAccuracy: max(5, meters),
                 elevation: 600
             )
         }

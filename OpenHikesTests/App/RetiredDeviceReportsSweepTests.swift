@@ -30,15 +30,15 @@ struct RetiredDeviceReportsSweepTests {
         let root = Self.sandbox()
         defer { try? FileManager.default.removeItem(at: root) }
         let reports = root.appending(path: "FieldMetrics", directoryHint: .isDirectory)
-        let neighbour = root.appending(path: "Photos", directoryHint: .isDirectory)
+        let neighbor = root.appending(path: "Photos", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: reports, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: neighbour, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: neighbor, withIntermediateDirectories: true)
         try Data("{}".utf8).write(to: reports.appending(path: "report.json"))
 
         await OpenHikesModel.removeRetiredDeviceReports(at: reports)
 
         #expect(!Self.exists(reports))
-        #expect(Self.exists(neighbour))
+        #expect(Self.exists(neighbor))
     }
 
     @Test("an install that never had any reports is left alone")

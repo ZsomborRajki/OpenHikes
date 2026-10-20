@@ -178,16 +178,16 @@ struct OfflineDownloadFootprintTests {
     /// claimed. Recomputed from the redrawn route, the claim would have let
     /// the delete strip the whole map.
     @Test("deleting a neighbour leaves a redrawn trail's saved map alone")
-    func deletingANeighbourSparesARedrawnMap() async throws {
+    func deletingANeighborSparesARedrawnMap() async throws {
         let redrawn = try savedTrail()
-        let neighbour = try savedTrail()
+        let neighbor = try savedTrail()
         let download = try await plannedDownload(of: redrawn)
         redrawn.mergeOfflineDownload(download.record)
-        neighbour.mergeOfflineDownload(download.record)
+        neighbor.mergeOfflineDownload(download.record)
 
         try redraw(redrawn)
 
-        let plan = StoredTileDeletionPlan(doomed: TileOwnership(neighbour), survivors: [TileOwnership(redrawn)])
+        let plan = StoredTileDeletionPlan(doomed: TileOwnership(neighbor), survivors: [TileOwnership(redrawn)])
         #expect(try await offMain { try plan.exclusiveTileKeys() }.isEmpty)
     }
 

@@ -149,7 +149,7 @@ final class HikeRecorder: NSObject {
     /// a time, and replaced rather than accumulated: entering a new region is
     /// hours of walking apart, and the neighbours of the region left behind
     /// are no longer the ones worth having.
-    @ObservationIgnored var neighbourPrefetchTask: Task<Void, Never>?
+    @ObservationIgnored var neighborPrefetchTask: Task<Void, Never>?
     /// The live subscription to ``PowerStateMonitor/state``. Held so it can be
     /// cancelled — see ``observePowerState()``.
     @ObservationIgnored var powerStateObservation: Task<Void, Never>?

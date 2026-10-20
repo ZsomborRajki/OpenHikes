@@ -37,7 +37,7 @@ import XCTest
 nonisolated final class ScreenshotUITests: XCTestCase {
     /// How many times ``revealCommunityPins(in:atLeast:)`` re-measures and
     /// pans before giving up.
-    private static let centringPasses = 5
+    private static let centeringPasses = 5
 
     /// How many community pins the nearby frame has to have on screen. Two,
     /// because one pin says "a hike is here" and two say "the list and the map
@@ -50,18 +50,18 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// kept hanging off the right edge — which turned out to be a pinch
     /// turning the map a few degrees off north rather than anything about
     /// where the pins are. See ``zoomMapInOneStep(in:)``.
-    private static let heroRouteCentreX: CGFloat = 0.5
+    private static let heroRouteCenterX: CGFloat = 0.5
 
     /// Where the walk's middle is aimed, as a share of the screen height.
     /// A little above centre. The callout is drawn above its pin and wants
     /// the room, but the collapsed sheet only takes the last tenth — and
     /// aiming at 0.55 or 0.46 left the walk low, its finish among the camera
     /// buttons; 0.385 pushed the trailhead up under the status bar.
-    private static let heroRouteCentre: CGFloat = 0.42
+    private static let heroRouteCenter: CGFloat = 0.42
     /// Close enough to centred to leave alone, as a share of the screen. A
     /// drag is not pixel-exact, so a pass that chased the last percent would
     /// spend a gesture to move the map by nothing.
-    private static let centringTolerance: CGFloat = 0.012
+    private static let centeringTolerance: CGFloat = 0.012
     /// Where a map-panning drag starts: clear of the pins, the sheet and the
     /// map controls in every corner.
     private static let dragAnchor = (dx: CGFloat(0.72), dy: CGFloat(0.30))
@@ -69,7 +69,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// and a fifth of the screen east of it, which is open water on the
     /// Königssee — nothing there for the tap to select. Off the line on
     /// purpose, because a tap on the drawn route opens its hike.
-    private static let zoomTapPoint = CGVector(dx: heroRouteCentreX + 0.2, dy: heroRouteCentre)
+    private static let zoomTapPoint = CGVector(dx: heroRouteCenterX + 0.2, dy: heroRouteCenter)
 
     /// Where on the elevation chart the photographs frame leaves its tracker,
     /// as a share of the chart element's width: the high point by the alm,
@@ -447,9 +447,9 @@ extension ScreenshotUITests {
     /// `SeededCommunityTransport.listingSpreadLatitude`.
     @MainActor
     private func revealCommunityPins(in app: XCUIApplication, atLeast minimum: Int) {
-        for _ in 0..<Self.centringPasses {
+        for _ in 0..<Self.centeringPasses {
             if visibleCommunityPins(in: app).count >= minimum { return }
-            centreCommunityPins(in: app)
+            centerCommunityPins(in: app)
         }
         if visibleCommunityPins(in: app).count >= minimum { return }
         let total = app.descendants(matching: .any)
@@ -493,7 +493,7 @@ extension ScreenshotUITests {
         // Once. A second pass is a correction of a few points, short enough
         // for the map to take as a tap — and a tap on a line opens that hike,
         // which is how one run photographed AV Weg 493's screen instead.
-        centreCommunityPins(in: app, titled: Self.nearbyWalkTitles)
+        centerCommunityPins(in: app, titled: Self.nearbyWalkTitles)
     }
 
     /// Pans the map so the community pins — or the ones with `titles`, when it
@@ -506,7 +506,7 @@ extension ScreenshotUITests {
     /// rather than at the middle of the screen, because half the screen is
     /// sheet.
     @MainActor
-    private func centreCommunityPins(in app: XCUIApplication, titled titles: [String] = []) {
+    private func centerCommunityPins(in app: XCUIApplication, titled titles: [String] = []) {
         let map = mapElement(in: app)
         let screen = app.frame
         let sheet = element("map-sheet", in: app)
@@ -521,7 +521,7 @@ extension ScreenshotUITests {
 
         let dx = 0.5 - bounds.midX / screen.width
         let dy = (bandBottom / 2) / screen.height - bounds.midY / screen.height
-        guard abs(dx) > Self.centringTolerance || abs(dy) > Self.centringTolerance else { return }
+        guard abs(dx) > Self.centeringTolerance || abs(dy) > Self.centeringTolerance else { return }
 
         // The anchor has to be inside the band too: a drag that starts on the
         // sheet drags the sheet.
@@ -632,13 +632,13 @@ extension ScreenshotUITests {
     /// the doubled offset that leaves is panned back out.
     @MainActor
     func expandRouteIntoTheFreedSpace(in app: XCUIApplication) {
-        centrePhotoPins(in: app)
+        centerPhotoPins(in: app)
         zoomMapInOneStep(in: app)
         // Up to twice, because a drag lands short of the vector it is given,
         // so one correction only closes part of the gap. A pass inside
-        // ``centringTolerance`` spends no gesture.
-        centrePhotoPins(in: app)
-        centrePhotoPins(in: app)
+        // ``centeringTolerance`` spends no gesture.
+        centerPhotoPins(in: app)
+        centerPhotoPins(in: app)
     }
 
     /// This hike's photo pins, top to bottom.
@@ -663,15 +663,15 @@ extension ScreenshotUITests {
     /// pins themselves: a press that begins on a pin drags the pin's callout
     /// rather than the map under it.
     @MainActor
-    private func centrePhotoPins(in app: XCUIApplication) {
+    private func centerPhotoPins(in app: XCUIApplication) {
         let map = mapElement(in: app)
         guard let bounds = Self.bounds(of: photoPins(in: app)) else { return }
         let screen = app.frame
         guard screen.width > 0, screen.height > 0 else { return }
 
-        let dx = Self.heroRouteCentreX - bounds.midX / screen.width
-        let dy = Self.heroRouteCentre - bounds.midY / screen.height
-        guard abs(dx) > Self.centringTolerance || abs(dy) > Self.centringTolerance else { return }
+        let dx = Self.heroRouteCenterX - bounds.midX / screen.width
+        let dy = Self.heroRouteCenter - bounds.midY / screen.height
+        guard abs(dx) > Self.centeringTolerance || abs(dy) > Self.centeringTolerance else { return }
 
         let from = CGVector(dx: Self.dragAnchor.dx, dy: Self.dragAnchor.dy)
         let to = CGVector(

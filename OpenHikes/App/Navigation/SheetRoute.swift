@@ -246,10 +246,10 @@ enum SheetRoute: Hashable {
         // By its Commons page, which is what names a photograph; the file it
         // was downloaded into is a fact about one search.
         case let (.commonsPhoto(left), .commonsPhoto(right)):
-            left.credit.licence.sourceURL == right.credit.licence.sourceURL
+            left.credit.license.sourceURL == right.credit.license.sourceURL
         // A group by its photographs' pages, for the same reason.
         case let (.commonsPhotos(left), .commonsPhotos(right)):
-            left.map(\.credit.licence.sourceURL) == right.map(\.credit.licence.sourceURL)
+            left.map(\.credit.license.sourceURL) == right.map(\.credit.license.sourceURL)
         default: false
         }
     }
@@ -341,10 +341,10 @@ enum SheetRoute: Hashable {
             hasher.combine(pending.id)
         case let .commonsPhoto(photo):
             hasher.combine(15)
-            hasher.combine(photo.credit.licence.sourceURL)
+            hasher.combine(photo.credit.license.sourceURL)
         case let .commonsPhotos(photos):
             hasher.combine(16)
-            for photo in photos { hasher.combine(photo.credit.licence.sourceURL) }
+            for photo in photos { hasher.combine(photo.credit.license.sourceURL) }
         case .hike, .newPlace, .photo, .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals,
             .trailDraft, .walk:
             break

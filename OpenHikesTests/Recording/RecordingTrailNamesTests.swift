@@ -22,7 +22,7 @@ struct RecordingTrailNamesTests {
     /// second at a signpost and once a minute while moving would elect the
     /// signpost — so the tally has to be about ground covered.
     @Test("the trail with the most metres leads, not the one seen most often")
-    func metresDecideRatherThanVisits() {
+    func metersDecideRatherThanVisits() {
         var names = RecordingTrailNames()
         for _ in 0..<20 { names.add(meters: 5, on: "Signpost Path") }
         names.add(meters: 900, on: "Ridge Trail")

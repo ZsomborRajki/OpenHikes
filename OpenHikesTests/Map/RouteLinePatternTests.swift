@@ -141,7 +141,7 @@ struct RouteLinePatternTests {
     /// A 1 pt line would otherwise get a chevron too small to see and a stroke
     /// thinner than a hairline.
     @Test("chevrons grow with the line but never below a legible minimum")
-    func chevronMetricsHonourMinimums() throws {
+    func chevronMetricsHonorMinimums() throws {
         let thin = try #require(RouteLinePattern.directional.chevronMetrics(forWidth: 1))
         let thick = try #require(RouteLinePattern.directional.chevronMetrics(forWidth: 12))
 

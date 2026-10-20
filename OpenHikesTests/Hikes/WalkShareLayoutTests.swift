@@ -37,7 +37,7 @@ struct WalkShareLayoutTests {
     }
 
     @Test("a box wider than the card is centred on it")
-    func oversizedBoxIsCentred() {
+    func oversizedBoxIsCentered() {
         let wide = CGSize(width: 500, height: 60)
         let center = WalkShareLayout.clampedCenter(CGPoint(x: 10, y: 300), boxSize: wide, canvas: Self.canvas)
 

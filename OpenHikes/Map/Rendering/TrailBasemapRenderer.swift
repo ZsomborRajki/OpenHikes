@@ -37,7 +37,7 @@ import AppKit
 
 actor TrailBasemapRenderer {
     static let shared = TrailBasemapRenderer(
-        pinnedHikeIDs: SharedHikeCataloguePublisher.pinnedTrails
+        pinnedHikeIDs: SharedHikeCatalogPublisher.pinnedTrails
     )
     private static let jpegCompressionQuality: CGFloat = 0.9
 
@@ -207,7 +207,7 @@ actor TrailBasemapRenderer {
     /// Renders a pinned trail's surroundings unless the images on disk already
     /// frame it — the map a widget pinned to a trail that is not selected has
     /// no other way to get. Called from the pinned-trail sweep in
-    /// `SharedHikeCataloguePublisher`.
+    /// `SharedHikeCatalogPublisher`.
     ///
     /// Beside the selection's render rather than through it: the two would
     /// otherwise overtake each other, and a launch runs both at once.

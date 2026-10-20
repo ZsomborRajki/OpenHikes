@@ -84,7 +84,7 @@ struct CommunityImportTests {
     /// of this that shipped, and it made every saved trail identical in the
     /// list they were saved into.
     @Test("an imported hike keeps the colour its listing was drawn in")
-    func importKeepsTheListingColour() async throws {
+    func importKeepsTheListingColor() async throws {
         let context = try Fixture.modelContext()
         let listing = CommunityListing.stub()
         let outcome = await CommunityImport.importHike(Self.detail(listing: listing), into: context)

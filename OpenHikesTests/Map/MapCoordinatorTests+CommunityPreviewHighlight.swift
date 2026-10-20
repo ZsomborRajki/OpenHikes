@@ -114,7 +114,7 @@ extension MapCoordinatorTests {
     /// published hike's own marker stands, and the default z-order leaves
     /// MapKit free to draw it underneath.
     @Test("a preview's dot is drawn in its line's colour, in front of the pins")
-    func aPreviewDotWearsTheListingsColour() async throws {
+    func aPreviewDotWearsTheListingsColor() async throws {
         let listing = CommunityListing.stub(id: "ridge")
         let browser = previewing(listing)
         let coordinator = MapView.Coordinator()

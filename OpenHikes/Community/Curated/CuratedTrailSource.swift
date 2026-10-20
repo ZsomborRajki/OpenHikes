@@ -357,9 +357,9 @@ extension CuratedTrailSource {
         // `min(count:)` is the shape ``OverpassCache/trim(_:keeping:)`` already uses
         // for the same question — *the k smallest, in order* — and it is what
         // `sorted().prefix()` was spelling the long way.
-        let centre = area.coordinate
+        let center = area.coordinate
         let nearest = listed
-            .map { (trail: $0, distance: RouteGeometry.distanceMeters(from: centre, to: $0.coordinate)) }
+            .map { (trail: $0, distance: RouteGeometry.distanceMeters(from: center, to: $0.coordinate)) }
             .min(count: min(limit, CuratedTrailQuery.geometryBatchLimit)) { $0.distance < $1.distance }
             .map(\.trail)
         lastArea = area

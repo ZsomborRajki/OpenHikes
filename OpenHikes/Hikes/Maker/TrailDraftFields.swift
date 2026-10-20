@@ -296,7 +296,7 @@ struct TrailDraftLineFooter: View {
             if !draft.legs.isEmpty {
                 Text(
                     """
-                    Press and hold the map to add a stop, or tap a grey route to take it \
+                    Press and hold the map to add a stop, or tap a gray route to take it \
                     instead. Press and hold a stop to drag it somewhere else.
                     """
                 )

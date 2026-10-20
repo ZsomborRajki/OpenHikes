@@ -53,7 +53,7 @@ struct SlippyTileMathTests {
     ///
     /// Sampled at tile centers rather than corners on purpose: a coordinate
     /// exactly on a shared edge is ambiguous by a rounding ulp, and neither
-    /// neighbour is the wrong answer (see `edgesLandOnEitherNeighbour`).
+    /// neighbour is the wrong answer (see `edgesLandOnEitherNeighbor`).
     @Test("a point inside a tile resolves back to that tile", arguments: [10, 14, 17, 19, 22])
     func centersRoundTrip(z: Int) {
         let n = 1 << z
@@ -69,7 +69,7 @@ struct SlippyTileMathTests {
     /// is a rounding detail, but it must never be a third tile, because that
     /// would mean the grid has a seam.
     @Test("a tile edge lands on one of the two tiles that share it", arguments: [10, 14, 19])
-    func edgesLandOnEitherNeighbour(z: Int) {
+    func edgesLandOnEitherNeighbor(z: Int) {
         let n = 1 << z
         for index in stride(from: 1, to: n, by: max(1, n / 97)) {
             #expect([index - 1, index].contains(SlippyTileMath.tileX(SlippyTileMath.lon(x: index, z: z), z: z)))

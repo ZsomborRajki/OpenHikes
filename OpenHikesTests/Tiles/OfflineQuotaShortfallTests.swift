@@ -27,7 +27,7 @@ struct OfflineQuotaShortfallTests {
     private static let stadia = TileProvider.stadiaOutdoors
     private static let osm = TileProvider.openStreetMap
     /// Who the messages have to name: the licence, not the style being saved.
-    private static let licence = DurableTileQuota.stadia
+    private static let license = DurableTileQuota.stadia
 
     private static func source(_ provider: TileProvider) -> ActiveTileSource {
         ActiveTileSource(
@@ -137,7 +137,7 @@ struct OfflineQuotaShortfallTests {
 
         #expect(shortfall.bytesToFree == Self.bytes(forTiles: 2))
         #expect(shortfall.limit == limit)
-        #expect(shortfall.licenceHolder == Self.licence.holder)
+        #expect(shortfall.licenseHolder == Self.license.holder)
     }
 
     /// A resumed download has most of its plan on disk already, and those
@@ -171,7 +171,7 @@ struct OfflineQuotaShortfallTests {
         "every Stadia style asks against the one shared licence",
         arguments: DurableTileQuota.stadia.providers
     )
-    func everyStadiaStyleNamesTheLicence(provider: TileProvider) async throws {
+    func everyStadiaStyleNamesTheLicense(provider: TileProvider) async throws {
         let downloader = Self.downloader(
             Self.broker(
                 limit: Self.bytes(forTiles: 4),
@@ -183,7 +183,7 @@ struct OfflineQuotaShortfallTests {
         let shortfall = try #require(
             await downloader.spaceShortfall(tiles: Self.tiles(2), source: Self.source(provider))
         )
-        #expect(shortfall.licenceHolder == Self.licence.holder)
+        #expect(shortfall.licenseHolder == Self.license.holder)
         #expect(shortfall.limit == Self.bytes(forTiles: 4))
     }
 
@@ -239,7 +239,7 @@ struct OfflineQuotaShortfallTests {
     /// who has hit a licensed ceiling, so the ceiling has to be named — along
     /// with the only thing that would help.
     @Test("a download stopped at the ceiling says so, and says whose")
-    func ceilingMessageNamesTheLicence() async {
+    func ceilingMessageNamesTheLicense() async {
         let downloader = Self.downloader(
             Self.broker(limit: Self.bytes(forTiles: 4), used: Self.bytes(forTiles: 4))
         )
@@ -249,7 +249,7 @@ struct OfflineQuotaShortfallTests {
             plannedCount: 9,
             source: Self.source(Self.stadia)
         )
-        #expect(partial.contains(Self.licence.holder))
+        #expect(partial.contains(Self.license.holder))
         #expect(partial.contains("Saved 3 of 9"))
         #expect(partial.contains("Delete another saved map"))
 
@@ -262,7 +262,7 @@ struct OfflineQuotaShortfallTests {
         #expect(nothing.contains("delete another saved map"))
         // The holder is a company called "… Maps", so a sentence that puts
         // "maps" after its name says it twice.
-        #expect(!nothing.contains("\(Self.licence.holder) maps"))
+        #expect(!nothing.contains("\(Self.license.holder) maps"))
     }
 
     /// Under the ceiling, a failure is a network failure, and trying again is
@@ -280,7 +280,7 @@ struct OfflineQuotaShortfallTests {
         )
         #expect(partial.contains("Saved 2 of 9"))
         #expect(partial.contains("Try again"))
-        #expect(!partial.contains(Self.licence.holder))
+        #expect(!partial.contains(Self.license.holder))
 
         let nothing = await downloader.failureMessage(
             savedCount: 0,

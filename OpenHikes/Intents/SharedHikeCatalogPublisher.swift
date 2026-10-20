@@ -1,5 +1,5 @@
 //
-//  SharedHikeCataloguePublisher.swift
+//  SharedHikeCatalogPublisher.swift
 //  OpenHikes
 //
 //  Keeping the App Group's copy of the library in step with the real one, and
@@ -46,15 +46,15 @@ import WidgetKit
 ///
 /// A case rather than an optional set, because the two ways of reading "no
 /// answer" are opposite and each caller has to pick one out loud — see
-/// ``SharedHikeCataloguePublisher/pinnedTrails()``.
+/// ``SharedHikeCatalogPublisher/pinnedTrails()``.
 nonisolated enum PinnedTrails: Sendable {
     case known(Set<UUID>)
     /// WidgetKit could not answer.
     case unknown
 }
 
-nonisolated enum SharedHikeCataloguePublisher {
-    private static let logger = Logger(subsystem: "OpenHikes", category: "WidgetCatalogue")
+nonisolated enum SharedHikeCatalogPublisher {
+    private static let logger = Logger(subsystem: "OpenHikes", category: "WidgetCatalog")
 
     /// Republishes the catalogue and the pinned trails' snapshots.
     ///
@@ -74,13 +74,13 @@ nonisolated enum SharedHikeCataloguePublisher {
         watch: WatchSessionCoordinator? = nil
     ) {
         Task.detached(priority: .utility) {
-            await publishCatalogue(from: coordinator, watch: watch)
+            await publishCatalog(from: coordinator, watch: watch)
             await publishPinnedTrails(container: container)
         }
     }
 
     /// The list the pickers read.
-    static func publishCatalogue(
+    static func publishCatalog(
         from coordinator: HikeIntentCoordinator,
         watch: WatchSessionCoordinator? = nil
     ) async {
@@ -88,12 +88,12 @@ nonisolated enum SharedHikeCataloguePublisher {
             let summaries = try await MainActor.run {
                 try coordinator.finishedHikes().map(HikeEntity.summary(of:))
             }
-            let catalogue = SharedHikeCatalogue(hikes: summaries)
-            SharedStore.saveHikeCatalogue(catalogue)
-            if let watch { await watch.publish(catalogue) }
+            let catalog = SharedHikeCatalog(hikes: summaries)
+            SharedStore.saveHikeCatalog(catalog)
+            if let watch { await watch.publish(catalog) }
         } catch {
             Self.logger.debug(
-                "Hike catalogue publish failed: \(error.localizedDescription, privacy: .public)"
+                "Hike catalog publish failed: \(error.localizedDescription, privacy: .public)"
             )
         }
     }

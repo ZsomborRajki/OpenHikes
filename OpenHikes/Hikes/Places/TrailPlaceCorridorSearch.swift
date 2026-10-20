@@ -279,7 +279,7 @@ nonisolated enum TrailPlaceCorridorSearch {
             lastLongitude = longitude
         }
 
-        var centre: CLLocationCoordinate2D {
+        var center: CLLocationCoordinate2D {
             CLLocationCoordinate2D(
                 latitude: (south + north) / 2,
                 longitude: RouteGeometry.normalizedLongitude((west + east) / 2)
@@ -295,7 +295,7 @@ nonisolated enum TrailPlaceCorridorSearch {
         }
 
         func area(margin: Double) -> CommunitySearchArea {
-            CommunitySearchArea(coordinate: centre, radiusMeters: radiusMeters + margin)
+            CommunitySearchArea(coordinate: center, radiusMeters: radiusMeters + margin)
         }
     }
 }

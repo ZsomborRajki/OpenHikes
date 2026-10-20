@@ -231,7 +231,7 @@ nonisolated enum CommonsPhotoQuery {
               thumbnail.scheme == "https",
               thumbnail.host().map(imageHosts.contains) == true,
               let source = info.descriptionurl.flatMap(URL.init(string:)),
-              let licenceName = field(.licenceName).flatMap(CommonsLicence.accepted),
+              let licenseName = field(.licenseName).flatMap(CommonsLicense.accepted),
               let capturedAt = CommonsDate.capturedAt(
                   field(.dateTimeOriginal),
                   uploaded: info.timestamp,
@@ -243,9 +243,9 @@ nonisolated enum CommonsPhotoQuery {
             thumbnailURL: thumbnail,
             credit: CommonsPhotoCredit(
                 author: CommonsText.author(field(.artist)),
-                licence: HikePhotoLicence(
-                    name: licenceName,
-                    url: field(.licenceURL).flatMap(CommonsText.link),
+                license: HikePhotoLicense(
+                    name: licenseName,
+                    url: field(.licenseURL).flatMap(CommonsText.link),
                     sourceURL: source
                 )
             ),
@@ -258,8 +258,8 @@ nonisolated enum CommonsPhotoQuery {
     enum Metadata: String, CaseIterable {
         case artist = "Artist"
         case dateTimeOriginal = "DateTimeOriginal"
-        case licenceName = "LicenseShortName"
-        case licenceURL = "LicenseUrl"
+        case licenseName = "LicenseShortName"
+        case licenseURL = "LicenseUrl"
         case restrictions = "Restrictions"
     }
 }

@@ -38,7 +38,7 @@ struct TrailDraftPlanToPhotoTests {
             fileURL: file,
             credit: CommonsPhotoCredit(
                 author: "Hiker",
-                licence: HikePhotoLicence(
+                license: HikePhotoLicense(
                     name: "CC0",
                     url: nil,
                     sourceURL: try #require(URL(string: "https://commons.wikimedia.org/wiki/File:1.jpg"))

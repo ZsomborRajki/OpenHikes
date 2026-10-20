@@ -38,10 +38,10 @@ extension TileTransportTests {
         // A different tile, because promoting one already in the browsing tier
         // is a file move rather than a request — free, and so never something
         // the policy should be asked about.
-        let neighbour = "osm/14/2639/6357@2.0"
+        let neighbor = "osm/14/2639/6357@2.0"
         #expect(
             await stub.cache.saveTileDurably(
-                forKey: neighbour,
+                forKey: neighbor,
                 url: url("14/2639/6357.png")
             ) == false
         )
@@ -146,10 +146,10 @@ extension TileTransportTests {
         StubTileProtocol.alwaysRespond(with: .tile())
 
         #expect(await stub.cache.loadTile(forKey: key, url: url()) != nil)
-        let neighbour = "osm/14/2639/6357@2.0"
+        let neighbor = "osm/14/2639/6357@2.0"
         #expect(
             await stub.cache.saveTileDurably(
-                forKey: neighbour,
+                forKey: neighbor,
                 url: url("14/2639/6357.png")
             ) == false
         )

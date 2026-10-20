@@ -1,5 +1,5 @@
 //
-//  HikePhotoLicenceTests.swift
+//  HikePhotoLicenseTests.swift
 //  OpenHikesDataTests
 //
 //  The licence a saved Wikimedia Commons photograph keeps, inside the
@@ -18,8 +18,8 @@ import Foundation
 import Testing
 
 @Suite("Hike photo licence")
-struct HikePhotoLicenceTests {
-    private static let licence = HikePhotoLicence(
+struct HikePhotoLicenseTests {
+    private static let license = HikePhotoLicense(
         name: "CC BY-SA 4.0",
         url: URL(string: "https://creativecommons.org/licenses/by-sa/4.0/"),
         sourceURL: URL(fileURLWithPath: "/File:Summit.jpg")
@@ -27,11 +27,11 @@ struct HikePhotoLicenceTests {
 
     @Test("a licensed copy comes back from the blob with its name and both links")
     func roundTrip() throws {
-        let photo = HikePhoto(importedAuthorName: "Anna", licence: Self.licence)
+        let photo = HikePhoto(importedAuthorName: "Anna", license: Self.license)
 
         let decoded = try JSONDecoder().decode([HikePhoto].self, from: JSONEncoder().encode([photo]))
 
-        #expect(decoded.first?.licence == Self.licence)
+        #expect(decoded.first?.license == Self.license)
         #expect(decoded.first?.importedAuthorName == "Anna")
     }
 
@@ -44,26 +44,49 @@ struct HikePhotoLicenceTests {
         let decoded = try JSONDecoder().decode([HikePhoto].self, from: older)
 
         #expect(decoded.count == 1)
-        #expect(decoded.first?.licence == nil)
+        #expect(decoded.first?.license == nil)
         #expect(decoded.first?.isOwn == true)
     }
 
+    /// The property is spelled `license` and the blob still says `licence`,
+    /// the key every copy saved before #847 was written with. A key that
+    /// followed the rename would read those copies as having no licence, and
+    /// so as the hiker's own to publish.
+    @Test("the licence is kept under the key it was first saved with")
+    func storedKeyIsUnchanged() throws {
+        let saved = Data(
+            #"""
+            [{"id":"7C0A3C5E-0D0B-4C5E-9A52-1F1B2C3D4E5F","capturedAt":0,"pathExtension":"jpeg",
+            "licence":{"name":"CC BY-SA 4.0","sourceURL":"file:///File:Summit.jpg"}}]
+            """#.utf8
+        )
+
+        let decoded = try JSONDecoder().decode([HikePhoto].self, from: saved)
+        let written = try JSONEncoder().encode(decoded)
+        let keys = try #require(JSONSerialization.jsonObject(with: written) as? [[String: Any]]).first?.keys
+
+        #expect(decoded.first?.license?.name == "CC BY-SA 4.0")
+        #expect(decoded.first?.isOwn == false)
+        #expect(keys?.contains("licence") == true)
+        #expect(keys?.contains("license") == false)
+    }
+
     @Test("a photograph under somebody else's licence is never the hiker's own to publish")
-    func licenceMakesItNotOwn() {
-        #expect(!HikePhoto(licence: Self.licence).isOwn)
+    func licenseMakesItNotOwn() {
+        #expect(!HikePhoto(license: Self.license).isOwn)
         #expect(HikePhoto().isOwn)
         #expect(!HikePhoto(importedFromListingID: "osm:r/1").isOwn)
     }
 
     @Test("a licensed copy is somebody else's by the rule a build without the licence field applies")
     func previousBuildsRuleKeepsItOut() throws {
-        let photo = HikePhoto(importedAuthorName: "Anna", licence: Self.licence)
+        let photo = HikePhoto(importedAuthorName: "Anna", license: Self.license)
 
         let decoded = try JSONDecoder().decode([HikePhoto].self, from: JSONEncoder().encode([photo]))
 
         // `isOwn` before 183ea3e7, which is what a 1.3 build 4 device applies.
         #expect(decoded.first?.importedFromListingID != nil)
-        #expect(HikePhoto(importedFromListingID: "osm:r/1", licence: Self.licence).importedFromListingID == "osm:r/1")
+        #expect(HikePhoto(importedFromListingID: "osm:r/1", license: Self.license).importedFromListingID == "osm:r/1")
         #expect(HikePhoto().importedFromListingID == nil)
     }
 }

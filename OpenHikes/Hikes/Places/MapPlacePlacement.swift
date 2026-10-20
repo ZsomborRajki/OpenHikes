@@ -178,11 +178,11 @@ extension MapView.Coordinator {
         // map the hiker has turned slides the right way.
         let point = mapView.convert(coordinate, toPointTo: mapView)
         let focus = focusPoint(in: mapView)
-        let centre = CGPoint(
+        let center = CGPoint(
             x: mapView.bounds.midX + point.x - focus.x,
             y: mapView.bounds.midY + point.y - focus.y
         )
-        mapView.setCenter(mapView.convert(centre, toCoordinateFrom: mapView), animated: animated)
+        mapView.setCenter(mapView.convert(center, toCoordinateFrom: mapView), animated: animated)
     }
 
     #if canImport(UIKit)

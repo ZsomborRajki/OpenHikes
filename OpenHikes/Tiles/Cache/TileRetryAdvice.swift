@@ -37,7 +37,7 @@ nonisolated enum RetryAfterHeader {
     /// it is shedding load, and OSM's infrastructure uses both. A 404 or a
     /// 500 may carry the header too, but neither says anything about *this*
     /// client's request rate, so neither should be allowed to park a tile.
-    static let honouredStatusCodes: Set<Int> = [tooManyRequests, serviceUnavailable]
+    static let honoredStatusCodes: Set<Int> = [tooManyRequests, serviceUnavailable]
 
     /// Longest delay honoured. A header asking for a day — or a misparsed
     /// date that looks like one — must not take a tile off the map until the
@@ -74,7 +74,7 @@ nonisolated enum RetryAfterHeader {
 
     /// The advice in `response`, if it is a status that carries any.
     static func delay(from response: HTTPURLResponse, now: Date = Date()) -> Duration? {
-        guard honouredStatusCodes.contains(response.statusCode),
+        guard honoredStatusCodes.contains(response.statusCode),
               let value = response.value(forHTTPHeaderField: name)
         else { return nil }
         return delay(from: value, now: now)

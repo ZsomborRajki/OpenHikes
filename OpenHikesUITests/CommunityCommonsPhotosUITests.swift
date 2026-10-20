@@ -49,7 +49,7 @@ nonisolated final class CommunityCommonsPhotosUITests: XCTestCase {
     /// The fourth photograph is the first from Commons: its page is titled
     /// with its author and carries the licence it was shared under.
     @MainActor
-    func testACommonsPhotographIsShownWithItsAuthorAndLicence() {
+    func testACommonsPhotographIsShownWithItsAuthorAndLicense() {
         let app = launchCommunity(scenario: .commons)
         selectCommunityTab(in: app)
         openCommunityHike(titled: SeededCuratedTrail.loopTitle, in: app)
@@ -72,7 +72,7 @@ nonisolated final class CommunityCommonsPhotosUITests: XCTestCase {
             "the first Commons photograph should come after the contributed ones, credited to its author"
         )
         XCTAssertTrue(
-            app.buttons["Photo by \(SeededCommons.firstAuthor) · \(SeededCommons.licence)"]
+            app.buttons["Photo by \(SeededCommons.firstAuthor) · \(SeededCommons.license)"]
                 .waitForExistence(timeout: UITestTimeout.existence),
             "a Commons photograph should carry its licence, and the way to it, over the picture"
         )
@@ -98,7 +98,7 @@ nonisolated final class CommunityCommonsPhotosUITests: XCTestCase {
             "a photo pin should open the photograph's screen"
         )
         XCTAssertTrue(
-            element("photo-licence-credit", in: app).waitForExistence(timeout: UITestTimeout.existence),
+            element("photo-license-credit", in: app).waitForExistence(timeout: UITestTimeout.existence),
             "and credit who took it, as every Commons photograph is"
         )
 

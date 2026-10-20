@@ -25,7 +25,7 @@ extension MapCoordinatorTests {
     /// The map centres on the user's first fix — once. A second fix a second
     /// later must not drag the map back while they're panning it.
     @Test("the first fix centres the map, and only the first")
-    func firstFixCentresOnce() async {
+    func firstFixCentersOnce() async {
         let coordinator = MapView.Coordinator()
         let view = mapView()
         let map = makeMap(view, coordinator)
@@ -39,14 +39,14 @@ extension MapCoordinatorTests {
         // Waits for the region, not just for the flag: `centerOnUser` sets
         // `hasHandledFirstFix` and then calls `setRegion(_:animated: true)`,
         // so the map can still be moving when the flag is already true.
-        // Capturing `centred` mid-animation would make the comparison below
+        // Capturing `centered` mid-animation would make the comparison below
         // fail for a reason that has nothing to do with the second fix.
         await settleDelegateHop(until: "the first fix to centre the map") {
             coordinator.hasHandledFirstFix
-                && map.region.center.latitude.isApproximatelyEqual(to: 47.6300, absoluteTolerance: Self.centreTolerance)
+                && map.region.center.latitude.isApproximatelyEqual(to: 47.6300, absoluteTolerance: Self.centerTolerance)
         }
         #expect(coordinator.hasHandledFirstFix)
-        let centred = map.region.center.latitude
+        let centered = map.region.center.latitude
 
         locationManager.locationManager(
             CLLocationManager(),
@@ -57,7 +57,7 @@ extension MapCoordinatorTests {
         }
 
         #expect(locationManager.coordinate?.latitude == 47.6400, "precondition: the second fix was published")
-        #expect(map.region.center.latitude == centred, "a later fix must not drag the map back")
+        #expect(map.region.center.latitude == centered, "a later fix must not drag the map back")
     }
 
     /// A selected route owns the viewport. Centring on the user as well would
@@ -85,7 +85,7 @@ extension MapCoordinatorTests {
         // moving here — towards the trail near 37.33, and never towards
         // Austria.
         #expect(
-            abs(map.region.center.latitude - 47.6300) > Self.centreTolerance,
+            abs(map.region.center.latitude - 47.6300) > Self.centerTolerance,
             "the route decides what's on screen"
         )
     }
@@ -94,7 +94,7 @@ extension MapCoordinatorTests {
     /// Otherwise closing the trail — which leaves the map exactly where the
     /// user was looking — arms the next fix to yank it away a second later.
     @Test("deselecting a route doesn't arm the next fix to recentre")
-    func deselectingARouteDoesNotArmARecentre() async {
+    func deselectingARouteDoesNotArmARecenter() async {
         let coordinator = MapView.Coordinator()
         let selected = mapView(route: Self.route())
         let map = makeMap(selected, coordinator)
@@ -127,7 +127,7 @@ extension MapCoordinatorTests {
 
         #expect(locationManager.coordinate?.latitude == 47.6400, "precondition: the second fix was published")
         #expect(
-            abs(map.region.center.latitude - 47.6400) > Self.centreTolerance,
+            abs(map.region.center.latitude - 47.6400) > Self.centerTolerance,
             "a fix after deselection must not pull the map onto the user"
         )
     }

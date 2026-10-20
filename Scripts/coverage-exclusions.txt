@@ -242,7 +242,7 @@ OpenHikes/Photos/HikePhotoSection.swift
 OpenHikes/Photos/HikePhotoViewer.swift
 OpenHikes/Photos/PhotoDiscoverySheet.swift
 OpenHikes/Photos/PhotoGalleryChrome.swift
-OpenHikes/Photos/PhotoLicenceCredit.swift
+OpenHikes/Photos/PhotoLicenseCredit.swift
 OpenHikes/Photos/PhotoStepButton.swift
 OpenHikes/Purchases/ElevationProPrompt.swift
 OpenHikes/Purchases/MapPaywallView.swift

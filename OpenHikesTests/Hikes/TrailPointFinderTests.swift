@@ -35,7 +35,7 @@ struct TrailPointFinderTests {
         }
     }
 
-    private static let centre = CLLocationCoordinate2D(latitude: 47.60, longitude: 12.90)
+    private static let center = CLLocationCoordinate2D(latitude: 47.60, longitude: 12.90)
 
     private static func finder(answering places: [TrailPlace]) -> TrailPointFinder {
         TrailPointFinder(source: StubPointSource { places })
@@ -48,7 +48,7 @@ struct TrailPointFinderTests {
     /// A region small enough to be searchable, centred where the fixtures are.
     private static func settled(
         _ finder: TrailPointFinder,
-        at coordinate: CLLocationCoordinate2D = centre,
+        at coordinate: CLLocationCoordinate2D = center,
         spanDegrees: Double = 0.05
     ) {
         finder.regionDidSettle(

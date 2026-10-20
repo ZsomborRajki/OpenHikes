@@ -95,7 +95,7 @@ struct CommunityQueryPolicyTests {
     /// quarter of the radius, which is where *CloudKit's* answer starts to
     /// differ; it is half now, because taking an offer also spends an Overpass
     /// listing pass against a volunteer-run API — see
-    /// ``CommunityQueryPolicy/recentreFraction``. The hiker loses nothing by
+    /// ``CommunityQueryPolicy/recenterFraction``. The hiker loses nothing by
     /// it: the pill is permanent, and a tap with no offer standing re-asks.
     @Test("a pan smaller than half the radius offers nothing")
     func smallPanIsRefused() {

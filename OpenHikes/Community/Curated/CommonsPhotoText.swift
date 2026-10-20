@@ -17,7 +17,7 @@ import Foundation
 import OpenHikesData
 
 /// Which licences a Commons photograph may be under for this app to show it.
-nonisolated enum CommonsLicence {
+nonisolated enum CommonsLicense {
     /// The short names kept, as the start of `LicenseShortName`.
     ///
     /// Every Creative Commons attribution licence in every version and port

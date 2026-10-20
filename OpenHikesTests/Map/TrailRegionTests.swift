@@ -74,7 +74,7 @@ struct TrailRegionTests {
     /// circle on the far side of the planet, and every hiker on earth is then
     /// either always near the trail or never near it.
     @Test("a route across the antimeridian is centred on the route")
-    func antimeridianRouteIsCentredOnTheRoute() throws {
+    func antimeridianRouteIsCenteredOnTheRoute() throws {
         let route = [
             CLLocationCoordinate2D(latitude: -16.5, longitude: 179.9),
             CLLocationCoordinate2D(latitude: -16.5, longitude: -179.9),

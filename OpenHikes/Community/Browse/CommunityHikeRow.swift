@@ -70,9 +70,9 @@ struct CommunityHikeRow: View {
         // would be the one part of the row that is false. See
         // ``CommunityListing/drawnDistanceMeters``.
         var parts: [String] = []
-        if let metres = listing.drawnDistanceMeters {
+        if let meters = listing.drawnDistanceMeters {
             parts.append(
-                Measurement(value: metres, unit: UnitLength.meters)
+                Measurement(value: meters, unit: UnitLength.meters)
                     .formatted(.measurement(width: .abbreviated, usage: .road))
             )
         }

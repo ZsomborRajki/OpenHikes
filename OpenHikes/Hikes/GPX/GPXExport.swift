@@ -265,7 +265,7 @@ nonisolated private extension GPXExport {
             if let href = photograph.linkHref {
                 xml += "    <link href=\"\(escaped(href))\"/>\n"
             }
-            if let source = photograph.credit?.licence.sourceURL {
+            if let source = photograph.credit?.license.sourceURL {
                 xml += "    <link href=\"\(escaped(source.absoluteString))\"/>\n"
             }
             xml += "    <sym>\(escaped(photographSymbol))</sym>\n"

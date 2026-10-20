@@ -54,7 +54,7 @@ struct MapControllerFramingTests {
     /// A line of one coordinate has no extent, so it is framed by a span rather
     /// than by a fit — `MKMapRect` would otherwise frame nothing at all.
     @Test("a lone point is framed around itself")
-    func onePointIsCentred() throws {
+    func onePointIsCentered() throws {
         let controller = MapController()
         let only = Self.coordinate(Ridge.south, Ridge.west)
 

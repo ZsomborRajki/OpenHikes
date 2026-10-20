@@ -73,7 +73,7 @@ final class CommunityCommonsPhotoAnnotation: NSObject, MKAnnotation {
             .compactMap { ($0 as? Self)?.photo }
             .sorted { lhs, rhs in
                 guard lhs.pin.capturedAt == rhs.pin.capturedAt else { return lhs.pin.capturedAt > rhs.pin.capturedAt }
-                return lhs.credit.licence.sourceURL.absoluteString < rhs.credit.licence.sourceURL.absoluteString
+                return lhs.credit.license.sourceURL.absoluteString < rhs.credit.license.sourceURL.absoluteString
             }
     }
 }

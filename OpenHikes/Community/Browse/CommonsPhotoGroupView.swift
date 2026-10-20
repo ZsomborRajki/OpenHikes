@@ -59,7 +59,7 @@ struct CommonsPhotoGroupView: View {
             VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
                 header
                 grid
-                Text("Photos from Wikimedia Commons, each under its own licence. Open one to see who took it.")
+                Text("Photos from Wikimedia Commons, each under its own license. Open one to see who took it.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -108,7 +108,7 @@ struct CommonsPhotoGroupView: View {
             columns: [GridItem(.adaptive(minimum: Self.tileMinimum), spacing: Self.tileSpacing)],
             spacing: Self.tileSpacing
         ) {
-            ForEach(photos.enumerated(), id: \.element.credit.licence.sourceURL) { index, photo in
+            ForEach(photos.enumerated(), id: \.element.credit.license.sourceURL) { index, photo in
                 Button {
                     onOpen(photo)
                 } label: {
@@ -126,7 +126,7 @@ struct CommonsPhotoGroupView: View {
     /// that tells two photographs by the same person apart without seeing
     /// them.
     private static func label(for photo: CommonsPhoto) -> String {
-        let credit = PhotoLicenceCredit.line(author: photo.credit.author, licence: photo.credit.licence)
+        let credit = PhotoLicenseCredit.line(author: photo.credit.author, license: photo.credit.license)
         let taken = photo.pin.capturedAt.formatted(date: .abbreviated, time: .omitted)
         return String(localized: "\(credit), taken \(taken)")
     }

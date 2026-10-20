@@ -18,7 +18,7 @@ import Testing
 struct WalkShareOfferedPhotosTests {
     private static let start = Date(timeIntervalSince1970: 1_800_000_000)
     private static let end = start.addingTimeInterval(3600)
-    private static let licence = HikePhotoLicence(
+    private static let license = HikePhotoLicense(
         name: "CC BY-SA 4.0",
         url: URL(string: "https://creativecommons.org/licenses/by-sa/4.0/"),
         sourceURL: URL(fileURLWithPath: "/File:Summit.jpg")
@@ -42,7 +42,7 @@ struct WalkShareOfferedPhotosTests {
             capturedAt: Self.start.addingTimeInterval(1200),
             importedFromListingID: "osm:r/1",
             importedAuthorName: "Anna",
-            licence: Self.licence
+            license: Self.license
         )
 
         let offered = WalkShareFlow.offered([own, place, commons], walkedFrom: Self.start, to: Self.end)

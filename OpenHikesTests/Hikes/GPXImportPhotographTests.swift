@@ -188,7 +188,7 @@ struct GPXImportPhotographTests {
     /// `<sym>` is the reading intended, but a reader that drops a symbol it
     /// has no glyph for and keeps the label must not cost the round trip.
     @Test("the name alone is enough when the symbol has been dropped")
-    func recognisesByNameAlone() throws {
+    func recognizesByNameAlone() throws {
         let noSymbol = """
             <wpt lat="\(Self.photographLatitude)" lon="\(Self.photographLongitude)">
                 <time>\(Self.photographTime)</time>
@@ -202,7 +202,7 @@ struct GPXImportPhotographTests {
     }
 
     @Test("the symbol alone is enough when the name has been dropped")
-    func recognisesBySymbolAlone() throws {
+    func recognizesBySymbolAlone() throws {
         let noName = """
             <wpt lat="\(Self.photographLatitude)" lon="\(Self.photographLongitude)">
                 <time>\(Self.photographTime)</time>
@@ -218,7 +218,7 @@ struct GPXImportPhotographTests {
     /// A symbol name is a lookup key in somebody else's table rather than text
     /// this app wrote, so the comparison does not care about its case.
     @Test("recognition does not depend on the case the writer used")
-    func recognisesRegardlessOfCase() throws {
+    func recognizesRegardlessOfCase() throws {
         let track = try imported(Self.file(waypoint: nil, name: "photo", symbol: "PHOTO"))
 
         #expect(track.photographs.count == 1)

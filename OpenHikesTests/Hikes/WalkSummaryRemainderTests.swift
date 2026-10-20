@@ -18,7 +18,7 @@ struct WalkSummaryRemainderTests {
     }
 
     @Test("less than a metre is nothing, since it would print as zero")
-    func underAMetreLeavesNothing() {
+    func underAMeterLeavesNothing() {
         #expect(WalkSummaryView.leftUnhiked(0.6) == nil)
     }
 

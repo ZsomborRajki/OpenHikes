@@ -29,19 +29,19 @@ struct WikimediaCommonsSourceTests {
     nonisolated private enum Answers {
         static let startLatitude = 47.6
         static let longitude = 13.0
-        static let kilometre = 0.009
+        static let kilometer = 0.009
         /// Where along the ten-kilometre route the three files stand.
-        static let photographed = [(id: 1, kilometres: 1.0), (id: 2, kilometres: 5.0), (id: 3, kilometres: 9.0)]
+        static let photographed = [(id: 1, kilometers: 1.0), (id: 2, kilometers: 5.0), (id: 3, kilometers: 9.0)]
 
         static let route: [RouteCoordinate] = (0...10).map { step in
-            RouteCoordinate(latitude: startLatitude + Double(step) * kilometre, longitude: longitude)
+            RouteCoordinate(latitude: startLatitude + Double(step) * kilometer, longitude: longitude)
         }
 
         static let geosearch: Data = {
             let hits = photographed.map { photo in
                 """
                 {"pageid":\(photo.id),"ns":6,"title":"File:\(photo.id).jpg",\
-                "lat":\(startLatitude + photo.kilometres * kilometre),"lon":\(longitude),"dist":1,"primary":true}
+                "lat":\(startLatitude + photo.kilometers * kilometer),"lon":\(longitude),"dist":1,"primary":true}
                 """
             }
             return Data(#"{"batchcomplete":true,"query":{"geosearch":[\#(hits.joined(separator: ","))]}}"#.utf8)
@@ -63,7 +63,7 @@ struct WikimediaCommonsSourceTests {
 
     private static var route: [RouteCoordinate] { Answers.route }
     private static var longitude: Double { Answers.longitude }
-    private static var photographed: [(id: Int, kilometres: Double)] { Answers.photographed }
+    private static var photographed: [(id: Int, kilometers: Double)] { Answers.photographed }
 
     // MARK: - The stand-in service
 
@@ -180,7 +180,7 @@ struct WikimediaCommonsSourceTests {
         let photos = try await Self.source(commons).photos(along: Self.route, downloadingInto: downloads.directory)
 
         #expect(photos.map(\.credit.author) == ["Hiker 1", "Hiker 2", "Hiker 3"])
-        #expect(photos.allSatisfy { $0.credit.licence.name == "CC BY-SA 4.0" })
+        #expect(photos.allSatisfy { $0.credit.license.name == "CC BY-SA 4.0" })
         #expect(photos.allSatisfy { abs(($0.pin.coordinate?.longitude ?? 0) - Self.longitude) < 0.00001 })
         #expect(Set(downloads.files) == ["commons-1.jpeg", "commons-2.jpeg", "commons-3.jpeg"])
         #expect(
@@ -235,7 +235,7 @@ struct WikimediaCommonsSourceTests {
 
     private static var longRoute: [RouteCoordinate] {
         (0...150).map { step in
-            RouteCoordinate(latitude: Answers.startLatitude + Double(step) * Answers.kilometre, longitude: longitude)
+            RouteCoordinate(latitude: Answers.startLatitude + Double(step) * Answers.kilometer, longitude: longitude)
         }
     }
 

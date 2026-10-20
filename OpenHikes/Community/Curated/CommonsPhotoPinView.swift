@@ -117,7 +117,7 @@ final class CommonsPhotoPinView: MKAnnotationView {
         // several, and each is credited on the screen a tap opens.
         accessibilityLabel = count > 1
             ? String(localized: "\(count) photos")
-            : PhotoLicenceCredit.line(author: photo.credit.author, licence: photo.credit.licence)
+            : PhotoLicenseCredit.line(author: photo.credit.author, license: photo.credit.license)
         showCount(count)
         guard shown != photo else { return }
         shown = photo

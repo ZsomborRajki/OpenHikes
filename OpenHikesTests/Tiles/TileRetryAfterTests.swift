@@ -118,10 +118,10 @@ struct TileRetryAfterTests {
     /// statements about this client's request rate. A 404 or a 500 is not,
     /// however helpfully it is decorated.
     @Test("only a rate limit or an overload can park a tile", arguments: [429, 503, 500, 404, 200])
-    func onlyRateLimitStatusesAreHonoured(status: Int) throws {
+    func onlyRateLimitStatusesAreHonored(status: Int) throws {
         let refusal = try response(status: status, headers: [RetryAfterHeader.name: "90"])
         let advice = RetryAfterHeader.delay(from: refusal, now: now)
-        #expect((advice != nil) == RetryAfterHeader.honouredStatusCodes.contains(status))
+        #expect((advice != nil) == RetryAfterHeader.honoredStatusCodes.contains(status))
     }
 
     @Test("a rate limit with no header carries no advice")

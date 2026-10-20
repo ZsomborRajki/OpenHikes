@@ -40,7 +40,7 @@ struct TrailDraftPhotoControllerTests {
                     fileURL: directory.appendingPathComponent("commons-1.jpeg"),
                     credit: CommonsPhotoCredit(
                         author: "Hiker",
-                        licence: HikePhotoLicence(
+                        license: HikePhotoLicense(
                             name: "CC0",
                             url: nil,
                             sourceURL: URL(string: "https://commons.wikimedia.org/wiki/File:1.jpg")

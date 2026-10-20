@@ -93,7 +93,7 @@ nonisolated enum TrailPointDecoding {
 nonisolated extension TrailPointDecoding {
     /// A way's or relation's representative point, which is what `out center`
     /// puts on it in place of an outline.
-    struct Centre: Decodable {
+    struct Center: Decodable {
         let lat: Double
         let lon: Double
     }
@@ -108,7 +108,7 @@ nonisolated extension TrailPointDecoding {
         let id: Int64?
         let lat: Double?
         let lon: Double?
-        let center: Centre?
+        let center: Center?
         let tags: [String: String]
 
         init(from decoder: Decoder) throws {
@@ -117,7 +117,7 @@ nonisolated extension TrailPointDecoding {
             id = try container.decodeIfPresent(Int64.self, forKey: .id)
             lat = try container.decodeIfPresent(Double.self, forKey: .lat)
             lon = try container.decodeIfPresent(Double.self, forKey: .lon)
-            center = try container.decodeIfPresent(Centre.self, forKey: .center)
+            center = try container.decodeIfPresent(Center.self, forKey: .center)
             tags = try container.decodeIfPresent([String: String].self, forKey: .tags) ?? [:]
         }
 

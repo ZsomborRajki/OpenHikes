@@ -217,9 +217,9 @@ struct CommonsPhotoQueryTests {
 
         #expect(file.thumbnailURL.absoluteString == "https://thumb.wikimedia.org/wikipedia/commons/thumb/kept/960px-Kept.jpg")
         #expect(file.credit.author == "Anna")
-        #expect(file.credit.licence.name == "CC BY-SA 3.0")
-        #expect(file.credit.licence.url?.absoluteString == "https://creativecommons.org/licenses/by-sa/3.0/")
-        #expect(file.credit.licence.sourceURL.absoluteString == "https://commons.wikimedia.org/wiki/File:Kept.jpg")
+        #expect(file.credit.license.name == "CC BY-SA 3.0")
+        #expect(file.credit.license.url?.absoluteString == "https://creativecommons.org/licenses/by-sa/3.0/")
+        #expect(file.credit.license.sourceURL.absoluteString == "https://commons.wikimedia.org/wiki/File:Kept.jpg")
     }
 
     @Test("the kept photograph is dated by its camera rather than by its upload")

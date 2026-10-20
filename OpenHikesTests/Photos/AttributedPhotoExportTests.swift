@@ -57,12 +57,12 @@ struct AttributedPhotoExportTests {
     nonisolated private static let page = URL(
         string: "https://commons.wikimedia.org/wiki/File:Thumsee_Ufer.jpg"
     )!
-    nonisolated private static let licenceText = URL(
+    nonisolated private static let licenseText = URL(
         string: "https://creativecommons.org/licenses/by-sa/4.0/"
     )!
     nonisolated private static let credit = CommonsPhotoCredit(
         author: "Anna Berger",
-        licence: HikePhotoLicence(name: "CC BY-SA 4.0", url: licenceText, sourceURL: page)
+        license: HikePhotoLicense(name: "CC BY-SA 4.0", url: licenseText, sourceURL: page)
     )
 
     // MARK: - The bytes
@@ -83,7 +83,7 @@ struct AttributedPhotoExportTests {
         #expect(CGImageMetadataCopyStringValueWithPath(metadata, nil, "dc:creator[0]" as CFString)
             as String? == "Anna Berger")
         #expect(CGImageMetadataCopyStringValueWithPath(metadata, nil, "xmpRights:WebStatement" as CFString)
-            as String? == Self.licenceText.absoluteString)
+            as String? == Self.licenseText.absoluteString)
     }
 
     @Test("the copyright notice alone names the author, the licence and both links")
@@ -101,7 +101,7 @@ struct AttributedPhotoExportTests {
         #expect(notice.contains("Anna Berger"))
         #expect(notice.contains("CC BY-SA 4.0"))
         #expect(notice.contains(Self.page.absoluteString))
-        #expect(notice.contains(Self.licenceText.absoluteString))
+        #expect(notice.contains(Self.licenseText.absoluteString))
     }
 
     @Test("an existing copyright is replaced without losing capture metadata", arguments: [UTType.jpeg, .heic, .tiff])
@@ -118,7 +118,7 @@ struct AttributedPhotoExportTests {
         #expect(CGImageMetadataCopyStringValueWithPath(metadata, nil, "dc:creator[0]" as CFString)
             as String? == "Anna Berger")
         #expect(CGImageMetadataCopyStringValueWithPath(metadata, nil, "xmpRights:WebStatement" as CFString)
-            as String? == Self.licenceText.absoluteString)
+            as String? == Self.licenseText.absoluteString)
         let properties = Self.properties(of: credited)
         let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
         #expect(tiff?[kCGImagePropertyTIFFMake] as? String == "Fixture camera")
@@ -263,7 +263,7 @@ struct AttributedPhotoExportTests {
 
     @Test("a saved Commons copy reads its credit from its row, and the hiker's own reads none")
     func creditComesFromTheRow() {
-        let copy = HikePhoto(importedAuthorName: "Anna Berger", licence: Self.credit.licence)
+        let copy = HikePhoto(importedAuthorName: "Anna Berger", license: Self.credit.license)
         #expect(CommonsPhotoCredit(copy) == Self.credit)
         // A contributed photograph names its author and has no licence: it is
         // credited in the app, and nothing here is owed for it.

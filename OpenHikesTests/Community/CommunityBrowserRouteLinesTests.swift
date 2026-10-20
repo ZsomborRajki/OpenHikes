@@ -272,7 +272,7 @@ struct CommunityBrowserRouteLinesTests {
     /// if that rejection were the only thing retiring the old trail, a
     /// preview that never loads would leave it emphasised for good.
     @Test("a preview that fails to load leaves no trail from the last one")
-    func afailedReplacementLeavesNothingEmphasised() async {
+    func afailedReplacementLeavesNothingEmphasized() async {
         let first = CommunityListing.stub(id: "ridge")
         let second = CommunityListing.stub(id: "summit", submissionID: "submission-2")
         let (browser, _) = await loaded([], outlines: [:])

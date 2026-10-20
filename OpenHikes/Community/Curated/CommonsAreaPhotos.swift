@@ -138,17 +138,17 @@ nonisolated enum CommonsAreaPhotos {
         of candidate: CommonsPhotoCandidate,
         in area: CommunitySearchArea
     ) -> (east: Double, north: Double, distance: Double) {
-        let metresPerDegree = 111_320.0
-        let north = (candidate.latitude - area.latitude) * metresPerDegree
-        let east = (candidate.longitude - area.longitude) * metresPerDegree * cos(area.latitude * .pi / 180)
+        let metersPerDegree = 111_320.0
+        let north = (candidate.latitude - area.latitude) * metersPerDegree
+        let east = (candidate.longitude - area.longitude) * metersPerDegree * cos(area.latitude * .pi / 180)
         return (east, north, (east * east + north * north).squareRoot())
     }
 
     private static func cell(of candidate: CommonsPhotoCandidate, in area: CommunitySearchArea, side: Int) -> Cell {
         let offset = offset(of: candidate, in: area)
         let width = 2 * max(area.radiusMeters, 1) / Double(side)
-        func index(_ metres: Double) -> Int {
-            min(max(Int(((metres + area.radiusMeters) / width).rounded(.down)), 0), side - 1)
+        func index(_ meters: Double) -> Int {
+            min(max(Int(((meters + area.radiusMeters) / width).rounded(.down)), 0), side - 1)
         }
         return Cell(column: index(offset.east), row: index(offset.north))
     }

@@ -1018,7 +1018,7 @@ private extension CommunityHikeView {
             // is also what a retry re-runs: a first attempt that failed has
             // measured nothing, and the analysis belongs to the route rather
             // than to the screen's first visit.
-            analyse(detail.route)
+            analyze(detail.route)
             // And what other hikers have added to this trail, which is a
             // second query against a different record type and is deliberately
             // not part of the fetch above — see
@@ -1085,7 +1085,7 @@ private extension CommunityHikeView {
     /// A provider-less launch — a preview, or any suite — asks nothing and
     /// leaves both sections absent, exactly as one does on a hike in the
     /// library.
-    func analyse(_ route: [RouteCoordinate]) {
+    func analyze(_ route: [RouteCoordinate]) {
         guard let trailGraphProvider else { return }
         analysisTask = Task {
             let measured = await HikeTrailAnalysis.breakdowns(

@@ -66,8 +66,8 @@ nonisolated extension TrailMatcher {
         }
         // Running total along the route; `distances[i]` is how far along the
         // route `coordinates[i]` sits.
-        let distances = coordinates.adjacentPairs().reductions(0.0) { travelled, leg in
-            travelled + RouteGeometry.distanceMeters(from: leg.0, to: leg.1)
+        let distances = coordinates.adjacentPairs().reductions(0.0) { traveled, leg in
+            traveled + RouteGeometry.distanceMeters(from: leg.0, to: leg.1)
         }
         let ctx = InterpolationContext(
             coordinates: coordinates,

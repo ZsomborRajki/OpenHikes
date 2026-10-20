@@ -117,7 +117,7 @@ final class MapAttributionView: UIView {
             button.menu = nil
             button.showsMenuAsPrimaryAction = false
             let url = links.first?.url
-            button.accessibilityHint = String(localized: "Opens the map licence in your browser")
+            button.accessibilityHint = String(localized: "Opens the map license in your browser")
             button.removeTarget(nil, action: nil, for: .primaryActionTriggered)
             button.addAction(
                 UIAction { [weak self] _ in
@@ -128,7 +128,7 @@ final class MapAttributionView: UIView {
             )
             return
         }
-        button.accessibilityHint = String(localized: "Shows the map licences you can open")
+        button.accessibilityHint = String(localized: "Shows the map licenses you can open")
         button.menu = UIMenu(
             children: links.map { link in
                 UIAction(title: link.title) { [weak self] _ in

@@ -155,7 +155,7 @@ struct CommonsPhotoView: View {
                 item: TrailPlaceCoordinates.mapsURL(camera, named: String(localized: "Photo")),
                 subject: Text("Photo"),
                 message: Text(
-                    [address, TrailPlaceCoordinates.text(camera), photo.credit.licence.sourceURL.absoluteString]
+                    [address, TrailPlaceCoordinates.text(camera), photo.credit.license.sourceURL.absoluteString]
                         .compacted()
                         .joined(separator: "\n")
                 )

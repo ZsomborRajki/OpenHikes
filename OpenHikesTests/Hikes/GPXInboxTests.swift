@@ -35,7 +35,7 @@ struct GPXInboxTests {
     }
 
     @Test("A file in the inbox is a copy the app owns")
-    func recognisesCopy() throws {
+    func recognizesCopy() throws {
         let inbox = try makeInbox()
         let copied = try writeFile(named: "route.gpx", in: inbox)
 

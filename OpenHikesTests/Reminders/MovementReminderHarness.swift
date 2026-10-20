@@ -129,7 +129,7 @@ enum MovementReminderHarness {
 
     /// One degree of latitude, near enough for a fixture: the assertions are
     /// about thresholds hundreds of metres apart, not about geodesy.
-    nonisolated private static let metresPerDegreeLatitude = 111_320.0
+    nonisolated private static let metersPerDegreeLatitude = 111_320.0
 
     /// A fix `meters` north of ``anchor``, accurate enough to be measured.
     ///
@@ -144,7 +144,7 @@ enum MovementReminderHarness {
     ) -> CLLocation {
         CLLocation(
             coordinate: CLLocationCoordinate2D(
-                latitude: anchor.latitude + meters / metresPerDegreeLatitude,
+                latitude: anchor.latitude + meters / metersPerDegreeLatitude,
                 longitude: anchor.longitude
             ),
             altitude: anchorElevation,

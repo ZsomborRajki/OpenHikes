@@ -48,12 +48,20 @@ nonisolated struct CommonsPhoto: Hashable, Sendable {
 ///
 /// Carried onto every gallery page and every saved copy, because the licence
 /// is the only reason the app may show the picture at all — see
-/// ``HikePhotoLicence``.
+/// ``HikePhotoLicense``.
 nonisolated struct CommonsPhotoCredit: Codable, Hashable, Sendable {
     /// The author as the file page names them, as text — or `nil` when it
     /// names nobody, and the source page is then the whole of the credit.
     var author: String?
-    var licence: HikePhotoLicence
+    var license: HikePhotoLicense
+
+    /// `licence` on the wire, the key ``CommonsPhotoStore`` and published
+    /// community payloads were first written with (#847) — see
+    /// ``HikePhoto/license``.
+    private enum CodingKeys: String, CodingKey {
+        case author = "author"
+        case license = "licence" // swiftlint:disable:this american_spelling_in_copy
+    }
 }
 
 // MARK: - In the merged gallery

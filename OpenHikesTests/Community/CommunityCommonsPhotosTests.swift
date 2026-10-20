@@ -82,7 +82,7 @@ struct CommunityCommonsPhotosTests {
             fileURL: directory.appendingPathComponent("commons-\(name).jpeg"),
             credit: CommonsPhotoCredit(
                 author: nil,
-                licence: HikePhotoLicence(
+                license: HikePhotoLicense(
                     name: "CC0",
                     url: nil,
                     sourceURL: URL(string: "https://commons.wikimedia.org/wiki/File:\(name).jpg")

@@ -209,8 +209,8 @@ final class CommunityCommonsPhotos {
     func usable(_ photo: CommonsPhoto) async -> CommonsPhoto? {
         let folder = photo.fileURL.deletingLastPathComponent().path
         if [directory, retired, restored].contains(where: { $0?.path == folder }) { return photo }
-        let page = photo.credit.licence.sourceURL
-        if let again = photos.first(where: { $0.credit.licence.sourceURL == page }) { return again }
+        let page = photo.credit.license.sourceURL
+        if let again = photos.first(where: { $0.credit.license.sourceURL == page }) { return again }
         if let kept = restoredCopies[page] { return kept }
         if let pending = restoring[page] { return await pending.value }
         guard let source else { return nil }

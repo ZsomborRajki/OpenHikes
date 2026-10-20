@@ -47,7 +47,7 @@ struct TrailDraftPhotoCopyTests {
                 fileURL: directory.appendingPathComponent("commons-\(index).jpeg"),
                 credit: CommonsPhotoCredit(
                     author: "Hiker \(index)",
-                    licence: HikePhotoLicence(
+                    license: HikePhotoLicense(
                         name: "CC BY-SA 4.0",
                         url: URL(string: "https://creativecommons.org/licenses/by-sa/4.0/"),
                         sourceURL: URL(string: "https://commons.wikimedia.org/wiki/File:\(index).jpg")

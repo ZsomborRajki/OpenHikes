@@ -81,7 +81,7 @@ struct WeatherRequestStateTests {
     /// turn the search field into a way to hammer a service that has already
     /// said no.
     @Test("an explicit focus does not bypass a failure's backoff")
-    func focusHonoursBackoff() {
+    func focusHonorsBackoff() {
         var state = WeatherRequestState()
         state.recordFailure(key: "place:Budapest", at: start, policy: policy)
 

@@ -179,12 +179,12 @@ struct CommunityPhotoViewer: View {
     /// uses for the same capsule, and for its reason: two pieces of glass that
     /// nearly touch render as two panes unless they share a container. The
     /// credit's visibility is its own, since a licence is owed on a gallery of
-    /// one as much as on a gallery of twelve. See ``PhotoLicenceCredit``.
+    /// one as much as on a gallery of twelve. See ``PhotoLicenseCredit``.
     private func controls(_ current: CommunityGalleryPhoto?) -> some View {
         GlassStack(spacing: 6) {
             VStack(spacing: 10) {
                 if let commons = current?.commons {
-                    PhotoLicenceCredit(author: commons.author, licence: commons.licence)
+                    PhotoLicenseCredit(author: commons.author, license: commons.license)
                 }
                 PhotoStepControls(
                     previousIdentifier: "community-previous-photo-button",

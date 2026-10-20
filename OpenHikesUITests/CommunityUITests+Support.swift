@@ -124,7 +124,7 @@ nonisolated enum SeededQueuedHike {
 /// as one group. Mirrors ``SeededCommonsPhotoSource``.
 nonisolated enum SeededCommons {
     static let firstAuthor = "Anna Berger"
-    static let licence = "CC BY-SA 4.0"
+    static let license = "CC BY-SA 4.0"
     static let count = 3
     /// The east photograph and the two taken beside it.
     static let groupCount = 3

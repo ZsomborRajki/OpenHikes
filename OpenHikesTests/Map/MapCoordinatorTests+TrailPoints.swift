@@ -49,7 +49,7 @@ extension MapCoordinatorTests {
         static let continentalSpan: Double = 2
     }
 
-    private static let searchCentre = CLLocationCoordinate2D(
+    private static let searchCenter = CLLocationCoordinate2D(
         latitude: Fixtures.latitude,
         longitude: Fixtures.longitude
     )
@@ -70,7 +70,7 @@ extension MapCoordinatorTests {
     /// A region small enough for a place search, centred on the fixtures.
     private static func searchableRegion() -> MKCoordinateRegion {
         MKCoordinateRegion(
-            center: searchCentre,
+            center: searchCenter,
             span: MKCoordinateSpan(latitudeDelta: Fixtures.span, longitudeDelta: Fixtures.span)
         )
     }
@@ -148,7 +148,7 @@ extension MapCoordinatorTests {
 
         maker.finder.regionDidSettle(
             MKCoordinateRegion(
-                center: Self.searchCentre,
+                center: Self.searchCenter,
                 span: MKCoordinateSpan(
                     latitudeDelta: Fixtures.continentalSpan,
                     longitudeDelta: Fixtures.continentalSpan

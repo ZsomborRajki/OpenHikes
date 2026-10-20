@@ -47,7 +47,7 @@ struct RouteTintTests {
     /// Anything above a sixth is nowhere near the gradient this rules out, and
     /// is five standard errors clear of what fifty uniform draws produce.
     private static let gradientFloor = 1.0 / 6
-    /// Out of a twenty-five row page. See ``aPageIsManyColours``.
+    /// Out of a twenty-five row page. See ``aPageIsManyColors``.
     private static let distinctFloor = 23
     private static let paletteSaturation: CGFloat = 0.65
     private static let paletteBrightness: CGFloat = 0.85
@@ -122,7 +122,7 @@ struct RouteTintTests {
     /// hand two hikes near-identical greens. What must not happen is a page
     /// that reads as one colour.
     @Test("a page of results is a page of colours")
-    func aPageIsManyColours() {
+    func aPageIsManyColors() {
         let ids = Self.curatedIDs(1_000_000...1_000_024)
         let swatches = Set(ids.map { RouteTint.stable(for: $0).hexRGBA })
 

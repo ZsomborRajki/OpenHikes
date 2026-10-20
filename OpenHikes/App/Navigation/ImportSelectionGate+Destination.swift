@@ -28,8 +28,8 @@ extension ImportSelectionGate {
         // A contributed set under review is the same kind of screen and gets
         // the same protection, keyed on its own queue entry.
         case .pendingPhotos(let pending): return .pendingSubmission(pending.id)
-        case .commonsPhoto(let photo): return .commonsPhoto(photo.credit.licence.sourceURL)
-        case .commonsPhotos(let photos): return .commonsPhotos(photos.map(\.credit.licence.sourceURL))
+        case .commonsPhoto(let photo): return .commonsPhoto(photo.credit.license.sourceURL)
+        case .commonsPhotos(let photos): return .commonsPhotos(photos.map(\.credit.license.sourceURL))
         case .hike, .newPlace, .photo, .place, .placesAround, .routeStyle, .walk: return .root
         }
     }

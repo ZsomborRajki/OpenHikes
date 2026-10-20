@@ -36,7 +36,7 @@ extension MapCoordinatorTests {
             fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("commons-\(index).jpeg"),
             credit: CommonsPhotoCredit(
                 author: "Hiker \(index)",
-                licence: HikePhotoLicence(
+                license: HikePhotoLicense(
                     name: "CC0",
                     url: nil,
                     sourceURL: URL(string: "https://commons.wikimedia.org/wiki/File:\(index).jpg")

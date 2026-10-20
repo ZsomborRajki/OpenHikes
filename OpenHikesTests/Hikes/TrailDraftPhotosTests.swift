@@ -42,7 +42,7 @@ struct TrailDraftPhotosTests {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             return try spots.enumerated().compactMap { index, spot in
                 let photo = TrailDraftPhotosTests.photo(index, at: spot, in: directory)
-                guard !shown.contains(photo.credit.licence.sourceURL) else { return nil }
+                guard !shown.contains(photo.credit.license.sourceURL) else { return nil }
                 try PhotoDiscoveryFixture.sampleImageData().write(to: photo.fileURL)
                 return photo
             }
@@ -59,7 +59,7 @@ struct TrailDraftPhotosTests {
             fileURL: directory.appendingPathComponent("commons-\(index).jpeg"),
             credit: CommonsPhotoCredit(
                 author: "Hiker \(index)",
-                licence: HikePhotoLicence(
+                license: HikePhotoLicense(
                     name: "CC BY-SA 4.0",
                     url: URL(string: "https://creativecommons.org/licenses/by-sa/4.0/"),
                     sourceURL: URL(string: "https://commons.wikimedia.org/wiki/File:\(index).jpg")
@@ -118,7 +118,7 @@ struct TrailDraftPhotosTests {
 
         await Self.searched(photos)
         #expect(photos.photos.count == 2, "the same two again add nothing")
-        #expect(source.avoided.last == Set(photos.photos.map(\.credit.licence.sourceURL)))
+        #expect(source.avoided.last == Set(photos.photos.map(\.credit.license.sourceURL)))
     }
 
     @Test("a second search while one is out is refused")
@@ -206,7 +206,7 @@ struct TrailDraftPhotosTests {
         let copy = try #require(hike.photos.first)
         #expect(hike.photos.count == 1)
         #expect(copy.importedAuthorName == "Hiker 0")
-        #expect(copy.licence?.name == "CC BY-SA 4.0")
+        #expect(copy.license?.name == "CC BY-SA 4.0")
         #expect(copy.matchEvidence == .place)
         #expect(!copy.isOwn, "somebody else's photograph is never offered for publishing")
     }

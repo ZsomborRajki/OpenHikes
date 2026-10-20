@@ -15,7 +15,7 @@ nonisolated extension GPXImport {
     static let teleportDistanceMeters = 100_000.0
 
     /// How close the two neighbours of a teleport must be to each other.
-    static let teleportNeighbourSpanMeters = 5000.0
+    static let teleportNeighborSpanMeters = 5000.0
 
     /// `points` without the placeholder fixes a logger writes for an epoch with
     /// no satellites, and with the heights of the placeholder ones it writes
@@ -50,7 +50,7 @@ nonisolated extension GPXImport {
             let after = located[index + 1].coordinate
             let isolated = RouteGeometry.distanceMeters(from: before, to: here) > teleportDistanceMeters
                 && RouteGeometry.distanceMeters(from: here, to: after) > teleportDistanceMeters
-                && RouteGeometry.distanceMeters(from: before, to: after) < teleportNeighbourSpanMeters
+                && RouteGeometry.distanceMeters(from: before, to: after) < teleportNeighborSpanMeters
             if !isolated { kept.append(located[index]) }
         }
         kept.append(located[located.count - 1])

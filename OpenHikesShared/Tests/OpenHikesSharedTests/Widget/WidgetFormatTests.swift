@@ -26,7 +26,7 @@ struct WidgetFormatTests {
     /// and `.general` both promote a four-figure height to kilometres, and a
     /// 1,250 m summit is not "1.2 km" high.
     @Test("a high summit stays in metres rather than becoming kilometres")
-    func elevationIsNeverPromotedToKilometres() {
+    func elevationIsNeverPromotedToKilometers() {
         let formatted = WidgetFormat.elevation(meters: 1250, locale: Self.metric)
         #expect(formatted.contains("1"))
         #expect(!formatted.contains("km"))

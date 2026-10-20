@@ -441,7 +441,7 @@
     "About" : {
 
     },
-    "About the %@ Licence" : {
+    "About the %@ License" : {
 
     },
     "Access" : {
@@ -1640,7 +1640,7 @@
     "Opens the full warning from %@" : {
 
     },
-    "Opens the map licence in your browser" : {
+    "Opens the map license in your browser" : {
 
     },
     "Opens the photo" : {
@@ -1831,7 +1831,7 @@
     "Photos from %@" : {
 
     },
-    "Photos from Wikimedia Commons, each under its own licence. Open one to see who took it." : {
+    "Photos from Wikimedia Commons, each under its own license. Open one to see who took it." : {
 
     },
     "Photos Not Added" : {
@@ -1888,7 +1888,7 @@
     "Plan a Trail Here" : {
 
     },
-    "Press and hold the map to add a stop, or tap a grey route to take it instead. Press and hold a stop to drag it somewhere else." : {
+    "Press and hold the map to add a stop, or tap a gray route to take it instead. Press and hold a stop to drag it somewhere else." : {
 
     },
     "Previous" : {
@@ -2234,7 +2234,7 @@
     "Shows the conditions and where this forecast comes from" : {
 
     },
-    "Shows the map licences you can open" : {
+    "Shows the map licenses you can open" : {
 
     },
     "Shows the photo full screen" : {
@@ -2246,7 +2246,7 @@
     "Shows this box’s options" : {
 
     },
-    "Shows where this photo comes from and its licence" : {
+    "Shows where this photo comes from and its license" : {
 
     },
     "Skip" : {

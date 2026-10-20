@@ -26,7 +26,7 @@ struct WalkingTimeEstimateTests {
     }
 
     @Test("on the flat it is four kilometres an hour")
-    func theFlatIsFourKilometresAnHour() {
+    func theFlatIsFourKilometersAnHour() {
         #expect(WalkingTimeEstimate.seconds(distanceMeters: 12_000, ascentMeters: 0, descentMeters: 0) == 3 * 3600)
     }
 

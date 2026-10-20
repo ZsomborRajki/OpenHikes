@@ -39,7 +39,7 @@ struct MergedCommunityCommonsTests {
                     fileURL: directory.appendingPathComponent("recorded.jpeg"),
                     credit: CommonsPhotoCredit(
                         author: nil,
-                        licence: HikePhotoLicence(name: "CC0", url: nil, sourceURL: source)
+                        license: HikePhotoLicense(name: "CC0", url: nil, sourceURL: source)
                     )
                 ),
             ]

@@ -116,7 +116,7 @@ nonisolated extension TrailGraphProviding {
     ///
     /// Empty for a provider with no regions to speak of — a bundled fixture
     /// covers wherever it covers, and has no neighbours to fetch.
-    func neighbouringRegionCoordinates(
+    func neighboringRegionCoordinates(
         around coordinate: CLLocationCoordinate2D
     ) -> [CLLocationCoordinate2D] {
         guard let region = region(containing: coordinate) else { return [] }
@@ -127,7 +127,7 @@ nonisolated extension TrailGraphProviding {
             guard row >= 0, row < count else { continue }
             for deltaX in -1...1 where deltaX != 0 || deltaY != 0 {
                 result.append(
-                    Self.regionCentre(
+                    Self.regionCenter(
                         zoom: region.zoom,
                         x: SlippyTileMath.wrap(region.x + deltaX, to: count),
                         y: row
@@ -140,7 +140,7 @@ nonisolated extension TrailGraphProviding {
 
     /// The centre of a slippy tile, taken in unit-Mercator space so it is the
     /// tile's own middle rather than the midpoint of its corner latitudes.
-    static func regionCentre(
+    static func regionCenter(
         zoom: Int,
         x: Int,
         y: Int

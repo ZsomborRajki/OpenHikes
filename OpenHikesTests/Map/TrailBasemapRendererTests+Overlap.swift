@@ -29,14 +29,14 @@ import Testing
 
 extension TrailBasemapRendererTests {
     /// Roughly 1 km of latitude — far enough that a pass for
-    /// ``neighbouringTrail`` bounds to a region the older pass's manifest
+    /// ``neighboringTrail`` bounds to a region the older pass's manifest
     /// cannot be mistaken for, close enough to stay the same kind of walk.
-    nonisolated private static let neighbourOffsetDegrees = 0.01
+    nonisolated private static let neighborOffsetDegrees = 0.01
 
     /// A trail 1 km north of ``trail``, for the overlap tests: the second
     /// selection, arriving while the first is still rendering.
-    nonisolated private static let neighbouringTrail: [SharedTrailSnapshot.CodableCoordinate] = trail.map { point in
-        .init(latitude: point.latitude + neighbourOffsetDegrees, longitude: point.longitude)
+    nonisolated private static let neighboringTrail: [SharedTrailSnapshot.CodableCoordinate] = trail.map { point in
+        .init(latitude: point.latitude + neighborOffsetDegrees, longitude: point.longitude)
     }
 
     /// Whether the pass that supersedes the one under test manages to render
@@ -82,7 +82,7 @@ extension TrailBasemapRendererTests {
 
             if shouldSupersede, let renderer = slot.withLock({ $0 }) {
                 state.withLock { $0.insideNewerPass = true }
-                await renderer.refreshIfNeeded(hikeID: newerHike, polyline: neighbouringTrail)
+                await renderer.refreshIfNeeded(hikeID: newerHike, polyline: neighboringTrail)
                 state.withLock { $0.insideNewerPass = false }
             }
             return rendered(for: input)
@@ -118,7 +118,7 @@ extension TrailBasemapRendererTests {
         await renderer.refreshIfNeeded(hikeID: olderHike, polyline: Self.trail)
 
         let published = try #require(SharedStore.loadBasemapSet(for: newerHike))
-        #expect(published.coverage == UnitMercatorRect(bounding: Self.neighbouringTrail))
+        #expect(published.coverage == UnitMercatorRect(bounding: Self.neighboringTrail))
         #expect(SharedStore.loadBasemapSet(for: olderHike) == nil)
         #expect(
             Self.Container.fileNames == Set(published.images.map(\.fileName)),

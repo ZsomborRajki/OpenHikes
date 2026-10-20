@@ -328,7 +328,7 @@ struct SettingsView: View {
                     // because one figure covering two of them is the part
                     // nobody would guess.
                     Text(
-                        "The \(quota.holder) licence allows"
+                        "The \(quota.holder) license allows"
                         + " \(Self.byteText(quota.byteLimit)) of saved tiles on this device,"
                         + " shared by \(quota.providers.map(\.name).formatted(.list(type: .and)))."
                         + " Once that’s used, saving a new route asks before replacing"
@@ -473,7 +473,7 @@ private extension SettingsView {
             Text("Reminders")
         } footer: {
             Text(
-                "Notices when a paused hike has moved half a kilometre — or a"
+                "Notices when a paused hike has moved half a kilometer — or a"
                 + " quarter of one at cycling pace — and asks whether you meant to"
                 + " resume, with a button that does it without unlocking the phone."
                 + " It also offers to pause a recording you have not moved on for"

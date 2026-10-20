@@ -21,21 +21,21 @@ struct CommonsTrailPhotosTests {
     private static let startLatitude = 47.6
     private static let longitude = 13.0
     /// One kilometre of latitude, near enough.
-    private static let kilometre = 0.009
+    private static let kilometer = 0.009
     /// Fifty and a hundred and fifty metres of longitude at this latitude.
-    private static let fiftyMetresEast = 0.000667
-    private static let hundredFiftyMetresEast = 0.002
+    private static let fiftyMetersEast = 0.000667
+    private static let hundredFiftyMetersEast = 0.002
 
     private static let route: [RouteCoordinate] = (0...10).map { step in
-        RouteCoordinate(latitude: startLatitude + Double(step) * kilometre, longitude: longitude)
+        RouteCoordinate(latitude: startLatitude + Double(step) * kilometer, longitude: longitude)
     }
 
     private static var profile: RouteProfile { RouteProfile(route: route) }
 
-    private static func candidate(_ pageID: Int, kilometres: Double, east: Double = 0) -> CommonsPhotoCandidate {
+    private static func candidate(_ pageID: Int, kilometers: Double, east: Double = 0) -> CommonsPhotoCandidate {
         CommonsPhotoCandidate(
             pageID: pageID,
-            latitude: startLatitude + kilometres * kilometre,
+            latitude: startLatitude + kilometers * kilometer,
             longitude: longitude + east
         )
     }
@@ -56,9 +56,9 @@ struct CommonsTrailPhotosTests {
     func corridor() throws {
         let kept = CommonsTrailPhotos.placed(
             [
-                Self.candidate(1, kilometres: 0.5),
-                Self.candidate(2, kilometres: 2.5, east: Self.fiftyMetresEast),
-                Self.candidate(3, kilometres: 4.5, east: Self.hundredFiftyMetresEast),
+                Self.candidate(1, kilometers: 0.5),
+                Self.candidate(2, kilometers: 2.5, east: Self.fiftyMetersEast),
+                Self.candidate(3, kilometers: 4.5, east: Self.hundredFiftyMetersEast),
             ],
             on: Self.profile
         )
@@ -73,7 +73,7 @@ struct CommonsTrailPhotosTests {
     @Test("a file two circles both found is kept once")
     func duplicatesAreKeptOnce() {
         let kept = CommonsTrailPhotos.placed(
-            [Self.candidate(7, kilometres: 1), Self.candidate(7, kilometres: 1)],
+            [Self.candidate(7, kilometers: 1), Self.candidate(7, kilometers: 1)],
             on: Self.profile
         )
         #expect(kept.count == 1)
@@ -204,7 +204,7 @@ struct CommonsTrailPhotosTests {
     @Test("a long route grows its circles rather than multiplying them, up to the service's ceiling")
     func longRouteAreas() {
         let long = (0...300).map { step in
-            RouteCoordinate(latitude: Self.startLatitude + Double(step) * Self.kilometre, longitude: Self.longitude)
+            RouteCoordinate(latitude: Self.startLatitude + Double(step) * Self.kilometer, longitude: Self.longitude)
         }
         let areas = CommonsTrailPhotos.areas(along: long)
 

@@ -67,10 +67,10 @@ nonisolated struct CuratedTrail: Codable, Hashable, Sendable {
     /// Where this route's pin stands.
     ///
     /// The box's centre until there is a line, and the box's centre
-    /// afterwards too — see ``CuratedTrailQuery/centre(of:)`` for why a
+    /// afterwards too — see ``CuratedTrailQuery/center(of:)`` for why a
     /// relation's first point is not a trailhead and must not be used as one.
     var coordinate: CLLocationCoordinate2D {
-        CuratedTrailQuery.centre(of: box)
+        CuratedTrailQuery.center(of: box)
     }
 
     /// The length of the line that is actually drawn, in metres.

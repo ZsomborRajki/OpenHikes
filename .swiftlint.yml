@@ -486,3 +486,38 @@ custom_rules:
     regex: '(?:Text\(|String\(localized:\s*|LocalizedStringKey\()"[^"\n]*[A-Za-z]\x27[a-z]'
     message: "Write the apostrophe in user-visible copy as ’ (U+2019), not '."
     severity: error
+
+  # The app is spelled American (#793, #847): "Color", "Center", "License",
+  # beside the Apple frameworks it calls — `setCenter`, `UIColor`, `distance
+  # Meters`. British spelling in comments is fine, and these rules cannot see
+  # comments; they hold the two places a reader meets the spelling as the
+  # app's: a name in the code, and a literal a hiker might read.
+  #
+  # Case-sensitive on purpose, so a camelCase seam such as `recentResume` is
+  # not read as `centre`. A word that is somebody else's vocabulary — an
+  # OpenStreetMap tag key or value, a file name already on disk, a wire key —
+  # is spelled as they spell it and carries `swiftlint:disable:this`.
+  american_spelling:
+    name: "American Spelling"
+    regex: '[Ll]icence|[Cc]entr(?:e|ed|es|ing)(?![a-z])|[Nn]eighbour|[Cc]olour|[Gg]rey|[Mm]etre|[Ff]avour|[Hh]onour|[Bb]ehaviour|[Cc]atalogue|[Tt]ravell(?:ed|ing|er)|[Rr]ecognis(?:e|ing|able)|[Nn]ormalis(?:e|ing|ation)|[Ss]erialis(?:e|ing|ation)|[Ii]nitialis(?:e|ing|ation)|[Ss]ummaris(?:e|ing)|[Aa]nalys(?:e|ed|ing)(?![a-z])'
+    match_kinds:
+      - identifier
+      - typeidentifier
+      - argument
+      - parameter
+    message: "Spell names the American way: color, center, license, meter, neighbor, gray (#847)."
+    severity: error
+
+  # The same words in a string literal, outside the test bundles — whose
+  # literals are test names and fixtures nobody installing the app reads.
+  # Plain `String`s count as well as catalogued ones, because a Settings
+  # footer or a recording-screen reason built from one never reaches the
+  # catalog; the catalogs themselves are held to it by `StringCatalogTests`.
+  american_spelling_in_copy:
+    name: "American Spelling In Copy"
+    regex: '[Ll]icence|[Cc]entr(?:e|ed|es|ing)(?![a-z])|[Nn]eighbour|[Cc]olour|[Gg]rey|[Mm]etre|[Ff]avour|[Hh]onour|[Bb]ehaviour|[Cc]atalogue|[Tt]ravell(?:ed|ing|er)|[Rr]ecognis(?:e|ing|able)|[Nn]ormalis(?:e|ing|ation)|[Ss]erialis(?:e|ing|ation)|[Ii]nitialis(?:e|ing|ation)|[Ss]ummaris(?:e|ing)|[Aa]nalys(?:e|ed|ing)(?![a-z])'
+    match_kinds:
+      - string
+    excluded: '(^|/)(OpenHikesTests|OpenHikesUITests|OpenWidgetTests|Tests)/'
+    message: "Spell user-visible text the American way: color, center, license, meter, gray (#847)."
+    severity: error

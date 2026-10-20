@@ -60,7 +60,7 @@
 //  has neither the registered dependency nor the store. Asking
 //  `AppDependencyManager` for one that was never registered *traps*.
 //
-//  So the list comes from the App Group instead: ``SharedHikeCatalogue``,
+//  So the list comes from the App Group instead: ``SharedHikeCatalog``,
 //  which the app republishes whenever its hikes change. One query for both
 //  processes rather than two, because two lists of the same hikes is how they
 //  come to disagree — and this one is also cheaper in the app, since it is a
@@ -169,7 +169,7 @@ extension HikeEntity: IndexedEntity {}
 /// intent in the app's Intents folder is built on — the hiker's hands are busy
 /// and the phone is in a pocket.
 ///
-/// Backed by ``SharedHikeCatalogue`` rather than by the store, which is what
+/// Backed by ``SharedHikeCatalog`` rather than by the store, which is what
 /// lets the same query fill the widget's configuration picker in a process
 /// with no `ModelContainer` — see this file's header for what that replaced
 /// and what it costs.
@@ -194,16 +194,16 @@ public struct HikeEntityQuery: EntityStringQuery {
     /// file read needs neither the hop nor the throw. The widget process has
     /// no main actor worth hopping to for this and no store to throw about.
     public func entities(for identifiers: [UUID]) -> [HikeEntity] {
-        SharedStore.loadHikeCatalogue().hikes(withIDs: identifiers).map(HikeEntity.init)
+        SharedStore.loadHikeCatalog().hikes(withIDs: identifiers).map(HikeEntity.init)
     }
 
     public func entities(matching string: String) -> [HikeEntity] {
-        SharedStore.loadHikeCatalogue().hikes(matching: string).map(HikeEntity.init)
+        SharedStore.loadHikeCatalog().hikes(matching: string).map(HikeEntity.init)
     }
 
     public func suggestedEntities() -> [HikeEntity] {
         SharedStore
-            .loadHikeCatalogue()
+            .loadHikeCatalog()
             .suggestions(limit: Self.suggestionLimit)
             .map(HikeEntity.init)
     }

@@ -34,12 +34,13 @@ import OpenHikesData
 /// default one — a red blaze drawn grey is worse than a blaze drawn as text.
 /// The vocabulary is the one `osmc:symbol` documents; anything outside it is
 /// ``other``, which keeps the name and drops the swatch.
-nonisolated enum WaymarkColour: String, CaseIterable, Hashable, Sendable {
+nonisolated enum WaymarkColor: String, CaseIterable, Hashable, Sendable {
     case black = "black"
     case blue = "blue"
     case brown = "brown"
+    /// OpenStreetMap writes it `grey`, and the raw value is its word.
+    case gray = "grey" // swiftlint:disable:this american_spelling_in_copy
     case green = "green"
-    case grey = "grey"
     case orange = "orange"
     case purple = "purple"
     case red = "red"
@@ -51,7 +52,7 @@ nonisolated enum WaymarkColour: String, CaseIterable, Hashable, Sendable {
     /// Trimmed and lowercased before matching, because this is text off a
     /// public database that people edit by hand — the same suspicion
     /// ``TrailSurface/init(osmSurface:tracktype:)`` applies to its own tag.
-    init?(osmColour raw: String?) {
+    init?(osmColor raw: String?) {
         guard let trimmed = raw?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased(),
@@ -66,8 +67,8 @@ nonisolated enum WaymarkColour: String, CaseIterable, Hashable, Sendable {
         case .black: "Black"
         case .blue: "Blue"
         case .brown: "Brown"
+        case .gray: "Gray"
         case .green: "Green"
-        case .grey: "Grey"
         case .orange: "Orange"
         case .purple: "Purple"
         case .red: "Red"
@@ -81,10 +82,10 @@ nonisolated enum WaymarkColour: String, CaseIterable, Hashable, Sendable {
 ///
 /// Two fields because a signpost carries two things and either can be absent.
 /// "Red 411" and "Red" and "411" are all real waymarks; "" is not, which is
-/// why ``init(osmcSymbol:colour:reference:)`` fails rather than producing an
+/// why ``init(osmcSymbol:color:reference:)`` fails rather than producing an
 /// empty one.
 nonisolated struct TrailWaymark: Hashable, Sendable {
-    var colour: WaymarkColour?
+    var color: WaymarkColor?
     /// The route number as it is painted, from OSM's `ref`.
     var reference: String?
 
@@ -99,15 +100,15 @@ nonisolated struct TrailWaymark: Hashable, Sendable {
     /// be worth rendering, and a name for a shape nobody can see is not worth
     /// a row. The `colour` tag is the fallback for a route that carries one
     /// without an `osmc:symbol`.
-    init?(osmcSymbol: String?, colour: String?, reference: String?) {
-        let symbolColour = osmcSymbol?
+    init?(osmcSymbol: String?, color: String?, reference: String?) {
+        let symbolColor = osmcSymbol?
             .split(separator: ":", omittingEmptySubsequences: false)
             .first
             .map(String.init)
-        self.colour = WaymarkColour(osmColour: symbolColour)
-            ?? WaymarkColour(osmColour: colour)
+        self.color = WaymarkColor(osmColor: symbolColor)
+            ?? WaymarkColor(osmColor: color)
         self.reference = BoundedText.bounded(reference, to: .credit)
-        guard self.colour != nil || self.reference != nil else { return nil }
+        guard self.color != nil || self.reference != nil else { return nil }
     }
 
     /// "Red waymark 411", "Red waymark", "Waymark 411" — whichever halves
@@ -118,9 +119,9 @@ nonisolated struct TrailWaymark: Hashable, Sendable {
     /// number legible: "411" alone is a figure, and "waymark 411" is a thing
     /// painted on a rock.
     var displayName: String {
-        switch (colour, reference) {
-        case let (colour?, reference?): "\(colour.displayName) waymark \(reference)"
-        case let (colour?, nil): "\(colour.displayName) waymark"
+        switch (color, reference) {
+        case let (color?, reference?): "\(color.displayName) waymark \(reference)"
+        case let (color?, nil): "\(color.displayName) waymark"
         case let (nil, reference?): "Waymark \(reference)"
         case (nil, nil): ""
         }
@@ -200,7 +201,7 @@ nonisolated extension CuratedTrailFacts {
     init(tags: [String: String], route: [RouteCoordinate]) {
         waymark = TrailWaymark(
             osmcSymbol: tags["osmc:symbol"],
-            colour: tags["colour"],
+            color: tags["colour"], // swiftlint:disable:this american_spelling_in_copy
             reference: tags["ref"]
         )
         shape = Self.trailShape(roundtrip: tags["roundtrip"], route: route)

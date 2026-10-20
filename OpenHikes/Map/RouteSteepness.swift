@@ -140,8 +140,8 @@ nonisolated enum RouteSteepness {
     /// height.
     private static func smoothStretch(_ stretch: ArraySlice<RouteCoordinate>, into smoothed: inout [Double?]) {
         let heights = stretch.map { $0.elevation ?? 0 }
-        let along = stretch.adjacentPairs().reductions(0.0) { travelled, leg in
-            travelled + RouteGeometry.distanceMeters(from: leg.0.clCoordinate, to: leg.1.clCoordinate)
+        let along = stretch.adjacentPairs().reductions(0.0) { traveled, leg in
+            traveled + RouteGeometry.distanceMeters(from: leg.0.clCoordinate, to: leg.1.clCoordinate)
         }
         // The area under the profile up to each point, the height running
         // straight between neighbours.
@@ -234,16 +234,16 @@ nonisolated enum RouteSteepness {
     /// however short it is.
     private static func absorbingShort(_ pieces: [Piece]) -> [Piece] {
         var pieces = pieces
-        func neighbours(of index: Int) -> [Int] {
+        func neighbors(of index: Int) -> [Int] {
             [index - 1, index + 1].filter { other in
                 pieces.indices.contains(other) && pieces[max(index, other)].joinsPrevious
             }
         }
         func step(_ index: Int) -> Int { RouteShade.scale.firstIndex(of: pieces[index].shade) ?? 0 }
         while let short = pieces.indices
-            .filter({ pieces[$0].length < minimumStretchMeters && !neighbours(of: $0).isEmpty })
+            .filter({ pieces[$0].length < minimumStretchMeters && !neighbors(of: $0).isEmpty })
             .min(by: { pieces[$0].length < pieces[$1].length }),
-            let into = neighbours(of: short).min(by: { first, second in
+            let into = neighbors(of: short).min(by: { first, second in
                 let apart = (abs(step(first) - step(short)), abs(step(second) - step(short)))
                 return apart.0 != apart.1 ? apart.0 < apart.1 : pieces[first].length > pieces[second].length
             }) {

@@ -139,9 +139,9 @@ struct WalkShareFlow: View {
     /// drawn over the picture and sent wherever the hiker shares it, and the
     /// licence the picture came under asks for its author, the licence and a
     /// link on anything made from it — none of which the card carries. See
-    /// ``HikePhoto/licence``.
+    /// ``HikePhoto/license``.
     static func offered(_ photos: [HikePhoto], walkedFrom start: Date, to end: Date) -> [HikePhoto] {
-        let pictures = photos.filter { !$0.recordsPlaceOnly && $0.licence == nil }
+        let pictures = photos.filter { !$0.recordsPlaceOnly && $0.license == nil }
         let walked = pictures.filter { (start...max(start, end)).contains($0.capturedAt) }
         let others = pictures.filter { !(start...max(start, end)).contains($0.capturedAt) }
         return walked + others

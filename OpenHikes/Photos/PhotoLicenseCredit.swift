@@ -1,5 +1,5 @@
 //
-//  PhotoLicenceCredit.swift
+//  PhotoLicenseCredit.swift
 //  OpenHikes
 //
 //  The credit a Wikimedia Commons photograph is owed, over the photograph.
@@ -10,7 +10,7 @@
 //  two in words, and both links one tap away in a menu — drawn by the gallery
 //  of a curated route's preview and by the saved hike's own gallery alike,
 //  because the copy a hiker keeps is owed the same credit as the one they
-//  were shown. See ``HikePhotoLicence``.
+//  were shown. See ``HikePhotoLicense``.
 //
 
 import OpenHikesData
@@ -18,20 +18,20 @@ import SwiftUI
 
 /// Who took a Commons photograph and what they shared it under, with the way
 /// to the photograph's page and to the licence.
-struct PhotoLicenceCredit: View {
+struct PhotoLicenseCredit: View {
     /// The author as the file page names them, or `nil` when it names nobody
     /// — the capsule then says the licence alone and the page says the rest.
     let author: String?
-    let licence: HikePhotoLicence
+    let license: HikePhotoLicense
 
     var body: some View {
         Menu {
-            Link(destination: licence.sourceURL) {
+            Link(destination: license.sourceURL) {
                 Label("View on Wikimedia Commons", systemImage: "photo.on.rectangle")
             }
-            if let url = licence.url {
+            if let url = license.url {
                 Link(destination: url) {
-                    Label("About the \(licence.name) Licence", systemImage: "doc.text")
+                    Label("About the \(license.name) License", systemImage: "doc.text")
                 }
             }
         } label: {
@@ -48,19 +48,19 @@ struct PhotoLicenceCredit: View {
         // credit beside it in the hiker's own gallery is told the same.
         .environment(\.colorScheme, .dark)
         .accessibilityLabel(line)
-        .accessibilityHint("Shows where this photo comes from and its licence")
-        .accessibilityIdentifier("photo-licence-credit")
+        .accessibilityHint("Shows where this photo comes from and its license")
+        .accessibilityIdentifier("photo-license-credit")
     }
 
-    private var line: String { Self.line(author: author, licence: licence) }
+    private var line: String { Self.line(author: author, license: license) }
 
     /// The credit in words — also what the maker's photo pins are called to
     /// VoiceOver, since it is the one thing about the picture this app knows.
     ///
     /// `nonisolated` because the exports that carry a copy out of the app
     /// write it off the main actor — see ``CommonsPhotoCredit/notice``.
-    nonisolated static func line(author: String?, licence: HikePhotoLicence) -> String {
-        guard let author else { return String(localized: "Photo · \(licence.name)") }
-        return String(localized: "Photo by \(author) · \(licence.name)")
+    nonisolated static func line(author: String?, license: HikePhotoLicense) -> String {
+        guard let author else { return String(localized: "Photo · \(license.name)") }
+        return String(localized: "Photo by \(author) · \(license.name)")
     }
 }

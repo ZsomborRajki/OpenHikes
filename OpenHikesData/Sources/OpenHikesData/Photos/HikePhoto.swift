@@ -132,7 +132,7 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// Who took this photograph, for one copied out of a *contribution* to a
     /// shared trail rather than out of the hike its author published — or out
     /// of Wikimedia Commons, where it is the author the file page names and
-    /// ``licence`` says what they shared it under.
+    /// ``license`` says what they shared it under.
     ///
     /// `nil` for almost every photograph, and the absence means two different
     /// innocent things rather than one: the hiker took it themselves, or it
@@ -237,7 +237,7 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// Wikimedia Commons photograph — `nil` for every other row.
     ///
     /// Saved with an OpenStreetMap trail, whose preview draws the Commons
-    /// photographs taken along it; see ``HikePhotoLicence``. What the licence
+    /// photographs taken along it; see ``HikePhotoLicense``. What the licence
     /// asks of anybody showing the picture is a credit, a link to the licence
     /// and a link to the source, and the copy has to keep being able to give
     /// all three for as long as the hiker keeps it. The author is
@@ -246,7 +246,28 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// A new key in the `CD_photos` blob, so no mirrored column — the shape
     /// ``placeID`` took — and optional for the reason ``sentToCommunityAt``
     /// is.
-    public var licence: HikePhotoLicence?
+    public var license: HikePhotoLicense?
+
+    /// The keys the `CD_photos` blob is written with, spelled out only so
+    /// ``license`` keeps the `licence` key it was first saved under (#847).
+    /// A synthesized key would follow the property's name, and every copy
+    /// already saved would decode with no licence — which ``isOwn`` reads as
+    /// the hiker's own to publish.
+    private enum CodingKeys: String, CodingKey {
+        case assetLocalIdentifier = "assetLocalIdentifier"
+        case capturedAt = "capturedAt"
+        case id = "id"
+        case importedAuthorName = "importedAuthorName"
+        case importedFromListingID = "importedFromListingID"
+        case isPlaceOnly = "isPlaceOnly"
+        case latitude = "latitude"
+        case license = "licence" // swiftlint:disable:this american_spelling_in_copy
+        case longitude = "longitude"
+        case matchEvidence = "matchEvidence"
+        case pathExtension = "pathExtension"
+        case placeID = "placeID"
+        case sentToCommunityAt = "sentToCommunityAt"
+    }
 
     public init(
         id: UUID = UUID(),
@@ -258,7 +279,7 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
         importedFromListingID: String? = nil,
         importedAuthorName: String? = nil,
         isPlaceOnly: Bool? = nil, // swiftlint:disable:this discouraged_optional_boolean
-        licence: HikePhotoLicence? = nil
+        license: HikePhotoLicense? = nil
     ) {
         self.id = id
         self.capturedAt = capturedAt
@@ -267,14 +288,14 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
         longitude = coordinate?.longitude
         self.assetLocalIdentifier = assetLocalIdentifier
         self.matchEvidence = matchEvidence
-        self.importedFromListingID = importedFromListingID ?? licence.map(Self.legacyOwnershipStamp)
+        self.importedFromListingID = importedFromListingID ?? license.map(Self.legacyOwnershipStamp)
         self.importedAuthorName = importedAuthorName
         self.isPlaceOnly = isPlaceOnly
-        self.licence = licence
+        self.license = license
     }
 
     /// The listing stamp a licensed copy carries so a build that predates
-    /// ``licence`` still reads it as somebody else's.
+    /// ``license`` still reads it as somebody else's.
     ///
     /// Such a build answers ``isOwn`` from ``importedFromListingID`` alone,
     /// decodes the blob, drops the `licence` key it does not know, and would
@@ -282,10 +303,10 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// credit. A copy saved out of the trail maker has no listing to name, so
     /// this names the Commons page it came from. It is a second meaning for a
     /// field named for listings and nothing reads it as one: ``isOwn`` keeps
-    /// ``licence`` as the rule for this build, and the stamp is only for the
+    /// ``license`` as the rule for this build, and the stamp is only for the
     /// mixed-version window.
-    static func legacyOwnershipStamp(for licence: HikePhotoLicence) -> String {
-        "commons:\(licence.sourceURL.absoluteString)"
+    static func legacyOwnershipStamp(for license: HikePhotoLicense) -> String {
+        "commons:\(license.sourceURL.absoluteString)"
     }
 
     /// Whether this photograph is the hiker's own to publish.
@@ -294,12 +315,12 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// to remember which way the optional runs. See
     /// ``importedFromListingID``.
     ///
-    /// And ``licence``, which answers it on its own: a photograph somebody
+    /// And ``license``, which answers it on its own: a photograph somebody
     /// shared on Wikimedia Commons is theirs under a licence, whichever hike
     /// it was saved onto and however it got there. The listing stamp already
     /// keeps today's copies out — they arrive with an OpenStreetMap trail —
     /// and this is what keeps a copy out that ever arrives some other way.
-    public var isOwn: Bool { importedFromListingID == nil && licence == nil }
+    public var isOwn: Bool { importedFromListingID == nil && license == nil }
 
     /// Whether this row is a place on the trail rather than a picture.
     ///
@@ -322,7 +343,7 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
         public var matchEvidence: PhotoMatchEvidence?
         public var importedFromListingID: String?
         public var importedAuthorName: String?
-        public var licence: HikePhotoLicence?
+        public var license: HikePhotoLicense?
 
         /// A photograph with nothing to say about where it came from: one the
         /// app watched being taken. The ordinary case, and the reason every
@@ -334,13 +355,13 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
             matchEvidence: PhotoMatchEvidence? = nil,
             importedFromListingID: String? = nil,
             importedAuthorName: String? = nil,
-            licence: HikePhotoLicence? = nil
+            license: HikePhotoLicense? = nil
         ) {
             self.assetLocalIdentifier = assetLocalIdentifier
             self.matchEvidence = matchEvidence
             self.importedFromListingID = importedFromListingID
             self.importedAuthorName = importedAuthorName
-            self.licence = licence
+            self.license = license
         }
     }
 

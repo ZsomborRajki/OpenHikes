@@ -387,7 +387,7 @@ nonisolated public enum TrailPlaceOrder {
         let targets = places.map { place in (id: place.id, coordinate: place.clCoordinate) }
         var best: [UUID: TrailPlaceAnchor] = [:]
         best.reserveCapacity(places.count)
-        var travelled: Double = 0
+        var traveled: Double = 0
         for (start, end) in coordinates.adjacentPairs() {
             let length = RouteGeometry.distanceMeters(from: start, to: end)
             for target in targets {
@@ -397,7 +397,7 @@ nonisolated public enum TrailPlaceOrder {
                     to: end
                 )
                 let candidate = TrailPlaceAnchor(
-                    distanceAlongRouteMeters: travelled + length * projection.fraction,
+                    distanceAlongRouteMeters: traveled + length * projection.fraction,
                     offRouteMeters: projection.offRouteMeters
                 )
                 // Nearest to the line wins, not first along it. A trail that
@@ -411,7 +411,7 @@ nonisolated public enum TrailPlaceOrder {
                     best[target.id] = candidate
                 }
             }
-            travelled += length
+            traveled += length
         }
         return best
     }

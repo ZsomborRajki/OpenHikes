@@ -76,7 +76,7 @@ extension CommunityHikeView {
     @ViewBuilder
     func commonsAttribution(_ detail: CommunityHikeDetail) -> some View {
         if !detail.commonsPhotos.isEmpty {
-            Text("Photos from Wikimedia Commons, each under its own licence. Open one to see who took it.")
+            Text("Photos from Wikimedia Commons, each under its own license. Open one to see who took it.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)

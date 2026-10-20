@@ -13,7 +13,7 @@
 //  those are somebody else's work, which the licence lets this hiker keep and
 //  look at — credited — and not publish under their name. The listing stamp
 //  keeps them out the way it keeps a stranger's community photographs out, and
-//  ``HikePhoto/licence`` keeps them out on its own.
+//  ``HikePhoto/license`` keeps them out on its own.
 //
 
 import CoreLocation
@@ -50,9 +50,9 @@ struct CommunityImportCommonsTests {
         }
     }
 
-    private static func licence(_ name: String) -> HikePhotoLicence? {
+    private static func license(_ name: String) -> HikePhotoLicense? {
         URL(string: "https://commons.wikimedia.org/wiki/File:\(name).jpg").map { source in
-            HikePhotoLicence(
+            HikePhotoLicense(
                 name: "CC BY-SA 4.0",
                 url: URL(string: "https://creativecommons.org/licenses/by-sa/4.0/"),
                 sourceURL: source
@@ -67,7 +67,7 @@ struct CommunityImportCommonsTests {
             fileURL: url,
             credit: CommonsPhotoCredit(
                 author: author,
-                licence: try #require(licence(url.deletingPathExtension().lastPathComponent))
+                license: try #require(license(url.deletingPathExtension().lastPathComponent))
             )
         )
     }
@@ -132,7 +132,7 @@ struct CommunityImportCommonsTests {
 
         #expect(copy.isComplete)
         #expect(hike.photos.count == 2)
-        let sources = Set(hike.photos.compactMap(\.licence?.sourceURL.lastPathComponent))
+        let sources = Set(hike.photos.compactMap(\.license?.sourceURL.lastPathComponent))
         #expect(sources == ["File:summit.jpg", "File:lake.jpg"])
         #expect(hike.photos.compactMap(\.importedAuthorName) == ["Anna"], "a file page naming nobody names nobody")
         #expect(hike.photos.allSatisfy { $0.matchEvidence == .place }, "pinned by the camera's own position")
@@ -174,9 +174,9 @@ struct CommunityImportCommonsTests {
     /// says — so a Commons photograph that ever reaches a hike some other way
     /// is still not the hiker's to send.
     @Test("a photograph under somebody else's licence is never the hiker's own")
-    func licenceAloneKeepsItOut() throws {
-        let licence = try #require(Self.licence("anywhere"))
-        #expect(!HikePhoto(licence: licence).isOwn)
+    func licenseAloneKeepsItOut() throws {
+        let license = try #require(Self.license("anywhere"))
+        #expect(!HikePhoto(license: license).isOwn)
     }
 
     // MARK: - What a failed copy offers
