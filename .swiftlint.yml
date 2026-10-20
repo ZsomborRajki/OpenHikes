@@ -474,3 +474,15 @@ custom_rules:
     regex: '(?ms)^[ \t]*@Suite\b.*?^[ \t]*@Suite\b'
     message: "Declare one @Suite per file; move the second into a file of its own."
     severity: error
+
+  # The app writes one apostrophe, the typographic ’ (#848). A literal handed
+  # to `Text(`, `String(localized:` or `LocalizedStringKey(` with a straight '
+  # between two letters is a contraction or a possessive typed in a hurry, and
+  # it would be a second catalog key for the same sentence. Multi-line
+  # literals and plain `String`s are not seen by a line regex; the catalogs are
+  # held to the rule by `StringCatalogTests`.
+  typographic_apostrophe:
+    name: "Typographic Apostrophe"
+    regex: '(?:Text\(|String\(localized:\s*|LocalizedStringKey\()"[^"\n]*[A-Za-z]\x27[a-z]'
+    message: "Write the apostrophe in user-visible copy as ’ (U+2019), not '."
+    severity: error

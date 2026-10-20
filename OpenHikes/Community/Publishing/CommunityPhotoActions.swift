@@ -139,7 +139,7 @@ struct CommunityPhotoActions: View {
         } message: {
             Text("""
             Their photos stop appearing on any hike, on this device. You can undo \
-            this in Settings. Blocking doesn't report them or take anything down.
+            this in Settings. Blocking doesn’t report them or take anything down.
             """)
         }
         .confirmationDialog(
@@ -152,11 +152,11 @@ struct CommunityPhotoActions: View {
             Button("Cancel", role: .cancel) { /* the dialog closing is the whole action */ }
         } message: {
             Text("""
-            They're removed for everybody and deleted for good. The hike itself \
-            isn't touched.
+            They’re removed for everybody and deleted for good. The hike itself \
+            isn’t touched.
             """)
         }
-        .communityFailureAlert("Couldn't take them down", failure: $takeDownFailure)
+        .communityFailureAlert("Couldn’t take them down", failure: $takeDownFailure)
     }
 }
 

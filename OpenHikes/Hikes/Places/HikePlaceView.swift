@@ -117,7 +117,7 @@ struct HikePlaceView: View {
             Button("Remove Place", role: .destructive) { remove() }
                 .accessibilityIdentifier("hike-place-remove-confirm")
         } message: {
-            Text("Its photos stay in this hike's gallery.")
+            Text("Its photos stay in this hike’s gallery.")
         }
         .hikePlaceRefusalAlert($refusal)
         // A photograph taken now is of this place, pinned where it stands.

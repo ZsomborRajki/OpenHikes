@@ -378,7 +378,7 @@ private extension CommunityShareSheet {
         CommunityCreditSection(
             authorName: $authorName,
             footer: """
-            Shown publicly next to your hike. It doesn't have to be your real \
+            Shown publicly next to your hike. It doesn’t have to be your real \
             name, and you can leave it blank to share without one.
             """,
             identifier: "community-author-field",
@@ -419,8 +419,8 @@ private extension CommunityShareSheet {
             // pointing at walks worth doing, rather than like an export of
             // everything anybody ever recorded.
             Text("""
-            Community hikes are ones worth someone else's day out — a whole route, \
-            hiked by you, that isn't already on the list.
+            Community hikes are ones worth someone else’s day out — a whole route, \
+            hiked by you, that isn’t already on the list.
             """)
             Text("""
             Share only a route, photos and notes that are yours to publish. A hike that \
@@ -448,9 +448,9 @@ private extension CommunityShareSheet {
                 CommunityFootnoteLabel(
                     text: Text(
                         """
-                        You've already shared this hike. Sending it again adds a \
-                        second copy for other hikers — it doesn't replace or update \
-                        the first, and this app can't take that one down. Ask for it \
+                        You’ve already shared this hike. Sending it again adds a \
+                        second copy for other hikers — it doesn’t replace or update \
+                        the first, and this app can’t take that one down. Ask for it \
                         to be removed by reporting it from its own screen.
                         """
                     ),
@@ -526,7 +526,7 @@ private extension CommunityShareSheet {
 
     var sentSection: some View {
         CommunitySentSection(
-            detail: "It'll appear for other hikers once it's been checked.",
+            detail: "It’ll appear for other hikers once it’s been checked.",
             identifier: "community-share-sent"
         )
     }

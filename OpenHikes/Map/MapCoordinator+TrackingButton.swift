@@ -403,7 +403,7 @@ extension MapView {
         // A glyph is not a label, and `performAccessibilityAudit` measures
         // both — the same rule the camera pill's buttons carry.
         button.accessibilityLabel = "Location access off"
-        button.accessibilityHint = "Explains why OpenHikes can't show your location."
+        button.accessibilityHint = "Explains why OpenHikes can’t show your location."
         button.accessibilityIdentifier = "location-access-refused"
         return button
     }

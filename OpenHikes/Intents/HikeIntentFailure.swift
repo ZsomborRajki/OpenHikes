@@ -56,17 +56,17 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     var errorDescription: String? {
         switch self {
         case .busyFinishing: "OpenHikes is still finishing your last recording."
-        case .couldNotSave: "Your hike couldn't be saved."
-        case .unknownDay: "OpenHikes couldn't work out which day that is."
-        case .noActiveRecording: "OpenHikes isn't recording a hike right now."
+        case .couldNotSave: "Your hike couldn’t be saved."
+        case .unknownDay: "OpenHikes couldn’t work out which day that is."
+        case .noActiveRecording: "OpenHikes isn’t recording a hike right now."
         case .alreadyRecording: "OpenHikes is already recording a hike."
-        case .walking(let trail): "You're hiking \(trail). End the hike in OpenHikes to start recording."
-        case .notPaused: "That hike isn't paused."
+        case .walking(let trail): "You’re hiking \(trail). End the hike in OpenHikes to start recording."
+        case .notPaused: "That hike isn’t paused."
         case .recording(let failure): failure.errorDescription
         case .awaitingRouteReview:
             "Your hike is saved, but it needs you to pick which trail you followed."
-        case .noHikesYet: "There aren't any hikes in OpenHikes yet."
-        case .storage: "Your hikes couldn't be read."
+        case .noHikesYet: "There aren’t any hikes in OpenHikes yet."
+        case .storage: "Your hikes couldn’t be read."
         }
     }
 

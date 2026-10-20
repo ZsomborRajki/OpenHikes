@@ -207,7 +207,7 @@ nonisolated extension CommunityPublishingEligibility.Reason {
         case .savedFromTheCommunity: "This trail is already shared"
         case .savedFromOpenStreetMap: "This trail is already public"
         case .tooShort: "This hike is too short to share"
-        case .retreads: "You've already shared this trail"
+        case .retreads: "You’ve already shared this trail"
         }
     }
 
@@ -251,8 +251,8 @@ nonisolated extension CommunityPublishingEligibility.Reason {
             let who = author.map { "\($0) shared it" } ?? "Another hiker shared it"
             return """
             \(who), and publishing it again would send their route and their notes \
-            under your name. Your photographs are a different matter — they're yours, \
-            and they can go on the trail that's already here.
+            under your name. Your photographs are a different matter — they’re yours, \
+            and they can go on the trail that’s already here.
             """
         case .tooShort(let meters):
             // `usage: .road`, which is what every other distance in the app
@@ -263,14 +263,14 @@ nonisolated extension CommunityPublishingEligibility.Reason {
             let walked = Self.road(meters, locale)
             return """
             Community hikes start at \(floor); this one is \(walked). Short hikes stay \
-            in your own list, where they're still yours to keep, export and sync.
+            in your own list, where they’re still yours to keep, export and sync.
             """
         case .savedFromOpenStreetMap:
             return """
             You saved this from OpenStreetMap, where anybody can already find it — \
             publishing a copy would put the same trail in this list twice. What \
-            OpenStreetMap hasn't got is a single photograph of it, and yours can go \
-            on the trail that's already here.
+            OpenStreetMap hasn’t got is a single photograph of it, and yours can go \
+            on the trail that’s already here.
             """
         case .retreads(let title):
             // The one reason that reaches both cases — an earlier hike that
@@ -282,7 +282,7 @@ nonisolated extension CommunityPublishingEligibility.Reason {
             return """
             \(title) covers the same ground, and two listings for one trail make it \
             harder for anyone to find either. This hike stays in your own list, where \
-            it's still yours to keep, export and sync.
+            it’s still yours to keep, export and sync.
             """
         }
     }

@@ -340,7 +340,7 @@ final class WatchRecorder: NSObject {
         }
 
         guard HKHealthStore.isHealthDataAvailable() else {
-            phase = .failed("This watch can't start a workout, so a recording couldn't stay running.")
+            phase = .failed("This watch can’t start a workout, so a recording couldn’t stay running.")
             return false
         }
         do {
@@ -420,7 +420,7 @@ final class WatchRecorder: NSObject {
             return true
         } catch {
             Self.logger.error("Workout session failed to start: \(error.localizedDescription, privacy: .public)")
-            phase = .failed("A workout couldn't be started, so a recording wouldn't survive the screen going dark.")
+            phase = .failed("A workout couldn’t be started, so a recording wouldn’t survive the screen going dark.")
             return false
         }
     }

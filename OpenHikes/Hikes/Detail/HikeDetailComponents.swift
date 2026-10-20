@@ -536,7 +536,7 @@ struct OfflineStorageStatus: View {
                 .controlSize(.small)
                 .minimumTapTarget()
                 // "Delete" alone doesn't say what goes.
-                .accessibilityLabel("Delete this hike's offline tiles")
+                .accessibilityLabel("Delete this hike’s offline tiles")
                 .accessibilityIdentifier("delete-offline-tiles-button")
             }
         }

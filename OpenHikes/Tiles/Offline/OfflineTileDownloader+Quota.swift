@@ -173,7 +173,7 @@ extension OfflineTileDownloader {
                     + "saved map to make room."
         }
         return savedCount == 0
-            ? "Couldn't save any tiles. Check your connection and try again."
+            ? "Couldn’t save any tiles. Check your connection and try again."
             : "Saved \(savedCount) of \(plannedCount) tiles. Try again to finish the download."
     }
 

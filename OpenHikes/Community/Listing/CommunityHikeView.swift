@@ -389,7 +389,7 @@ struct CommunityHikeView: View {
         } message: {
             Text("""
             Their hikes stop appearing on this device. You can undo this in \
-            Settings. Blocking doesn't report the hike or take it down.
+            Settings. Blocking doesn’t report the hike or take it down.
             """)
         }
         // Here for the reason the one above is: a dialog attached inside the
@@ -405,10 +405,10 @@ struct CommunityHikeView: View {
         } message: {
             Text("""
             It stops appearing for everybody, and the route and photographs \
-            behind it are deleted for good. This can't be undone.
+            behind it are deleted for good. This can’t be undone.
             """)
         }
-        .communityFailureAlert("Couldn't take it down", failure: $takeDownFailure)
+        .communityFailureAlert("Couldn’t take it down", failure: $takeDownFailure)
         // Started here and *held*, rather than simply run by the modifier.
         // `.task`'s own cancellation is the right trigger and the wrong reach:
         // it cancels this closure, and the work that writes into the download

@@ -117,7 +117,7 @@ struct AboutSection: View {
             Text(
                 "The policy and the terms open in your browser, and are the ones the App Store"
                 + " listing links too. Share feedback, suggestions, or report an issue on GitHub"
-                + " \u{2014} the version above says which build you're on."
+                + " \u{2014} the version above says which build you’re on."
             )
         }
     }

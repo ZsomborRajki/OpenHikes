@@ -71,7 +71,7 @@ struct WalkShareEditableBox: View {
             .onTapGesture { model.selection = isSelected ? nil : widget }
             .accessibilityAddTraits(.isButton)
             .accessibilityAddTraits(isSelected ? .isSelected : [])
-            .accessibilityHint("Shows this box's options")
+            .accessibilityHint("Shows this box’s options")
             .modifier(WalkShareBoxActions(widget: widget, model: model, boxSize: boxSize))
             .accessibilityIdentifier("walk-share-box-\(widget.rawValue)")
             .position(target.center)

@@ -30,7 +30,7 @@ struct HikeIntentPhrasingTests {
             isTrailNameStale: false
         ).spokenSummary
 
-        #expect(summary.contains("You're"))
+        #expect(summary.contains("You’re"))
         // The *spoken* duration: `HikeFormat.duration` is narrow because a stat
         // tile has room for "1h 25m" and a synthesiser handed it is guessing,
         // which is the same reason the distance beside it is `.wide`.
@@ -131,7 +131,7 @@ struct HikeIntentPhrasingTests {
             distance: Measurement(value: 0, unit: .meters)
         ).spokenSummary(for: "today")
 
-        #expect(summary == "You haven't recorded a hike today.")
+        #expect(summary == "You haven’t recorded a hike today.")
     }
 
     @Test("one hike is singular and several are not")
@@ -169,7 +169,7 @@ struct HikeIntentPhrasingTests {
         let day = HikeIntentFailure.unknownDay
 
         #expect(storage.recoverySuggestion == "Open OpenHikes to check on your hikes.")
-        #expect(day.errorDescription?.contains("couldn't be read") == false)
+        #expect(day.errorDescription?.contains("couldn’t be read") == false)
         #expect(day.recoverySuggestion == nil)
     }
 

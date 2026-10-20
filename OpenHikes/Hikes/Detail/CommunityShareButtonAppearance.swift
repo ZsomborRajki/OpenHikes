@@ -107,8 +107,8 @@ struct CommunityShareButtonAppearance {
         guard eligibility.offersPhotographs else {
             return Self(
                 symbol: "person.2.slash",
-                label: eligibility.reason?.shortLabel ?? String(localized: "Can't be shared"),
-                hint: String(localized: "Opens an explanation of why this hike can't be shared.")
+                label: eligibility.reason?.shortLabel ?? String(localized: "Can’t be shared"),
+                hint: String(localized: "Opens an explanation of why this hike can’t be shared.")
             )
         }
         return switch contribution {
@@ -150,7 +150,7 @@ struct CommunityShareButtonAppearance {
         case .notShared:
             String(
                 localized: """
-                Live for other hikers. Add photos you've taken since, or ask \
+                Live for other hikers. Add photos you’ve taken since, or ask \
                 for the hike to be taken down.
                 """
             )

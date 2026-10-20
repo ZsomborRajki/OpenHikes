@@ -236,8 +236,8 @@ struct HikeActivityControls: View {
     static func wording(for refusal: HikeActivityControlRefusal) -> LocalizedStringKey {
         switch refusal {
         case .needsPreciseLocation: "Turn on Precise Location in Settings to carry on."
-        case .notRecording: "That hike isn't recording any more."
-        case .failed: "OpenHikes couldn't do that."
+        case .notRecording: "That hike isn’t recording any more."
+        case .failed: "OpenHikes couldn’t do that."
         }
     }
 }

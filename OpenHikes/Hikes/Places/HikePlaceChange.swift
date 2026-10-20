@@ -35,9 +35,9 @@ enum HikePlaceRefusal: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .notAdded: String(localized: "This place couldn't be added.")
-        case .notEdited: String(localized: "Your changes to this place couldn't be saved.")
-        case .notRemoved: String(localized: "This place couldn't be removed.")
+        case .notAdded: String(localized: "This place couldn’t be added.")
+        case .notEdited: String(localized: "Your changes to this place couldn’t be saved.")
+        case .notRemoved: String(localized: "This place couldn’t be removed.")
         }
     }
 
@@ -47,7 +47,7 @@ enum HikePlaceRefusal: LocalizedError, Equatable {
         switch self {
         case .notAdded, .notEdited:
             String(
-                localized: "What you entered wasn't lost. Check that the device has storage available, then try again."
+                localized: "What you entered wasn’t lost. Check that the device has storage available, then try again."
             )
         case .notRemoved:
             String(localized: "Check that the device has storage available, then try again.")

@@ -85,7 +85,7 @@ public enum WatchLinkFailure: LocalizedError, Equatable, Sendable {
         case let .missingBody(kind):
             "A \(kind.rawValue) message arrived with nothing in it."
         case let .unrecognizedKind(raw):
-            "The other device sent a message this version doesn't recognize (\(raw ?? "no kind"))."
+            "The other device sent a message this version doesn’t recognize (\(raw ?? "no kind"))."
         case let .unsupportedVersion(kind, found, supported):
             "A \(kind.rawValue) message is in format \(found); this version reads \(supported)."
         }

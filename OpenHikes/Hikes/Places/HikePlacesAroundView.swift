@@ -118,7 +118,7 @@ struct HikePlacesAroundView: View {
             .accessibilityIdentifier("places-around-searching")
         case .failed(let outage):
             ContentUnavailableView {
-                Label("Couldn't Search", systemImage: "exclamationmark.triangle")
+                Label("Couldn’t Search", systemImage: "exclamationmark.triangle")
             } description: {
                 Text(TrailPointNotice.outage(outage).caption.text)
             } actions: {
@@ -273,7 +273,7 @@ struct TrailPlaceAroundRow: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityHint(Text("Shows the place's card"))
+            .accessibilityHint(Text("Shows the place’s card"))
             if entry.isAdded {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title3)

@@ -333,7 +333,7 @@ extension HikeDetailView {
             }
             .accessibilityIdentifier("community-photo-withdraw-button")
         }
-        Button("Check Whether It's Still Live", systemImage: "arrow.clockwise") {
+        Button("Check Whether It’s Still Live", systemImage: "arrow.clockwise") {
             checkWhetherStillLive(transport)
         }
         .accessibilityIdentifier("community-liveness-button")
@@ -433,7 +433,7 @@ extension HikeDetailView {
         switch answer {
         case .live: String(localized: "Still published")
         case .takenDown: String(localized: "No longer published")
-        case .failed: String(localized: "Couldn't check")
+        case .failed: String(localized: "Couldn’t check")
         }
     }
 
@@ -447,14 +447,14 @@ extension HikeDetailView {
         case .live:
             String(
                 localized: """
-                This hike is still live for other hikers, so it's still \
+                This hike is still live for other hikers, so it’s still \
                 somewhere your photos can go.
                 """
             )
         case .takenDown:
             String(
                 localized: """
-                This hike isn't in the community list any more. You can reset \
+                This hike isn’t in the community list any more. You can reset \
                 it here, which forgets that it was ever sent and lets you \
                 share a corrected hike — but it also forgets the details a \
                 removal request needs, so only do it if you no longer want \
@@ -464,8 +464,8 @@ extension HikeDetailView {
         case .failed:
             String(
                 localized: """
-                Couldn't reach the community list just now, so this hike still \
-                reads the way it did. Try again when you're back online.
+                Couldn’t reach the community list just now, so this hike still \
+                reads the way it did. Try again when you’re back online.
                 """
             )
         }

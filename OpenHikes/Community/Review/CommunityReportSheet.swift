@@ -128,10 +128,10 @@ private extension CommunityReportSheet {
                 }
             }
         } header: {
-            Text("What you're reporting")
+            Text("What you’re reporting")
         } footer: {
             if contribution != nil {
-                Text("The hike itself isn't reported — only the photo somebody added to it.")
+                Text("The hike itself isn’t reported — only the photo somebody added to it.")
             }
         }
     }
@@ -153,7 +153,7 @@ private extension CommunityReportSheet {
             .labelsHidden()
             .accessibilityIdentifier("community-report-reason")
         } header: {
-            Text("What's wrong")
+            Text("What’s wrong")
         }
     }
 
@@ -184,7 +184,7 @@ private extension CommunityReportSheet {
             // needing no account is the part that is worth knowing.
             Text("""
             Your report opens in your mail app so you can send it. \
-            You don't need an account to report a hike.
+            You don’t need an account to report a hike.
             """)
         }
     }

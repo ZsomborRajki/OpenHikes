@@ -87,7 +87,7 @@ final class HikeIntentCoordinatorTests {
         // instruction as well as the reason.
         #expect(
             HikeIntentFailure.walking(trail: "Ridge Loop").errorDescription
-                == "You're hiking Ridge Loop. End the hike in OpenHikes to start recording."
+                == "You’re hiking Ridge Loop. End the hike in OpenHikes to start recording."
         )
     }
 

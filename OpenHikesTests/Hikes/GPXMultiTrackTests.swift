@@ -278,13 +278,13 @@ struct GPXMultiTrackTests {
     @Test("several failed files are one sentence naming each")
     func severalFailuresAreOneAlert() {
         let failure = HikeImportFailure.several([
-            .init(fileName: "a.gpx", reason: "This file couldn't be read."),
+            .init(fileName: "a.gpx", reason: "This file couldn’t be read."),
             .init(fileName: "b.gpx", reason: "This GPX file is too large to import."),
         ])
-        #expect(failure.errorDescription == "2 files couldn't be imported.")
-        #expect(failure.recoverySuggestion?.contains("a.gpx: This file couldn't be read.") == true)
+        #expect(failure.errorDescription == "2 files couldn’t be imported.")
+        #expect(failure.recoverySuggestion?.contains("a.gpx: This file couldn’t be read.") == true)
         #expect(failure.recoverySuggestion?.contains("b.gpx") == true)
-        let one = HikeImportFailure.several([.init(fileName: "a.gpx", reason: "This file couldn't be read.")])
-        #expect(one.errorDescription == "1 file couldn't be imported.")
+        let one = HikeImportFailure.several([.init(fileName: "a.gpx", reason: "This file couldn’t be read.")])
+        #expect(one.errorDescription == "1 file couldn’t be imported.")
     }
 }

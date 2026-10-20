@@ -218,7 +218,7 @@ nonisolated struct CommunityWithdrawal: Equatable, Sendable {
         case (.photographs, true):
             """
             The hiker who contributed these photos is asking for them to be taken down. \
-            The trail itself is somebody else's and is not part of this request.
+            The trail itself is somebody else’s and is not part of this request.
             """
         case (.photographs, false):
             "The hiker who sent these photos is asking to withdraw them before review."

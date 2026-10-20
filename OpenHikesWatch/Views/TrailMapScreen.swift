@@ -186,7 +186,7 @@ struct TrailMapScreen: View {
     /// ``TrailMapFull``, which is where everything per-fix lives.
     @ViewBuilder private var refusedCaption: some View {
         if model.recorder.isLocationRefused {
-            Text("Location is off, so your position isn't shown.")
+            Text("Location is off, so your position isn’t shown.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

@@ -215,7 +215,7 @@ struct SettingsView: View {
                     // appear in a build where the paid rows are dead, which
                     // is the build this text most needs to not read like a
                     // half-finished app.
-                    Text("Maps marked \u{201C}Needs API key\u{201D} aren't available in this build.")
+                    Text("Maps marked \u{201C}Needs API key\u{201D} aren’t available in this build.")
                     #if DEBUG
                     // Verbatim: only a contributor reads it, so it is not
                     // for translation, and Xcode's own catalog sync leaves
@@ -313,7 +313,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(
                     "Saved tiles keep your hikes usable without a signal. The map cache is just"
-                    + " what you've recently looked at — it's kept under"
+                    + " what you’ve recently looked at — it’s kept under"
                     + " \(Self.byteText(TileCache.cacheByteLimit)), oldest first,"
                     + " and clearing it costs you nothing offline."
                     + " Photos are only removed when you delete them, or the hike they belong to."
@@ -328,7 +328,7 @@ struct SettingsView: View {
                         "The \(quota.holder) licence allows"
                         + " \(Self.byteText(quota.byteLimit)) of saved tiles on this device,"
                         + " shared by \(quota.providers.map(\.name).formatted(.list(type: .and)))."
-                        + " Once that's used, saving a new route asks before replacing"
+                        + " Once that’s used, saving a new route asks before replacing"
                         + " your least-recently-used saved tiles. Other sources are unlimited."
                     )
                 }
@@ -373,7 +373,7 @@ private extension SettingsView {
             Text(
                 "Photos you take on a hike are always kept in OpenHikes and shown"
                 + " with that hike. Turn this on to put a copy in your photo library"
-                + " too, stamped with when and where you took it. You'll be asked"
+                + " too, stamped with when and where you took it. You’ll be asked"
                 + " for permission the first time one is saved."
             )
         }
@@ -409,7 +409,7 @@ private extension SettingsView {
                 + " towards your rings and sits beside your other activity. Deleting a"
                 + " hike removes its workout from Health too. OpenHikes reads nothing"
                 + " from Health on your iPhone; on Apple Watch a recording reads your"
-                + " heart rate to show it while you hike. You'll be asked for permission"
+                + " heart rate to show it while you hike. You’ll be asked for permission"
                 + " the first time a hike is saved."
             )
         }
@@ -654,7 +654,7 @@ extension SettingsView {
                 "Apart from the previews above, OpenHikes downloads, caches and auto-saves"
                 + " no map tiles while this is selected, so it uses the least battery and"
                 + " data — but the map needs"
-                + " a signal where the system hasn't already cached it."
+                + " a signal where the system hasn’t already cached it."
                 + " Tiles already saved by other sources are kept, and listed below."
             )
         case .hybrid:

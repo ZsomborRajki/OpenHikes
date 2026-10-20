@@ -91,13 +91,13 @@
     "Install OpenHikes on the iPhone paired with this watch to send trails across." : {
 
     },
-    "It hasn't been saved anywhere, so it can't be recovered." : {
+    "It hasn’t been saved anywhere, so it can’t be recovered." : {
 
     },
     "Last hike not saved" : {
 
     },
-    "Location is off, so your position isn't shown." : {
+    "Location is off, so your position isn’t shown." : {
 
     },
     "Map of %@" : {
@@ -121,7 +121,7 @@
     "Pause recording" : {
 
     },
-    "Paused. The ground you cover now isn't part of the hike." : {
+    "Paused. The ground you cover now isn’t part of the hike." : {
 
     },
     "Progress along the trail" : {
@@ -139,7 +139,7 @@
     "Recording stopped at %@. Everything before then is kept." : {
 
     },
-    "Records on this watch, with or without your iPhone. The hike goes to your iPhone when it's back in range." : {
+    "Records on this watch, with or without your iPhone. The hike goes to your iPhone when it’s back in range." : {
 
     },
     "Resume" : {
@@ -187,7 +187,7 @@
     "Waiting for your iPhone to come back in range…" : {
 
     },
-    "Waiting for your iPhone. It'll go across on its own." : {
+    "Waiting for your iPhone. It’ll go across on its own." : {
 
     },
     "Your iPhone is recording" : {

@@ -168,7 +168,7 @@ nonisolated enum RecordingEnergyPolicy {
         if lowPower, hot { return "Low Power Mode and heat — recording at ten-metre accuracy to save battery." }
         if lowPower { return "Low Power Mode — recording at ten-metre accuracy to save battery." }
         if hot { return "The device is warm — recording at ten-metre accuracy until it cools." }
-        if stationary { return "You've stopped — checking position less often until you move on." }
+        if stationary { return "You’ve stopped — checking position less often until you move on." }
         return nil
     }
 }

@@ -240,7 +240,7 @@ final class PhoneLink: NSObject {
             encoded = try WatchLink.message(command)
         } catch {
             Self.logger.error("A command could not be encoded: \(error.localizedDescription, privacy: .public)")
-            deliverRefusal(of: command, saying: "That didn't reach your iPhone.")
+            deliverRefusal(of: command, saying: "That didn’t reach your iPhone.")
             return
         }
         session.sendMessage(encoded) { [weak self] reply in
@@ -254,13 +254,13 @@ final class PhoneLink: NSObject {
                 // end the wait here too. Dropped, it would leave
                 // `pendingCommand` set and every button disabled until
                 // reachability moved.
-                onMainActor { self?.deliverRefusal(of: command, saying: "Your iPhone couldn't answer that.") }
+                onMainActor { self?.deliverRefusal(of: command, saying: "Your iPhone couldn’t answer that.") }
                 return
             }
             onMainActor { self?.onDelivery?(.commandOutcome(outcome)) }
         } errorHandler: { [weak self] error in
             Self.logger.debug("A command failed: \(error.localizedDescription, privacy: .public)")
-            onMainActor { self?.deliverRefusal(of: command, saying: "That didn't reach your iPhone.") }
+            onMainActor { self?.deliverRefusal(of: command, saying: "That didn’t reach your iPhone.") }
         }
     }
 

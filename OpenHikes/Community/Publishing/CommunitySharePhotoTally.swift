@@ -109,8 +109,8 @@ struct CommunitySharePhotoTally {
     static func onAnotherDevice(count: Int) -> String {
         String(
             localized: """
-            \(count) of this hike's photos are on the device they were \
-            added on, so they can't be shared from here.
+            \(count) of this hike’s photos are on the device they were \
+            added on, so they can’t be shared from here.
             """
         )
     }
