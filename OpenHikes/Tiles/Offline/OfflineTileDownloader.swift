@@ -33,7 +33,10 @@ final class OfflineTileDownloader {
 
     /// A plan held while the user decides whether to free space for it.
     struct PendingRun {
+        /// The whole plan, which is what reclaiming must leave alone.
         let tiles: [Tile]
+        /// What the run still has to fetch once space is made.
+        let outstanding: [Tile]
         let source: ActiveTileSource
         let shortfall: SpaceShortfall
         let generation: Int
@@ -318,10 +321,15 @@ final class OfflineTileDownloader {
         // A provider whose terms cap durable storage may not have room for
         // this. Asked before a single tile is fetched, so a user who declines
         // has cost nothing and lost nothing.
-        if let shortfall = await spaceShortfall(tiles: tiles, source: source) {
+        if let shortfall = await spaceShortfall(
+            tiles: tiles,
+            fetching: outstanding,
+            source: source
+        ) {
             guard generation == self.generation, !Task.isCancelled else { return }
             pendingRun = PendingRun(
                 tiles: tiles,
+                outstanding: outstanding,
                 source: source,
                 shortfall: shortfall,
                 generation: generation
@@ -360,7 +368,7 @@ final class OfflineTileDownloader {
             )
             guard pending.generation == generation, !Task.isCancelled else { return }
             await run(
-                tiles: pending.tiles,
+                tiles: pending.outstanding,
                 source: pending.source,
                 generation: pending.generation
             )

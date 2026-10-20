@@ -140,6 +140,31 @@ struct OfflineQuotaShortfallTests {
         #expect(shortfall.licenceHolder == Self.licence.holder)
     }
 
+    /// A resumed download has most of its plan on disk already, and those
+    /// bytes are in `used`. Charging the whole plan again asks the hiker to
+    /// delete other saved coverage for room the missing tiles do not need.
+    @Test("a resumed download is charged only for the tiles it still has to fetch")
+    func resumedDownloadIsChargedForTheGap() async {
+        let plan = Self.tiles(5)
+        let downloader = Self.downloader(
+            Self.broker(
+                limit: Self.bytes(forTiles: 10),
+                used: Self.bytes(forTiles: 9),
+                reclaimable: Self.bytes(forTiles: 9)
+            )
+        )
+
+        let whole = await downloader.spaceShortfall(tiles: plan, source: Self.source(Self.stadia))
+        let gap = await downloader.spaceShortfall(
+            tiles: plan,
+            fetching: Array(plan.suffix(1)),
+            source: Self.source(Self.stadia)
+        )
+
+        #expect(whole?.bytesToFree == Self.bytes(forTiles: 4))
+        #expect(gap == nil)
+    }
+
     /// The ceiling is Stadia's, not the style's, so whichever Stadia style is
     /// being saved is short against the same figure and names the same party.
     @Test(
