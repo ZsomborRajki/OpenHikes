@@ -119,6 +119,17 @@ if [[ -n "${STUB_TRACE_DIR:-}" ]]; then
         "xcresulttool get test-results activities"*) cat "$STUB_TRACE_DIR/activities.json" ;;
     esac
 fi
+# `xcstringstool sync <catalog> …` leaves the catalog as it found it, the way a
+# sync of one already current does; with STUB_CATALOG_BEHIND set it adds an
+# entry the source would have extracted, the way a sync of one that is behind
+# does.
+if [[ "${1:-}" == "xcstringstool" && "${2:-}" == "sync" && -n "${STUB_CATALOG_BEHIND:-}" ]]; then
+    sed -i '' '/^  "strings" : {$/a\
+    "A string the catalog lacks" : {\
+\
+    },
+' "$3"
+fi
 [[ "${1:-}" == "simctl" ]] || exit 0
 shift
 case "${1:-}" in
@@ -1769,6 +1780,41 @@ if expect_status 1 && expect_contains "$output" "error:" "the output"; then
     else
         fail "the refused catalog was rewritten anyway"
     fi
+fi
+
+echo "String catalog check"
+
+# Scripts/sync-string-catalogs.sh --check is the only completeness check the
+# String Catalogs have, and CI runs it after the build: a catalog that is
+# behind the source must be the exit status, not a message nobody reads. The
+# stubbed xcstringstool stands in for the sync; the derived data is a folder of
+# empty .stringsdata files, one per target, because the script only needs to
+# find them.
+catalog_check="$repository_root/Scripts/sync-string-catalogs.sh"
+catalog_dd="$work/catalog-dd"
+for target in OpenHikes OpenWidgetExtension OpenHikesWatch OpenHikesWatchWidgets; do
+    target_dir="$catalog_dd/Build/Intermediates.noindex/OpenHikes.build/Debug-iphonesimulator/$target.build"
+    mkdir -p "$target_dir"
+    : > "$target_dir/Example.stringsdata"
+done
+
+unset STUB_CATALOG_BEHIND || true
+run_script "sync-string-catalogs --check passes when every catalog is current" \
+    "$catalog_check" --check "$catalog_dd"
+if expect_status 0 && expect_contains "$output" "current OpenHikes/Localizable.xcstrings" "the output"; then
+    pass
+fi
+
+STUB_CATALOG_BEHIND=1 run_script "sync-string-catalogs --check exits 2 and names a catalog that is behind" \
+    "$catalog_check" --check "$catalog_dd"
+if expect_status 2 && expect_contains "$output" "OpenHikes/Localizable.xcstrings is out of date" "the output"; then
+    pass
+fi
+
+run_script "sync-string-catalogs --check changes no catalog in the checkout" \
+    git -C "$repository_root" status --porcelain -- '*.xcstrings'
+if expect_status 0 && expect_absent "$output" "xcstrings" "the working tree changes"; then
+    pass
 fi
 
 echo "App Store screenshots"

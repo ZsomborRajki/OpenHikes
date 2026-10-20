@@ -269,6 +269,14 @@ jobs:
             'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) REQUIRE_ALL_SUITES' \
             | xcbeautify --renderer github-actions --disable-logging
 
+      # The build just extracted every localizable literal in all four targets,
+      # which is the one thing that can say whether the String Catalogs are
+      # complete: an English key is not compiled into the bundle, so no test
+      # can tell. It syncs copies, changes nothing in the checkout, and exits 2
+      # naming the catalog that is behind the source.
+      - name: Check the string catalogs are current
+        run: Scripts/sync-string-catalogs.sh --check DerivedData
+
       # Booted as its own step so the first test launch does not pay for it.
       # A cold simulator is a known source of "Early unexpected exit, operation
       # never finished bootstrapping": the host app is killed by the watchdog
