@@ -161,10 +161,9 @@ struct RecordedWalkTests {
 
     // MARK: What the two figures are measured on
 
-    /// The invariant `WalkSummaryView` reads a walk against: its stored route
-    /// length has to be the length `RouteProfile` measures on the saved row,
-    /// or *Show on Map* decides the trail has changed since the walk and
-    /// refuses to draw the stretches it covered.
+    /// Coverage uses the length `RouteProfile` measures on the saved row,
+    /// and the revision names that same line, so the summary can draw the
+    /// stretches where the recording actually went.
     ///
     /// Which is why the walk is not written against `distanceMeters`: that is
     /// the figure the hiker watched tick, with the stationary windows
@@ -199,6 +198,8 @@ struct RecordedWalkTests {
             )
         )
         #expect(walk.routeDistanceMeters.isApproximatelyEqual(to: profileLength, absoluteTolerance: 0.01))
+        #expect(walk.isAlong(revision: TrailWalkRecord.routeRevision(of: prepared.route)))
+        #expect(!walk.isAlong(revision: TrailWalkRecord.routeRevision(of: prepared.route.reversed())))
         #expect(walk.coveredFraction == 1)
     }
 

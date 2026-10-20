@@ -20,12 +20,10 @@ nonisolated struct PreparedRecording: Sendable {
     /// is that, and is the figure the hike shows. This is the *axis* a walk's
     /// coverage is measured on, which is `RouteProfile.totalDistanceMeters`
     /// and nothing else: `TrailWalkSession` starts every followed walk
-    /// against that number, and `WalkSummaryView` compares a walk's stored
-    /// route length back against it to decide whether the trail on screen is
-    /// still the one that was walked. So the recording's own walk — see
-    /// ``HikeWalk/recorded(_:prepared:)`` — has to be written on the same
-    /// scale, or it would read as a walk along a trail that has since
-    /// changed.
+    /// against that number, and the summary draws its covered stretches on
+    /// that axis once the route revision agrees. So the recording's own
+    /// walk — see ``HikeWalk/recorded(_:prepared:)`` — has to use the same
+    /// scale, or its stretches would end before or beyond the saved line.
     ///
     /// Summed here, where the points are already being walked off the main
     /// thread, rather than by building a `RouteProfile` at save time: that is
