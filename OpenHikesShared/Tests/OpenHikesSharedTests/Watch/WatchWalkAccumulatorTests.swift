@@ -145,16 +145,18 @@ struct WatchWalkAccumulatorTests {
         #expect(walk.elevationLossMeters == 0)
     }
 
-    @Test("Metre-scale wobble on level ground reads the same as everywhere else")
-    func wobbleReadsLikeThePhone() {
+    @Test("Metre-scale wobble on level ground reads the same as everywhere else", arguments: [1.2, -1.2])
+    func wobbleReadsLikeThePhone(firstOffset: Double) {
         var walk = WatchWalkAccumulator()
         var reference = ElevationAccumulator()
         for step in 0..<2000 {
             // ±1.2 m alternating: past a one-metre floor every step, under the
             // three-metre reversal rule always.
-            let height = 1500 + (step.isMultiple(of: 2) ? 1.2 : -1.2)
+            let height = 1500 + (step.isMultiple(of: 2) ? firstOffset : -firstOffset)
             walk.accept(
-                latitude: Fixture.latitude + Double(step) * 0.00001,
+                // About 11 m per fix clears the displacement gate. A smaller
+                // step can drop every other height and erase the wobble.
+                latitude: Fixture.latitude + Double(step) * 0.0001,
                 longitude: Fixture.longitude,
                 timestamp: Fixture.start.addingTimeInterval(Double(step) * Fixture.stepSeconds),
                 horizontalAccuracy: 5,
@@ -162,9 +164,11 @@ struct WatchWalkAccumulatorTests {
             )
             reference.record(height)
         }
+        #expect(walk.fixes.count == 2000)
         #expect(walk.elevationGainMeters == reference.gainMeters)
         #expect(walk.elevationLossMeters == reference.lossMeters)
         #expect(walk.elevationGainMeters < ElevationAccumulator.reversalThresholdMeters)
+        #expect(walk.elevationLossMeters < ElevationAccumulator.reversalThresholdMeters)
     }
 
     @Test("A real climb and the descent off it are both counted")
