@@ -32,18 +32,84 @@ struct OutAndBackFollowTests {
 
     /// A kilometre north, then a kilometre back along the same path, the
     /// return leg three metres to the east, a point every ten metres.
-    private static var route: [RouteCoordinate] {
+    private static var route: [RouteCoordinate] { route(returnOffset: 3) }
+
+    private static func route(returnOffset: Double) -> [RouteCoordinate] {
         var line: [CLLocationCoordinate2D] = []
         for index in 0...100 { line.append(point(north: Double(index) * 10, east: 0)) }
-        for index in (0...100).reversed() { line.append(point(north: Double(index) * 10, east: 3)) }
+        for index in (0...100).reversed() { line.append(point(north: Double(index) * 10, east: returnOffset)) }
         return line.map { RouteCoordinate($0) }
     }
 
     /// Where a perfect hiker is `step` fixes in: ten metres a fix, out and back.
-    private static func fix(at step: Int) -> (coordinate: CLLocationCoordinate2D, course: Double) {
+    private static func fix(at step: Int) -> RouteFix {
         step <= 100
-            ? (point(north: Double(step) * 10, east: 0), 0)
-            : (point(north: Double(200 - step) * 10, east: 3), 180)
+            ? routeFix(north: Double(step) * 10, second: Double(step), course: 0)
+            : routeFix(north: Double(200 - step) * 10, second: Double(step), east: 3)
+    }
+
+    private static func routeFix(north: Double, second: Double, east: Double = 0, course: Double? = 180) -> RouteFix {
+        RouteFix(
+            coordinate: point(north: north, east: east),
+            course: course,
+            timestamp: Date(timeIntervalSince1970: second)
+        )
+    }
+
+    @Test("reading one cached fix again does not count as another contrary fix")
+    func cachedFixDoesNotSwitchLegs() throws {
+        let profile = RouteProfile(route: Self.route)
+        var anchor: FollowAnchor?
+        _ = FollowAnchor.advance(
+            &anchor, on: profile, to: Self.routeFix(north: 600, second: 0, course: 0), scope: .wholeRoute
+        )
+        let cached = Self.routeFix(north: 590, second: 1)
+        for _ in 0..<5 {
+            let match = try #require(FollowAnchor.advance(&anchor, on: profile, to: cached, scope: .wholeRoute))
+            #expect(match.distanceAlongRoute < profile.totalDistanceMeters / 2)
+        }
+        let second = try #require(FollowAnchor.advance(
+            &anchor, on: profile, to: Self.routeFix(north: 580, second: 2), scope: .wholeRoute
+        ))
+        #expect(second.distanceAlongRoute < profile.totalDistanceMeters / 2)
+        let third = try #require(FollowAnchor.advance(
+            &anchor, on: profile, to: Self.routeFix(north: 570, second: 3), scope: .wholeRoute
+        ))
+        #expect(third.distanceAlongRoute > profile.totalDistanceMeters / 2)
+    }
+
+    @Test("a heading cannot replace an on-trail match with an off-trail one")
+    func offTrailOpinionIsIgnored() throws {
+        let profile = RouteProfile(route: Self.route(returnOffset: 15))
+        var anchor: FollowAnchor?
+        _ = FollowAnchor.advance(
+            &anchor, on: profile, to: Self.routeFix(north: 600, second: 0, course: 0), scope: .wholeRoute
+        )
+        for second in 1...5 {
+            let fix = Self.routeFix(north: 600 - Double(second), second: Double(second), east: -70)
+            let match = try #require(FollowAnchor.advance(&anchor, on: profile, to: fix, scope: .wholeRoute))
+            #expect(match.offRouteMeters <= RouteProfile.followMatchThresholdMeters)
+            #expect(match.distanceAlongRoute < profile.totalDistanceMeters / 2)
+        }
+    }
+
+    @Test("an unusable or off-trail fix interrupts the run of contrary fixes", arguments: [false, true])
+    func rejectedFixInterruptsContraryRun(offTrail: Bool) throws {
+        let profile = RouteProfile(route: Self.route)
+        var anchor: FollowAnchor?
+        _ = FollowAnchor.advance(
+            &anchor, on: profile, to: Self.routeFix(north: 600, second: 0, course: 0), scope: .wholeRoute
+        )
+        for second in 1...2 {
+            let fix = Self.routeFix(north: 600 - Double(second), second: Double(second))
+            _ = FollowAnchor.advance(&anchor, on: profile, to: fix, scope: .wholeRoute)
+        }
+        let rejected = offTrail ? Self.routeFix(north: 590, second: 3, east: -200) : nil
+        _ = FollowAnchor.advance(&anchor, on: profile, to: rejected, scope: .wholeRoute)
+        let resumed = try #require(FollowAnchor.advance(
+            &anchor, on: profile, to: Self.routeFix(north: 590, second: 4), scope: .wholeRoute
+        ))
+        #expect(resumed.distanceAlongRoute < profile.totalDistanceMeters / 2)
     }
 
     @Test("a hiker walking home is followed along the return leg")
@@ -56,15 +122,10 @@ struct OutAndBackFollowTests {
         var lastOnTheWayBack = 0.0
 
         for step in 0..<200 {
-            let (coordinate, course) = Self.fix(at: step)
-            let (found, contraryFixes) = FollowAnchor.advance(
-                anchor, on: profile, to: coordinate, course: course, scope: .wholeRoute
-            )
-            let match = try #require(found)
+            let match = try #require(FollowAnchor.advance(
+                &anchor, on: profile, to: Self.fix(at: step), scope: .wholeRoute
+            ))
             #expect(match.offRouteMeters <= RouteProfile.followMatchThresholdMeters)
-            anchor = .matched(
-                at: match.distanceAlongRoute, course: course, from: anchor, contraryFixes: contraryFixes
-            )
             coverage.record(distance: match.distanceAlongRoute)
             furthest = max(furthest, match.distanceAlongRoute)
             if step > 100 { lastOnTheWayBack = match.distanceAlongRoute }
@@ -84,26 +145,16 @@ struct OutAndBackFollowTests {
         let profile = RouteProfile(route: Self.route)
         var anchor: FollowAnchor?
         for step in 0...50 {
-            let (coordinate, course) = Self.fix(at: step)
-            let (found, contraryFixes) = FollowAnchor.advance(
-                anchor, on: profile, to: coordinate, course: course, scope: .wholeRoute
-            )
-            let match = try #require(found)
-            anchor = .matched(
-                at: match.distanceAlongRoute, course: course, from: anchor, contraryFixes: contraryFixes
-            )
+            _ = try #require(FollowAnchor.advance(
+                &anchor, on: profile, to: Self.fix(at: step), scope: .wholeRoute
+            ))
         }
 
-        let standing = Self.point(north: 500, east: 0)
-        for _ in 0..<(FollowAnchor.contraryFixesToSwitch - 1) {
-            let (found, contraryFixes) = FollowAnchor.advance(
-                anchor, on: profile, to: standing, course: 180, scope: .wholeRoute
-            )
-            let match = try #require(found)
+        for second in 1..<FollowAnchor.contraryFixesToSwitch {
+            let match = try #require(FollowAnchor.advance(
+                &anchor, on: profile, to: Self.routeFix(north: 500, second: Double(50 + second)), scope: .wholeRoute
+            ))
             #expect(match.distanceAlongRoute < profile.totalDistanceMeters / 2, "still on the way out")
-            anchor = .matched(
-                at: match.distanceAlongRoute, course: 180, from: anchor, contraryFixes: contraryFixes
-            )
         }
     }
 }
