@@ -60,10 +60,11 @@ nonisolated struct HikePhotoTimeline: Sendable {
         let timestamp: Date
         let latitude: Double
         let longitude: Double
-        /// Whether the recording was paused over the stretch arriving at this
-        /// fix — ``RouteCoordinate/isPauseBoundary`` carried across, so the
-        /// lookup can tell a resume from the next step of the same segment.
-        let resumesAfterPause: Bool
+        /// Which continuous recording segment supplied this fix. Assigned in
+        /// route order before filtering, sorting or collapsing duplicates: a
+        /// resume can be dropped or moved, but fixes from different segments
+        /// still must not be joined.
+        let segment: Int
 
         var coordinate: CLLocationCoordinate2D {
             CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -111,28 +112,27 @@ nonisolated struct HikePhotoTimeline: Sendable {
     init?(route: [RouteCoordinate]) {
         var stamped: [Fix] = []
         stamped.reserveCapacity(route.count)
-        // A pause describes the leg *arriving* at its point, so one on a
-        // point without a timestamp is not dropped with the point: it moves to
-        // the next fix that has one, whose arriving leg now spans that pause.
-        var pausedSinceLastFix = false
+        // Number segments before dropping untimestamped points: a pause on
+        // one still separates the timestamped fixes either side of it.
+        var segment = 0
         for point in route {
-            pausedSinceLastFix = pausedSinceLastFix || point.isPauseBoundary
+            if point.isPauseBoundary { segment += 1 }
             guard let timestamp = point.timestamp else { continue }
             stamped.append(
                 Fix(
                     timestamp: timestamp,
                     latitude: point.latitude,
                     longitude: point.longitude,
-                    resumesAfterPause: pausedSinceLastFix
+                    segment: segment
                 )
             )
-            pausedSinceLastFix = false
         }
         guard !stamped.isEmpty else { return nil }
         // Sorted by timestamp, and only the first of any duplicate kept: two
         // fixes sharing a second would make the interpolation below divide by
         // zero, and a GPX writer that rounds to whole seconds produces them
-        // routinely.
+        // routinely. A duplicate can discard a resume, but the next surviving
+        // fix still carries its segment and keeps the pause intact.
         //
         // `chunked(by:)` rather than `uniqued(on:)` because the sort above has
         // already put equal timestamps next to each other, so taking the first
@@ -163,7 +163,7 @@ nonisolated struct HikePhotoTimeline: Sendable {
         // A paused leg is not a stretch of the walk at all, so there is no
         // line to interpolate along — only the segment that ended before it
         // and the one that resumed after it, each placed at its own end.
-        if later.resumesAfterPause {
+        if earlier.segment != later.segment {
             return sinceEarlier <= untilLater
                 ? endPosition(earlier, offsetTo: date)
                 : endPosition(later, offsetTo: date)
