@@ -19,10 +19,11 @@ struct WatchFigure: View {
     /// the tile. Shrinking is the lesser cost, and 0.6 is where the digits
     /// stop being legible at arm's length.
     private static let minimumScale = 0.6
-    /// The caption, in points. Below `.caption2` on purpose: these labels are
-    /// one word each and are read once, while the values beside them are read
-    /// on every glance.
-    private static let captionSize = 10.0
+    /// The caption, in points at the default text size. Below `.caption2` on
+    /// purpose: these labels are one word each and are read once, while the
+    /// values beside them are read on every glance. Scaled with `.caption2`, so
+    /// it still grows when the value above it does.
+    @ScaledMetric(relativeTo: .caption2) private var captionSize = 10.0
 
     let title: String
     let value: String
@@ -34,7 +35,7 @@ struct WatchFigure: View {
                 .minimumScaleFactor(Self.minimumScale)
                 .lineLimit(1)
             Text(title)
-                .font(.system(size: Self.captionSize))
+                .font(.system(size: captionSize))
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)

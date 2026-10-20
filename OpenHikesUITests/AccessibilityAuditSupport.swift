@@ -29,9 +29,9 @@ nonisolated enum AccessibilityAudit {
     /// - `.dynamicType` reports SwiftUI nodes whose font it cannot introspect,
     ///   including a navigation bar's system "Done" button and `Form` section
     ///   footers — text this app neither styles nor sizes. Every font it does
-    ///   set is a semantic one, which scales by definition; the only fixed
-    ///   sizes are decorative glyphs inside fixed frames, already hidden from
-    ///   VoiceOver. ``StatStrip`` and ``StatRow`` cover the case that actually mattered.
+    ///   set is a semantic one or a `@ScaledMetric`
+    ///   size, which scale; the only fixed sizes are decorative glyphs inside
+    ///   fixed frames, already hidden from VoiceOver. ``StatStrip`` and ``StatRow`` cover the case that actually mattered.
     static let types: XCUIAccessibilityAuditType = .all
         .subtracting(.contrast)
         .subtracting(.textClipped)
