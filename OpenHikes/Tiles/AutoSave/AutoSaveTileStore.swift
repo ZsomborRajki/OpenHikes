@@ -109,6 +109,18 @@ nonisolated final class AutoSaveTileStore: Sendable {
         }
     }
 
+    /// Withdraws the active hike's corridor while one is prepared for its
+    /// edited route, keeping everything the hike already owns.
+    ///
+    /// ``beginActiveHike(id:knownKeys:acceptsNewClaims:)`` empties the
+    /// corridor too, but replaces the ownership state along with it — pending
+    /// set included, the only record of tiles saved since the last drain.
+    /// Empty rather than kept, so the old line's bounds claim nothing for a
+    /// route that no longer goes there.
+    func beginPreparingCorridor(for hikeID: UUID) {
+        updateCorridor(TileCorridor(route: [], bufferMeters: 0), for: hikeID)
+    }
+
     /// Applies a prepared corridor only if the same hike is still active.
     func updateCorridor(_ corridor: TileCorridor, for hikeID: UUID) {
         state.withLock { state in
