@@ -198,12 +198,15 @@ struct SettingsView: View {
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
                 // The map's credits and the layer's, as the line on the map
-                // draws them, so what is credited here is what is drawn there.
+                // draws them, then every other source a card above shows
+                // imagery from: a card is that provider's imagery too.
                 if let drawn = TileAttribution.drawn(
                     base: selectedProvider.attribution,
                     layer: TileLayer.shown(isOn: showsHikingRoutes)?.attribution
                 ) {
-                    TileAttributionView(attribution: drawn)
+                    TileAttributionView(attribution: drawn.including(
+                        previews: TileProvider.all.filter(Secrets.canLoadTiles).map(\.attribution)
+                    ))
                 }
                 mapTilesCostNote
                 if TileProvider.all.contains(where: { !Secrets.canLoadTiles($0) }) {
