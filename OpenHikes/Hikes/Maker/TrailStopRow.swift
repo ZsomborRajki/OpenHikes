@@ -11,13 +11,19 @@
 //  gone because the number was never the interesting fact; the order is, and
 //  the list already draws that.
 //
-//  It says that in one line, as Apple Maps' directions list does: the name
-//  when there is one, the role until then — two at an accessibility type size,
-//  where one would leave a long name a few letters wide. The distance along the
-//  line is the row's accessibility value now, because the map draws it. A leg
-//  with something wrong with it keeps a mark at the row's trailing edge, the
-//  notice's own glyph, because the footer can only say what is wrong and not
-//  where; its sentence is in the value too. Last on the row, as in Maps, is
+//  Its heading is the name when there is one and the role until then, as in
+//  Apple Maps' directions list — one line, two at an accessibility type size,
+//  where one would leave a long name a few letters wide. **Under a heading
+//  there is a second line**, which Maps does not draw: the role again once a
+//  name has taken its place, and how far along the route the stop sits (see
+//  ``TrailStopRole/detail(isNamed:along:)``). It was one line until a route
+//  drawn in a forest listed two stops as "4810 Gmunden" — MapKit's postcode,
+//  for each — over pins numbered 1 and 2, with nothing on either row to say
+//  which pin it was. A name can be no help at all; the role and the distance
+//  are never the same twice. A leg with something wrong with it keeps a mark
+//  at the row's trailing edge, the notice's own glyph, because the footer can
+//  only say what is wrong and not where; its sentence is in the accessibility
+//  value, beside the role and the distance. Last on the row, as in Maps, is
 //  the three-line grabber that says the row can be dragged.
 //
 //  ## The line is drawn by the rows, not between them
@@ -106,6 +112,14 @@ struct TrailStopRowView: View {
     /// drawn at 96% at the medium detent — the same 34-pixel capitals in each
     /// say the scale is shared, so the pixels compare directly.
     static let rowPadding: CGFloat = 16
+    /// The same, for a row with a second line under its heading. Less than
+    /// ``rowPadding``, so the line adds 8 points to the row rather than 20 —
+    /// 58 against 50 for one line, measured off a 3× screenshot of this sheet
+    /// at the default type size — and a route of several stops stays a list a
+    /// hiker can see the end of.
+    static let detailedRowPadding: CGFloat = 10
+    /// Between a heading and the line under it.
+    private static let detailSpacing: CGFloat = 2
     /// No vertical inset, so the stems reach the row's edges, and the 16
     /// points either side every row in the card has.
     static let rowInsets = EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
@@ -115,6 +129,7 @@ struct TrailStopRowView: View {
     var body: some View {
         let slots = draft.slots
         let slot = slots.indices.contains(position) ? slots[position] : .open(.end)
+        let detail = Self.detail(of: slot, in: draft)
         Button(action: onSearch) {
             HStack(alignment: .center, spacing: Self.railSpacing) {
                 rail(
@@ -122,9 +137,9 @@ struct TrailStopRowView: View {
                     isOpen: slot.waypointIndex == nil,
                     count: slots.count
                 )
-                text(slot)
+                text(slot, detail: detail)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
-                    .padding(.vertical, Self.rowPadding)
+                    .padding(.vertical, detail == nil ? Self.rowPadding : Self.detailedRowPadding)
                 Spacer(minLength: 0)
                 legMark(slot)
                 Self.grabber
@@ -180,12 +195,12 @@ struct TrailStopRowView: View {
         .accessibilityHidden(true)
     }
 
-    /// What this stop is called: its name once it has one, its role until
-    /// then. One line and nothing under it, as in Apple Maps — the row is there
-    /// to be found in a list, and what the route does between two stops is the
-    /// map's to draw and the footer's to sum up.
+    /// What this stop is called — its name once it has one, its role until
+    /// then — and under it `detail`, the line that tells it from every other
+    /// row. What the route does between two stops is still the map's to draw
+    /// and the footer's to sum up.
     @ViewBuilder
-    private func text(_ slot: TrailStopSlot) -> some View {
+    private func text(_ slot: TrailStopSlot, detail: String?) -> some View {
         switch slot {
         case .open:
             // By place, like the identifier above.
@@ -193,8 +208,28 @@ struct TrailStopRowView: View {
                 .foregroundStyle(.secondary)
         case .point(let index, _):
             let name = draft.name(ofWaypointAt: index)
-            Text(name.isEmpty ? draft.role(ofWaypointAt: index).title : name)
+            VStack(alignment: .leading, spacing: Self.detailSpacing) {
+                Text(name.isEmpty ? draft.role(ofWaypointAt: index).title : name)
+                if let detail {
+                    Text(detail)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        // VoiceOver hears the role and the distance in the
+                        // value, beside the leg's notice — see `spokenDetail`.
+                        .accessibilityHidden(true)
+                }
+            }
         }
+    }
+
+    /// The line under a stop's heading, or `nil` for an open field and for
+    /// an unnamed start, which have nothing to add to theirs.
+    private static func detail(of slot: TrailStopSlot, in draft: TrailDraft) -> String? {
+        guard case .point(let index, _) = slot else { return nil }
+        return draft.role(ofWaypointAt: index).detail(
+            isNamed: !draft.name(ofWaypointAt: index).isEmpty,
+            along: draft.distanceAlongLine(toWaypointAt: index)
+        )
     }
 
     /// The three lines Apple Maps draws at the trailing edge of every row it
@@ -225,10 +260,10 @@ struct TrailStopRowView: View {
         }
     }
 
-    /// What the row no longer prints, still said to VoiceOver: the role a
+    /// What the row says beside its heading, said to VoiceOver: the role a
     /// name hides, how far along the stop sits, and what the leg into it has
-    /// to report. The eye gets the second from the map and the third from the
-    /// row's mark and the footer's sentence.
+    /// to report. The eye gets the first two from the row's second line and
+    /// the third from the row's mark and the footer's sentence.
     private func spokenDetail(_ slot: TrailStopSlot) -> String {
         guard case .point(let index, _) = slot else { return "" }
         let isNamed = !draft.name(ofWaypointAt: index).isEmpty

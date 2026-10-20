@@ -94,9 +94,10 @@ struct TrailPlaceCard: Equatable {
             let waypoint = draft.waypoints[index]
             let role = draft.role(ofWaypointAt: index)
             title = waypoint.name.isEmpty ? role.title : waypoint.name
-            subtitle = Self.subtitle(
-                kind: waypoint.name.isEmpty ? nil : role.title,
-                distance: draft.distanceAlongLine(toWaypointAt: index)
+            // What its row says under the same heading.
+            subtitle = role.detail(
+                isNamed: !waypoint.name.isEmpty,
+                along: draft.distanceAlongLine(toWaypointAt: index)
             )
             systemImage = role.systemImageName
             tint = .accentColor
@@ -125,7 +126,9 @@ struct TrailPlaceCard: Equatable {
         }
     }
 
-    static func subtitle(kind: String?, distance: Double?) -> String? {
+    /// `nonisolated`, because ``TrailStopRole/detail(isNamed:along:)`` says
+    /// its distance in these words and the role is not main-actor.
+    nonisolated static func subtitle(kind: String?, distance: Double?) -> String? {
         let along = distance.map { meters in
             let length = Measurement(value: meters, unit: UnitLength.meters)
                 .formatted(.measurement(width: .abbreviated, usage: .road))

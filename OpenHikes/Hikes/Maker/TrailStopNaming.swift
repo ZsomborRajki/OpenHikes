@@ -116,20 +116,42 @@ struct MapKitTrailStopNaming: TrailStopNaming {
 ///
 /// - ``chosen(_:)`` answers *what did the hiker pick*, and the hiker picked a
 ///   row that said a name. A search result always carries a real one.
-/// - ``here(_:)`` answers *what is at this coordinate*, which is what an
+/// - ``here(_:at:)`` answers *what is at this coordinate*, which is what an
 ///   address is for — the same answer Apple Maps gives a dropped pin. It never
 ///   falls back to the name, so the placeholder has nowhere to get in.
+///
+/// ## An answer can be about somewhere else
+///
+/// Where MapKit has no address near a point it does not say so. It answers
+/// with the whole area the point is in, placed at the area's middle: a pin
+/// dropped in the forest above the Traunsee comes back as "4810 Gmunden", the
+/// postcode, standing 1.8 km from the pin — and so does every other pin in
+/// that forest, which is how two rows of one route came to read the same.
+/// That is not rare on a hillside, it is usual. Of fifty random spots across
+/// five Alpine regions, measured on 2026-10-20, thirty came back as a postcode
+/// and six as a park or a municipality, placed 0.4–25 km from the spot and
+/// all but two of them more than ``farthestAnswerMeters`` away; the nine
+/// street addresses stood within 70 m, and the five named things — a summit,
+/// a cable-car station, a valley — within 570 m. So ``here(_:at:)`` asks how
+/// far the answer stands from the spot before it calls the spot by it, which
+/// keeps every one of the latter and nearly none of the former. The place
+/// sheet's ``address(of:)`` does not, because it answers a different
+/// question: *where* a spot is, which "4810 Gmunden" truthfully says.
 nonisolated enum TrailStopName {
+    /// How far MapKit's answer may stand from a spot and still name it — see
+    /// *An answer can be about somewhere else*, above.
+    static let farthestAnswerMeters: CLLocationDistance = 1000
+
     /// The best line for a place the hiker chose out of the search: its name,
     /// and its address only if MapKit declines to name it.
     static func chosen(_ item: MKMapItem?) -> String? {
         guard let item else { return nil }
-        return first(of: [item.name, item.address?.shortAddress, item.address?.fullAddress])
+        return first(of: [item.name, shortAddress(of: item), item.address?.fullAddress])
     }
 
     /// The whole address, for the place sheet, where there is room for it.
     static func address(of item: MKMapItem) -> String? {
-        first(of: [item.address?.fullAddress, item.address?.shortAddress])
+        first(of: [item.address?.fullAddress, shortAddress(of: item)])
     }
 
     /// The best line for a coordinate nobody named — a tap on the map.
@@ -137,10 +159,28 @@ nonisolated enum TrailStopName {
     /// The address and nothing else. `nil` for an item with no address at all,
     /// which is an item MapKit could not place: its `name` in that state is the
     /// placeholder described above, and a row reading "Unknown Location" says
-    /// strictly less than one reading "Stop 2".
-    static func here(_ item: MKMapItem?) -> String? {
+    /// strictly less than one reading "Stop 2". And `nil` for an answer
+    /// standing further than ``farthestAnswerMeters`` from `coordinate`, which
+    /// is the area the spot is in rather than anything at it: "Stop 2" is the
+    /// honest answer there too, and unlike the area it is never also the name
+    /// of the row above.
+    static func here(_ item: MKMapItem?, at coordinate: CLLocationCoordinate2D) -> String? {
         guard let item else { return nil }
-        return first(of: [item.address?.shortAddress, item.address?.fullAddress])
+        let spot = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        guard item.location.distance(from: spot) <= farthestAnswerMeters else { return nil }
+        return first(of: [shortAddress(of: item), item.address?.fullAddress])
+    }
+
+    /// MapKit's short address, without the empty part it carries for a place
+    /// with no street: "Traunstein,, Gmunden" for the summit, measured on
+    /// 2026-10-20, where the same answer's full address has no gap.
+    private static func shortAddress(of item: MKMapItem) -> String? {
+        item.address?.shortAddress.map { address in
+            address
+                .split(separator: ",", omittingEmptySubsequences: false)
+                .filter { !$0.allSatisfy(\.isWhitespace) }
+                .joined(separator: ",")
+        }
     }
 
     /// The first candidate with anything in it, bounded.
@@ -274,7 +314,10 @@ final class TrailStopNamer {
                 // the point as finished-with as an answer does, and a call
                 // arriving mid-request must not queue the same point again.
                 self?.startAsking(question)
-                let name = TrailStopName.here(await source.mapItem(at: question.clCoordinate))
+                let name = TrailStopName.here(
+                    await source.mapItem(at: question.clCoordinate),
+                    at: question.clCoordinate
+                )
                 guard !Task.isCancelled, let self else { return }
                 guard let name else {
                     Self.logger.info("No name found for a drawn point")

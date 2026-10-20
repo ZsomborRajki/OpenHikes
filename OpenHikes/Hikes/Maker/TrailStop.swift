@@ -114,6 +114,20 @@ nonisolated enum TrailStopRole: Hashable, Sendable {
         }
     }
 
+    /// What a stop says under its heading: its row's second line, its pin's
+    /// subtitle and its card's, so the three never disagree.
+    ///
+    /// The role when a name has taken the heading, because the role is the
+    /// one word that ties a row to its numbered pin — two rows both reading
+    /// "4810 Gmunden" over pins 1 and 2 say nothing about which is which. Then
+    /// how far along the route the stop sits, which changes from one stop to
+    /// the next however alike their names are. No distance where it is
+    /// nothing — at the start, or at a lone point — so an unnamed one of those
+    /// has no line at all: its heading already says everything there is.
+    func detail(isNamed: Bool, along meters: Double) -> String? {
+        TrailPlaceCard.subtitle(kind: isNamed ? title : nil, distance: meters > 0 ? meters : nil)
+    }
+
     /// The glyph on the route's own line. Filled at the two ends and hollow in
     /// between, which is the whole of what a picture of a route has to say:
     /// these are where it begins and finishes, and those are places it passes.
