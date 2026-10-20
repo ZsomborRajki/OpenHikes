@@ -515,26 +515,26 @@ struct TrailDraftView: View {
     /// An edit whose hike has gone — deleted on this device or another while
     /// the drawing was open — is saved as a new trail instead, because the
     /// drawing is still the hiker's work and there is nothing left to write
-    /// it into.
+    /// it into. One the store could not read is refused instead, with the
+    /// drawing kept for the next Save — see ``TrailDraftSaveTarget``.
     private func saveTapped() {
-        guard let id = maker.editingHikeID,
-              let hike = try? modelContext.fetch(
-                  FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
-              ).first
-        else {
+        switch TrailDraftSaveTarget.resolve(editing: maker.editingHikeID, in: modelContext) {
+        case .newTrail:
             startNaming()
-            return
-        }
-        finish(
-            TrailDraftSave.update(
-                hike,
-                from: draft,
-                openedWith: maker.editingPlaceIDs,
-                into: modelContext,
-                heights: maker.elevation.samples,
-                keepingPlaces: maker.finder.filter.placesShown
+        case .edit(let hike):
+            finish(
+                TrailDraftSave.update(
+                    hike,
+                    from: draft,
+                    openedWith: maker.editingPlaceIDs,
+                    into: modelContext,
+                    heights: maker.elevation.samples,
+                    keepingPlaces: maker.finder.filter.placesShown
+                )
             )
-        )
+        case .refused(let refusal):
+            finish(.refused(refusal))
+        }
     }
 
     /// Asks what to call it, with the field blank.
