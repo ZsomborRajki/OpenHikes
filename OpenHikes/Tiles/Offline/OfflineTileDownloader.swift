@@ -61,6 +61,13 @@ final class OfflineTileDownloader {
         let saved: Bool
     }
 
+    /// A reservation's identity is independent of the download generation
+    /// (shared by planning and confirmation) and of the system's handle.
+    nonisolated private struct BackgroundTimeGrant: Equatable, Sendable {
+        let owner: UUID
+        let token: BackgroundTimeToken
+    }
+
     private(set) var phase: Phase = .idle
     /// Tiles actually saved so far — not tiles attempted.
     ///
@@ -174,7 +181,7 @@ final class OfflineTileDownloader {
     /// The grant currently held, so the run can give it back exactly once.
     /// `nil` between runs and for a run the system refused — the same state
     /// as far as `releaseBackgroundTime(_:)` is concerned.
-    private var backgroundTimeToken: BackgroundTimeToken?
+    private var backgroundTimeGrant: BackgroundTimeGrant?
 
     init(
         gate: TileLoadGate = .shared,
@@ -252,21 +259,16 @@ final class OfflineTileDownloader {
         // Before the task starts rather than inside it, so a hiker who taps
         // Save and locks the phone in the same second is already covered.
         let grant = reserveBackgroundTime()
-        task = Task { [weak self] in
-            await self?.prepareAndRun(
+        task = Task { [self] in
+            // The run outlives its screen, including a screen released before
+            // this task starts. Keep its owner through the cleanup as well.
+            defer { releaseBackgroundTime(grant) }
+            await prepareAndRun(
                 route: route,
                 source: source,
                 maxZoom: maxZoom,
                 generation: currentGeneration
             )
-            // Whatever the run did — finished, failed, was superseded or was
-            // cancelled out from under itself — the grant goes back here.
-            // Holding one after the work has stopped is how an app gets
-            // killed on the next expiry instead of suspended. *This run's*
-            // grant, not whichever the downloader holds by now: a cancelled
-            // run's tail can land after a restart took a new one, and ending
-            // that leaves the new run suspendable mid-download (#876).
-            self?.releaseBackgroundTime(grant)
         }
         lastRun = task
     }
@@ -366,8 +368,7 @@ final class OfflineTileDownloader {
         // stopped to ask, and a hiker who taps to free space and locks the
         // phone is the same hiker `start` reserves for (#882).
         let grant = reserveBackgroundTime()
-        task = Task { [weak self] in
-            guard let self else { return }
+        task = Task { [self] in
             defer { releaseBackgroundTime(grant) }
             let plannedKeys = Set(
                 pending.tiles.map { tile in
@@ -666,7 +667,7 @@ extension OfflineTileDownloader {
         // Given back here as well as in the task's tail: a cancelled task's
         // tail is not guaranteed to run promptly and the system is counting.
         // Both paths are idempotent.
-        releaseBackgroundTime(backgroundTimeToken)
+        releaseBackgroundTime(backgroundTimeGrant)
         finishPlanning()
     }
 
@@ -677,37 +678,37 @@ extension OfflineTileDownloader {
     /// and the download then behaves exactly as it did before this existed —
     /// it stalls on lock and resumes on return. Nothing is reported, because
     /// there is nothing the hiker could do about it.
-    private func reserveBackgroundTime() -> BackgroundTimeToken? {
+    private func reserveBackgroundTime() -> BackgroundTimeGrant? {
         // A run already holding one is a run being restarted. Give the old
         // grant back first rather than leaking it: the system counts them,
         // and an unreturned task is charged against the app either way.
-        releaseBackgroundTime(backgroundTimeToken)
-        let owner = generation
-        backgroundTimeToken = backgroundTime.begin { [weak self] in
+        releaseBackgroundTime(backgroundTimeGrant)
+        let owner = UUID()
+        guard let token = backgroundTime.begin({ [weak self] in
             // The system is about to reclaim the time. Stopping is not
             // optional here — an app still running when the grant expires is
             // killed rather than suspended, and a killed run is the one
-            // outcome that costs the hiker every tile it fetched. Only the
-            // run this grant was taken for: every path that moves
-            // `generation` on has already ended it, so a later run is not
-            // this handler's to stop.
-            guard let self, generation == owner else { return }
+            // outcome that costs the hiker every tile it fetched. An ended
+            // grant's late callback must leave both the space prompt and a
+            // confirmed run alone, although they share its plan's generation.
+            guard let self, backgroundTimeGrant?.owner == owner else { return }
             cancel()
-        }
-        return backgroundTimeToken
+        }) else { return nil }
+        let grant = BackgroundTimeGrant(owner: owner, token: token)
+        backgroundTimeGrant = grant
+        return grant
     }
 
     /// Gives `grant` back, once, and only while it is still the one held.
     ///
     /// Idempotent by clearing the token before spending it, which is what
     /// lets both the task's tail and ``cancel()`` call it without the second
-    /// one ending a task the system has already reclaimed. Matched on the
-    /// token rather than taking whatever is held, because a superseded run's
-    /// tail can run after its successor reserved: what is held then is the
-    /// successor's, and not the tail's to end (#876).
-    private func releaseBackgroundTime(_ grant: BackgroundTimeToken?) {
-        guard let grant, grant == backgroundTimeToken else { return }
-        backgroundTimeToken = nil
-        backgroundTime.end(grant)
+    /// one ending a task the system has already reclaimed. The owner also
+    /// distinguishes reservations if the system reuses an ended token, so a
+    /// superseded run's tail cannot release its successor's time (#876).
+    private func releaseBackgroundTime(_ grant: BackgroundTimeGrant?) {
+        guard let grant, grant == backgroundTimeGrant else { return }
+        backgroundTimeGrant = nil
+        backgroundTime.end(grant.token)
     }
 }
