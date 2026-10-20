@@ -115,6 +115,29 @@ nonisolated struct TileAttribution: Hashable, Sendable {
             return reached.insert(url).inserted
         })
     }
+
+    /// These credits, then every party in `previews` not already named — for
+    /// a screen that shows other sources' imagery beside the map it credits.
+    ///
+    /// Settings is that screen: each of its map cards is drawn from its own
+    /// source's tiles, or a MapKit snapshot, whichever map is selected, and a
+    /// thumbnail of a provider's imagery is still its imagery. So the line
+    /// under the cards credits all of them, not only the selected one.
+    ///
+    /// A party is the same one twice when its licence link is — the rule
+    /// ``drawn(base:layer:)`` uses, and for the same reason the spelling
+    /// already here wins. Apple's unlinked credit is kept, once: a snapshot
+    /// carries no **Legal** link of its own, so in Settings nothing else
+    /// names Apple.
+    func including(previews: [Self]) -> Self {
+        var named = Set(credits.map(Self.identity(of:)))
+        let added = previews.flatMap(\.credits).filter { named.insert(Self.identity(of: $0)).inserted }
+        return Self(credits + added)
+    }
+
+    private static func identity(of credit: Credit) -> String {
+        credit.url?.absoluteString ?? credit.title
+    }
 }
 
 nonisolated extension TileAttribution.Credit {
