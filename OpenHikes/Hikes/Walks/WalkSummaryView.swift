@@ -47,7 +47,10 @@ struct WalkSummaryView: View {
     private var hike: Hike? { walk.hike }
     private var tint: Color { hike?.tintOpaque ?? .green }
     private var percent: Int { Int((walk.coveredFraction * 100).rounded()) }
-    private var profile: RouteProfile? { trail?.profile }
+    private var profile: RouteProfile? {
+        guard let trail, trail.key == WalkSummaryRouteKey(walk: walk) else { return nil }
+        return trail.profile
+    }
     private var ascentMeters: Double? { profile?.elevation.gainMeters }
 
     /// Whether the trail on screen is still the one this walk was walked
@@ -58,7 +61,7 @@ struct WalkSummaryView: View {
     /// still being built: there is nothing to draw along yet either way.
     private var routeMatchesWalk: Bool {
         guard let trail else { return false }
-        return walk.isAlong(revision: trail.revision)
+        return trail.matches(walk)
     }
 
     /// The same disagreement, once it is known to be one rather than a
@@ -101,10 +104,14 @@ struct WalkSummaryView: View {
         // stretches along the line that was replaced.
         .task(id: WalkSummaryRouteKey(walk: walk)) {
             let key = WalkSummaryRouteKey(walk: walk)
-            // The old line must not be drawn along while the new one is built.
-            if trail?.key != key { trail = nil }
+            // Clear an outdated line only when one exists: writing nil over
+            // nil rebuilds the summary without changing what it can show.
+            if let preparedKey = trail?.key, preparedKey != key { trail = nil }
             guard !key.route.isEmpty else { return }
-            trail = await Self.trail(along: key)
+            guard let prepared = try? await WalkSummaryTrail.prepare(along: key),
+                  !Task.isCancelled,
+                  key == WalkSummaryRouteKey(walk: walk) else { return }
+            trail = prepared
         }
         // A `.task` rather than the unstructured `Task` the button used to
         // start: that one outlived this view, and a hiker who backed out and
@@ -202,7 +209,7 @@ struct WalkSummaryView: View {
 
     /// *Show on Map*, and the one case where it cannot draw.
     ///
-    /// The length disagreement is a state the button is in, not something the
+    /// The route disagreement is a state the button is in, not something the
     /// tap discovers: it used to stay live on a re-imported route, return
     /// silently, and leave the hiker tapping a control that did nothing and
     /// explained nothing.
@@ -229,24 +236,10 @@ struct WalkSummaryView: View {
 
     /// Draws the covered stretches over the route and fits the map to it.
     private func showOnMap() async {
-        guard routeMatchesWalk, let profile else { return }
-        let segments = await WalkHighlight.segments(covering: walk.coverage.ranges, along: profile)
-        // The await above is where a selection change gets in. Cancellation
-        // is what this view's lifetime speaks through, so it is asked again
-        // here rather than only before the await.
-        guard !Task.isCancelled else { return }
+        guard let trail, let segments = try? await trail.coveredSegments(of: walk) else { return }
         walkHighlight.show(segments)
         mapController.fitToRoute()
         onShowOnMap()
-    }
-
-    @concurrent
-    private static func trail(along key: WalkSummaryRouteKey) async -> WalkSummaryTrail {
-        WalkSummaryTrail(
-            key: key,
-            profile: RouteProfile(route: key.route),
-            revision: TrailWalkRecord.routeRevision(of: key.route)
-        )
     }
 
     private static func length(_ meters: Double) -> String {
@@ -275,4 +268,40 @@ nonisolated struct WalkSummaryTrail: Sendable {
     let key: WalkSummaryRouteKey
     let profile: RouteProfile
     let revision: String
+
+    @concurrent
+    static func prepare(along key: WalkSummaryRouteKey) async throws(CancellationError) -> Self {
+        assertOffMainThread("Walk summary route preparation must stay off the main thread")
+        let built = try RouteProfile.cancellable(route: key.route)
+        let signature = TrailWalkRecord.routeRevision(of: key.route)
+        guard !Task.isCancelled else { throw CancellationError() }
+        return Self(
+            key: key,
+            profile: built,
+            revision: signature
+        )
+    }
+
+    /// The prepared line must still be current as well as the walk's own.
+    /// A route edit can arrive before SwiftUI restarts its preparation task.
+    @MainActor
+    func matches(_ walk: HikeWalk) -> Bool {
+        key == WalkSummaryRouteKey(walk: walk) && walk.isAlong(revision: revision)
+    }
+
+    /// An edit during the off-main calculation invalidates the request just
+    /// as leaving the summary does. Neither may apply its old geometry or
+    /// move the camera to a route the calculation was never about.
+    @MainActor
+    func coveredSegments(
+        of walk: HikeWalk,
+        using build: ([ClosedRange<Double>], RouteProfile) async -> [[CLLocationCoordinate2D]] = { ranges, profile in
+            await WalkHighlight.segments(covering: ranges, along: profile)
+        }
+    ) async throws(CancellationError) -> [[CLLocationCoordinate2D]] {
+        guard matches(walk) else { throw CancellationError() }
+        let segments = await build(walk.coverage.ranges, profile)
+        guard !Task.isCancelled, matches(walk) else { throw CancellationError() }
+        return segments
+    }
 }
