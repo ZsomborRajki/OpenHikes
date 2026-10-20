@@ -13,21 +13,25 @@ struct WatchRecordingJournalBufferTests {
     func fixesWaitForACount() {
         var buffer = WatchRecordingJournalBuffer()
         for step in 0..<(WatchRecordingJournalBuffer.maximumPendingFixes - 1) {
-            #expect(buffer.add(.fix(Self.fix(seconds: Double(step))), at: Self.time(Double(step))).isEmpty)
+            let isDue = buffer.add(.fix(Self.fix(seconds: Double(step))), at: Self.time(Double(step)))
+            #expect(!isDue)
         }
-        let due = buffer.add(.fix(Self.fix(seconds: 20)), at: Self.time(20))
-        #expect(due.count == WatchRecordingJournalBuffer.maximumPendingFixes)
-        #expect(buffer.pending.isEmpty)
+        let isDue = buffer.add(.fix(Self.fix(seconds: 20)), at: Self.time(20))
+        #expect(isDue)
+        #expect(buffer.pending.count == WatchRecordingJournalBuffer.maximumPendingFixes)
     }
 
     @Test("A fix does not wait longer than the interval")
     func fixesWaitForATime() {
         var buffer = WatchRecordingJournalBuffer()
-        #expect(buffer.add(.fix(Self.fix(seconds: 0)), at: Self.time(0)).isEmpty)
-        #expect(buffer.add(.fix(Self.fix(seconds: 10)), at: Self.time(10)).isEmpty)
+        let firstIsDue = buffer.add(.fix(Self.fix(seconds: 0)), at: Self.time(0))
+        #expect(!firstIsDue)
+        let secondIsDue = buffer.add(.fix(Self.fix(seconds: 10)), at: Self.time(10))
+        #expect(!secondIsDue)
         let interval = WatchRecordingJournalBuffer.maximumPendingSeconds
-        let due = buffer.add(.fix(Self.fix(seconds: interval)), at: Self.time(interval))
-        #expect(due.count == 3)
+        let lastIsDue = buffer.add(.fix(Self.fix(seconds: interval)), at: Self.time(interval))
+        #expect(lastIsDue)
+        #expect(buffer.pending.count == 3)
     }
 
     @Test("A pause is written at once, behind the fixes before it")
@@ -35,8 +39,9 @@ struct WatchRecordingJournalBufferTests {
         var buffer = WatchRecordingJournalBuffer()
         let fix = WatchRecordingJournalEntry.fix(Self.fix(seconds: 0))
         _ = buffer.add(fix, at: Self.time(0))
-        let due = buffer.add(.paused(Self.time(1)), at: Self.time(1))
-        #expect(due == [fix, .paused(Self.time(1))])
+        let isDue = buffer.add(.paused(Self.time(1)), at: Self.time(1))
+        #expect(isDue)
+        #expect(buffer.pending == [fix, .paused(Self.time(1))])
     }
 
     @Test("The clock starts again after every write")
@@ -44,9 +49,24 @@ struct WatchRecordingJournalBufferTests {
         var buffer = WatchRecordingJournalBuffer()
         _ = buffer.add(.fix(Self.fix(seconds: 0)), at: Self.time(0))
         _ = buffer.add(.resumed(Self.time(1)), at: Self.time(1))
-        #expect(buffer.add(.fix(Self.fix(seconds: 25)), at: Self.time(25)).isEmpty)
-        #expect(buffer.drain().count == 1)
-        #expect(buffer.drain().isEmpty)
+        buffer.written()
+        let isDue = buffer.add(.fix(Self.fix(seconds: 25)), at: Self.time(25))
+        #expect(!isDue)
+        #expect(buffer.pending.count == 1)
+    }
+
+    @Test("Lines a failed write left stay waiting, and every line after asks again")
+    func unwrittenLinesStayDue() {
+        var buffer = WatchRecordingJournalBuffer()
+        let count = WatchRecordingJournalBuffer.maximumPendingFixes
+        for step in 0..<count {
+            _ = buffer.add(.fix(Self.fix(seconds: Double(step))), at: Self.time(Double(step)))
+        }
+        // Due, but nothing called `written()`: the write threw.
+        let isDue = buffer.add(.fix(Self.fix(seconds: 12)), at: Self.time(12))
+        #expect(isDue)
+        #expect(buffer.pending.count == count + 1)
+        #expect(buffer.pending.first == .fix(Self.fix(seconds: 0)))
     }
 
     private static func time(_ seconds: TimeInterval) -> Date {

@@ -665,8 +665,11 @@ extension WatchRecorder {
         // A recovery that stays paused reopens it again at ``resume()``.
         window = RecordingFixWindow(opensAt: now)
         journaling { journal in
-            try journal.record(.paused(now), at: now)
-            if !paused { try journal.record(.resumed(now), at: now) }
+            if paused {
+                try journal.record(.paused(now), at: now)
+            } else {
+                try journal.record(.paused(now), .resumed(now), at: now)
+            }
         }
         stats.reset()
         stats.update(from: snapshot)

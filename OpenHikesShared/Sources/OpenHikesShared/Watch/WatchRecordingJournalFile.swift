@@ -41,14 +41,24 @@ public struct WatchRecordingJournalFile: Sendable {
     /// last line, which ``recover()`` cuts off. Refuses rather than creates a
     /// missing file, because a journal without its header is one no recovery
     /// would read.
+    ///
+    /// A write that throws is cut back to where it started. Half a batch left
+    /// on disk would be a torn line with the retry appended after it, and a
+    /// recovery stops at the first line that does not decode — so it would
+    /// lose the retry and everything written after it.
     public func append(_ entries: [WatchRecordingJournalEntry]) throws {
         guard !entries.isEmpty else { return }
         var data = Data()
         for entry in entries { data.append(try entry.line()) }
         let handle = try FileHandle(forWritingTo: url)
         defer { try? handle.close() }
-        try handle.seekToEnd()
-        try handle.write(contentsOf: data)
+        let end = try handle.seekToEnd()
+        do {
+            try handle.write(contentsOf: data)
+        } catch {
+            try? handle.truncate(atOffset: end)
+            throw error
+        }
     }
 
     /// The recording this journal holds, with a torn tail cut off so the next
@@ -77,9 +87,10 @@ public struct WatchRecordingJournalFile: Sendable {
 ///
 /// Every write can throw, and the recorder logs a throw and carries on. The
 /// journal is insurance against the process dying; a recording refused or
-/// stopped for want of it would lose the walk the insurance is for. Lines
-/// lost to a failed write are lost to a recovery only, as a gap in its line —
-/// the accumulator still has them, and a Stop keeps them.
+/// stopped for want of it would lose the walk the insurance is for. A failed
+/// write loses nothing either: its lines stay waiting, in order, and go to
+/// disk with the next write that succeeds. Until then they are missing only
+/// from a recovery — the accumulator still has them, and a Stop keeps them.
 public struct WatchRecordingJournalWriter: Sendable {
     public let file: WatchRecordingJournalFile
     private var buffer = WatchRecordingJournalBuffer()
@@ -94,15 +105,24 @@ public struct WatchRecordingJournalWriter: Sendable {
         try file.begin(header)
     }
 
-    /// Writes a line down, now or with the next batch — see
+    /// Writes lines down, now or with the next batch — see
     /// ``WatchRecordingJournalBuffer``.
-    public mutating func record(_ entry: WatchRecordingJournalEntry, at date: Date) throws {
-        try file.append(buffer.add(entry, at: date))
+    ///
+    /// Every line is waiting before anything is written, so lines that belong
+    /// together — a recovery's pause and resume — are kept together by a
+    /// write that throws, rather than the first kept and the rest never added.
+    public mutating func record(_ entries: WatchRecordingJournalEntry..., at date: Date) throws {
+        var isDue = false
+        for entry in entries {
+            isDue = buffer.add(entry, at: date) || isDue
+        }
+        if isDue { try flush() }
     }
 
-    /// Writes everything still waiting.
+    /// Writes everything still waiting, and keeps it waiting if that throws.
     public mutating func flush() throws {
-        try file.append(buffer.drain())
+        try file.append(buffer.pending)
+        buffer.written()
     }
 
     /// Lets the journal go, once its walk is on the outbound queue or the
