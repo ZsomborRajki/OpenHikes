@@ -18,7 +18,6 @@ import Testing
 struct BorderedPolylineRendererTests {
     private typealias Canvas = DirectionalPolylineRendererTests.Canvas
 
-    private static let red = CGColor(red: 1, green: 0, blue: 0, alpha: 1)
     private static let black = CGColor(red: 0, green: 0, blue: 0, alpha: 1)
 
     private static func renderer(

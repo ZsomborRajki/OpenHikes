@@ -16,7 +16,6 @@
 //  answered, the card would be offering something a subscriber already has.
 //
 
-import OpenHikesData
 import SwiftUI
 
 struct ElevationProPrompt: View {
