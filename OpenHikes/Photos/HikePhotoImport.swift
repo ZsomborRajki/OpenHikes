@@ -65,7 +65,9 @@ nonisolated enum HikePhotoImport {
     ///   written, or the attach could not be committed. A photo this hike
     ///   already holds for `assetLocalIdentifier` comes back as-is: the asset
     ///   is in the walk, which is what the caller asked for, so this is a
-    ///   success and not a failure to report.
+    ///   success and not a failure to report — unless it was to be filed under
+    ///   `placeID` and that move could not be committed, which is `nil` like
+    ///   any other attach the store refused.
     ///
     /// A returned photo is on disk in both halves — file and row — rather than
     /// merely started. See this file's header for why the commit is here and
@@ -168,18 +170,30 @@ nonisolated enum HikePhotoImport {
     /// screen: the asset is in the walk, so what the hiker is asking for is
     /// that it be filed under the place. Picked again from anywhere else, it
     /// is left where it is.
+    ///
+    /// The move is committed like any attach, and a save the store refuses
+    /// puts the photograph back where it was filed and comes back `nil`.
+    /// Reported as a success, it would sit under the place until the next
+    /// launch and then be back where it started, with nobody told.
     @MainActor
     private static func refiled(
         _ existing: HikePhoto,
         under placeID: UUID?,
         in hike: Hike,
         _ save: (ModelContext) throws -> Void
-    ) -> HikePhoto {
+    ) -> HikePhoto? {
         guard let placeID, existing.placeID != placeID,
               hike.trailPoints?.contains(where: { $0.id == placeID }) == true,
               let refiled = hike.filePhoto(id: existing.id, underPlace: placeID)
         else { return existing }
-        _ = persisted(hike, save, refusal: "Could not save a photo filed under a place")
+        guard persisted(
+            hike,
+            save,
+            refusal: "Kept a photo where it was filed when its move to a place could not be saved"
+        ) else {
+            hike.filePhoto(id: existing.id, underPlace: existing.placeID)
+            return nil
+        }
         return refiled
     }
 
@@ -261,7 +275,7 @@ nonisolated enum HikePhotoImport {
     /// this case is the removal path's alone.
     ///
     /// - Parameter refusal: What was done about a save that failed, for the
-    ///   log — the two callers undo opposite things.
+    ///   log — each caller undoes something different.
     @MainActor
     private static func persisted(
         _ hike: Hike,
