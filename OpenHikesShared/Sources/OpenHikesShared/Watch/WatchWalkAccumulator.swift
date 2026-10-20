@@ -84,18 +84,15 @@ public enum WatchFixPolicy {
 
 /// The running totals of a watch recording.
 public struct WatchWalkAccumulator: Sendable, Equatable {
-    /// How much a pair of consecutive heights must differ by before it counts
-    /// as climbing rather than as the receiver breathing.
-    ///
-    /// A barometric altimeter on a still wrist drifts by a metre or two, and a
-    /// six-hour walk is thousands of readings — unfiltered, that noise alone
-    /// adds hundreds of metres of "climb" to a flat towpath.
-    public static let elevationNoiseFloorMeters: Double = 1
-
     public private(set) var fixes: [WatchRecordedFix] = []
     public private(set) var distanceMeters: Double = 0
-    public private(set) var elevationGainMeters: Double = 0
-    public private(set) var elevationLossMeters: Double = 0
+    /// Counted by ``ElevationAccumulator``, the rule the phone counts every
+    /// hike's climb with, so a walk reads the same on the wrist, in Health and
+    /// on the hike it becomes. A fixed noise floor integrates barometer wobble
+    /// in one direction forever: it read +462 m on six level hours.
+    private var elevation = ElevationAccumulator()
+    public var elevationGainMeters: Double { elevation.gainMeters }
+    public var elevationLossMeters: Double { elevation.lossMeters }
     /// Seconds between consecutive kept fixes, which is the walk's clock with
     /// its pauses already out of it: a pause stops fixes arriving, and the
     /// first one after a resume opens a new leg rather than closing the old.
@@ -109,10 +106,6 @@ public struct WatchWalkAccumulator: Sendable, Equatable {
     /// Set while the recording is paused, so the next accepted fix is marked
     /// as the one that ended it.
     private var isResuming = false
-    /// The last height that counted, which is what the noise floor is measured
-    /// from — not the previous fix's, or a slow drift would be admitted a
-    /// centimetre at a time.
-    private var lastCountedElevation: Double?
 
     public init() { /* every total starts at zero */ }
 
@@ -205,18 +198,11 @@ public struct WatchWalkAccumulator: Sendable, Equatable {
         return walk.isWorthKeeping ? walk : nil
     }
 
-    /// - Parameter bridging: whether the rise from the last counted height to
-    ///   this one is ground the hiker walked. Across a pause it is not, so the
-    ///   height is adopted as the new reference without being climbed.
-    private mutating func accumulateElevation(_ elevation: Double?, bridging: Bool) {
-        guard let elevation, elevation.isFinite else { return }
-        guard bridging, let last = lastCountedElevation else {
-            lastCountedElevation = elevation
-            return
-        }
-        let change = elevation - last
-        guard abs(change) >= Self.elevationNoiseFloorMeters else { return }
-        if change > 0 { elevationGainMeters += change } else { elevationLossMeters -= change }
-        lastCountedElevation = elevation
+    /// - Parameter bridging: whether the rise from the last height to this one
+    ///   is ground the hiker walked. Across a pause it is not, so the run
+    ///   ends and this height starts the next one without being climbed.
+    private mutating func accumulateElevation(_ height: Double?, bridging: Bool) {
+        if !bridging { elevation.endRun() }
+        elevation.record(height)
     }
 }

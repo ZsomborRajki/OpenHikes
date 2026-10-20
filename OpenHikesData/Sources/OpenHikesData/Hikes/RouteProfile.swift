@@ -10,6 +10,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesShared
 
 nonisolated public struct RouteProfile: Sendable {
     /// How far off the route (in meters) a GPS fix can be and still count as

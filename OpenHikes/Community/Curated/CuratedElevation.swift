@@ -66,6 +66,7 @@ import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 import os
 
 /// Where a curated route's heights come from.
