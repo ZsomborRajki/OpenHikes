@@ -316,6 +316,28 @@
         }
       }
     },
+    "%lld photos couldn’t be added to “%@”. The trail itself is saved." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld photo couldn’t be added to “%2$@”. The trail itself is saved."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld photos couldn’t be added to “%2$@”. The trail itself is saved."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld photos couldn’t be saved to this hike." : {
       "localizations" : {
         "en" : {
@@ -1812,6 +1834,9 @@
     "Photos from Wikimedia Commons, each under its own licence. Open one to see who took it." : {
 
     },
+    "Photos Not Added" : {
+
+    },
     "Photos of This Hike" : {
 
     },
@@ -2222,6 +2247,9 @@
 
     },
     "Shows where this photo comes from and its licence" : {
+
+    },
+    "Skip" : {
 
     },
     "Smaller" : {

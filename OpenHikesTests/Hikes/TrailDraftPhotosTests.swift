@@ -198,11 +198,11 @@ struct TrailDraftPhotosTests {
         let hike = Fixture.hike(in: context)
         let handOff = try #require(photos.handOff(along: hike.route))
 
-        let added = await handOff.attach(to: hike, store: sandbox.store, libraryWriter: StubPhotoLibraryWriter())
+        let missed = await handOff.attach(to: hike, store: sandbox.store, libraryWriter: StubPhotoLibraryWriter())
         let again = await handOff.attach(to: hike, store: sandbox.store, libraryWriter: StubPhotoLibraryWriter())
 
-        #expect(added == 1)
-        #expect(again == 0)
+        #expect(missed == nil)
+        #expect(again == nil)
         let copy = try #require(hike.photos.first)
         #expect(hike.photos.count == 1)
         #expect(copy.importedAuthorName == "Hiker 0")
