@@ -21,6 +21,10 @@ final class AutoSaveController {
     /// selected-hike state, the pushed detail view); this controller shouldn't
     /// be the thing keeping a deleted hike around.
     private weak var activeHike: Hike?
+    /// The line ``activeHike``'s corridor was asked for. Edit Route saves into
+    /// the same hike, so its ID alone cannot tell a re-selection from a new
+    /// route — the same reason `HikeDetailRouteKey` holds the route itself.
+    @ObservationIgnored private var activeRoute: [RouteCoordinate] = []
     /// Not UI state, so excluded from observation tracking. Ordinary isolated
     /// storage: the `isolated deinit` below is what cancels them, and SE-0371
     /// hops that deinit back to the main actor before it runs, so these are
@@ -255,31 +259,45 @@ final class AutoSaveController {
     }
 
     private func activate(_ hike: Hike) {
-        // Re-selecting the hike that is already active must not rebuild its
-        // corridor — `beginActiveHike` installs an empty one, which would stop
-        // claims until the rebuild lands. It does still have to put the store
-        // back into an accepting state: a selection deferred while the scene
-        // was inactive resolves through here, and `sceneWillResignActive` left
-        // the store suspended.
-        guard activeHike?.id != hike.id else {
+        let route = hike.route
+        if activeHike?.id == hike.id {
+            // Re-selecting the hike that is already active must not rebuild
+            // its corridor — that installs an empty one, which would stop
+            // claims until the rebuild lands. It does still have to put the
+            // store back into an accepting state: a selection deferred while
+            // the scene was inactive resolves through here, and
+            // `sceneWillResignActive` left the store suspended.
             if !isSuspended {
                 store.resumePersisting(for: hike.id)
             }
-            return
+            guard route != activeRoute else { return }
+            // The same hike with an edited line. Its tiles stay its own, but
+            // the corridor has to follow the new route: kept, it would refuse
+            // every tile around a section moved or added outside the old
+            // bounds until the hike was selected again.
+            cancelPendingActivation()
+            store.beginPreparingCorridor(for: hike.id)
+        } else {
+            // Hand the outgoing hike its tiles back first: `beginActiveHike`
+            // replaces the store's state wholesale, pending set included, and
+            // those tiles are already on disk.
+            flushPendingKeys()
+            cancelPendingActivation()
+            activeHike = hike
+            store.beginActiveHike(
+                id: hike.id,
+                knownKeys: Set(hike.autoSavedTileKeys),
+                acceptsNewClaims: !isSuspended
+            )
         }
-        // Hand the outgoing hike its tiles back first: `beginActiveHike`
-        // replaces the store's state wholesale, pending set included, and those
-        // tiles are already on disk.
-        flushPendingKeys()
-        cancelPendingActivation()
-        activeHike = hike
-        let hikeID = hike.id
-        let route = hike.route
-        store.beginActiveHike(
-            id: hike.id,
-            knownKeys: Set(hike.autoSavedTileKeys),
-            acceptsNewClaims: !isSuspended
-        )
+        activeRoute = route
+        prepareCorridor(for: hike.id, route: route)
+    }
+
+    /// Builds `route`'s corridor off the main actor and hands it to the store,
+    /// unless a newer activation — another hike, or another edit of this
+    /// one — has superseded it by the time it is ready.
+    private func prepareCorridor(for hikeID: UUID, route: [RouteCoordinate]) {
         activationRevision &+= 1
         let revision = activationRevision
         activationTask = Task(priority: .utility) { [weak self] in
@@ -321,6 +339,7 @@ final class AutoSaveController {
             : flushPendingKeys()
         cancelPendingActivation()
         activeHike = nil
+        activeRoute = []
         store.clearActiveHike()
         return folded
     }
