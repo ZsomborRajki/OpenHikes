@@ -231,12 +231,19 @@ final class LocationManager: NSObject {
     ///
     /// Re-reads the grant on the way in, because a trip to Settings is how a
     /// refusal gets reversed, so the map's button is right on the first frame
-    /// back rather than whenever the callback lands. Never prompts: the scene
-    /// can become active before the map has appeared, and until then nobody
-    /// has decided to ask.
+    /// back rather than whenever the callback lands. Never prompts before the
+    /// map has asked: the scene can become active before the map has appeared,
+    /// and until then nobody has decided to ask. After ``start()`` it does,
+    /// because a grant can lapse to `.notDetermined` under a live process
+    /// ("Allow Once" ending), and nothing else would ask again until the next
+    /// launch. A prompt answered cannot stay `.notDetermined`, so this cannot
+    /// repeat.
     func resume() {
         isForeground = true
         reconcile()
+        if updatesRequested, authorizationStatus == .notDetermined {
+            manager.requestWhenInUseAuthorization()
+        }
     }
 
     /// Brings the receiver in line with the one rule this feed follows: it runs
