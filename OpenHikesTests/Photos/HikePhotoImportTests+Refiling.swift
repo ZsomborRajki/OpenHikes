@@ -75,20 +75,31 @@ extension HikePhotoImportTests {
     /// by another route while the bytes are being written, so the repeat is
     /// only found once the write is done and its file is already on disk.
     ///
-    /// The repeat is attached in the one gap the import leaves on the main
-    /// actor. The import's task is enqueued before this test yields, so it
-    /// runs up to its off-main write before the test resumes, and its own
-    /// resumption is enqueued only once that write is done. Lost the other way
-    /// round, the race leaves two photos and fails below rather than passing.
+    /// Immediate start runs through the first duplicate check to the off-main
+    /// write before returning control to this test. The main actor stays here
+    /// until the repeat is attached, so the import can find it only at its
+    /// second check. A yield would guarantee neither ordering and could let
+    /// this pass through the early check or the refused new-photo path.
     @MainActor
     @Test("a repeat found after the file write keeps its filing when the move cannot be saved")
     func lateRefileRollsBackWhenTheSaveFails() async throws {
         let sandbox = Sandbox()
         let context = try Fixture.modelContext()
         let hike = Self.hikeWithAPlace(in: context)
-        let existing = HikePhoto(assetLocalIdentifier: Refiling.asset)
+        let origin = HikePhoto.Origin(assetLocalIdentifier: Refiling.asset)
+        let existing = try #require(
+            await Task.detached {
+                sandbox.store.store(
+                    Self.sampleImageData(),
+                    capturedAt: Date(timeIntervalSince1970: 0),
+                    coordinate: nil,
+                    origin: origin
+                )
+            }.value
+        )
 
-        let importing = Task { @MainActor in
+        var saves = 0
+        let importing = Task.immediate { @MainActor in
             await HikePhotoImport.add(
                 Self.sampleImageData(),
                 to: hike,
@@ -97,20 +108,29 @@ extension HikePhotoImportTests {
                 assetLocalIdentifier: Refiling.asset,
                 placeID: Refiling.spring.id,
                 store: sandbox.store,
-                save: { _ in throw CocoaError(.fileWriteUnknown) }
+                save: { _ in
+                    saves += 1
+                    #expect(hike.photos.map(\.id) == [existing.id], "the late check must find the repeat")
+                    #expect(
+                        hike.photos.first?.placeID == Refiling.spring.id,
+                        "the save is a move of the existing photo"
+                    )
+                    throw CocoaError(.fileWriteUnknown)
+                }
             )
         }
-        await Task.yield()
         hike.addPhoto(existing)
         let again = await importing.value
 
         #expect(again == nil, "a move the store refused is a failure to report")
+        #expect(saves == 1)
         #expect(hike.photos.map(\.id) == [existing.id], "the repeat is found, not copied")
         #expect(hike.photos.first?.placeID == nil)
         await settleDelegateHop(until: "the repeat's file to be erased") {
-            Self.fileCount(in: sandbox.store.directory) == 0
+            Self.fileCount(in: sandbox.store.directory) == 1
         }
-        #expect(Self.fileCount(in: sandbox.store.directory) == 0)
+        #expect(Self.fileCount(in: sandbox.store.directory) == 1)
+        #expect(FileManager.default.fileExists(atPath: sandbox.store.url(for: existing).path))
     }
 
     /// Checked against the disk rather than the context that was refused, for
