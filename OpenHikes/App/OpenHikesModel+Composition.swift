@@ -949,7 +949,7 @@ extension OpenHikesModel {
             tracker: tracker,
             reminders: reminders,
             activeRecordingHikeID: { [weak recorder] in recorder?.currentHike?.id },
-            daylight: { [weak weather] in weather?.state.daylight(forWalkOn: $0, at: $1) }
+            daylight: { [weak weather] in weather?.daylight(forWalkOn: $0, at: $1) }
         )
     }
 }

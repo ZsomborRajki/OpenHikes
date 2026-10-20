@@ -132,6 +132,8 @@ extension WeatherBadgeState {
     ///
     /// A reading from another day needs no rule here: its dusk has passed,
     /// and ``DuskWatch`` says nothing about a dusk that has passed.
+    /// ``WeatherManager/daylight(forWalkOn:at:)`` supplies the reading's
+    /// original subject here rather than the badge's moving focus.
     func daylight(forWalkOn hikeID: UUID, at coordinate: CLLocationCoordinate2D?) -> WeatherDaylight? {
         guard case let .reading(snapshot, subject) = self else { return nil }
         switch subject {

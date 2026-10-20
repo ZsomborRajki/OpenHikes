@@ -31,7 +31,8 @@
 import CoreLocation
 import Foundation
 
-/// A restored reading and the subject it was for.
+/// A reading and the subject it was requested for, kept together in memory
+/// and across launches so a moving focus cannot relocate the forecast.
 nonisolated struct StoredWeatherReading: Sendable {
     let snapshot: WeatherSnapshot
     let subject: WeatherSubject
