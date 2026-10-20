@@ -127,6 +127,15 @@ nonisolated struct WikimediaCommonsSource: CommonsPhotoSourcing {
     /// them is drawn until the last has landed.
     static let parallelDownloads = 4
 
+    /// How many geosearches in a row may fail to reach Commons at all before
+    /// the rest of a route's stretches are not asked.
+    ///
+    /// Each is `CommonsPhotoQuery`'s fifteen-second timeout, and a route has up
+    /// to ``CommonsTrailPhotos/maximumAreas`` of them one after another — four
+    /// minutes of a spinner on a weak signal. A route that could not reach
+    /// Commons for two stretches in a row will not reach it for the third.
+    static let unreachableLimit = 2
+
     private static let logger = Logger(subsystem: "OpenHikes", category: "Community")
 
     /// Ephemeral, uncached and refused over Low Data Mode — see this file's
@@ -164,9 +173,16 @@ nonisolated struct WikimediaCommonsSource: CommonsPhotoSourcing {
         guard route.count > 1 else { return [] }
         let profile = RouteProfile(route: route)
         var found: [CommonsPhotoCandidate] = []
+        var unreachable = 0
         for area in CommonsTrailPhotos.areas(along: route) {
             try Task.checkCancellation()
-            found += try await candidates(around: area)
+            let search = try await candidates(around: area)
+            found += search.files
+            unreachable = search.reachedCommons ? 0 : unreachable + 1
+            if unreachable >= Self.unreachableLimit {
+                Self.logger.info("Commons is unreachable, the remaining stretches are not asked")
+                break
+            }
         }
         let length = profile.totalDistanceMeters
         // Twice through the spread, because the metadata decides between the
@@ -205,7 +221,7 @@ nonisolated struct WikimediaCommonsSource: CommonsPhotoSourcing {
         downloadingInto directory: URL
     ) async throws -> [CommonsPhoto] {
         let asked = CommonsAreaPhotos.asked(area)
-        let found = try await candidates(around: asked)
+        let found = try await candidates(around: asked).files
         let shortlist = CommonsAreaPhotos.spread(found, in: asked, limit: CommonsPhotoQuery.imageInfoBatch)
         guard !shortlist.isEmpty else { return [] }
         try Task.checkCancellation()
@@ -246,11 +262,18 @@ nonisolated private extension WikimediaCommonsSource {
     /// these are the files earlier searches on this device found there, which
     /// may be none. The failure is logged and the rest of the route goes on.
     /// See ``CommonsPhotoStore`` for why a partial answer beats none here.
-    func candidates(around area: CommunitySearchArea) async throws -> [CommonsPhotoCandidate] {
+    ///
+    /// `reachedCommons` is `false` only when the request itself failed — a
+    /// timeout, no route — and not for a busy or refused answer, which came
+    /// from Commons.
+    func candidates(
+        around area: CommunitySearchArea
+    ) async throws -> (files: [CommonsPhotoCandidate], reachedCommons: Bool) {
         do {
-            return try await answer(CommonsPhotoQuery.geosearch(around: area)) { data in
+            let files = try await answer(CommonsPhotoQuery.geosearch(around: area)) { data in
                 try CommonsPhotoQuery.candidates(from: data)
             }
+            return (files, true)
         } catch let error where !(error is CancellationError) {
             let known = store?.pages(near: area, limit: CommonsPhotoQuery.geosearchLimit) ?? []
             Self.logger.info(
@@ -259,7 +282,7 @@ nonisolated private extension WikimediaCommonsSource {
                 \(error.localizedDescription, privacy: .public)
                 """
             )
-            return known.map(\.candidate)
+            return (known.map(\.candidate), !(error is URLError))
         }
     }
 
