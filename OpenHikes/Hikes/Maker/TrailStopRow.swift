@@ -263,13 +263,15 @@ struct TrailStopRowView: View {
     /// What the row says beside its heading, said to VoiceOver: the role a
     /// name hides, how far along the stop sits, and what the leg into it has
     /// to report. The eye gets the first two from the row's second line and
-    /// the third from the row's mark and the footer's sentence.
+    /// the third from the row's mark and the footer's sentence. No distance
+    /// where it is nothing, as the line has none there either.
     private func spokenDetail(_ slot: TrailStopSlot) -> String {
         guard case .point(let index, _) = slot else { return "" }
         let isNamed = !draft.name(ofWaypointAt: index).isEmpty
+        let along = draft.distanceAlongLine(toWaypointAt: index)
         return [
             isNamed ? draft.role(ofWaypointAt: index).title : nil,
-            Self.length(draft.distanceAlongLine(toWaypointAt: index)),
+            along > 0 ? Self.length(along) : nil,
             draft.leg(arrivingAtWaypointAt: index)?.snap.notice?.text,
         ]
         .compacted()
