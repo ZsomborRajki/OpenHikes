@@ -2,16 +2,18 @@
 //  BorderedPolylineRenderer.swift
 //  OpenHikes
 //
-//  A plain line with an outline: the trail being drawn in the maker, and the
-//  red line of a recording. Both sit on the same basemaps a hike's own line
-//  does, and a hike's line carries a black border by default — see
-//  ``RouteStyle/defaultBorder`` — so these carry one too, or the line on top
-//  of a green valley is the only one that disappears into it.
+//  A plain line with an outline: the trail being drawn in the maker, the red
+//  line of a recording, and the shared hikes' lines in the Community tab. All
+//  of them sit on the same basemaps a hike's own line does, and a hike's line
+//  carries a black border by default — see ``RouteStyle/defaultBorder`` — so
+//  these carry one too, or the line on top of a green valley is the only one
+//  that disappears into it.
 //
 //  Drawn the way ``DirectionalPolylineRenderer`` draws a hike's border, and
 //  from the same copy of the line, ``RouteBorderLine``: MapKit's own stroke,
 //  wider, underneath, with the line's stroke cleared back out of it so a
-//  translucent line shows the map through it rather than the border. Not that
+//  translucent line shows the map through it rather than the border — inside
+//  a layer of its own, so that clear does not take the map with it. Not that
 //  renderer itself, because its dashes come from a ``RouteLinePattern`` and
 //  these lines dash by what their state means — a leg being routed, a leg
 //  that found no path, a recording's live tail — so the border here follows
@@ -55,6 +57,8 @@ nonisolated final class BorderedPolylineRenderer: MKPolylineRenderer {
     )
 
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
+        let isolation = isolationBounds(in: mapRect, zoomScale: zoomScale)
+        if let isolation { context.beginTransparencyLayer(in: isolation, auxiliaryInfo: nil) }
         if let borderColor, borderColor.alpha > 0 {
             context.saveGState()
             // MapKit can leave a dash on the context, which a copy drawn solid
@@ -69,6 +73,33 @@ nonisolated final class BorderedPolylineRenderer: MKPolylineRenderer {
             context.restoreGState()
         }
         super.draw(mapRect, zoomScale: zoomScale, in: context)
+        if isolation != nil { context.endTransparencyLayer() }
+    }
+
+    /// Where to draw the line and its border into a transparency layer, or
+    /// `nil` where they need none: with no border, or under an opaque line.
+    ///
+    /// The context MapKit hands a renderer is the tile every overlay at the
+    /// line's level is drawn into, the basemap's tiles first — see
+    /// ``DirectionalPolylineRenderer``'s own `isolationBounds`. So the clear
+    /// that makes the border's copy a ring clears the *map* under the line
+    /// too. An opaque line paints all of it back; a translucent one is laid
+    /// over the empty grid behind the tiles, which shows white, instead of
+    /// over the map — a shared hike's half-strength line came out a flat
+    /// pale stripe, the street names under it gone. Inside a layer the clear
+    /// reaches only the copy this draw put there, and the layer is laid over
+    /// the map as one.
+    ///
+    /// Only then, because the layer is a bitmap the size of what it covers,
+    /// made on every draw — bounded by the line and its border, so a tile the
+    /// line only crosses a corner of pays for that corner.
+    private func isolationBounds(in mapRect: MKMapRect, zoomScale: MKZoomScale) -> CGRect? {
+        guard let borderColor, borderColor.alpha > 0, (strokeColor?.cgColor.alpha ?? 0) < 1 else { return nil }
+        let width = Double(lineWidth)
+        let stroke = (width + RouteBorder.width(forLineWidth: width) * 2) * Double(contentScaleFactor / zoomScale)
+        let bounds = overlay.boundingMapRect.insetBy(dx: -stroke, dy: -stroke).intersection(mapRect)
+        guard !bounds.isNull, !bounds.isEmpty else { return nil }
+        return rect(for: bounds)
     }
 
     private func invalidateBorderLine() {

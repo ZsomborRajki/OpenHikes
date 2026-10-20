@@ -2,10 +2,11 @@
 //  BorderedPolylineRendererTests.swift
 //  OpenHikesTests
 //
-//  The outline round the trail being drawn and a recording's line, drawn into
-//  a bitmap with MapKit's own stroke as the reference — see
-//  `DirectionalPolylineRendererTests+Border.swift`, whose canvas and pixel
-//  helpers these borrow, for what a bitmap can and cannot show about it.
+//  The outline round the trail being drawn, a recording's line and the shared
+//  hikes' lines, drawn into a bitmap with MapKit's own stroke as the
+//  reference — see `DirectionalPolylineRendererTests+Border.swift`, whose
+//  canvas and pixel helpers these borrow, for what a bitmap can and cannot
+//  show about it.
 //
 
 import CoreGraphics
@@ -48,6 +49,49 @@ struct BorderedPolylineRendererTests {
         canvas.context.translateBy(x: 0, y: CGFloat(canvas.context.height / 2))
         renderer.draw(polyline.boundingMapRect, zoomScale: zoomScale, in: canvas.context)
         return canvas
+    }
+
+    /// The same, over a canvas painted opaque grey first and across a whole
+    /// tile of it rather than the line's own bounds: what MapKit hands a
+    /// renderer is a tile with the map already in it. See
+    /// `DirectionalPolylineRendererTests+Basemap.swift` for why an empty
+    /// canvas cannot show what a clear does to the map.
+    private static func renderOverBasemap(
+        _ renderer: BorderedPolylineRenderer,
+        of polyline: MKPolyline
+    ) throws -> Canvas {
+        let canvas = try Canvas()
+        let width = CGFloat(canvas.context.width), height = CGFloat(canvas.context.height)
+        canvas.context.setFillColor(basemap)
+        canvas.context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        canvas.context.translateBy(x: 0, y: height / 2)
+        let tile = polyline.boundingMapRect.insetBy(dx: 0, dy: -Double(height) / 2)
+        renderer.draw(tile, zoomScale: 1, in: canvas.context)
+        return canvas
+    }
+
+    private static let basemap = CGColor(gray: 0.5, alpha: 1)
+
+    /// Below this alpha a pixel is map the draw took away rather than line
+    /// laid over it — the directional suite's basemap tests argue the figure.
+    private static let seeThrough: UInt8 = 180
+
+    private static func seeThroughPixels(in canvas: Canvas) -> Int {
+        guard let data = canvas.context.data else { return 0 }
+        let count = canvas.context.width * canvas.context.height
+        let bytes = data.bindMemory(to: UInt8.self, capacity: count * 4)
+        return (0..<count).count { bytes[$0 * 4 + 3] < seeThrough }
+    }
+
+    /// Rows of column `x` that are no longer the map's grey — read off the
+    /// canvas's top row, which no line here reaches, since the grey is
+    /// converted into the bitmap's colour space on the way in.
+    private static func markedRows(in canvas: Canvas, column x: Int) -> Int {
+        let tolerance = 8
+        let grey = canvas.pixel(x: x, row: 0)
+        return (0..<canvas.context.height).count { row in
+            zip(canvas.pixel(x: x, row: row), grey).prefix(3).contains { abs(Int($0) - Int($1)) > tolerance }
+        }
     }
 
     @Test("no border, or a clear one, draws exactly the plain line")
@@ -118,5 +162,48 @@ struct BorderedPolylineRendererTests {
         )
         let row = try #require(plain.mostInkedRow)
         #expect(bordered.pixel(x: 100, row: row) == plain.pixel(x: 100, row: row))
+    }
+
+    /// The shared hikes' lines are half strength, outlined at half strength.
+    /// The ring is cut by clearing the line's stroke out of the copy under
+    /// it. Drawn straight into the tile, that clear took the map out from
+    /// under the line as well, and the half-strength line was laid over
+    /// nothing.
+    @Test("a translucent bordered line leaves the map under it")
+    func translucentBorderedLineKeepsTheMap() throws {
+        let polyline = DirectionalPolylineRendererTests.line()
+        let faded = CGFloat(0.5)
+        let plain = try Self.renderOverBasemap(Self.renderer(on: polyline, border: nil, alpha: faded), of: polyline)
+        let bordered = try Self.renderOverBasemap(
+            Self.renderer(on: polyline, border: Self.black.copy(alpha: faded), alpha: faded),
+            of: polyline
+        )
+        let reference = try Self.renderCentred(Self.renderer(on: polyline, border: nil), of: polyline)
+        let row = try #require(reference.mostInkedRow)
+
+        #expect(Self.seeThroughPixels(in: bordered) == 0, "the ring was cleared through the map")
+        // The middle is the line over the map, as with no border at all —
+        // to within the rounding of compositing it through a layer. Over
+        // nothing it would have no grey in it at all.
+        let middle = bordered.pixel(x: 100, row: row)
+        let expected = plain.pixel(x: 100, row: row)
+        #expect(zip(middle, expected).allSatisfy { abs(Int($0) - Int($1)) <= 2 }, "\(middle) is not \(expected)")
+    }
+
+    /// The layer that keeps the map is a bitmap only as big as the line, so a
+    /// layer cut too small would clip the ring it is there to keep.
+    @Test("a translucent line's layer holds the whole of its border")
+    func translucentBorderIsWhole() throws {
+        let polyline = DirectionalPolylineRendererTests.line()
+        let faded = CGFloat(0.5)
+        let plain = try Self.renderOverBasemap(Self.renderer(on: polyline, border: nil, alpha: faded), of: polyline)
+        let bordered = try Self.renderOverBasemap(
+            Self.renderer(on: polyline, border: Self.black.copy(alpha: faded), alpha: faded),
+            of: polyline
+        )
+        let lineRows = Self.markedRows(in: plain, column: 100)
+        let borderedRows = Self.markedRows(in: bordered, column: 100)
+        #expect(lineRows > 0)
+        #expect((3...5).contains(borderedRows - lineRows), "\(lineRows) rows grew to \(borderedRows)")
     }
 }

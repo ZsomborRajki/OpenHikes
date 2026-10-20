@@ -33,6 +33,14 @@
 //  ``applyCommunityRoutes(_:on:)``, which explains what the opaque tile
 //  overlay does to anything drawn beneath it.
 //
+//  Each is outlined as every other line on this map is — a hike's own, the
+//  trail being drawn, a recording — in the black a hike's line wears until
+//  its owner picks a colour (``RouteStyle/defaultBorder``), so a shared trail
+//  over a green valley does not disappear into it. Faded with the line: an
+//  opaque outline round a half-strength line would be the one part of it
+//  drawn at full strength. And not the hiker's own border colour, which
+//  belongs to their route for the reason its tint does.
+//
 //  The previewed line is the one exception and only to the fade: it is at full
 //  strength because the screen showing it no longer draws a route of its own,
 //  so this is where the hiker looks to see what they are deciding about. It
@@ -186,7 +194,7 @@ extension MapView.Coordinator {
     func communityRouteRenderer(for polyline: MKPolyline) -> MKPolylineRenderer? {
         guard let drawing = communityRoutes.first(where: { $0.polyline === polyline })
         else { return nil }
-        let renderer = MKPolylineRenderer(polyline: polyline)
+        let renderer = BorderedPolylineRenderer(polyline: polyline)
         let previewed = drawing.line.isPreviewed
         // This listing's own colour, exactly as its marker and its row are.
         // Every shared line used to be the app's tint, which made a page of
@@ -203,6 +211,11 @@ extension MapView.Coordinator {
         let tint = UIColor(drawing.line.listing.tint)
         #endif
         renderer.strokeColor = previewed ? tint : tint.withAlphaComponent(Self.communityRouteAlpha)
+        // Outlined in the default black, at the line's own strength — see
+        // *Faded, and underneath* above.
+        renderer.borderColor = previewed
+            ? Self.defaultBorderColor
+            : Self.defaultBorderColor.copy(alpha: Self.communityRouteAlpha)
         renderer.lineWidth = previewed ? Self.previewedRouteWidth : Self.communityRouteWidth
         renderer.lineJoin = .round
         renderer.lineCap = .round

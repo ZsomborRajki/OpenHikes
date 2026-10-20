@@ -127,6 +127,11 @@ extension MapCoordinatorTests {
         #if os(iOS)
         let alpha = try #require(renderer.strokeColor?.cgColor.alpha)
         #expect(alpha < 1, "a stranger's trail must not read as the hiker's own")
+        // Outlined in the black every unstyled line wears, and faded with the
+        // line: a full-strength outline would be the one part of it that is not.
+        let border = try #require((renderer as? BorderedPolylineRenderer)?.borderColor)
+        #expect(border.copy(alpha: 1) == MapView.Coordinator.defaultBorderColor)
+        #expect(border.alpha == alpha)
         #endif
     }
 
@@ -156,6 +161,8 @@ extension MapCoordinatorTests {
         )
         #if os(iOS)
         #expect(renderer.strokeColor?.cgColor.alpha == 1)
+        // And so is its outline.
+        #expect((renderer as? BorderedPolylineRenderer)?.borderColor == MapView.Coordinator.defaultBorderColor)
         #endif
     }
 
