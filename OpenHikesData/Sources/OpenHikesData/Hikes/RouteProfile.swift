@@ -14,7 +14,7 @@ import Foundation
 nonisolated public struct RouteProfile: Sendable {
     /// How far off the route (in meters) a GPS fix can be and still count as
     /// "on the trail" — shared by every consumer of
-    /// `nearestPoint(to:near:heading:scope:)` (in-app auto-follow, the
+    /// `nearestPoint(to:near:heading:headingOverridesReference:scope:)` (in-app auto-follow, the
     /// foreground/background widget feeds) so they all agree on the same trail.
     public static let followMatchThresholdMeters: Double = 75
 
@@ -370,11 +370,20 @@ nonisolated extension RouteProfile {
     /// question outright, and outranks the assumption about the start. The two
     /// legs of an out-and-back run in opposite directions, so a hiker already
     /// on the way back is going the *wrong* way for the outbound leg and the
-    /// right way for the return one. It is consulted only when there is no
-    /// `referenceDistance`: once a match exists, continuity is the better
-    /// evidence, and letting a noisy course overrule it would reintroduce
-    /// exactly the jumping this parameter set out to stop — a hiker pausing
-    /// to look back down the trail is not a hiker who has turned around.
+    /// right way for the return one. By default it is consulted only when there
+    /// is no `referenceDistance`: once a match exists, continuity is the better
+    /// evidence, and letting a noisy course overrule it on a single fix would
+    /// reintroduce exactly the jumping this parameter set out to stop — a
+    /// hiker pausing to look back down the trail is not a hiker who has turned
+    /// around.
+    ///
+    /// `headingOverridesReference` lets the course settle a tie even though a
+    /// `referenceDistance` exists. A caller does not pass it on every fix —
+    /// that is the jumping described above — but asks for it as a second
+    /// opinion, and moves to its answer only once the course has kept
+    /// disagreeing with continuity (see `FollowAnchor`). Without it, a hiker
+    /// walking home along an out-and-back is held on the outbound leg by
+    /// continuity for the whole return.
     ///
     /// A loop's junction stays ambiguous under this test, correctly: both
     /// passes run the same way, so the start assumption still decides it.
@@ -382,6 +391,7 @@ nonisolated extension RouteProfile {
         to coordinate: CLLocationCoordinate2D,
         near referenceDistance: Double? = nil,
         heading: CLLocationDirection? = nil,
+        headingOverridesReference: Bool = false,
         scope: SearchScope = .wholeRoute
     ) -> (distanceAlongRoute: Double, offRouteMeters: Double)? {
         guard !coordinates.isEmpty else { return nil }
@@ -438,7 +448,7 @@ nonisolated extension RouteProfile {
         guard let best else { return nil }
 
         let anchor = referenceDistance ?? 0
-        let course = referenceDistance == nil ? heading : nil
+        let course = referenceDistance == nil || headingOverridesReference ? heading : nil
 
         func runsWithTheHiker(_ candidate: NearestCandidate) -> Bool {
             guard let course else { return false }
