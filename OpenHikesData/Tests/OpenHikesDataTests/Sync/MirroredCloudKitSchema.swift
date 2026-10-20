@@ -75,6 +75,7 @@ enum MirroredCloudKitSchema {
                 "hikeID",
                 "id",
                 "routeDistanceMeters",
+                "routeRevision",
                 "startedAt",
             ],
             relationships: ["hike"]

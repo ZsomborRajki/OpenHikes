@@ -68,7 +68,10 @@ extension HikeWalk {
             coveredIntervals: [0, routeLength],
             furthestDistanceMeters: routeLength,
             routeDistanceMeters: routeLength,
-            endReason: .recorded
+            endReason: .recorded,
+            // The line the hike is saved with, so the History can tell this
+            // walk's stretches from an edit made to it later.
+            routeRevision: TrailWalkRecord.routeRevision(of: prepared.route)
         )
     }
 }

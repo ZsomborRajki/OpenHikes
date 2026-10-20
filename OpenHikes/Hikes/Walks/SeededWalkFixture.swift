@@ -130,7 +130,8 @@ nonisolated enum SeededWalkFixture {
             coveredIntervals: [0, covered],
             furthestDistanceMeters: covered,
             routeDistanceMeters: routeDistance,
-            endReason: fixture.endReason
+            endReason: fixture.endReason,
+            routeRevision: TrailWalkRecord.routeRevision(of: hike.route)
         )
         context.insert(walk)
         walk.hike = hike
