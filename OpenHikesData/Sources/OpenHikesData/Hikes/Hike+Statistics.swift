@@ -10,10 +10,6 @@ import DequeModule
 import Foundation
 import OpenHikesShared
 
-/// The climb rule lives in `OpenHikesShared` so the watch counts with it too;
-/// re-declared here so everything that imports this package keeps one name.
-public typealias ElevationAccumulator = OpenHikesShared.ElevationAccumulator
-
 /// How much of a route's clock the hiker spent moving, as opposed to standing
 /// at a viewpoint, eating lunch, or waiting out a shower.
 ///
