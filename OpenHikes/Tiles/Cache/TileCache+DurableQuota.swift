@@ -204,6 +204,21 @@ nonisolated extension TileCache {
         return (durableByteLimit(for: quota), used)
     }
 
+    /// Estimates only new durable storage. Existing saved tiles are already
+    /// charged to the quota; browsing-tier tiles still need a reservation
+    /// when promoted. Age does not remove a durable tile's coverage.
+    func estimatedAdditionalDurableBytes(forKeys keys: Set<String>) -> Int64 {
+        assertOffMainThread(
+            "estimatedAdditionalDurableBytes stats durable tile files — call it off the main thread"
+        )
+        return keys.reduce(into: Int64(0)) { bytes, key in
+            let durable = filePaths(forKey: key).durable
+            if storedModificationDate(for: durable, in: .durable) == nil {
+                bytes += Self.estimatedTileBytes
+            }
+        }
+    }
+
     /// Bytes of durable tiles under `providerID`'s quota that eviction could
     /// reach — that is, every style's tiles except the keys `protecting`
     /// names. See ``providerIDs(sharingCeilingWith:)``.
