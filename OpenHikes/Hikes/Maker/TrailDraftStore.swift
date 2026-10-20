@@ -39,7 +39,8 @@ import SwiftData
 /// The resolved leg shapes are deliberately absent. They are re-derivable, the
 /// graph behind them is on disk for a month, and a restored draft asks for
 /// them again the moment the maker opens — see
-/// ``TrailDraftController/setEditing(_:)``.
+/// ``TrailDraftController/setEditing(_:)``. The ways the hiker chose among
+/// them are not re-derivable, and are kept — see ``TrailLegChoice``.
 nonisolated struct StoredTrailDraft: Equatable, Sendable {
     var waypoints: [TrailWaypoint]
     /// What was marked along it. Kept apart from the points for the reason
@@ -55,6 +56,8 @@ nonisolated struct StoredTrailDraft: Equatable, Sendable {
     var editingHikeID: UUID?
     /// See ``TrailDraftRecord/editingPlaceIDs``.
     var editingPlaceIDs: [UUID] = []
+    /// See ``TrailDraft/chosenLegs``.
+    var chosenLegs: [TrailLegChoice] = []
 
     /// Both lists, because either on its own is a drawing worth coming back
     /// to — see ``TrailDraft/isEmpty``.
@@ -107,7 +110,8 @@ struct TrailDraftStore {
                 travelMode: record.travelMode,
                 startIsOpen: record.startIsOpen,
                 editingHikeID: record.editingHikeID,
-                editingPlaceIDs: record.editingPlaceIDs
+                editingPlaceIDs: record.editingPlaceIDs,
+                chosenLegs: record.chosenLegs
             )
         } catch {
             log("load", error)
@@ -132,7 +136,8 @@ struct TrailDraftStore {
         travelMode: TrailTravelMode = .hiking,
         startIsOpen: Bool = false,
         editingHikeID: UUID? = nil,
-        editingPlaceIDs: [UUID] = []
+        editingPlaceIDs: [UUID] = [],
+        chosenLegs: [TrailLegChoice] = []
     ) {
         let points = waypoints.map(\.routeCoordinate)
         // Written in the same statement that writes the points, every time, so
@@ -151,6 +156,7 @@ struct TrailDraftStore {
                 record.startIsOpen = startIsOpen
                 record.editingHikeID = editingHikeID
                 record.editingPlaceIDs = editingPlaceIDs
+                record.chosenLegs = chosenLegs
                 record.updatedAt = .now
             } else {
                 context.insert(
@@ -163,7 +169,8 @@ struct TrailDraftStore {
                         travelMode: travelMode,
                         startIsOpen: startIsOpen,
                         editingHikeID: editingHikeID,
-                        editingPlaceIDs: editingPlaceIDs
+                        editingPlaceIDs: editingPlaceIDs,
+                        chosenLegs: chosenLegs
                     )
                 )
             }

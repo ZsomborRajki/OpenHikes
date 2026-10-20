@@ -71,6 +71,15 @@
 //  adjacency back, a delete, and a point dragged away and back restore the
 //  line rather than redraw it straight and ask for it again.
 //
+//  ## Except the way a hiker chose, which is not re-derivable
+//
+//  A tap on a grey alternative is a preference rather than an answer: asked
+//  again, the router answers between the same stops with its own default. So
+//  the chosen ways are kept apart, in ``chosenLegs``, written down with the
+//  stops, and laid back over each answer as it lands — which is what makes a
+//  restored draft, an *Edit Route* and the switch turned off and on again all
+//  come back the way the hiker picked. See ``TrailLegChoice``.
+//
 //  There is no undo. Apple Maps' directions have none, and the menu that
 //  offered it went with the rest of the maker's ⋯ menu.
 //
@@ -203,6 +212,23 @@ final class TrailDraft {
     /// drawn, so publishing it would be a body pass for a cache write. See
     /// ``TrailLegMemo``.
     @ObservationIgnored private var memo = TrailLegMemo()
+
+    /// The ways the hiker picked over the router's own, by their two ends.
+    ///
+    /// Untracked for the reason ``memo`` is: it changes only with ``legs``,
+    /// which is what is drawn. Not bounded, because nothing but a tap adds to
+    /// it. Kept for ends no longer in the line, so a stop dragged away and back
+    /// brings the choice back, and written down only for the legs there are —
+    /// see ``chosenLegs``.
+    @ObservationIgnored private var choices: [TrailLegEnds: TrailLegPath] = [:]
+
+    /// The ways chosen for the legs this line has, in drawing order — what is
+    /// written down with the stops. See the file header.
+    var chosenLegs: [TrailLegChoice] {
+        legs.compactMap { leg in
+            choices[leg.ends].map { TrailLegChoice($0, between: leg.ends) }
+        }
+    }
 
     /// The line's length.
     ///
@@ -337,19 +363,21 @@ final class TrailDraft {
     /// Replaces the whole draft — what a restore from disk does, and nothing
     /// else does today.
     ///
-    /// The points and the toggle are the whole of it: a drawn trail is named
-    /// in the alert that saves it, so there is nothing else a restore could
-    /// bring back. The resolved shapes are deliberately not among them — they
-    /// are re-derivable, the graph they came from is on disk for a month, and
-    /// storing a few hundred coordinates per leg to save a cache lookup would
-    /// be writing down the answer to a question the disk already answers. See
-    /// ``TrailDraftView``.
+    /// The points, the toggle and the ways chosen are the whole of it: a drawn
+    /// trail is named in the alert that saves it, so there is nothing else a
+    /// restore could bring back. The resolved shapes are deliberately not
+    /// among them — they are re-derivable, the graph they came from is on disk
+    /// for a month, and storing a few hundred coordinates per leg to save a
+    /// cache lookup would be writing down the answer to a question the disk
+    /// already answers. A chosen way is the exception because it is *not* the
+    /// answer — see the file header.
     func replace(
         with waypoints: [TrailWaypoint],
         places: [TrailPlace],
         snapsToPaths: Bool,
         travelMode: TrailTravelMode = .hiking,
-        startIsOpen: Bool = false
+        startIsOpen: Bool = false,
+        chosenLegs: [TrailLegChoice] = []
     ) {
         cancelDrag()
         self.waypoints = waypoints
@@ -357,6 +385,7 @@ final class TrailDraft {
         self.travelMode = travelMode
         self.startIsOpen = waypoints.count == 1 && startIsOpen
         memo = TrailLegMemo()
+        choices = Dictionary(chosenLegs.map { ($0.ends, $0.way) }) { _, latest in latest }
         legs = []
         setSnapsToPaths(snapsToPaths)
         rebuildLegs()
@@ -369,6 +398,7 @@ final class TrailDraft {
     func clear() {
         cancelDrag()
         memo = TrailLegMemo()
+        choices = [:]
         guard !isEmpty else { return }
         waypoints = []
         places = []
@@ -391,12 +421,15 @@ final class TrailDraft {
     }
 
     /// A mode owns its shapes: changing it straightens the legs and forgets
-    /// every shape remembered for the old one, so they are asked for anew.
+    /// every shape remembered for the old one, so they are asked for anew —
+    /// the ways chosen among them included, since a road picked for driving is
+    /// no choice about a footpath.
     func setTravelMode(_ mode: TrailTravelMode) {
         guard travelMode != mode else { return }
         cancelDrag()
         travelMode = mode
         memo = TrailLegMemo()
+        choices = [:]
         straightenLegs()
     }
 
@@ -479,7 +512,14 @@ final class TrailDraft {
     /// leg is routing still gets that leg's answer, and a hiker who has turned
     /// snapping off in the meantime gets none, because the leg is no longer
     /// ``TrailLegSnap/routing``.
+    ///
+    /// A way the hiker chose between these ends is drawn over the router's
+    /// own, which is then offered in its place — but only over an answer that
+    /// found a way at all. A refusal or a gap is the router saying something
+    /// about the leg the choice cannot answer, and the choice stays for the
+    /// answer after it.
     func apply(_ route: TrailLegRoute, to ends: TrailLegEnds) {
+        let chosen = Self.offersWays(route.snap) ? choices[ends] : nil
         mutateLegs { leg in
             guard leg.ends == ends, leg.snap.isRouting else { return }
             leg.coordinates = route.coordinates
@@ -487,6 +527,7 @@ final class TrailDraft {
             leg.snap = route.snap
             leg.travelTime = route.travelTime
             leg.alternatives = route.alternatives
+            if let chosen { leg = leg.taking(chosen) }
         }
     }
 
@@ -904,14 +945,25 @@ extension TrailDraft {
     /// it replaces in its place — a tap on a grey route on the map.
     ///
     /// It changes which way the line goes between two points the hiker already
-    /// chose, not the points. The memo remembers the choice, so a reorder that
-    /// brings these ends back brings the chosen shape with them.
+    /// chose, not the points. The memo remembers the shape, so a reorder that
+    /// brings these ends back brings it with them; ``chosenLegs`` remembers
+    /// the choice, so the router's next answer about them does too.
     func chooseAlternative(_ index: Int, forLegAt legIndex: Int) {
         guard legs.indices.contains(legIndex),
               let chosen = legs[legIndex].choosing(alternative: index) else { return }
+        choices[chosen.ends] = chosen.path
         var updated = legs
         updated[legIndex] = chosen
         publish(updated)
+    }
+
+    /// Whether an answer in `snap` drew a way the router could have offered
+    /// others beside — the answers a chosen way is laid over.
+    private static func offersWays(_ snap: TrailLegSnap) -> Bool {
+        switch snap {
+        case .snapped, .unmapped(.endpointOffNetwork): true
+        case .freehand, .routing, .refused, .directionsUnavailable, .unmapped: false
+        }
     }
 
     // MARK: A point under a finger

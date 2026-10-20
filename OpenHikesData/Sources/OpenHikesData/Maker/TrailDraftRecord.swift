@@ -112,6 +112,12 @@ public final class TrailDraftRecord {
     /// the hike gained in the meantime. Empty for a new trail.
     public var editingPlaceIDs: [UUID] = []
 
+    /// The ways the hiker picked over the router's own for legs of this
+    /// drawing — see ``TrailLegChoice``. Without it a restored draft routes
+    /// between the same stops again and silently goes back to the router's
+    /// default. An empty inline default, like every column here.
+    public var chosenLegs: [TrailLegChoice] = []
+
     /// When this was last written, so a later phase that offers to resume a
     /// draft has something to say about it. Read by nothing today.
     public var updatedAt = Date.distantPast
@@ -125,10 +131,12 @@ public final class TrailDraftRecord {
         travelMode: TrailTravelMode = .hiking,
         startIsOpen: Bool = false,
         editingHikeID: UUID? = nil,
-        editingPlaceIDs: [UUID] = []
+        editingPlaceIDs: [UUID] = [],
+        chosenLegs: [TrailLegChoice] = []
     ) {
         self.editingHikeID = editingHikeID
         self.editingPlaceIDs = editingPlaceIDs
+        self.chosenLegs = chosenLegs
         self.waypoints = waypoints
         self.waypointNames = waypointNames
         self.places = places
