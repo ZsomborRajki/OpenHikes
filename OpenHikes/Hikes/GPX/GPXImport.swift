@@ -223,7 +223,7 @@ nonisolated enum GPXImport {
         }
 
         let usable: [(container: Int, points: [Point])] = source.compactMap { segment in
-            let points = segment.points.compactMap(point)
+            let points = droppingPlaceholders(from: segment.points.compactMap(point))
             return points.isEmpty ? nil : (segment.containerIndex, points)
         }
         guard !usable.isEmpty else { throw .noUsablePoints }
