@@ -264,10 +264,25 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
         longitude = coordinate?.longitude
         self.assetLocalIdentifier = assetLocalIdentifier
         self.matchEvidence = matchEvidence
-        self.importedFromListingID = importedFromListingID
+        self.importedFromListingID = importedFromListingID ?? licence.map(Self.legacyOwnershipStamp)
         self.importedAuthorName = importedAuthorName
         self.isPlaceOnly = isPlaceOnly
         self.licence = licence
+    }
+
+    /// The listing stamp a licensed copy carries so a build that predates
+    /// ``licence`` still reads it as somebody else's.
+    ///
+    /// Such a build answers ``isOwn`` from ``importedFromListingID`` alone,
+    /// decodes the blob, drops the `licence` key it does not know, and would
+    /// offer a CC BY-SA photograph for publishing as the hiker's own, with no
+    /// credit. A copy saved out of the trail maker has no listing to name, so
+    /// this names the Commons page it came from. It is a second meaning for a
+    /// field named for listings and nothing reads it as one: ``isOwn`` keeps
+    /// ``licence`` as the rule for this build, and the stamp is only for the
+    /// mixed-version window.
+    static func legacyOwnershipStamp(for licence: HikePhotoLicence) -> String {
+        "commons:\(licence.sourceURL.absoluteString)"
     }
 
     /// Whether this photograph is the hiker's own to publish.
