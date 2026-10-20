@@ -28,6 +28,14 @@ struct HikeFormatTests {
         #expect(long.contains("25"))
     }
 
+    /// The style is picked on the interval the style will round to, so the last
+    /// half second of an hour reads as the hour rather than "60m".
+    @Test("no duration just under an hour prints as 60 minutes", arguments: [3599.4, 3599.5, 3599.6, 3600, 3600.6])
+    func durationAtTheHour(seconds: TimeInterval) {
+        #expect(!HikeFormat.duration(seconds).contains("60m"))
+        #expect(!HikeFormat.spokenDuration(seconds).contains("60"))
+    }
+
     /// Elevations are whole units — a stat tile reading "217.4382 m" is false
     /// precision on data this noisy. Which unit, and the non-finite case, are
     /// `ElevationFormatTests`' business: they are the region-sensitive half

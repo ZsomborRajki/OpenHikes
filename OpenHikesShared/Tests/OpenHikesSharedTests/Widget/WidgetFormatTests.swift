@@ -63,6 +63,14 @@ struct WidgetFormatTests {
         #expect(!WidgetFormat.elevation(meters: 620.4, locale: Self.imperial).contains("."))
     }
 
+    /// A height just below sea level rounds to zero, and zero has no sign.
+    @Test("a height that rounds to zero prints without a minus", arguments: [-0.49, -0.4, -0.1, 0])
+    func elevationRoundingToZero(meters: Double) {
+        let text = WidgetFormat.elevation(meters: meters, locale: Self.metric)
+        #expect(!text.contains("-"))
+        #expect(!text.contains("\u{2212}"))
+    }
+
     @Test("speed follows whatever the region measures road speed in")
     func speedFollowsTheLocale() {
         #expect(WidgetFormat.speed(metersPerSecond: 1.2, locale: Self.metric).contains("km/h"))

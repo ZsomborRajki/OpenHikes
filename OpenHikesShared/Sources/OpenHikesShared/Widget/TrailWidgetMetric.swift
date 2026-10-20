@@ -63,7 +63,7 @@ public enum WidgetFormat {
             ? measurement.converted(to: .feet)
             : measurement
         return Measurement(
-            value: converted.value.rounded(),
+            value: converted.value.rounded() + 0,
             unit: converted.unit
         )
         .formatted(
