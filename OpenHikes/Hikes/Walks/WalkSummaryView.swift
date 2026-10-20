@@ -40,6 +40,9 @@ struct WalkSummaryView: View {
     /// Bumped by *Show on Map*, so the drawing runs as a `.task` the view
     /// owns rather than as a `Task` that outlives it — see ``showOnMap()``.
     @State private var showOnMapRequest = 0
+    /// The lead percentage, in points at the default text size. Scaled with
+    /// `.largeTitle` so it keeps pace with the `.headline` label beside it.
+    @ScaledMetric(relativeTo: .largeTitle) private var figureSize = 44.0
 
     private var hike: Hike? { walk.hike }
     private var tint: Color { hike?.tintOpaque ?? .green }
@@ -124,8 +127,10 @@ struct WalkSummaryView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("\(percent)%")
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
+                    .font(.system(size: figureSize, weight: .bold, design: .rounded))
                     .monospacedDigit()
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
                 Text(WalkRow.outcome(walk.endReason))
                     .font(.headline)
                     .foregroundStyle(.secondary)
