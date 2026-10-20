@@ -87,6 +87,9 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
     public var elevationGainMeters: Double?
     public var elevationLossMeters: Double?
     public var points: [WatchTrailPoint]
+    /// When the phone read the route this was packaged from. What orders two
+    /// copies of one trail that crossed out of order — see
+    /// ``WatchTrailSelection/accepts(_:replacing:)``.
     public var sentAt: Date
 
     public init(

@@ -193,7 +193,7 @@ final class WatchSessionCoordinator: NSObject {
     private func sendTrail(_ request: WatchTrailRequest) {
         let hikeID = request.hikeID
         Task { [container] in
-            let input = await MainActor.run { () -> HikeRouteInput? in
+            let read = await MainActor.run { () -> (input: HikeRouteInput, at: Date)? in
                 let context = ModelContext(container)
                 var descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
                 descriptor.fetchLimit = 1
@@ -201,9 +201,10 @@ final class WatchSessionCoordinator: NSObject {
                 // to send and nothing to report: the watch draws its waiting
                 // state, and the next digest takes the row off its list.
                 guard let hike = try? context.fetch(descriptor).first else { return nil }
-                return HikeRouteInput(hike: hike)
+                return (HikeRouteInput(hike: hike), .now)
             }
-            guard let input, let package = await WatchTrailPackaging.package(from: input) else { return }
+            guard let read, let package = await WatchTrailPackaging.package(from: read.input, readAt: read.at)
+            else { return }
             // The watch already holds exactly this, and asked to find out
             // whether the route had been edited since. It had not, so there is
             // nothing to send: the copy it has stays the one it draws.
