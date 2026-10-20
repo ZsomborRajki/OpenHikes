@@ -55,6 +55,40 @@ private final class RecordingBackgroundTime {
     var isOutstanding: Bool { begun > ended.count }
 }
 
+/// Holds every save open until the test lets it go, and says when the first
+/// one arrived — so a run can be pinned mid-download, in flight, while the
+/// test looks at what time it holds. The shape `SaveProbe` takes in
+/// `OfflineTileDownloaderTests+Window.swift`, for the reason it gives.
+private actor ParkedSaves {
+    private var arrived = false
+    private var isReleased = false
+    private var parked: [CheckedContinuation<Void, Never>] = []
+    private var arrivalWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func save() async -> Bool {
+        arrived = true
+        let waiters = arrivalWaiters
+        arrivalWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
+        if !isReleased {
+            await withCheckedContinuation { parked.append($0) }
+        }
+        return true
+    }
+
+    func waitForFirstSave() async {
+        guard !arrived else { return }
+        await withCheckedContinuation { arrivalWaiters.append($0) }
+    }
+
+    func release() {
+        isReleased = true
+        let resumed = parked
+        parked.removeAll()
+        for continuation in resumed { continuation.resume() }
+    }
+}
+
 @MainActor
 @Suite("Offline download background time")
 struct OfflineDownloadBackgroundTimeTests {
@@ -74,6 +108,23 @@ struct OfflineDownloadBackgroundTimeTests {
             isOnline: { true },
             backgroundTime: time.reservation,
             saveTile: { _, _ in false }
+        )
+    }
+
+    /// A downloader whose saves park in `saves`, with a gate and registry of
+    /// its own so a run held open here holds nothing another suite shares.
+    private func downloader(
+        _ time: RecordingBackgroundTime,
+        parkingIn saves: ParkedSaves,
+        quota: OfflineTileDownloader.QuotaBroker = .unlimited
+    ) -> OfflineTileDownloader {
+        OfflineTileDownloader(
+            gate: TileLoadGate(),
+            isOnline: { true },
+            quota: quota,
+            registry: OfflineDownloadRegistry(),
+            backgroundTime: time.reservation,
+            saveTile: { _, _ in await saves.save() }
         )
     }
 
@@ -193,5 +244,77 @@ struct OfflineDownloadBackgroundTimeTests {
         #expect(time.begun == 2)
         downloader.cancel()
         #expect(time.ended.count == 2, "each grant is ended exactly once")
+    }
+
+    /// Cancel and restart in one breath, and the cancelled run's tail lands
+    /// after the restart has taken its grant. That tail used to end whatever
+    /// the downloader held — the replacement's grant, with the replacement
+    /// still downloading and now suspendable on lock (#876).
+    @Test("a cancelled run's late tail leaves its replacement's grant alone")
+    func supersededTailKeepsTheReplacementsGrant() async throws {
+        let time = RecordingBackgroundTime()
+        let saves = ParkedSaves()
+        let downloader = downloader(time, parkingIn: saves)
+
+        downloader.start(
+            route: Fixture.ridgeRoute,
+            source: unreachable,
+            claim: Fixture.unrecordedClaim
+        )
+        let cancelled = try #require(downloader.lastRun)
+        downloader.cancel()
+        downloader.start(
+            route: Fixture.ridgeRoute,
+            source: unreachable,
+            claim: Fixture.unrecordedClaim
+        )
+        await saves.waitForFirstSave()
+        await cancelled.value
+
+        #expect(downloader.phase == .downloading, "precondition: the replacement is mid-download")
+        #expect(time.ended == [BackgroundTimeToken(rawValue: 1)], "only the cancelled run's grant went back")
+        #expect(time.isOutstanding, "the replacement still holds its own")
+
+        await saves.release()
+        await downloader.waitForCurrentRun()
+        #expect(time.ended == [BackgroundTimeToken(rawValue: 1), BackgroundTimeToken(rawValue: 2)])
+    }
+
+    /// The grant `start` took went back when planning stopped to ask about
+    /// space, so the run the hiker's confirmation starts needs one of its own
+    /// — it used to run with none, and lock meant suspension (#882).
+    @Test("freeing space for a download reserves time for the run it starts")
+    func confirmedReclaimReservesItsOwnGrant() async throws {
+        let time = RecordingBackgroundTime()
+        let saves = ParkedSaves()
+        let downloader = downloader(
+            time,
+            parkingIn: saves,
+            quota: .init(
+                space: { _ in (limit: 0, used: 0) },
+                reclaimable: { _, _ in .max },
+                reclaim: { _, _, bytes in bytes }
+            )
+        )
+        downloader.start(
+            route: Fixture.ridgeRoute,
+            source: unreachable,
+            claim: Fixture.unrecordedClaim
+        )
+        await downloader.waitForCurrentRun()
+        _ = try #require(downloader.pendingSpaceShortfall)
+        #expect(!time.isOutstanding, "waiting on the hiker holds no time")
+
+        downloader.confirmReclaimingSpace()
+        await saves.waitForFirstSave()
+
+        #expect(downloader.phase == .downloading)
+        #expect(time.begun == 2)
+        #expect(time.isOutstanding, "the confirmed run is covered while it downloads")
+
+        await saves.release()
+        await downloader.waitForCurrentRun()
+        #expect(downloader.phase == .finished)
+        #expect(!time.isOutstanding, "and gives its grant back when it ends")
     }
 }
