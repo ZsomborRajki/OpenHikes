@@ -30,13 +30,13 @@ struct WalkSummaryView: View {
     /// out of the way of the map it just changed.
     var onShowOnMap: () -> Void = { /* no-op default */ }
 
-    /// The trail's profile, built once off the main actor: the route is
-    /// walked for it, and a summary is not the place to pay that on the
-    /// frame that pushed it. It answers all three questions this screen has
-    /// of the route — the ascent it shows, whether the trail is still the one
-    /// the walk was walked along, and the geometry *Show on Map* draws the
+    /// The trail as this screen reads it, built off the main actor: the
+    /// route is walked for it, and a summary is not the place to pay that on
+    /// the frame that pushed it. It answers all three questions this screen
+    /// has of the route — the ascent it shows, whether the trail is still the
+    /// one the walk was walked along, and the geometry *Show on Map* draws the
     /// covered stretches over.
-    @State private var profile: RouteProfile?
+    @State private var trail: WalkSummaryTrail?
     /// Bumped by *Show on Map*, so the drawing runs as a `.task` the view
     /// owns rather than as a `Task` that outlives it — see ``showOnMap()``.
     @State private var showOnMapRequest = 0
@@ -47,16 +47,18 @@ struct WalkSummaryView: View {
     private var hike: Hike? { walk.hike }
     private var tint: Color { hike?.tintOpaque ?? .green }
     private var percent: Int { Int((walk.coveredFraction * 100).rounded()) }
+    private var profile: RouteProfile? { trail?.profile }
     private var ascentMeters: Double? { profile?.elevation.gainMeters }
 
     /// Whether the trail on screen is still the one this walk was walked
     /// along. The stretches are measured in metres from the start of *that*
     /// route, so a route re-imported or edited since would draw them against
-    /// the wrong geometry. `false` while the profile is still being built:
-    /// there is nothing to draw along yet either way.
+    /// the wrong geometry — and the line, not its length, is what says so: a
+    /// reversed route is as long as it was. `false` while the profile is
+    /// still being built: there is nothing to draw along yet either way.
     private var routeMatchesWalk: Bool {
-        guard let profile else { return false }
-        return abs(profile.totalDistanceMeters - walk.routeDistanceMeters) < 1
+        guard let trail else { return false }
+        return walk.isAlong(revision: trail.revision)
     }
 
     /// The same disagreement, once it is known to be one rather than a
@@ -92,9 +94,17 @@ struct WalkSummaryView: View {
         .fullScreenCover(isPresented: $share.isPresented, onDismiss: share.closed) {
             WalkShareFlow(walk: walk, trail: profile, trailMatchesWalk: routeMatchesWalk, session: share)
         }
-        .task(id: walk.id) {
-            guard let route = hike?.route, !route.isEmpty else { return }
-            profile = await Self.profile(of: route)
+        // Keyed on the line as well as the walk, for the reason
+        // ``HikeDetailRouteKey`` gives: *Edit Route* keeps the hike and
+        // replaces its route, here or on another device while this screen is
+        // up, and keyed on the walk alone the summary went on drawing the
+        // stretches along the line that was replaced.
+        .task(id: WalkSummaryRouteKey(walk: walk)) {
+            let key = WalkSummaryRouteKey(walk: walk)
+            // The old line must not be drawn along while the new one is built.
+            if trail?.key != key { trail = nil }
+            guard !key.route.isEmpty else { return }
+            trail = await Self.trail(along: key)
         }
         // A `.task` rather than the unstructured `Task` the button used to
         // start: that one outlived this view, and a hiker who backed out and
@@ -231,12 +241,38 @@ struct WalkSummaryView: View {
     }
 
     @concurrent
-    private static func profile(of route: [RouteCoordinate]) async -> RouteProfile {
-        RouteProfile(route: route)
+    private static func trail(along key: WalkSummaryRouteKey) async -> WalkSummaryTrail {
+        WalkSummaryTrail(
+            key: key,
+            profile: RouteProfile(route: key.route),
+            revision: TrailWalkRecord.routeRevision(of: key.route)
+        )
     }
 
     private static func length(_ meters: Double) -> String {
         Measurement(value: meters, unit: UnitLength.meters)
             .formatted(.measurement(width: .abbreviated, usage: .road))
     }
+}
+
+/// The line a walk summary was prepared from, and so what its `.task(id:)` is
+/// keyed on — the route itself, for the cost reasons ``HikeDetailRouteKey``
+/// gives.
+nonisolated struct WalkSummaryRouteKey: Equatable, Sendable {
+    let walkID: UUID
+    let route: [RouteCoordinate]
+
+    @MainActor
+    init(walk: HikeWalk) {
+        walkID = walk.id
+        route = walk.hike?.route ?? []
+    }
+}
+
+/// The current trail, as a walk summary needs it: its profile, and the
+/// ``TrailWalkRecord/routeRevision(of:)`` the walk is compared against.
+nonisolated struct WalkSummaryTrail: Sendable {
+    let key: WalkSummaryRouteKey
+    let profile: RouteProfile
+    let revision: String
 }

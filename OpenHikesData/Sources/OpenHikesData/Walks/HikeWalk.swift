@@ -55,6 +55,16 @@ public final class HikeWalk {
     public var routeDistanceMeters: Double = 0
     /// ``TrailWalkEndReason`` by raw value.
     public var endReasonID: String = TrailWalkEndReason.ended.rawValue
+    /// Which line the walk was along — ``TrailWalkRecord/routeRevision`` as
+    /// it stood when the walk closed — so a route edited since can be told
+    /// from the one ``coveredIntervals`` are measured along.
+    ///
+    /// The length cannot say it alone: a route reversed, or replaced by a
+    /// line of the same length, keeps ``routeDistanceMeters`` and moves every
+    /// metre of it. Optional only because ``TrailWalkRecord/routeRevision``
+    /// is; a walk that names no line is along none — see
+    /// ``isAlong(revision:)``.
+    public var routeRevision: String?
 
     public init(
         hikeID: UUID,
@@ -65,6 +75,7 @@ public final class HikeWalk {
         furthestDistanceMeters: Double,
         routeDistanceMeters: Double,
         endReason: TrailWalkEndReason,
+        routeRevision: String? = nil,
         id: UUID = UUID()
     ) {
         self.id = id
@@ -76,6 +87,7 @@ public final class HikeWalk {
         self.furthestDistanceMeters = furthestDistanceMeters
         self.routeDistanceMeters = routeDistanceMeters
         endReasonID = endReason.rawValue
+        self.routeRevision = routeRevision
     }
 }
 
@@ -97,6 +109,16 @@ public extension HikeWalk {
         max(0, routeDistanceMeters - coverage.coveredMeters)
     }
 
+    /// Whether the route whose ``TrailWalkRecord/routeRevision(of:)`` is
+    /// `revision` is still the line this walk's distances are measured along
+    /// — so its covered stretches can be drawn, and climbed, on it.
+    ///
+    /// The line rather than its length: the length was the whole test once,
+    /// and a reversed route passed it.
+    func isAlong(revision: String) -> Bool {
+        routeRevision == revision
+    }
+
     /// The walk's record, frozen from `record` at `endedAt`.
     convenience init(closing record: TrailWalkRecord, at endedAt: Date, reason: TrailWalkEndReason) {
         self.init(
@@ -107,7 +129,8 @@ public extension HikeWalk {
             coveredIntervals: record.coverage.intervals,
             furthestDistanceMeters: record.coverage.furthestDistanceMeters,
             routeDistanceMeters: record.routeDistanceMeters,
-            endReason: reason
+            endReason: reason,
+            routeRevision: record.routeRevision
         )
     }
 }

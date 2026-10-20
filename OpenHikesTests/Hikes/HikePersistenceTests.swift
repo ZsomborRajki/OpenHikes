@@ -175,6 +175,7 @@ struct HikePersistenceTests {
                 furthestDistanceMeters: 1500,
                 routeDistanceMeters: 2000,
                 endReason: .reachedEnd,
+                routeRevision: TrailWalkRecord.routeRevision(of: Fixture.ridgeRoute),
                 id: walkID
             )
             context.insert(walk)
@@ -197,6 +198,7 @@ struct HikePersistenceTests {
             #expect(reopened.furthestDistanceMeters == 1500)
             #expect(reopened.routeDistanceMeters == 2000)
             #expect(reopened.endReason == .reachedEnd)
+            #expect(reopened.routeRevision == TrailWalkRecord.routeRevision(of: Fixture.ridgeRoute))
             #expect(reopened.coveredFraction.isApproximatelyEqual(to: 0.55, absoluteTolerance: 0.0001))
 
             let hike = try #require(
