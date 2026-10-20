@@ -71,17 +71,17 @@ struct HikePhotoTimelinePauseTests {
         RouteGeometry.distanceMeters(from: position.coordinate, to: coordinate)
     }
 
-    @Test("a fix that resumed a pause is marked as one")
-    func resumeIsCarriedIntoTheFix() throws {
+    @Test("fixes remember their original recording segment")
+    func segmentsAreCarriedIntoFixes() throws {
         let timeline = try #require(HikePhotoTimeline(route: Self.route(pause: 360)))
 
-        #expect(timeline.fixes.map(\.resumesAfterPause) == [false, true, false])
+        #expect(timeline.fixes.map(\.segment) == [0, 1, 1])
     }
 
     /// The route an import or a matcher splices can carry the boundary on a
     /// point with no clock. The pause still happened between the fixes either
-    /// side of it, so it belongs to the next one that has a timestamp.
-    @Test("a pause on an untimestamped point moves to the next fix")
+    /// side of it, so the next timestamped fix starts a different segment.
+    @Test("a pause on an untimestamped point separates the next fix")
     func pauseOnAnUnstampedPointIsKept() throws {
         var route = Self.route(pause: 360)
         route[1].boundary = nil
@@ -96,7 +96,84 @@ struct HikePhotoTimelinePauseTests {
 
         let timeline = try #require(HikePhotoTimeline(route: route))
 
-        #expect(timeline.fixes.map(\.resumesAfterPause) == [false, true, false])
+        #expect(timeline.fixes.map(\.segment) == [0, 1, 1])
+    }
+
+    @Test("a discarded duplicate cannot hide a pause", arguments: [false, true])
+    func pauseOnADiscardedDuplicateIsKept(unstampedResume: Bool) throws {
+        var route = Self.route(pause: 360)
+        route.insert(
+            RouteCoordinate(
+                latitude: Self.beforePause.latitude,
+                longitude: Self.beforePause.longitude,
+                timestamp: Self.epoch.addingTimeInterval(360)
+            ),
+            at: 1
+        )
+        if unstampedResume {
+            route[2].timestamp = nil
+            route.insert(
+                RouteCoordinate(
+                    latitude: Self.resumed.latitude,
+                    longitude: Self.resumed.longitude,
+                    timestamp: Self.epoch.addingTimeInterval(360)
+                ),
+                at: 3
+            )
+        }
+
+        let timeline = try #require(HikePhotoTimeline(route: route))
+        let position = try #require(
+            timeline.position(at: Self.epoch.addingTimeInterval(390))
+        )
+
+        #expect(timeline.fixes.count == 3)
+        #expect(Self.meters(from: position, to: Self.beforePause) < Self.toleranceMeters)
+        #expect(position.secondsFromFix == 30)
+    }
+
+    @Test("sorting keeps a pause between the original recording segments")
+    func sortedFixesKeepTheirSegments() throws {
+        var route = Self.route(pause: 360)
+        route[2].timestamp = Self.epoch.addingTimeInterval(300)
+        let timeline = try #require(HikePhotoTimeline(route: route))
+
+        let duringPause = try #require(
+            timeline.position(at: Self.epoch.addingTimeInterval(150))
+        )
+        let withinSegment = try #require(
+            timeline.position(at: Self.epoch.addingTimeInterval(330))
+        )
+
+        #expect(Self.meters(from: duringPause, to: Self.beforePause) < Self.toleranceMeters)
+        #expect(duringPause.secondsFromFix == 150)
+        let expected = CLLocationCoordinate2D(
+            latitude: Self.resumed.latitude + Self.stepDegrees / 2,
+            longitude: Self.resumed.longitude
+        )
+        #expect(Self.meters(from: withinSegment, to: expected) < Self.toleranceMeters)
+        #expect(withinSegment.secondsFromFix == 30)
+    }
+
+    @Test("interleaved timestamps cannot join different recording segments")
+    func interleavedSegmentsAreNotInterpolated() throws {
+        var route = Self.route(pause: 300)
+        route.insert(
+            RouteCoordinate(
+                latitude: Self.beforePause.latitude,
+                longitude: Self.beforePause.longitude,
+                timestamp: Self.epoch.addingTimeInterval(330)
+            ),
+            at: 1
+        )
+        let timeline = try #require(HikePhotoTimeline(route: route))
+
+        let position = try #require(
+            timeline.position(at: Self.epoch.addingTimeInterval(315))
+        )
+
+        #expect(Self.meters(from: position, to: Self.resumed) < Self.toleranceMeters)
+        #expect(position.secondsFromFix == 15)
     }
 
     /// The reproduction in #870: six minutes paused, a photo three minutes
