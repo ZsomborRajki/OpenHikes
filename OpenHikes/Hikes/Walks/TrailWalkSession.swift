@@ -28,6 +28,7 @@
 //  a failure before returning to the cadence for persistent failures.
 //
 
+import CoreLocation
 import Foundation
 import Observation
 import OpenHikesData
@@ -123,10 +124,13 @@ final class TrailWalkSession {
     /// machine alone reaches no notification centre.
     @ObservationIgnored let reminders: MovementReminderController?
     @ObservationIgnored private let commit: (ModelContext) throws -> Void
-    /// Today's light where the hiker is, for the after-dark warning — see
+    /// Today's light where the walk on a hike is, given where on its route
+    /// the hiker last matched, for the after-dark warning — see
     /// ``DuskWatch``. A closure for the reason ``activeRecordingHikeID`` is
-    /// one: the weather manager is the single authority on the reading.
-    @ObservationIgnored let daylight: () -> WeatherDaylight?
+    /// one: the weather manager is the single authority on the reading. Asked
+    /// about *this* walk because the badge is not: browsing another trail
+    /// moves the badge and leaves the walk where it is.
+    @ObservationIgnored let daylight: (UUID, CLLocationCoordinate2D?) -> WeatherDaylight?
     @ObservationIgnored private var lastPersistedAt: Date?
     @ObservationIgnored private var lastPersistenceAttemptAt: Date?
     /// Capped at two: the first failure gets one prompt retry, then attempts
@@ -167,7 +171,7 @@ final class TrailWalkSession {
         reminders: MovementReminderController? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
         activeRecordingHikeID: @escaping () -> UUID? = { nil },
-        daylight: @escaping () -> WeatherDaylight? = { nil },
+        daylight: @escaping (UUID, CLLocationCoordinate2D?) -> WeatherDaylight? = { _, _ in nil },
         save: @escaping (ModelContext) throws -> Void = { try $0.save() }
     ) {
         self.context = context
