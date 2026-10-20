@@ -492,12 +492,12 @@ nonisolated private extension OverpassTrailLegRouter {
         in index: TrailMatcherGraphIndex
     ) -> Set<Int> {
         let middle = (path.distance / 4)...(path.distance * 3 / 4)
-        var travelled = 0.0
+        var traveled = 0.0
         var banned = Set<Int>()
         for edge in path.edgeIndices {
             let cost = index.cost(ofEdge: edge)
-            if (travelled...(travelled + cost)).overlaps(middle) { banned.insert(edge) }
-            travelled += cost
+            if (traveled...(traveled + cost)).overlaps(middle) { banned.insert(edge) }
+            traveled += cost
         }
         return banned
     }

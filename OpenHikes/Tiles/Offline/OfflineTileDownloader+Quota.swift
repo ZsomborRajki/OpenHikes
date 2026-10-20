@@ -42,7 +42,7 @@ extension OfflineTileDownloader {
     struct SpaceShortfall: Equatable, Sendable {
         /// Whose licence sets the ceiling — "Stadia Maps", not the style being
         /// saved, because the limit is shared by every style it covers.
-        let licenceHolder: String
+        let licenseHolder: String
         /// Bytes to free from *other* saved maps for this download to fit.
         let bytesToFree: Int64
         /// The licence's device-wide ceiling, quoted so the message can
@@ -135,7 +135,7 @@ extension OfflineTileDownloader {
         source: ActiveTileSource
     ) async -> SpaceShortfall? {
         guard let space = await quota.space(source.providerID),
-              let licence = TileCache.durableQuota(forProviderID: source.providerID)
+              let license = TileCache.durableQuota(forProviderID: source.providerID)
         else { return nil }
         let fetchingKeys = Set(fetching.map { $0.cacheKey(providerID: source.providerID) })
         let required = await quota.additionalBytes(fetchingKeys)
@@ -151,7 +151,7 @@ extension OfflineTileDownloader {
         guard shortfall > 0 else { return nil }
 
         return SpaceShortfall(
-            licenceHolder: licence.holder,
+            licenseHolder: license.holder,
             bytesToFree: shortfall,
             limit: space.limit
         )
@@ -186,11 +186,11 @@ extension OfflineTileDownloader {
     ) async -> String {
         if let space = await quota.space(source.providerID),
            space.used >= space.limit,
-           let licence = TileCache.durableQuota(forProviderID: source.providerID) {
-            let name = licence.holder
+           let license = TileCache.durableQuota(forProviderID: source.providerID) {
+            let name = license.holder
             let limit = ByteCountFormatter.string(fromByteCount: space.limit, countStyle: .file)
             return savedCount == 0
-                ? "Saved maps from \(name) are full. Its licence allows \(limit) of saved tiles on "
+                ? "Saved maps from \(name) are full. Its license allows \(limit) of saved tiles on "
                     + "this device, across all its map styles — delete another saved map to make room."
                 : "Saved \(savedCount) of \(plannedCount) tiles, then reached the \(limit) "
                     + "\(name) allows on this device across all its map styles. Delete another "

@@ -94,7 +94,7 @@ struct MapCoordinatorTests {
 
     /// MapKit round-trips a region through its own projection, so a centre
     /// comes back close to what was asked for rather than equal to it.
-    static let centreTolerance = 0.001
+    static let centerTolerance = 0.001
 
     /// `locationManager` is a parameter with a default for the reason
     /// `community` and `searchCompleter` are: one file's worth of tests needs

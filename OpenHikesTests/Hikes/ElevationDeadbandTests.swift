@@ -153,7 +153,7 @@ struct ElevationDeadbandTests {
     /// the old one, and the noise test above stops holding. A test that
     /// passes against the unfixed code is not evidence.
     @Test("a zero deadband restores the behaviour this replaced")
-    func zeroThresholdRestoresTheOldBehaviour() {
+    func zeroThresholdRestoresTheOldBehavior() {
         let elevations = (0..<1000).map { idx in
             600 + (idx.isMultiple(of: 2) ? 1.0 : -1.0)
         }

@@ -51,7 +51,7 @@ extension DirectionalPolylineRendererTests {
     }
 
     /// The directional line in dark blue, with its middle drawn across so it
-    /// does not sit on the bitmap's edge — see `renderCentred` beside the
+    /// does not sit on the bitmap's edge — see `renderCentered` beside the
     /// border's tests — and, when `shaded`, the whole of it as one yellow
     /// stretch.
     private static func renderBlueDirectional(shaded: Bool) throws -> Canvas {
@@ -196,10 +196,10 @@ extension DirectionalPolylineRendererTests {
         let shown = Self.meetingLength + Self.meetingMargin * 2
         let row = canvas.context.height / 2
         let column = { (meters: Double) in Int((Self.meetingMargin + meters) / shown * Double(canvas.context.width)) }
-        let coloured = Self.pixel(in: canvas, x: column(half / 2), y: row)
-        let uncoloured = Self.pixel(in: canvas, x: column(half * 3 / 2), y: row)
-        #expect(coloured.blue > Self.bright && coloured.red < Self.dim)
-        #expect(uncoloured.alpha == 0, "the line itself is not drawn")
+        let colored = Self.pixel(in: canvas, x: column(half / 2), y: row)
+        let uncolored = Self.pixel(in: canvas, x: column(half * 3 / 2), y: row)
+        #expect(colored.blue > Self.bright && colored.red < Self.dim)
+        #expect(uncolored.alpha == 0, "the line itself is not drawn")
     }
 
     /// An out-and-back trail draws its return leg over its outward one, and

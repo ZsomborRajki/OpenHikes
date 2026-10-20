@@ -163,7 +163,7 @@ struct CommunityFailureMappingTests {
     /// never heard of looks like. It has to land on the diagnostic rather than
     /// crash or be read as the nearest neighbour.
     @Test("a code this build does not know is not mistaken for one it does")
-    func unrecognisedCodeIsNotGuessedAt() {
+    func unrecognizedCodeIsNotGuessedAt() {
         let error = CKError(_nsError: NSError(domain: CKErrorDomain, code: 999_999))
 
         guard case .unavailable = CloudKitCommunityTransport.failure(from: error, while: "browsing")

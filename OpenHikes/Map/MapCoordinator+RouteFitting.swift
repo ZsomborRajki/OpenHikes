@@ -265,11 +265,11 @@ extension MapView.Coordinator {
         let area = focusArea(in: mapView)
         let clear = area.insetBy(dx: clearance, dy: clearance)
         guard !clear.isEmpty, !clear.contains(point) else { return false }
-        let centre = CGPoint(
+        let center = CGPoint(
             x: mapView.bounds.midX + point.x - area.midX,
             y: mapView.bounds.midY + point.y - area.midY
         )
-        let target = mapView.convert(centre, toCoordinateFrom: mapView)
+        let target = mapView.convert(center, toCoordinateFrom: mapView)
         guard CLLocationCoordinate2DIsValid(target) else { return false }
         mapView.setCenter(target, animated: true)
         return true

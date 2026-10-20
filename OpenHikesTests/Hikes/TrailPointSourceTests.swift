@@ -138,7 +138,7 @@ struct TrailPointSourceTests {
     /// query asks `nwr` for it — and a way has no `lat`, only the `center`
     /// that `out center` puts on it.
     @Test("a place mapped as a building stands at its centre")
-    func aBuildingStandsAtItsCentre() async throws {
+    func aBuildingStandsAtItsCenter() async throws {
         let (source, _) = Self.makeSource([Self.ok(Self.body)])
 
         let hut = try await source.places(near: Self.area)[2]

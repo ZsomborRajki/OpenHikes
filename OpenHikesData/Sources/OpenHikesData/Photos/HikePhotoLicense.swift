@@ -1,5 +1,5 @@
 //
-//  HikePhotoLicence.swift
+//  HikePhotoLicense.swift
 //  OpenHikes
 //
 //  The licence a photograph copied out of Wikimedia Commons was shared under,
@@ -27,7 +27,7 @@ import Foundation
 /// photograph, saved with an OpenStreetMap trail. Its presence is also what
 /// makes ``HikePhoto/isOwn`` false whatever else the row says — a picture under
 /// somebody else's licence is never this hiker's to publish.
-nonisolated public struct HikePhotoLicence: Codable, Hashable, Sendable {
+nonisolated public struct HikePhotoLicense: Codable, Hashable, Sendable {
     /// The licence's short name as Commons spells it — "CC BY-SA 4.0",
     /// "Public domain". Shown beside the credit.
     public var name: String

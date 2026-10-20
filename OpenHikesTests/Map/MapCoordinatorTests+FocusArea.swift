@@ -123,15 +123,15 @@ extension MapCoordinatorTests {
         view.update(map, coordinator)
         let restY = map.bounds.height * 0.45
         settle(sheetMetrics, at: restY)
-        let centre = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
+        let center = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
 
         coordinator.show(
-            MKCoordinateRegion(center: centre, latitudinalMeters: 4000, longitudinalMeters: 4000),
+            MKCoordinateRegion(center: center, latitudinalMeters: 4000, longitudinalMeters: 4000),
             on: map,
             animated: false
         )
 
-        let point = map.convert(centre, toPointTo: map)
+        let point = map.convert(center, toPointTo: map)
         #expect(point.y <= restY, "the place asked for must not be behind the sheet")
         #expect(point.y >= 0)
         #endif

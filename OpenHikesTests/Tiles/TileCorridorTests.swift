@@ -28,7 +28,7 @@ struct TileCorridorTests {
         (z, SlippyTileMath.tileX(coordinate.longitude, z: z), SlippyTileMath.tileY(coordinate.latitude, z: z))
     }
 
-    /// `metres` north/east of a coordinate — rough, but exact enough to sit
+    /// `meters` north/east of a coordinate — rough, but exact enough to sit
     /// confidently inside or outside a 1.5 km buffer.
     private func offset(
         _ coordinate: CLLocationCoordinate2D,

@@ -61,14 +61,14 @@ struct TrailDraftSaveTests {
     /// ``TrailDraftElevationTests`` for how they are asked for.
     private static func heights(
         for draft: TrailDraft,
-        of metres: [Double]
+        of meters: [Double]
     ) -> RouteHeightSamples {
         let route = draft.routeCoordinates
         return RouteHeightSamples(
             routePointCount: route.count,
             indexes: Array(route.indices),
             coordinates: route,
-            heights: metres
+            heights: meters
         )
     }
 

@@ -185,9 +185,9 @@ extension MapCoordinatorTests {
             animated: false
         )
 
-        let centre = CGPoint(x: map.bounds.midX, y: map.bounds.midY)
+        let center = CGPoint(x: map.bounds.midX, y: map.bounds.midY)
         let named = TrailDraftDroppedPinSpot(
-            coordinate: map.convert(centre, toCoordinateFrom: map),
+            coordinate: map.convert(center, toCoordinateFrom: map),
             leg: nil,
             name: "Watzmann"
         )
@@ -196,7 +196,7 @@ extension MapCoordinatorTests {
         // Whether the tap is answered here or claimed by the pin's own view is
         // a matter of whether MapKit has drawn it yet; either way the card
         // stays open.
-        coordinator.handleTrailDraftTap(at: centre, in: map)
+        coordinator.handleTrailDraftTap(at: center, in: map)
         #expect(maker.selection == .droppedPin, "the label's card stays open")
         #expect(maker.droppedPin == named)
 

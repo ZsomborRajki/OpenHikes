@@ -169,7 +169,7 @@ struct RouteSteepnessTests {
     /// A short stretch a step from each neighbour is no nearer one than the
     /// other, so the longer one decides.
     @Test("a short stretch as far from both neighbours takes the colour of the longer one")
-    func shortStretchJoinsTheLongerNeighbour() {
+    func shortStretchJoinsTheLongerNeighbor() {
         let route = Self.route([(400, 0), (200, 17), (600, 35)])
 
         let runs = RouteSteepness.runs(route: route)

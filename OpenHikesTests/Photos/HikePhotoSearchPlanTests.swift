@@ -55,7 +55,7 @@ struct HikePhotoSearchPlanTests {
         HikePhotoSearchPlan(timeline: timeline, walks: walks, route: route)
     }
 
-    private static func metres(
+    private static func meters(
         from match: LibraryPhotoMatch,
         to coordinate: CLLocationCoordinate2D
     ) -> Double {
@@ -89,7 +89,7 @@ struct HikePhotoSearchPlanTests {
         let match = try #require(found.first)
         #expect(found.count == 1)
         #expect(match.evidence == .walk)
-        #expect(Self.metres(from: match, to: halfWay) < 1)
+        #expect(Self.meters(from: match, to: halfWay) < 1)
     }
 
     /// The camera outranks the guess where it has something to say, exactly as
@@ -108,7 +108,7 @@ struct HikePhotoSearchPlanTests {
 
         let match = try #require(found.first)
         #expect(match.evidence == .place)
-        #expect(Self.metres(from: match, to: takenAt) < 1)
+        #expect(Self.meters(from: match, to: takenAt) < 1)
     }
 
     /// What a walk adds that a route cannot. The trail runs to the summit and

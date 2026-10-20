@@ -1,5 +1,5 @@
 //
-//  SharedHikeCatalogueTests.swift
+//  SharedHikeCatalogTests.swift
 //  OpenHikesSharedTests
 //
 //  The App Group's copy of the library, and the per-hike trail snapshots that
@@ -19,7 +19,7 @@ import Foundation
 import Testing
 
 @Suite("The App Group's copy of the library")
-struct SharedHikeCatalogueTests {
+struct SharedHikeCatalogTests {
     private static func summary(
         id: UUID = UUID(),
         name: String = "Thumsee Loop",
@@ -31,13 +31,13 @@ struct SharedHikeCatalogueTests {
     // MARK: The catalogue
 
     @Test("a catalogue survives the round trip through the container")
-    func catalogueRoundTrips() throws {
+    func catalogRoundTrips() throws {
         try withSharedStoreSandbox { _ in
-            let catalogue = SharedHikeCatalogue(hikes: [Self.summary(), Self.summary()])
+            let catalog = SharedHikeCatalog(hikes: [Self.summary(), Self.summary()])
 
-            SharedStore.saveHikeCatalogue(catalogue)
+            SharedStore.saveHikeCatalog(catalog)
 
-            #expect(SharedStore.loadHikeCatalogue().hikes.count == 2)
+            #expect(SharedStore.loadHikeCatalog().hikes.count == 2)
         }
     }
 
@@ -45,16 +45,16 @@ struct SharedHikeCatalogueTests {
     /// with nothing to offer draws the same either way. An optional would
     /// spread a decision none of them can act on.
     @Test("a container that has never been written reads as an empty catalogue")
-    func anUnwrittenCatalogueIsEmpty() throws {
+    func anUnwrittenCatalogIsEmpty() throws {
         try withSharedStoreSandbox { _ in
-            #expect(SharedStore.loadHikeCatalogue().hikes.isEmpty)
+            #expect(SharedStore.loadHikeCatalog().hikes.isEmpty)
         }
     }
 
     @Test("no container at all reads as an empty catalogue rather than failing")
-    func noContainerIsAnEmptyCatalogue() {
+    func noContainerIsAnEmptyCatalog() {
         withoutSharedStoreContainer {
-            #expect(SharedStore.loadHikeCatalogue().hikes.isEmpty)
+            #expect(SharedStore.loadHikeCatalog().hikes.isEmpty)
         }
     }
 
@@ -63,37 +63,37 @@ struct SharedHikeCatalogueTests {
     @Test("hikes are found by identifier")
     func findsByIdentifier() {
         let wanted = Self.summary(name: "Rennsteig")
-        let catalogue = SharedHikeCatalogue(hikes: [Self.summary(), wanted, Self.summary()])
+        let catalog = SharedHikeCatalog(hikes: [Self.summary(), wanted, Self.summary()])
 
-        #expect(catalogue.hikes(withIDs: [wanted.id]).map(\.name) == ["Rennsteig"])
+        #expect(catalog.hikes(withIDs: [wanted.id]).map(\.name) == ["Rennsteig"])
     }
 
     @Test("hikes are found by name, ignoring case and accents")
     func findsByName() {
-        let catalogue = SharedHikeCatalogue(
+        let catalog = SharedHikeCatalog(
             hikes: [Self.summary(name: "Kalvarienberg"), Self.summary(name: "Thumsee Loop")]
         )
 
-        #expect(catalogue.hikes(matching: "kalvarienberg").count == 1)
-        #expect(catalogue.hikes(matching: "KALVARIENBERG").count == 1)
-        #expect(catalogue.hikes(matching: "thumsee").count == 1)
+        #expect(catalog.hikes(matching: "kalvarienberg").count == 1)
+        #expect(catalog.hikes(matching: "KALVARIENBERG").count == 1)
+        #expect(catalog.hikes(matching: "thumsee").count == 1)
     }
 
     /// An empty query is the picker before anything has been typed, which is
     /// every hike rather than none.
     @Test("an empty query matches everything")
     func anEmptyQueryMatchesEverything() {
-        let catalogue = SharedHikeCatalogue(hikes: [Self.summary(), Self.summary()])
+        let catalog = SharedHikeCatalog(hikes: [Self.summary(), Self.summary()])
 
-        #expect(catalogue.hikes(matching: "   ").count == 2)
+        #expect(catalog.hikes(matching: "   ").count == 2)
     }
 
     @Test("suggestions are bounded and take the catalogue's own order")
     func suggestionsAreBounded() {
         let hikes = (0..<20).map { index in Self.summary(name: "Hike \(index)") }
-        let catalogue = SharedHikeCatalogue(hikes: hikes)
+        let catalog = SharedHikeCatalog(hikes: hikes)
 
-        let suggested = catalogue.suggestions(limit: 10)
+        let suggested = catalog.suggestions(limit: 10)
 
         #expect(suggested.count == 10)
         #expect(suggested.first?.name == "Hike 0")

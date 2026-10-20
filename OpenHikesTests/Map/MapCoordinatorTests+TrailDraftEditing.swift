@@ -28,7 +28,7 @@ extension MapCoordinatorTests {
     /// converts to somewhere on it.
     private enum Drawn {
         static let longitude: Double = -122.0300
-        static let centre: Double = 37.3350
+        static let center: Double = 37.3350
         static let span: Double = 0.02
         static let south: Double = 37.3300
         static let north: Double = 37.3400
@@ -37,7 +37,7 @@ extension MapCoordinatorTests {
     private static func drawnRegion() -> MKCoordinateRegion {
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(
-                latitude: Drawn.centre,
+                latitude: Drawn.center,
                 longitude: Drawn.longitude
             ),
             span: MKCoordinateSpan(latitudeDelta: Drawn.span, longitudeDelta: Drawn.span)

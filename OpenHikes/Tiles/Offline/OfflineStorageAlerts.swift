@@ -85,7 +85,7 @@ private struct OfflineStorageAlerts: ViewModifier {
             fromByteCount: shortfall.bytesToFree,
             countStyle: .file
         )
-        return "\(shortfall.licenceHolder) allows \(limit) of saved maps on this device, across all"
+        return "\(shortfall.licenseHolder) allows \(limit) of saved maps on this device, across all"
             + " its map styles, and that’s already in use. Saving this route will delete about"
             + " \(freeing) of your least-recently-used saved tiles, whichever of its styles they"
             + " were saved in.\n\nThe hikes they belong to keep their routes, and their maps"

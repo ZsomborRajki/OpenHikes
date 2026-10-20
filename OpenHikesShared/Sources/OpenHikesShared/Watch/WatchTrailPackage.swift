@@ -233,14 +233,14 @@ public struct WatchLibraryRequest: SharedPayload, Equatable {
 /// Carries ``SharedHikeSummary`` rows — the same four fields the widget's
 /// picker and Siri already read — because a watch list shows exactly what a
 /// picker row shows. It is deliberately **not** the routes: see
-/// ``SharedHikeCatalogue``, whose header makes this argument for the App
+/// ``SharedHikeCatalog``, whose header makes this argument for the App
 /// Group, and which applies with more force over a Bluetooth link.
 public struct WatchLibraryDigest: SharedPayload, Equatable {
     public static let currentSchemaVersion = 1
 
     /// How many trails cross. A watch list is scrolled with a finger on a
     /// 45 mm screen, and a library can hold years of walks; the phone sends
-    /// the newest of them, which is the order ``SharedHikeCatalogue`` is
+    /// the newest of them, which is the order ``SharedHikeCatalog`` is
     /// already sorted in and the same argument `HikeEntityQuery` makes for its
     /// suggestion limit.
     public static let hikeBudget = 50

@@ -438,7 +438,7 @@ nonisolated extension TileCache {
             // here for the same reason it does during browsing.
             let removed = removeTileInvalidatingToken(
                 at: tile.url,
-                operation: "trim durable tile over licence limit"
+                operation: "trim durable tile over license limit"
             )
             guard removed else { continue }
             freed += tile.size

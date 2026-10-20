@@ -30,7 +30,7 @@
 //  Both processes need the type. The widget declares it; the **app** reads it
 //  back out of `WidgetCenter.getCurrentConfigurations()` to learn which trails
 //  are pinned, which is what decides the snapshots it keeps warm — see
-//  `SharedHikeCataloguePublisher`. A type in `OpenWidget/` is not visible to
+//  `SharedHikeCatalogPublisher`. A type in `OpenWidget/` is not visible to
 //  the app target any more than one in `OpenHikes/` is to the widget.
 //
 

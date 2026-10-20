@@ -141,13 +141,13 @@ extension WeatherConditions {
         static let cloudCover = 0.45
         static let pressureHectopascals: Double = 1013
         static let uvIndex = 3
-        static let visibilityKilometres: Double = 10
-        static let precipitationMillimetres: Double = 0
-        static let windKilometresPerHour: Double = 14
+        static let visibilityKilometers: Double = 10
+        static let precipitationMillimeters: Double = 0
+        static let windKilometersPerHour: Double = 14
         /// North-west: the one compass point whose abbreviation cannot be
         /// confused with a mis-indexed neighbour on either side.
         static let windFromDegrees: Double = 315
-        static let gustKilometresPerHour: Double = 22
+        static let gustKilometersPerHour: Double = 22
     }
 
     static let preview = Self(
@@ -157,15 +157,15 @@ extension WeatherConditions {
         cloudCover: Preview.cloudCover,
         pressure: Measurement(value: Preview.pressureHectopascals, unit: .hectopascals),
         uvIndex: WeatherUVIndex(value: Preview.uvIndex, category: .moderate),
-        visibility: Measurement(value: Preview.visibilityKilometres, unit: .kilometers),
+        visibility: Measurement(value: Preview.visibilityKilometers, unit: .kilometers),
         precipitationIntensity: Measurement(
-            value: Preview.precipitationMillimetres,
+            value: Preview.precipitationMillimeters,
             unit: .millimeters
         ),
         wind: WeatherWind(
-            speed: Measurement(value: Preview.windKilometresPerHour, unit: .kilometersPerHour),
+            speed: Measurement(value: Preview.windKilometersPerHour, unit: .kilometersPerHour),
             direction: Measurement(value: Preview.windFromDegrees, unit: .degrees),
-            gust: Measurement(value: Preview.gustKilometresPerHour, unit: .kilometersPerHour)
+            gust: Measurement(value: Preview.gustKilometersPerHour, unit: .kilometersPerHour)
         )
     )
 }

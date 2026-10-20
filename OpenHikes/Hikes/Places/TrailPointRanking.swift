@@ -99,7 +99,7 @@ nonisolated enum TrailPointRanking {
     static let alreadyMarkedMeters = TrailPlace.alreadyMarkedMeters
 
     /// The `limit` places of `found` nearest the drawing, or nearest
-    /// `centre` where there is no drawing to be near.
+    /// `center` where there is no drawing to be near.
     ///
     /// Nearest to the **line** rather than nearest to its start or its middle:
     /// a trail is long, and a hut half a kilometre from its far end is nearer
@@ -107,21 +107,21 @@ nonisolated enum TrailPointRanking {
     /// the rest of it. ``TrailPlaceAnchor/offRouteMeters`` is that distance
     /// and arrives free with the projection.
     ///
-    /// `centre` is `nil` only where a caller has neither a line nor a map,
+    /// `center` is `nil` only where a caller has neither a line nor a map,
     /// which nothing in the app is; it answers the first `limit` in that case
     /// rather than refusing, because an arbitrary forty is a better answer
     /// than none to a question nobody can order.
     static func chosen(
         from found: [TrailPlace],
         along route: [RouteCoordinate],
-        around centre: CLLocationCoordinate2D?,
+        around center: CLLocationCoordinate2D?,
         limit: Int = TrailPointQuery.maximumResults
     ) -> [TrailPlace] {
         guard found.count > limit else { return found }
         let anchors = TrailPlaceOrder.anchors(of: found, along: route)
         if anchors.isEmpty {
-            guard let centre else { return Array(found.prefix(limit)) }
-            return nearest(found, to: centre, limit: limit)
+            guard let center else { return Array(found.prefix(limit)) }
+            return nearest(found, to: center, limit: limit)
         }
         return found
             .map { place in
@@ -143,12 +143,12 @@ nonisolated enum TrailPointRanking {
     /// walk to it is the most useful order to work in.
     private static func nearest(
         _ places: [TrailPlace],
-        to centre: CLLocationCoordinate2D,
+        to center: CLLocationCoordinate2D,
         limit: Int
     ) -> [TrailPlace] {
         places
             .map { place in
-                (place: place, distance: RouteGeometry.distanceMeters(from: centre, to: place.clCoordinate))
+                (place: place, distance: RouteGeometry.distanceMeters(from: center, to: place.clCoordinate))
             }
             // Measured once per place and then ordered, rather than measured
             // inside a comparator — the shape ``CuratedTrailSource``'s own

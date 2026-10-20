@@ -294,7 +294,7 @@ extension MapCoordinatorTests {
     /// have to come with it, or a re-tinted route is left with pins in the
     /// previous hue until something else rebuilds them.
     @Test("the markers follow the route's tint")
-    func markersAreRecolouredWithTheRoute() async throws {
+    func markersAreRecoloredWithTheRoute() async throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)

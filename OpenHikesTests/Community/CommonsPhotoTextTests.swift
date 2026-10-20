@@ -3,7 +3,7 @@
 //  OpenHikesTests
 //
 //  The three things a Commons file page says in words — its licence, who took
-//  it, and when — read the way ``CommonsLicence``, ``CommonsText`` and
+//  it, and when — read the way ``CommonsLicense``, ``CommonsText`` and
 //  ``CommonsDate`` read them.
 //
 //  The shapes below are the ones the live service answered with while this was
@@ -35,21 +35,21 @@ struct CommonsPhotoTextTests {
         "every Creative Commons attribution licence, CC0 and the public domain are kept",
         arguments: ["CC BY-SA 4.0", "CC BY-SA 3.0 de", "CC BY 2.0", "CC0", "CC0 1.0", "Public domain"]
     )
-    func acceptedLicences(name: String) {
-        #expect(CommonsLicence.accepted(name) == name)
+    func acceptedLicenses(name: String) {
+        #expect(CommonsLicense.accepted(name) == name)
     }
 
     @Test(
         "a licence asking for more than a credit and a link is left out",
         arguments: ["GFDL", "GFDL 1.2", "FAL", "CC BY-NC 4.0", "CC BY-SA-ND 2.0", "", "Copyrighted"]
     )
-    func refusedLicences(name: String) {
-        #expect(CommonsLicence.accepted(name) == nil)
+    func refusedLicenses(name: String) {
+        #expect(CommonsLicense.accepted(name) == nil)
     }
 
     @Test("a licence name arrives trimmed")
-    func licenceIsTrimmed() {
-        #expect(CommonsLicence.accepted("  CC BY-SA 4.0\n") == "CC BY-SA 4.0")
+    func licenseIsTrimmed() {
+        #expect(CommonsLicense.accepted("  CC BY-SA 4.0\n") == "CC BY-SA 4.0")
     }
 
     // MARK: - Authors
@@ -93,7 +93,7 @@ struct CommonsPhotoTextTests {
     // MARK: - Links
 
     @Test("a scheme-relative licence link is completed, and anything not on the web refused")
-    func licenceLinks() {
+    func licenseLinks() {
         #expect(
             CommonsText.link("//creativecommons.org/licenses/by-sa/4.0/")?.absoluteString
                 == "https://creativecommons.org/licenses/by-sa/4.0/"

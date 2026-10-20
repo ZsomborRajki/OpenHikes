@@ -112,10 +112,10 @@ nonisolated enum PhotoMetadataStamp {
             complete = complete && setting(
                 kCGImagePropertyIPTCDictionary,
                 kCGImagePropertyIPTCSource,
-                credit.licence.sourceURL.absoluteString as CFString,
+                credit.license.sourceURL.absoluteString as CFString,
                 in: metadata
             )
-            if let url = credit.licence.url {
+            if let url = credit.license.url {
                 complete = complete && CGImageMetadataSetValueWithPath(
                     metadata,
                     nil,

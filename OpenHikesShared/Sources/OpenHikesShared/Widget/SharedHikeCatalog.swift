@@ -1,5 +1,5 @@
 //
-//  SharedHikeCatalogue.swift
+//  SharedHikeCatalog.swift
 //  OpenHikesShared
 //
 //  The list of a hiker's saved trails, in the App Group, so a process with no
@@ -73,7 +73,7 @@ public struct SharedHikeSummary: Codable, Equatable, Hashable, Identifiable, Sen
 }
 
 /// Every saved hike, newest first.
-public struct SharedHikeCatalogue: Codable, Equatable, Sendable {
+public struct SharedHikeCatalog: Codable, Equatable, Sendable {
     /// Newest first, which is the order a picker offers them in and the order
     /// ``suggestions(limit:)`` takes its prefix from. Sorted by the writer so
     /// no reader has to.
@@ -91,7 +91,7 @@ public struct SharedHikeCatalogue: Codable, Equatable, Sendable {
     public static let empty = Self(hikes: [], writtenAt: .distantPast)
 }
 
-public extension SharedHikeCatalogue {
+public extension SharedHikeCatalog {
     /// The hikes with these identifiers, in the catalogue's own order.
     ///
     /// Order is the catalogue's rather than the argument's, deliberately: the

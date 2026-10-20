@@ -38,7 +38,7 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
     /// then the two an area search finds beside the third.
     static let authors: [String?] = ["Anna Berger", "Lukas Moser", nil, "Marta Huber", "Jonas Leitner"]
     /// What all of them are shared under.
-    static let licenceName = "CC BY-SA 4.0"
+    static let licenseName = "CC BY-SA 4.0"
 
     /// Where along the route each stands, as a share of its length.
     private static let positions = [0.25, 0.5, 0.75]
@@ -51,7 +51,7 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
     private static let frameHeight = 756.0
     private static let frameSize = CGSize(width: frameWidth, height: frameHeight)
     // swiftlint:disable force_unwrapping
-    private static let licenceURL = URL(string: "https://creativecommons.org/licenses/by-sa/4.0/")!
+    private static let licenseURL = URL(string: "https://creativecommons.org/licenses/by-sa/4.0/")!
     private static let filePage = URL(string: "https://commons.wikimedia.org/wiki/File:Seeded_trail_photo.jpg")!
     // swiftlint:enable force_unwrapping
 
@@ -76,7 +76,7 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
         avoiding shown: Set<URL>,
         downloadingInto directory: URL
     ) async throws -> [CommonsPhoto] {
-        let degrees = area.radiusMeters / Self.metresPerDegree
+        let degrees = area.radiusMeters / Self.metersPerDegree
         let eastDegrees = degrees / cos(area.latitude * .pi / 180)
         let spots: [CLLocationCoordinate2D] = zip(Self.areaNorths, Self.areaEasts).map { north, east in
             CLLocationCoordinate2D(
@@ -87,12 +87,12 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
         let third = spots[spots.count - 1]
         let beside = Self.besideThird.map { north, east in
             CLLocationCoordinate2D(
-                latitude: third.latitude + north / Self.metresPerDegree,
-                longitude: third.longitude + east / Self.metresPerDegree / cos(third.latitude * .pi / 180)
+                latitude: third.latitude + north / Self.metersPerDegree,
+                longitude: third.longitude + east / Self.metersPerDegree / cos(third.latitude * .pi / 180)
             )
         }
         return try await Self.photos(at: spots + beside, downloadingInto: directory)
-            .filter { !shown.contains($0.credit.licence.sourceURL) }
+            .filter { !shown.contains($0.credit.license.sourceURL) }
     }
 
     /// Where an area's three stand, as shares of its radius north and east of
@@ -105,7 +105,7 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
     /// Where the two beside the third stand from it, in metres north and
     /// east: close enough that no zoom a test searches at draws them apart.
     private static let besideThird: [(north: Double, east: Double)] = [(12, 0), (0, 12)]
-    private static let metresPerDegree = 111_320.0
+    private static let metersPerDegree = 111_320.0
 
     /// One photograph per spot that has one, each its own Commons page so
     /// that a viewer and a save can tell them apart.
@@ -131,9 +131,9 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
                     fileURL: url,
                     credit: CommonsPhotoCredit(
                         author: authors[index],
-                        licence: HikePhotoLicence(
-                            name: licenceName,
-                            url: licenceURL,
+                        license: HikePhotoLicense(
+                            name: licenseName,
+                            url: licenseURL,
                             sourceURL: filePage.appending(queryItems: [URLQueryItem(name: "seeded", value: "\(index)")])
                         )
                     )

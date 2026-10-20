@@ -77,8 +77,8 @@ final class CommunityMapAnnotation: NSObject, MKAnnotation {
         // A curated pin whose line was refused has no length to give, and the
         // callout says the half it does have rather than *0 m* beside it —
         // see ``CommunityListing/drawnDistanceMeters``.
-        let distance = listing.drawnDistanceMeters.map { metres in
-            Measurement(value: metres, unit: UnitLength.meters)
+        let distance = listing.drawnDistanceMeters.map { meters in
+            Measurement(value: meters, unit: UnitLength.meters)
                 .formatted(.measurement(width: .abbreviated, usage: .road))
         }
         if let shape = listing.curatedFacts?.shape {

@@ -37,7 +37,7 @@ struct WalkShareRouteShapeTests {
     }
 
     @Test("north is up and the narrow side is centred")
-    func northIsUpAndCentred() throws {
+    func northIsUpAndCentered() throws {
         let shape = WalkShareRouteShape(fitting: Self.tall, walked: [])
         let south = try #require(shape.trail.first)
         let north = try #require(shape.trail.last)

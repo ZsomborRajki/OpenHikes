@@ -197,9 +197,9 @@ nonisolated struct MovementWatch: Equatable, Sendable {
            date.timeIntervalSince(lastReminderAt) < MovementReminderPolicy.quietFor {
             return false
         }
-        let travelled = awayMeters - baselineMeters
+        let traveled = awayMeters - baselineMeters
         let burst = oldest.map { awayMeters - $0.awayMeters } ?? 0
-        guard travelled >= MovementReminderPolicy.awayMeters
+        guard traveled >= MovementReminderPolicy.awayMeters
             || burst >= MovementReminderPolicy.paceMeters else { return false }
         remindersSent += 1
         lastReminderAt = date

@@ -85,7 +85,7 @@ struct TrailGlyphProjectionTests {
     /// is the middle of the glyph — the corner it used to land in read as a
     /// route that had gone off the edge of the frame.
     @Test("a route with no extent is drawn in the middle, not in a corner")
-    func stationaryRouteIsCentred() throws {
+    func stationaryRouteIsCentered() throws {
         let stationary = Array(repeating: Coordinate(latitude: 47.6, longitude: 12.8), count: 4)
 
         let projected = try #require(project(stationary))
@@ -100,7 +100,7 @@ struct TrailGlyphProjectionTests {
     /// reaches here through a live fix — but it takes the same path, and a
     /// single point that landed off-frame would take the fix dot with it.
     @Test("a single point is treated as a route with no extent")
-    func singlePointIsCentred() throws {
+    func singlePointIsCentered() throws {
         let projected = try #require(project([Coordinate(latitude: 0, longitude: 0)]))
 
         let point = try #require(projected.points.first)
@@ -167,8 +167,8 @@ struct TrailGlyphProjectionTests {
 
         // The flat projection the fit is derived from, recomputed here rather
         // than taken from the function under test.
-        let centreLat = 0.125
-        let cosLat = cos(centreLat * .pi / 180)
+        let centerLat = 0.125
+        let cosLat = cos(centerLat * .pi / 180)
         let flatWidth = 1 * cosLat
         let flatHeight = 0.25
 
@@ -239,11 +239,11 @@ struct TrailGlyphProjectionTests {
             "precondition: both centres are past the floor"
         )
 
-        let projections = try flooredLatitudes.map { centre in
+        let projections = try flooredLatitudes.map { center in
             try #require(
                 project([
-                    Coordinate(latitude: centre - 0.01, longitude: 0),
-                    Coordinate(latitude: centre + 0.01, longitude: 0.05),
+                    Coordinate(latitude: center - 0.01, longitude: 0),
+                    Coordinate(latitude: center + 0.01, longitude: 0.05),
                 ])
             ).points
         }
@@ -261,11 +261,11 @@ struct TrailGlyphProjectionTests {
     /// would pass just as well against a cosine hard-coded to the floor.
     @Test("below the floor the centre latitude still narrows the route")
     func temperateRoutesKeepTheirOwnCosine() throws {
-        func aspect(centredAt centre: Double) throws -> Double {
+        func aspect(centeredAt center: Double) throws -> Double {
             let projected = try #require(
                 project([
-                    Coordinate(latitude: centre - 0.05, longitude: 0),
-                    Coordinate(latitude: centre + 0.05, longitude: 0.2),
+                    Coordinate(latitude: center - 0.05, longitude: 0),
+                    Coordinate(latitude: center + 0.05, longitude: 0.2),
                 ])
             )
             let box = bounds(of: projected.points)
@@ -276,7 +276,7 @@ struct TrailGlyphProjectionTests {
 
         // cos(60°) is exactly half cos(0°), so the same longitude span has to
         // come out exactly half as wide relative to the latitude span.
-        let ratio = try aspect(centredAt: 0) / aspect(centredAt: 60)
+        let ratio = try aspect(centeredAt: 0) / aspect(centeredAt: 60)
         #expect(ratio.isApproximatelyEqual(to: 2, absoluteTolerance: 1e-3))
     }
 

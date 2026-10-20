@@ -81,13 +81,13 @@ struct TrailDraftShadingTests {
 
     /// Heights read at every point of `draft`'s line, as the maker's
     /// elevation source would hand them over.
-    private static func heights(for draft: TrailDraft, _ metres: [Double]) -> RouteHeightSamples {
+    private static func heights(for draft: TrailDraft, _ meters: [Double]) -> RouteHeightSamples {
         let route = draft.routeCoordinates
         return RouteHeightSamples(
             routePointCount: route.count,
             indexes: Array(route.indices),
             coordinates: route,
-            heights: metres
+            heights: meters
         )
     }
 
@@ -106,7 +106,7 @@ struct TrailDraftShadingTests {
     }
 
     @Test("heights colour a hiking line by steepness, and offer Elevation")
-    func heightsColourByElevation() async {
+    func heightsColorByElevation() async {
         let draft = Self.straightDraft()
         let shading = TrailDraftShading(draft: draft, provider: nil)
 
@@ -120,7 +120,7 @@ struct TrailDraftShadingTests {
     }
 
     @Test("a line along graded paths is coloured by difficulty from the cached graph")
-    func gradedPathsColourByDifficulty() async throws {
+    func gradedPathsColorByDifficulty() async throws {
         let draft = try Self.fixtureDraft()
         let provider = try #require(BundledTrailGraphProvider(fixtureName: UITestTrailTagFixture.trailGraphName))
         let shading = TrailDraftShading(draft: draft, provider: provider)
@@ -166,7 +166,7 @@ struct TrailDraftShadingTests {
     /// The dashes are the maker's warning that a leg is a placeholder, and a
     /// grade along it is the grade of ground nobody will walk.
     @Test("a leg drawn dashed is not coloured by steepness, and the legs after it are")
-    func degradedLegsAreNotColoured() async throws {
+    func degradedLegsAreNotColored() async throws {
         let draft = TrailDraft()
         let step = (Line.north - Line.south) / 3
         let latitudes = (0...3).map { Line.south + Double($0) * step }
@@ -185,9 +185,9 @@ struct TrailDraftShadingTests {
         shading.heightsDidLand(Self.heights(for: draft, (0...3).map { Line.low + Double($0) * rise }))
         try await #require(shading.measurement).value
 
-        let coloured = shading.stretches(for: .elevation).flatMap(\.coordinates)
-        #expect(!coloured.isEmpty, "the snapped legs are still coloured")
-        #expect(coloured.allSatisfy { $0.latitude >= latitudes[1] }, "nothing on the dashed leg is")
+        let colored = shading.stretches(for: .elevation).flatMap(\.coordinates)
+        #expect(!colored.isEmpty, "the snapped legs are still coloured")
+        #expect(colored.allSatisfy { $0.latitude >= latitudes[1] }, "nothing on the dashed leg is")
     }
 
     /// The colours go with the line, but the section stays: otherwise it
@@ -241,7 +241,7 @@ struct TrailDraftShadingTests {
     /// Apple's directions run along roads, where neither a SAC grade nor the
     /// grade of a footpath is what a line is read for.
     @Test("a line drawn for another travel mode is not coloured")
-    func otherTravelModesAreNotColoured() throws {
+    func otherTravelModesAreNotColored() throws {
         let draft = Self.straightDraft()
         draft.setTravelMode(.walking)
         let provider = try #require(BundledTrailGraphProvider(fixtureName: UITestTrailTagFixture.trailGraphName))

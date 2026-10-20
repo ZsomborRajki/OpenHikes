@@ -285,7 +285,7 @@ extension WeatherConditions {
             // whatever unit the measurement arrives in.
             precipitationIntensity: Measurement(
                 value: weather.precipitationIntensity
-                    .converted(to: .kilometersPerHour).value * Self.millimetresPerKilometre,
+                    .converted(to: .kilometersPerHour).value * Self.millimetersPerKilometer,
                 unit: .millimeters
             ),
             wind: WeatherWind(
@@ -296,7 +296,7 @@ extension WeatherConditions {
         )
     }
 
-    nonisolated private static let millimetresPerKilometre: Double = 1_000_000
+    nonisolated private static let millimetersPerKilometer: Double = 1_000_000
 }
 
 extension WeatherUVCategory {

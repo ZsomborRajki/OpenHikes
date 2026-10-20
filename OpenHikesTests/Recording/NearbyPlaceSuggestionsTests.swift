@@ -18,9 +18,9 @@ import Testing
 struct NearbyPlaceSuggestionsTests {
     private static let here = CLLocationCoordinate2D(latitude: 47.61, longitude: 12.98)
 
-    private static func place(_ id: Int64, metresNorth: Double) -> TrailPlace {
+    private static func place(_ id: Int64, metersNorth: Double) -> TrailPlace {
         TrailPlace(
-            latitude: here.latitude + metresNorth / RouteGeometry.metersPerDegreeLatitude,
+            latitude: here.latitude + metersNorth / RouteGeometry.metersPerDegreeLatitude,
             longitude: here.longitude,
             symbol: .shelter,
             osm: TrailPlaceOSM(elementType: "node", elementID: id)
@@ -29,9 +29,9 @@ struct NearbyPlaceSuggestionsTests {
 
     @Test("what is within reach is offered, nearest first")
     func nearestFirstWithinReach() {
-        let near = Self.place(1, metresNorth: 20)
-        let nearer = Self.place(2, metresNorth: 5)
-        let far = Self.place(3, metresNorth: NearbyPlaceSuggestions.matchRadiusMeters + 50)
+        let near = Self.place(1, metersNorth: 20)
+        let nearer = Self.place(2, metersNorth: 5)
+        let far = Self.place(3, metersNorth: NearbyPlaceSuggestions.matchRadiusMeters + 50)
 
         let offered = NearbyPlaceSuggestions.suggestions(from: [near, far, nearer], around: Self.here, excluding: [])
 
@@ -40,8 +40,8 @@ struct NearbyPlaceSuggestionsTests {
 
     @Test("an element the walk already has is not offered again, but its neighbour is")
     func heldElementIsLeftOut() {
-        let hut = Self.place(1, metresNorth: 10)
-        let spring = Self.place(2, metresNorth: 12)
+        let hut = Self.place(1, metersNorth: 10)
+        let spring = Self.place(2, metersNorth: 12)
 
         let offered = NearbyPlaceSuggestions.suggestions(from: [hut, spring], around: Self.here, excluding: [hut])
 
@@ -50,7 +50,7 @@ struct NearbyPlaceSuggestionsTests {
 
     @Test("one element answered twice is offered once, and a place with no element is not a suggestion")
     func duplicatesAndHandMadeAreLeftOut() {
-        let hut = Self.place(1, metresNorth: 10)
+        let hut = Self.place(1, metersNorth: 10)
         let handMade = TrailPlace(coordinate: Self.here, name: "Mine")
 
         let offered = NearbyPlaceSuggestions.suggestions(from: [hut, hut, handMade], around: Self.here, excluding: [])
@@ -62,8 +62,8 @@ struct NearbyPlaceSuggestionsTests {
 
     @Test("the live answer replaces what the device had")
     func liveAnswerReplacesStored() async {
-        let stored = Self.place(1, metresNorth: 10)
-        let live = Self.place(2, metresNorth: 12)
+        let stored = Self.place(1, metersNorth: 10)
+        let live = Self.place(2, metersNorth: 12)
         let finder = NearbyPlaceFinder()
 
         let source = NearbySource(stored: [stored], live: [live], refuses: false)
@@ -75,7 +75,7 @@ struct NearbyPlaceSuggestionsTests {
 
     @Test("a refused search leaves what the device had, and says why")
     func refusalKeepsStored() async {
-        let stored = Self.place(1, metresNorth: 10)
+        let stored = Self.place(1, metersNorth: 10)
         let finder = NearbyPlaceFinder()
 
         let source = NearbySource(stored: [stored], live: [], refuses: true)
@@ -87,7 +87,7 @@ struct NearbyPlaceSuggestionsTests {
 
     @Test("the list is short")
     func listIsCapped() {
-        let many = (1...20).map { Self.place(Int64($0), metresNorth: Double($0)) }
+        let many = (1...20).map { Self.place(Int64($0), metersNorth: Double($0)) }
         let offered = NearbyPlaceSuggestions.suggestions(from: many, around: Self.here, excluding: [])
         #expect(offered.count == NearbyPlaceSuggestions.maximumSuggestions)
     }

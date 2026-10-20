@@ -14,7 +14,9 @@ import Foundation
 public enum SharedStore {
     public static let appGroupID = "group.tappium.com.OpenHikes"
     private static let fileName = "trail-snapshot.json"
-    private static let catalogueFileName = "hike-catalogue.json"
+    /// The name the widget has always read; renaming the file would empty
+    /// its picker until the app next wrote one.
+    private static let catalogFileName = "hike-catalogue.json" // swiftlint:disable:this american_spelling_in_copy
     /// The directory the per-hike snapshots live in, one file each.
     ///
     /// A directory rather than more names beside ``fileName``, because the set
@@ -92,8 +94,8 @@ public enum SharedStore {
         containerURL?.appendingPathComponent(fileName)
     }
 
-    private static var catalogueURL: URL? {
-        containerURL?.appendingPathComponent(catalogueFileName)
+    private static var catalogURL: URL? {
+        containerURL?.appendingPathComponent(catalogFileName)
     }
 
     private static var trailSnapshotDirectoryURL: URL? {
@@ -167,21 +169,21 @@ public enum SharedStore {
     // MARK: The hike catalogue
 
     /// Every saved hike, for a process that has no store to ask — see
-    /// ``SharedHikeCatalogue``.
+    /// ``SharedHikeCatalog``.
     ///
-    /// ``SharedHikeCatalogue/empty`` rather than `nil` for a container that
+    /// ``SharedHikeCatalog/empty`` rather than `nil` for a container that
     /// cannot be resolved or a file that has never been written. Every caller
     /// is a picker, and a picker with nothing to offer is the same drawing
     /// either way; handing them an optional would spread a decision none of
     /// them can act on, which is the argument ``load()`` already makes.
-    public static func loadHikeCatalogue() -> SharedHikeCatalogue {
-        guard let catalogueURL, let data = try? Data(contentsOf: catalogueURL) else {
+    public static func loadHikeCatalog() -> SharedHikeCatalog {
+        guard let catalogURL, let data = try? Data(contentsOf: catalogURL) else {
             return .empty
         }
         return decodeUnversioned(
-            SharedHikeCatalogue.self,
+            SharedHikeCatalog.self,
             from: data,
-            named: catalogueFileName
+            named: catalogFileName
         ) ?? .empty
     }
 
@@ -191,9 +193,9 @@ public enum SharedStore {
     /// and the cost in between is a picker with no rows — where the same
     /// failure in a snapshot would be a blank widget with nothing to rebuild
     /// it from.
-    public static func saveHikeCatalogue(_ catalogue: SharedHikeCatalogue) {
-        guard let catalogueURL, let data = try? JSONEncoder().encode(catalogue) else { return }
-        try? data.write(to: catalogueURL, options: .atomic)
+    public static func saveHikeCatalog(_ catalog: SharedHikeCatalog) {
+        guard let catalogURL, let data = try? JSONEncoder().encode(catalog) else { return }
+        try? data.write(to: catalogURL, options: .atomic)
     }
 
     // MARK: Per-hike trail snapshots

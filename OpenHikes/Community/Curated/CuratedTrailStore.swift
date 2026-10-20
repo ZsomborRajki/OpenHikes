@@ -127,7 +127,7 @@ nonisolated extension CuratedTrailStore {
     ///
     /// By the pin, which is the box's centre — the same point the row's
     /// distance and the map's annotation use, so a trail the list offers is a
-    /// trail the map can show. See ``CuratedTrailQuery/centre(of:)``.
+    /// trail the map can show. See ``CuratedTrailQuery/center(of:)``.
     func trails(near area: CommunitySearchArea, limit: Int) -> [CuratedTrail] {
         files.values(near: area, limit: limit, at: \.coordinate)
     }

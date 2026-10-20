@@ -116,7 +116,7 @@ struct TileOwnershipTests {
     @Test("only the genuinely shared tiles are held back")
     func partialOverlap() async throws {
         let doomed = Fixture.hike(in: context, title: "Doomed")
-        let neighbour = Fixture.hike(
+        let neighbor = Fixture.hike(
             in: context,
             title: "Neighbour",
             // ~2 km north of the ridge fixture: different close-in tiles,
@@ -126,16 +126,16 @@ struct TileOwnershipTests {
             }
         )
         download(doomed, maxZoom: 16)
-        download(neighbour, maxZoom: 16)
+        download(neighbor, maxZoom: 16)
 
         let doomedOwnership = TileOwnership(doomed)
-        let neighbourOwnership = TileOwnership(neighbour)
+        let neighborOwnership = TileOwnership(neighbor)
         let claimed = try await offMain { try doomedOwnership.tileKeys() }
-        let exclusive = try await offMain { try doomedOwnership.exclusiveTileKeys(against: [neighbourOwnership]) }
+        let exclusive = try await offMain { try doomedOwnership.exclusiveTileKeys(against: [neighborOwnership]) }
 
         #expect(!exclusive.isEmpty, "the close-in tiles are this hike's alone")
         #expect(exclusive.count < claimed.count, "the overview tiles are shared")
-        let shared = try await offMain { try neighbourOwnership.tileKeys() }
+        let shared = try await offMain { try neighborOwnership.tileKeys() }
         #expect(exclusive.isDisjoint(with: shared))
     }
 

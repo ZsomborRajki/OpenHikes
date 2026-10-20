@@ -17,14 +17,14 @@ struct CommonsAreaPhotosTests {
     /// A two-kilometre circle, so a four-by-four grid's cells are a kilometre
     /// across.
     private static let area = CommunitySearchArea(coordinate: middle, radiusMeters: 2000)
-    private static let metresPerDegree = 111_320.0
+    private static let metersPerDegree = 111_320.0
 
     /// A candidate `north` and `east` metres from the middle of the area.
     private static func candidate(_ pageID: Int, north: Double, east: Double = 0) -> CommonsPhotoCandidate {
         CommonsPhotoCandidate(
             pageID: pageID,
-            latitude: middle.latitude + north / metresPerDegree,
-            longitude: middle.longitude + east / (metresPerDegree * cos(middle.latitude * .pi / 180))
+            latitude: middle.latitude + north / metersPerDegree,
+            longitude: middle.longitude + east / (metersPerDegree * cos(middle.latitude * .pi / 180))
         )
     }
 

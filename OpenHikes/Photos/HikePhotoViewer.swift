@@ -274,11 +274,11 @@ struct HikePhotoViewer: View {
     /// A copy of a Wikimedia Commons photograph is owed more than a name — its
     /// licence, and links to it and to the photograph's page — so it gets the
     /// capsule the curated route's own gallery drew it with. See
-    /// ``PhotoLicenceCredit``.
+    /// ``PhotoLicenseCredit``.
     @ViewBuilder
     private func credit(_ photo: HikePhoto?) -> some View {
-        if let photo, let licence = photo.licence {
-            PhotoLicenceCredit(author: photo.importedAuthorName, licence: licence)
+        if let photo, let license = photo.license {
+            PhotoLicenseCredit(author: photo.importedAuthorName, license: license)
         } else if let name = photo?.importedAuthorName, !name.isEmpty {
             Text("Photo by \(name)")
                 .font(.footnote)

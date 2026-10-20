@@ -115,7 +115,7 @@ struct HikePlaceEditingTests {
     }
 
     @Test("two found places a few metres apart both go in, as the list offered them")
-    func addingKeepsFoundNeighbours() throws {
+    func addingKeepsFoundNeighbors() throws {
         let (hike, context) = try hike()
         let spring = TrailPlace(
             latitude: 47.61005,
@@ -131,7 +131,7 @@ struct HikePlaceEditingTests {
     }
 
     @Test("a place added by hand goes in beside one a few metres away")
-    func addingByHandKeepsNeighbours() throws {
+    func addingByHandKeepsNeighbors() throws {
         let (hike, context) = try hike()
         hike.replacePlaces(with: [Self.hut()], in: context)
 

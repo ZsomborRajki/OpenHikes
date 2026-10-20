@@ -138,7 +138,7 @@ extension MapCoordinatorTests {
     /// The preview no longer draws the route anywhere else, so this is where
     /// the hiker sees what they are deciding about.
     @Test("the open preview's line is drawn at full strength")
-    func thePreviewedLineIsEmphasised() async throws {
+    func thePreviewedLineIsEmphasized() async throws {
         let listing = CommunityListing.stub(id: "ridge")
         let browser = await browserWithLines([listing], outlines: ["ridge": Self.line()])
         let coordinator = MapView.Coordinator()

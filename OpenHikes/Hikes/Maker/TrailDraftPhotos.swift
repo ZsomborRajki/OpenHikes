@@ -112,7 +112,7 @@ final class TrailDraftPhotos {
         guard let source, !isSearching else { return false }
         isSearching = true
         let target = directory
-        let shown = Set(photos.map(\.credit.licence.sourceURL))
+        let shown = Set(photos.map(\.credit.license.sourceURL))
         task = Task { [weak self] in
             let found: [CommonsPhoto]
             do {
@@ -158,16 +158,16 @@ final class TrailDraftPhotos {
     /// page), or when the copy fails — the destination is still set, and the
     /// picture is only missing from the map.
     @discardableResult func adopt(_ photo: CommonsPhoto) -> Task<Void, Never> {
-        let page = photo.credit.licence.sourceURL
+        let page = photo.credit.license.sourceURL
         let target = directory
         return Task { [weak self] in
-            guard self?.photos.contains(where: { $0.credit.licence.sourceURL == page }) == false,
+            guard self?.photos.contains(where: { $0.credit.license.sourceURL == page }) == false,
                   let copy = await Self.copy(photo.fileURL, into: target),
                   let self,
                   // Cleared while the copy was being made: the chip went
                   // off, or the drawing was thrown away.
                   target == directory,
-                  !photos.contains(where: { $0.credit.licence.sourceURL == page })
+                  !photos.contains(where: { $0.credit.license.sourceURL == page })
             else { return }
             var adopted = photo
             adopted.fileURL = copy
@@ -272,7 +272,7 @@ final class TrailDraftPhotos {
 /// one set with no listing. What each copy is stamped with is the same and is
 /// owed by the licence rather than chosen — the author on
 /// ``HikePhoto/importedAuthorName``, the licence and its links on
-/// ``HikePhoto/licence`` (which alone keeps it from ever being published), and
+/// ``HikePhoto/license`` (which alone keeps it from ever being published), and
 /// ``PhotoMatchEvidence/place`` for a pin worked out from the camera.
 nonisolated struct TrailDraftPhotoHandOff: Sendable {
     let photos: [CommonsPhoto]
@@ -302,7 +302,7 @@ nonisolated struct TrailDraftPhotoHandOff: Sendable {
             // Re-checked every picture: the hike can be deleted while a dozen
             // are being copied, and writing to a detached row keeps nothing.
             guard hike.isAttached,
-                  !hike.photos.contains(where: { $0.licence?.sourceURL == photo.credit.licence.sourceURL })
+                  !hike.photos.contains(where: { $0.license?.sourceURL == photo.credit.license.sourceURL })
             else { continue }
             guard let data = await Self.read(photo.fileURL) else {
                 missed.append(photo)
@@ -318,7 +318,7 @@ nonisolated struct TrailDraftPhotoHandOff: Sendable {
                 capturedAt: photo.pin.capturedAt,
                 matchEvidence: .place,
                 importedAuthorName: photo.credit.author,
-                licence: photo.credit.licence,
+                license: photo.credit.license,
                 store: store,
                 libraryWriter: libraryWriter,
                 save: save

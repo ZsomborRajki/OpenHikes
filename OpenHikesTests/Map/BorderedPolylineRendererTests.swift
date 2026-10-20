@@ -38,8 +38,8 @@ struct BorderedPolylineRendererTests {
     }
 
     /// Across the middle of the canvas, for the reason the directional
-    /// suite's own `renderCentred` gives.
-    private static func renderCentred(
+    /// suite's own `renderCentered` gives.
+    private static func renderCentered(
         _ renderer: BorderedPolylineRenderer,
         of polyline: MKPolyline,
         zoomScale: MKZoomScale = 1
@@ -87,17 +87,17 @@ struct BorderedPolylineRendererTests {
     /// converted into the bitmap's colour space on the way in.
     private static func markedRows(in canvas: Canvas, column x: Int) -> Int {
         let tolerance = 8
-        let grey = canvas.pixel(x: x, row: 0)
+        let gray = canvas.pixel(x: x, row: 0)
         return (0..<canvas.context.height).count { row in
-            zip(canvas.pixel(x: x, row: row), grey).prefix(3).contains { abs(Int($0) - Int($1)) > tolerance }
+            zip(canvas.pixel(x: x, row: row), gray).prefix(3).contains { abs(Int($0) - Int($1)) > tolerance }
         }
     }
 
     @Test("no border, or a clear one, draws exactly the plain line")
     func noBorderDrawsThePlainLine() throws {
         let polyline = DirectionalPolylineRendererTests.line()
-        let plain = try Self.renderCentred(Self.renderer(on: polyline, border: nil), of: polyline)
-        let clear = try Self.renderCentred(
+        let plain = try Self.renderCentered(Self.renderer(on: polyline, border: nil), of: polyline)
+        let clear = try Self.renderCentered(
             Self.renderer(on: polyline, border: CGColor(red: 0, green: 0, blue: 0, alpha: 0)),
             of: polyline
         )
@@ -110,8 +110,8 @@ struct BorderedPolylineRendererTests {
     @Test("the border reaches past the line by the border's width on each side")
     func borderWidensTheBand() throws {
         let polyline = DirectionalPolylineRendererTests.line()
-        let line = try Self.renderCentred(Self.renderer(on: polyline, border: nil), of: polyline)
-        let bordered = try Self.renderCentred(Self.renderer(on: polyline, border: Self.black), of: polyline)
+        let line = try Self.renderCentered(Self.renderer(on: polyline, border: nil), of: polyline)
+        let bordered = try Self.renderCentered(Self.renderer(on: polyline, border: Self.black), of: polyline)
 
         let lineRows = line.inkedRows(inColumn: 100)
         let borderedRows = bordered.inkedRows(inColumn: 100)
@@ -127,12 +127,12 @@ struct BorderedPolylineRendererTests {
         // Gaps wide enough to survive the round caps a 6 pt line and its
         // 10 pt border put on each dash.
         let dashes = [10.0, 20.0]
-        let lineOnly = try Self.renderCentred(
+        let lineOnly = try Self.renderCentered(
             Self.renderer(on: polyline, border: nil, dashes: dashes),
             of: polyline,
             zoomScale: 0.5
         )
-        let bordered = try Self.renderCentred(
+        let bordered = try Self.renderCentered(
             Self.renderer(on: polyline, border: Self.black, dashes: dashes),
             of: polyline,
             zoomScale: 0.5
@@ -154,8 +154,8 @@ struct BorderedPolylineRendererTests {
     @Test("a translucent line shows no border through it")
     func translucentLineIsNotDarkened() throws {
         let polyline = DirectionalPolylineRendererTests.line()
-        let plain = try Self.renderCentred(Self.renderer(on: polyline, border: nil, alpha: 0.5), of: polyline)
-        let bordered = try Self.renderCentred(
+        let plain = try Self.renderCentered(Self.renderer(on: polyline, border: nil, alpha: 0.5), of: polyline)
+        let bordered = try Self.renderCentered(
             Self.renderer(on: polyline, border: Self.black, alpha: 0.5),
             of: polyline
         )
@@ -177,7 +177,7 @@ struct BorderedPolylineRendererTests {
             Self.renderer(on: polyline, border: Self.black.copy(alpha: faded), alpha: faded),
             of: polyline
         )
-        let reference = try Self.renderCentred(Self.renderer(on: polyline, border: nil), of: polyline)
+        let reference = try Self.renderCentered(Self.renderer(on: polyline, border: nil), of: polyline)
         let row = try #require(reference.mostInkedRow)
 
         #expect(Self.seeThroughPixels(in: bordered) == 0, "the ring was cleared through the map")

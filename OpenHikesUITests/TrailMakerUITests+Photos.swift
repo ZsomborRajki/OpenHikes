@@ -41,7 +41,7 @@ extension TrailMakerUITests {
             "a photograph's card should be headed by the photograph"
         )
         XCTAssertTrue(
-            element("photo-licence-credit", in: app).exists,
+            element("photo-license-credit", in: app).exists,
             "and credit who took it, as every Commons photograph is"
         )
         XCTAssertFalse(

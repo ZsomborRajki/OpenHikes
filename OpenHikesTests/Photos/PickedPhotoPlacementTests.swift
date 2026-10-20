@@ -39,7 +39,7 @@ struct PickedPhotoPlacementTests {
         )
     }
 
-    private static func metres(_ from: CLLocationCoordinate2D?, _ to: CLLocationCoordinate2D) -> Double {
+    private static func meters(_ from: CLLocationCoordinate2D?, _ to: CLLocationCoordinate2D) -> Double {
         guard let from else { return .infinity }
         return RouteGeometry.distanceMeters(from: from, to: to)
     }
@@ -69,7 +69,7 @@ struct PickedPhotoPlacementTests {
         let placement = Self.resolve(takenAtStep: 4.5)
 
         #expect(placement.evidence == .time)
-        #expect(Self.metres(placement.coordinate, PhotoDiscoveryFixture.coordinate(atStep: 4.5)) < 1)
+        #expect(Self.meters(placement.coordinate, PhotoDiscoveryFixture.coordinate(atStep: 4.5)) < 1)
         #expect(placement.capturedAt == PhotoDiscoveryFixture.date(atStep: 4.5))
     }
 
@@ -81,7 +81,7 @@ struct PickedPhotoPlacementTests {
         )
 
         #expect(placement.evidence == .timeAndPlace)
-        #expect(Self.metres(placement.coordinate, PhotoDiscoveryFixture.coordinate(atStep: 3)) < 1)
+        #expect(Self.meters(placement.coordinate, PhotoDiscoveryFixture.coordinate(atStep: 3)) < 1)
     }
 
     /// An imported trail has no clock of its own; a walk along it is what
@@ -110,7 +110,7 @@ struct PickedPhotoPlacementTests {
         let placement = Self.resolve(takenAtStep: 6, camera: takenAt, plan: plan)
 
         #expect(placement.evidence == .place)
-        #expect(Self.metres(placement.coordinate, takenAt) < 1)
+        #expect(Self.meters(placement.coordinate, takenAt) < 1)
     }
 
     // MARK: - Placed by the camera when the clock cannot
@@ -125,7 +125,7 @@ struct PickedPhotoPlacementTests {
         let placement = Self.resolve(takenAtStep: lastYear, camera: takenAt)
 
         #expect(placement.evidence == .place)
-        #expect(Self.metres(placement.coordinate, takenAt) < 1)
+        #expect(Self.meters(placement.coordinate, takenAt) < 1)
         #expect(placement.capturedAt == PhotoDiscoveryFixture.date(atStep: lastYear))
     }
 
@@ -136,7 +136,7 @@ struct PickedPhotoPlacementTests {
         let placement = Self.resolve(takenAtStep: nil, camera: takenAt)
 
         #expect(placement.evidence == .place)
-        #expect(Self.metres(placement.coordinate, takenAt) < 1)
+        #expect(Self.meters(placement.coordinate, takenAt) < 1)
         #expect(placement.capturedAt == Self.now)
     }
 
@@ -153,7 +153,7 @@ struct PickedPhotoPlacementTests {
         let placement = Self.resolve(takenAtStep: nil, camera: beside)
 
         #expect(placement.evidence == .place)
-        #expect(Self.metres(placement.coordinate, PhotoDiscoveryFixture.coordinate(atStep: 3)) < 1)
+        #expect(Self.meters(placement.coordinate, PhotoDiscoveryFixture.coordinate(atStep: 3)) < 1)
     }
 
     /// A trail never walked with this app has no clock at all; the route is
@@ -166,7 +166,7 @@ struct PickedPhotoPlacementTests {
         let placement = Self.resolve(takenAtStep: 4, camera: takenAt, plan: plan)
 
         #expect(placement.evidence == .place)
-        #expect(Self.metres(placement.coordinate, takenAt) < 1)
+        #expect(Self.meters(placement.coordinate, takenAt) < 1)
     }
 
     /// A drawn or imported trail can run a straight kilometre between two of
@@ -182,7 +182,7 @@ struct PickedPhotoPlacementTests {
         let placement = Self.resolve(takenAtStep: nil, camera: takenAt, plan: plan)
 
         #expect(placement.evidence == .place)
-        #expect(Self.metres(placement.coordinate, takenAt) < 1)
+        #expect(Self.meters(placement.coordinate, takenAt) < 1)
     }
 
     // MARK: - Falling back to the graph selection
@@ -195,7 +195,7 @@ struct PickedPhotoPlacementTests {
         let placement = Self.resolve(takenAtStep: nil)
 
         #expect(placement.evidence == nil)
-        #expect(Self.metres(placement.coordinate, Self.graphSelection) < 1)
+        #expect(Self.meters(placement.coordinate, Self.graphSelection) < 1)
         #expect(placement.capturedAt == Self.now)
     }
 
@@ -207,7 +207,7 @@ struct PickedPhotoPlacementTests {
         let placement = Self.resolve(takenAtStep: dayBefore)
 
         #expect(placement.evidence == nil)
-        #expect(Self.metres(placement.coordinate, Self.graphSelection) < 1)
+        #expect(Self.meters(placement.coordinate, Self.graphSelection) < 1)
         #expect(placement.capturedAt == PhotoDiscoveryFixture.date(atStep: dayBefore))
     }
 
@@ -227,7 +227,7 @@ struct PickedPhotoPlacementTests {
         let placement = Self.resolve(takenAtStep: step, camera: elsewhere)
 
         #expect(placement.evidence == nil)
-        #expect(Self.metres(placement.coordinate, Self.graphSelection) < 1)
+        #expect(Self.meters(placement.coordinate, Self.graphSelection) < 1)
     }
 
     /// A trail never walked with this app, and a photo with no position.
@@ -238,7 +238,7 @@ struct PickedPhotoPlacementTests {
         let placement = Self.resolve(takenAtStep: 4, plan: plan)
 
         #expect(placement.evidence == nil)
-        #expect(Self.metres(placement.coordinate, Self.graphSelection) < 1)
+        #expect(Self.meters(placement.coordinate, Self.graphSelection) < 1)
     }
 
     /// Picked on a place's own screen: the place is where it belongs, however
@@ -252,7 +252,7 @@ struct PickedPhotoPlacementTests {
         )
 
         #expect(placement.evidence == nil)
-        #expect(Self.metres(placement.coordinate, Self.graphSelection) < 1)
+        #expect(Self.meters(placement.coordinate, Self.graphSelection) < 1)
     }
 
     // MARK: - Through the import
@@ -290,7 +290,7 @@ struct PickedPhotoPlacementTests {
         #expect(photo.matchEvidence == .timeAndPlace)
         #expect(photo.capturedAt == takenAt)
         #expect(photo.assetLocalIdentifier == "picked-asset")
-        #expect(Self.metres(photo.coordinate, PhotoDiscoveryFixture.coordinate(atStep: 5)) < 1)
+        #expect(Self.meters(photo.coordinate, PhotoDiscoveryFixture.coordinate(atStep: 5)) < 1)
     }
 
     @Test("a picked photo with no metadata is stored at the graph selection")
@@ -311,7 +311,7 @@ struct PickedPhotoPlacementTests {
         )
 
         #expect(photo.matchEvidence == nil)
-        #expect(Self.metres(photo.coordinate, Self.graphSelection) < 1)
+        #expect(Self.meters(photo.coordinate, Self.graphSelection) < 1)
     }
 
     nonisolated private static func sampleJPEG() -> Data {

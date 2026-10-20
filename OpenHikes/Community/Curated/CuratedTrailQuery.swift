@@ -148,10 +148,10 @@ nonisolated extension CuratedTrailQuery {
         // a circumscribing box is exactly the buffer that constant is
         // for, and a second spelling of it is a second thing to keep
         // right.
-        let metresPerDegreeLatitude = RouteGeometry.metersPerDegreeLatitude
-        let latitudeSpan = area.radiusMeters / metresPerDegreeLatitude
+        let metersPerDegreeLatitude = RouteGeometry.metersPerDegreeLatitude
+        let latitudeSpan = area.radiusMeters / metersPerDegreeLatitude
         let longitudeSpan = area.radiusMeters
-            / (metresPerDegreeLatitude * cos(latitude * .pi / 180))
+            / (metersPerDegreeLatitude * cos(latitude * .pi / 180))
         guard latitudeSpan.isFinite, longitudeSpan.isFinite, area.longitude.isFinite else { return nil }
 
         // Brought into −180...180 before the span is applied rather than
@@ -274,7 +274,7 @@ nonisolated extension CuratedTrailQuery {
     /// either way round and ``isDayHike(box:)`` rejects it on the complement
     /// just as it would on the literal width.
     ///
-    /// Stated once here because ``spanMeters(of:)`` and ``centre(of:)`` have
+    /// Stated once here because ``spanMeters(of:)`` and ``center(of:)`` have
     /// to agree about it. They used to agree by accident and only halfway:
     /// the span was already short, because `RouteGeometry.distanceMeters`
     /// normalises the delta it is handed, while the centre averaged the two
@@ -334,7 +334,7 @@ nonisolated extension CuratedTrailQuery {
     /// route that got the naive average was not merely drawn in the wrong
     /// place: it sorted as though it were 20,000 km away and could never be
     /// found in the cache again.
-    static func centre(of box: BoundingBox) -> CLLocationCoordinate2D {
+    static func center(of box: BoundingBox) -> CLLocationCoordinate2D {
         CLLocationCoordinate2D(
             latitude: (box.south + box.north) / 2,
             longitude: RouteGeometry.normalizedLongitude(box.west + longitudeSpanDegrees(of: box) / 2)

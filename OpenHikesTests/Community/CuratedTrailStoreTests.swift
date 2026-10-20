@@ -31,8 +31,8 @@ import Testing
 /// The on-disk half of the curated cache.
 @Suite("Curated trail store")
 struct CuratedTrailStoreTests {
-    private static let centre = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.99)
-    private static let metresPerDegreeLatitude: Double = 111_320
+    private static let center = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.99)
+    private static let metersPerDegreeLatitude: Double = 111_320
     private static let day: TimeInterval = 24 * 60 * 60
 
     /// A directory per case. Removed by the case that made it, so a failure
@@ -42,16 +42,16 @@ struct CuratedTrailStoreTests {
             .appendingPathComponent("curated-store-\(UUID().uuidString)")
     }
 
-    /// A route whose box — and so whose pin — stands `metresNorth` of
-    /// ``centre``.
-    private static func trail(_ relationID: Int64, metresNorth: Double) -> CuratedTrail {
+    /// A route whose box — and so whose pin — stands `metersNorth` of
+    /// ``center``.
+    private static func trail(_ relationID: Int64, metersNorth: Double) -> CuratedTrail {
         let halfSpan = 0.004
-        let latitude = centre.latitude + metresNorth / metresPerDegreeLatitude
+        let latitude = center.latitude + metersNorth / metersPerDegreeLatitude
         let box = CuratedTrailQuery.BoundingBox(
             south: latitude - halfSpan,
-            west: centre.longitude - halfSpan,
+            west: center.longitude - halfSpan,
             north: latitude + halfSpan,
-            east: centre.longitude + halfSpan
+            east: center.longitude + halfSpan
         )
         return CuratedTrail(
             relationID: relationID,
@@ -66,7 +66,7 @@ struct CuratedTrailStoreTests {
     }
 
     private static func area(radiusMeters: Double) -> CommunitySearchArea {
-        CommunitySearchArea(coordinate: centre, radiusMeters: radiusMeters)
+        CommunitySearchArea(coordinate: center, radiusMeters: radiusMeters)
     }
 }
 // swiftlint:enable convenience_type
@@ -81,7 +81,7 @@ extension CuratedTrailStoreTests {
         let directory = Self.scratch()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = CuratedTrailStore(directory: directory, clock: { .now })
-        let trail = Self.trail(4_811_001, metresNorth: 0)
+        let trail = Self.trail(4_811_001, metersNorth: 0)
 
         store.save(trail)
 
@@ -108,7 +108,7 @@ extension CuratedTrailStoreTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let clock = TestClock()
         let store = CuratedTrailStore(directory: directory, clock: clock.read)
-        store.save(Self.trail(4_811_001, metresNorth: 0))
+        store.save(Self.trail(4_811_001, metersNorth: 0))
 
         clock.advance(by: OverpassCache.lifetime - Self.day)
         #expect(store.trail(of: 4_811_001) != nil, "inside the horizon it is still trusted")
@@ -134,7 +134,7 @@ extension CuratedTrailStoreTests {
         let overflow = 5
         for index in 0..<(CuratedTrailStore.maximumFiles + overflow) {
             clock.advance(by: 1)
-            store.save(Self.trail(Int64(4_811_001 + index), metresNorth: 0))
+            store.save(Self.trail(Int64(4_811_001 + index), metersNorth: 0))
         }
 
         let files = try? FileManager.default.contentsOfDirectory(
@@ -159,23 +159,23 @@ extension CuratedTrailStoreTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let clock = TestClock()
         let store = CuratedTrailStore(directory: directory, clock: clock.read)
-        let favourite: Int64 = 4_811_001
-        store.save(Self.trail(favourite, metresNorth: 0))
+        let favorite: Int64 = 4_811_001
+        store.save(Self.trail(favorite, metersNorth: 0))
         for index in 1..<CuratedTrailStore.maximumFiles {
             clock.advance(by: 1)
-            store.save(Self.trail(Int64(4_811_001 + index), metresNorth: 0))
+            store.save(Self.trail(Int64(4_811_001 + index), metersNorth: 0))
         }
 
         // Read it, then fill the directory past its ceiling.
         clock.advance(by: 1)
-        #expect(store.trail(of: favourite) != nil)
+        #expect(store.trail(of: favorite) != nil)
         let overflow = 5
         for index in 0..<overflow {
             clock.advance(by: 1)
-            store.save(Self.trail(Int64(4_812_001 + index), metresNorth: 0))
+            store.save(Self.trail(Int64(4_812_001 + index), metersNorth: 0))
         }
 
-        #expect(store.trail(of: favourite) != nil)
+        #expect(store.trail(of: favorite) != nil)
     }
 }
 
@@ -189,9 +189,9 @@ extension CuratedTrailStoreTests {
         let directory = Self.scratch()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = CuratedTrailStore(directory: directory, clock: { .now })
-        store.save(Self.trail(4_811_003, metresNorth: 3000))
-        store.save(Self.trail(4_811_001, metresNorth: 1000))
-        store.save(Self.trail(4_811_002, metresNorth: 2000))
+        store.save(Self.trail(4_811_003, metersNorth: 3000))
+        store.save(Self.trail(4_811_001, metersNorth: 1000))
+        store.save(Self.trail(4_811_002, metersNorth: 2000))
 
         let near = store.trails(near: Self.area(radiusMeters: 20_000), limit: 25)
 
@@ -206,8 +206,8 @@ extension CuratedTrailStoreTests {
         let directory = Self.scratch()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = CuratedTrailStore(directory: directory, clock: { .now })
-        store.save(Self.trail(4_811_001, metresNorth: 1000))
-        store.save(Self.trail(4_811_009, metresNorth: 90_000))
+        store.save(Self.trail(4_811_001, metersNorth: 1000))
+        store.save(Self.trail(4_811_009, metersNorth: 90_000))
 
         let near = store.trails(near: Self.area(radiusMeters: 20_000), limit: 25)
 
@@ -217,12 +217,12 @@ extension CuratedTrailStoreTests {
     /// The limit is a page, and this path is reached when something has
     /// already failed — it is not the moment to hand back four hundred rows.
     @Test("the limit is honoured")
-    func theLimitIsHonoured() {
+    func theLimitIsHonored() {
         let directory = Self.scratch()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = CuratedTrailStore(directory: directory, clock: { .now })
         for index in 0..<10 {
-            store.save(Self.trail(Int64(4_811_001 + index), metresNorth: Double(index + 1) * 100))
+            store.save(Self.trail(Int64(4_811_001 + index), metersNorth: Double(index + 1) * 100))
         }
 
         let near = store.trails(near: Self.area(radiusMeters: 20_000), limit: 3)
@@ -238,7 +238,7 @@ extension CuratedTrailStoreTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let clock = TestClock()
         let store = CuratedTrailStore(directory: directory, clock: clock.read)
-        store.save(Self.trail(4_811_001, metresNorth: 1000))
+        store.save(Self.trail(4_811_001, metersNorth: 1000))
 
         clock.advance(by: OverpassCache.lifetime + Self.day)
 
@@ -264,25 +264,25 @@ extension CuratedTrailStoreTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let clock = TestClock()
         let store = CuratedTrailStore(directory: directory, clock: clock.read)
-        let favourite: Int64 = 4_811_001
-        store.save(Self.trail(favourite, metresNorth: 0))
+        let favorite: Int64 = 4_811_001
+        store.save(Self.trail(favorite, metersNorth: 0))
         for index in 1..<CuratedTrailStore.maximumFiles {
             clock.advance(by: 1)
             // Far enough out that only the favourite answers the search below,
             // so the re-stamp under test is the one this is about.
-            store.save(Self.trail(Int64(4_811_001 + index), metresNorth: 90_000))
+            store.save(Self.trail(Int64(4_811_001 + index), metersNorth: 90_000))
         }
 
         clock.advance(by: 1)
         let offered = store.trails(near: Self.area(radiusMeters: 20_000), limit: 25)
-        #expect(offered.map(\.relationID) == [favourite])
+        #expect(offered.map(\.relationID) == [favorite])
 
         for index in 0..<5 {
             clock.advance(by: 1)
-            store.save(Self.trail(Int64(4_812_001 + index), metresNorth: 90_000))
+            store.save(Self.trail(Int64(4_812_001 + index), metersNorth: 90_000))
         }
 
-        #expect(store.trail(of: favourite) != nil)
+        #expect(store.trail(of: favorite) != nil)
     }
 
     /// A file this read and rejected for being in another valley is not a
@@ -296,10 +296,10 @@ extension CuratedTrailStoreTests {
         let clock = TestClock()
         let store = CuratedTrailStore(directory: directory, clock: clock.read)
         let distant: Int64 = 4_811_001
-        store.save(Self.trail(distant, metresNorth: 90_000))
+        store.save(Self.trail(distant, metersNorth: 90_000))
         for index in 1..<CuratedTrailStore.maximumFiles {
             clock.advance(by: 1)
-            store.save(Self.trail(Int64(4_811_001 + index), metresNorth: 0))
+            store.save(Self.trail(Int64(4_811_001 + index), metersNorth: 0))
         }
 
         clock.advance(by: 1)
@@ -307,7 +307,7 @@ extension CuratedTrailStoreTests {
             .contains { $0.relationID == distant })
 
         clock.advance(by: 1)
-        store.save(Self.trail(4_812_001, metresNorth: 0))
+        store.save(Self.trail(4_812_001, metersNorth: 0))
 
         #expect(store.trail(of: distant) == nil, "the oldest file is still the oldest")
     }

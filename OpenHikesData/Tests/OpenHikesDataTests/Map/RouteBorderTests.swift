@@ -40,7 +40,7 @@ struct RouteBorderTests {
     }
 
     @Test("a different colour picked onto a faded-out border arrives opaque")
-    func newColourOverFadedIsOpaque() {
+    func newColorOverFadedIsOpaque() {
         #expect(RouteBorder.pickedHex("#FFFFFF00", over: "#FF000000") == "#FFFFFFFF")
     }
 

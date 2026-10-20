@@ -353,7 +353,7 @@ extension HikeRecorder {
                       !Task.isCancelled,
                       sessionID == expectedSessionID else { return }
                 trailGraphPrefetchStates[region] = .loaded
-                prefetchNeighbouringTrailGraphRegions(around: coordinate)
+                prefetchNeighboringTrailGraphRegions(around: coordinate)
             } catch is CancellationError {
                 // `prefetch` now propagates cancellation, so this path is
                 // reachable where it previously was not. A cancelled prefetch
@@ -417,8 +417,8 @@ extension HikeRecorder {
         }
         trailGraphPrefetchTasks.removeAll()
         trailGraphPrefetchStates.removeAll()
-        neighbourPrefetchTask?.cancel()
-        neighbourPrefetchTask = nil
+        neighborPrefetchTask?.cancel()
+        neighborPrefetchTask = nil
     }
 
     /// Downloads the regions around the one that just landed, so the graph is
@@ -436,31 +436,31 @@ extension HikeRecorder {
     /// Failures are not recorded. A miss here must not put the *arrival* at
     /// that region into backoff, because by then it will be the one fetch
     /// somebody is actually waiting for.
-    func prefetchNeighbouringTrailGraphRegions(
+    func prefetchNeighboringTrailGraphRegions(
         around coordinate: CLLocationCoordinate2D
     ) {
         guard let trailGraphProvider,
               trailGraphNetworkDecision(.speculative).isAllowed else { return }
-        let neighbours = trailGraphProvider
-            .neighbouringRegionCoordinates(around: coordinate)
-            .filter { neighbour in
+        let neighbors = trailGraphProvider
+            .neighboringRegionCoordinates(around: coordinate)
+            .filter { neighbor in
                 guard let region = trailGraphProvider.region(
-                    containing: neighbour
+                    containing: neighbor
                 ) else { return false }
                 return trailGraphPrefetchStates[region] == nil
             }
-        guard !neighbours.isEmpty else { return }
-        neighbourPrefetchTask?.cancel()
+        guard !neighbors.isEmpty else { return }
+        neighborPrefetchTask?.cancel()
         let expectedSessionID = sessionID
-        neighbourPrefetchTask = Task { [weak self] in
-            for neighbour in neighbours {
+        neighborPrefetchTask = Task { [weak self] in
+            for neighbor in neighbors {
                 guard !Task.isCancelled else { return }
-                try? await trailGraphProvider.prefetch(around: neighbour)
+                try? await trailGraphProvider.prefetch(around: neighbor)
             }
             guard let self,
                   !Task.isCancelled,
                   sessionID == expectedSessionID else { return }
-            neighbourPrefetchTask = nil
+            neighborPrefetchTask = nil
         }
     }
 

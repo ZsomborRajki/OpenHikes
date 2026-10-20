@@ -28,15 +28,15 @@ extension MapCoordinatorTests {
     /// as under it — MapKit rounds its camera to the pixel.
     private static let pinTolerance: CGFloat = 1.5
 
-    private enum OffCentre {
+    private enum OffCenter {
         static let x: CGFloat = 80
         static let y: CGFloat = 160
     }
 
     /// A spot well off the middle of the map, so putting it under the pin
     /// is a move rather than a coincidence.
-    private func offCentreSpot(on map: MKMapView) -> HikePlaceSpot {
-        HikePlaceSpot(map.convert(CGPoint(x: OffCentre.x, y: OffCentre.y), toCoordinateFrom: map))
+    private func offCenterSpot(on map: MKMapView) -> HikePlaceSpot {
+        HikePlaceSpot(map.convert(CGPoint(x: OffCenter.x, y: OffCenter.y), toCoordinateFrom: map))
     }
 
     private func distance(_ lhs: CGPoint, _ rhs: CGPoint) -> CGFloat {
@@ -68,7 +68,7 @@ extension MapCoordinatorTests {
         let map = makeMap(mapView(), coordinator)
         defer { detach(map) }
         settle(sheetMetrics, at: map.bounds.height * 0.45)
-        let spot = offCentreSpot(on: map)
+        let spot = offCenterSpot(on: map)
 
         _ = await placePin(at: spot, on: map, coordinator)
 
@@ -91,7 +91,7 @@ extension MapCoordinatorTests {
         let map = makeMap(mapView(), coordinator)
         defer { detach(map) }
         settle(sheetMetrics, at: map.bounds.height * 0.45)
-        let spot = offCentreSpot(on: map)
+        let spot = offCenterSpot(on: map)
         _ = await placePin(at: spot, on: map, coordinator)
         coordinator.mapView(map, regionDidChangeAnimated: false)
         let unmoved = placePins.placement(of: spot).coordinate
@@ -126,7 +126,7 @@ extension MapCoordinatorTests {
         let map = makeMap(mapView(), coordinator)
         defer { detach(map) }
         settle(sheetMetrics, at: map.bounds.height * 0.45)
-        let spot = offCentreSpot(on: map)
+        let spot = offCenterSpot(on: map)
         _ = await placePin(at: spot, on: map, coordinator)
         let before = coordinator.focusPoint(in: map)
         // What the map's own settle after the move recorded, rounding and all.
@@ -166,7 +166,7 @@ extension MapCoordinatorTests {
         let map = makeMap(mapView(), coordinator)
         defer { detach(map) }
         settle(sheetMetrics, at: map.bounds.height * 0.45)
-        let spot = offCentreSpot(on: map)
+        let spot = offCenterSpot(on: map)
         let token = await placePin(at: spot, on: map, coordinator)
         let before = coordinator.focusPoint(in: map)
 
@@ -193,7 +193,7 @@ extension MapCoordinatorTests {
         let map = makeMap(mapView(), coordinator)
         defer { detach(map) }
         settle(sheetMetrics, at: map.bounds.height * 0.45)
-        let spot = offCentreSpot(on: map)
+        let spot = offCenterSpot(on: map)
         _ = await placePin(at: spot, on: map, coordinator)
 
         sheetMetrics.detentCommitted(toMiddle: true)
@@ -224,7 +224,7 @@ extension MapCoordinatorTests {
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
         defer { detach(map) }
-        let spot = offCentreSpot(on: map)
+        let spot = offCenterSpot(on: map)
         let placeholder = HikePlaceDraft().placeholder(at: spot)
         let token = await placePin(at: spot, on: map, coordinator)
         let pin = try #require(coordinator.placePlacement.pin)

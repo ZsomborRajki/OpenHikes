@@ -258,7 +258,7 @@ struct CommunityPhotoPublisherTests {
     /// and a contribution that filtered afterwards would be a second answer to
     /// one question.
     @Test("a struck-off photograph does not go")
-    func exclusionIsHonoured() async throws {
+    func exclusionIsHonored() async throws {
         let context = try Fixture.modelContext()
         let sandbox = PhotoStoreSandbox()
         let hike = Fixture.hike(in: context)

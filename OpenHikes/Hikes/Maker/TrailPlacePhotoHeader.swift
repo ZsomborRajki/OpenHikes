@@ -9,7 +9,7 @@
 //  the hiker tapped to see; the card under it is what they can do about it.
 //  The credit sits on the picture, as it does in every gallery that shows a
 //  Commons photograph, because the licence is owed wherever it is shown — see
-//  ``PhotoLicenceCredit``. A tap opens it full screen in the gallery a curated
+//  ``PhotoLicenseCredit``. A tap opens it full screen in the gallery a curated
 //  route's preview uses, paging through everything the searches found.
 //
 //  The *Community* tab's photograph screen is headed by the same thing — see
@@ -54,13 +54,13 @@ struct TrailPlacePhotoHeader: View {
                 .contentShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(PhotoLicenceCredit.line(author: photo.credit.author, licence: photo.credit.licence))
+        .accessibilityLabel(PhotoLicenseCredit.line(author: photo.credit.author, license: photo.credit.license))
         .accessibilityHint("Opens the photo full screen")
         .accessibilityIdentifier(accessibilityIdentifier)
         // Beside the button rather than inside it, so a tap on the credit
         // opens its menu and not the viewer.
         .overlay(alignment: .bottomLeading) {
-            PhotoLicenceCredit(author: photo.credit.author, licence: photo.credit.licence)
+            PhotoLicenseCredit(author: photo.credit.author, license: photo.credit.license)
                 // White over a photograph, rather than the maker's accent the
                 // menu's label would otherwise take — green on a meadow.
                 .tint(.white)

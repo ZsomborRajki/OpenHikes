@@ -271,7 +271,7 @@ struct CommunityOriginTests {
         // also the assertion that a route cannot arrive on the list having lost
         // its waymark on the way.
         #expect(listing.curatedFacts?.waymark?.reference == "411")
-        #expect(listing.curatedFacts?.waymark?.colour == WaymarkColour.red)
+        #expect(listing.curatedFacts?.waymark?.color == WaymarkColor.red)
         #expect(listing.curatedFacts?.maintainer == "Alpenverein Berchtesgaden")
     }
 
@@ -282,7 +282,7 @@ struct CommunityOriginTests {
     /// them changing. So the two fields are read back through the origin they
     /// were folded into.
     @Test("the longhand initialiser still produces a published origin")
-    func compatibilityInitialiserStaysPublished() {
+    func compatibilityInitializerStaysPublished() {
         let listing = CommunityListing(
             id: "listing-42",
             submissionID: Sample.submissionID,

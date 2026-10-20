@@ -489,9 +489,9 @@ nonisolated enum CommunityImport {
     /// — it is somebody else's photograph, and the licence lets this hiker
     /// keep and look at it, not send it on under their name. **The author**,
     /// on ``HikePhoto/importedAuthorName``, as for a contributed picture.
-    /// **The licence and its links**, on ``HikePhoto/licence``, so the saved
+    /// **The licence and its links**, on ``HikePhoto/license``, so the saved
     /// hike's own gallery can go on giving the credit the preview gave — see
-    /// ``PhotoLicenceCredit``.
+    /// ``PhotoLicenseCredit``.
     ///
     /// Each one is stamped as its own set of one, because the credit differs
     /// from picture to picture where a contribution's is the set's. And each
@@ -521,7 +521,7 @@ nonisolated enum CommunityImport {
                         listingID: detail.listing.id,
                         authorName: credit.author,
                         places: [:],
-                        licence: credit.licence,
+                        license: credit.license,
                         evidence: .place
                     ),
                     to: hike,
@@ -548,7 +548,7 @@ nonisolated enum CommunityImport {
         let places: [UUID: UUID]
         /// The open licence a Wikimedia Commons photograph came under, and
         /// `nil` for everything published on this app.
-        var licence: HikePhotoLicence?
+        var license: HikePhotoLicense?
         /// How the pin was arrived at, for a photograph whose pin this app
         /// worked out — `nil` for the ones that arrived with their own.
         var evidence: PhotoMatchEvidence?
@@ -611,7 +611,7 @@ nonisolated enum CommunityImport {
                 // author's own pictures. See ``HikePhoto/importedFromListingID``.
                 importedFromListingID: stamp.listingID,
                 importedAuthorName: stamp.authorName,
-                licence: stamp.licence,
+                license: stamp.license,
                 placeID: pin.placeID.flatMap { stamp.places[$0] },
                 store: store,
                 libraryWriter: libraryWriter,

@@ -35,7 +35,7 @@ extension MapCoordinatorTests {
 
     /// A two-stop hiking trail with its heights in, on a map, coloured by
     /// `shading`'s control. `maker` defaults to the suite's own.
-    private func colouredTrail(
+    private func coloredTrail(
         _ coordinator: MapView.Coordinator,
         shading: RouteShading,
         maker: TrailDraftController? = nil
@@ -65,10 +65,10 @@ extension MapCoordinatorTests {
     }
 
     @Test("the drawn line is coloured in the way every hike is, above its legs")
-    func drawnLineIsColoured() async throws {
+    func drawnLineIsColored() async throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
-        let map = await colouredTrail(coordinator, shading: try scratchShading(.elevation))
+        let map = await coloredTrail(coordinator, shading: try scratchShading(.elevation))
         defer { detach(map) }
 
         await settle(until: "the colours to reach the map") { coordinator.trailDraftShades.line != nil }
@@ -86,18 +86,18 @@ extension MapCoordinatorTests {
     /// The control is shared: *None* picked on any hike's Route Style takes
     /// the colours off the trail being drawn, and moving it back brings them.
     @Test("None on the shared control takes the colours off the drawn line")
-    func noneTakesTheColoursOff() async throws {
+    func noneTakesTheColorsOff() async throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let shading = try scratchShading(.elevation)
-        let map = await colouredTrail(coordinator, shading: shading)
+        let map = await coloredTrail(coordinator, shading: shading)
         defer { detach(map) }
         await settle(until: "the colours to reach the map") { coordinator.trailDraftShades.line != nil }
-        let coloured = try #require(coordinator.trailDraftShades.line)
+        let colored = try #require(coordinator.trailDraftShades.line)
 
         shading.setColoring(.off)
         await settle(until: "None to take them off") { coordinator.trailDraftShades.line == nil }
-        #expect(!map.overlays.contains { $0 === coloured })
+        #expect(!map.overlays.contains { $0 === colored })
 
         shading.setColoring(.elevation)
         await settle(until: "Elevation to bring them back") { coordinator.trailDraftShades.line != nil }
@@ -110,7 +110,7 @@ extension MapCoordinatorTests {
     func movingTheLineTakesThemOff() async throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
-        let map = await colouredTrail(coordinator, shading: try scratchShading(.elevation))
+        let map = await coloredTrail(coordinator, shading: try scratchShading(.elevation))
         defer { detach(map) }
         await settle(until: "the colours to reach the map") { coordinator.trailDraftShades.line != nil }
 
@@ -132,7 +132,7 @@ extension MapCoordinatorTests {
         let coordinator = MapView.Coordinator()
         // Held here: the map holds the control weakly.
         let shading = try scratchShading(.elevation)
-        let map = await colouredTrail(coordinator, shading: shading, maker: maker)
+        let map = await coloredTrail(coordinator, shading: shading, maker: maker)
         defer { detach(map) }
 
         #expect(!maker.shading.stretches(for: .elevation).isEmpty, "precondition: the steepness is measured")

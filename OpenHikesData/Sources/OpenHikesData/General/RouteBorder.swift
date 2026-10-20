@@ -68,9 +68,9 @@ nonisolated public enum RouteBorder {
     public static func pickedHex(_ picked: String, over current: String) -> String {
         guard picked.count == hexLength, picked.hasSuffix(transparentAlpha) else { return picked }
         let firstPick = current == noneHex
-        let newColourOverFaded = current.count == hexLength && current.hasSuffix(transparentAlpha)
+        let newColorOverFaded = current.count == hexLength && current.hasSuffix(transparentAlpha)
             && picked.prefix(rgbPrefixLength) != current.prefix(rgbPrefixLength)
-        guard firstPick || newColourOverFaded else { return picked }
+        guard firstPick || newColorOverFaded else { return picked }
         return picked.prefix(rgbPrefixLength) + opaqueAlpha
     }
 

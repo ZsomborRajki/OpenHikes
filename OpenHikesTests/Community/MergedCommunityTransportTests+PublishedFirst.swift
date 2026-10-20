@@ -27,8 +27,8 @@ extension MergedCommunityTransportTests {
     )
     func publishedHalfArrivesFirst() async throws {
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)],
-            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)]
+            published: [Self.published("listing-a", metersNorth: Offset.near)],
+            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest)]
         )
         let gate = AsyncGate()
         merged.overpass.beforeListingsReturn = { await gate.wait() }
@@ -49,7 +49,7 @@ extension MergedCommunityTransportTests {
     @Test("a published-only question hands nothing up early")
     func publishedOnlyHandsNothingUp() async throws {
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)]
+            published: [Self.published("listing-a", metersNorth: Offset.near)]
         )
         let early = Mutex(0)
 
@@ -67,7 +67,7 @@ extension MergedCommunityTransportTests {
     @Test("an empty published half is not handed up")
     func emptyPublishedHalfIsKept() async throws {
         let merged = Self.merged(
-            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)]
+            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest)]
         )
         let early = Mutex(0)
 
@@ -84,7 +84,7 @@ extension MergedCommunityTransportTests {
     @Test("a failed published half hands nothing up and the trails still land")
     func failedPublishedHalfHandsNothingUp() async throws {
         let merged = Self.merged(
-            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)]
+            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest)]
         )
         merged.cloudKit.listingsResult = .failure(.unreachable)
         let early = Mutex(0)

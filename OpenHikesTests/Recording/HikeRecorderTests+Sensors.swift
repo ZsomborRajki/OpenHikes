@@ -234,7 +234,7 @@ extension HikeRecorderTests {
         source.deliver(second)
 
         // Each fix also seeds its eight neighbours (see
-        // ``HikeRecorder/prefetchNeighbouringTrailGraphRegions(around:)``), so
+        // ``HikeRecorder/prefetchNeighboringTrailGraphRegions(around:)``), so
         // the assertion is that the two regions walked through were fetched —
         // not that nothing else was.
         let walked = [first, second].compactMap { location in
@@ -249,7 +249,7 @@ extension HikeRecorderTests {
     }
 
     @Test("speculative neighbour prefetch is skipped when the policy denies it")
-    func neighbourPrefetchRespectsNetworkPolicy() async throws {
+    func neighborPrefetchRespectsNetworkPolicy() async throws {
         let provider = StubTrailGraphProvider(graph: .empty)
         // Bound to a constant rather than written inline: `makeRecorder`
         // takes further closures after this one, so a trailing closure
@@ -276,10 +276,10 @@ extension HikeRecorderTests {
             region: region,
             recorder: recorder
         )
-        // And `prefetchNeighbouringTrailGraphRegions` assigns its task
+        // And `prefetchNeighboringTrailGraphRegions` assigns its task
         // synchronously, so a sweep the policy failed to deny is waited
         // through here rather than raced against.
-        await recorder.neighbourPrefetchTask?.value
+        await recorder.neighborPrefetchTask?.value
 
         #expect(Set(await provider.prefetches()) == [region])
     }

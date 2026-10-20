@@ -56,7 +56,7 @@ enum LocationAccessNeed {
             """
         case .whileUsing:
             """
-            OpenHikes can’t show where you are, centre the map on you, or \
+            OpenHikes can’t show where you are, center the map on you, or \
             report the weather where you’re standing. Turn on Location \
             Access for OpenHikes in Settings to use the location button.
             """

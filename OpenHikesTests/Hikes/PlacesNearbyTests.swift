@@ -44,7 +44,7 @@ struct PlacesNearbyTests {
     /// expected back to within a couple of percent.
     private static let projectionSlack = 0.98
 
-    private static func metres(east meters: Double, of origin: CLLocationCoordinate2D) -> CLLocationCoordinate2D {
+    private static func meters(east meters: Double, of origin: CLLocationCoordinate2D) -> CLLocationCoordinate2D {
         CLLocationCoordinate2D(
             latitude: origin.latitude,
             longitude: origin.longitude
@@ -71,8 +71,8 @@ struct PlacesNearbyTests {
     /// look around that is only that wide shows the car park.
     @Test("a short walk is framed at least two kilometres across, around the hiker")
     func shortWalkGetsTheMinimum() throws {
-        let line = [Self.here, Self.metres(east: 150, of: Self.here)]
-        let region = try #require(PlacesNearbyFrame.region(line: line, position: Self.metres(east: 300, of: Self.here)))
+        let line = [Self.here, Self.meters(east: 150, of: Self.here)]
+        let region = try #require(PlacesNearbyFrame.region(line: line, position: Self.meters(east: 300, of: Self.here)))
         let span = Self.spanMeters(region)
 
         #expect(span.latitude >= PlacesNearbyFrame.minimumSpanMeters * Self.projectionSlack)
@@ -84,7 +84,7 @@ struct PlacesNearbyTests {
     /// on its edge.
     @Test("a walk of a few kilometres is framed whole, with room around it")
     func walkIsFramedWhole() throws {
-        let end = Self.metres(east: 6000, of: Self.here)
+        let end = Self.meters(east: 6000, of: Self.here)
         let region = try #require(PlacesNearbyFrame.region(line: [Self.here, end], position: end))
         let span = Self.spanMeters(region)
 
@@ -97,7 +97,7 @@ struct PlacesNearbyTests {
     /// surroundings are the question the screen exists for.
     @Test("a walk too long to search in one go gives way to the hiker's surroundings")
     func longWalkFallsBackToTheHiker() throws {
-        let start = Self.metres(east: -25_000, of: Self.here)
+        let start = Self.meters(east: -25_000, of: Self.here)
         let region = try #require(PlacesNearbyFrame.region(line: [start, Self.here], position: Self.here))
 
         #expect(region.center.longitude.isApproximatelyEqual(to: Self.here.longitude, absoluteTolerance: 0.0001))
@@ -209,9 +209,9 @@ struct PlacesNearbyTests {
     /// a hiker looking around reads.
     @Test("rows are nearest the hiker first, the walk's own among them")
     func rowsAreNearestFirst() {
-        let far = TrailPlace(coordinate: Self.metres(east: 900, of: Self.here), name: "Hut")
-        let near = TrailPlace(coordinate: Self.metres(east: 100, of: Self.here), name: "Spring")
-        let held = TrailPlace(coordinate: Self.metres(east: 400, of: Self.here), name: "Bench")
+        let far = TrailPlace(coordinate: Self.meters(east: 900, of: Self.here), name: "Hut")
+        let near = TrailPlace(coordinate: Self.meters(east: 100, of: Self.here), name: "Spring")
+        let held = TrailPlace(coordinate: Self.meters(east: 400, of: Self.here), name: "Bench")
 
         let entries = PlacesNearbyEntry.sorted(
             held: [TrailPlaceRow(place: held, anchor: nil)],

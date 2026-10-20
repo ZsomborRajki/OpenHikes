@@ -32,7 +32,7 @@ extension DirectionalPolylineRendererTests {
     /// edge: a line of constant latitude has a bounding rect of zero height,
     /// so it sits on the renderer's y = 0 and half of every stroke would fall
     /// off the bitmap.
-    private static func renderCentred(
+    private static func renderCentered(
         _ renderer: DirectionalPolylineRenderer,
         of polyline: MKPolyline,
         zoomScale: MKZoomScale = 1
@@ -63,8 +63,8 @@ extension DirectionalPolylineRendererTests {
     @Test("a transparent border draws exactly what no border draws")
     func transparentBorderDrawsNothing() throws {
         let polyline = Self.line()
-        let none = try Self.renderCentred(Self.styled(.directional, on: polyline, border: nil), of: polyline)
-        let clear = try Self.renderCentred(
+        let none = try Self.renderCentered(Self.styled(.directional, on: polyline, border: nil), of: polyline)
+        let clear = try Self.renderCentered(
             Self.styled(.directional, on: polyline, border: CGColor(red: 1, green: 1, blue: 1, alpha: 0)),
             of: polyline
         )
@@ -79,8 +79,8 @@ extension DirectionalPolylineRendererTests {
     @Test("the border reaches past the line by the border's width on each side")
     func borderWidensTheBand() throws {
         let polyline = Self.line()
-        let line = try Self.renderCentred(Self.styled(.solid, on: polyline, border: nil), of: polyline)
-        let bordered = try Self.renderCentred(Self.styled(.solid, on: polyline, border: Self.red), of: polyline)
+        let line = try Self.renderCentered(Self.styled(.solid, on: polyline, border: nil), of: polyline)
+        let bordered = try Self.renderCentered(Self.styled(.solid, on: polyline, border: Self.red), of: polyline)
 
         let lineRows = line.inkedRows(inColumn: 100)
         let borderedRows = bordered.inkedRows(inColumn: 100)
@@ -96,12 +96,12 @@ extension DirectionalPolylineRendererTests {
     @Test("every dash of a dashed line is outlined past its ends, and the gaps stay open")
     func dashedBorderFollowsEachDash() throws {
         let polyline = Self.line()
-        let lineOnly = try Self.renderCentred(
+        let lineOnly = try Self.renderCentered(
             Self.styled(.dashed, on: polyline, border: nil),
             of: polyline,
             zoomScale: 0.5
         )
-        let bordered = try Self.renderCentred(
+        let bordered = try Self.renderCentered(
             Self.styled(.dashed, on: polyline, border: Self.red),
             of: polyline,
             zoomScale: 0.5
@@ -123,14 +123,14 @@ extension DirectionalPolylineRendererTests {
     /// the same distance past both ends of every dash — 2 pt at half zoom,
     /// four pixels — not all of it past one end.
     @Test("each dash's outline reaches the same distance past both of its ends")
-    func dashOutlineIsCentred() throws {
+    func dashOutlineIsCentered() throws {
         let polyline = Self.line()
-        let lineOnly = try Self.renderCentred(
+        let lineOnly = try Self.renderCentered(
             Self.styled(.dashed, on: polyline, border: nil),
             of: polyline,
             zoomScale: 0.5
         )
-        let bordered = try Self.renderCentred(
+        let bordered = try Self.renderCentered(
             Self.styled(.dashed, on: polyline, border: Self.red),
             of: polyline,
             zoomScale: 0.5
@@ -162,8 +162,8 @@ extension DirectionalPolylineRendererTests {
         for renderer in [lineOnly, bordered] {
             renderer.strokeColor = UIColor.blue.withAlphaComponent(0.5)
         }
-        let plain = try Self.renderCentred(lineOnly, of: polyline)
-        let outlined = try Self.renderCentred(bordered, of: polyline)
+        let plain = try Self.renderCentered(lineOnly, of: polyline)
+        let outlined = try Self.renderCentered(bordered, of: polyline)
 
         let row = try #require(plain.mostInkedRow)
         #expect(outlined.pixel(x: 100, row: row) == plain.pixel(x: 100, row: row))
@@ -171,13 +171,13 @@ extension DirectionalPolylineRendererTests {
     }
 
     @Test("a line with no colour at all leaves only the ring")
-    func colourlessLineLeavesARing() throws {
+    func colorlessLineLeavesARing() throws {
         let polyline = Self.line()
-        let reference = try Self.renderCentred(Self.styled(.solid, on: polyline, border: nil), of: polyline)
+        let reference = try Self.renderCentered(Self.styled(.solid, on: polyline, border: nil), of: polyline)
         let row = try #require(reference.mostInkedRow)
         let renderer = Self.styled(.solid, on: polyline, border: Self.red)
         renderer.strokeColor = .clear
-        let canvas = try Self.renderCentred(renderer, of: polyline)
+        let canvas = try Self.renderCentered(renderer, of: polyline)
 
         #expect(!canvas.isInked(x: 100, row: row), "the middle of the line is cleared")
         #expect(canvas.inkedRows(inColumn: 100) > 0, "and the ring round it is not")
@@ -186,8 +186,8 @@ extension DirectionalPolylineRendererTests {
     @Test("chevrons with no line under them are outlined too")
     func arrowheadsAreOutlined() throws {
         let polyline = Self.line()
-        let plain = try Self.renderCentred(Self.styled(.arrowheads, on: polyline, border: nil), of: polyline)
-        let outlined = try Self.renderCentred(Self.styled(.arrowheads, on: polyline, border: Self.red), of: polyline)
+        let plain = try Self.renderCentered(Self.styled(.arrowheads, on: polyline, border: nil), of: polyline)
+        let outlined = try Self.renderCentered(Self.styled(.arrowheads, on: polyline, border: Self.red), of: polyline)
         #expect(outlined.inkedPixels > plain.inkedPixels)
     }
 }

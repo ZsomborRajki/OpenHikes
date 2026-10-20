@@ -230,7 +230,7 @@ nonisolated struct WikimediaCommonsSource: CommonsPhotoSourcing {
         // geosearch knows only page ids. So a second tap over the same valley
         // offers the next photographs along rather than the same ones again.
         let files = try await files(for: shortlist)
-            .filter { !shown.contains($0.value.credit.licence.sourceURL) }
+            .filter { !shown.contains($0.value.credit.license.sourceURL) }
         let chosen = CommonsAreaPhotos.chosen(
             shortlist.filter { files[$0.pageID] != nil },
             authors: files.compactMapValues(\.credit.author),

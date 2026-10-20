@@ -120,7 +120,7 @@ struct HikeActivityUpdatePolicyTests {
     }
 
     @Test("the same walk is recognised across a rename")
-    func sameWalkIsRecognisedAcrossARename() {
+    func sameWalkIsRecognizedAcrossARename() {
         let hikeID = UUID()
         let original = HikeActivityAttributes(
             subject: .following(hikeID: hikeID),

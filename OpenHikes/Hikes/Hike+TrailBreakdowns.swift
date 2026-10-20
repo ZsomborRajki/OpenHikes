@@ -21,13 +21,13 @@ extension Hike {
     /// still opens — the percentages simply renormalise over what's left.
     var surfaceBreakdown: TrailSurfaceBreakdown? {
         get {
-            var recognised: [TrailSurface: Double] = [:]
+            var recognized: [TrailSurface: Double] = [:]
             for (category, meters) in surfaceMetersByCategory {
                 guard let surface = TrailSurface(rawValue: category) else { continue }
-                recognised[surface] = meters
+                recognized[surface] = meters
             }
-            guard !recognised.isEmpty else { return nil }
-            let breakdown = TrailSurfaceBreakdown(metersByCategory: recognised)
+            guard !recognized.isEmpty else { return nil }
+            let breakdown = TrailSurfaceBreakdown(metersByCategory: recognized)
             return breakdown.isEmpty ? nil : breakdown
         }
         set {
@@ -45,13 +45,13 @@ extension Hike {
     /// surfaces are.
     var difficultyBreakdown: TrailDifficultyBreakdown? {
         get {
-            var recognised: [TrailDifficulty: Double] = [:]
+            var recognized: [TrailDifficulty: Double] = [:]
             for (grade, meters) in difficultyMetersByGrade {
                 guard let difficulty = TrailDifficulty(rawValue: grade) else { continue }
-                recognised[difficulty] = meters
+                recognized[difficulty] = meters
             }
-            guard !recognised.isEmpty else { return nil }
-            let breakdown = TrailDifficultyBreakdown(metersByCategory: recognised)
+            guard !recognized.isEmpty else { return nil }
+            let breakdown = TrailDifficultyBreakdown(metersByCategory: recognized)
             return breakdown.isEmpty ? nil : breakdown
         }
         set {

@@ -16,7 +16,7 @@ import XCTest
 extension OrientationUITests {
     /// How far a settled page's middle may sit from the window's. Rounding,
     /// not drift: the drift this guards against was 31 points a page.
-    private static let centringTolerance: CGFloat = 2
+    private static let centeringTolerance: CGFloat = 2
 
     /// Every page of a landscape gallery comes to rest in the middle of the
     /// window, not only the first and the last.
@@ -27,7 +27,7 @@ extension OrientationUITests {
     /// until the clamp at the end put the last page back. So the page asserted
     /// is a middle one, two swipes in, where the drift had reached 62 points.
     @MainActor
-    func testLandscapeGalleryPagesStayCentred() {
+    func testLandscapeGalleryPagesStayCentered() {
         addTeardownBlock {
             await MainActor.run { XCUIDevice.shared.orientation = .portrait }
         }
@@ -59,7 +59,7 @@ extension OrientationUITests {
                 pictures.allElementsBoundByIndex.contains { picture in
                     let frame = picture.frame
                     return frame.minX < app.frame.midX && frame.maxX > app.frame.midX
-                        && abs(frame.midX - app.frame.midX) <= Self.centringTolerance
+                        && abs(frame.midX - app.frame.midX) <= Self.centeringTolerance
                 }
             },
             "the third page should rest in the middle of the window"

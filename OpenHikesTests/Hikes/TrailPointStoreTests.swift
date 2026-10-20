@@ -33,10 +33,10 @@ import Testing
 /// The on-disk half of what a place search found.
 @Suite("Trail point store")
 struct TrailPointStoreTests {
-    static let centre = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.99)
+    static let center = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.99)
     static let day: TimeInterval = 24 * 60 * 60
-    static let kilometre: Double = 1000
-    private static let metresPerDegreeLatitude: Double = 111_320
+    static let kilometer: Double = 1000
+    private static let metersPerDegreeLatitude: Double = 111_320
 
     /// A directory per case. Removed by the case that made it, so a failure
     /// leaves nothing behind for the next run to read.
@@ -45,17 +45,17 @@ struct TrailPointStoreTests {
             .appendingPathComponent("trail-points-\(UUID().uuidString)")
     }
 
-    /// One element standing `metresNorth` of ``centre``.
+    /// One element standing `metersNorth` of ``center``.
     static func found(
         _ id: Int64,
-        metresNorth: Double = 0,
+        metersNorth: Double = 0,
         type: String = "node",
         symbol: TrailPlaceSymbol = .water,
         name: String = ""
     ) -> TrailPlace {
         TrailPlace(
-            latitude: centre.latitude + metresNorth / metresPerDegreeLatitude,
-            longitude: centre.longitude,
+            latitude: center.latitude + metersNorth / metersPerDegreeLatitude,
+            longitude: center.longitude,
             name: name,
             symbol: symbol,
             osm: TrailPlaceOSM(elementType: type, elementID: id)
@@ -63,7 +63,7 @@ struct TrailPointStoreTests {
     }
 
     static func area(radiusMeters: Double) -> CommunitySearchArea {
-        CommunitySearchArea(coordinate: centre, radiusMeters: radiusMeters)
+        CommunitySearchArea(coordinate: center, radiusMeters: radiusMeters)
     }
 
     static func fileCount(in directory: URL) -> Int {
@@ -90,7 +90,7 @@ extension TrailPointStoreTests {
 
         store.save([spring])
 
-        let nearby = store.places(near: Self.area(radiusMeters: Self.kilometre), limit: 10)
+        let nearby = store.places(near: Self.area(radiusMeters: Self.kilometer), limit: 10)
         #expect(nearby.map(\.name) == ["Kalte Quelle"])
         #expect(nearby.first?.symbol == .water)
     }
@@ -105,9 +105,9 @@ extension TrailPointStoreTests {
         var spring = Self.found(1, name: "Kalte Quelle")
         spring.osm?.facts = [TrailPlaceFact(kind: .drinkingWater, value: "yes")]
 
-        store.save([spring, TrailPlace(latitude: Self.centre.latitude, longitude: Self.centre.longitude)])
+        store.save([spring, TrailPlace(latitude: Self.center.latitude, longitude: Self.center.longitude)])
 
-        let nearby = store.places(near: Self.area(radiusMeters: Self.kilometre), limit: 10)
+        let nearby = store.places(near: Self.area(radiusMeters: Self.kilometer), limit: 10)
         #expect(nearby.map(\.osm) == [spring.osm], "and a place with no element is not filed at all")
     }
 
@@ -120,9 +120,9 @@ extension TrailPointStoreTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = TrailPointStore(directory: directory, clock: { .now })
 
-        store.save([Self.found(1, metresNorth: 20 * Self.kilometre)])
+        store.save([Self.found(1, metersNorth: 20 * Self.kilometer)])
 
-        #expect(store.places(near: Self.area(radiusMeters: Self.kilometre), limit: 10).isEmpty)
+        #expect(store.places(near: Self.area(radiusMeters: Self.kilometer), limit: 10).isEmpty)
     }
 
     /// Nearest the middle of the map first, which is the only order a
@@ -134,12 +134,12 @@ extension TrailPointStoreTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = TrailPointStore(directory: directory, clock: { .now })
         store.save([
-            Self.found(1, metresNorth: 3 * Self.kilometre, name: "Far"),
-            Self.found(2, metresNorth: Self.kilometre, name: "Near"),
-            Self.found(3, metresNorth: 2 * Self.kilometre, name: "Middle"),
+            Self.found(1, metersNorth: 3 * Self.kilometer, name: "Far"),
+            Self.found(2, metersNorth: Self.kilometer, name: "Near"),
+            Self.found(3, metersNorth: 2 * Self.kilometer, name: "Middle"),
         ])
 
-        let nearest = store.places(near: Self.area(radiusMeters: 5 * Self.kilometre), limit: 2)
+        let nearest = store.places(near: Self.area(radiusMeters: 5 * Self.kilometer), limit: 2)
 
         #expect(nearest.map(\.name) == ["Near", "Middle"])
     }
@@ -154,7 +154,7 @@ extension TrailPointStoreTests {
         let clock = TestClock()
         let store = TrailPointStore(directory: directory, clock: clock.read)
         store.save([Self.found(1)])
-        let area = Self.area(radiusMeters: Self.kilometre)
+        let area = Self.area(radiusMeters: Self.kilometer)
 
         clock.advance(by: OverpassCache.lifetime - Self.day)
         #expect(!store.places(near: area, limit: 10).isEmpty, "inside the horizon it is still trusted")
@@ -180,7 +180,7 @@ extension TrailPointStoreTests {
         store.save([Self.found(1, name: "Spring")])
         store.save([Self.found(1, name: "Kalte Quelle")])
 
-        let nearby = store.places(near: Self.area(radiusMeters: Self.kilometre), limit: 10)
+        let nearby = store.places(near: Self.area(radiusMeters: Self.kilometer), limit: 10)
         #expect(nearby.map(\.name) == ["Kalte Quelle"], "the newer reading wins")
         #expect(Self.fileCount(in: directory) == 1)
     }
@@ -213,7 +213,7 @@ extension TrailPointStoreTests {
 
         #expect(Self.fileCount(in: directory) == 1, "it is still written, and written here")
         #expect(
-            !store.places(near: Self.area(radiusMeters: Self.kilometre), limit: 10).isEmpty,
+            !store.places(near: Self.area(radiusMeters: Self.kilometer), limit: 10).isEmpty,
             "and it is still readable"
         )
     }
@@ -237,7 +237,7 @@ extension TrailPointStoreTests {
         let overflow = 5
 
         store.save((0..<TrailPointStore.maximumFiles).map { index in
-            Self.found(Int64(index), metresNorth: Self.kilometre)
+            Self.found(Int64(index), metersNorth: Self.kilometer)
         })
         #expect(Self.fileCount(in: directory) == TrailPointStore.maximumFiles)
 
@@ -252,7 +252,7 @@ extension TrailPointStoreTests {
         }
 
         #expect(Self.fileCount(in: directory) == TrailPointStore.maximumFiles)
-        let nearest = store.places(near: Self.area(radiusMeters: Self.kilometre / 2), limit: overflow)
+        let nearest = store.places(near: Self.area(radiusMeters: Self.kilometer / 2), limit: overflow)
         #expect(
             nearest.count == overflow,
             "the five written last are the five closest, and all of them survived"

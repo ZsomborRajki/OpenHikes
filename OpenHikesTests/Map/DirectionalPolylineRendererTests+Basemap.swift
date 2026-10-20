@@ -122,13 +122,13 @@ extension DirectionalPolylineRendererTests {
         "a dashed or dotted coloured line leaves the map showing in its gaps",
         arguments: [RouteLinePattern.dashed, .dotted]
     )
-    func brokenColouredLineKeepsTheMap(_ pattern: RouteLinePattern) throws {
+    func brokenColoredLineKeepsTheMap(_ pattern: RouteLinePattern) throws {
         let canvas = try Self.renderOverBasemap(pattern, shades: Self.meetingShades(alpha: 1))
         #expect(Self.seeThroughPixels(in: canvas) == 0, "the gaps were cleared through to nothing")
     }
 
     @Test("a translucent coloured line is laid over the map rather than replacing it")
-    func translucentColouredLineKeepsTheMap() throws {
+    func translucentColoredLineKeepsTheMap() throws {
         let canvas = try Self.renderOverBasemap(
             .solid,
             shades: Self.meetingShades(alpha: Self.translucent),
@@ -167,8 +167,8 @@ extension DirectionalPolylineRendererTests {
         )
         let row = blended.context.height / 2
         let differing = (0..<blended.context.width).count { column in
-            Self.isGrey(Self.basemapPixel(in: blended, x: column, y: row))
-                != Self.isGrey(Self.basemapPixel(in: unblended, x: column, y: row))
+            Self.isGray(Self.basemapPixel(in: blended, x: column, y: row))
+                != Self.isGray(Self.basemapPixel(in: unblended, x: column, y: row))
         }
         #expect(differing == 0, "the blend moved where the dashes are")
     }
@@ -180,7 +180,7 @@ extension DirectionalPolylineRendererTests {
     /// over the grey at half alpha, every pixel's red less its green is half
     /// what it is on the opaque line, the gradient's included.
     @Test("a translucent dashed line blends its colours as fully as an opaque one")
-    func translucentDashedBlendKeepsItsColours() throws {
+    func translucentDashedBlendKeepsItsColors() throws {
         let opaque = try Self.renderOverBasemap(.dashed, shades: Self.meetingShades(alpha: 1))
         let faded = try Self.renderOverBasemap(
             .dashed,
@@ -200,10 +200,10 @@ extension DirectionalPolylineRendererTests {
 
     /// Whether a pixel is the canvas's own grey — the "map" — rather than
     /// anything the line drew.
-    private static func isGrey(_ pixel: (red: UInt8, green: UInt8, blue: UInt8)) -> Bool {
+    private static func isGray(_ pixel: (red: UInt8, green: UInt8, blue: UInt8)) -> Bool {
         let tolerance = 24
-        let grey = 128
-        return [pixel.red, pixel.green, pixel.blue].allSatisfy { abs(Int($0) - grey) <= tolerance }
+        let gray = 128
+        return [pixel.red, pixel.green, pixel.blue].allSatisfy { abs(Int($0) - gray) <= tolerance }
     }
 
     private static func basemapPixel(in canvas: Canvas, x: Int, y: Int) -> (red: UInt8, green: UInt8, blue: UInt8) {
@@ -216,7 +216,7 @@ extension DirectionalPolylineRendererTests {
     /// The case every hike starts in, which needs no layer and has to come
     /// out the same without one.
     @Test("a solid opaque coloured line keeps the map without a layer")
-    func solidColouredLineKeepsTheMap() throws {
+    func solidColoredLineKeepsTheMap() throws {
         let canvas = try Self.renderOverBasemap(.solid, shades: Self.meetingShades(alpha: 1))
         #expect(Self.seeThroughPixels(in: canvas) == 0)
     }

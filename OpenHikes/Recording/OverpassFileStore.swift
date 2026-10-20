@@ -179,7 +179,7 @@ nonisolated extension OverpassFileStore {
               )
         else { return [] }
 
-        let centre = area.coordinate
+        let center = area.coordinate
         // One reading of the clock for the whole pass rather than one per
         // file: every file answers the same question, and a pass that
         // straddled a tick would age two of them differently for no reason
@@ -190,7 +190,7 @@ nonisolated extension OverpassFileStore {
                   let stored = try? JSONDecoder().decode(Entry.self, from: data),
                   now.timeIntervalSince(stored.fetchedAt) <= OverpassCache.lifetime
             else { return nil }
-            let distance = RouteGeometry.distanceMeters(from: centre, to: coordinate(stored.value))
+            let distance = RouteGeometry.distanceMeters(from: center, to: coordinate(stored.value))
             guard distance <= area.radiusMeters else { return nil }
             return (url: url, value: stored.value, distance: distance)
         }

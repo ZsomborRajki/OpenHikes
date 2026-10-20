@@ -77,7 +77,7 @@ struct MapPaywallView: View {
         (
             "mountain.2",
             "Stamen Terrain",
-            "Hillshaded terrain in natural colours, a softer page for reading the shape of the land."
+            "Hillshaded terrain in natural colors, a softer page for reading the shape of the land."
         ),
         (
             "map.fill",

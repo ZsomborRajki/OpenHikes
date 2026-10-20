@@ -34,7 +34,7 @@ struct CuratedTrailQueryTests {
     /// that agrees to within twenty — and a test that wants to say *a route
     /// 19.9 km across* has to be able to build exactly that, or the assertion
     /// is about the builder's rounding rather than about the ceiling.
-    private static let metresPerDegree: Double = 6_371_008.8 * .pi / 180
+    private static let metersPerDegree: Double = 6_371_008.8 * .pi / 180
 
     /// About ten centimetres, in degrees.
     ///
@@ -70,8 +70,8 @@ struct CuratedTrailQueryTests {
         longitude: Double = 12.86
     ) -> CuratedTrailQuery.BoundingBox {
         let edge = diagonalMeters / sqrt(2)
-        let latitudeSpan = edge / metresPerDegree
-        let longitudeSpan = edge / (metresPerDegree * cos(latitude * .pi / 180))
+        let latitudeSpan = edge / metersPerDegree
+        let longitudeSpan = edge / (metersPerDegree * cos(latitude * .pi / 180))
         return CuratedTrailQuery.BoundingBox(
             south: latitude,
             west: longitude,
@@ -218,7 +218,7 @@ struct CuratedTrailQueryTests {
     /// anything in the measured data, and is here to pin the ceiling to the
     /// documented 20 km rather than to whatever it drifts to.
     @Test("a route just inside twenty kilometres is a day hike and one just outside is not")
-    func dayHikeLineSitsAtTwentyKilometres() {
+    func dayHikeLineSitsAtTwentyKilometers() {
         #expect(CuratedTrailQuery.isDayHike(box: Self.box(diagonalMeters: 19_900)))
         #expect(!CuratedTrailQuery.isDayHike(box: Self.box(diagonalMeters: 20_100)))
         #expect(CuratedTrailQuery.maximumSpanMeters == 20_000)
@@ -242,7 +242,7 @@ struct CuratedTrailQueryTests {
         let degreeHypotenuse = hypot(
             nordic.north - nordic.south,
             nordic.east - nordic.west
-        ) * Self.metresPerDegree
+        ) * Self.metersPerDegree
         #expect(degreeHypotenuse > CuratedTrailQuery.maximumSpanMeters)
     }
 
@@ -261,11 +261,11 @@ struct CuratedTrailQueryTests {
     /// added, so its "first" point is not a trailhead and means nothing. The
     /// centre of the box is at least a true statement about where the route is.
     @Test("a curated pin stands in the middle of the route's box")
-    func centreIsTheBoxMidpoint() {
+    func centerIsTheBoxMidpoint() {
         let box = CuratedTrailQuery.BoundingBox(south: 47.5, west: 12.8, north: 47.7, east: 13)
-        let centre = CuratedTrailQuery.centre(of: box)
-        #expect(centre.latitude.isApproximatelyEqual(to: 47.6, absoluteTolerance: Self.coordinateTolerance))
-        #expect(centre.longitude.isApproximatelyEqual(to: 12.9, absoluteTolerance: Self.coordinateTolerance))
+        let center = CuratedTrailQuery.center(of: box)
+        #expect(center.latitude.isApproximatelyEqual(to: 47.6, absoluteTolerance: Self.coordinateTolerance))
+        #expect(center.longitude.isApproximatelyEqual(to: 12.9, absoluteTolerance: Self.coordinateTolerance))
     }
 
     /// Overpass's `bb` is a plain minimum and maximum over the members'
@@ -276,18 +276,18 @@ struct CuratedTrailQueryTests {
     /// is where the list then sorted it and where the store then failed to
     /// find it again.
     @Test("a route across the date line is pinned on the line, not on zero")
-    func centreOfAnAntimeridianBoxStaysOnTheLine() {
+    func centerOfAnAntimeridianBoxStaysOnTheLine() {
         let box = CuratedTrailQuery.BoundingBox(
             south: 66.0,
             west: -179.99,
             north: 66.01,
             east: 179.99
         )
-        let centre = CuratedTrailQuery.centre(of: box)
-        #expect(centre.latitude.isApproximatelyEqual(to: 66.005, absoluteTolerance: Self.coordinateTolerance))
+        let center = CuratedTrailQuery.center(of: box)
+        #expect(center.latitude.isApproximatelyEqual(to: 66.005, absoluteTolerance: Self.coordinateTolerance))
         // Either spelling of the line: −180 and 180 are the same meridian, and
         // ``CuratedTrailQuery`` normalises into −180...180.
-        #expect(abs(centre.longitude).isApproximatelyEqual(to: 180, absoluteTolerance: 0.01))
+        #expect(abs(center.longitude).isApproximatelyEqual(to: 180, absoluteTolerance: 0.01))
     }
 
     /// The width the filter reads is the short way round, which is what makes
@@ -421,7 +421,7 @@ struct CuratedTrailQueryTests {
     /// 180°, and a box built from the raw figure would ask Overpass about a
     /// place that does not exist.
     @Test("a longitude that has wrapped round the world is brought back")
-    func awrappedLongitudeIsNormalised() throws {
+    func awrappedLongitudeIsNormalized() throws {
         let wrapped = try #require(CuratedTrailQuery.circumscribingBox(
             for: Self.area(latitude: 47.63, longitude: 12.98 + 360)
         ))

@@ -703,26 +703,26 @@ extension TrailBasemapRendererTests {
     func degenerateGeometryHandsOverCleanly(
         shape: (name: String, polyline: [SharedTrailSnapshot.CodableCoordinate])
     ) async throws {
-        let neighbour = UUID()
+        let neighbor = UUID()
         let seeded = Self.seedPublishedSet(
-            hikeID: neighbour,
+            hikeID: neighbor,
             coverage: try #require(UnitMercatorRect(bounding: Self.trail))
         )
         let subject = UUID()
 
         await Self.failingRenderer().refreshIfNeeded(hikeID: subject, polyline: shape.polyline)
 
-        Self.expectConsistentStore(for: [neighbour, subject], Comment(rawValue: shape.name))
+        Self.expectConsistentStore(for: [neighbor, subject], Comment(rawValue: shape.name))
 
-        let neighbourImage = SharedStore.basemapImageData(named: seeded.images[0].fileName)
-        if SharedStore.loadBasemapSet(for: neighbour) == nil {
+        let neighborImage = SharedStore.basemapImageData(named: seeded.images[0].fileName)
+        if SharedStore.loadBasemapSet(for: neighbor) == nil {
             #expect(
-                neighbourImage == nil,
+                neighborImage == nil,
                 "\(shape.name) replaced the manifest but left the superseded image on disk"
             )
         } else {
             #expect(
-                neighbourImage == Self.imageBytes,
+                neighborImage == Self.imageBytes,
                 "\(shape.name) kept the manifest but deleted the image it points at"
             )
         }

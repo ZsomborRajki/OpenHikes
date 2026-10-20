@@ -134,19 +134,19 @@ struct TrailGraphCorridorTests {
     }
 
     @Test("a region's neighbours surround it without repeating it")
-    func neighbouringRegionsSurroundTheOriginal() throws {
+    func neighboringRegionsSurroundTheOriginal() throws {
         let provider = SlippyRegionProvider()
         let here = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
         let origin = try #require(provider.region(containing: here))
 
-        let neighbours = provider
-            .neighbouringRegionCoordinates(around: here)
+        let neighbors = provider
+            .neighboringRegionCoordinates(around: here)
             .compactMap(provider.region(containing:))
 
-        #expect(neighbours.count == 8)
-        #expect(!neighbours.contains(origin))
-        #expect(Set(neighbours).count == 8)
-        #expect(neighbours.allSatisfy { region in
+        #expect(neighbors.count == 8)
+        #expect(!neighbors.contains(origin))
+        #expect(Set(neighbors).count == 8)
+        #expect(neighbors.allSatisfy { region in
             abs(region.x - origin.x) <= 1 && abs(region.y - origin.y) <= 1
         })
     }
@@ -163,37 +163,37 @@ struct TrailGraphCorridorTests {
             longitude: 0
         )
 
-        let neighbours = provider
-            .neighbouringRegionCoordinates(around: nearThePole)
+        let neighbors = provider
+            .neighboringRegionCoordinates(around: nearThePole)
             .compactMap(provider.region(containing:))
 
         // Two rows instead of three: its own and the one below it.
         #expect(provider.region(containing: nearThePole)?.y == 0)
-        #expect(neighbours.count == 5)
-        #expect(Set(neighbours.map(\.y)) == [0, 1])
+        #expect(neighbors.count == 5)
+        #expect(Set(neighbors.map(\.y)) == [0, 1])
     }
 
     @Test("neighbours across the antimeridian wrap rather than disappear")
-    func antimeridianNeighboursWrap() throws {
+    func antimeridianNeighborsWrap() throws {
         let provider = SlippyRegionProvider()
         let here = CLLocationCoordinate2D(latitude: 0, longitude: 179.99)
         let origin = try #require(provider.region(containing: here))
 
-        let neighbours = provider
-            .neighbouringRegionCoordinates(around: here)
+        let neighbors = provider
+            .neighboringRegionCoordinates(around: here)
             .compactMap(provider.region(containing:))
 
-        #expect(neighbours.count == 8)
-        #expect(neighbours.contains { $0.x == 0 })
+        #expect(neighbors.count == 8)
+        #expect(neighbors.contains { $0.x == 0 })
         #expect(origin.x == (1 << origin.zoom) - 1)
     }
 
     @Test("an unrepresentable coordinate has no neighbours to prefetch")
-    func unrepresentableCoordinateHasNoNeighbours() {
+    func unrepresentableCoordinateHasNoNeighbors() {
         let provider = StubTrailGraphProvider(graph: .empty)
         let nowhere = CLLocationCoordinate2D(latitude: .nan, longitude: .nan)
 
-        #expect(provider.neighbouringRegionCoordinates(around: nowhere).isEmpty)
+        #expect(provider.neighboringRegionCoordinates(around: nowhere).isEmpty)
     }
 }
 

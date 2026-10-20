@@ -30,7 +30,7 @@ import Testing
 
 @Suite("Community lineless row")
 struct CommunityLinelessRowTests {
-    private static let centre = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
+    private static let center = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
 
     /// A curated trail, with a line or without one. The listing pass fills in
     /// everything here except ``CuratedTrail/route``, which is the geometry
@@ -38,10 +38,10 @@ struct CommunityLinelessRowTests {
     private static func trail(drawn: Bool) -> CuratedTrail {
         let halfSpan = 0.004
         let box = CuratedTrailQuery.BoundingBox(
-            south: centre.latitude - halfSpan,
-            west: centre.longitude - halfSpan,
-            north: centre.latitude + halfSpan,
-            east: centre.longitude + halfSpan
+            south: center.latitude - halfSpan,
+            west: center.longitude - halfSpan,
+            north: center.latitude + halfSpan,
+            east: center.longitude + halfSpan
         )
         return CuratedTrail(
             relationID: 1234,

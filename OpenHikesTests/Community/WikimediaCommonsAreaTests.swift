@@ -133,7 +133,7 @@ struct WikimediaCommonsAreaTests {
         let photos = try await Self.source(commons)
             .photos(in: Self.area, avoiding: [shown], downloadingInto: downloads.directory)
 
-        #expect(Set(photos.map(\.credit.licence.sourceURL)).isDisjoint(with: [shown]))
+        #expect(Set(photos.map(\.credit.license.sourceURL)).isDisjoint(with: [shown]))
         #expect(photos.count == 2)
         #expect(
             !commons.requests.contains { $0.absoluteString.contains("/thumb/2/") },

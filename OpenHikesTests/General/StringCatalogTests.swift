@@ -85,6 +85,30 @@ struct StringCatalogTests {
     /// `.swiftlint.yml` holds the literals that never reach a catalog.
     @Test("no English value uses a straight apostrophe", arguments: ["OpenHikes", "OpenHikesWatch", "OpenWidget"])
     func catalogsUseTypographicApostrophes(folder: String) throws {
+        let offenders = try Self.englishStrings(in: folder).filter { $0.contains("'") }
+        #expect(offenders.isEmpty, "straight apostrophes in \(folder): \(offenders.sorted())")
+    }
+
+    /// American spelling, the convention #793 settled (#847): "Line Color",
+    /// "Center", "License". `.swiftlint.yml`'s `american_spelling_in_copy`
+    /// holds the literals and spells out the same words; this holds what the
+    /// catalogs say, which is where a key edited by hand would keep the old
+    /// word.
+    @Test("no English value uses a British spelling", arguments: ["OpenHikes", "OpenHikesWatch", "OpenWidget"])
+    func catalogsUseAmericanSpelling(folder: String) throws {
+        let british = #/
+            [Ll]icence | [Cc]entr(?:e|ed|es|ing)(?![a-z]) | [Nn]eighbour | [Cc]olour | [Gg]rey | [Mm]etre
+            | [Ff]avour | [Hh]onour | [Bb]ehaviour | [Cc]atalogue | [Tt]ravell(?:ed|ing|er)
+            | [Rr]ecognis(?:e|ing|able) | [Nn]ormalis(?:e|ing|ation) | [Ss]erialis(?:e|ing|ation)
+            | [Ii]nitialis(?:e|ing|ation) | [Ss]ummaris(?:e|ing) | [Aa]nalys(?:e|ed|ing)(?![a-z])
+            /#
+        let offenders = try Self.englishStrings(in: folder).filter { $0.contains(british) }
+        #expect(offenders.isEmpty, "British spellings in \(folder): \(offenders.sorted())")
+    }
+
+    /// Every key of `folder`'s catalog, and every English value under it —
+    /// plural and device variations included — read from the source tree.
+    private static func englishStrings(in folder: String) throws -> [String] {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let data = try Data(contentsOf: root.appending(path: "\(folder)/Localizable.xcstrings"))
@@ -98,10 +122,9 @@ struct StringCatalogTests {
             return all
         }
 
-        let offenders = strings.flatMap { key, entry -> [String] in
+        return strings.flatMap { key, entry -> [String] in
             let english = (entry as? [String: Any])?["localizations"] as? [String: Any]
-            return ([key] + values(in: english?["en"] as Any)).filter { $0.contains("'") }
+            return [key] + values(in: english?["en"] as Any)
         }
-        #expect(offenders.isEmpty, "straight apostrophes in \(folder): \(offenders.sorted())")
     }
 }

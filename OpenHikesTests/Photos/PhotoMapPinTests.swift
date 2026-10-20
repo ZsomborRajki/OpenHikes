@@ -78,7 +78,7 @@ struct PhotoMapPinTests {
     }
 
     @Test("an unanchored photo between two anchored ones is skipped, not shifted")
-    func unanchoredPhotosDoNotDisplaceTheirNeighbours() {
+    func unanchoredPhotosDoNotDisplaceTheirNeighbors() {
         let first = Self.photo(at: Self.bend, offset: 0)
         let loose = Self.photo(at: nil, offset: 60)
         let second = Self.photo(at: Self.summit, offset: 120)

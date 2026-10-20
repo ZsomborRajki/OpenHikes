@@ -32,8 +32,8 @@ struct CommunityCommonsGalleryTests {
         )
     }
 
-    private static func licence(_ name: String) -> HikePhotoLicence {
-        HikePhotoLicence(
+    private static func license(_ name: String) -> HikePhotoLicense {
+        HikePhotoLicense(
             name: "CC BY-SA 4.0",
             url: URL(string: "https://creativecommons.org/licenses/by-sa/4.0/"),
             sourceURL: URL(fileURLWithPath: "/\(name)")
@@ -44,7 +44,7 @@ struct CommunityCommonsGalleryTests {
         CommonsPhoto(
             pin: pin(9),
             fileURL: file(name),
-            credit: CommonsPhotoCredit(author: author, licence: licence(name))
+            credit: CommonsPhotoCredit(author: author, license: license(name))
         )
     }
 
@@ -90,7 +90,7 @@ struct CommunityCommonsGalleryTests {
         let page = try #require(Self.detail.galleryPhotos.last { $0.commons != nil && $0.credit != nil })
 
         #expect(page.credit == "Anna")
-        #expect(page.commons?.licence.name == "CC BY-SA 4.0")
+        #expect(page.commons?.license.name == "CC BY-SA 4.0")
         #expect(page.contribution == nil, "nothing on this app to report, block or take down")
         #expect(Self.detail.galleryPhotos.last?.credit == nil, "a file page that names nobody credits nobody")
     }

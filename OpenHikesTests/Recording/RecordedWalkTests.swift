@@ -57,19 +57,19 @@ struct RecordedWalkTests {
     /// distance the hike reports and the length of the line it saved are
     /// different numbers.
     private func wanderingFixture() -> [RecordingPoint] {
-        let metre = 1 / 111_320.0
+        let meter = 1 / 111_320.0
         var points: [RecordingPoint] = []
         var latitude = 47.63
         var offset: TimeInterval = 0
         for _ in 0..<6 {
             points.append(point(latitude, 12.8601, at: offset))
-            latitude += 15 * metre
+            latitude += 15 * meter
             offset += 15
         }
         let standing = latitude
         for step in 0..<9 {
             points.append(point(
-                standing + Double((step % 2) * 2 - 1) * 5 * metre,
+                standing + Double((step % 2) * 2 - 1) * 5 * meter,
                 step.isMultiple(of: 2) ? 12.860075 : 12.860125,
                 at: offset
             ))
@@ -77,7 +77,7 @@ struct RecordedWalkTests {
         }
         latitude = standing
         for _ in 0..<6 {
-            latitude += 15 * metre
+            latitude += 15 * meter
             offset += 15
             points.append(point(latitude, 12.8601, at: offset))
         }

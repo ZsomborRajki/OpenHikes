@@ -31,8 +31,8 @@ extension MergedCommunityTransportTests {
     @Test("a published-only question never reaches Overpass")
     func publishedOnlyLeavesTheCuratedSourceQuiet() async throws {
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)],
-            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)]
+            published: [Self.published("listing-a", metersNorth: Offset.near)],
+            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest)]
         )
 
         let answer = try await Self.answer(merged, scope: .publishedOnly)
@@ -49,8 +49,8 @@ extension MergedCommunityTransportTests {
     @Test("the curated question reaches both halves")
     func curatedScopeAsksBoth() async throws {
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)],
-            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)]
+            published: [Self.published("listing-a", metersNorth: Offset.near)],
+            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest)]
         )
 
         let answer = try await Self.answer(merged, scope: .withCuratedTrails)
@@ -69,7 +69,7 @@ extension MergedCommunityTransportTests {
     @Test("a rate-limited listing pass is carried back beside the rows")
     func aRateLimitedListingPassIsReported() async throws {
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)]
+            published: [Self.published("listing-a", metersNorth: Offset.near)]
         )
         merged.overpass.nearbyResult = .failure(.rateLimited(retryAfter: 60))
 
@@ -91,7 +91,7 @@ extension MergedCommunityTransportTests {
     @Test("a gateway refusal is reported as a busy server")
     func aGatewayRefusalIsReported() async throws {
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)]
+            published: [Self.published("listing-a", metersNorth: Offset.near)]
         )
         merged.overpass.nearbyResult = .failure(.server(statusCode: 504))
 
@@ -107,7 +107,7 @@ extension MergedCommunityTransportTests {
     @Test("any other curated failure is reported as unavailable")
     func anotherCuratedFailureIsReported() async throws {
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)]
+            published: [Self.published("listing-a", metersNorth: Offset.near)]
         )
         merged.overpass.nearbyResult = .failure(.invalidResponse)
 
@@ -122,10 +122,10 @@ extension MergedCommunityTransportTests {
     @Test("a curated half that answered reports what it listed")
     func aGoodCuratedHalfReportsItsCount() async throws {
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)],
+            published: [Self.published("listing-a", metersNorth: Offset.near)],
             curated: [
-                Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest),
-                Self.trail(Relation.almbach, named: "Almbachklamm", metresNorth: Offset.near),
+                Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest),
+                Self.trail(Relation.almbach, named: "Almbachklamm", metersNorth: Offset.near),
             ]
         )
 
@@ -142,7 +142,7 @@ extension MergedCommunityTransportTests {
     @Test("an area with no waymarked routes reports none rather than a refusal")
     func anEmptyAreaReportsNoTrails() async throws {
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)]
+            published: [Self.published("listing-a", metersNorth: Offset.near)]
         )
 
         let answer = try await Self.answer(merged)
@@ -160,10 +160,10 @@ extension MergedCommunityTransportTests {
     @Test("a refused geometry pass still answers with the listed rows")
     func aRefusedGeometryPassStillAnswers() async throws {
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.far)],
+            published: [Self.published("listing-a", metersNorth: Offset.far)],
             curated: [
-                Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest),
-                Self.trail(Relation.almbach, named: "Almbachklamm", metresNorth: Offset.near),
+                Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest),
+                Self.trail(Relation.almbach, named: "Almbachklamm", metersNorth: Offset.near),
             ]
         )
         merged.overpass.geometryResult = .refused(.rateLimited(retryAfter: 60))
@@ -187,8 +187,8 @@ extension MergedCommunityTransportTests {
     @Test("a geometry pass that throws leaves the published half standing")
     func aThrownGeometryPassLeavesThePublishedHalf() async throws {
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)],
-            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)]
+            published: [Self.published("listing-a", metersNorth: Offset.near)],
+            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest)]
         )
         merged.overpass.geometryResult = .thrown(TrailGraphProviderError.invalidResponse)
 
@@ -203,11 +203,11 @@ extension MergedCommunityTransportTests {
     @Test("a refused search falls back to the routes already on the device")
     func aRefusedSearchDrawsWhatIsAlreadyHere() async throws {
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.far)]
+            published: [Self.published("listing-a", metersNorth: Offset.far)]
         )
         merged.overpass.nearbyResult = .failure(.rateLimited(retryAfter: 60))
         merged.overpass.storedTrails = [
-            Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest),
+            Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest),
         ]
 
         let answer = try await Self.answer(merged)
@@ -227,7 +227,7 @@ extension MergedCommunityTransportTests {
         let merged = Self.merged()
         merged.overpass.nearbyResult = .failure(.rateLimited(retryAfter: 60))
         merged.overpass.storedTrails = [
-            Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest),
+            Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest),
         ]
 
         let answer = try await Self.answer(merged)
@@ -241,10 +241,10 @@ extension MergedCommunityTransportTests {
     @Test("a search that worked never falls back")
     func aGoodSearchDoesNotFallBack() async throws {
         let merged = Self.merged(
-            curated: [Self.trail(Relation.almbach, named: "Almbachklamm", metresNorth: Offset.near)]
+            curated: [Self.trail(Relation.almbach, named: "Almbachklamm", metersNorth: Offset.near)]
         )
         merged.overpass.storedTrails = [
-            Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest),
+            Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest),
         ]
 
         let answer = try await Self.answer(merged)
@@ -260,7 +260,7 @@ extension MergedCommunityTransportTests {
     /// list, which offers a page of routes to draw one of them.
     @Test("opening a curated route fills its heights in")
     func openingACuratedRouteFetchesHeights() async throws {
-        let trail = Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)
+        let trail = Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest)
         let merged = Self.merged(curated: [trail], elevation: StubElevationSource(height: 642))
         let listing = CommunityListing(curated: trail, editedAt: .now)
 
@@ -279,7 +279,7 @@ extension MergedCommunityTransportTests {
     /// heights existed.
     @Test("a refused height request still opens the hike")
     func refusedHeightsStillOpenTheHike() async throws {
-        let trail = Self.trail(Relation.almbach, named: "Almbachklamm", metresNorth: Offset.near)
+        let trail = Self.trail(Relation.almbach, named: "Almbachklamm", metersNorth: Offset.near)
         let merged = Self.merged(curated: [trail], elevation: StubElevationSource(height: nil))
         let listing = CommunityListing(curated: trail, editedAt: .now)
 
@@ -297,7 +297,7 @@ extension MergedCommunityTransportTests {
     /// relies on it, and a change to it would spend money from a test run.
     @Test("a composite built without an elevation source asks nobody")
     func defaultCompositeAsksNoVendor() async throws {
-        let trail = Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)
+        let trail = Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest)
         let cloudKit = StubCommunityTransport()
         let merged = MergedCommunityTransport(
             published: cloudKit,
@@ -318,12 +318,12 @@ extension MergedCommunityTransportTests {
     func publishedDetailAsksNoElevationSource() async {
         let source = StubElevationSource(height: 642)
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)],
+            published: [Self.published("listing-a", metersNorth: Offset.near)],
             elevation: source
         )
 
         _ = try? await merged.transport.detail(
-            for: Self.published("listing-a", metresNorth: Offset.near),
+            for: Self.published("listing-a", metersNorth: Offset.near),
             downloadingInto: FileManager.default.temporaryDirectory
         )
 
@@ -335,10 +335,10 @@ extension MergedCommunityTransportTests {
     @Test("a published-only question never reads the device's routes either")
     func publishedOnlyDoesNotFallBack() async throws {
         let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)]
+            published: [Self.published("listing-a", metersNorth: Offset.near)]
         )
         merged.overpass.storedTrails = [
-            Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest),
+            Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest),
         ]
 
         let answer = try await Self.answer(merged, scope: .publishedOnly)

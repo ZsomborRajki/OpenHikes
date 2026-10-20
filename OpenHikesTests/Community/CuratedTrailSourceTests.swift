@@ -76,11 +76,11 @@ actor CuratedTransportStub {
 struct CuratedTrailSourceTests {
     // MARK: - Fixtures
 
-    private static let centre = CLLocationCoordinate2D(latitude: 47.62, longitude: 12.97)
+    private static let center = CLLocationCoordinate2D(latitude: 47.62, longitude: 12.97)
     private static let searchRadius: Double = 10_000
 
     static var area: CommunitySearchArea {
-        CommunitySearchArea(coordinate: centre, radiusMeters: searchRadius)
+        CommunitySearchArea(coordinate: center, radiusMeters: searchRadius)
     }
 
     /// Two named day-hike relations and one continental path, which is what
@@ -285,7 +285,7 @@ struct CuratedTrailSourceTests {
 
         let trails = try await Self.search(source)
         let distances = trails.map { trail in
-            RouteGeometry.distanceMeters(from: Self.centre, to: trail.coordinate)
+            RouteGeometry.distanceMeters(from: Self.center, to: trail.coordinate)
         }
         #expect(trails.first?.name == "Near Loop")
         #expect(distances == distances.sorted())
@@ -297,7 +297,7 @@ struct CuratedTrailSourceTests {
     func tooWideSendsNothing() async throws {
         let (source, stub) = Self.makeSource([Self.ok(Self.listingBody)])
         let wide = CommunitySearchArea(
-            coordinate: Self.centre,
+            coordinate: Self.center,
             radiusMeters: CuratedTrailQuery.maximumRadiusMeters * 2
         )
 
@@ -476,7 +476,7 @@ extension CuratedTrailSourceTests {
         ])
         _ = try await Self.search(source)
         let wide = CommunitySearchArea(
-            coordinate: Self.centre,
+            coordinate: Self.center,
             radiusMeters: CuratedTrailQuery.maximumRadiusMeters * 2
         )
 
