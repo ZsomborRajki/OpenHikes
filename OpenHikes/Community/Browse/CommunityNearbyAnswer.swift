@@ -202,7 +202,10 @@ nonisolated enum CuratedTrailOutage: Equatable, Sendable {
     /// `Retry-After` is read to a person does not.
     static func wait(_ retryAfter: TimeInterval) -> String? {
         guard retryAfter > 0 else { return nil }
-        return Duration.seconds(Int(retryAfter.rounded(.up)))
+        // `Int(.infinity)` traps, so the number is bounded before it is a
+        // `Duration`; nothing upstream asks for longer than this anyway.
+        let seconds = min(retryAfter, TimeInterval(RetryAfterHeader.maximumDelay.components.seconds))
+        return Duration.seconds(Int(seconds.rounded(.up)))
             .formatted(
                 .units(allowed: [.minutes, .seconds], width: .abbreviated, maximumUnitCount: 1)
             )

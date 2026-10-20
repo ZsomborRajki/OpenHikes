@@ -164,8 +164,12 @@ nonisolated enum OverpassRequest {
         case successRange:
             return response.data
         case rateLimitCode:
+            // The tile path's reader: bounded, so `inf` and `1e30` are no
+            // advice and a day is fifteen minutes, and it takes the HTTP-date
+            // form too.
             let delay = response.headers["retry-after"]
-                .flatMap(TimeInterval.init) ?? defaultRetryDelay
+                .flatMap { RetryAfterHeader.delay(from: $0) }
+                .map { TimeInterval($0.components.seconds) } ?? defaultRetryDelay
             throw TrailGraphProviderError.rateLimited(retryAfter: delay)
         default:
             throw TrailGraphProviderError.server(statusCode: response.statusCode)
