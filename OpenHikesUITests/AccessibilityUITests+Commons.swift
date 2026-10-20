@@ -58,7 +58,7 @@ extension AccessibilityUITests {
     func testCommonsPhotoScreenPassesAccessibilityAudit() throws {
         let app = launchCommunity(scenario: .commons)
         selectCommunityTab(in: app)
-        tapWhenReady(element("community-commons-photo-pin", in: app), timeout: UITestTimeout.trace)
+        tapWhenReady(communityCommonsPhotoPin(in: app), timeout: UITestTimeout.trace)
         XCTAssertTrue(
             element("commons-photo-plan-trail", in: app).waitForExistence(timeout: UITestTimeout.navigation),
             "the audit is worth nothing before the photograph's screen is up"

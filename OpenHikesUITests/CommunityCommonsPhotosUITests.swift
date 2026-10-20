@@ -25,13 +25,6 @@
 import XCTest
 
 nonisolated final class CommunityCommonsPhotosUITests: XCTestCase {
-    /// Mirrors ``SeededCommonsPhotoSource``.
-    private enum SeededCommons {
-        static let firstAuthor = "Anna Berger"
-        static let licence = "CC BY-SA 4.0"
-        static let count = 3
-    }
-
     /// Contributed first, Commons after, and the strip says whose they are.
     @MainActor
     func testACuratedRouteShowsCommonsPhotographsAfterTheContributedOnes() {
@@ -91,7 +84,7 @@ nonisolated final class CommunityCommonsPhotosUITests: XCTestCase {
         let app = launchCommunity(scenario: .commons)
         selectCommunityTab(in: app)
 
-        let pin = element("community-commons-photo-pin", in: app)
+        let pin = communityCommonsPhotoPin(in: app)
         XCTAssertTrue(
             pin.waitForExistence(timeout: UITestTimeout.trace),
             "the tab's search should put the area's photographs on the map"
