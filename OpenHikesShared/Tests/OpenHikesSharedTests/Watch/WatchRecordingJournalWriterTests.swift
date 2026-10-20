@@ -89,6 +89,30 @@ struct WatchRecordingJournalWriterTests {
         }
     }
 
+    @Test("A failed resume retries on each fix until it reaches disk")
+    func failedResumeRetriesWithTheNextFix() throws {
+        try withWriter { writer in
+            try writer.begin(Fixture.header)
+            try writer.record(.fix(Fixture.fix(step: 0)), at: Fixture.time(step: 0))
+            try writer.record(.paused(Fixture.time(step: 1)), at: Fixture.time(step: 1))
+            try withJournalMissing(writer.file) {
+                #expect(throws: (any Error).self) {
+                    try writer.record(.resumed(Fixture.time(step: 2)), at: Fixture.time(step: 2))
+                }
+                #expect(throws: (any Error).self) {
+                    try writer.record(.fix(Fixture.fix(step: 3)), at: Fixture.time(step: 3))
+                }
+            }
+            try writer.record(.fix(Fixture.fix(step: 4)), at: Fixture.time(step: 4))
+
+            let recovered = try #require(writer.file.recover())
+            #expect(!recovered.wasPaused)
+            #expect(recovered.accumulator.fixes.count == 3)
+            #expect(recovered.accumulator.fixes.dropFirst().first?.resumesAfterPause == true)
+            #expect(recovered.lastRecordedAt == Fixture.time(step: 4))
+        }
+    }
+
     @Test("A pause and resume recorded together survive a failed write together")
     func failedWriteKeepsPauseAndResume() throws {
         try withWriter { writer in
@@ -100,12 +124,13 @@ struct WatchRecordingJournalWriterTests {
                     try writer.record(.paused(breakAt), .resumed(breakAt), at: breakAt)
                 }
             }
-            try writer.flush()
+            try writer.record(.fix(Fixture.fix(step: 2)), at: Fixture.time(step: 2))
 
             let recovered = try #require(writer.file.recover())
-            #expect(recovered.accumulator.fixes.count == 1)
+            #expect(recovered.accumulator.fixes.count == 2)
+            #expect(recovered.accumulator.fixes.last?.resumesAfterPause == true)
             #expect(!recovered.wasPaused)
-            #expect(recovered.lastRecordedAt == Fixture.time(step: 1))
+            #expect(recovered.lastRecordedAt == Fixture.time(step: 2))
         }
     }
 

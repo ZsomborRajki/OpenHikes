@@ -199,21 +199,26 @@ struct WatchRecordingJournalBuffer: Sendable, Equatable {
 
     private(set) var pending: [WatchRecordingJournalEntry] = []
     private var oldestPendingAt: Date?
+    private var isDue = false
 
     init() { /* nothing waiting */ }
 
     /// Adds a line. Returns whether ``pending`` is due to be written now —
     /// false while fixes are still allowed to wait.
     ///
-    /// Lines a failed write left waiting count toward the batch, so once one
-    /// write has failed every line asks for the next try.
+    /// A due batch stays due until ``written()``. A failed pause or resume
+    /// must retry with the next fix even below the count and time limits.
     mutating func add(_ entry: WatchRecordingJournalEntry, at date: Date) -> Bool {
         pending.append(entry)
-        guard case .fix = entry else { return true }
-        let oldest = oldestPendingAt ?? date
-        oldestPendingAt = oldest
-        return pending.count >= Self.maximumPendingFixes
-            || date.timeIntervalSince(oldest) >= Self.maximumPendingSeconds
+        if case .fix = entry {
+            let oldest = oldestPendingAt ?? date
+            oldestPendingAt = oldest
+            isDue = isDue || pending.count >= Self.maximumPendingFixes
+                || date.timeIntervalSince(oldest) >= Self.maximumPendingSeconds
+        } else {
+            isDue = true
+        }
+        return isDue
     }
 
     /// Forgets everything waiting, once it is on disk. Not before: a write
@@ -221,5 +226,6 @@ struct WatchRecordingJournalBuffer: Sendable, Equatable {
     mutating func written() {
         pending = []
         oldestPendingAt = nil
+        isDue = false
     }
 }
