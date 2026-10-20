@@ -96,8 +96,11 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// handed back with the selection rather than looked up in the library.
     ///
     /// Optional because a capture has no library asset behind it at all: it
-    /// exists only inside OpenHikes unless the user opted into the mirror, and
-    /// the mirrored copy is a new asset this app never sees the identity of.
+    /// exists only inside OpenHikes unless the user opted into the mirror. A
+    /// mirrored capture is given the identifier of the copy the mirror made,
+    /// once that copy exists — see ``Hike/linkPhoto(id:toAsset:)`` — because
+    /// that copy is otherwise a new asset to *Find Photos*, stamped with the
+    /// same moment and place, and would be offered back to the same hike.
     public var assetLocalIdentifier: String?
 
     /// How this photo came to be pinned where it is, for a photo the app did
@@ -410,6 +413,21 @@ public extension Hike {
         guard let index = photos.firstIndex(where: { $0.id == id }) else { return nil }
         guard photos[index].placeID != placeID else { return photos[index] }
         photos[index].placeID = placeID
+        return photos[index]
+    }
+
+    /// Records the library asset a photograph already in this hike was copied
+    /// out to, answering it as linked — or `nil` when the photograph is no
+    /// longer here to link.
+    ///
+    /// For the mirror's copy of a capture, which only gets an identity after
+    /// the photo is already attached. A photograph that already names an asset
+    /// keeps it: it came *from* the library, and the asset it came from is
+    /// the one every later scan will find.
+    @discardableResult func linkPhoto(id: UUID, toAsset localIdentifier: String) -> HikePhoto? {
+        guard let index = photos.firstIndex(where: { $0.id == id }) else { return nil }
+        guard photos[index].assetLocalIdentifier == nil else { return photos[index] }
+        photos[index].assetLocalIdentifier = localIdentifier
         return photos[index]
     }
 

@@ -17,7 +17,9 @@
 //  will have forgotten by the next launch. The optional photo-library mirror
 //  waits for that commit too: the copy in the user's library is the one thing
 //  here nothing can take back, and it must never be all that survives an
-//  import OpenHikes itself failed to keep.
+//  import OpenHikes itself failed to keep. Once that copy exists, its
+//  identifier is recorded on the photo, so the next read of the library knows
+//  it for the photograph the hike already holds rather than offering it back.
 //
 //  Deleting is the mirror image: the metadata goes on the main actor, where
 //  the `@Model` lives, and the files go afterwards on the concurrent executor.
@@ -156,14 +158,45 @@ nonisolated enum HikePhotoImport {
             // the same claims about when and where it was taken. `coordinate`
             // is genuinely absent for a photo the app could not place, and an
             // absent location is written as an absent one.
-            await libraryWriter.save(
+            let asset = await libraryWriter.save(
                 data,
                 fileExtension: photo.pathExtension,
                 capturedAt: photo.capturedAt,
                 coordinate: photo.coordinate
             )
+            if let asset, let linked = linked(photo, toAsset: asset, in: hike, save) {
+                photo = linked
+            }
         }
         return photo
+    }
+
+    /// Ties a mirrored photo to the copy the mirror made, so that copy is
+    /// recognised as this photograph when the library is next read rather
+    /// than offered back to the hike as a new one.
+    ///
+    /// Committed like the attach, but a store that refuses it takes nothing
+    /// back: the photograph is kept either way, the link is still true in
+    /// memory for the next autosave to carry, and the worst a lost link costs
+    /// is the copy being offered once more. `nil` when the hike or the photo
+    /// went away during the mirror's `await`.
+    @MainActor
+    private static func linked(
+        _ photo: HikePhoto,
+        toAsset asset: String,
+        in hike: Hike,
+        _ save: (ModelContext) throws -> Void
+    ) -> HikePhoto? {
+        guard hike.isAttached,
+              let linked = hike.linkPhoto(id: photo.id, toAsset: asset),
+              linked.assetLocalIdentifier == asset
+        else { return nil }
+        _ = persisted(
+            hike,
+            save,
+            refusal: "Kept a mirrored photo's link to its library copy unsaved"
+        )
+        return linked
     }
 
     /// A photograph the hike already holds, picked again from a place's

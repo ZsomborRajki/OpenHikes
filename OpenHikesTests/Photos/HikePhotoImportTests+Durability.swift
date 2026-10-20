@@ -45,8 +45,12 @@ extension HikePhotoImportTests {
                 store: sandbox.store,
                 libraryWriter: writer,
                 save: { modelContext in
-                    photoCountAtSave = hike.photos.count
-                    mirrorsAtSave = writer.saves.count
+                    // The first commit is the attach; the one after the
+                    // mirror only links the photo to the copy it made.
+                    if photoCountAtSave == nil {
+                        photoCountAtSave = hike.photos.count
+                        mirrorsAtSave = writer.saves.count
+                    }
                     try modelContext.save()
                 }
             )
