@@ -41,6 +41,10 @@
 //  drawn at full strength. And not the hiker's own border colour, which
 //  belongs to their route for the reason its tint does.
 //
+//  The outline costs these lines their being thinner. A faded line is 5.8 pt
+//  across with it, against 5 for a hike's own line at its default width, so
+//  what keeps the two apart is the fade and the order, not the width.
+//
 //  The previewed line is the one exception and only to the fade: it is at full
 //  strength because the screen showing it no longer draws a route of its own,
 //  so this is where the hiker looks to see what they are deciding about. It
@@ -204,7 +208,7 @@ extension MapView.Coordinator {
         // It is still not the route tint the hiker chose: that colour belongs
         // to their own selected hike, which may well be drawn on the same
         // screen. What keeps the two apart is what always did the work — these
-        // are thinner, faded, and underneath — and that is unchanged below.
+        // are faded, and underneath — and that is unchanged below.
         #if os(macOS)
         let tint = NSColor(drawing.line.listing.tint)
         #else

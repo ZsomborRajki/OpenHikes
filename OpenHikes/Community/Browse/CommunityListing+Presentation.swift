@@ -28,8 +28,8 @@ nonisolated extension CommunityListing {
     /// saying how long the walk is.
     ///
     /// What keeps these from being mistaken for the hiker's own route is not
-    /// the colour and never really was: it is that they are drawn thinner, at
-    /// half strength, and underneath it. See ``MapCommunityRoutes``.
+    /// the colour and never really was: it is that they are drawn at half
+    /// strength, and underneath it. See ``MapCommunityRoutes``.
     ///
     /// Derived from ``CommunityListing/id`` rather than stored, because there
     /// is nowhere to store it — a listing is a value fetched again by every
