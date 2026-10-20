@@ -414,8 +414,9 @@ extension TrailMakerUITests {
         )
         // **It went in at row two, which is the whole of what *into* means.**
         // An append would leave row two sitting at the trail's old length; an
-        // insert moves it somewhere short of it. The rows print only a title,
-        // so the distance is read from their accessibility value.
+        // insert moves it somewhere short of it. The distance a row prints
+        // under its heading is hidden from VoiceOver, which hears it in the
+        // row's accessibility value instead, so that is where it is read.
         XCTAssertFalse(
             (element("trail-draft-point-2", in: app).value as? String ?? "").contains(length),
             "a point appended to the end would have left row two at \(length)"

@@ -7,7 +7,9 @@
 //  The two facts the maker's list was rebuilt around. The role is derived from
 //  a point's place in the line and is stored nowhere, so every claim about it
 //  is a claim about the list; the name is stored, and the interesting claims
-//  are about the three things that are allowed to *unset* it.
+//  are about the three things that are allowed to *unset* it. Then the line a
+//  stop's row, pin and card each print under its heading, which is what keeps
+//  two stops apart when their names are the same.
 //
 //  What is asserted elsewhere: `TrailDraftStoreTests` that a name survives a
 //  relaunch, `TrailStopNamerTests` the queue that produces one,
@@ -17,6 +19,7 @@
 //
 
 import CoreLocation
+import Foundation
 @testable import OpenHikes
 import Testing
 
@@ -170,5 +173,77 @@ struct TrailStopTests {
         #expect(!draft.endDrag(), "nothing moved, so nothing was edited")
 
         #expect(draft.name(ofWaypointAt: 0) == "Lurdy Ház")
+    }
+
+    // MARK: - The line under a heading
+
+    /// The line each of the first `count` stops prints under its heading.
+    private static func details(_ draft: TrailDraft, count: Int) -> [String?] {
+        (0..<count).map { index in
+            draft.role(ofWaypointAt: index).detail(
+                isNamed: !draft.name(ofWaypointAt: index).isEmpty,
+                along: draft.distanceAlongLine(toWaypointAt: index)
+            )
+        }
+    }
+
+    private static func length(_ meters: Double) -> String {
+        Measurement(value: meters, unit: UnitLength.meters)
+            .formatted(.measurement(width: .abbreviated, usage: .road))
+    }
+
+    /// The route this line was added for: MapKit called two pins in one
+    /// forest by their postcode, and nothing else on either row said which
+    /// of the pins it was.
+    @Test("two stops with the same name are still told apart")
+    func sameNamesAreToldApart() {
+        let draft = Self.drawn([Ridge.south, Ridge.middle, Ridge.north])
+        draft.describe(waypointWith: draft.waypoints[0].id, as: "4810 Gmunden")
+        draft.describe(waypointWith: draft.waypoints[1].id, as: "4810 Gmunden")
+
+        let lines = Self.details(draft, count: 2)
+
+        #expect(lines[0] != lines[1])
+        #expect(lines[0] == "Start")
+        #expect(lines[1]?.hasPrefix("Stop 1") == true, "the role a name hides is what ties a row to pin 1")
+    }
+
+    @Test("a named stop keeps its role and says how far along it sits")
+    func aNamedStopSaysItsRoleAndDistance() throws {
+        let line = try #require(TrailStopRole.stop(number: 1).detail(isNamed: true, along: 1900))
+        #expect(line.hasPrefix("Stop 1 · "))
+        #expect(line.contains(Self.length(1900)))
+    }
+
+    /// Its heading is already the role, so the line does not say it twice.
+    @Test("an unnamed stop's line is how far along it sits, alone")
+    func anUnnamedStopSaysItsDistance() throws {
+        let line = try #require(TrailStopRole.stop(number: 2).detail(isNamed: false, along: 1250))
+        #expect(line.contains(Self.length(1250)))
+        #expect(!line.contains("Stop 2"))
+    }
+
+    /// The start, and a lone destination with the start still open: neither
+    /// is anywhere along a route yet, and "0 m along the route" is a line
+    /// spent on nothing.
+    @Test("nothing is said of a distance that is nothing", arguments: [TrailStopRole.start, .end])
+    func noDistanceWhereThereIsNone(_ role: TrailStopRole) {
+        #expect(role.detail(isNamed: false, along: 0) == nil)
+        #expect(role.detail(isNamed: true, along: 0) == role.title)
+    }
+
+    /// The card a tap on a stop's pin opens is headed like its row, so it says
+    /// the same thing under the heading too.
+    @Test("a stop's card says what its row says under the same heading")
+    func theCardAgreesWithTheRow() throws {
+        let draft = Self.drawn([Ridge.south, Ridge.middle, Ridge.north])
+        draft.describe(waypointWith: draft.waypoints[1].id, as: "Gellért-hegy")
+        let lines = Self.details(draft, count: 3)
+
+        for (index, line) in lines.enumerated() {
+            let card = try #require(TrailPlaceCard(.stop(draft.waypoints[index].id), in: draft, droppedPin: nil))
+            #expect(card.subtitle == line)
+        }
+        #expect(lines[0] == nil, "an unnamed start's card has nothing under its heading")
     }
 }

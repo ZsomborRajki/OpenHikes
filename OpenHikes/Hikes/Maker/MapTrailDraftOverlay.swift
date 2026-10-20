@@ -120,8 +120,8 @@ final class TrailDraftWaypointAnnotation: NSObject, MKAnnotation {
     /// the map.
     @objc private(set) dynamic var title: String?
 
-    /// What it is to the route and how far along it sits — see
-    /// ``subtitle(name:role:along:)``.
+    /// What it is to the route and how far along it sits, or `nil` for an
+    /// unnamed start — see ``TrailStopRole/detail(isNamed:along:)``.
     @objc private(set) dynamic var subtitle: String?
 
     /// Brings the pin up to what its waypoint now is, writing only what
@@ -153,14 +153,11 @@ final class TrailDraftWaypointAnnotation: NSObject, MKAnnotation {
         name.isEmpty ? role.title : name
     }
 
-    /// In the hiker's own units. The role is repeated here only when the
-    /// heading is a name, which is the one case where it would otherwise not
-    /// be said at all.
-    private static func subtitle(name: String, role: TrailStopRole, along meters: Double) -> String {
-        let length = Measurement(value: meters, unit: UnitLength.meters)
-            .formatted(.measurement(width: .abbreviated, usage: .road))
-        guard !name.isEmpty else { return length }
-        return "\(role.title) · \(length)"
+    /// The row's second line, word for word. The role is repeated here only
+    /// when the heading is a name, which is the one case where it would
+    /// otherwise not be said at all.
+    private static func subtitle(name: String, role: TrailStopRole, along meters: Double) -> String? {
+        role.detail(isNamed: !name.isEmpty, along: meters)
     }
 }
 

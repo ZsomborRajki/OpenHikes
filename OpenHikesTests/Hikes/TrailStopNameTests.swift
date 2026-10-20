@@ -16,7 +16,13 @@
 //  Assign `nil` to it and MapKit hands back a localized placeholder, so
 //  "has a name" is not a question that can be asked of one. That is why there
 //  are two functions here rather than one ordered list of fallbacks, and why
-//  ``TrailStopName/here(_:)`` never reaches for a name at all.
+//  ``TrailStopName/here(_:at:)`` never reaches for a name at all.
+//
+//  The second finding: an answer can be about somewhere else. Where there is
+//  no address near a spot MapKit answers with the postcode the spot is in,
+//  placed at the postcode's middle, which named every pin in one forest the
+//  same. The answers below that show it are MapKit's own, word for word and
+//  to the coordinate, as they came back on 2026-10-20.
 //
 
 import CoreLocation
@@ -51,7 +57,7 @@ struct TrailStopNameTests {
     @Test("nothing at all is no name, either way")
     func noItemIsNoName() {
         #expect(TrailStopName.chosen(nil) == nil)
-        #expect(TrailStopName.here(nil) == nil)
+        #expect(TrailStopName.here(nil, at: Self.somewhere.coordinate) == nil)
     }
 
     // MARK: - What the hiker picked
@@ -72,20 +78,83 @@ struct TrailStopNameTests {
     @Test("a tapped spot is named by its address, never by its name")
     func aSpotIsItsAddress() {
         let item = Self.item(name: "Lurdy Ház", address: Self.address)
-        #expect(TrailStopName.here(item) == "Könyves Kálmán körút 12-14")
+        #expect(TrailStopName.here(item, at: Self.somewhere.coordinate) == "Könyves Kálmán körút 12-14")
     }
 
     @Test("and by the full address when there is no short one")
     func theFullAddressIsTheLastResort() {
         let cityOnly = MKAddress(fullAddress: "1097 Budapest", shortAddress: nil)
-        #expect(TrailStopName.here(Self.item(name: nil, address: cityOnly)) == "1097 Budapest")
+        let item = Self.item(name: nil, address: cityOnly)
+        #expect(TrailStopName.here(item, at: Self.somewhere.coordinate) == "1097 Budapest")
     }
 
     /// The placeholder has nowhere to get in: an item MapKit could not place is
     /// no name at all, and the row keeps the word for what it is to the route.
     @Test("a spot MapKit cannot place is no name, not a placeholder")
     func anUnplaceableSpotIsNoName() {
-        #expect(TrailStopName.here(Self.item(name: nil, address: nil)) == nil)
+        let item = Self.item(name: nil, address: nil)
+        #expect(TrailStopName.here(item, at: Self.somewhere.coordinate) == nil)
+    }
+
+    // MARK: - An answer about somewhere else
+
+    /// A pin in the forest above the Traunsee, and what MapKit said about it:
+    /// the postcode, placed 1.8 km away at the postcode's middle. Every pin in
+    /// that forest got the same answer, which is how two rows of one route
+    /// both came to read "4810 Gmunden".
+    @Test("a postcode answered from across the valley is no name for the spot")
+    func aPostcodeIsNoName() {
+        let pin = CLLocationCoordinate2D(latitude: 47.9118, longitude: 13.8215)
+        let postcode = MKMapItem(
+            location: CLLocation(latitude: 47.9195217, longitude: 13.8003063),
+            address: MKAddress(fullAddress: "4810 Gmunden, Austria", shortAddress: "4810 Gmunden")
+        )
+        postcode.name = "4810"
+
+        #expect(TrailStopName.here(postcode, at: pin) == nil)
+        // Where the pin is, though, it truthfully says — which is what the
+        // place sheet asks it.
+        #expect(TrailStopName.address(of: postcode) == "4810 Gmunden, Austria")
+    }
+
+    /// A summit is named at its own mark, which a pin on the top need not be
+    /// right on: this answer stood 552 m off, and is still the mountain the
+    /// pin is on. Its short address is also MapKit's, gap and all.
+    @Test("a summit a few hundred metres off is still its name, without MapKit's empty part")
+    func aSummitNamesItsTop() {
+        let top = CLLocationCoordinate2D(latitude: 47.8727, longitude: 13.8306)
+        let summit = MKMapItem(
+            location: CLLocation(latitude: 47.8721271, longitude: 13.837932),
+            address: MKAddress(
+                fullAddress: "Traunstein, 4810 Gmunden, Austria",
+                shortAddress: "Traunstein,, Gmunden"
+            )
+        )
+        summit.name = "Traunstein"
+
+        #expect(TrailStopName.here(summit, at: top) == "Traunstein, Gmunden")
+    }
+
+    @Test("an answer is a name up to a kilometre from the spot, and not beyond")
+    func theBoundIsAKilometre() throws {
+        let bound = TrailStopName.farthestAnswerMeters
+        let near = MKMapItem(location: Self.east(of: Self.somewhere, by: bound - 10), address: Self.address)
+        let far = MKMapItem(location: Self.east(of: Self.somewhere, by: bound + 10), address: Self.address)
+        try #require(near.location.distance(from: Self.somewhere) < bound)
+        try #require(far.location.distance(from: Self.somewhere) > bound)
+
+        #expect(TrailStopName.here(near, at: Self.somewhere.coordinate) != nil)
+        #expect(TrailStopName.here(far, at: Self.somewhere.coordinate) == nil)
+    }
+
+    /// A spot about `meters` due east of `location` — near enough, which the
+    /// test above checks rather than assumes.
+    private static func east(of location: CLLocation, by meters: Double) -> CLLocation {
+        let metersPerDegree = 111_320 * cos(location.coordinate.latitude * .pi / 180)
+        return CLLocation(
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude + meters / metersPerDegree
+        )
     }
 
     /// The bound every name in this app is taken through where it enters — and
