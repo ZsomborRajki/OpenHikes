@@ -305,9 +305,12 @@ final class OfflineTileDownloader {
         // planning rather than instead of it, because the plan is what says
         // how big the map is — a resumed run that measured itself against the
         // gap would report a four-thousand-tile map as a thousand-tile one.
-        let plannedCount = tiles.count
+        // Partial records may also cover an older route. Only saved keys in
+        // this plan contribute to its progress.
+        resumedKeys.formIntersection(tiles.map { $0.cacheKey(providerID: source.providerID) })
+        completed = resumedKeys.count
         let outstanding = tiles.filter { !resumedKeys.contains($0.cacheKey(providerID: source.providerID)) }
-        total = plannedCount
+        total = tiles.count
         finishPlanning()
 
         guard !outstanding.isEmpty else {

@@ -58,6 +58,11 @@ extension OfflineTileDownloader {
         var space: @Sendable (String) async -> (limit: Int64, used: Int64)?
         var reclaimable: @Sendable (String, Set<String>) async -> Int64
         var reclaim: @Sendable (String, Set<String>, Int64) async -> Int64
+        /// Only bytes that would be added to durable storage. A tile another
+        /// hike or auto-save already saved costs no additional allowance.
+        var additionalBytes: @Sendable (Set<String>) async -> Int64 = { keys in
+            Int64(keys.count) * TileCache.estimatedTileBytes
+        }
 
         static let live = Self(
             space: { providerID in
@@ -78,6 +83,11 @@ extension OfflineTileDownloader {
                         protecting: protected,
                         byteCount: bytes
                     )
+                }
+            },
+            additionalBytes: { keys in
+                await Self.offMain {
+                    TileCache.shared.estimatedAdditionalDurableBytes(forKeys: keys)
                 }
             }
         )
@@ -117,8 +127,8 @@ extension OfflineTileDownloader {
     /// more than was needed rather than overrunning the limit.
     ///
     /// `tiles` is the whole plan and stays protected from reclaim; `fetching`
-    /// is what the run will actually write, which a resumed download makes
-    /// smaller — tiles already on disk are not charged a second time.
+    /// is this run's remaining work. The broker excludes keys already durable
+    /// for any hike, since their bytes are already in the quota's usage.
     func spaceShortfall(
         tiles: [Tile],
         fetching: [Tile],
@@ -127,7 +137,8 @@ extension OfflineTileDownloader {
         guard let space = await quota.space(source.providerID),
               let licence = TileCache.durableQuota(forProviderID: source.providerID)
         else { return nil }
-        let required = Int64(fetching.count) * TileCache.estimatedTileBytes
+        let fetchingKeys = Set(fetching.map { $0.cacheKey(providerID: source.providerID) })
+        let required = await quota.additionalBytes(fetchingKeys)
         let available = max(0, space.limit - space.used)
         guard required > available else { return nil }
 
