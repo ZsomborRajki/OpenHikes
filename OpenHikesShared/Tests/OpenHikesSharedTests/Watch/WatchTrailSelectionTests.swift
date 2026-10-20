@@ -18,13 +18,13 @@ struct WatchTrailSelectionTests {
     @Test("A then B asked for, B then A delivered: the watch keeps B")
     func lateAnswerForAnEarlierTrailIsDropped() {
         var selection = WatchTrailSelection()
-        selection.select(Fixture.trailA)
-        selection.select(Fixture.trailB)
+        let requestA = selection.select(Fixture.trailA)
+        let requestB = selection.select(Fixture.trailB)
         var held: WatchTrailPackage?
 
-        let b = Fixture.package(Fixture.trailB, at: 20)
+        let b = Fixture.package(Fixture.trailB, at: 20, requestID: requestB.id)
         if selection.accepts(b, replacing: held) { held = b }
-        let a = Fixture.package(Fixture.trailA, at: 10)
+        let a = Fixture.package(Fixture.trailA, at: 10, requestID: requestA.id)
         if selection.accepts(a, replacing: held) { held = a }
 
         #expect(held == b)
@@ -33,12 +33,12 @@ struct WatchTrailSelectionTests {
     @Test("the trail asked for is taken over a different one held")
     func wantedTrailReplacesAnotherHeld() {
         var selection = WatchTrailSelection()
-        selection.select(Fixture.trailB)
+        let request = selection.select(Fixture.trailB)
 
         // Older than what is held, and still taken: the stamps of two
         // different trails say nothing about which the hiker wants.
         #expect(selection.accepts(
-            Fixture.package(Fixture.trailB, at: 10),
+            Fixture.package(Fixture.trailB, at: 10, requestID: request.id),
             replacing: Fixture.package(Fixture.trailA, at: 20)
         ))
     }
@@ -46,20 +46,42 @@ struct WatchTrailSelectionTests {
     @Test("an older copy of the trail held does not replace a newer one")
     func olderRevisionOfTheSameTrailIsDropped() {
         var selection = WatchTrailSelection()
-        selection.select(Fixture.trailA)
-        let edited = Fixture.package(Fixture.trailA, at: 20, title: "Thumsee and Back")
+        let earlier = selection.select(Fixture.trailA)
+        let latest = selection.select(Fixture.trailA)
+        let edited = Fixture.package(Fixture.trailA, at: 20, title: "Thumsee and Back", requestID: latest.id)
 
-        #expect(!selection.accepts(Fixture.package(Fixture.trailA, at: 10), replacing: edited))
+        #expect(!selection.accepts(Fixture.package(Fixture.trailA, at: 10, requestID: earlier.id), replacing: edited))
     }
 
     @Test("a newer copy of the trail held replaces it, and so does one read at the same moment")
     func newerOrSimultaneousRevisionIsTaken() {
         var selection = WatchTrailSelection()
-        selection.select(Fixture.trailA)
         let held = Fixture.package(Fixture.trailA, at: 10)
+        let request = selection.select(Fixture.trailA, holding: held)
 
-        #expect(selection.accepts(Fixture.package(Fixture.trailA, at: 20, title: "Thumsee and Back"), replacing: held))
-        #expect(selection.accepts(Fixture.package(Fixture.trailA, at: 10), replacing: held))
+        #expect(selection.accepts(
+            Fixture.package(Fixture.trailA, at: 20, title: "Thumsee and Back", requestID: request.id),
+            replacing: held
+        ))
+        #expect(selection.accepts(Fixture.package(Fixture.trailA, at: 10, requestID: request.id), replacing: held))
+    }
+
+    @Test("a refresh satisfied by the held copy still supersedes an earlier answer")
+    func unchangedRefreshSupersedesAnEarlierAnswer() {
+        var selection = WatchTrailSelection()
+        let held = Fixture.package(Fixture.trailA, at: 10)
+        let earlier = selection.select(Fixture.trailA, holding: held)
+        let renamed = Fixture.package(Fixture.trailA, at: 20, title: "Temporary name", requestID: earlier.id)
+        #expect(earlier.needs(renamed))
+
+        // The rename is undone while that answer is crossing. The next
+        // request already holds the phone's current revision, so no package
+        // comes back to advance the held copy's timestamp.
+        let latest = selection.select(Fixture.trailA, holding: held)
+        #expect(latest.id != earlier.id)
+        #expect(!latest.needs(Fixture.package(Fixture.trailA, at: 30)))
+
+        #expect(!selection.accepts(renamed, replacing: held))
     }
 
     @Test("before anything is opened, any trail is taken, but an older copy of the one held is not")
@@ -75,10 +97,18 @@ struct WatchTrailSelectionTests {
     @Test("a new library re-asks for the trail wanted, not the one held")
     func digestRefreshesTheWantedTrail() {
         var selection = WatchTrailSelection()
-        selection.select(Fixture.trailB)
+        let earlier = selection.select(Fixture.trailB)
         let digest = Fixture.digest(Fixture.trailA, Fixture.trailB)
+        let held = Fixture.package(Fixture.trailA, at: 10)
 
-        #expect(selection.refreshTarget(holding: Fixture.package(Fixture.trailA, at: 10), in: digest) == Fixture.trailB)
+        let target = selection.refreshTarget(holding: held, in: digest)
+        #expect(target == Fixture.trailB)
+        if let target {
+            let refresh = selection.select(target, holding: held)
+            #expect(refresh.heldRevision == nil)
+            #expect(!selection.accepts(Fixture.package(Fixture.trailB, at: 20, requestID: earlier.id), replacing: held))
+            #expect(selection.accepts(Fixture.package(Fixture.trailB, at: 30, requestID: refresh.id), replacing: held))
+        }
     }
 
     @Test("with nothing opened, a new library re-asks for the trail held")
@@ -111,7 +141,8 @@ struct WatchTrailSelectionTests {
         static func package(
             _ hikeID: UUID,
             at seconds: TimeInterval,
-            title: String = "Thumsee Loop"
+            title: String = "Thumsee Loop",
+            requestID: UUID = UUID()
         ) -> WatchTrailPackage {
             WatchTrailPackage(
                 hikeID: hikeID,
@@ -122,7 +153,8 @@ struct WatchTrailSelectionTests {
                     WatchTrailPoint(latitude: 47.6961, longitude: 12.8543),
                     WatchTrailPoint(latitude: 47.6972, longitude: 12.8559),
                 ],
-                sentAt: epoch.addingTimeInterval(seconds)
+                sentAt: epoch.addingTimeInterval(seconds),
+                requestID: requestID
             )
         }
 

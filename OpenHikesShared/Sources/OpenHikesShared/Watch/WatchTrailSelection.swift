@@ -17,7 +17,10 @@
 //
 //  One trail asked for twice has the same race — a tap and a new library
 //  digest either side of an edit on the phone — and there the late answer is
-//  the route as it was before the edit.
+//  the route as it was before the edit. The latest request may need no
+//  answer at all because the watch already holds its revision, so read
+//  timestamps alone cannot supersede an earlier answer. Every request has
+//  an identity the phone echoes in its package.
 //
 //  ## Why it is here
 //
@@ -30,35 +33,43 @@ import Foundation
 
 /// The trail the hiker last asked the watch for, and what that rules out.
 public struct WatchTrailSelection: Equatable, Sendable {
-    /// The trail the hiker last opened, or `nil` before they have opened one
-    /// in this process.
+    /// The trail last requested, or `nil` before this process has asked for one.
     ///
     /// Not persisted. A package that lands after a relaunch is an answer to a
     /// request the last process made, which is the last thing the hiker asked
     /// for, and a watch that refused it would be waiting for a screen to be
     /// opened again before it drew anything.
-    public private(set) var wantedHikeID: UUID?
+    public var wantedHikeID: UUID? { latestRequest?.hikeID }
 
-    public init(wantedHikeID: UUID? = nil) {
-        self.wantedHikeID = wantedHikeID
+    private var latestRequest: WatchTrailRequest?
+
+    public init() {
+        latestRequest = nil
     }
 
-    /// The hiker opened `hikeID`; a package for any other trail is now late.
-    public mutating func select(_ hikeID: UUID) {
-        wantedHikeID = hikeID
+    /// Asks for `hikeID`, superseding every earlier request, including a
+    /// refresh of the same trail. Send the returned request unchanged.
+    @discardableResult public mutating func select(
+        _ hikeID: UUID,
+        holding held: WatchTrailPackage? = nil
+    ) -> WatchTrailRequest {
+        let request = WatchTrailRequest(hikeID: hikeID, holding: held)
+        latestRequest = request
+        return request
     }
 
     /// Whether `package` should replace `held` as the trail the watch draws,
     /// matches against and keeps on disk.
     ///
-    /// Two ways to be late. A package for a trail other than the one wanted
-    /// answers a request the hiker has since moved on from. A package for the
-    /// trail already held, packaged *before* the copy held was, is that trail
-    /// as it stood before an edit — ``WatchTrailPackage/sentAt`` is when the
-    /// phone read the route, so it orders the two. The same moment is taken:
-    /// it is the same read, or one no older.
+    /// A package answering any earlier request is late, even for the same
+    /// trail: the latest request may already hold the current revision and
+    /// need no reply. The read timestamp also orders two copies of the trail
+    /// already held, including arrivals after a relaunch before a request has
+    /// been made — ``WatchTrailPackage/sentAt`` is when the phone read the
+    /// route. The same moment is taken: it is the same read, or one no older.
     public func accepts(_ package: WatchTrailPackage, replacing held: WatchTrailPackage?) -> Bool {
-        if let wantedHikeID, package.hikeID != wantedHikeID { return false }
+        if let latestRequest,
+           package.hikeID != latestRequest.hikeID || package.requestID != latestRequest.id { return false }
         guard let held, held.hikeID == package.hikeID else { return true }
         return package.sentAt >= held.sentAt
     }

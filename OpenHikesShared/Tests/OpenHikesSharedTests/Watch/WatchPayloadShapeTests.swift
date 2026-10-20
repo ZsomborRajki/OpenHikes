@@ -41,6 +41,7 @@ struct WatchPayloadShapeTests {
                 "points[].elevationMeters: number",
                 "points[].latitude: number",
                 "points[].longitude: number",
+                "requestID: string",
                 "schemaVersion: number",
                 "sentAt: number",
                 "tintHex: string",
@@ -56,7 +57,7 @@ struct WatchPayloadShapeTests {
             of: Fixture.trailRequest,
             named: "WatchTrailRequest",
             versionedBy: "WatchTrailRequest.currentSchemaVersion",
-            matches: ["heldRevision: string", "hikeID: string", "schemaVersion: number"]
+            matches: ["heldRevision: string", "hikeID: string", "id: string", "schemaVersion: number"]
         )
     }
 

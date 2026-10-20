@@ -61,7 +61,7 @@ public struct WatchTrailPoint: Codable, Sendable, Equatable {
 
 /// A trail the phone has sent to the watch.
 public struct WatchTrailPackage: SharedPayload, Equatable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     /// How many points of a route cross to the watch. See this file's header
     /// for why it is not the widget's 180 and not the whole route.
@@ -87,6 +87,9 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
     public var elevationGainMeters: Double?
     public var elevationLossMeters: Double?
     public var points: [WatchTrailPoint]
+    /// The request this answers. A newer request supersedes this answer even
+    /// when the phone sends nothing because the watch already has its revision.
+    public var requestID: UUID
     /// When the phone read the route this was packaged from. What orders two
     /// copies of one trail that crossed out of order — see
     /// ``WatchTrailSelection/accepts(_:replacing:)``.
@@ -100,7 +103,8 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
         points: [WatchTrailPoint],
         elevationGainMeters: Double? = nil,
         elevationLossMeters: Double? = nil,
-        sentAt: Date = .now
+        sentAt: Date = .now,
+        requestID: UUID = UUID()
     ) {
         self.hikeID = hikeID
         self.title = title
@@ -110,6 +114,7 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
         self.elevationGainMeters = elevationGainMeters
         self.elevationLossMeters = elevationLossMeters
         self.sentAt = sentAt
+        self.requestID = requestID
         schemaVersion = Self.currentSchemaVersion
     }
 
@@ -133,9 +138,9 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
     ///
     /// Everything the watch uses is in it — the line, the heights, the name it
     /// records under, the tint and the length it reports progress on — and
-    /// ``sentAt`` and ``schemaVersion`` are not, since a trail packaged twice
-    /// is the same trail. See ``WatchTrailRequest/heldRevision`` for the one
-    /// thing it is for.
+    /// ``sentAt``, ``requestID`` and ``schemaVersion`` are not, since a trail
+    /// packaged twice is the same trail. See ``WatchTrailRequest/heldRevision``
+    /// for the one thing it is for.
     public var revision: String {
         var hasher = StableHasher()
         hasher.combine(hikeID)
@@ -164,9 +169,11 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
 /// is versioned like everything else crossing this link and a future field
 /// does not need a second message kind — ``heldRevision`` was the first.
 public struct WatchTrailRequest: SharedPayload, Equatable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public let schemaVersion: Int
+    /// Echoed in the package so an answer to an earlier refresh can be dropped.
+    public let id: UUID
     public var hikeID: UUID
     /// The ``WatchTrailPackage/revision`` of the copy the watch already holds
     /// for this hike, or `nil` when it holds none.
@@ -181,6 +188,7 @@ public struct WatchTrailRequest: SharedPayload, Equatable {
     public var heldRevision: String?
 
     public init(hikeID: UUID, heldRevision: String? = nil) {
+        id = UUID()
         self.hikeID = hikeID
         self.heldRevision = heldRevision
         schemaVersion = Self.currentSchemaVersion

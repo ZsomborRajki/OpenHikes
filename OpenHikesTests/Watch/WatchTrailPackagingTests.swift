@@ -37,15 +37,22 @@ struct WatchTrailPackagingTests {
         #expect(!WatchTrailRequest(hikeID: held.hikeID, holding: crossed).needs(again))
     }
 
-    @Test("a package is stamped when its route was read, not when packaging finished")
+    @Test("a package keeps its request's identity and the time its route was read")
     func packageIsStampedAtTheRead() async throws {
         // Two requests either side of an edit are packaged concurrently and
         // can finish in either order; the watch orders the two copies by this
         // stamp — issue #867.
         let read = Date(timeIntervalSince1970: 1_700_000_000)
-        let package = try #require(await WatchTrailPackaging.package(from: Fixture.shortInput, readAt: read))
+        let input = Fixture.shortInput
+        let request = WatchTrailRequest(hikeID: input.hikeID)
+        let package = try #require(await WatchTrailPackaging.package(
+            from: input,
+            readAt: read,
+            requestID: request.id
+        ))
 
         #expect(package.sentAt == read)
+        #expect(package.requestID == request.id)
     }
 
     @Test("a short route crosses whole")

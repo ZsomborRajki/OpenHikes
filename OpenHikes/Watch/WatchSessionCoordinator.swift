@@ -203,7 +203,11 @@ final class WatchSessionCoordinator: NSObject {
                 guard let hike = try? context.fetch(descriptor).first else { return nil }
                 return (HikeRouteInput(hike: hike), .now)
             }
-            guard let read, let package = await WatchTrailPackaging.package(from: read.input, readAt: read.at)
+            guard let read, let package = await WatchTrailPackaging.package(
+                from: read.input,
+                readAt: read.at,
+                requestID: request.id
+            )
             else { return }
             // The watch already holds exactly this, and asked to find out
             // whether the route had been edited since. It had not, so there is
