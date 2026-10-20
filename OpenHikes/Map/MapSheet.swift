@@ -403,6 +403,16 @@ struct MapSheet: View {
                 // valley they have already walked costs nothing to describe.
                 trailGraphProvider: appModel.trailGraphProvider
             )
+            // One screen per listing. A pin tapped over an open preview
+            // replaces it in place — `[A]` becomes `[B]`, see
+            // ``SheetPresentation/showCommunityHike(_:)`` — and the stack
+            // handed B's listing to A's view rather than building a new one.
+            // The title followed and nothing else did: the screen's `@State`
+            // still held A's detail — its route, its photographs — and its
+            // `.task` never ran for B. A new identity is a new visit, which is
+            // what the screen's `previewSession` already assumes one is. See
+            // `CommunityUITests+SwitchingPreviews.swift`.
+            .id(listing.id)
         }
     }
 
