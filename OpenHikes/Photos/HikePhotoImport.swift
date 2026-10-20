@@ -164,7 +164,7 @@ nonisolated enum HikePhotoImport {
                 capturedAt: photo.capturedAt,
                 coordinate: photo.coordinate
             )
-            if let asset, let linked = linked(photo, toAsset: asset, in: hike, save) {
+            if let asset, let linked = linked(photo, toAsset: asset, in: hike, store: store, save) {
                 photo = linked
             }
         }
@@ -180,22 +180,52 @@ nonisolated enum HikePhotoImport {
     /// memory for the next autosave to carry, and the worst a lost link costs
     /// is the copy being offered once more. `nil` when the hike or the photo
     /// went away during the mirror's `await`.
+    ///
+    /// The library can expose its copy before the mirror returns. If a picker
+    /// or discovery import already attached it, keep the capture and its
+    /// metadata, carrying over any place filing and publication stamp from the
+    /// import. Its duplicate files go only after their rows' removal commits.
     @MainActor
     private static func linked(
         _ photo: HikePhoto,
         toAsset asset: String,
         in hike: Hike,
+        store: HikePhotoStore,
         _ save: (ModelContext) throws -> Void
     ) -> HikePhoto? {
         guard hike.isAttached,
-              let linked = hike.linkPhoto(id: photo.id, toAsset: asset),
+              var linked = hike.linkPhoto(id: photo.id, toAsset: asset),
               linked.assetLocalIdentifier == asset
         else { return nil }
-        _ = persisted(
+        let photos = hike.photos
+        let duplicates = photos.filter { $0.id != linked.id && $0.assetLocalIdentifier == asset }
+        if !duplicates.isEmpty {
+            if let placeID = duplicates.last(where: { $0.placeID != nil })?.placeID,
+               hike.trailPoints?.contains(where: { $0.id == placeID }) == true {
+                linked.placeID = placeID
+            }
+            if linked.sentToCommunityAt == nil {
+                linked.sentToCommunityAt = duplicates.compactMap(\.sentToCommunityAt).min()
+            }
+            hike.photos = photos.compactMap { current in
+                if current.id == linked.id { return linked }
+                return current.assetLocalIdentifier == asset ? nil : current
+            }
+        }
+        let committed = persisted(
             hike,
             save,
             refusal: "Kept a mirrored photo's link to its library copy unsaved"
         )
+        if committed {
+            discardFiles(duplicates, from: store)
+        } else if !duplicates.isEmpty {
+            // The old rows still claim these files on disk. Keep them claimed
+            // in memory too, so neither a cleanup nor the next autosave loses
+            // a photograph after the store refused its removal.
+            hike.photos = photos
+            return photos.first { $0.id == linked.id }
+        }
         return linked
     }
 

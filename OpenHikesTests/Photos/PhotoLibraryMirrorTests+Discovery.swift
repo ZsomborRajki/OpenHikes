@@ -67,6 +67,48 @@ extension PhotoLibraryMirrorTests {
         #expect(hike.photos.count == 1)
     }
 
+    @Test("a mirrored capture's asset link survives reopening the store")
+    func mirroredLinkSurvivesAReopen() async throws {
+        let sandbox = PhotoStoreSandbox()
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mirrored-photo-store-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("OpenHikes.store")
+        let localURL = directory.appendingPathComponent("OpenHikesLocal.store")
+        let writer = StubPhotoLibraryWriter()
+        let hikeID: UUID
+        let photoID: UUID
+        do {
+            let container = try ModelContainer.openHikes(url: storeURL, localURL: localURL)
+            let context = ModelContext(container)
+            context.autosaveEnabled = false
+            let hike = Fixture.hike(in: context)
+            let photo = try #require(
+                await HikePhotoImport.add(
+                    PhotoDiscoveryFixture.sampleImageData(),
+                    to: hike,
+                    coordinate: nil,
+                    savesToPhotoLibrary: true,
+                    store: sandbox.store,
+                    libraryWriter: writer
+                )
+            )
+            hikeID = hike.id
+            photoID = photo.id
+        }
+
+        let container = try ModelContainer.openHikes(url: storeURL, localURL: localURL)
+        let context = ModelContext(container)
+        let reopened = try #require(
+            try context.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })).first
+        )
+        let asset = try #require(writer.saves.last?.createdAsset)
+        #expect(reopened.photos.map(\.id) == [photoID])
+        #expect(reopened.photos.first?.assetLocalIdentifier == asset)
+        #expect(reopened.importedPhotoAssetIdentifiers == [asset])
+    }
+
     /// The order the import guarantees, from the mirror's side: a copy that
     /// never landed in the library takes nothing from the one in the hike —
     /// and leaves it linked to nothing, rather than to an asset that is not

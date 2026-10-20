@@ -275,17 +275,18 @@ nonisolated final class StubPhotoLibraryWriter: PhotoLibraryWriting {
 
     private let recorded = Mutex<[Save]>([])
     private let refuses: Bool
+    private let afterCreation: (@MainActor @Sendable (String) async -> Void)?
 
     /// - Parameter refuses: Answer every save as a refused permission or a
     ///   failed write would, with no asset created.
-    init(refuses: Bool = false) {
+    init(
+        refuses: Bool = false,
+        afterCreation: (@MainActor @Sendable (String) async -> Void)? = nil
+    ) {
         self.refuses = refuses
+        self.afterCreation = afterCreation
     }
 
-    // Async because the protocol is, not because this body suspends: the real
-    // writer awaits an authorization prompt and a change request, this one
-    // appends to an array.
-    //
     // Deliberately *without* `@concurrent`, unlike the requirement it
     // witnesses. A witness that carried it would hop off the main actor under
     // its own power and report a clean executor no matter what the protocol
@@ -293,20 +294,20 @@ nonisolated final class StubPhotoLibraryWriter: PhotoLibraryWriting {
     // to be unable to get. Left plain, this body runs wherever the call
     // boundary puts it, so what it records is the protocol's promise rather
     // than the stub's.
-    // swiftlint:disable async_without_await
     @discardableResult func save(
         _ data: Data,
         fileExtension: String,
         capturedAt: Date,
         coordinate: CLLocationCoordinate2D?
     ) async -> String? {
-        // swiftlint:enable async_without_await
-        record(
+        let asset = record(
             fileExtension: fileExtension,
             capturedAt: capturedAt,
             coordinate: coordinate,
             byteCount: data.count
         )
+        if let asset { await afterCreation?(asset) }
+        return asset
     }
 
     /// Split out of `save` only so `Thread.isMainThread` can be read at all:
