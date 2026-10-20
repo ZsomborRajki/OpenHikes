@@ -54,4 +54,16 @@ struct HikePhotoLicenceTests {
         #expect(HikePhoto().isOwn)
         #expect(!HikePhoto(importedFromListingID: "osm:r/1").isOwn)
     }
+
+    @Test("a licensed copy is somebody else's by the rule a build without the licence field applies")
+    func previousBuildsRuleKeepsItOut() throws {
+        let photo = HikePhoto(importedAuthorName: "Anna", licence: Self.licence)
+
+        let decoded = try JSONDecoder().decode([HikePhoto].self, from: JSONEncoder().encode([photo]))
+
+        // `isOwn` before 183ea3e7, which is what a 1.3 build 4 device applies.
+        #expect(decoded.first?.importedFromListingID != nil)
+        #expect(HikePhoto(importedFromListingID: "osm:r/1", licence: Self.licence).importedFromListingID == "osm:r/1")
+        #expect(HikePhoto().importedFromListingID == nil)
+    }
 }
