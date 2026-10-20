@@ -115,6 +115,10 @@ extension MapView.Coordinator {
         guard !isObservingCommunityRoutes else { return }
         isObservingCommunityRoutes = true
         trackCommunityRoutes(browser, on: mapView)
+        // And the dot the open preview's chart stands on its line, which is
+        // started with the lines because it is a point on one of them — see
+        // `MapCommunityPreviewHighlight.swift`.
+        trackCommunityPreviewHighlight(browser, on: mapView)
     }
 
     private func trackCommunityRoutes(_ browser: CommunityBrowser, on mapView: MKMapView) {

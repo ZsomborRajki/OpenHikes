@@ -166,12 +166,12 @@ struct CommunityHikeView: View {
     /// lists behind it — see ``CommunityBlockList``.
     let blockList: CommunityBlockList
     /// The browser behind the map, told when this preview opens, what its
-    /// route turned out to be, and when it goes.
+    /// route turned out to be, where its chart is pointing, and when it goes.
     ///
     /// **Written and never read.** Nothing in this body touches a property of
     /// it, which is what keeps a screen presented over the map out of the
-    /// map's own redraw path — the three calls are one-way, and what they
-    /// produce is a line on the map behind this sheet rather than anything
+    /// map's own redraw path — the calls are one-way, and what they produce
+    /// is a line and a dot on the map behind this sheet rather than anything
     /// here. See ``CommunityBrowser/previewOpened(_:)``.
     let browser: CommunityBrowser
     /// Read for one thing: whether this account may take a published hike
@@ -238,9 +238,10 @@ struct CommunityHikeView: View {
     /// down without ever being read here: a finger dragging the chart moves
     /// the marker and redraws the chart, and nothing on this screen above it.
     /// Unlike the hike's own, nothing else writes to it — there is no live
-    /// location to project onto a stranger's trail and no map pin to hand
-    /// back, so ``TrackerState/liveTrackerDistance`` stays `nil` for the life
-    /// of this screen.
+    /// location to project onto a stranger's trail, so
+    /// ``TrackerState/liveTrackerDistance`` stays `nil` for the life of this
+    /// screen. The map's dot follows it, through the browser rather than
+    /// through anything this body reads — see ``publishChartPosition()``.
     @State private var tracker = TrackerState()
     // The import's state is read by `CommunityHikeView+Import.swift`, which
     // holds the button and the save — internal for the reason ``phase`` is.
@@ -443,6 +444,8 @@ struct CommunityHikeView: View {
                 // from this same value: a pin and the page it opens have to be
                 // one picture. See ``publishPhotoPins(_:)``.
                 publishPhotoPins(visible(detail))
+                // And the dot, where the chart's marker was left.
+                publishChartPosition()
             }
         }
         .onDisappear {
@@ -786,9 +789,12 @@ private extension CommunityHikeView {
     /// ``ElevationChartView`` rather than anything built for this screen, and
     /// the scrub comes with it: reading an elevation off a point of a trail is
     /// most of what a hiker is deciding on, and it is the one interaction on
-    /// this page that costs nothing to offer. What does not come with it is
-    /// everything that needs a hike — the route tint, the map pin, the live
-    /// dot — so the callbacks end at ``tracker`` and go no further.
+    /// this page that costs nothing to offer. Its dot on the map comes with it
+    /// too, standing on the line the map draws for this preview, because a
+    /// climb on the graph is only half read until it is a slope somewhere on
+    /// the ground — see ``publishChartPosition(_:along:)``. What does not come
+    /// with it is everything that needs a hike — the route tint and the live
+    /// dot.
     ///
     /// Absent entirely when there are no heights to draw, rather than replaced
     /// by a card saying so.
@@ -812,7 +818,7 @@ private extension CommunityHikeView {
     /// Without OpenHikes Pro, a curated route's missing chart is the card that
     /// sells the heights instead — see ``ElevationProPrompt``.
     @ViewBuilder var elevationSection: some View {
-        if let profile = prepared?.profile, profile.samples.count > 1 {
+        if let profile = chartProfile {
             VStack(alignment: .leading, spacing: 6) {
                 ElevationChartView(
                     profile: profile,
@@ -823,7 +829,10 @@ private extension CommunityHikeView {
                     // ``CommunityListing/tint``.
                     tint: listing.tint,
                     tracker: tracker,
-                    onScrub: { tracker.trackerDistance = $0 }
+                    onScrub: { distance in
+                        tracker.trackerDistance = distance
+                        publishChartPosition(distance, along: profile)
+                    }
                 )
                 .equatable()
                 // The credit for the heights, and only where it is owed. A
@@ -852,6 +861,30 @@ private extension CommunityHikeView {
                 onUnlocked: fetchHeights
             )
         }
+    }
+
+    /// The profile the chart draws, or `nil` when there is no chart: the route
+    /// has not been walked yet, or carries no heights to draw.
+    var chartProfile: RouteProfile? {
+        guard let profile = prepared?.profile, profile.samples.count > 1 else { return nil }
+        return profile
+    }
+
+    /// Hands the map the point `distance` along this route, where it stands
+    /// the dot that mirrors the chart's marker — the dot a hike of the
+    /// hiker's own has always had, on the line the map draws for this
+    /// preview. See ``CommunityBrowser/previewScrubbed(to:of:)``.
+    func publishChartPosition(_ distance: Double, along profile: RouteProfile) {
+        browser.previewScrubbed(to: profile.coordinate(atDistance: distance), of: listing)
+    }
+
+    /// The same, for wherever the chart's marker stands now: at the trailhead
+    /// when the chart first appears — where the hike's own screen puts its dot
+    /// — and wherever a finger left it after that. Nothing when there is no
+    /// chart, since the dot is the chart's and says nothing on its own.
+    func publishChartPosition() {
+        guard let chartProfile else { return }
+        publishChartPosition(tracker.trackerDistance, along: chartProfile)
     }
 
     /// What OpenStreetMap says this stretch of trail runs on, in the hike
@@ -1001,6 +1034,9 @@ private extension CommunityHikeView {
             // ``CommonsPhoto``.
             loadCommonsPhotos(along: detail.route)
             prepared = await Self.prepare(detail)
+            // The chart is up, with its marker at the trailhead, so the map's
+            // dot goes there too.
+            publishChartPosition()
         } catch is CancellationError {
             // The screen has gone. There is nothing to report a failure on and
             // nothing the hiker could do about it — the same call
@@ -1031,6 +1067,8 @@ private extension CommunityHikeView {
             latest.route = filled
             phase = .loaded(latest)
             prepared = await Self.prepare(latest)
+            // The first chart this route has had, so its dot goes up with it.
+            publishChartPosition()
         }
     }
 
