@@ -11,6 +11,7 @@
 import CoreGraphics
 import CoreLocation
 @testable import OpenHikes
+import OpenHikesData
 import RealModule
 import Testing
 
@@ -54,6 +55,43 @@ struct WalkShareRouteShapeTests {
 
         #expect(stretchEnd.x.isApproximatelyEqual(to: 0.5, absoluteTolerance: 1e-9))
         #expect(stretchEnd.y.isApproximatelyEqual(to: 0.5, absoluteTolerance: 1e-9))
+    }
+
+    /// A U two hundredths of a degree wide and one tall, its west arm at
+    /// `west` — at Taveuni's latitude, where the antimeridian crosses land.
+    private static func letterU(west: Double) -> [CLLocationCoordinate2D] {
+        [(0, 0.01), (0, 0), (0.02, 0), (0.02, 0.01)].map { east, north in
+            CLLocationCoordinate2D(
+                latitude: -16.8 + north,
+                longitude: RouteGeometry.normalizedLongitude(west + east)
+            )
+        }
+    }
+
+    /// Moved across the antimeridian, the same trail is the same drawing: its
+    /// corners where they were, and the covered stretch along its bottom where
+    /// it was — whichever way round the trail is walked.
+    @Test("a trail across the antimeridian draws as it does anywhere else", arguments: [false, true])
+    func antimeridianIsTranslationInvariant(reversed: Bool) {
+        func drawn(west: Double) -> WalkShareRouteShape {
+            let trail = Self.letterU(west: west)
+            let ordered = reversed ? trail.reversed() : trail
+            let bottom = Array(ordered[1...2])
+            return WalkShareRouteShape(fitting: ordered, walked: [bottom])
+        }
+        let greenwich = drawn(west: 0)
+        let dateLine = drawn(west: 179.99)
+
+        func matches(_ actual: [CGPoint], _ expected: [CGPoint]) -> Bool {
+            actual.count == expected.count && zip(actual, expected).allSatisfy { actual, expected in
+                actual.x.isApproximatelyEqual(to: expected.x, absoluteTolerance: 1e-9)
+                    && actual.y.isApproximatelyEqual(to: expected.y, absoluteTolerance: 1e-9)
+            }
+        }
+        #expect(greenwich.trail.count == 4)
+        #expect(matches(dateLine.trail, greenwich.trail))
+        #expect(dateLine.walked.count == 1)
+        #expect(matches(dateLine.walked.first ?? [], greenwich.walked.first ?? []))
     }
 
     @Test("points too close to draw apart are dropped, the ends never")

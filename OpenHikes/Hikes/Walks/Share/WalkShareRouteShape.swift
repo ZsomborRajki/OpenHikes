@@ -12,11 +12,15 @@
 //  on screen while it is dragged and pinched, and at the export's pixel scale
 //  — without the route being projected again.
 //
+//  Its bounds are `TileBoundingBox`'s rather than a `min`/`max` of the
+//  longitudes, so a trail across the antimeridian is fitted as the few
+//  kilometres it covers rather than the rest of the globe.
+//
 
-import Algorithms
 import CoreGraphics
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated struct WalkShareRouteShape: Equatable, Sendable {
     /// The whole trail, in a unit square: centred, the longer side spanning
@@ -39,16 +43,19 @@ nonisolated struct WalkShareRouteShape: Equatable, Sendable {
     /// projection exactly because nothing has to line up with it: there is no
     /// map under this line, only a photograph.
     init(fitting trail: [CLLocationCoordinate2D], walked: [[CLLocationCoordinate2D]]) {
-        guard let (minLatitude, maxLatitude) = trail.lazy.map(\.latitude).minAndMax(),
-              let (minLongitude, maxLongitude) = trail.lazy.map(\.longitude).minAndMax() else {
+        guard let bounds = TileBoundingBox(route: trail) else {
             self = .empty
             return
         }
         // Floored for the reason `TrailGlyphView` floors it: a trail near a
         // pole must not divide its width by nothing.
-        let cosLatitude = max(cos((minLatitude + maxLatitude) / 2 * .pi / 180), Self.minimumCosLatitude)
-        let width = (maxLongitude - minLongitude) * cosLatitude
-        let height = maxLatitude - minLatitude
+        let cosLatitude = max(cos((bounds.southLat + bounds.northLat) / 2 * .pi / 180), Self.minimumCosLatitude)
+        let width = bounds.lonSpan * cosLatitude
+        let height = bounds.northLat - bounds.southLat
+        // Measured from the middle of the span, not its west edge: a walked
+        // point a hair west of the trail's box is a hair west of it here, not
+        // a lap of the globe east.
+        let middleLongitude = bounds.westLon + bounds.lonSpan / 2
         let span = max(width, height)
         // A trail with no extent at all is a point in the middle of the box.
         let scale = span > 0 ? 1 / span : 0
@@ -57,8 +64,9 @@ nonisolated struct WalkShareRouteShape: Equatable, Sendable {
 
         func fit(_ coordinate: CLLocationCoordinate2D) -> CGPoint {
             CGPoint(
-                x: originX + (coordinate.longitude - minLongitude) * cosLatitude * scale,
-                y: originY + (maxLatitude - coordinate.latitude) * scale
+                x: originX + (RouteGeometry.normalizedLongitudeDelta(coordinate.longitude - middleLongitude)
+                    + bounds.lonSpan / 2) * cosLatitude * scale,
+                y: originY + (bounds.northLat - coordinate.latitude) * scale
             )
         }
 
