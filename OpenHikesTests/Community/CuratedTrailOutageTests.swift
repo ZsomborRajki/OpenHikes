@@ -107,4 +107,12 @@ struct CuratedTrailOutageTests {
                 != CuratedTrailOutage.rateLimited(retryAfter: 60).text
         )
     }
+
+    /// `Int(.infinity)` is a trap, and the number comes off a server's header.
+    @Test("an unbounded wait is a sentence rather than a trap")
+    func unboundedWaitDoesNotTrap() {
+        #expect(CuratedTrailOutage.wait(.infinity) != nil)
+        #expect(CuratedTrailOutage.wait(1e30) != nil)
+        #expect(CuratedTrailOutage.wait(.nan) == nil)
+    }
 }

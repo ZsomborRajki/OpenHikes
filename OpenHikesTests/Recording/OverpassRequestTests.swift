@@ -131,4 +131,30 @@ struct OverpassRequestTests {
         #expect(request.value(forHTTPHeaderField: "User-Agent") == TileCache.userAgent)
         #expect(request.httpMethod == "POST")
     }
+
+    /// A `Retry-After` is the server's to word and not ours to trust: `inf` and
+    /// `1e400` once parsed as `TimeInterval`s and went on to trap in the
+    /// caption, and a day silenced Overpass until relaunch.
+    @Test("a 429's Retry-After is read the way the tile path reads it")
+    func retryAfterIsBounded() throws {
+        func delay(_ header: String) throws -> TimeInterval {
+            let response = OverpassHTTPResponse(
+                data: Data(), statusCode: 429, headers: ["retry-after": header]
+            )
+            do {
+                _ = try OverpassRequest.body(of: response)
+            } catch TrailGraphProviderError.rateLimited(let retryAfter) {
+                return retryAfter
+            }
+            throw TrailGraphProviderError.invalidResponse
+        }
+        let fallback = OverpassRequest.defaultRetryDelay
+        let ceiling = TimeInterval(RetryAfterHeader.maximumDelay.components.seconds)
+
+        #expect(try delay("90") == 90)
+        #expect(try delay("inf") == fallback)
+        #expect(try delay("1e400") == fallback)
+        #expect(try delay("-5") == fallback)
+        #expect(try delay("86400") == ceiling)
+    }
 }
