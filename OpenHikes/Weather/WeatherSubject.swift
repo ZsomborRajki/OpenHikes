@@ -156,7 +156,7 @@ final class WeatherFocus {
     /// polyline is a real question with a real answer — ``TrailWalkSession``
     /// asks it — but it is the wrong question here, and asking it would put
     /// route matching underneath the weather badge.
-    static let trailFollowRadius: CLLocationDistance = 25_000
+    nonisolated static let trailFollowRadius: CLLocationDistance = 25_000
 
     private(set) var subject: WeatherSubject?
 
@@ -249,7 +249,9 @@ final class WeatherFocus {
         subject = next
     }
 
-    private static func distance(
+    /// Straight-line distance, which the follow radius is measured in — here
+    /// and in ``WeatherBadgeState/daylight(forWalkOn:at:)``.
+    nonisolated static func distance(
         from origin: CLLocationCoordinate2D,
         to destination: CLLocationCoordinate2D
     ) -> CLLocationDistance {

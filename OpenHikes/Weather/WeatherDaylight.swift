@@ -32,6 +32,7 @@
 //  that ends the walk.
 //
 
+import CoreLocation
 import Foundation
 import WeatherKit
 
@@ -115,20 +116,34 @@ extension WeatherDaylight {
 }
 
 extension WeatherBadgeState {
-    /// Today's light where a walk is, or `nil` when the reading on the badge
-    /// is about somewhere else.
+    /// Today's light where the walk on `hikeID` is, or `nil` when the reading
+    /// on the badge is about somewhere else.
     ///
-    /// A walk's badge is about the hiker (``WeatherSubject/me``) or about the
-    /// trail they selected, which follows them once they are out on it — see
-    /// ``WeatherFocus/trailFollowRadius``. A searched city is neither, and its
-    /// dusk is a different dusk. A reading from another day needs no rule
-    /// here: its dusk has passed, and ``DuskWatch`` says nothing about a dusk
-    /// that has passed.
-    var daylightNearHiker: WeatherDaylight? {
+    /// The walk and the badge are not tied together: browsing another trail
+    /// leaves the walk running and moves the badge to the trail being
+    /// browsed. So a reading counts only when it is about this walk — the
+    /// walked trail's own — or about somewhere within
+    /// ``WeatherFocus/trailFollowRadius`` of `coordinate`, where the walk is,
+    /// and so under the same sky: the hiker (``WeatherSubject/me``), or
+    /// another trail on the same hillside. A distant trail's dusk is a
+    /// different dusk, and so is a searched city's, however near — the
+    /// hiker asked about that city, not about here. With no position for the
+    /// walk, only the walked trail's own reading is about it.
+    ///
+    /// A reading from another day needs no rule here: its dusk has passed,
+    /// and ``DuskWatch`` says nothing about a dusk that has passed.
+    func daylight(forWalkOn hikeID: UUID, at coordinate: CLLocationCoordinate2D?) -> WeatherDaylight? {
         guard case let .reading(snapshot, subject) = self else { return nil }
         switch subject {
-        case .me, .trail: return snapshot.daylight
-        case .place: return nil
+        case .trail(_, hikeID, _):
+            return snapshot.daylight
+        case .me(let readAt), .trail(let readAt, _, _):
+            guard let coordinate,
+                  WeatherFocus.distance(from: readAt, to: coordinate) <= WeatherFocus.trailFollowRadius
+            else { return nil }
+            return snapshot.daylight
+        case .place:
+            return nil
         }
     }
 }

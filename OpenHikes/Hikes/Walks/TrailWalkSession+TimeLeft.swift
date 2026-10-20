@@ -7,6 +7,7 @@
 //  question asked *of* the walk rather than a step in running it.
 //
 
+import CoreLocation
 import Foundation
 import OpenHikesData
 
@@ -35,10 +36,12 @@ extension TrailWalkSession {
     /// when the light goes — see ``DuskWatch``. Per matched fix while
     /// following, which is as often as the estimate can change.
     func estimateFinish(at now: Date) {
-        guard let reminders, let left = secondsLeft(at: now) else { return }
+        guard let reminders, let hikeID = walkedHikeID,
+              let left = secondsLeft(at: now) else { return }
+        let position = record?.lastFollowedDistanceMeters.flatMap { walkedProfile?.coordinate(atDistance: $0) }
         reminders.walkFinishEstimated(
             finishAt: now.addingTimeInterval(left),
-            civilDusk: daylight()?.civilDusk,
+            civilDusk: daylight(hikeID, position)?.civilDusk,
             trailTitle: walkedHikeTitle,
             at: now
         )

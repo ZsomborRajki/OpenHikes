@@ -6,6 +6,7 @@
 //  the widget and the Lock Screen — and the after-dark reminder it drives.
 //
 
+import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
@@ -21,7 +22,36 @@ extension TrailWalkSessionTests {
             context: context,
             reminders: harness.controller,
             clock: clock.read,
-            daylight: { WeatherDaylight(civilDusk: dusk) }
+            daylight: { _, _ in WeatherDaylight(civilDusk: dusk) }
+        )
+    }
+
+    /// A session whose light comes from a real badge `state`, through the
+    /// same rule the app composes it with.
+    private func badgeSession(
+        _ harness: MovementReminderHarness.Harness,
+        state: @escaping () -> WeatherBadgeState
+    ) -> TrailWalkSession {
+        TrailWalkSession(
+            context: context,
+            reminders: harness.controller,
+            clock: clock.read,
+            daylight: { hikeID, position in state().daylight(forWalkOn: hikeID, at: position) }
+        )
+    }
+
+    /// Dusk in eight minutes, which the rest of the fixture trail outlasts.
+    private func readingWithDuskSoon(about subject: WeatherSubject) -> WeatherBadgeState {
+        .reading(
+            WeatherSnapshot(
+                symbolName: "sun.max.fill",
+                temperature: Measurement(value: 12, unit: UnitTemperature.celsius),
+                conditionDescription: "Clear",
+                capturedAt: clock.read(),
+                conditions: .preview,
+                daylight: WeatherDaylight(civilDusk: clock.read().addingTimeInterval(8 * 60))
+            ),
+            subject: subject
         )
     }
 
@@ -97,5 +127,54 @@ extension TrailWalkSessionTests {
 
         #expect(harness.notifier.withdrawn.contains(.afterDark))
         #expect(harness.notifier.postedKinds == [.afterDark, .afterDark])
+    }
+
+    @Test("the light is asked about the walked hike, where the hiker matched on it")
+    func daylightIsAskedAboutTheWalk() throws {
+        let harness = MovementReminderHarness.harness()
+        var asked: [(UUID, CLLocationCoordinate2D?)] = []
+        let session = TrailWalkSession(
+            context: context,
+            reminders: harness.controller,
+            clock: clock.read,
+            daylight: { hikeID, position in
+                asked.append((hikeID, position))
+                return nil
+            }
+        )
+        let walked = hike()
+        let profile = RouteProfile(route: walked.route)
+        walk(session, hike: walked, profile: profile, from: 0, through: 3)
+
+        let last = try #require(asked.last)
+        let matched = try #require(profile.coordinate(atDistance: profile.distances[3]))
+        let position = try #require(last.1)
+        #expect(last.0 == walked.id)
+        #expect(position.latitude == matched.latitude && position.longitude == matched.longitude)
+    }
+
+    /// #874. Browsing another trail mid-walk moves the badge to it; a dusk
+    /// that trail reads a long way off is not this walk's, and neither posts
+    /// the warning nor spends it.
+    @Test("a distant trail on the badge mid-walk neither warns nor spends the warning")
+    func aBrowsedTrailsDuskIsNotTheWalks() async throws {
+        let harness = MovementReminderHarness.harness()
+        let walked = hike()
+        let start = try #require(walked.route.first)
+        let farAway = CLLocationCoordinate2D(latitude: start.latitude + 2, longitude: start.longitude)
+        let browsedID = UUID()
+        var state = readingWithDuskSoon(about: .trail(farAway, hikeID: browsedID, name: "Elsewhere"))
+        let session = badgeSession(harness) { state }
+        let profile = RouteProfile(route: walked.route)
+
+        walk(session, hike: walked, profile: profile, from: 0, through: 3)
+        await harness.controller.settle()
+        #expect(harness.notifier.posted.isEmpty)
+
+        // Back on the walked trail: its own dusk is the one that counts.
+        state = readingWithDuskSoon(about: .trail(farAway, hikeID: walked.id, name: walked.title))
+        walk(session, hike: walked, profile: profile, from: 3, through: 3)
+        await harness.controller.settle()
+        #expect(harness.notifier.postedKinds == [.afterDark])
     }
 }
