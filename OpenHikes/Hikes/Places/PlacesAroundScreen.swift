@@ -38,8 +38,10 @@ struct PlacesAroundScreen<Content: View>: View {
     let onAttach: () -> Void
     /// *Search This Area*, from the pill on the map.
     let onSearchArea: () -> Void
-    /// What the finder found for *Search This Area*, while the hike is still
-    /// in the store.
+    /// What to do with an answer from the finder, while the hike is still in
+    /// the store: *Search This Area*'s on both screens, and on *Places
+    /// Nearby* — which asks nothing any other way — its first question's and
+    /// *Try Again*'s too.
     let onFound: ([TrailPlace]) -> Void
     /// The screen's chips, status and list, given the rows' actions.
     @ViewBuilder let content: (PlacesAroundRows) -> Content
