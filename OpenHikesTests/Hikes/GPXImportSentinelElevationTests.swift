@@ -79,6 +79,34 @@ struct GPXImportSentinelElevationTests {
         #expect(stats.minElevation?.value == 1000)
     }
 
+    @Test("a winding climb with missing heights keeps the real summit")
+    func windingClimbKeepsItsSummit() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx version="1.1" creator="OpenHikesTests" xmlns="http://www.topografix.com/GPX/1/1">
+            <trk><trkseg>
+                <trkpt lat="47.55" lon="12.86"><ele>1000</ele></trkpt>
+                <trkpt lat="47.56" lon="12.86"/>
+                <trkpt lat="47.5505" lon="12.86"><ele>1500</ele></trkpt>
+                <trkpt lat="47.54" lon="12.86"/>
+                <trkpt lat="47.551" lon="12.86"><ele>1000</ele></trkpt>
+            </trkseg></trk>
+        </gpx>
+        """
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("summit-\(UUID().uuidString).gpx")
+        try xml.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let track = try GPXImport.load(from: url)
+        let stats = statistics(of: track)
+
+        #expect(track.points.map(\.elevation) == [1000, nil, 1500, nil, 1000])
+        #expect(stats.elevationGain?.value == 500)
+        #expect(stats.elevationLoss?.value == 500)
+        #expect(stats.maxElevation?.value == 1500)
+    }
+
     @Test("a photograph's placeholder height is emptied with the track's")
     func photographHeightIsChecked() throws {
         let xml = """

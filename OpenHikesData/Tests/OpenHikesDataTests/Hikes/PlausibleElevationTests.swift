@@ -72,6 +72,38 @@ struct PlausibleElevationTests {
         #expect(PlausibleElevation.despiked(route) == route)
     }
 
+    @Test("A summit reached by a winding path keeps its height across missing readings")
+    func windingSummitIsKept() {
+        let route = [
+            RouteCoordinate(latitude: 47.55, longitude: 12.86, elevation: 1000),
+            RouteCoordinate(latitude: 47.56, longitude: 12.86),
+            RouteCoordinate(latitude: 47.5505, longitude: 12.86, elevation: 1500),
+            RouteCoordinate(latitude: 47.54, longitude: 12.86),
+            RouteCoordinate(latitude: 47.551, longitude: 12.86, elevation: 1000),
+        ]
+
+        #expect(PlausibleElevation.despiked(route) == route)
+    }
+
+    @Test("A pause separates height neighbours, even when its point has no height", arguments: [1, 2, 3, 4])
+    func pauseSeparatesNeighbours(boundaryIndex: Int) {
+        var route = Self.walk(heights: [1000, nil, 1500, nil, 1000])
+        route[boundaryIndex].boundary = .paused
+
+        #expect(PlausibleElevation.despiked(route) == route)
+    }
+
+    @Test("Spikes inside each segment are still removed, with their positions and boundary kept")
+    func spikesInsideSegmentsAreEmptied() {
+        var route = Self.walk(heights: [1000, 0, 1000, 1000, 0, 1000])
+        route[3].boundary = .paused
+        var expected = route
+        expected[1].elevation = nil
+        expected[4].elevation = nil
+
+        #expect(PlausibleElevation.despiked(route) == expected)
+    }
+
     @Test("A step that stays up is not a spike")
     func stepIsKept() {
         let heights: [Double?] = (0..<120).map { $0 < 60 ? 1000 : 1150 }
