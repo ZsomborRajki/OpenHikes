@@ -30,6 +30,12 @@
 //  *Share* or *Remove*, because there is nothing on the hike yet to share or
 //  remove. It starts as a viewpoint called "Viewpoint" with no note.
 //
+//  The photographs it is holding are drawn right under *Take Photo* and *Add
+//  Photos*, as ``HikePlaceView`` draws a place's own, and the questions under
+//  them. Under the questions, the strip was past the foot of a landscape
+//  panel and of the sheet at its middle detent — the height the form opens
+//  at — so a picture that arrived there changed nothing the hiker could see.
+//
 //  ## Photographs wait for *Add*
 //
 //  Nothing reaches the hike until the hiker says *Add*: a camera frame or a
@@ -70,20 +76,34 @@ struct HikePlaceAdder: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage(SettingsKey.savePhotosToLibrary) private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
 
+    /// The strip's identity in the form's scroll view, which a photograph
+    /// arriving scrolls to — see ``HikePlaceStagedPhotoArrival``.
+    private static let stripID = "hike-place-adder-strip"
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
-                header
-                Text("Move the map to put the pin where the place is.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("hike-place-adder-placement-hint")
-                actions
-                fields
-                HikePlaceStagedPhotoStrip(session: session)
-                HikePlaceAdderLocation(spot: spot, placePins: placePins)
+        // A reader rather than a bound scroll position, so the hiker's own
+        // scrolling writes nothing into this view — ``RecordingView``'s reason.
+        ScrollViewReader { scroller in
+            ScrollView {
+                VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
+                    header
+                    Text("Move the map to put the pin where the place is.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("hike-place-adder-placement-hint")
+                    actions
+                    HikePlaceStagedPhotoStrip(session: session)
+                        .id(Self.stripID)
+                        .background {
+                            HikePlaceStagedPhotoArrival(session: session) {
+                                withAnimation { scroller.scrollTo(Self.stripID) }
+                            }
+                        }
+                    fields
+                    HikePlaceAdderLocation(spot: spot, placePins: placePins)
+                }
+                .padding()
             }
-            .padding()
         }
         .softScrollEdgeEffect(for: .top)
         .disabled(session.isAdding)
@@ -248,6 +268,27 @@ private struct HikePlaceAdderLocation: View {
     }
 }
 
+/// Brings the strip wholly into view as a photograph arrives in it.
+///
+/// Right under the photo buttons the strip is mostly in view already, but the
+/// foot of a landscape panel cuts across it, and a picture is meant to be seen
+/// arriving: one that landed out of sight closed the camera on a form that
+/// looked exactly as it had, which reads as the picture never having made it.
+/// The smallest scroll that shows the strip whole leaves *Take Photo* on
+/// screen for the next one. Its own view, reading the count, so an arrival
+/// re-runs this and not the form.
+private struct HikePlaceStagedPhotoArrival: View {
+    let session: HikePlaceAdderSession
+    let reveal: () -> Void
+
+    var body: some View {
+        Color.clear
+            .onChange(of: session.photos.count) { held, holding in
+                if holding > held { reveal() }
+            }
+    }
+}
+
 /// The photographs *Add Place* is holding, each with a way to take it back.
 ///
 /// Its own view so the strip belongs to it rather than to the form, whose
@@ -275,16 +316,24 @@ private struct HikePlaceStagedPhotoStrip: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
-                ScrollView(.horizontal) {
-                    LazyHStack(spacing: PhotoTileMetrics.spacing) {
-                        ForEach(photos.enumerated(), id: \.element.id) { index, photo in
-                            tile(photo, label: String(localized: "Photo \(index + 1) of \(photos.count)"))
+                ScrollViewReader { tiles in
+                    ScrollView(.horizontal) {
+                        LazyHStack(spacing: PhotoTileMetrics.spacing) {
+                            ForEach(photos.enumerated(), id: \.element.id) { index, photo in
+                                tile(photo, label: String(localized: "Photo \(index + 1) of \(photos.count)"))
+                            }
                         }
+                        .padding(.vertical, 2)
                     }
-                    .padding(.vertical, 2)
+                    .scrollIndicators(.hidden)
+                    .accessibilityIdentifier("hike-place-adder-photos")
+                    // The newest goes on the end, which is past the edge of a
+                    // landscape panel from the fourth on.
+                    .onChange(of: photos.last?.id) { _, newest in
+                        guard let newest else { return }
+                        withAnimation { tiles.scrollTo(newest) }
+                    }
                 }
-                .scrollIndicators(.hidden)
-                .accessibilityIdentifier("hike-place-adder-photos")
             }
         }
     }
