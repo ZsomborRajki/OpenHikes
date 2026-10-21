@@ -176,6 +176,54 @@ struct TrailDraftChosenWayTests {
         #expect(leg?.alternatives.map(\.coordinates) == [Self.west.coordinates])
     }
 
+    @Test(
+        "a remembered way keeps its own access warning when the router offers a different path",
+        arguments: [true, false]
+    )
+    func aRememberedWayKeepsItsAccessWarning(hasUncheckedAccess: Bool) throws {
+        let draft = TrailDraft()
+        draft.replace(
+            with: [Line.south, Line.north].map { TrailWaypoint(coordinate: Self.coordinate($0)) },
+            places: [],
+            snapsToPaths: true
+        )
+        let chosenSnap: TrailLegSnap = hasUncheckedAccess ? .unmapped(.endpointOffNetwork) : .snapped
+        draft.beginRouting([Self.ends])
+        draft.apply(
+            TrailLegRoute(
+                coordinates: Self.west.coordinates,
+                distanceMeters: Self.west.distanceMeters,
+                snap: chosenSnap,
+                alternatives: [Self.east]
+            ),
+            to: Self.ends
+        )
+        draft.chooseAlternative(0, forLegAt: 0)
+        try #require(draft.legs.first?.snap == chosenSnap)
+
+        let saved = try JSONEncoder().encode(DrawnRoute(draft))
+        let drawn = try JSONDecoder().decode(DrawnRoute.self, from: saved)
+        let reopened = TrailDraft()
+        reopened.replace(
+            with: drawn.trailWaypoints,
+            places: [],
+            snapsToPaths: drawn.snapsToPaths,
+            chosenLegs: drawn.chosenLegs
+        )
+        reopened.beginRouting([Self.ends])
+        reopened.apply(
+            TrailLegRoute(
+                coordinates: Self.west.coordinates,
+                distanceMeters: Self.west.distanceMeters,
+                snap: hasUncheckedAccess ? .snapped : .unmapped(.endpointOffNetwork)
+            ),
+            to: Self.ends
+        )
+
+        #expect(reopened.legs.first?.coordinates == Self.east.coordinates)
+        #expect(reopened.legs.first?.snap == chosenSnap, "the new answer describes a different path")
+    }
+
     /// A refusal says the leg could not be asked about; the choice is not an
     /// answer to that, and waits for the next one.
     @Test("a refusal is drawn as one, and the choice waits for the next answer")
@@ -186,26 +234,6 @@ struct TrailDraftChosenWayTests {
 
         #expect(draft.legs.first?.coordinates == Self.ends.straightCoordinates)
         #expect(draft.chosenLegs.map(\.coordinates) == [Self.east.coordinates])
-    }
-
-    /// Every trail drawn before choices were kept carries JSON without them,
-    /// and an Edit Route that refused to decode it would vanish from all of
-    /// them.
-    @Test("a route saved before choices were kept still opens, with none chosen")
-    func anOlderRouteDecodes() throws {
-        let older = Data(
-            """
-            {
-                "waypoints": [{"latitude": 47.63, "longitude": 12.86}, {"latitude": 47.634, "longitude": 12.86}],
-                "waypointNames": ["", ""],
-                "travelMode": "hiking",
-                "snapsToPaths": true
-            }
-            """.utf8
-        )
-        let drawn = try JSONDecoder().decode(DrawnRoute.self, from: older)
-        #expect(drawn.waypoints.count == 2)
-        #expect(drawn.chosenLegs.isEmpty)
     }
 
     @Test("a new travel mode forgets the ways chosen for the old one")

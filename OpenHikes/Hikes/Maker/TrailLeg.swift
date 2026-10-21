@@ -265,11 +265,13 @@ nonisolated struct TrailLeg: Identifiable, Equatable, Sendable {
         return chosen
     }
 
-    /// The same leg with `way` drawn: the alternative it matches if the
-    /// router offered it again, and otherwise `way` itself with the router's
+    /// The same leg with `choice` drawn: the alternative it matches if the
+    /// router offered it again, and otherwise the choice itself with the router's
     /// answer offered in its place. What a hiker's earlier choice does to a
-    /// fresh answer — see ``TrailLegChoice``.
-    func taking(_ way: TrailLegPath) -> Self {
+    /// fresh answer — see ``TrailLegChoice``. A shape no longer offered keeps
+    /// its own access warning: the new answer describes a different path.
+    func taking(_ choice: TrailLegChoice) -> Self {
+        let way = choice.way
         guard way.coordinates != coordinates else { return self }
         if let index = alternatives.firstIndex(where: { $0.coordinates == way.coordinates }) {
             return choosing(alternative: index) ?? self
@@ -279,6 +281,7 @@ nonisolated struct TrailLeg: Identifiable, Equatable, Sendable {
         taken.coordinates = way.coordinates
         taken.distanceMeters = way.distanceMeters
         taken.travelTime = way.travelTime
+        taken.snap = choice.hasUncheckedAccess ? .unmapped(.endpointOffNetwork) : .snapped
         return taken
     }
 
@@ -336,7 +339,13 @@ nonisolated struct TrailLegRoute: Equatable, Sendable {
     }
 }
 
-extension TrailLegChoice {
+nonisolated extension TrailLegChoice {
+    /// The chosen shape and the access status of that same leg.
+    init(_ leg: TrailLeg) {
+        self.init(leg.path, between: leg.ends)
+        hasUncheckedAccess = leg.snap == .unmapped(.endpointOffNetwork)
+    }
+
     /// `way`, chosen for the leg between `ends`.
     init(_ way: TrailLegPath, between ends: TrailLegEnds) {
         self.init(

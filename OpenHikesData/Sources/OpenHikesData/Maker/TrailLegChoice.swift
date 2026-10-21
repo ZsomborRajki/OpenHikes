@@ -32,18 +32,24 @@ nonisolated public struct TrailLegChoice: Codable, Hashable, Sendable {
     /// Apple Maps' estimate for this way, or `nil` where only a distance was
     /// known.
     public var travelTime: TimeInterval?
+    /// Whether the chosen shape includes an unchecked connector between a
+    /// stop and the network. A later answer about another path cannot verify
+    /// access along this one.
+    public var hasUncheckedAccess: Bool
 
     public init(
         start: RouteCoordinate,
         end: RouteCoordinate,
         coordinates: [RouteCoordinate],
         distanceMeters: Double,
-        travelTime: TimeInterval?
+        travelTime: TimeInterval?,
+        hasUncheckedAccess: Bool = false
     ) {
         self.start = start
         self.end = end
         self.coordinates = coordinates
         self.distanceMeters = distanceMeters
         self.travelTime = travelTime
+        self.hasUncheckedAccess = hasUncheckedAccess
     }
 }

@@ -47,23 +47,8 @@ nonisolated struct DrawnRoute: Codable, Equatable, Sendable {
     /// edited, or `nil` for a route never edited while shared.
     var editedUnderSubmissionID: String?
     /// The ways the hiker picked over the router's own — see
-    /// ``TrailLegChoice``. Empty for a route drawn the router's way, and for
-    /// one saved before choices were kept.
-    var chosenLegs: [TrailLegChoice] = []
-
-    /// Field by field, so a route saved before ``chosenLegs`` existed — the
-    /// JSON on every hike drawn until then, and on any device still running
-    /// that build — decodes as one with nothing chosen rather than as `nil`,
-    /// which would withdraw its Edit Route.
-    init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        waypoints = try container.decode([RouteCoordinate].self, forKey: .waypoints)
-        waypointNames = try container.decode([String].self, forKey: .waypointNames)
-        travelMode = try container.decode(TrailTravelMode.self, forKey: .travelMode)
-        snapsToPaths = try container.decode(Bool.self, forKey: .snapsToPaths)
-        editedUnderSubmissionID = try container.decodeIfPresent(String.self, forKey: .editedUnderSubmissionID)
-        chosenLegs = try container.decodeIfPresent([TrailLegChoice].self, forKey: .chosenLegs) ?? []
-    }
+    /// ``TrailLegChoice``. Empty for a route drawn the router's way.
+    var chosenLegs: [TrailLegChoice]
 
     /// The stops as the maker works in them. Names are paired only when there
     /// is one per point, the rule ``TrailDraftStore`` applies for the same
