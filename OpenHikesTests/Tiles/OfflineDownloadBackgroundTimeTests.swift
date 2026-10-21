@@ -328,6 +328,10 @@ struct OfflineDownloadBackgroundTimeTests {
         #expect(!time.isOutstanding, "and gives its grant back when it ends")
     }
 
+    /// Planning and the run its confirmation starts share a generation, so a
+    /// generation is not what tells their grants apart. The planning grant's
+    /// expiry, landing after that grant went back, must stop neither the
+    /// question nor the answer to it.
     @Test("an ended planning grant cannot cancel the space decision or its confirmed run", arguments: [false, true])
     func planningExpiryLeavesItsSuccessorAlone(confirmFirst: Bool) async throws {
         let time = RecordingBackgroundTime()
@@ -374,6 +378,9 @@ struct OfflineDownloadBackgroundTimeTests {
 }
 
 extension OfflineDownloadBackgroundTimeTests {
+    /// A run whose task held its downloader weakly could find it gone, and
+    /// then neither download nor give back the grant taken for it — which is
+    /// the app killed on the next expiry rather than suspended.
     @Test("a run returns its grant after its caller releases the downloader", arguments: [false, true])
     func callerCanReleaseDownloader(reclaiming: Bool) async throws {
         let time = RecordingBackgroundTime()
