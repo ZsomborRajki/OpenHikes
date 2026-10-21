@@ -22,6 +22,7 @@ import ImageIO
 @testable import OpenHikes
 import OpenHikesData
 import Testing
+import UniformTypeIdentifiers
 
 #if canImport(UIKit)
 import UIKit
@@ -103,6 +104,28 @@ struct AttributedPhotoExportTests {
         #expect(notice.contains(Self.licenceText.absoluteString))
     }
 
+    @Test("an existing copyright is replaced without losing capture metadata", arguments: [UTType.jpeg, .heic, .tiff])
+    func replacesExistingCopyright(type: UTType) async throws {
+        let original = try await offMain { try Self.imageWithExistingMetadata(type: type) }
+        try #require(Self.copyright(of: original) == Self.existingCopyright)
+
+        let credited = try #require(
+            await offMain { PhotoMetadataStamp.credited(original, with: Self.credit) }
+        )
+
+        #expect(Self.copyright(of: credited) == Self.credit.notice)
+        let metadata = try #require(Self.metadata(of: credited))
+        #expect(CGImageMetadataCopyStringValueWithPath(metadata, nil, "dc:creator[0]" as CFString)
+            as String? == "Anna Berger")
+        #expect(CGImageMetadataCopyStringValueWithPath(metadata, nil, "xmpRights:WebStatement" as CFString)
+            as String? == Self.licenceText.absoluteString)
+        let properties = Self.properties(of: credited)
+        let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
+        #expect(tiff?[kCGImagePropertyTIFFMake] as? String == "Fixture camera")
+        let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any]
+        #expect(exif?[kCGImagePropertyExifDateTimeOriginal] as? String == "2001:02:03 04:05:06")
+    }
+
     // MARK: - Sharing one photograph
 
     @Test("sharing a Commons copy sends a credited copy and leaves the stored file alone")
@@ -140,6 +163,25 @@ struct AttributedPhotoExportTests {
                 )
             }
         }
+    }
+
+    @Test("a readable image whose old copyright survives the rewrite is not sent")
+    func unchangedCopyrightIsWithheld() async throws {
+        let sandbox = CreditSandbox()
+        let original = try await offMain { try Self.imageWithExistingMetadata(type: .png) }
+        try #require(Self.copyright(of: original) == Self.existingCopyright)
+        let photo = try await Self.storedPhoto(in: sandbox, data: original)
+        let stored = sandbox.store.url(for: photo)
+        let output = sandbox.output
+
+        await #expect(throws: HikePhotoFile.CreditNotWritten.self) {
+            try await offMain {
+                try HikePhotoFile.stageCredited(stored, with: Self.credit, named: "Thumsee-1.png", in: output)
+            }
+        }
+
+        #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("Thumsee-1.png").path))
+        #expect(try Data(contentsOf: stored) == original)
     }
 
     // MARK: - The archive
@@ -198,6 +240,27 @@ struct AttributedPhotoExportTests {
         ))
     }
 
+    @Test("an archive keeps the original and its credits list when metadata cannot carry the credit")
+    func archiveFallsBackToCredits() async throws {
+        let sandbox = CreditSandbox()
+        let original = try await offMain { try Self.imageWithExistingMetadata(type: .png) }
+        try #require(Self.copyright(of: original) == Self.existingCopyright)
+        let photo = try await Self.storedPhoto(in: sandbox, data: original)
+        let archive = Self.archive([(photo, Self.credit)])
+
+        let root = try await offMain {
+            try HikeArchive.stage(archive, in: sandbox.output, store: sandbox.store)
+        }
+
+        let copy = root.appendingPathComponent("Photos/photo-1.png")
+        #expect(try Data(contentsOf: copy) == original)
+        let credits = try String(
+            contentsOf: root.appendingPathComponent(HikeArchive.creditsFileName),
+            encoding: .utf8
+        )
+        #expect(credits == "Photos/photo-1.png\n\(Self.credit.notice)\n")
+    }
+
     @Test("a saved Commons copy reads its credit from its row, and the hiker's own reads none")
     func creditComesFromTheRow() {
         let copy = HikePhoto(importedAuthorName: "Anna Berger", licence: Self.credit.licence)
@@ -209,6 +272,31 @@ struct AttributedPhotoExportTests {
     }
 
     // MARK: - Fixtures
+
+    nonisolated private static let existingCopyright = "All rights reserved"
+
+    /// ImageIO maps an existing copyright to an alternate-text XMP array,
+    /// unlike the metadata-free pictures above. That shape exposed both a
+    /// HEIC writer crash and copies that silently kept their old notice.
+    nonisolated private static func imageWithExistingMetadata(type: UTType) throws -> Data {
+        let source = try #require(CGImageSourceCreateWithData(image(jpeg: false) as CFData, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        // swiftlint:disable:next legacy_objc_type
+        let output = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(output, type.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, image, [
+            kCGImagePropertyTIFFDictionary: [
+                kCGImagePropertyTIFFCopyright: existingCopyright,
+                kCGImagePropertyTIFFArtist: "Camera artist",
+                kCGImagePropertyTIFFMake: "Fixture camera",
+            ],
+            kCGImagePropertyExifDictionary: [
+                kCGImagePropertyExifDateTimeOriginal: "2001:02:03 04:05:06",
+            ],
+        ] as CFDictionary)
+        try #require(CGImageDestinationFinalize(destination))
+        return output as Data
+    }
 
     /// A decodable image with no metadata at all.
     nonisolated private static func image(jpeg: Bool) -> Data {
@@ -225,13 +313,13 @@ struct AttributedPhotoExportTests {
     }
 
     /// A photo whose pixels are really on disk in `sandbox`.
-    private static func storedPhoto(in sandbox: CreditSandbox) async throws -> HikePhoto {
-        let data = image(jpeg: false)
-        try #require(!data.isEmpty)
+    private static func storedPhoto(in sandbox: CreditSandbox, data: Data? = nil) async throws -> HikePhoto {
+        let bytes = data ?? image(jpeg: false)
+        try #require(!bytes.isEmpty)
         let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
         let store = sandbox.store
         return try #require(
-            await offMain { store.store(data, capturedAt: date, coordinate: coordinate) }
+            await offMain { store.store(bytes, capturedAt: date, coordinate: coordinate) }
         )
     }
 

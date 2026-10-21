@@ -89,15 +89,21 @@ nonisolated enum PhotoMetadataStamp {
     /// Commons file page is the authority on its licence, and a camera's
     /// *all rights reserved* left in the copyright notice would contradict it.
     static func credited(_ data: Data, with credit: CommonsPhotoCredit) -> Data? {
+        let notice = credit.notice
         var complete = true
-        let rewritten = copy(data) { source in
+        // HEIC's merge can keep the old EXIF copyright ahead of the new XMP
+        // rights. Start with all the source's tags, then replace that metadata.
+        let rewritten = copy(data, mergingMetadata: false) { source in
             let metadata = mutableMetadata(of: source)
             complete = credit.author.map { setCreator($0, in: metadata) } ?? true
-            complete = complete && setting(
-                kCGImagePropertyTIFFDictionary,
-                kCGImagePropertyTIFFCopyright,
-                credit.notice as CFString,
-                in: metadata
+            // An existing dc:rights is an alternate-text array. Assigning a
+            // string to the whole property corrupts that array and can crash
+            // ImageIO's HEIC writer; update its default-language entry instead.
+            complete = complete && CGImageMetadataSetValueWithPath(
+                metadata,
+                nil,
+                "\(kCGImageMetadataPrefixDublinCore):rights[x-default]" as CFString,
+                notice as CFString
             )
             complete = complete && setting(
                 kCGImagePropertyIPTCDictionary,
@@ -115,17 +121,28 @@ nonisolated enum PhotoMetadataStamp {
             }
             return metadata
         }
-        guard complete else {
+        // A successful metadata setter and copy do not prove the container
+        // kept the notice: PNG can silently retain its old copyright instead.
+        guard complete, let rewritten, copyright(of: rewritten) == notice else {
             logger.error("Could not write a Commons credit into an image.")
             return nil
         }
         return rewritten
     }
 
+    private static func copyright(of data: Data) -> String? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
+        else { return nil }
+        return tiff[kCGImagePropertyTIFFCopyright] as? String
+    }
+
     /// `data` copied with `metadata(source)` merged into it, without touching
     /// the pixels — see this file's header for why it is this API.
     private static func copy(
         _ data: Data,
+        mergingMetadata: Bool = true,
         adding metadata: (CGImageSource) -> CGMutableImageMetadata
     ) -> Data? {
         assertOffMainThread("Image metadata rewriting must stay off the main thread")
@@ -152,10 +169,9 @@ nonisolated enum PhotoMetadataStamp {
             source,
             [
                 kCGImageDestinationMetadata: metadata(source),
-                // Merge rather than replace: a photograph that arrived from
-                // the library already carries metadata of its own, and this is
-                // adding facts to it rather than deciding what it says.
-                kCGImageDestinationMergeMetadata: true,
+                // Capture stamps merge; credits replace a full copy of the
+                // metadata so an old copyright cannot win the merge.
+                kCGImageDestinationMergeMetadata: mergingMetadata,
             ] as CFDictionary,
             &failure
         )
