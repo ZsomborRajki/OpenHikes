@@ -71,6 +71,35 @@ struct HikePhotoLicenseTests {
         #expect(keys?.contains("license") == false)
     }
 
+    /// The keys are written out by hand so the licence can keep its old one,
+    /// and a list written by hand is one a new property can be left out of.
+    /// That still compiles, and for an optional it means a field that is
+    /// never saved. So every stored property, each one set, has to come back
+    /// out of the blob under its own name — the licence under its old one.
+    @Test("every stored property is written to the blob")
+    func everyPropertyIsWritten() throws {
+        var photo = HikePhoto(
+            assetLocalIdentifier: "asset",
+            matchEvidence: .place,
+            importedFromListingID: "osm:r/1",
+            importedAuthorName: "Anna",
+            isPlaceOnly: false,
+            license: Self.license
+        )
+        photo.latitude = 47.5
+        photo.longitude = 12.4
+        photo.sentToCommunityAt = .now
+        photo.placeID = UUID()
+
+        let written = try JSONEncoder().encode(photo)
+        let keys = try #require(JSONSerialization.jsonObject(with: written) as? [String: Any]).keys
+        let stored = Mirror(reflecting: photo).children.compactMap(\.label)
+
+        // A property missing here is either unset above or missing from
+        // `HikePhoto.CodingKeys`.
+        #expect(Set(keys) == Set(stored.map { $0 == "license" ? "licence" : $0 }))
+    }
+
     @Test("a photograph under somebody else's licence is never the hiker's own to publish")
     func licenseMakesItNotOwn() {
         #expect(!HikePhoto(license: Self.license).isOwn)

@@ -253,6 +253,11 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// A synthesized key would follow the property's name, and every copy
     /// already saved would decode with no licence — which ``isOwn`` reads as
     /// the hiker's own to publish.
+    ///
+    /// A property added to the type is added here too. One left out still
+    /// compiles, and an optional one then decodes as `nil` and is never
+    /// written, so `HikePhotoLicenseTests` holds every stored property to
+    /// appearing in the blob.
     private enum CodingKeys: String, CodingKey {
         case assetLocalIdentifier = "assetLocalIdentifier"
         case capturedAt = "capturedAt"

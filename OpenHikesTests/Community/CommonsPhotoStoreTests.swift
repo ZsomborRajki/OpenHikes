@@ -108,17 +108,23 @@ struct CommonsPhotoStoreTests {
     /// The credit is written down here and inside published community
     /// payloads that older builds read, both under `licence` — the key it
     /// had before the property was spelled `license` (#847).
+    ///
+    /// Every other stored property is held to its own key as well, because
+    /// the keys are written out by hand: a property left out of them still
+    /// compiles, and an optional one would never be saved.
     @Test("a credit keeps the key its licence was first written under")
     func creditKeyIsUnchanged() throws {
         let written = try #require(try Self.page(1, metersNorth: 0).file?.credit)
         let keys = try #require(
             JSONSerialization.jsonObject(with: JSONEncoder().encode(written)) as? [String: Any]
         ).keys
+        let stored = Mirror(reflecting: written).children.compactMap(\.label)
 
         let saved = Data(#"{"author":"Anna","licence":{"name":"CC0","sourceURL":"https://commons.wikimedia.org/"}}"#.utf8)
         let decoded = try JSONDecoder().decode(CommonsPhotoCredit.self, from: saved)
 
-        #expect(Set(keys) == ["author", "licence"])
+        #expect(keys.contains("licence"))
+        #expect(Set(keys) == Set(stored.map { $0 == "license" ? "licence" : $0 }))
         #expect(decoded.license.name == "CC0")
     }
 }

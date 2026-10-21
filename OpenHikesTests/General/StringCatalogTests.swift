@@ -95,27 +95,42 @@ struct StringCatalogTests {
 
     /// American spelling, the convention #793 settled (#847): "Line Color",
     /// "Center", "License". `.swiftlint.yml`'s `american_spelling_in_copy`
-    /// holds the literals and spells out the same words; this holds what the
-    /// catalogs say, which is where a key edited by hand would keep the old
-    /// word.
+    /// holds the literals; this holds what the catalogs say, which is where a
+    /// key edited by hand would keep the old word. The words are the lint
+    /// rules' own, read out of that file, so a word added there is checked
+    /// here too rather than in one place and not the other.
     @Test("no English value uses a British spelling", arguments: Self.catalogFolders)
     func catalogsUseAmericanSpelling(folder: String) throws {
-        let british = #/
-            [Ll]icence | [Cc]entr(?:e|ed|es|ing)(?![a-z]) | [Nn]eighbour | [Cc]olour | [Gg]rey | [Mm]etre
-            | [Ff]avour | [Hh]onour | [Bb]ehaviour | [Cc]atalogue | [Tt]ravell(?:ed|ing|er)
-            | [Rr]ecognis(?:e|ing|able) | [Nn]ormalis(?:e|ing|ation) | [Ss]erialis(?:e|ing|ation)
-            | [Ii]nitialis(?:e|ing|ation) | [Ss]ummaris(?:e|ing) | [Aa]nalys(?:e|ed|ing)(?![a-z])
-            /#
+        let british = try Self.britishSpellings()
+        // A control, so a pattern misread out of the file fails here rather
+        // than passing every catalog.
+        #expect("Line Colour".contains(british))
         let offenders = try Self.englishStrings(in: folder).filter { $0.contains(british) }
         #expect(offenders.isEmpty, "British spellings in \(folder): \(offenders.sorted())")
+    }
+
+    /// The checkout this file was compiled from, which the catalogs and the
+    /// lint configuration are read out of.
+    private static var sourceRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    /// The word list the two spelling rules share, as the
+    /// `british_spellings` anchor in `.swiftlint.yml` writes it: one
+    /// single-quoted pattern on the anchor's line.
+    private static func britishSpellings() throws -> Regex<AnyRegexOutput> {
+        let configuration = try String(contentsOf: sourceRoot.appending(path: ".swiftlint.yml"), encoding: .utf8)
+        let line = try #require(configuration.split(separator: "\n").first { $0.contains("&british_spellings") })
+        let quoted = line.split(separator: "'", omittingEmptySubsequences: false)
+        try #require(quoted.count == 3, "expected one single-quoted pattern on: \(line)")
+        return try Regex(String(quoted[1]))
     }
 
     /// Every key of `folder`'s catalog, and every English value under it —
     /// plural and device variations included — read from the source tree.
     private static func englishStrings(in folder: String) throws -> [String] {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let data = try Data(contentsOf: root.appending(path: "\(folder)/Localizable.xcstrings"))
+        let data = try Data(contentsOf: sourceRoot.appending(path: "\(folder)/Localizable.xcstrings"))
         let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let strings = try #require(json["strings"] as? [String: Any])
 
