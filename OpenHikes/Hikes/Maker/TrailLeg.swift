@@ -215,6 +215,12 @@ nonisolated struct TrailLegPath: Equatable, Sendable {
     /// trail graph's answers and every straight line. See
     /// ``TrailDraft/travelTime(of:)`` for what stands in.
     var travelTime: TimeInterval?
+    /// What a leg drawn along this way is, where that is not the leg's own:
+    /// the router's ways offered beside a remembered choice it no longer
+    /// gives, whose answer said nothing about the choice — see
+    /// ``TrailLeg/taking(_:)``. `nil` for the ways of one answer, which share
+    /// its state.
+    var snap: TrailLegSnap?
 }
 
 /// One stretch of the drawn line, between two consecutive waypoints.
@@ -253,12 +259,19 @@ nonisolated struct TrailLeg: Identifiable, Equatable, Sendable {
     }
 
     /// The same leg with alternative `index` drawn and the current shape offered
-    /// in its place, or `nil` for an index that is not there.
+    /// in its place, or `nil` for an index that is not there. A way with a
+    /// ``TrailLegPath/snap`` of its own brings it, and the shape it displaces
+    /// keeps the leg's.
     func choosing(alternative index: Int) -> Self? {
         guard alternatives.indices.contains(index) else { return nil }
         var chosen = self
         let taken = alternatives[index]
-        chosen.alternatives[index] = path
+        var displaced = path
+        if let own = taken.snap {
+            displaced.snap = snap
+            chosen.snap = own
+        }
+        chosen.alternatives[index] = displaced
         chosen.coordinates = taken.coordinates
         chosen.distanceMeters = taken.distanceMeters
         chosen.travelTime = taken.travelTime
@@ -269,7 +282,9 @@ nonisolated struct TrailLeg: Identifiable, Equatable, Sendable {
     /// router offered it again, and otherwise the choice itself with the router's
     /// answer offered in its place. What a hiker's earlier choice does to a
     /// fresh answer — see ``TrailLegChoice``. A shape no longer offered keeps
-    /// its own access warning: the new answer describes a different path.
+    /// its own access warning: the new answer describes a different path. The
+    /// router's ways keep the answer's, so tapping one of them back draws what
+    /// the router said about it rather than what was said about the choice.
     func taking(_ choice: TrailLegChoice) -> Self {
         let way = choice.way
         guard way.coordinates != coordinates else { return self }
@@ -277,7 +292,11 @@ nonisolated struct TrailLeg: Identifiable, Equatable, Sendable {
             return choosing(alternative: index) ?? self
         }
         var taken = self
-        taken.alternatives.insert(path, at: 0)
+        taken.alternatives = ([path] + alternatives).map { offered in
+            var offered = offered
+            offered.snap = offered.snap ?? snap
+            return offered
+        }
         taken.coordinates = way.coordinates
         taken.distanceMeters = way.distanceMeters
         taken.travelTime = way.travelTime
