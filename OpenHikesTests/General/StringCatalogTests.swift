@@ -18,6 +18,10 @@ import Testing
 
 @Suite("String catalog")
 struct StringCatalogTests {
+    nonisolated private static let catalogFolders = [
+        "OpenHikes", "OpenWidget", "OpenHikesWatch", "OpenHikesWatchWidgets"
+    ]
+
     @Test("the app is developed in English")
     func englishIsTheDevelopmentLanguage() {
         #expect(Bundle.main.developmentLocalization == "en")
@@ -83,7 +87,7 @@ struct StringCatalogTests {
     /// string typed in a hurry gets, so the catalogs are read from the source
     /// tree and every English value is held to the rule, and
     /// `.swiftlint.yml` holds the literals that never reach a catalog.
-    @Test("no English value uses a straight apostrophe", arguments: ["OpenHikes", "OpenHikesWatch", "OpenWidget"])
+    @Test("no English value uses a straight apostrophe", arguments: Self.catalogFolders)
     func catalogsUseTypographicApostrophes(folder: String) throws {
         let offenders = try Self.englishStrings(in: folder).filter { $0.contains("'") }
         #expect(offenders.isEmpty, "straight apostrophes in \(folder): \(offenders.sorted())")
@@ -94,7 +98,7 @@ struct StringCatalogTests {
     /// holds the literals and spells out the same words; this holds what the
     /// catalogs say, which is where a key edited by hand would keep the old
     /// word.
-    @Test("no English value uses a British spelling", arguments: ["OpenHikes", "OpenHikesWatch", "OpenWidget"])
+    @Test("no English value uses a British spelling", arguments: Self.catalogFolders)
     func catalogsUseAmericanSpelling(folder: String) throws {
         let british = #/
             [Ll]icence | [Cc]entr(?:e|ed|es|ing)(?![a-z]) | [Nn]eighbour | [Cc]olour | [Gg]rey | [Mm]etre
