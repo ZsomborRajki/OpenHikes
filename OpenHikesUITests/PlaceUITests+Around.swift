@@ -90,6 +90,40 @@ extension PlaceUITests {
         XCTAssertFalse(element("hike-place-screen", in: app).exists, "not the place's pushed screen")
     }
 
+    /// A pale pin opens its card, and brings the sheet to its middle with it,
+    /// as a row and the hike's own pins do: the card is about a spot on the
+    /// map, and a sheet the hiker had pulled down is put where the map frames.
+    ///
+    /// The sheet is read once the card has closed, because while it is up the
+    /// card is the only sheet XCUITest can see.
+    @MainActor
+    func testAPalePinOpensItsCardWithTheSheetAtItsMiddle() {
+        let app = openPlacesAround()
+        XCTAssertTrue(element("places-around-nearby", in: app).waitForExistence(timeout: UITestTimeout.navigation))
+        collapseSheet(in: app)
+
+        let pin = app.descendants(matching: .any)
+            .matching(NSPredicate(
+                format: "identifier == %@ AND label CONTAINS %@",
+                "hike-place-candidate",
+                Self.nearbySummit
+            ))
+            .firstMatch
+        XCTAssertTrue(pin.waitForExistence(timeout: UITestTimeout.existence), "the summit is a pale pin")
+        pin.tap()
+
+        let title = element("places-around-card-title", in: app)
+        XCTAssertTrue(title.waitForExistence(timeout: UITestTimeout.navigation), "a pale pin opens its card")
+        XCTAssertEqual(title.label, Self.nearbySummit)
+
+        app.buttons["places-around-card-close"].tap()
+        XCTAssertTrue(title.waitForNonExistence(timeout: UITestTimeout.existence), "the card closes")
+        XCTAssertTrue(
+            waitForSheetTop(in: app) { top in (Self.middleSheetLowerBound...Self.middleSheetUpperBound).contains(top) },
+            "the sheet came up to its middle with the card"
+        )
+    }
+
     @MainActor
     func testPressingTheMapAddsAPlaceOfTheHikersOwn() {
         let app = openPlacesAround()
@@ -127,4 +161,43 @@ extension PlaceUITests {
         scrollToTap(element("hike-place-search", in: app), in: app)
         return app
     }
+
+    /// Drags the sheet down to its compact detent and waits for it to land.
+    ///
+    /// The drag and the bounds below are `PhotoUITests`'s — see
+    /// `PhotoUITests+SheetHeight.swift` for why a detent is waited on as a
+    /// frame — and are not borrowed for the reason `ScreenshotUITests` gives:
+    /// they are that class's members.
+    @MainActor
+    private func collapseSheet(in app: XCUIApplication) {
+        let grabber = app.buttons["Sheet Grabber"]
+        XCTAssertTrue(grabber.waitForExistence(timeout: UITestTimeout.navigation), "the sheet offers a grabber")
+        grabber.coordinate(withNormalizedOffset: Self.grabberMiddle)
+            .press(forDuration: Self.dragPress, thenDragTo: app.coordinate(withNormalizedOffset: Self.sheetBottom))
+        XCTAssertTrue(
+            waitForSheetTop(in: app) { top in top > Self.collapsedSheetFraction },
+            "the sheet comes to rest at its compact detent"
+        )
+    }
+
+    /// Waits for the sheet's top edge, as a share of the screen's height, to
+    /// be where `isAt` says.
+    @MainActor
+    private func waitForSheetTop(in app: XCUIApplication, isAt: @escaping (CGFloat) -> Bool) -> Bool {
+        let sheet = element("map-sheet", in: app)
+        guard sheet.waitForExistence(timeout: UITestTimeout.navigation) else { return false }
+        let settled = NSPredicate { _, _ in isAt(sheet.frame.minY / app.frame.height) }
+        return XCTWaiter.wait(
+            for: [expectation(for: settled, evaluatedWith: sheet)],
+            timeout: UITestTimeout.navigation
+        ) == .completed
+    }
+
+    private static let grabberMiddle = CGVector(dx: 0.5, dy: 0.5)
+    private static let sheetBottomFraction = 0.95
+    private static let sheetBottom = CGVector(dx: 0.5, dy: sheetBottomFraction)
+    private static let dragPress: TimeInterval = 0.1
+    private static let collapsedSheetFraction: CGFloat = 0.8
+    private static let middleSheetLowerBound: CGFloat = 0.3
+    private static let middleSheetUpperBound: CGFloat = 0.65
 }
