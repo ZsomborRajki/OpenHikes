@@ -81,19 +81,57 @@ private final class TrailDraftPhotoAlertController: UIViewController {
     }
 
     private func synchronize() {
-        guard !isTransitioning, isViewLoaded, view.window != nil else { return }
+        guard !isTransitioning, isViewLoaded else { return }
         if let shown {
             guard shown.id != desired?.id else { return }
             close(shown.controller)
         } else if let desired, let copy {
+            let presenter = topController
+            // Walked first and checked second, for the reason
+            // ``LimitedLibraryPresenter/presentingViewController`` gives.
+            guard presenter.view.window != nil else { return }
+            // The *Name Your Trail* alert a save is answered from is usually
+            // still closing when the copy fails.
+            if let transition = presenter.transitionCoordinator, wait(for: transition) { return }
             let alert = makeAlert(for: desired, copy: copy)
             shown = (desired.id, alert)
             isTransitioning = true
-            present(alert, animated: true) { [weak self] in
+            presenter.present(alert, animated: true) { [weak self] in
                 self?.isTransitioning = false
                 self?.synchronize()
             }
+            // Refused after all, and it will not call back: left for the next
+            // update rather than held behind a flag nothing clears.
+            if alert.presentingViewController == nil {
+                shown = nil
+                isTransitioning = false
+            }
         }
+    }
+
+    /// The top of whatever this screen already has presented — a picker, a
+    /// sheet, another alert. `present` on a controller that is already
+    /// presenting, or still opening or closing, writes a line to the console
+    /// and never calls back, which left `isTransitioning` set and every later
+    /// notice queued behind one nobody could see. The walk
+    /// ``LimitedLibraryPresenter`` makes, from this screen's own root.
+    private var topController: UIViewController {
+        var controller: UIViewController = self
+        while let parent = controller.parent { controller = parent }
+        while let presented = controller.presentedViewController { controller = presented }
+        return controller
+    }
+
+    /// Synchronizes again once `transition` has finished. Answers whether it
+    /// could be waited on.
+    private func wait(for transition: any UIViewControllerTransitionCoordinator) -> Bool {
+        isTransitioning = true
+        let queued = transition.animate(alongsideTransition: nil) { [weak self] _ in
+            self?.isTransitioning = false
+            self?.synchronize()
+        }
+        if !queued { isTransitioning = false }
+        return queued
     }
 
     private func makeAlert(for missed: TrailDraftPhotoCopy.Missed, copy: TrailDraftPhotoCopy) -> UIAlertController {
@@ -132,8 +170,11 @@ private final class TrailDraftPhotoAlertController: UIViewController {
             if let copy { desired = copy.isShowing ? copy.missed : nil }
             synchronize()
         }
-        if alert.isBeingDismissed, let transition = alert.transitionCoordinator {
-            transition.animate(alongsideTransition: nil) { _ in finished() }
+        if alert.presentingViewController == nil {
+            // Already closed by the time its action ran: nothing to wait on.
+            finished()
+        } else if alert.isBeingDismissed, let transition = alert.transitionCoordinator {
+            if !transition.animate(alongsideTransition: nil, completion: { _ in finished() }) { finished() }
         } else {
             alert.dismiss(animated: true, completion: finished)
         }
