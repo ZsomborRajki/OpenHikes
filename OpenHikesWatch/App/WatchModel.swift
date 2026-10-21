@@ -345,7 +345,7 @@ final class WatchModel {
             // selection's to say: see
             // ``WatchTrailSelection/refreshTarget(holding:in:)``.
             if let hikeID = selection.refreshTarget(holding: trail, in: digest) {
-                link.requestTrail(selection.select(hikeID, holding: trail))
+                link.requestTrail(selection.refresh(hikeID, holding: trail))
             }
         case .trail(let package):
             // An answer to a request the hiker has moved on from, or an older
@@ -355,6 +355,7 @@ final class WatchModel {
                 Self.logger.debug("Dropped a trail package that arrived after a newer selection or revision")
                 return
             }
+            selection.took(package)
             trail = package
             tracker = WatchRouteTracker(package)
             follow.clear()

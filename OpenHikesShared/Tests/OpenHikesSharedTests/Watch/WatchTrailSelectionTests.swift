@@ -104,11 +104,40 @@ struct WatchTrailSelectionTests {
         let target = selection.refreshTarget(holding: held, in: digest)
         #expect(target == Fixture.trailB)
         if let target {
-            let refresh = selection.select(target, holding: held)
+            let refresh = selection.refresh(target, holding: held)
             #expect(refresh.heldRevision == nil)
             #expect(!selection.accepts(Fixture.package(Fixture.trailB, at: 20, requestID: earlier.id), replacing: held))
             #expect(selection.accepts(Fixture.package(Fixture.trailB, at: 30, requestID: refresh.id), replacing: held))
         }
+    }
+
+    @Test("after a relaunch, the refresh of the trail held does not drop the last process's answer")
+    func launchRefreshStillTakesTheLastProcessAnswer() throws {
+        // Every launch re-reads the library the phone last published, and
+        // asks about the trail held before the queued transfers are handed
+        // over — B among them, asked for by the process before this one.
+        var selection = WatchTrailSelection()
+        let held = Fixture.package(Fixture.trailA, at: 10)
+        let digest = Fixture.digest(Fixture.trailA, Fixture.trailB)
+        let refresh = try selection.refresh(#require(selection.refreshTarget(holding: held, in: digest)), holding: held)
+        #expect(selection.wantedHikeID == nil)
+
+        let b = Fixture.package(Fixture.trailB, at: 20)
+        #expect(selection.accepts(b, replacing: held))
+        selection.took(b)
+
+        // A had been edited, so the refresh is answered. B is the trail drawn now.
+        #expect(!selection.accepts(Fixture.package(Fixture.trailA, at: 30, requestID: refresh.id), replacing: b))
+    }
+
+    @Test("after a relaunch, the refresh of the trail held drops an earlier answer for it")
+    func launchRefreshSupersedesAnEarlierAnswerForTheHeldTrail() {
+        var selection = WatchTrailSelection()
+        let held = Fixture.package(Fixture.trailA, at: 10)
+        let refresh = selection.refresh(Fixture.trailA, holding: held)
+
+        #expect(!selection.accepts(Fixture.package(Fixture.trailA, at: 20), replacing: held))
+        #expect(selection.accepts(Fixture.package(Fixture.trailA, at: 20, requestID: refresh.id), replacing: held))
     }
 
     @Test("with nothing opened, a new library re-asks for the trail held")
