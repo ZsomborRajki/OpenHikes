@@ -23,15 +23,17 @@
 //  for the reason that file gives.
 //
 
+import Foundation
+import Observation
 import OpenHikesData
 import SwiftData
-import SwiftUI
 
 @MainActor
 @Observable
 final class TrailDraftPhotoCopy {
     /// Photographs a save could not copy into its hike.
-    struct Missed {
+    struct Missed: Identifiable {
+        let id = UUID()
         let hike: Hike
         /// Its name when the copy finished, so the alert never reads a hike
         /// that has been deleted under it.
@@ -42,6 +44,9 @@ final class TrailDraftPhotoCopy {
     /// What the alert offers again, or `nil` the rest of the time.
     private(set) var missed: Missed?
 
+    @ObservationIgnored private var pending: [Missed] = []
+    @ObservationIgnored private var tail: Task<Void, Never>?
+    private var isRetrying = false
     @ObservationIgnored private let store: HikePhotoStore
     @ObservationIgnored private let libraryWriter: any PhotoLibraryWriting
     @ObservationIgnored private let save: (ModelContext) throws -> Void
@@ -64,20 +69,16 @@ final class TrailDraftPhotoCopy {
     /// alert.
     ///
     /// Answers the task so a suite can wait on it; the save that calls this
-    /// does not.
+    /// does not. Attempts run in order, including retries: two attempts for
+    /// the same hike must not both pass its duplicate check before either
+    /// has committed the photograph.
     @discardableResult func attach(_ handOff: TrailDraftPhotoHandOff, to hike: Hike) -> Task<Void, Never> {
-        Task {
-            guard let left = await handOff.attach(
-                to: hike,
-                store: store,
-                libraryWriter: libraryWriter,
-                save: save
-            ) else { return }
-            // A later save's misses replace an earlier one's still waiting:
-            // one alert, about the trail just made, and the older files go
-            // the way *Skip* would have sent them.
-            skip()
-            missed = Missed(hike: hike, hikeTitle: hike.title, photos: left)
+        enqueue {
+            guard let failed = await self.copy(handOff, to: hike) else { return }
+            // Each trail keeps its sources until the hiker answers it. A
+            // later save is not permission to abandon the earlier one's.
+            self.pending.append(failed)
+            self.showNext()
         }
     }
 
@@ -85,51 +86,49 @@ final class TrailDraftPhotoCopy {
     /// already holds the rest. Whatever is still missed comes back as a new
     /// alert.
     @discardableResult func retry() -> Task<Void, Never>? {
-        guard let missed else { return nil }
-        self.missed = nil
-        return attach(missed.photos, to: missed.hike)
+        guard let missed, !isRetrying else { return nil }
+        isRetrying = true
+        return enqueue {
+            self.missed = await self.copy(missed.photos, to: missed.hike)
+            self.showNext()
+            self.isRetrying = false
+        }
     }
 
     /// Lets the missed photographs go, and their files with them.
     func skip() {
-        guard let missed else { return }
+        guard let missed, !isRetrying else { return }
         self.missed = nil
         missed.photos.discard()
+        showNext()
     }
 
-    /// Drives `.alert(isPresented:)`. Its setter does nothing: both buttons
-    /// say what happens to the files, and either one clears ``missed``, which
-    /// is what closes the alert. Building it reads ``missed`` — see
-    /// ``LocationAccessPrompt/isShowingBinding`` for what that makes of the
-    /// body that builds it, which is ``TrailDraftPhotoCopyAlert``'s own.
-    var isShowingBinding: Binding<Bool> {
-        Binding(get: { self.missed != nil }, set: { _ in /* the buttons decide */ })
+    private func showNext() {
+        guard missed == nil, !pending.isEmpty else { return }
+        missed = pending.removeFirst()
     }
-}
 
-extension View {
-    /// Says which of a drawn trail's photographs its save missed, and offers
-    /// them again — see ``TrailDraftPhotoCopy``.
-    func trailDraftPhotoCopyAlert(_ copy: TrailDraftPhotoCopy) -> some View {
-        modifier(TrailDraftPhotoCopyAlert(copy: copy))
+    private func copy(_ handOff: TrailDraftPhotoHandOff, to hike: Hike) async -> Missed? {
+        guard let left = await handOff.attach(
+            to: hike,
+            store: store,
+            libraryWriter: libraryWriter,
+            save: save
+        ) else { return nil }
+        return Missed(hike: hike, hikeTitle: hike.title, photos: left)
     }
-}
 
-/// Its own modifier so that the body reading ``TrailDraftPhotoCopy/missed`` is
-/// this one, and not that of the view the alert is attached to.
-private struct TrailDraftPhotoCopyAlert: ViewModifier {
-    let copy: TrailDraftPhotoCopy
-
-    func body(content: Content) -> some View {
-        content
-            .alert("Photos Not Added", isPresented: copy.isShowingBinding, presenting: copy.missed) { _ in
-                Button("Try Again") { copy.retry() }
-                Button("Skip", role: .cancel) { copy.skip() }
-            } message: { missed in
-                Text("""
-                    \(missed.photos.photos.count) photos couldn’t be added to “\(missed.hikeTitle)”. \
-                    The trail itself is saved.
-                    """)
-            }
+    private func enqueue(_ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
+        let previous = tail
+        let next = Task {
+            await previous?.value
+            await operation()
+        }
+        tail = next
+        return next
     }
+
+    /// A retry hides the alert while keeping its sources claimed. Only the
+    /// alert's own modifier reads this, so no enclosing screen observes it.
+    var isShowing: Bool { missed != nil && !isRetrying }
 }

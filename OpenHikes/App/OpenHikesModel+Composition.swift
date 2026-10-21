@@ -8,12 +8,12 @@
 //
 //  Apart from ``OpenHikesModel`` itself because it answers a different
 //  question. The class is the list of what the app depends on and what it
-//  coordinates between them; this is the one place the *production* choices
-//  behind each of those dependencies are named — a real pedometer, a real
-//  barometer, a mirrored container, the user's own defaults — and every one of
-//  them has a test double behind the same parameter of the designated
-//  initializer. Keeping the two apart is what stops that list from reading as
-//  though the app could only ever be assembled one way.
+//  coordinates between them; the composition extensions name the *production*
+//  choices behind each dependency — a real pedometer, a real barometer, a
+//  mirrored container, the user's own defaults — and every one has a test
+//  double behind the same parameter of the designated initializer. Keeping
+//  them apart stops that list from reading as though the app could only ever
+//  be assembled one way.
 //
 
 import Foundation
@@ -237,7 +237,7 @@ extension OpenHikesModel {
             // recents in the scratch domain rather than the developer's.
             recents: TrailStopRecents(defaults: defaults),
             placeFilter: TrailPlaceFilter(defaults: defaults),
-            photos: TrailDraftPhotos(source: Self.makeTrailPhotoSource()),
+            photos: TrailDraftPhotos(source: Self.makeTrailPhotoSource(), photoCopy: Self.makeTrailPhotoCopy()),
             // The same answer the elevation source asks before it spends a
             // call, read through the store so a purchase repaints the line.
             elevationUnlocked: { entitlement.isEntitled }
@@ -334,36 +334,6 @@ extension OpenHikesModel {
         #endif
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
         return TrailPointSource()
-    }
-
-    /// Where the maker's *Search this area* asks for photographs, or `nil`
-    /// for a launch that must not ask.
-    ///
-    /// The guard ``makeTrailPointSource()`` makes, beside it and on its terms:
-    /// Wikimedia's API is run for everybody on donations, and a suite that
-    /// fell into it would be spending its patience on a stub's worth of
-    /// pictures. The one way past it is the same scenario name, so a launch
-    /// that seeds the places seeds the photographs with them — see
-    /// ``SeededCommonsPhotoSource``. `--ui-test-community=commons` is the
-    /// other: it seeds Commons for the curated preview, and the *Community*
-    /// tab's *Search this area* asks through this source too.
-    ///
-    /// Also the *Community* tab's — see ``makeCommunityBrowser(transport:blocks:maker:)``.
-    static func makeTrailPhotoSource() -> (any CommonsPhotoSourcing)? {
-        #if DEBUG
-        if SeededTrailPointSource.Scenario(argument: AppLaunchEnvironment.trailPointScenarioName) == .seeded
-            || SeededCommunityTransport.Scenario(argument: AppLaunchEnvironment.communityScenarioName) == .commons {
-            return SeededCommonsPhotoSource()
-        }
-        #endif
-        guard !AppLaunchEnvironment.isRunningTests else { return nil }
-        return makeLiveCommonsSource()
-    }
-
-    /// Wikimedia Commons, with what it said about each file kept in `Caches`
-    /// for every launch that asks it — see ``CommonsPhotoStore``.
-    static func makeLiveCommonsSource() -> WikimediaCommonsSource {
-        WikimediaCommonsSource(store: CommonsPhotoStore.defaultDirectory().map { CommonsPhotoStore(directory: $0) })
     }
 }
 

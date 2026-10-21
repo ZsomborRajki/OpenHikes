@@ -46,6 +46,7 @@ nonisolated enum AppLaunchEnvironment {
         /// ``AppLaunchEnvironment/routeHue``.
         let routeHue: Double?
         let failsFirstSave: Bool
+        let refusesTrailPhotoCopy: Bool
         let losesImportSelection: Bool
         let stubsWeather: Bool
         let grantsPaidMaps: Bool
@@ -83,6 +84,7 @@ nonisolated enum AppLaunchEnvironment {
             seededRecordingFixtureName = nil
             routeHue = nil
             failsFirstSave = false
+            refusesTrailPhotoCopy = false
             losesImportSelection = false
             stubsWeather = false
             grantsPaidMaps = false
@@ -105,6 +107,7 @@ nonisolated enum AppLaunchEnvironment {
         private static let seedRecordingPrefix = "--ui-test-seed-recording="
         private static let routeHuePrefix = "--ui-test-route-hue="
         private static let failFirstSaveArgument = "--ui-test-fail-first-save"
+        private static let refuseTrailPhotoCopyArgument = "--ui-test-refuse-trail-photo-copy"
         private static let loseImportSelectionArgument =
             "--ui-test-lose-import-selection"
         private static let stubWeatherArgument = "--ui-test-weather"
@@ -178,6 +181,8 @@ nonisolated enum AppLaunchEnvironment {
             routeHue = Self.hue(in: arguments, isUITesting: isUITesting)
             failsFirstSave = isUITesting
                 && arguments.contains(Self.failFirstSaveArgument)
+            refusesTrailPhotoCopy = isUITesting
+                && arguments.contains(Self.refuseTrailPhotoCopyArgument)
             losesImportSelection = isUITesting
                 && arguments.contains(Self.loseImportSelectionArgument)
             stubsWeather = isUITesting
@@ -400,6 +405,10 @@ nonisolated enum AppLaunchEnvironment {
     /// seam exists for the unit suites — so this is that closure, failing
     /// once, and everything downstream of it is the shipping state machine.
     static let failsFirstSave = configuration.failsFirstSave
+
+    /// Refuses the maker's photo metadata writes so automation can exercise
+    /// its retry and Skip buttons without depending on an actual disk fault.
+    static let refusesTrailPhotoCopy = configuration.refusesTrailPhotoCopy
 
     /// Whether an import should give up the selection it would otherwise
     /// take.

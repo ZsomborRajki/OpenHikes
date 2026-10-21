@@ -13,6 +13,8 @@
 //  the card with the picture and its credit, and that the card's *Add Stop*
 //  puts a point down. What a search finds, what the chip does and what a save
 //  keeps are `TrailDraftPhotosTests` and `TrailDraftPhotoControllerTests`.
+//  The refused-copy scenario also drives Try Again and Skip from the saved
+//  hike, through the map sheet's real alert presenter.
 //
 
 import XCTest
@@ -20,6 +22,7 @@ import XCTest
 extension TrailMakerUITests {
     /// How many double taps the map may need before it is narrow enough.
     private static let photoSearchZoomSteps = 6
+    private static let secondPhotoStop = CGVector(dx: 0.75, dy: 0.25)
 
     @MainActor
     func testAPhotoFromSearchThisAreaBecomesAStop() {
@@ -31,6 +34,66 @@ extension TrailMakerUITests {
                 "--ui-test-import-gpx=\(UITestFixture.gpxName)",
             ]
         )
+        _ = openSeededPhoto(in: app)
+
+        XCTAssertTrue(
+            element("trail-place-photo", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "a photograph's card should be headed by the photograph"
+        )
+        XCTAssertTrue(
+            element("photo-licence-credit", in: app).exists,
+            "and credit who took it, as every Commons photograph is"
+        )
+        XCTAssertFalse(
+            element("trail-place-remove", in: app).exists,
+            "a photograph is taken off the map by its chip, not from its card"
+        )
+
+        tapInPlaceSheet("trail-place-add-stop", in: app)
+        XCTAssertTrue(
+            element("trail-draft-point-1", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "Add Stop should put a point down where the camera stood"
+        )
+    }
+
+    @MainActor
+    func testMissedPhotosCanBeRetriedAndSkipped() {
+        let app = launchApp(arguments: [
+            "--ui-test-trail-points=seeded",
+            "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+            "--ui-test-refuse-trail-photo-copy",
+        ])
+        let map = openSeededPhoto(in: app)
+        tapInPlaceSheet("trail-place-add-stop", in: app)
+        // The photograph is one end, so the saved line necessarily passes it.
+        dropPin(at: Self.secondPhotoStop, on: map)
+        tapInPlaceSheet("trail-place-add-stop", in: app)
+        XCTAssertTrue(element("trail-draft-point-2", in: app).waitForExistence(timeout: UITestTimeout.navigation))
+        element("trail-draft-save", in: app).tap()
+        let name = "Photo Retry Trail"
+        nameTheTrail(name, in: app)
+
+        let alert = app.alerts["Photos Not Added"]
+        for _ in 0..<2 {
+            XCTAssertTrue(alert.waitForExistence(timeout: UITestTimeout.navigation))
+            let namedMessage = alert.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", name)).firstMatch
+            XCTAssertTrue(namedMessage.exists)
+            alert.buttons["Try Again"].tap()
+        }
+        XCTAssertTrue(
+            alert.waitForExistence(timeout: UITestTimeout.navigation),
+            "a refused retry must be offered again"
+        )
+        alert.buttons["Skip"].tap()
+        XCTAssertTrue(waitUntil { !alert.exists }, "Skip should close the failure notice")
+        XCTAssertTrue(element("map-sheet", in: app).exists, "the map sheet must survive the alert")
+        XCTAssertTrue(app.navigationBars[name].exists, "the trail itself must still be saved")
+        popScreen(in: app)
+        XCTAssertTrue(awaitHikeRow(titled: name, in: app).exists)
+    }
+
+    @MainActor
+    private func openSeededPhoto(in app: XCUIApplication) -> XCUIElement {
         _ = awaitHikeRow(titled: UITestFixture.importedHikeTitle, in: app)
         let map = element("trail-map", in: app)
         XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
@@ -55,24 +118,9 @@ extension TrailMakerUITests {
             "the search should put the area's photographs on the map"
         )
         photo.tap()
-
         XCTAssertTrue(
-            element("trail-place-photo", in: app).waitForExistence(timeout: UITestTimeout.navigation),
-            "a photograph's card should be headed by the photograph"
+            element("trail-place-photo", in: app).waitForExistence(timeout: UITestTimeout.navigation)
         )
-        XCTAssertTrue(
-            element("photo-licence-credit", in: app).exists,
-            "and credit who took it, as every Commons photograph is"
-        )
-        XCTAssertFalse(
-            element("trail-place-remove", in: app).exists,
-            "a photograph is taken off the map by its chip, not from its card"
-        )
-
-        tapInPlaceSheet("trail-place-add-stop", in: app)
-        XCTAssertTrue(
-            element("trail-draft-point-1", in: app).waitForExistence(timeout: UITestTimeout.navigation),
-            "Add Stop should put a point down where the camera stood"
-        )
+        return map
     }
 }

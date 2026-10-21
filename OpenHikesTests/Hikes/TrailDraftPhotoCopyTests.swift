@@ -34,7 +34,7 @@ struct TrailDraftPhotoCopyTests {
 
     /// A hand-off of `count` photographs along the fixture's line, each with
     /// a real image on disk in a directory of its own.
-    private static func handOff(of count: Int) throws -> TrailDraftPhotoHandOff {
+    static func handOff(of count: Int) throws -> TrailDraftPhotoHandOff {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("TrailDraftPhotoCopyTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -62,8 +62,8 @@ struct TrailDraftPhotoCopyTests {
     }
 
     private static func gone(_ url: URL) async {
-        while FileManager.default.fileExists(atPath: url.path) {
-            await Task.yield()
+        await settleDelegateHop(until: "the hand-off directory was deleted") {
+            !FileManager.default.fileExists(atPath: url.path)
         }
     }
 
@@ -88,6 +88,7 @@ struct TrailDraftPhotoCopyTests {
         let saves = Saves()
         saves.refused = [2]
         let copy = TrailDraftPhotoCopy(store: sandbox.store, libraryWriter: StubPhotoLibraryWriter(), save: saves.save)
+        defer { copy.skip() }
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context, title: "Ridge Loop")
         let handOff = try Self.handOff(of: 2)
@@ -98,7 +99,7 @@ struct TrailDraftPhotoCopyTests {
         let missed = try #require(copy.missed)
         #expect(missed.hikeTitle == "Ridge Loop")
         #expect(missed.photos.photos.map(\.credit.author) == ["Hiker 1"])
-        #expect(copy.isShowingBinding.wrappedValue)
+        #expect(copy.isShowing)
         let file = try #require(missed.photos.photos.first?.fileURL)
         #expect(FileManager.default.fileExists(atPath: file.path), "kept for Try Again")
     }
@@ -120,7 +121,7 @@ struct TrailDraftPhotoCopyTests {
         #expect(saves.count == savesBeforeRetry + 1, "one save, for the one photograph missing")
         #expect(Set(hike.photos.compactMap(\.importedAuthorName)) == ["Hiker 0", "Hiker 1"])
         #expect(copy.missed == nil)
-        #expect(!copy.isShowingBinding.wrappedValue)
+        #expect(!copy.isShowing)
         await Self.gone(handOff.directory)
     }
 
@@ -130,6 +131,7 @@ struct TrailDraftPhotoCopyTests {
         let saves = Saves()
         saves.refused = [1, 2]
         let copy = TrailDraftPhotoCopy(store: sandbox.store, libraryWriter: StubPhotoLibraryWriter(), save: saves.save)
+        defer { copy.skip() }
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
         await copy.attach(try Self.handOff(of: 1), to: hike).value
@@ -178,8 +180,8 @@ struct TrailDraftPhotoCopyTests {
         await Self.gone(handOff.directory)
     }
 
-    @Test("a later save's misses replace an earlier one's, whose files go")
-    func laterMissesReplace() async throws {
+    @Test("a later save keeps both trails' missed photographs until each is answered")
+    func laterMissesWait() async throws {
         let sandbox = PhotoStoreSandbox()
         let saves = Saves()
         saves.refused = [1, 2]
@@ -188,9 +190,65 @@ struct TrailDraftPhotoCopyTests {
         let first = try Self.handOff(of: 1)
         await copy.attach(first, to: Fixture.hike(in: context, title: "First")).value
 
-        await copy.attach(try Self.handOff(of: 1), to: Fixture.hike(in: context, title: "Second")).value
+        let second = try Self.handOff(of: 1)
+        await copy.attach(second, to: Fixture.hike(in: context, title: "Second")).value
 
+        #expect(copy.missed?.hikeTitle == "First")
+        #expect(FileManager.default.fileExists(atPath: first.directory.path))
+        #expect(FileManager.default.fileExists(atPath: second.directory.path))
+        copy.skip()
         #expect(copy.missed?.hikeTitle == "Second")
         await Self.gone(first.directory)
+        #expect(FileManager.default.fileExists(atPath: second.directory.path))
+        copy.skip()
+        #expect(copy.missed == nil)
+        await Self.gone(second.directory)
+    }
+
+    @Test("a source that cannot be read is reported and can be restored for a retry")
+    func unreadableSourceIsReported() async throws {
+        let sandbox = PhotoStoreSandbox()
+        let copy = TrailDraftPhotoCopy(store: sandbox.store, libraryWriter: StubPhotoLibraryWriter())
+        defer { copy.skip() }
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let handOff = try Self.handOff(of: 2)
+        let file = try #require(handOff.photos.first?.fileURL)
+        try FileManager.default.removeItem(at: file)
+
+        await copy.attach(handOff, to: hike).value
+
+        #expect(hike.photos.count == 1)
+        let missed = try #require(copy.missed)
+        #expect(missed.photos.photos.map(\.fileURL) == [file])
+        try PhotoDiscoveryFixture.sampleImageData().write(to: file)
+        await copy.retry()?.value
+
+        #expect(hike.photos.count == 2)
+        #expect(copy.missed == nil)
+        await Self.gone(handOff.directory)
+    }
+
+    @Test("a retry and a later save cannot attach the same Commons page twice")
+    func overlappingRetryAndSave() async throws {
+        let sandbox = PhotoStoreSandbox()
+        let saves = Saves()
+        saves.refused = [1]
+        let copy = TrailDraftPhotoCopy(store: sandbox.store, libraryWriter: StubPhotoLibraryWriter(), save: saves.save)
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let first = try Self.handOff(of: 1)
+        await copy.attach(first, to: hike).value
+        let second = try Self.handOff(of: 1)
+
+        let retry = try #require(copy.retry())
+        let later = copy.attach(second, to: hike)
+        await retry.value
+        await later.value
+
+        #expect(hike.photos.count == 1)
+        #expect(copy.missed == nil)
+        await Self.gone(first.directory)
+        await Self.gone(second.directory)
     }
 }
