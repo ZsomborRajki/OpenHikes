@@ -868,8 +868,10 @@ extension MapView.Coordinator {
         // pan: a hiker dragging across a county would otherwise ask a
         // question per frame. What arrives here is still filtered again by
         // ``CommunityQueryPolicy`` before anything reaches the network, and
-        // costs a comparison while browsing is off.
-        community?.regionDidSettle(mapView.region)
+        // costs a comparison while browsing is off. The part of the map the
+        // hiker can see rather than the whole view, which runs on under the
+        // sheet — see `MapCommunitySearchRegion.swift`.
+        community?.regionDidSettle(communitySearchRegion(of: mapView, sheet: .atMiddleDetent))
         // And the trail maker's own area search, which asks a different
         // service about a smaller box and is otherwise the same offer. Nothing
         // reaches the network here either: it is a comparison, and a tap is

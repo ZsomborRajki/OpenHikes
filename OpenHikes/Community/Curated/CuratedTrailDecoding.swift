@@ -2,7 +2,7 @@
 //  CuratedTrailDecoding.swift
 //  OpenHikes
 //
-//  Turning the two Overpass responses into rows and lines.
+//  Turning what Overpass answers a curated search into rows and lines.
 //
 //  The decoding itself is ordinary. What is not, and what this file mostly
 //  exists for, is **assembling a relation's member ways into one walkable
@@ -149,16 +149,10 @@ nonisolated extension CuratedTrailDecoding {
         let response = try OverpassRequest.decode(Response.self, from: data)
         return response.elements.compactMap { element -> CuratedTrail? in
             guard element.type == "relation",
-                  let bounds = element.bounds,
-                  let name = BoundedText.bounded(element.tags["name"], to: .title)
+                  let box = element.bounds?.box,
+                  let name = BoundedText.bounded(element.tags["name"], to: .title),
+                  CuratedTrailQuery.isDayHike(box: box)
             else { return nil }
-            let box = CuratedTrailQuery.BoundingBox(
-                south: bounds.minlat,
-                west: bounds.minlon,
-                north: bounds.maxlat,
-                east: bounds.maxlon
-            )
-            guard CuratedTrailQuery.isDayHike(box: box) else { return nil }
             return CuratedTrail(
                 relationID: element.id,
                 name: name,
@@ -166,6 +160,33 @@ nonisolated extension CuratedTrailDecoding {
                 box: box,
                 route: []
             )
+        }
+    }
+
+    /// The routes in an area's `out geom` response that are worth offering,
+    /// each with its line: both passes of a small search, answered by one
+    /// request — see ``CuratedTrailQuery/areaRequest(in:)``.
+    ///
+    /// The two passes' rules, in the order they applied them. The day-hike
+    /// filter decides what is offered, exactly as ``trails(fromListing:)``
+    /// decides it, and only then is a line assembled, exactly as
+    /// ``trails(fromGeometry:)`` assembles one — so a route this offers is the
+    /// route the two passes would have offered, drawn the same way. Filtering
+    /// first also means a long route that slipped under
+    /// ``CuratedTrailQuery/maximumMemberCount`` is measured by its box rather
+    /// than walked way by way.
+    ///
+    /// A route whose ways cannot be assembled is left out, which is where the
+    /// two passes ended up as well, one request later: listed, then dropped
+    /// when its geometry came back with nothing to draw.
+    static func trails(fromListingWithLines data: Data) throws -> [CuratedTrail] {
+        let response = try OverpassRequest.decode(Response.self, from: data)
+        return response.elements.compactMap { element -> CuratedTrail? in
+            guard element.type == "relation",
+                  let box = element.bounds?.box,
+                  CuratedTrailQuery.isDayHike(box: box)
+            else { return nil }
+            return drawn(element)
         }
     }
 }
@@ -195,25 +216,31 @@ nonisolated extension CuratedTrailDecoding {
         let response = try OverpassRequest.decode(Response.self, from: data)
         var trails: [Int64: CuratedTrail] = [:]
         for element in response.elements where element.type == "relation" {
-            guard let bounds = element.bounds,
-                  let name = BoundedText.bounded(element.tags["name"], to: .title)
-            else { continue }
-            let line = assemble(routeWays(of: element))
-            guard line.count > 1 else { continue }
-            trails[element.id] = CuratedTrail(
-                relationID: element.id,
-                name: name,
-                tags: element.tags,
-                box: CuratedTrailQuery.BoundingBox(
-                    south: bounds.minlat,
-                    west: bounds.minlon,
-                    north: bounds.maxlat,
-                    east: bounds.maxlon
-                ),
-                route: line.map(RouteCoordinate.init)
-            )
+            guard let trail = drawn(element) else { continue }
+            trails[element.id] = trail
         }
         return trails
+    }
+
+    /// `element` as a route with its line, or `nil` when it has no usable name
+    /// or box, or no run of its ways that is a large enough share of it to
+    /// draw — see ``assemble(_:)``.
+    ///
+    /// One spelling for both passes that draw lines, so a route reads the same
+    /// whichever of them brought it.
+    static func drawn(_ element: Element) -> CuratedTrail? {
+        guard let box = element.bounds?.box,
+              let name = BoundedText.bounded(element.tags["name"], to: .title)
+        else { return nil }
+        let line = assemble(routeWays(of: element))
+        guard line.count > 1 else { return nil }
+        return CuratedTrail(
+            relationID: element.id,
+            name: name,
+            tags: element.tags,
+            box: box,
+            route: line.map(RouteCoordinate.init)
+        )
     }
 
     /// The member ways of `element` that make up the route itself.
@@ -371,6 +398,11 @@ nonisolated extension CuratedTrailDecoding {
         let minlon: Double
         let maxlat: Double
         let maxlon: Double
+
+        /// The same four numbers as the box a curated route is pinned by.
+        var box: CuratedTrailQuery.BoundingBox {
+            CuratedTrailQuery.BoundingBox(south: minlat, west: minlon, north: maxlat, east: maxlon)
+        }
     }
 
     struct GeometryPoint: Decodable {

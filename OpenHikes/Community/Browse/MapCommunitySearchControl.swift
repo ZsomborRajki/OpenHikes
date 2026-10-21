@@ -768,6 +768,11 @@ extension MapView {
     /// the region on screen, so it belongs at the top where the most map is
     /// visible, and the sheet never reaches it. Its own visibility is the
     /// whole of its behaviour — see ``MapCommunitySearchControl``.
+    ///
+    /// The tap tells the browser what is on screen before it asks, with the
+    /// sheet where it is at that moment: a settle measures the map above the
+    /// sheet's middle detent, and a hiker who lowered the sheet since is
+    /// looking at more map than that — see `MapCommunitySearchRegion.swift`.
     func addAreaSearchControl(
         to mapView: MKMapView,
         _ coordinator: Coordinator,
@@ -775,7 +780,12 @@ extension MapView {
     ) {
         let control = MapAreaSearchView(
             identifiers: .community,
-            onTap: { [community] in community.searchVisibleArea() },
+            onTap: { [community, weak coordinator, weak mapView] in
+                if let coordinator, let mapView {
+                    community.regionDidSettle(coordinator.communitySearchRegion(of: mapView, sheet: .whereItIs))
+                }
+                community.searchVisibleArea()
+            },
             onDismissNotice: { [community] in community.dismissCuratedNotice() }
         )
         // Nothing is offered until the map has settled somewhere the list does

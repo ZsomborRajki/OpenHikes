@@ -45,8 +45,7 @@ nonisolated enum SeededCommunityFixture {
         excluding: Set<String> = []
     ) async throws -> [CommunityListing] {
         try await transport(scenario).listings(
-            near: anywhere,
-            radiusMeters: searchRadiusMeters,
+            near: CommunitySearchArea(coordinate: anywhere, radiusMeters: searchRadiusMeters),
             limit: pageLimit,
             excluding: excluding,
             // The widest question, because a seeded scenario's curated half is
