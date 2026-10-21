@@ -49,6 +49,43 @@ extension TrailDraftPhotoCopyTests {
         await host.settle(until: "the last alert closed") { host.alert == nil }
         #expect(counter.count == before, "photo failures must not rebuild the enclosing screen")
     }
+
+    /// A save is answered from the *Name Your Trail* alert, so the copy can
+    /// fail while that alert is still closing — and a picker or a sheet can
+    /// be up by the time it does. `present` refuses both with a console line
+    /// and never calls back.
+    @Test("an alert goes over whatever the sheet has up, and waits out one closing")
+    func alertsSurviveOtherPresentations() async throws {
+        let sandbox = PhotoStoreSandbox()
+        let copy = TrailDraftPhotoCopy(
+            store: sandbox.store,
+            libraryWriter: StubPhotoLibraryWriter(),
+            save: { _ in throw CocoaError(.fileWriteUnknown) }
+        )
+        let context = try Fixture.modelContext()
+        let host = try AlertHost(copy: copy, counter: BodyCounter())
+        defer { host.dismiss() }
+        let blocker = UIViewController()
+        blocker.modalPresentationStyle = .pageSheet
+        await host.present(blocker)
+
+        await copy.attach(try Self.handOff(of: 1), to: Fixture.hike(in: context, title: "Covered")).value
+        await host.settle(until: "the alert appeared over the sheet") {
+            host.message?.contains("Covered") == true
+        }
+        #expect(host.alert?.presentingViewController === blocker)
+        copy.skip()
+        await host.settle(until: "the covering alert closed") { host.alert == nil }
+
+        host.root.dismiss(animated: true)
+        await copy.attach(try Self.handOff(of: 1), to: Fixture.hike(in: context, title: "Closing")).value
+        await host.settle(until: "the alert appeared once the sheet had closed") {
+            host.message?.contains("Closing") == true
+        }
+        #expect(host.alert?.presentingViewController === host.root)
+        copy.skip()
+        await host.settle(until: "the last alert closed") { host.alert == nil }
+    }
 }
 
 private struct AlertProbe: View {
@@ -80,8 +117,19 @@ private struct AlertHost {
         window.layoutIfNeeded()
     }
 
-    var alert: UIAlertController? { root.presentedViewController as? UIAlertController }
+    /// The alert on top of whatever else is presented.
+    var alert: UIAlertController? {
+        var top = root
+        while let presented = top.presentedViewController { top = presented }
+        return top as? UIAlertController
+    }
     var message: String? { alert?.message }
+
+    func present(_ controller: UIViewController) async {
+        await withCheckedContinuation { continuation in
+            root.present(controller, animated: false) { continuation.resume() }
+        }
+    }
 
     func settle(until description: Comment, condition: @escaping @MainActor () -> Bool) async {
         await settleDelegateHop(until: description) {
