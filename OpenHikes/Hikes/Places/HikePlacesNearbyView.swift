@@ -26,7 +26,6 @@
 import CoreLocation
 import MapKit
 import OpenHikesData
-import OpenHikesShared
 import SwiftUI
 
 struct HikePlacesNearbyView: View {

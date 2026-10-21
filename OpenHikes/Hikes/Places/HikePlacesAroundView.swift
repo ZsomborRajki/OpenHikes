@@ -25,7 +25,6 @@
 //
 
 import OpenHikesData
-import OpenHikesShared
 import SwiftUI
 
 struct HikePlacesAroundView: View {
