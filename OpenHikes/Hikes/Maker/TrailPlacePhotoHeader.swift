@@ -10,11 +10,14 @@
 //  The credit sits on the picture, as it does in every gallery that shows a
 //  Commons photograph, because the licence is owed wherever it is shown — see
 //  ``PhotoLicenseCredit``. A tap opens it full screen in the gallery a curated
-//  route's preview uses, paging through everything the searches found.
+//  route's preview uses, paging through everything the searches found — see
+//  ``CommonsPhotoGallery``.
 //
 //  The *Community* tab's photograph screen is headed by the same thing — see
-//  ``CommonsPhotoView`` — so it takes the gallery to page through rather than
-//  the maker it was first written for.
+//  ``CommonsPhotoView`` — and the two open that gallery differently, so the
+//  tap is the caller's. That screen pushes it onto the sheet's stack; the
+//  maker's card is a sheet over the sheet with no stack to push onto, and
+//  presents it in a cover — see ``TrailDraftPhotoHeader``.
 //
 
 import OpenHikesData
@@ -22,15 +25,11 @@ import SwiftUI
 
 struct TrailPlacePhotoHeader: View {
     let photo: CommonsPhoto
-    /// Every photograph the full-screen viewer pages through. Read when the
-    /// viewer opens rather than when this is built, so a search landing
-    /// behind the card does not redraw it.
-    let gallery: () -> [CommonsPhoto]
-    let mapController: MapController
     var accessibilityIdentifier = "trail-place-photo"
+    /// Opens the photograph full screen, wherever the caller keeps it.
+    let onOpen: () -> Void
 
     @State private var image: Image?
-    @State private var isViewing = false
 
     private static let height: CGFloat = 180
     private static let cornerRadius: CGFloat = 12
@@ -39,7 +38,7 @@ struct TrailPlacePhotoHeader: View {
     private static let maxPixelSize = 1200
 
     var body: some View {
-        Button { isViewing = true } label: {
+        Button(action: onOpen) {
             Color(.secondarySystemFill)
                 .frame(maxWidth: .infinity)
                 .frame(height: Self.height)
@@ -70,15 +69,39 @@ struct TrailPlacePhotoHeader: View {
             image = nil
             image = await CommunityPhotoTile.decode(photo.fileURL, maxPixelSize: Self.maxPixelSize)
         }
-        .fullScreenCover(isPresented: $isViewing) {
-            TrailDraftPhotoViewer(
-                photos: gallery(),
-                opening: photo,
-                mapController: mapController
-            ) {
-                isViewing = false
+    }
+}
+
+/// The maker's card's photograph, which opens in a cover of its own because
+/// the card it heads is already a sheet.
+///
+/// This cover still closes when the phone is turned: the card's host moves
+/// from the portrait sheet to the side panel, and while the card comes back —
+/// ``TrailDraftController/selection`` presents it — `isViewing` goes with the
+/// old host. The *Community* tab's photograph screen pushes the same gallery
+/// instead, which is what survives a turn. See
+/// ``SheetRoute/commonsGallery(_:_:)``.
+struct TrailDraftPhotoHeader: View {
+    let photo: CommonsPhoto
+    /// Every photograph the full-screen viewer pages through. Read when the
+    /// viewer opens rather than when this is built, so a search landing
+    /// behind the card does not redraw it.
+    let gallery: () -> [CommonsPhoto]
+    let mapController: MapController
+
+    @State private var isViewing = false
+
+    var body: some View {
+        TrailPlacePhotoHeader(photo: photo) { isViewing = true }
+            .fullScreenCover(isPresented: $isViewing) {
+                TrailDraftPhotoViewer(
+                    photos: gallery(),
+                    opening: photo,
+                    mapController: mapController
+                ) {
+                    isViewing = false
+                }
             }
-        }
     }
 }
 
@@ -92,19 +115,10 @@ private struct TrailDraftPhotoViewer: View {
     let onClose: () -> Void
 
     var body: some View {
-        let gallery = photos.enumerated().map { index, photo in
-            CommunityGalleryPhoto(
-                index: index,
-                pin: photo.pin,
-                fileURL: photo.fileURL,
-                contribution: nil,
-                commons: photo.credit
-            )
-        }
         NavigationStack {
-            CommunityPhotoViewer(
-                photos: gallery,
-                startIndex: photos.firstIndex(of: opening) ?? 0,
+            CommonsPhotoGallery(
+                photos: photos,
+                opening: opening,
                 mapController: mapController,
                 // The camera has moved to the spot; the cover is what is in
                 // the way of seeing it.

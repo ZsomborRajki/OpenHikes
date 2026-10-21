@@ -8,7 +8,9 @@
 //  ``SheetPresentation/showCommonsPhotos(_:)`` on the terms a shared hike's
 //  preview is — never twice, and a jump rather than a step deeper — and a
 //  photograph is the same screen whatever search downloaded it. A photograph
-//  opened from a group's grid is the one step deeper, and goes over it.
+//  opened from a group's grid is the one step deeper, and goes over it; the
+//  gallery a photograph's screen opens is one step deeper again, and holds
+//  the page it is on for as long as it is pushed.
 //
 
 import CoreLocation
@@ -142,5 +144,57 @@ struct SheetCommonsPhotoTests {
 
         presentation.showCommunityHike(listing)
         #expect(presentation.path == [.communityHike(listing)])
+    }
+
+    @Test("a gallery is the page it opened at, wants the whole sheet and is nobody's hike")
+    func galleryRouteFacts() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let gallery = SheetRoute.commonsGallery([Self.photo(1), Self.photo(2)], Self.photo(2))
+        let again = SheetRoute.commonsGallery([Self.photo(2, downloadedAs: "b")], Self.photo(2, downloadedAs: "b"))
+
+        #expect(gallery == again)
+        #expect(gallery.hashValue == again.hashValue)
+        #expect(gallery != .commonsGallery([Self.photo(1), Self.photo(2)], Self.photo(1)))
+        #expect(gallery != .commonsPhoto(Self.photo(2)))
+        #expect(!gallery.shows(hikeID: hike.id))
+        #expect(gallery.prefersFullHeight)
+        #expect(!gallery.revealsMapBeside)
+        #expect(gallery.isCommunityPreview)
+    }
+
+    /// The page is what a rotation comes back to: turning the phone rebuilds
+    /// the gallery in the side panel or the sheet, and the selection the
+    /// presentation holds for its route is what the new one opens at.
+    @Test("a gallery over a photograph takes the whole sheet and keeps its page until it is popped")
+    func galleryOverAPhotograph() {
+        let photos = [Self.photo(1), Self.photo(2)]
+        let gallery = SheetRoute.commonsGallery(photos, Self.photo(1))
+        let presentation = SheetPresentation(detent: .medium)
+        presentation.showCommonsPhoto(Self.photo(1))
+
+        // What the photograph's header does — see `MapSheet+CommonsPhotos.swift`.
+        presentation.path.append(gallery)
+        #expect(presentation.detent == .large)
+        #expect(presentation.isShowingFullHeightScreen)
+        presentation.communityPhotoSelection(for: gallery).currentIndex = 1
+        #expect(presentation.communityPhotoSelection(for: gallery).currentIndex == 1)
+
+        presentation.path.removeLast()
+        #expect(presentation.path == [.commonsPhoto(Self.photo(1))])
+        #expect(presentation.detent == .medium)
+        #expect(presentation.communityPhotoSelection(for: gallery).currentIndex == nil)
+    }
+
+    @Test("a pin tapped while a gallery is up replaces the gallery and its photograph")
+    func pinReplacesGallery() {
+        let presentation = SheetPresentation(detent: .medium)
+        presentation.showCommonsPhoto(Self.photo(1))
+        presentation.path.append(.commonsGallery([Self.photo(1), Self.photo(2)], Self.photo(1)))
+
+        presentation.showCommonsPhoto(Self.photo(3))
+
+        #expect(presentation.path == [.commonsPhoto(Self.photo(3))])
+        #expect(presentation.detent == .medium)
     }
 }

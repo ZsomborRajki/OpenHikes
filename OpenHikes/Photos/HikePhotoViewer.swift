@@ -144,7 +144,7 @@ struct HikePhotoViewer: View {
         .background {
             HikePhotoPinClaim(hike: hike, controller: photoPins) { showFromPin($0) }
         }
-        .overlay(alignment: .bottom) { bottomBar(photos, currentIndex: currentIndex) }
+        .overlay { bottomBar(photos, currentIndex: currentIndex) }
         .navigationTitle(title(photos, currentIndex: currentIndex))
         .toolbar {
             toolbarContent(
@@ -217,26 +217,20 @@ struct HikePhotoViewer: View {
 
     // MARK: - Controls
 
-    /// What stands over the bottom of the photograph: who took it, and the
-    /// way to the next one.
+    /// What stands over the photograph: who took it, and the way to the next
+    /// one — the credit above the pill upright, and at the leading edge on a
+    /// screen turned on its side, where the black a photograph leaves is. See
+    /// ``PhotoGalleryControls``.
     ///
-    /// One ``GlassStack`` around both, which is the rule this app follows
-    /// wherever two pieces of glass sit near each other — separate containers
-    /// each sample the backdrop for themselves, and two that nearly touch
-    /// render as two panes rather than merging as they approach. See that
-    /// type, where the cost is the argument.
-    ///
-    /// The credit is above the pill rather than beside it, and its visibility
-    /// is its own: the pill goes transparent on a gallery of one, and a credit
-    /// is exactly as due on a single photograph as on the fortieth.
+    /// The credit's visibility is its own: the pill goes transparent on a
+    /// gallery of one, and a credit is exactly as due on a single photograph
+    /// as on the fortieth.
     private func bottomBar(_ photos: [HikePhoto], currentIndex: Int?) -> some View {
-        GlassStack(spacing: 6) {
-            VStack(spacing: 10) {
-                credit(currentIndex.map { photos[$0] })
-                stepControls(photos, currentIndex: currentIndex)
-            }
+        PhotoGalleryControls { placement in
+            credit(currentIndex.map { photos[$0] }, placement: placement)
+        } steps: {
+            stepControls(photos, currentIndex: currentIndex)
         }
-        .padding(.bottom, 20)
     }
 
     /// Previous and next, merged into one pill.
@@ -276,15 +270,12 @@ struct HikePhotoViewer: View {
     /// capsule the curated route's own gallery drew it with. See
     /// ``PhotoLicenseCredit``.
     @ViewBuilder
-    private func credit(_ photo: HikePhoto?) -> some View {
+    private func credit(_ photo: HikePhoto?, placement: PhotoCreditPlacement) -> some View {
         if let photo, let license = photo.license {
-            PhotoLicenseCredit(author: photo.importedAuthorName, license: license)
+            PhotoLicenseCredit(author: photo.importedAuthorName, license: license, placement: placement)
         } else if let name = photo?.importedAuthorName, !name.isEmpty {
             Text("Photo by \(name)")
-                .font(.footnote)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .glassSurface(.regular, in: Capsule())
+                .photoCreditSurface(placement)
                 // The backdrop is black whatever the device is set to, the
                 // same reason the navigation bar above is told this.
                 .environment(\.colorScheme, .dark)

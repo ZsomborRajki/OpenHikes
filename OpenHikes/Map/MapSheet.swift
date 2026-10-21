@@ -327,8 +327,9 @@ struct MapSheet: View {
     }
 
     /// The screens about the shared list rather than the library: a
-    /// stranger's hike, its gallery, a Commons photograph the list's search
-    /// found or a group of them, and the reviewer's two queue rows.
+    /// stranger's hike, its gallery, and the reviewer's two queue rows. The
+    /// Commons photographs the list's search found are
+    /// `MapSheet+CommonsPhotos.swift`'s.
     ///
     /// A switch of its own so the one above stays a list the linter allows —
     /// it passed the complexity limit when *Route Style* joined it.
@@ -343,10 +344,8 @@ struct MapSheet: View {
             pendingSubmissionDestination(pending)
         case let .pendingPhotos(pending):
             pendingPhotosDestination(pending)
-        case .commonsPhoto, .commonsPhotos:
-            commonsDestination(for: route, among: appModel.community.areaPhotos)
-        case .hike, .newPlace, .photo, .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals,
-            .trailDraft, .walk:
+        case .commonsGallery, .commonsPhoto, .commonsPhotos, .hike, .newPlace, .photo, .place, .placesAround,
+            .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
             EmptyView()
         }
     }
@@ -519,7 +518,9 @@ struct MapSheet: View {
             // above make every copy a new view — see
             // `HikeDetailView+Equatable.swift`.
             .equatable()
-        case .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .pendingSubmission, .pendingPhotos:
+        case .commonsGallery, .commonsPhoto, .commonsPhotos:
+            commonsDestination(for: route, among: appModel.community.areaPhotos)
+        case .communityHike, .communityPhoto, .pendingSubmission, .pendingPhotos:
             communityDestination(for: route)
         case .place, .newPlace, .placesAround, .placesNearby:
             placesDestination(for: route)

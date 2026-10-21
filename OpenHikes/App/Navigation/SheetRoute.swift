@@ -8,6 +8,16 @@ import OpenHikesData
 import SwiftData
 
 enum SheetRoute: Hashable {
+    /// Every Commons photograph the *Community* tab found, full screen,
+    /// opened at the one whose screen was tapped — the gallery a curated
+    /// route's preview uses. See ``CommonsPhotoGallery``.
+    ///
+    /// Pushed over that photograph's screen rather than presented as a cover
+    /// from it, for the reason the other two galleries are pushed: a rotation
+    /// moves the sheet's screens between the portrait sheet and the landscape
+    /// side panel — two different hosts — and a cover presented from the old
+    /// one went down with it. The path is the one thing both hosts share.
+    case commonsGallery([CommonsPhoto], CommonsPhoto)
     /// A Wikimedia Commons photograph the *Community* tab found, on its own
     /// screen: the picture, its credit, where it was taken, and *Plan a Trail
     /// Here*. Carries the photograph for the reason ``communityHike(_:)``
@@ -122,8 +132,8 @@ enum SheetRoute: Hashable {
         // deleted. A community preview — and the gallery over it — is about a
         // hike that is not in the library at all, which is exactly the state a
         // deletion puts one back into.
-        case .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .pendingPhotos, .pendingSubmission,
-            .recording, .totals, .trailDraft:
+        case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .pendingPhotos,
+            .pendingSubmission, .recording, .totals, .trailDraft:
             false
         }
     }
@@ -163,22 +173,23 @@ enum SheetRoute: Hashable {
     /// A Commons photograph's screen counts too, and a group's grid: each is
     /// the same kind of jump from a pin on the same map, so a hike tapped over
     /// a photograph replaces it, and a photograph tapped over a hike's preview
-    /// replaces that.
+    /// replaces that. The gallery over a photograph goes with it, as a shared
+    /// hike's goes with its preview.
     var isCommunityPreview: Bool {
         switch self {
-        case .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto: true
+        case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto: true
         case .hike, .newPlace, .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .placesNearby,
             .recording, .routeStyle, .totals, .trailDraft, .walk:
             false
         }
     }
 
-    /// Whether this route wants the whole sheet. Both photo viewers do: each
-    /// draws one picture and nothing else, and a picture in the medium detent
-    /// is a stamp. Whose picture it is changes nothing about that.
+    /// Whether this route wants the whole sheet. The three photo viewers do:
+    /// each draws one picture and nothing else, and a picture in the medium
+    /// detent is a stamp. Whose picture it is changes nothing about that.
     var prefersFullHeight: Bool {
         switch self {
-        case .communityPhoto, .photo: true
+        case .commonsGallery, .communityPhoto, .photo: true
         case .commonsPhoto, .commonsPhotos, .communityHike, .hike, .newPlace, .pendingPhotos, .pendingSubmission,
             .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
             false
@@ -189,16 +200,17 @@ enum SheetRoute: Hashable {
     /// take the whole window again — the hiker's own gallery, whose *Show on
     /// map* lowers it and whose photograph's tap raises it.
     ///
-    /// A shared hike's gallery has no such way back, so it is not drawn as a
-    /// column at all: dragged down in portrait and then turned, it would be a
-    /// photograph in a 320-point panel with nothing to widen it but *Back*.
+    /// A shared hike's gallery has no such way back, and neither has a Commons
+    /// one, so neither is drawn as a column at all: dragged down in portrait
+    /// and then turned, it would be a photograph in a 320-point panel with
+    /// nothing to widen it but *Back*.
     /// See ``SheetPresentation/isShowingFullHeightScreen``.
     var revealsMapBeside: Bool {
         switch self {
         case .photo: true
-        case .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .hike, .newPlace, .pendingPhotos,
-            .pendingSubmission, .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals, .trailDraft,
-            .walk:
+        case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .hike, .newPlace,
+            .pendingPhotos, .pendingSubmission, .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals,
+            .trailDraft, .walk:
             false
         }
     }
@@ -231,15 +243,15 @@ enum SheetRoute: Hashable {
         }
     }
 
-    /// Whether this is one of the two routes about Commons photographs.
+    /// Whether this is one of the three routes about Commons photographs.
     private var isAboutCommons: Bool {
         switch self {
-        case .commonsPhoto, .commonsPhotos: true
+        case .commonsGallery, .commonsPhoto, .commonsPhotos: true
         default: false
         }
     }
 
-    /// `==` for the two routes about Commons photographs — split from `==`
+    /// `==` for the three routes about Commons photographs — split from `==`
     /// so that switch stays inside the complexity limit.
     private static func commonsRoutesEqual(_ lhs: Self, _ rhs: Self) -> Bool {
         switch (lhs, rhs) {
@@ -250,6 +262,11 @@ enum SheetRoute: Hashable {
         // A group by its photographs' pages, for the same reason.
         case let (.commonsPhotos(left), .commonsPhotos(right)):
             left.map(\.credit.license.sourceURL) == right.map(\.credit.license.sourceURL)
+        // By the page it opened at, and deliberately not the rest, for the
+        // reason a shared hike's gallery is: two pushes of the same picture
+        // are the same screen, whichever answer they paged through.
+        case let (.commonsGallery(_, left), .commonsGallery(_, right)):
+            left.credit.license.sourceURL == right.credit.license.sourceURL
         default: false
         }
     }
@@ -288,7 +305,8 @@ enum SheetRoute: Hashable {
         case let .walk(walk):
             hasher.combine(3)
             hasher.combine(walk.persistentModelID)
-        case .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .pendingSubmission, .pendingPhotos:
+        case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .pendingSubmission,
+            .pendingPhotos:
             hashCommunity(into: &hasher)
         case .trailDraft:
             hasher.combine(8)
@@ -345,6 +363,10 @@ enum SheetRoute: Hashable {
         case let .commonsPhotos(photos):
             hasher.combine(16)
             for photo in photos { hasher.combine(photo.credit.license.sourceURL) }
+        case let .commonsGallery(_, opening):
+            // 17 to 19 are numbers the linter would have named.
+            hasher.combine(20)
+            hasher.combine(opening.credit.license.sourceURL)
         case .hike, .newPlace, .photo, .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals,
             .trailDraft, .walk:
             break
