@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
@@ -100,5 +101,40 @@ struct SheetDestinationStateTests {
         presentation.path.append(route)
         #expect(presentation.walkShare(for: route) !== share)
         #expect(!presentation.walkShare(for: route).isPresented)
+    }
+
+    /// A turn of the phone replaces *Add Place*'s form, which closed the
+    /// camera it had open and came back emptied, so what it holds lives here
+    /// until the form is popped — by *Cancel*, or by *Add* putting the new
+    /// place's screen in its stead.
+    @Test("Add Place's form and its open camera outlive rotation, and go with the form")
+    func placeAdderFollowsTheNavigationLifetime() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let route = SheetRoute.newPlace(hike, HikePlaceSpot(CLLocationCoordinate2D(latitude: 47.6, longitude: 12.9)))
+        let presentation = SheetPresentation()
+        presentation.path = [.recording, route]
+        let form = presentation.placeAdder(for: route)
+        form.draft.name = "Lookout"
+        form.draft.setKind(.summit)
+        form.capture.showCamera = true
+
+        for layout in [SheetLayout.sidePanel, .bottomSheet] {
+            presentation.layout = layout
+            #expect(presentation.placeAdder(for: route) === form)
+            #expect(form.draft.name == "Lookout" && form.draft.symbol == .summit)
+            #expect(form.capture.showCamera, "the camera the form had open is presented again")
+        }
+
+        presentation.path.removeLast()
+        presentation.path.append(route)
+        #expect(presentation.placeAdder(for: route) !== form, "Cancel leaves nothing for the next form")
+        #expect(presentation.placeAdder(for: route).draft == HikePlaceDraft())
+        #expect(!presentation.placeAdder(for: route).capture.showCamera)
+
+        let added = presentation.placeAdder(for: route)
+        presentation.path[presentation.path.count - 1] = .place(hike, UUID())
+        presentation.path[presentation.path.count - 1] = route
+        #expect(presentation.placeAdder(for: route) !== added, "nor does Add")
     }
 }

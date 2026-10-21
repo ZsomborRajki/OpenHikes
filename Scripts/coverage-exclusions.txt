@@ -164,7 +164,9 @@
 #
 # `HikePlaceAdder` followed the same day, *Add Place* from the camera pill: a
 # form, entirely body code. What it decides is `HikePlaceDraft` and what it
-# files is `HikePlaceStagedPhoto`, each in a file and a suite of its own.
+# files is `HikePlaceStagedPhoto`, each in a file and a suite of its own —
+# and, since a turn of the phone stopped emptying it, what it holds is
+# `HikePlaceAdderSession`, which stays measured.
 #
 # Two arrived with the duplication sweep of 2026-09-25, and they are the
 # case the five from the earlier sweeps describe: body code folded out of
