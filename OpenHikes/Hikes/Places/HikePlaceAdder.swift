@@ -40,9 +40,17 @@
 //  through the same ``HikePhotoImport`` path, under the new place, and opens
 //  the place's screen.
 //
+//  ## Held by the sheet, not by this view
+//
+//  What the form has been told and handed — the name, kind and note, the
+//  photographs it is holding, and the camera or picker it has open — is a
+//  ``HikePlaceAdderSession`` the sheet keeps for as long as the form is on
+//  its stack. A turn of the phone moves the form between the sheet and the
+//  side panel, which replaces this view; see that type for what it cost while
+//  all of it was this view's own state.
+//
 
 import OpenHikesData
-import PhotosUI
 import SwiftData
 import SwiftUI
 
@@ -50,6 +58,10 @@ struct HikePlaceAdder: View {
     let hike: Hike
     let spot: HikePlaceSpot
     var placePins: TrailPlacePinController?
+    /// Everything the form has been told and handed, kept by the sheet rather
+    /// than here: a rotation replaces this view — see
+    /// ``HikePlaceAdderSession``.
+    @Bindable var session: HikePlaceAdderSession
     /// Called with the new place's id once it and its photographs are on the
     /// hike.
     let onAdded: (UUID) -> Void
@@ -57,21 +69,6 @@ struct HikePlaceAdder: View {
 
     @Environment(\.modelContext) private var modelContext
     @AppStorage(SettingsKey.savePhotosToLibrary) private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
-    @State private var draft = HikePlaceDraft()
-    @State private var photos: [HikePlaceStagedPhoto] = []
-    @State private var capture = PhotoCaptureState()
-    @State private var isAdding = false
-    /// Photographs taken or picked that are still being read into the strip.
-    /// *Add* waits for them: it files what the strip holds, and a frame
-    /// straight off the camera that arrived a moment after it would be lost.
-    @State private var stagingCount = 0
-    /// The place, once it is on the hike, while an alert about a photograph
-    /// that did not make it is still up. The place's screen opens when the
-    /// alert goes.
-    @State private var addedID: UUID?
-    /// Set when *Add*'s save was refused. The form stays up under it, as it
-    /// was, so tapping *Add* again is the retry.
-    @State private var refusal: HikePlaceRefusal?
 
     var body: some View {
         ScrollView {
@@ -83,15 +80,13 @@ struct HikePlaceAdder: View {
                     .accessibilityIdentifier("hike-place-adder-placement-hint")
                 actions
                 fields
-                HikePlaceStagedPhotoStrip(photos: photos) { removed in
-                    photos.removeAll { $0.id == removed }
-                }
+                HikePlaceStagedPhotoStrip(session: session)
                 HikePlaceAdderLocation(spot: spot, placePins: placePins)
             }
             .padding()
         }
         .softScrollEdgeEffect(for: .top)
-        .disabled(isAdding)
+        .disabled(session.isAdding)
         .navigationTitle(Text("New Place"))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -103,11 +98,11 @@ struct HikePlaceAdder: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button(role: .cancel, action: onCancel)
-                    .disabled(isAdding)
+                    .disabled(session.isAdding)
                     .accessibilityIdentifier("hike-place-adder-cancel")
             }
             ToolbarItem(placement: .confirmationAction) {
-                if isAdding || stagingCount > 0 {
+                if session.isAdding || session.stagingCount > 0 {
                     ProgressView()
                 } else {
                     Button(role: .confirm, action: add)
@@ -116,24 +111,31 @@ struct HikePlaceAdder: View {
             }
         }
         .background {
-            HikePlacePinClaim(hike: hike, controller: placePins, placeholder: draft.placeholder(at: spot))
+            HikePlacePinClaim(hike: hike, controller: placePins, placeholder: session.draft.placeholder(at: spot))
         }
-        .photoCapturePickers($capture, onCaptured: stage, onPicked: stage)
-        .photoCaptureAlerts($capture)
-        .hikePlaceRefusalAlert($refusal)
-        .onChange(of: capture.failure) { _, failure in
-            guard failure == nil, let addedID else { return }
+        // The session's own staging rather than this view's: a camera this
+        // form presented can outlive it by a turn of the phone, and its
+        // picture belongs to the form the new host draws.
+        .photoCapturePickers(
+            $session.capture,
+            onCaptured: { frame in session.stage(frame) },
+            onPicked: { items in session.stage(items) }
+        )
+        .photoCaptureAlerts($session.capture)
+        .hikePlaceRefusalAlert($session.refusal)
+        .onChange(of: session.capture.failure) { _, failure in
+            guard failure == nil, let addedID = session.addedID else { return }
             onAdded(addedID)
         }
         .accessibilityIdentifier("hike-place-adder")
     }
 
     private var header: some View {
-        let shown = draft.placeholder(at: spot).place
+        let shown = session.draft.placeholder(at: spot).place
         return PlaceCardHeader {
             TrailPlaceBadge(systemImage: shown.systemImageName, tint: shown.tint)
         } title: {
-            Text(draft.displayName)
+            Text(session.draft.displayName)
                 .lineLimit(2)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("hike-place-adder-title")
@@ -149,8 +151,8 @@ struct HikePlaceAdder: View {
                 libraryIdentifier: "hike-place-adder-library",
                 onCamera: { Task { await openCamera() } },
                 onLibrary: {
-                    capture.pickedPhotos = []
-                    capture.showLibraryPicker = true
+                    session.capture.pickedPhotos = []
+                    session.capture.showLibraryPicker = true
                 }
             )
         }
@@ -160,15 +162,21 @@ struct HikePlaceAdder: View {
 
     private var fields: some View {
         StatList(title: String(localized: "Details")) {
-            TextField("Name", text: $draft.name, prompt: Text(TrailPlace.unnamedName(for: draft.symbol)))
-                .trailPlaceRow()
-                .accessibilityIdentifier("hike-place-adder-name")
+            TextField(
+                "Name",
+                text: $session.draft.name,
+                prompt: Text(TrailPlace.unnamedName(for: session.draft.symbol))
+            )
+            .trailPlaceRow()
+            .accessibilityIdentifier("hike-place-adder-name")
             LabeledContent("Kind") {
-                TrailPlaceKindPicker(selection: Binding(get: { draft.symbol }, set: { draft.setKind($0) }))
-                    .labelsHidden()
+                TrailPlaceKindPicker(
+                    selection: Binding(get: { session.draft.symbol }, set: { session.draft.setKind($0) })
+                )
+                .labelsHidden()
             }
             .trailPlaceRow()
-            TextField("Note", text: $draft.note, axis: .vertical)
+            TextField("Note", text: $session.draft.note, axis: .vertical)
                 .lineLimit(1...6)
                 .trailPlaceRow()
                 .accessibilityIdentifier("hike-place-adder-note")
@@ -180,39 +188,9 @@ struct HikePlaceAdder: View {
     /// ``OpenHikesView/presentCamera()`` gives: it is a simulator.
     private func openCamera() async {
         switch await CameraAccess.request() {
-        case .granted: capture.showCamera = true
-        case .denied: capture.cameraAccessDenied = true
+        case .granted: session.capture.showCamera = true
+        case .denied: session.capture.cameraAccessDenied = true
         case .unavailable: break
-        }
-    }
-
-    private func stage(_ frame: CapturedFrame) {
-        stagingCount += 1
-        Task {
-            defer { stagingCount -= 1 }
-            let thumbnail = await HikePlaceStagedPhoto.thumbnail(of: frame.image)
-            photos.append(HikePlaceStagedPhoto(source: .captured(frame), thumbnail: thumbnail))
-        }
-    }
-
-    /// Loads what was picked now rather than at *Add*, so the strip can show
-    /// it and a picture that cannot be read is reported while the hiker is
-    /// still choosing.
-    private func stage(_ items: [PhotosPickerItem]) {
-        stagingCount += 1
-        Task {
-            defer { stagingCount -= 1 }
-            for item in items {
-                guard let data = try? await item.loadTransferable(type: Data.self) else {
-                    capture.failure = .importFailed
-                    continue
-                }
-                let thumbnail = await HikePlaceStagedPhoto.thumbnail(of: data)
-                photos.append(HikePlaceStagedPhoto(
-                    source: .picked(data, assetLocalIdentifier: item.itemIdentifier),
-                    thumbnail: thumbnail
-                ))
-            }
         }
     }
 
@@ -220,17 +198,17 @@ struct HikePlaceAdder: View {
     /// opens it — after the alert, if a photograph did not make it. A refused
     /// save leaves the form and its photographs as they were.
     private func add() {
-        guard !isAdding, stagingCount == 0, hike.isAttached else { return }
+        guard !session.isAdding, session.stagingCount == 0, hike.isAttached else { return }
         // Where the pin stands now, not where the form opened.
-        let place = draft.place(at: placePins?.placement(of: spot) ?? spot)
+        let place = session.draft.place(at: placePins?.placement(of: spot) ?? spot)
         do throws(HikePlaceRefusal) {
             guard try HikePlaceChange.add(place, to: hike, in: modelContext) else { return }
         } catch {
-            refusal = error
+            session.refusal = error
             return
         }
-        isAdding = true
-        let staged = photos
+        session.isAdding = true
+        let staged = session.photos
         let savesCaptures = savePhotosToLibrary
         Task {
             var failure: PhotoCaptureState.Failure?
@@ -246,13 +224,13 @@ struct HikePlaceAdder: View {
                     if failure != .captureNotStored { failure = lost }
                 }
             }
-            isAdding = false
+            session.isAdding = false
             guard let failure else {
                 onAdded(place.id)
                 return
             }
-            addedID = place.id
-            capture.failure = failure
+            session.addedID = place.id
+            session.capture.failure = failure
         }
     }
 }
@@ -274,7 +252,8 @@ private struct HikePlaceAdderLocation: View {
 ///
 /// Its own view so the strip belongs to it rather than to the form, whose
 /// every keystroke would otherwise rebuild it — ``HikePlaceView``'s strip is
-/// split out for the same reason.
+/// split out for the same reason. It reads the photographs off the session
+/// itself, so one arriving redraws the strip and not the form.
 private struct HikePlaceStagedPhotoStrip: View {
     /// The remove button's scrim, dark enough for its white cross to read
     /// over a bright sky.
@@ -283,10 +262,10 @@ private struct HikePlaceStagedPhotoStrip: View {
     /// What a tile shows for a photograph no thumbnail could be made of.
     private static let pendingOpacity = 0.2
 
-    let photos: [HikePlaceStagedPhoto]
-    let onRemove: (UUID) -> Void
+    let session: HikePlaceAdderSession
 
     var body: some View {
+        let photos = session.photos
         VStack(alignment: .leading, spacing: 8) {
             Text("Photos")
                 .font(.headline)
@@ -315,7 +294,7 @@ private struct HikePlaceStagedPhotoStrip: View {
             .frame(width: PhotoTileMetrics.stripTileSize, height: PhotoTileMetrics.stripTileSize)
             .clipShape(.rect(cornerRadius: PhotoTileMetrics.cornerRadius))
             .overlay(alignment: .topTrailing) {
-                Button("Remove Photo", systemImage: "xmark.circle.fill") { onRemove(photo.id) }
+                Button("Remove Photo", systemImage: "xmark.circle.fill") { session.remove(photo.id) }
                     .labelStyle(.iconOnly)
                     .symbolRenderingMode(.palette)
                     .foregroundStyle(.white, .black.opacity(Self.scrimOpacity))

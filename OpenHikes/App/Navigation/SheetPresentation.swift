@@ -227,6 +227,9 @@ final class SheetPresentation {
     @ObservationIgnored private var communityPhotoSelections: [SheetRoute: CommunityPhotoSelection] = [:]
     /// The same, for a walk summary's share card — see ``WalkShareSession``.
     @ObservationIgnored private var walkShares: [SheetRoute: WalkShareSession] = [:]
+    /// The same, for *Add Place*'s form and the camera it has open — see
+    /// ``HikePlaceAdderSession``.
+    @ObservationIgnored private var placeAdders: [SheetRoute: HikePlaceAdderSession] = [:]
     /// The screens that have brought what they are about into view — see
     /// ``claimsFirstFraming(of:)``.
     @ObservationIgnored private var framedRoutes: Set<SheetRoute> = []
@@ -432,6 +435,13 @@ final class SheetPresentation {
         return session
     }
 
+    func placeAdder(for route: SheetRoute) -> HikePlaceAdderSession {
+        if let existing = placeAdders[route] { return existing }
+        let session = HikePlaceAdderSession()
+        placeAdders[route] = session
+        return session
+    }
+
     /// Whether this is the first time since `route` was pushed that its
     /// screen asks to bring what it is about into view: `true` once, then
     /// `false` until the route is popped.
@@ -622,6 +632,7 @@ final class SheetPresentation {
         photoSelections = photoSelections.filter { storedPath.contains($0.key) }
         communityPhotoSelections = communityPhotoSelections.filter { storedPath.contains($0.key) }
         walkShares = walkShares.filter { storedPath.contains($0.key) }
+        placeAdders = placeAdders.filter { storedPath.contains($0.key) }
         framedRoutes = framedRoutes.filter { storedPath.contains($0) }
         let recording = storedPath.last == .recording
         if isRecordingPresented != recording { isRecordingPresented = recording }

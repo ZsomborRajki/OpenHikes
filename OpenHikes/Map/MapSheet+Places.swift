@@ -23,7 +23,7 @@ extension MapSheet {
         case let .place(hike, placeID):
             placeDestination(placeID, of: hike)
         case let .newPlace(hike, spot):
-            placeAdderDestination(at: spot, on: hike)
+            placeAdderDestination(at: spot, on: hike, session: presentation.placeAdder(for: route))
         case let .placesAround(hike):
             placesAroundDestination(of: hike)
         case let .placesNearby(hike):
@@ -108,11 +108,19 @@ extension MapSheet {
     ///
     /// Adding replaces the form with the new place's screen rather than
     /// stacking it, so back from there is the hike rather than a spent form.
-    func placeAdderDestination(at spot: HikePlaceSpot, on hike: Hike) -> some View {
+    /// What the form holds is kept by the presentation rather than by the
+    /// form, so a rotation neither empties it nor leaves its camera closed —
+    /// see ``HikePlaceAdderSession``.
+    func placeAdderDestination(
+        at spot: HikePlaceSpot,
+        on hike: Hike,
+        session: HikePlaceAdderSession
+    ) -> some View {
         HikePlaceAdder(
             hike: hike,
             spot: spot,
             placePins: placePins,
+            session: session,
             onAdded: { placeID in
                 guard case .newPlace = presentation.path.last else { return }
                 presentation.path[presentation.path.count - 1] = .place(hike, placeID)
