@@ -224,6 +224,52 @@ struct TrailDraftChosenWayTests {
         #expect(reopened.legs.first?.snap == chosenSnap, "the new answer describes a different path")
     }
 
+    /// The other half of the same rule: the router's ways, offered beside a
+    /// remembered one, keep what its answer said about them.
+    @Test(
+        "the router's way tapped back over a remembered one carries the router's access warning",
+        arguments: [true, false]
+    )
+    func theRoutersWayKeepsItsAccessWarning(routerHasUncheckedAccess: Bool) throws {
+        let further = Self.way(along: Self.ends, bowing: 3 * Line.bow)
+        var choice = TrailLegChoice(further, between: Self.ends)
+        choice.hasUncheckedAccess = !routerHasUncheckedAccess
+        let routerSnap: TrailLegSnap = routerHasUncheckedAccess ? .unmapped(.endpointOffNetwork) : .snapped
+        let choiceSnap: TrailLegSnap = routerHasUncheckedAccess ? .snapped : .unmapped(.endpointOffNetwork)
+        let draft = TrailDraft()
+        draft.replace(
+            with: [Line.south, Line.north].map { TrailWaypoint(coordinate: Self.coordinate($0)) },
+            places: [],
+            snapsToPaths: true,
+            chosenLegs: [choice]
+        )
+        draft.beginRouting([Self.ends])
+        draft.apply(
+            TrailLegRoute(
+                coordinates: Self.west.coordinates,
+                distanceMeters: Self.west.distanceMeters,
+                snap: routerSnap,
+                alternatives: [Self.east]
+            ),
+            to: Self.ends
+        )
+        try #require(draft.legs.first?.coordinates == further.coordinates)
+        try #require(draft.legs.first?.snap == choiceSnap)
+
+        draft.chooseAlternative(0, forLegAt: 0)
+        #expect(draft.legs.first?.coordinates == Self.west.coordinates)
+        #expect(draft.legs.first?.snap == routerSnap, "what the router said about its own way")
+        #expect(draft.chosenLegs.first?.hasUncheckedAccess == routerHasUncheckedAccess, "and what is written down")
+
+        let other = try #require(draft.legs.first?.alternatives.firstIndex { $0.coordinates == Self.east.coordinates })
+        draft.chooseAlternative(other, forLegAt: 0)
+        #expect(draft.legs.first?.snap == routerSnap, "the answer's other way shares it")
+
+        let back = try #require(draft.legs.first?.alternatives.firstIndex { $0.coordinates == further.coordinates })
+        draft.chooseAlternative(back, forLegAt: 0)
+        #expect(draft.legs.first?.snap == choiceSnap, "and the remembered way has its own back")
+    }
+
     /// A refusal says the leg could not be asked about; the choice is not an
     /// answer to that, and waits for the next one.
     @Test("a refusal is drawn as one, and the choice waits for the next answer")
@@ -253,5 +299,30 @@ struct TrailDraftChosenWayTests {
 
         draft.remove(atOffsets: IndexSet([1]))
         #expect(draft.chosenLegs.isEmpty)
+    }
+
+    /// The hike's copy is a field of its CloudKit record rather than an asset,
+    /// so the ways it carries are bounded — see ``DrawnRoute``. A way that
+    /// would pass the bound is left out, and the ones after it still go.
+    @Test("the saved route leaves out a chosen way that would pass the bound, and keeps the rest")
+    func theSavedRouteBoundsTheChosenWays() {
+        let stops = [Line.south, Line.middle, Line.north, Line.north + 0.002]
+            .map { TrailWaypoint(coordinate: Self.coordinate($0)) }
+        let choices = zip(zip(stops, stops.dropFirst()), [DrawnRoute.maximumChosenCoordinates - 2, 3, 2])
+            .map { pair, count in
+                let leg = TrailLegEnds(from: pair.0, to: pair.1)
+                return TrailLegChoice(
+                    start: leg.start,
+                    end: leg.end,
+                    coordinates: Array(repeating: leg.start, count: count),
+                    distanceMeters: 0,
+                    travelTime: nil
+                )
+            }
+        let draft = TrailDraft()
+        draft.replace(with: stops, places: [], snapsToPaths: true, chosenLegs: choices)
+        #expect(draft.chosenLegs == choices, "the draft on this device keeps them all")
+
+        #expect(DrawnRoute(draft).chosenLegs == [choices[0], choices[2]])
     }
 }

@@ -23,6 +23,19 @@
 //  actually walked would replace it with a guess (the owner's decision: Edit
 //  Route is for maker-born hikes only).
 //
+//  ## A field, not an asset, so the chosen ways are bounded
+//
+//  Everything here was a few hundred bytes until ``chosenLegs`` put leg
+//  shapes in it, and a snapped leg can be thousands of points. Unlike
+//  ``Hike/route`` this column has no external storage, so it travels inside
+//  the hike's `CKRecord`, whose fields have to add up to less than a megabyte
+//  — a plan with enough long legs chosen would stop the whole hike syncing.
+//  So the ways written here share ``maximumChosenCoordinates``, and a way that
+//  would pass it is left out: its leg reopens on the router's default, the
+//  loss this column exists to prevent, but only once the ways chosen add up
+//  to thousands of points. The draft on this device is unmirrored and keeps
+//  every choice.
+//
 //  ## A published trail that was edited
 //
 //  A submission is write-once, and *Share Again* is gone for the reason the
@@ -74,7 +87,24 @@ extension DrawnRoute {
         travelMode = draft.travelMode
         snapsToPaths = draft.snapsToPaths
         self.editedUnderSubmissionID = editedUnderSubmissionID
-        chosenLegs = draft.chosenLegs
+        chosenLegs = Self.fitting(draft.chosenLegs)
+    }
+
+    /// How many points the chosen ways may carry between them — see the file
+    /// header. At about sixty bytes a point as JSON, a few hundred kilobytes
+    /// at most, which leaves the rest of the record its room.
+    static let maximumChosenCoordinates = 5000
+
+    /// `choices` in drawing order, leaving out any way that would take them
+    /// past ``maximumChosenCoordinates``.
+    static func fitting(_ choices: [TrailLegChoice]) -> [TrailLegChoice] {
+        var remaining = maximumChosenCoordinates
+        var kept: [TrailLegChoice] = []
+        for choice in choices where choice.coordinates.count <= remaining {
+            remaining -= choice.coordinates.count
+            kept.append(choice)
+        }
+        return kept
     }
 }
 
