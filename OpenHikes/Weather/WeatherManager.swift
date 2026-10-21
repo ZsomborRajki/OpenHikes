@@ -555,16 +555,23 @@ final class WeatherManager {
         }
     }
 
-    /// Daylight for the walk, checked against where the reading was requested.
+    /// Today's light for the walk on `hikeID`, from the newest cached reading
+    /// that is about it — see ``WeatherSubject/isAbout(walkOn:at:)``.
     ///
-    /// The badge's subject follows the focus even while it shows a cached
-    /// forecast. Its current coordinate can be far from the reading's, so
-    /// proximity must use the cached subject until a new reading arrives.
+    /// Asked of the cache rather than of the badge. The badge follows
+    /// browsing and the walk does not, so a hiker who glances at a trail in
+    /// another country and pockets the phone leaves the badge there for the
+    /// rest of the walk; the walked trail's own reading, still cached, is the
+    /// walk's dusk all the same. Each entry is measured against the subject
+    /// it was requested for, since a focus that moves reuses the forecast
+    /// before a new one arrives. The newest capture wins because the cache is
+    /// ordered by use, and a trail last opened yesterday still holds
+    /// yesterday's dusk.
     func daylight(forWalkOn hikeID: UUID, at coordinate: CLLocationCoordinate2D?) -> WeatherDaylight? {
-        guard case .reading(_, let subject) = state,
-              let reading = cache[subject.key] else { return nil }
-        return WeatherBadgeState.reading(reading.snapshot, subject: reading.subject)
-            .daylight(forWalkOn: hikeID, at: coordinate)
+        cache.values
+            .filter { $0.snapshot.daylight != nil && $0.subject.isAbout(walkOn: hikeID, at: coordinate) }
+            .max { $0.snapshot.capturedAt < $1.snapshot.capturedAt }?
+            .snapshot.daylight
     }
 
     /// Fetches current weather for `subject`, keeping the last reading for it

@@ -40,15 +40,16 @@ extension TrailWalkSessionTests {
         )
     }
 
-    /// Dusk in eight minutes, which the rest of the fixture trail outlasts.
-    private func readingWithDuskSoon() -> WeatherSnapshot {
+    /// Dusk in eight minutes by default, which the rest of the fixture trail
+    /// outlasts.
+    private func reading(duskIn seconds: TimeInterval = 8 * 60) -> WeatherSnapshot {
         WeatherSnapshot(
             symbolName: "sun.max.fill",
             temperature: Measurement(value: 12, unit: UnitTemperature.celsius),
             conditionDescription: "Clear",
             capturedAt: clock.read(),
             conditions: .preview,
-            daylight: WeatherDaylight(civilDusk: clock.read().addingTimeInterval(8 * 60))
+            daylight: WeatherDaylight(civilDusk: clock.read().addingTimeInterval(seconds))
         )
     }
 
@@ -162,7 +163,7 @@ extension TrailWalkSessionTests {
         let browsedID = UUID()
         let weather = WeatherManager(widgetPublisher: .inert)
         weather.applyUITestSnapshot(
-            readingWithDuskSoon(),
+            reading(),
             subject: .trail(farAway, hikeID: browsedID, name: "Elsewhere")
         )
         let session = weatherSession(harness, weather: weather)
@@ -174,10 +175,34 @@ extension TrailWalkSessionTests {
 
         // Back on the walked trail: its own dusk is the one that counts.
         weather.applyUITestSnapshot(
-            readingWithDuskSoon(),
+            reading(),
             subject: .trail(farAway, hikeID: walked.id, name: walked.title)
         )
         walk(session, hike: walked, profile: profile, from: 3, through: 3)
+        await harness.controller.settle()
+        #expect(harness.notifier.postedKinds == [.afterDark])
+    }
+
+    /// The other half of #874: the badge left on a distant trail must not
+    /// silence the walk either, while the walked trail's own reading is still
+    /// cached. A hiker who glances at another trail and pockets the phone
+    /// leaves the badge there for the rest of the walk.
+    @Test("a distant trail on the badge mid-walk leaves the walked trail's dusk in force")
+    func browsingAwayKeepsTheWalksDusk() async throws {
+        let harness = MovementReminderHarness.harness()
+        let walked = hike()
+        let start = try #require(walked.route.first)
+        let here = CLLocationCoordinate2D(latitude: start.latitude, longitude: start.longitude)
+        let farAway = CLLocationCoordinate2D(latitude: here.latitude + 2, longitude: here.longitude)
+        let weather = WeatherManager(widgetPublisher: .inert)
+        weather.applyUITestSnapshot(reading(), subject: .trail(here, hikeID: walked.id, name: walked.title))
+        weather.applyUITestSnapshot(
+            reading(duskIn: 10 * 3600),
+            subject: .trail(farAway, hikeID: UUID(), name: "Elsewhere")
+        )
+        let session = weatherSession(harness, weather: weather)
+
+        walk(session, hike: walked, profile: RouteProfile(route: walked.route), from: 0, through: 3)
         await harness.controller.settle()
         #expect(harness.notifier.postedKinds == [.afterDark])
     }
@@ -191,7 +216,7 @@ extension TrailWalkSessionTests {
         let farAway = CLLocationCoordinate2D(latitude: here.latitude + 2, longitude: here.longitude)
         let subject: WeatherSubject = isTrail ? .trail(farAway, hikeID: UUID(), name: "Nearby") : .me(farAway)
         let weather = WeatherManager(widgetPublisher: .inert)
-        weather.applyUITestSnapshot(readingWithDuskSoon(), subject: subject)
+        weather.applyUITestSnapshot(reading(), subject: subject)
         weather.focus(on: subject.moved(to: here), willRequest: true)
         let session = weatherSession(harness, weather: weather)
         let profile = RouteProfile(route: walked.route)
@@ -200,7 +225,7 @@ extension TrailWalkSessionTests {
         await harness.controller.settle()
         #expect(harness.notifier.posted.isEmpty)
 
-        weather.applyUITestSnapshot(readingWithDuskSoon(), subject: subject.moved(to: here))
+        weather.applyUITestSnapshot(reading(), subject: subject.moved(to: here))
         walk(session, hike: walked, profile: profile, from: 3, through: 4)
         await harness.controller.settle()
         #expect(harness.notifier.postedKinds == [.afterDark])

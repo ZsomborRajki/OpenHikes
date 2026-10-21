@@ -250,7 +250,7 @@ final class WeatherFocus {
     }
 
     /// Straight-line distance, which the follow radius is measured in — here
-    /// and in ``WeatherBadgeState/daylight(forWalkOn:at:)``.
+    /// and in ``WeatherSubject/isAbout(walkOn:at:)``.
     nonisolated static func distance(
         from origin: CLLocationCoordinate2D,
         to destination: CLLocationCoordinate2D
