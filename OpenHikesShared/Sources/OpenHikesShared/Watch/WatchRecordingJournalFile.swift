@@ -48,10 +48,15 @@ public struct WatchRecordingJournalFile: Sendable {
     /// lose the retry and everything written after it.
     public func append(_ entries: [WatchRecordingJournalEntry]) throws {
         guard !entries.isEmpty else { return }
-        var data = Data()
-        for entry in entries { data.append(try entry.line()) }
+        // Opened before anything is encoded. A journal whose header never
+        // landed refuses every write for the rest of the walk, and the
+        // writer retries with every line while what it has waiting grows, so
+        // encoding first would encode the whole backlog again per fix only to
+        // be refused.
         let handle = try FileHandle(forWritingTo: url)
         defer { try? handle.close() }
+        var data = Data()
+        for entry in entries { data.append(try entry.line()) }
         let end = try handle.seekToEnd()
         do {
             try handle.write(contentsOf: data)
