@@ -2,13 +2,13 @@
 //  WalkDaylightTests.swift
 //  OpenHikesTests
 //
-//  Which of the badge's readings may tell a walk when its light goes.
+//  Which readings may tell a walk when its light goes.
 //
 //  The badge follows what the hiker is looking at, and the walk does not:
 //  browsing another trail leaves the walk running on its own. So the dusk an
 //  after-dark warning is measured against has to be asked of the walk —
 //  which hike, and where on it — rather than taken from whatever the badge
-//  shows. See ``WeatherBadgeState/daylight(forWalkOn:at:)``.
+//  shows. See ``WeatherSubject/isAbout(walkOn:at:)``.
 //
 
 import CoreLocation
@@ -18,7 +18,6 @@ import Testing
 
 @Suite("Walk daylight")
 struct WalkDaylightTests {
-    private static let noon = Date(timeIntervalSince1970: 1_780_000_000)
     private static let walkedID = UUID()
     private static let browsedID = UUID()
     private static let budapest = CLLocationCoordinate2D(latitude: 47.4979, longitude: 19.0402)
@@ -26,21 +25,6 @@ struct WalkDaylightTests {
     private static let nearBudapest = CLLocationCoordinate2D(latitude: 47.5250, longitude: 19.0402)
     /// About 215 km from ``budapest`` — far outside it.
     private static let vienna = CLLocationCoordinate2D(latitude: 48.2082, longitude: 16.3738)
-    private static let daylight = WeatherDaylight(civilDusk: noon.addingTimeInterval(8 * 3600))
-
-    private static func reading(about subject: WeatherSubject) -> WeatherBadgeState {
-        .reading(
-            WeatherSnapshot(
-                symbolName: "sun.max.fill",
-                temperature: Measurement(value: 12, unit: UnitTemperature.celsius),
-                conditionDescription: "Clear",
-                capturedAt: noon,
-                conditions: .preview,
-                daylight: daylight
-            ),
-            subject: subject
-        )
-    }
 
     // MARK: About this walk
 
@@ -49,26 +33,24 @@ struct WalkDaylightTests {
     /// still be the walk's.
     @Test("the walked trail's own reading counts wherever it was taken")
     func theWalkedTrailCounts() {
-        let state = Self.reading(about: .trail(Self.vienna, hikeID: Self.walkedID, name: "Ridge Loop"))
+        let subject = WeatherSubject.trail(Self.vienna, hikeID: Self.walkedID, name: "Ridge Loop")
 
-        #expect(state.daylight(forWalkOn: Self.walkedID, at: Self.budapest) == Self.daylight)
-        #expect(state.daylight(forWalkOn: Self.walkedID, at: nil) == Self.daylight)
+        #expect(subject.isAbout(walkOn: Self.walkedID, at: Self.budapest))
+        #expect(subject.isAbout(walkOn: Self.walkedID, at: nil))
     }
 
     @Test("a reading about the hiker counts where the walk is")
     func theHikerNearbyCounts() {
-        let state = Self.reading(about: .me(Self.nearBudapest))
-
-        #expect(state.daylight(forWalkOn: Self.walkedID, at: Self.budapest) == Self.daylight)
+        #expect(WeatherSubject.me(Self.nearBudapest).isAbout(walkOn: Self.walkedID, at: Self.budapest))
     }
 
     /// Another trail on the same hillside has the walk's sky, so its dusk is
     /// the walk's dusk to any precision a reminder needs.
     @Test("another trail near the walk counts")
     func aNearbyTrailCounts() {
-        let state = Self.reading(about: .trail(Self.nearBudapest, hikeID: Self.browsedID, name: "Pilis Loop"))
+        let subject = WeatherSubject.trail(Self.nearBudapest, hikeID: Self.browsedID, name: "Pilis Loop")
 
-        #expect(state.daylight(forWalkOn: Self.walkedID, at: Self.budapest) == Self.daylight)
+        #expect(subject.isAbout(walkOn: Self.walkedID, at: Self.budapest))
     }
 
     // MARK: About somewhere else
@@ -77,43 +59,31 @@ struct WalkDaylightTests {
     /// country away, and the warning measured against the other one's dusk.
     @Test("a distant trail being browsed mid-walk does not count")
     func aDistantBrowsedTrailDoesNotCount() {
-        let state = Self.reading(about: .trail(Self.vienna, hikeID: Self.browsedID, name: "Wienerwald"))
+        let subject = WeatherSubject.trail(Self.vienna, hikeID: Self.browsedID, name: "Wienerwald")
 
-        #expect(state.daylight(forWalkOn: Self.walkedID, at: Self.budapest) == nil)
+        #expect(!subject.isAbout(walkOn: Self.walkedID, at: Self.budapest))
     }
 
     @Test("a reading about the hiker somewhere far from the walk does not count")
     func aDistantHikerReadingDoesNotCount() {
-        let state = Self.reading(about: .me(Self.vienna))
-
-        #expect(state.daylight(forWalkOn: Self.walkedID, at: Self.budapest) == nil)
+        #expect(!WeatherSubject.me(Self.vienna).isAbout(walkOn: Self.walkedID, at: Self.budapest))
     }
 
     /// Without a position, nothing but the walked trail is known to be about
     /// the walk — not even "here", which may have been read anywhere.
     @Test("with no position for the walk, only its own trail counts")
     func noPositionOnlyItsOwnTrail() {
-        let other = Self.reading(about: .trail(Self.budapest, hikeID: Self.browsedID, name: "Pilis Loop"))
-        let hiker = Self.reading(about: .me(Self.budapest))
+        let other = WeatherSubject.trail(Self.budapest, hikeID: Self.browsedID, name: "Pilis Loop")
 
-        #expect(other.daylight(forWalkOn: Self.walkedID, at: nil) == nil)
-        #expect(hiker.daylight(forWalkOn: Self.walkedID, at: nil) == nil)
+        #expect(!other.isAbout(walkOn: Self.walkedID, at: nil))
+        #expect(!WeatherSubject.me(Self.budapest).isAbout(walkOn: Self.walkedID, at: nil))
     }
 
     /// The hiker asked about the city, not about where they stand.
     @Test("a searched place never counts, however near")
     func aSearchedPlaceNeverCounts() {
-        let state = Self.reading(about: .place(Self.budapest, name: "Budapest"))
+        let subject = WeatherSubject.place(Self.budapest, name: "Budapest")
 
-        #expect(state.daylight(forWalkOn: Self.walkedID, at: Self.budapest) == nil)
-    }
-
-    @Test("a badge with no reading has no daylight")
-    func noReadingNoDaylight() {
-        let subject = WeatherSubject.trail(Self.budapest, hikeID: Self.walkedID, name: "Ridge Loop")
-
-        #expect(WeatherBadgeState.idle.daylight(forWalkOn: Self.walkedID, at: Self.budapest) == nil)
-        #expect(WeatherBadgeState.loading(subject).daylight(forWalkOn: Self.walkedID, at: Self.budapest) == nil)
-        #expect(WeatherBadgeState.unavailable(subject).daylight(forWalkOn: Self.walkedID, at: Self.budapest) == nil)
+        #expect(!subject.isAbout(walkOn: Self.walkedID, at: Self.budapest))
     }
 }

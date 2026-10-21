@@ -115,9 +115,9 @@ extension WeatherDaylight {
     }
 }
 
-extension WeatherBadgeState {
-    /// Today's light where the walk on `hikeID` is, or `nil` when the reading
-    /// on the badge is about somewhere else.
+extension WeatherSubject {
+    /// Whether a reading requested for this subject is about the walk on
+    /// `hikeID`, and so may tell it when its light goes — see ``DuskWatch``.
     ///
     /// The walk and the badge are not tied together: browsing another trail
     /// leaves the walk running and moves the badge to the trail being
@@ -130,22 +130,20 @@ extension WeatherBadgeState {
     /// hiker asked about that city, not about here. With no position for the
     /// walk, only the walked trail's own reading is about it.
     ///
-    /// A reading from another day needs no rule here: its dusk has passed,
-    /// and ``DuskWatch`` says nothing about a dusk that has passed.
-    /// ``WeatherManager/daylight(forWalkOn:at:)`` supplies the reading's
-    /// original subject here rather than the badge's moving focus.
-    func daylight(forWalkOn hikeID: UUID, at coordinate: CLLocationCoordinate2D?) -> WeatherDaylight? {
-        guard case let .reading(snapshot, subject) = self else { return nil }
-        switch subject {
+    /// Asked of the subject a reading was *requested* for, never of the
+    /// badge's focus, which moves on ahead of the next reading — see
+    /// ``WeatherManager/daylight(forWalkOn:at:)``. A reading from another day
+    /// needs no rule here: its dusk has passed, and ``DuskWatch`` says
+    /// nothing about a dusk that has passed.
+    nonisolated func isAbout(walkOn hikeID: UUID, at coordinate: CLLocationCoordinate2D?) -> Bool {
+        switch self {
         case .trail(_, hikeID, _):
-            return snapshot.daylight
+            true
         case .me(let readAt), .trail(let readAt, _, _):
-            guard let coordinate,
-                  WeatherFocus.distance(from: readAt, to: coordinate) <= WeatherFocus.trailFollowRadius
-            else { return nil }
-            return snapshot.daylight
+            coordinate.map { WeatherFocus.distance(from: readAt, to: $0) <= WeatherFocus.trailFollowRadius }
+                ?? false
         case .place:
-            return nil
+            false
         }
     }
 }
