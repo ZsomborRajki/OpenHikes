@@ -112,7 +112,7 @@ struct CommunityPhotoViewer: View {
         // ``photoGalleryChrome()``, which the hiker's own gallery wears too.
         return pages
             .photoGalleryChrome()
-            .overlay(alignment: .bottom) { controls(current) }
+            .overlay { controls(current) }
             .navigationTitle(title)
             .toolbar { toolbarContent(current) }
         .accessibilityIdentifier("community-photo-viewer")
@@ -174,32 +174,30 @@ struct CommunityPhotoViewer: View {
     /// map button's identifier does work. The same shape one screen over is
     /// why ``PhotoUITests`` asks for `app.buttons["Next photo"]`.
     ///
-    /// A Wikimedia Commons photograph has its credit above the pill, in the
-    /// one ``GlassStack`` with it — the arrangement the hiker's own gallery
-    /// uses for the same capsule, and for its reason: two pieces of glass that
-    /// nearly touch render as two panes unless they share a container. The
-    /// credit's visibility is its own, since a licence is owed on a gallery of
-    /// one as much as on a gallery of twelve. See ``PhotoLicenseCredit``.
+    /// A Wikimedia Commons photograph has its credit with the pill — above
+    /// it upright, and at the leading edge on a screen turned on its side —
+    /// laid out as the hiker's own gallery lays out the same capsule. See
+    /// ``PhotoGalleryControls``. The credit's visibility is its own, since a
+    /// licence is owed on a gallery of one as much as on a gallery of twelve.
+    /// See ``PhotoLicenseCredit``.
     private func controls(_ current: CommunityGalleryPhoto?) -> some View {
-        GlassStack(spacing: 6) {
-            VStack(spacing: 10) {
-                if let commons = current?.commons {
-                    PhotoLicenseCredit(author: commons.author, license: commons.license)
-                }
-                PhotoStepControls(
-                    previousIdentifier: "community-previous-photo-button",
-                    nextIdentifier: "community-next-photo-button",
-                    // This gallery's own question about its own list.
-                    hasDestination: { destination(by: $0) != nil },
-                    step: { step(by: $0) }
-                )
-                // On the pill rather than on the stack, so an empty glass
-                // capsule is not left behind on a gallery of one — and so a
-                // credit above it is not hidden with it.
-                .photoStepVisibility(count: photos.count)
+        PhotoGalleryControls { placement in
+            if let commons = current?.commons {
+                PhotoLicenseCredit(author: commons.author, license: commons.license, placement: placement)
             }
+        } steps: {
+            PhotoStepControls(
+                previousIdentifier: "community-previous-photo-button",
+                nextIdentifier: "community-next-photo-button",
+                // This gallery's own question about its own list.
+                hasDestination: { destination(by: $0) != nil },
+                step: { step(by: $0) }
+            )
+            // On the pill rather than on the controls, so an empty glass
+            // capsule is not left behind on a gallery of one — and so a
+            // credit beside it is not hidden with it.
+            .photoStepVisibility(count: photos.count)
         }
-        .padding(.bottom, 20)
     }
 
     @ToolbarContentBuilder

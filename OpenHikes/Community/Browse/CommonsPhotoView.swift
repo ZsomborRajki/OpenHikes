@@ -7,9 +7,9 @@
 //
 //  Laid out as the maker's place card is when it is about a photograph,
 //  because it is the same thing reached from the other side: the picture at
-//  the head with its credit on it (a tap opens it full screen), what it is and
-//  when it was taken, the place, and what can be done about it. See
-//  ``TrailPlacePhotoHeader``.
+//  the head with its credit on it (a tap pushes it full screen over this
+//  screen — see ``CommonsPhotoGallery``), what it is and when it was taken,
+//  the place, and what can be done about it. See ``TrailPlacePhotoHeader``.
 //
 //  The verb is *Plan a Trail Here*: the trail maker opens with **where the
 //  camera stood** as the destination and the start left open, as Apple Maps'
@@ -31,24 +31,34 @@ struct CommonsPhotoView: View {
     let found: CommunityCommonsPhotos
     let mapController: MapController
     let maker: TrailDraftController
+    /// Pushes the gallery over this screen: the photographs to page through,
+    /// and the one to open at.
+    let onOpenGallery: (_ photos: [CommonsPhoto], _ opening: CommonsPhoto) -> Void
 
     /// The address MapKit found, `nil` until it answers and for a spot it
     /// cannot place.
     @State private var address: String?
     /// The photograph the map was last asked to bring into view, so it is
-    /// asked once. `.task` runs again when the full-screen viewer closes, and
-    /// that viewer's own *Show on Map* has just put the camera on whichever
-    /// picture it was paged to.
+    /// asked once. `.task` runs again when the gallery pushed over this screen
+    /// is popped, and that gallery's own *Show on Map* has just put the camera
+    /// on whichever picture it was paged to.
     @State private var framed: URL?
     /// The photograph with a file still on disk, once the one this screen
     /// opened on has lost its own — see ``CommunityCommonsPhotos/usable(_:)``.
     @State private var restored: CommonsPhoto?
 
-    init(_ photo: CommonsPhoto, among found: CommunityCommonsPhotos, map: MapController, maker: TrailDraftController) {
+    init(
+        _ photo: CommonsPhoto,
+        among found: CommunityCommonsPhotos,
+        map: MapController,
+        maker: TrailDraftController,
+        onOpenGallery: @escaping (_ photos: [CommonsPhoto], _ opening: CommonsPhoto) -> Void
+    ) {
         self.photo = photo
         self.found = found
         mapController = map
         self.maker = maker
+        self.onOpenGallery = onOpenGallery
     }
 
     /// What the picture, its viewer and *Plan a Trail Here* read.
@@ -74,12 +84,14 @@ struct CommonsPhotoView: View {
             VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
                 TrailPlacePhotoHeader(
                     photo: current,
+                    accessibilityIdentifier: "commons-photo-header"
+                ) { [found, current, onOpenGallery] in
                     // The tab's answer to page through, unless a newer one
                     // has replaced the answer this photograph came from.
-                    gallery: { [found, current] in found.photos.contains(current) ? found.photos : [current] },
-                    mapController: mapController,
-                    accessibilityIdentifier: "commons-photo-header"
-                )
+                    // Read on the tap, so a search landing behind the screen
+                    // does not redraw it.
+                    onOpenGallery(found.photos.contains(current) ? found.photos : [current], current)
+                }
                 header
                 actions(at: camera)
                 TrailPlaceFactsAndLocation(facts: [], address: address, coordinate: camera)
@@ -170,5 +182,15 @@ struct CommonsPhotoView: View {
         // One height for the row, whichever word needs the most room at the
         // hiker's type size.
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+extension CommonsPhotoView: Equatable {
+    /// The photograph and what the screen draws from, by identity — and not
+    /// ``onOpenGallery``, which appends to the sheet's path whichever copy of
+    /// it runs. See `HikeDetailView+Equatable.swift`.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.photo == rhs.photo && lhs.found === rhs.found && lhs.mapController === rhs.mapController
+            && lhs.maker === rhs.maker
     }
 }

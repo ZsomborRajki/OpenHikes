@@ -128,6 +128,10 @@ nonisolated enum SeededCommons {
     static let count = 3
     /// The east photograph and the two taken beside it.
     static let groupCount = 3
+    /// The shape of every one of them — the source's 1008 by 756 frame, a
+    /// phone camera's 4:3 — which is what says where the black around one
+    /// is on a screen of any shape.
+    static let aspectRatio: CGFloat = 4.0 / 3.0
 }
 
 /// How many screens ``XCTestCase/awaitCommunityAnswer(_:in:)`` walks before

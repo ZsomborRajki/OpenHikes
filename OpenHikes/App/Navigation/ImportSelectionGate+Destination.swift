@@ -28,7 +28,10 @@ extension ImportSelectionGate {
         // A contributed set under review is the same kind of screen and gets
         // the same protection, keyed on its own queue entry.
         case .pendingPhotos(let pending): return .pendingSubmission(pending.id)
-        case .commonsPhoto(let photo): return .commonsPhoto(photo.credit.license.sourceURL)
+        // The gallery over a photograph is its screen one push further in, on
+        // the terms a shared hike's is its preview's.
+        case .commonsPhoto(let photo), .commonsGallery(_, let photo):
+            return .commonsPhoto(photo.credit.license.sourceURL)
         case .commonsPhotos(let photos): return .commonsPhotos(photos.map(\.credit.license.sourceURL))
         case .hike, .newPlace, .photo, .place, .placesAround, .routeStyle, .walk: return .root
         }
@@ -46,8 +49,8 @@ extension ImportSelectionGate {
         case .placesAround(let hike): hike.id
         case .routeStyle(let hike): hike.id
         case .walk(let walk): walk.hikeID
-        case .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .pendingPhotos, .pendingSubmission,
-            .placesNearby, .recording, .totals, .trailDraft:
+        case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .pendingPhotos,
+            .pendingSubmission, .placesNearby, .recording, .totals, .trailDraft:
             nil
         }
     }

@@ -23,6 +23,11 @@ struct PhotoLicenseCredit: View {
     /// — the capsule then says the licence alone and the page says the rest.
     let author: String?
     let license: HikePhotoLicense
+    /// Where it stands over the photograph. In the narrow column beside one
+    /// the credit is set on two lines — who, then the licence — so a narrow
+    /// column breaks it between the two rather than inside *CC BY-SA*. See
+    /// ``PhotoGalleryControls``.
+    var placement = PhotoCreditPlacement.underneath
 
     var body: some View {
         Menu {
@@ -35,11 +40,8 @@ struct PhotoLicenseCredit: View {
                 }
             }
         } label: {
-            Text(line)
-                .font(.footnote)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .glassSurface(.regular, in: Capsule())
+            text
+                .photoCreditSurface(placement)
                 // A capsule of footnote text is shorter than a finger: the
                 // target grows to the minimum and the glass keeps its size.
                 .minimumTapTarget()
@@ -53,6 +55,18 @@ struct PhotoLicenseCredit: View {
     }
 
     private var line: String { Self.line(author: author, license: license) }
+
+    @ViewBuilder private var text: some View {
+        switch placement {
+        case .underneath:
+            Text(line)
+        case .beside:
+            VStack(alignment: .leading, spacing: 2) {
+                Text(author.map { String(localized: "Photo by \($0)") } ?? String(localized: "Photo"))
+                Text(license.name)
+            }
+        }
+    }
 
     /// The credit in words — also what the maker's photo pins are called to
     /// VoiceOver, since it is the one thing about the picture this app knows.

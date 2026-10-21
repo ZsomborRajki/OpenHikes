@@ -130,4 +130,32 @@ struct ImportSelectionGateTests {
             )
         )
     }
+
+    /// The gallery a Commons photograph's screen pushes is that screen one
+    /// push further in, as a shared hike's gallery is its preview's: an
+    /// import finishing under it still lands on the photograph.
+    @Test("a Commons photograph's gallery is the photograph's screen")
+    func commonsGalleryIsThePhotograph() throws {
+        let page = try #require(URL(string: "https://commons.wikimedia.org/wiki/File:1.jpg"))
+        let photo = CommonsPhoto(
+            pin: CommunityPhotoPin(capturedAt: .distantPast, coordinate: nil),
+            fileURL: URL(filePath: "/tmp/1.jpg"),
+            credit: CommonsPhotoCredit(author: nil, license: HikePhotoLicense(name: "CC0", url: nil, sourceURL: page))
+        )
+        let gate = ImportSelectionGate()
+        let screen: [SheetRoute] = [.commonsPhoto(photo)]
+        let token = gate.token(selectedHikeID: nil, path: screen)
+        let gallery = screen + [.commonsGallery([photo], photo)]
+
+        #expect(gate.destination(for: gallery) == .commonsPhoto(page))
+        #expect(
+            gate.permits(
+                token: token,
+                selectedHikeID: nil,
+                path: gallery,
+                currentRecordingHikeID: nil,
+                recordingPresented: false
+            )
+        )
+    }
 }
