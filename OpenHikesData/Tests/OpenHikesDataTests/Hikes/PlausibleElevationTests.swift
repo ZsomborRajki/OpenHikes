@@ -49,7 +49,7 @@ struct PlausibleElevationTests {
     }
 
     @Test("A spike is judged against the nearest heights, past points that have none")
-    func neighboursSkipMissingHeights() {
+    func neighborsSkipMissingHeights() {
         var route = Self.walk()
         route[59].elevation = nil
         route[60].elevation = 0
@@ -86,7 +86,7 @@ struct PlausibleElevationTests {
     }
 
     @Test("A pause separates height neighbours, even when its point has no height", arguments: [1, 2, 3, 4])
-    func pauseSeparatesNeighbours(boundaryIndex: Int) {
+    func pauseSeparatesNeighbors(boundaryIndex: Int) {
         var route = Self.walk(heights: [1000, nil, 1500, nil, 1000])
         route[boundaryIndex].boundary = .paused
 

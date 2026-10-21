@@ -200,7 +200,7 @@ struct CommunityRoutePayloadTests {
     }
 
     @Test("a published summit beside a pause keeps its height", arguments: [1, 2, 3, 4])
-    func pauseSeparatesHeightNeighbours(boundaryIndex: Int) throws {
+    func pauseSeparatesHeightNeighbors(boundaryIndex: Int) throws {
         var published = route(5)
         published[1].elevation = nil
         published[2].elevation = 1300

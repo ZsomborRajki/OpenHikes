@@ -66,7 +66,7 @@ struct GPXImportSentinelElevationTests {
     }
 
     @Test("a void run longer than one point keeps the heights around it")
-    func voidRunKeepsItsNeighbours() throws {
+    func voidRunKeepsItsNeighbors() throws {
         var heights = Self.climb
         for index in 50..<56 { heights[index] = -9999 }
         let track = try GPXImport.load(from: try gpxFile(heights: heights))
