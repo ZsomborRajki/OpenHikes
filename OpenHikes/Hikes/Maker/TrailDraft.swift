@@ -220,14 +220,12 @@ final class TrailDraft {
     /// it. Kept for ends no longer in the line, so a stop dragged away and back
     /// brings the choice back, and written down only for the legs there are —
     /// see ``chosenLegs``.
-    @ObservationIgnored private var choices: [TrailLegEnds: TrailLegPath] = [:]
+    @ObservationIgnored private var choices: [TrailLegEnds: TrailLegChoice] = [:]
 
     /// The ways chosen for the legs this line has, in drawing order — what is
     /// written down with the stops. See the file header.
     var chosenLegs: [TrailLegChoice] {
-        legs.compactMap { leg in
-            choices[leg.ends].map { TrailLegChoice($0, between: leg.ends) }
-        }
+        legs.compactMap { choices[$0.ends] }
     }
 
     /// The line's length.
@@ -385,7 +383,7 @@ final class TrailDraft {
         self.travelMode = travelMode
         self.startIsOpen = waypoints.count == 1 && startIsOpen
         memo = TrailLegMemo()
-        choices = Dictionary(chosenLegs.map { ($0.ends, $0.way) }) { _, latest in latest }
+        choices = Dictionary(chosenLegs.map { ($0.ends, $0) }) { _, latest in latest }
         legs = []
         setSnapsToPaths(snapsToPaths)
         rebuildLegs()
@@ -527,7 +525,10 @@ final class TrailDraft {
             leg.snap = route.snap
             leg.travelTime = route.travelTime
             leg.alternatives = route.alternatives
-            if let chosen { leg = leg.taking(chosen) }
+            if let chosen {
+                leg = leg.taking(chosen)
+                choices[ends] = TrailLegChoice(leg)
+            }
         }
     }
 
@@ -951,7 +952,7 @@ extension TrailDraft {
     func chooseAlternative(_ index: Int, forLegAt legIndex: Int) {
         guard legs.indices.contains(legIndex),
               let chosen = legs[legIndex].choosing(alternative: index) else { return }
-        choices[chosen.ends] = chosen.path
+        choices[chosen.ends] = TrailLegChoice(chosen)
         var updated = legs
         updated[legIndex] = chosen
         publish(updated)
