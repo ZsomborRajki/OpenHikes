@@ -2,8 +2,9 @@
 //  HikePlaceAroundCard.swift
 //  OpenHikes
 //
-//  Apple Maps' place card, over *Places Around Trail*, for any place on its
-//  map — one found around the trail, or one the hike already has.
+//  Apple Maps' place card, over *Places Around Trail* and *Places Nearby*, for
+//  any place on their map — one found around the trail, or one the hike
+//  already has.
 //
 //  One card for both, the way the maker's ``TrailPlaceSheet`` is one card for
 //  whatever a tap lands on, because to the hiker it is one question: *what is
@@ -23,7 +24,7 @@
 //
 //  ## A sheet over the sheet
 //
-//  Presented from inside ``HikePlacesAroundView``, like the maker's card, with
+//  Presented from inside ``PlacesAroundScreen``, like the maker's card, with
 //  the map left live behind its smaller detents: tapping the next pin moves the
 //  card to it. A saved hike's own *Places* section still pushes the place's
 //  full screen — see ``HikePlaceView`` — where it is edited and removed.
