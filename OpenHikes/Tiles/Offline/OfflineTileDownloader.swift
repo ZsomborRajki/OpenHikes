@@ -259,9 +259,14 @@ final class OfflineTileDownloader {
         // Before the task starts rather than inside it, so a hiker who taps
         // Save and locks the phone in the same second is already covered.
         let grant = reserveBackgroundTime()
+        // `self` strongly: the run outlives its screen, including a screen
+        // released before this task starts — which `[weak self]` turned into
+        // a run that never began and a grant nobody gave back.
         task = Task { [self] in
-            // The run outlives its screen, including a screen released before
-            // this task starts. Keep its owner through the cleanup as well.
+            // Whatever the run did — finished, failed, was superseded or was
+            // cancelled out from under itself — *this run's* grant goes back
+            // here, not whichever the downloader holds by now: a cancelled
+            // run's tail can land after a restart took a new one (#876).
             defer { releaseBackgroundTime(grant) }
             await prepareAndRun(
                 route: route,
@@ -701,9 +706,9 @@ extension OfflineTileDownloader {
 
     /// Gives `grant` back, once, and only while it is still the one held.
     ///
-    /// Idempotent by clearing the token before spending it, which is what
-    /// lets both the task's tail and ``cancel()`` call it without the second
-    /// one ending a task the system has already reclaimed. The owner also
+    /// Idempotent by clearing the grant before spending its token, which is
+    /// what lets both the task's tail and ``cancel()`` call it without the
+    /// second one ending a task the system has already reclaimed. The owner also
     /// distinguishes reservations if the system reuses an ended token, so a
     /// superseded run's tail cannot release its successor's time (#876).
     private func releaseBackgroundTime(_ grant: BackgroundTimeGrant?) {
