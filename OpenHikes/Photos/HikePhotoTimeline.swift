@@ -154,7 +154,7 @@ nonisolated struct HikePhotoTimeline: Sendable {
         if date >= end {
             return endPosition(fixes[fixes.count - 1], offsetTo: date)
         }
-        let index = segmentIndex(containing: date)
+        let index = pairIndex(containing: date)
         let earlier = fixes[index]
         let later = fixes[index + 1]
         let gap = later.timestamp.timeIntervalSince(earlier.timestamp)
@@ -209,7 +209,7 @@ nonisolated struct HikePhotoTimeline: Sendable {
     /// per candidate photo, so it is a binary search rather than a walk — the
     /// same `partitioningIndex` ``RouteProfile`` and ``MapState`` already
     /// index their sorted arrays with, rather than a fourth hand-written one.
-    private func segmentIndex(containing date: Date) -> Int {
+    private func pairIndex(containing date: Date) -> Int {
         fixes.partitioningIndex { $0.timestamp > date } - 1
     }
 }
