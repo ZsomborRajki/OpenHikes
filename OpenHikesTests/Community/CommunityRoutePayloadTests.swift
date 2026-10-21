@@ -199,6 +199,21 @@ struct CommunityRoutePayloadTests {
         #expect(stats.minElevation?.value == 1000)
     }
 
+    @Test("a published summit beside a pause keeps its height", arguments: [1, 2, 3, 4])
+    func pauseSeparatesHeightNeighbours(boundaryIndex: Int) throws {
+        var published = route(5)
+        published[1].elevation = nil
+        published[2].elevation = 1300
+        published[3].elevation = nil
+        published[boundaryIndex].boundary = .paused
+
+        let read = CommunityRoutePayload.route(from: try encoded(published))
+
+        #expect(read == published)
+        let stats = HikeRouteStatistics(distanceMeters: read.lengthMeters, route: read)
+        #expect(stats.maxElevation?.value == 1300)
+    }
+
     /// The same for a timestamp, which decodes from a number the same way and
     /// poisons a duration the same way.
     @Test("an impossible time is emptied and its point is kept", arguments: [Double.nan, .infinity, -.infinity])

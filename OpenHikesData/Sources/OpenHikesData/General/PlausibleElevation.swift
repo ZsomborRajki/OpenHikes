@@ -21,6 +21,7 @@
 //  breaking its run.
 //
 
+import Algorithms
 import CoreLocation
 
 nonisolated public enum PlausibleElevation {
@@ -50,6 +51,8 @@ nonisolated public enum PlausibleElevation {
     /// side would be steeper than one in one. The last condition is what keeps
     /// a real summit on a sparse planned route — 500 m above two stops a
     /// kilometre either side of it is a steep path, not a placeholder.
+    /// Distance follows every point between the heights: a missing reading
+    /// does not shorten a winding climb to the straight line between its ends.
     ///
     /// Judged against the heights as written, as ``GPXImport``'s teleport rule
     /// is, so two placeholders in a row vouch for each other and are kept, and
@@ -71,24 +74,22 @@ nonisolated public enum PlausibleElevation {
             let rise = abs(height - previous)
             let fall = abs(height - next)
             guard rise > spikeMeters, fall > spikeMeters, abs(next - previous) <= spikeMeters else { continue }
-            let toBefore = RouteGeometry.distanceMeters(
-                from: samples[before].coordinate, to: samples[here].coordinate
-            )
-            let toAfter = RouteGeometry.distanceMeters(
-                from: samples[here].coordinate, to: samples[after].coordinate
-            )
+            let toBefore = RouteGeometry.lengthMeters(of: samples[before...here].map(\.coordinate))
+            let toAfter = RouteGeometry.lengthMeters(of: samples[here...after].map(\.coordinate))
             if rise > toBefore, fall > toAfter { spikes.insert(here) }
         }
         return spikes
     }
 
     /// `route` with the height of every one of its ``spikes(in:)`` emptied.
+    /// Each pause starts a fresh set of neighbours, as a GPX segment does.
     /// Positions, times and boundaries are untouched.
     public static func despiked(_ route: [RouteCoordinate]) -> [RouteCoordinate] {
-        let spikes = spikes(in: route.map { ($0.clCoordinate, $0.elevation) })
-        guard !spikes.isEmpty else { return route }
         var despiked = route
-        for index in spikes { despiked[index].elevation = nil }
+        for segment in route.chunked(by: { !$1.isPauseBoundary }) {
+            let spikes = spikes(in: segment.map { ($0.clCoordinate, $0.elevation) })
+            for offset in spikes { despiked[segment.startIndex + offset].elevation = nil }
+        }
         return despiked
     }
 }
