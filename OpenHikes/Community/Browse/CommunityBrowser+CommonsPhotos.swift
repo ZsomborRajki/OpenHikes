@@ -61,6 +61,13 @@ extension CommunityBrowser {
     ) -> CommunitySearchArea {
         guard let region else { return area }
         let visible = CommunityQueryPolicy.visibleRadiusMeters(for: region)
-        return CommunitySearchArea(coordinate: area.coordinate, radiusMeters: min(area.radiusMeters, visible))
+        // The rectangle travels with it, so a stand-in can tell an area that
+        // is all on screen from one whose lower half is under the sheet — see
+        // ``SeededCommonsPhotoSource``.
+        return CommunitySearchArea(
+            coordinate: area.coordinate,
+            radiusMeters: min(area.radiusMeters, visible),
+            visibleSpan: area.visibleSpan
+        )
     }
 }
