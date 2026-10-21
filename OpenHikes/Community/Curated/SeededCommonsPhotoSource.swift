@@ -76,12 +76,18 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
         avoiding shown: Set<URL>,
         downloadingInto directory: URL
     ) async throws -> [CommonsPhoto] {
-        let degrees = area.radiusMeters / Self.metersPerDegree
-        let eastDegrees = degrees / cos(area.latitude * .pi / 180)
-        let spots: [CLLocationCoordinate2D] = zip(Self.areaNorths, Self.areaEasts).map { north, east in
+        // An area carrying the rectangle on screen — the *Community* tab's —
+        // is all visible, so its three stand just south of its middle, clear
+        // of the pill along the top. One without — the trail maker's whole
+        // map — keeps them north of the middle, out from under the sheet.
+        let halfHeight = area.visibleSpan.map { $0.latitudeDelta / 2 } ?? area.radiusMeters / Self.metersPerDegree
+        let halfWidth = area.visibleSpan.map { $0.longitudeDelta / 2 }
+            ?? area.radiusMeters / Self.metersPerDegree / cos(area.latitude * .pi / 180)
+        let norths = area.visibleSpan == nil ? Self.areaNorths : Self.visibleNorths
+        let spots: [CLLocationCoordinate2D] = zip(norths, Self.areaEasts).map { north, east in
             CLLocationCoordinate2D(
-                latitude: area.latitude + north * degrees,
-                longitude: area.longitude + east * eastDegrees
+                latitude: area.latitude + north * halfHeight,
+                longitude: area.longitude + east * halfWidth
             )
         }
         let third = spots[spots.count - 1]
@@ -101,6 +107,11 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
     private static let middleNorth = 0.55
     private static let sideEast = 0.3
     private static let areaNorths = [sideNorth, middleNorth, sideNorth]
+    /// The same pattern for an area that is all on screen, as shares of its
+    /// half-height: a little south of the middle, below the pill.
+    private static let visibleSideNorth = -0.2
+    private static let visibleMiddleNorth = -0.1
+    private static let visibleNorths = [visibleSideNorth, visibleMiddleNorth, visibleSideNorth]
     private static let areaEasts = [-sideEast, 0, sideEast]
     /// Where the two beside the third stand from it, in metres north and
     /// east: close enough that no zoom a test searches at draws them apart.
