@@ -88,6 +88,10 @@ nonisolated enum PhotoMetadataStamp {
     /// Overwrites whatever the photograph already said in those fields. The
     /// Commons file page is the authority on its licence, and a camera's
     /// *all rights reserved* left in the copyright notice would contradict it.
+    /// That is also why the notice is read back before the copy counts as
+    /// credited: a PNG that already carries one keeps it whatever is written,
+    /// and such a copy comes back `nil` like any other that would leave
+    /// uncredited. A Commons copy is always a JPEG, which takes it.
     static func credited(_ data: Data, with credit: CommonsPhotoCredit) -> Data? {
         let notice = credit.notice
         var complete = true
@@ -130,6 +134,8 @@ nonisolated enum PhotoMetadataStamp {
         return rewritten
     }
 
+    /// The copyright notice a reader of `data` sees — TIFF `Copyright`, as
+    /// ImageIO reconciles it from whichever block the container keeps it in.
     private static func copyright(of data: Data) -> String? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
@@ -138,8 +144,9 @@ nonisolated enum PhotoMetadataStamp {
         return tiff[kCGImagePropertyTIFFCopyright] as? String
     }
 
-    /// `data` copied with `metadata(source)` merged into it, without touching
-    /// the pixels — see this file's header for why it is this API.
+    /// `data` copied with `metadata(source)` merged into it — or in place of
+    /// its own, when `mergingMetadata` is `false` — without touching the
+    /// pixels. See this file's header for why it is this API.
     private static func copy(
         _ data: Data,
         mergingMetadata: Bool = true,
