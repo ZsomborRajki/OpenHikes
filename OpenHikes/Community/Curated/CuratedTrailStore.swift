@@ -15,10 +15,13 @@
 //  What changed is the estimate of what a launch costs. The old bargain —
 //  "a browse session is minutes long, OSM data changes under a cache anyway"
 //  — priced a miss as one round trip. Against a volunteer-run API that allows
-//  a handful of slots per address, a miss is priced in `429`s: two passes per
-//  search, every search, and a hiker who opens the app twice in an evening
-//  pays for the same valley twice. The geometry pass is 420 KB to 1.4 MB a
-//  page. That is the measurement the old paragraph said nobody had.
+//  a handful of slots per address, a miss is priced in `429`s: a wide search
+//  spends a second pass on lines this directory may already hold, and a hiker
+//  who opens the app twice in an evening pays for the same valley twice. The
+//  geometry pass is 420 KB to 1.4 MB a page. That is the measurement the old
+//  paragraph said nobody had. (A small search brings its lines with its list
+//  regardless — see ``CuratedTrailQuery/areaRequest(in:)`` — so for it this
+//  directory saves what comes after: the lines drawn and the hike opened.)
 //
 //  ## What is kept, and what is deliberately not
 //

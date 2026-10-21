@@ -221,9 +221,14 @@ nonisolated protocol CommunityTransporting: Sendable {
     @concurrent
     func publication(of submissionID: String) async throws -> CommunityListing?
 
-    /// Published hikes whose start point is within `radiusMeters` of
-    /// `coordinate`, nearest first, and — when `scope` asks for them — the
-    /// curated OpenStreetMap routes beside them.
+    /// Published hikes whose start point is within `area`'s radius of its
+    /// centre, nearest first, and — when `scope` asks for them — the curated
+    /// OpenStreetMap routes in the part of the map `area` saw.
+    ///
+    /// The area rather than a coordinate and a radius, because the two halves
+    /// are asked about two shapes of it: CloudKit about the circle, Overpass
+    /// about the rectangle on screen — see ``CommunitySearchArea``. A
+    /// conformance with one source reads the half it has.
     ///
     /// The only requirement here that takes a scope, because it is the only
     /// one with a second source behind it. A conformance with one source
@@ -237,8 +242,7 @@ nonisolated protocol CommunityTransporting: Sendable {
     /// and nothing else.
     @concurrent
     func listings(
-        near coordinate: CLLocationCoordinate2D,
-        radiusMeters: Double,
+        near area: CommunitySearchArea,
         limit: Int,
         excluding: Set<String>,
         scope: CommunityNearbyScope
@@ -247,14 +251,14 @@ nonisolated protocol CommunityTransporting: Sendable {
     /// The same question, with the published hikes handed to `publishedFirst`
     /// as soon as they land when a slower source is still being asked.
     ///
-    /// CloudKit answers in well under a second; an Overpass listing pass and
-    /// the geometry pass after it can take ten. Holding the hiker's own
-    /// published hikes back for the whole of that is waiting on the half they
-    /// are least likely to be looking for, so the rows go up the moment they
-    /// exist and the trails join them when they arrive. The returned answer is
-    /// still the whole one — the early rows included — and it is the only
-    /// thing that ends the request, which is what keeps *Search this area*
-    /// spinning until OpenStreetMap has had its say.
+    /// CloudKit answers in well under a second; Overpass can hold a request in
+    /// its queue for half a minute before starting on it. Holding the hiker's
+    /// own published hikes back for the whole of that is waiting on the half
+    /// they are least likely to be looking for, so the rows go up the moment
+    /// they exist and the trails join them when they arrive. The returned
+    /// answer is still the whole one — the early rows included — and it is the
+    /// only thing that ends the request, which is what keeps *Search this
+    /// area* spinning until OpenStreetMap has had its say.
     ///
     /// **Called at most once, and never with nothing.** An empty published
     /// half is not handed over: replacing the last area's rows with an empty
@@ -269,8 +273,7 @@ nonisolated protocol CommunityTransporting: Sendable {
     /// other than a cancellation: the merge throws only when CloudKit failed.
     @concurrent
     func listings(
-        near coordinate: CLLocationCoordinate2D,
-        radiusMeters: Double,
+        near area: CommunitySearchArea,
         limit: Int,
         excluding: Set<String>,
         scope: CommunityNearbyScope,
@@ -667,20 +670,13 @@ nonisolated extension CommunityTransporting {
     /// requirement.
     @concurrent
     func listings(
-        near coordinate: CLLocationCoordinate2D,
-        radiusMeters: Double,
+        near area: CommunitySearchArea,
         limit: Int,
         excluding: Set<String>,
         scope: CommunityNearbyScope,
         publishedFirst _: @Sendable ([CommunityListing]) async -> Void
     ) async throws -> CommunityNearbyAnswer {
-        try await listings(
-            near: coordinate,
-            radiusMeters: radiusMeters,
-            limit: limit,
-            excluding: excluding,
-            scope: scope
-        )
+        try await listings(near: area, limit: limit, excluding: excluding, scope: scope)
     }
 
     /// No curated routes, so no photographs of them. See the requirement.

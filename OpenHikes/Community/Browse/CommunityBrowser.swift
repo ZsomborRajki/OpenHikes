@@ -463,6 +463,12 @@ final class CommunityBrowser {
     /// The map came to rest. Called from `MapView.Coordinator`, never from a
     /// SwiftUI body.
     ///
+    /// `region` is the part of the map the hiker can see rather than the whole
+    /// map view — the map above the sheet — because that is what a search is
+    /// about and what its rows are sorted outward from. The coordinator also
+    /// calls this just before the pill's tap is handled, with the sheet where
+    /// it is at that moment. See ``MapView/Coordinator/communitySearchRegion(of:sheet:)``.
+    ///
     /// Cheap by contract: while browsing is off this stores a value and
     /// returns, which is what lets it sit on `regionDidChangeAnimated`
     /// alongside the highlight update without costing a hiker who has never
@@ -544,7 +550,7 @@ final class CommunityBrowser {
     /// question's rather than the transport's.
     func searchVisibleArea() {
         // A second question while the first is unanswered buys nothing and
-        // costs an Overpass listing pass:
+        // costs an Overpass request:
         // ``perform(_:describing:about:matching:from:_:)`` awaits the task it
         // supersedes before starting, so a tap during a search cannot arrive
         // sooner — it can only queue another one. The pill is dimmed and
@@ -568,7 +574,7 @@ final class CommunityBrowser {
     /// **Unless the last visit's rows are still here.** That unconfirmed
     /// request exists so the tab is never opened onto nothing; with rows kept
     /// there is no nothing to open onto, and asking anyway would spend a
-    /// CloudKit query and two Overpass round trips to replace an area's
+    /// CloudKit query and an Overpass request or two to replace an area's
     /// answer with the same area's answer. So a return visit asks for nothing
     /// and only re-reads the map: the rows stand under the area name they
     /// arrived with, and if the map moved while they were away the pill offers
@@ -762,8 +768,8 @@ final class CommunityBrowser {
         guard let resultsArea else { return }
         // Published only: a block is not a hiker asking OpenStreetMap
         // anything, and the curated rows in the list are unaffected by it —
-        // they have no author to block. Re-asking Overpass here would spend
-        // two round trips to get back the same trails.
+        // they have no author to block. Re-asking Overpass here would spend a
+        // request or two to get back the same trails.
         //
         // Unless the trails have not arrived yet. This request supersedes the
         // one still fetching them, and asking for the published hikes alone
@@ -859,8 +865,7 @@ final class CommunityBrowser {
         let excluded = blockList.blockedIDs
         perform(.nearby, describing: "a nearby search", about: area, from: scope) { transport, publishedFirst in
             try await transport.listings(
-                near: area.coordinate,
-                radiusMeters: area.radiusMeters,
+                near: area,
                 limit: Self.resultLimit,
                 excluding: excluded,
                 scope: scope,

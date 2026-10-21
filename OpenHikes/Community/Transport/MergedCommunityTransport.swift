@@ -16,7 +16,7 @@
 //  ## Four rules, and each of them is a correction to the obvious version
 //
 //  **A published hike never loses its place to a curated one.** The limit is
-//  spent on CloudKit first and only the remainder is asked of Overpass. The
+//  spent on CloudKit first and only the remainder is filled from Overpass. The
 //  obvious version — ask both for the full page and truncate — would push real
 //  people's hikes off the bottom of the list as soon as an area had twenty-five
 //  waymarked routes in it, which in the Alps is most areas. The feature exists
@@ -56,12 +56,15 @@
 //  itself do not.
 //
 //  **The fast half is not held for the slow one.** CloudKit answers a nearby
-//  query in a fraction of a second, and Overpass's two passes can take ten.
-//  The published rows are handed up through `publishedFirst` the moment they
-//  land, so the hiker's own hikes are on the map and in the list while the
-//  trails are still on their way; the merged answer replaces them when it
-//  arrives, and only it ends the request. They are the same rows the merged
-//  page leads with, so nothing drawn early is taken away by the full answer.
+//  query in a fraction of a second, and Overpass held every request it
+//  admitted for 25–52 seconds when this was last measured, on 2026-10-21 —
+//  once for a search of the map above the sheet, twice for a wide one; see
+//  ``CuratedTrailQuery``. The published rows are handed up through
+//  `publishedFirst` the moment they land, so the hiker's own hikes are on the
+//  map and in the list while the trails are still on their way; the merged
+//  answer replaces them when it arrives, and only it ends the request. They
+//  are the same rows the merged page leads with, so nothing drawn early is
+//  taken away by the full answer.
 //
 //  **A curated id must never reach CloudKit.** Every per-listing method routes
 //  on the listing's ``CommunityOrigin`` — ``CommunityListing/relationID`` and
@@ -123,15 +126,13 @@ nonisolated struct MergedCommunityTransport: CommunityTransporting {
 nonisolated extension MergedCommunityTransport {
     @concurrent
     func listings(
-        near coordinate: CLLocationCoordinate2D,
-        radiusMeters: Double,
+        near area: CommunitySearchArea,
         limit: Int,
         excluding: Set<String>,
         scope: CommunityNearbyScope
     ) async throws -> CommunityNearbyAnswer {
         try await listings(
-            near: coordinate,
-            radiusMeters: radiusMeters,
+            near: area,
             limit: limit,
             excluding: excluding,
             scope: scope,
@@ -141,8 +142,7 @@ nonisolated extension MergedCommunityTransport {
 
     @concurrent
     func listings(
-        near coordinate: CLLocationCoordinate2D,
-        radiusMeters: Double,
+        near area: CommunitySearchArea,
         limit: Int,
         excluding: Set<String>,
         scope: CommunityNearbyScope,
@@ -156,42 +156,45 @@ nonisolated extension MergedCommunityTransport {
             // through would be handing a second source's instruction to a
             // transport that has none.
             try await published.listings(
-                near: coordinate,
-                radiusMeters: radiusMeters,
+                near: area,
                 limit: limit,
                 excluding: excluding,
                 scope: .publishedOnly
             ).listings
         }
-        let area = CommunitySearchArea(
-            coordinate: coordinate,
-            radiusMeters: radiusMeters
-        )
-        // The cheap pass only, and it runs beside CloudKit rather than after
-        // it. Which of these rows are worth a line is not known until the
-        // published half has answered — see ``merge(published:curated:limit:)``
-        // — and a line costs 420 KB to 1.4 MB a page. Asking for geometry here
-        // would be spending all of that on rows the limit then throws away.
+        // The curated half's first request, and it runs beside CloudKit rather
+        // than after it. Which of its rows are worth a line is not known until
+        // the published half has answered — see
+        // ``merge(published:curated:limit:)`` — so for a wide area this is the
+        // cheap pass alone: a page of lines there is 420 KB to 1.4 MB, and
+        // asking for them here would spend all of that on rows the limit then
+        // throws away. For the map above the sheet it brings every line in the
+        // box with it, because that costs less than a second turn in Overpass's
+        // queue; the published rows still take their places first, so what the
+        // limit throws away there is bytes rather than a request. See
+        // ``CuratedTrailQuery/areaRequest(in:)``.
         //
         // For a ``CommunityNearbyScope/publishedOnly`` question it is not a
-        // pass at all: `listCurated` returns without touching the source, so
-        // the whole request is the one CloudKit query beside it.
+        // request at all: `listCurated` returns without touching the source,
+        // so the whole request is the one CloudKit query beside it.
         async let curatedListed = listCurated(near: area, limit: limit, for: scope)
 
         let publishedAnswer = await publishedRows
-        // Up before Overpass has answered, while the listing pass above is
+        // Up before Overpass has answered, while the curated request above is
         // still running — see the file header's fourth rule. Only when there
         // is a slower half to wait for, and only with rows in it; see
-        // ``CommunityTransporting/listings(near:radiusMeters:limit:excluding:scope:publishedFirst:)``.
+        // ``CommunityTransporting/listings(near:limit:excluding:scope:publishedFirst:)``.
         if scope == .withCuratedTrails, !publishedAnswer.rows.isEmpty {
-            await publishedFirst(nearestFirst(publishedAnswer.rows, to: coordinate))
+            await publishedFirst(nearestFirst(publishedAnswer.rows, to: area.coordinate))
         }
         // What Overpass had to say, or — when it refused — what this device
         // already had about the same area. See ``listCurated(near:limit:for:)``.
         let listed = await curatedListed
         let room = max(0, limit - publishedAnswer.rows.count)
         // Nothing to complete when the question did not ask, and nothing worth
-        // completing when the published half has already spent the page.
+        // completing when the published half has already spent the page. A
+        // small search's rows are complete already, and completing them finds
+        // every line in hand — see ``CuratedTrailSourcing/completed(_:)``.
         let curatedRows = scope == .publishedOnly || room == 0
             ? CuratedAttempt.notAsked
             : await complete(Array(listed.trails.prefix(room)))
@@ -206,7 +209,7 @@ nonisolated extension MergedCommunityTransport {
         // one question rather than two answers stacked. Both sources already
         // sort this way; what this settles is the interleave between them.
         return CommunityNearbyAnswer(
-            listings: nearestFirst(rows, to: coordinate),
+            listings: nearestFirst(rows, to: area.coordinate),
             curated: outcome(listed: listed, completed: curatedRows, for: scope)
         )
     }

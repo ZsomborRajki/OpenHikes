@@ -87,9 +87,15 @@ enum CommunityQueryAction: Equatable {
 /// query, and the two thresholds that decide whether the next region is the
 /// same question.
 struct CommunityQueryPolicy {
-    /// Smallest radius worth asking about. Under this the server's own
-    /// resolution is coarser than the question, so a smaller number would
+    /// Smallest radius worth asking CloudKit about. Under this the server's
+    /// own resolution is coarser than the question, so a smaller number would
     /// narrow the wording and not the answer.
+    ///
+    /// CloudKit's floor and nobody else's. OpenStreetMap is asked about the
+    /// rectangle the hiker could see, however small, and Overpass answers a
+    /// box exactly — see ``CommunitySearchArea/visibleSpan``. It used to
+    /// inherit this one as a twenty-kilometre square, which at a valley's zoom
+    /// was seventeen times the map above the sheet.
     static let minimumRadiusMeters: Double = 10_000
     /// Largest radius worth asking about, and the zoom ceiling with it: past
     /// this a result means "somewhere on this continent".
@@ -162,6 +168,13 @@ struct CommunityQueryPolicy {
 
     /// What the map settling on `region` means.
     ///
+    /// `region` is the part of the map the hiker can see — the map above the
+    /// sheet, which is what `MapView.Coordinator` hands over rather than its
+    /// whole view; see ``MapView/Coordinator/communitySearchRegion(of:sheet:)``.
+    /// So its centre is the middle of what is on screen, which is where the
+    /// rows are sorted outward from, and its span is the rectangle
+    /// OpenStreetMap is asked about.
+    ///
     /// Takes the region rather than a coordinate and a radius because the
     /// radius *is* the zoom: a hiker who has zoomed into one valley is asking
     /// about that valley, and one looking at a whole county is asking about
@@ -184,9 +197,16 @@ struct CommunityQueryPolicy {
         // should leave the valley's results standing rather than re-fetch
         // them.
         guard visibleRadius <= Self.maximumRadiusMeters else { return .tooFarOut }
+        // Both shapes of the one question: the floored circle CloudKit is
+        // asked about, and the rectangle itself, which is what OpenStreetMap
+        // is asked about — see ``CommunitySearchArea``.
         let area = CommunitySearchArea(
             coordinate: region.center,
-            radiusMeters: max(visibleRadius, Self.minimumRadiusMeters)
+            radiusMeters: max(visibleRadius, Self.minimumRadiusMeters),
+            visibleSpan: CommunitySearchArea.Span(
+                latitudeDelta: region.span.latitudeDelta,
+                longitudeDelta: region.span.longitudeDelta
+            )
         )
 
         if let committed {

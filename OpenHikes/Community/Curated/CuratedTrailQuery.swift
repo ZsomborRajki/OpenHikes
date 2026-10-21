@@ -2,16 +2,37 @@
 //  CuratedTrailQuery.swift
 //  OpenHikes
 //
-//  What this app asks OpenStreetMap for when a hiker searches an area, and
-//  the two reasons it is asked in two passes.
+//  What this app asks OpenStreetMap for when a hiker searches an area: one
+//  request for the map most searches cover, two for a wide one, and why.
 //
-//  **The listing pass must not carry geometry.** Measured against the real
-//  API: `out geom` over one Berchtesgaden search box returned 7.0 MB for 105
-//  route relations — 121,496 points — which is not a thing to spend on a list
-//  somebody may scroll straight past. `out tags bb` over the identical box
-//  returned **43.7 KB**, and carries every tag *plus* a bounding box per
-//  relation. So the list is built from that, and lines are fetched afterwards
-//  for the handful of routes that survive the filter below.
+//  **The lines come with the list when the area is small, and only then.**
+//  Measured against the real API: `out geom` over one Berchtesgaden search box
+//  returned 7.0 MB for 105 route relations — 121,496 points — while `out tags
+//  bb` over the identical box returned **43.7 KB**, carrying every tag *plus* a
+//  bounding box per relation. That is why the list was built from the cheap
+//  pass and the lines fetched afterwards, by id, for the handful of routes
+//  that survived the filter below — and it is still how a wide area is asked.
+//
+//  But a second request is not priced in bytes. Measured on 2026-10-21,
+//  `overpass-api.de` held every request it admitted for 25–52 seconds whatever
+//  it asked — a query for one node waited as long as a search did — so two
+//  passes were two waits: a median of 68 seconds to a drawn list, against 37
+//  for one request carrying the lines, alternating the two over eight rounds.
+//  What made the seven megabytes was the box rather than the pass: a square
+//  never narrower than twenty kilometres, with the continental paths in it.
+//  The map above the sheet is a fraction of that — see ``CommunitySearchArea``
+//  — and every line in it came to 7–400 KB gzipped across the four areas
+//  measured. So a search up to ``maximumOneRequestAreaSquareMeters`` asks once
+//  and gets its lines; a wider one keeps the two passes. ``areaRequest(in:)``
+//  is where that is decided.
+//
+//  **The continental paths are left out before their boxes are measured.**
+//  Both shapes of search filter on ``maximumMemberCount``, because Overpass
+//  computes a relation's box — and draws its line — from every member it has,
+//  and the paths no day hike resembles have thousands: 609 to 4,471 over the
+//  Berchtesgaden and Pilis boxes, where the largest of 832 day hikes measured
+//  had 209. Dropping them halved the listing pass's time on the server, and
+//  they were never going to survive the diagonal below anyway.
 //
 //  **The bounding box is also the day-hike filter, and that is what makes the
 //  feature honest.** `route=hiking` relations are not day hikes. The same box
@@ -75,22 +96,48 @@ nonisolated enum CuratedTrailQuery {
     /// both sides and is not balanced on a tie.
     static let maximumSpanMeters: Double = 20_000
 
-    /// How many routes one search asks Overpass for geometry for.
+    /// The most members a relation may have and still be asked about.
+    ///
+    /// See this file's header for the measurement: 209 for the largest day
+    /// hike of 832, 609 for the smallest continental path. Five hundred sits
+    /// between them with room on the day-hike side, which is the side a
+    /// mistake would cost — a route left out here is never offered at all,
+    /// where one let through is only measured and thrown away by
+    /// ``isDayHike(box:)``.
+    static let maximumMemberCount = 500
+
+    /// The widest search, in square metres of box, whose lines are asked for
+    /// with its list.
+    ///
+    /// Up to here the second request costs more than the lines do; past it the
+    /// lines start to cost more than the request. Three hundred square
+    /// kilometres is the map above a half-height sheet up to a view about
+    /// seventeen kilometres across. The densest box measured — the Pilis hills,
+    /// 141 km² — carried 55 day hikes in 2.9 MB of JSON, 0.4 MB gzipped, so the
+    /// worst case at the ceiling is under a megabyte on the wire, against a
+    /// second turn in a queue that held every admitted request for at least 25
+    /// seconds. See this file's header.
+    static let maximumOneRequestAreaSquareMeters: Double = 300_000_000
+
+    /// How many routes one search keeps lines for.
     ///
     /// The same figure as ``CommunityBrowser``'s own page, so the two halves
-    /// of a merged answer are drawn from comparable budgets. Measured cost of
-    /// the geometry pass at this count: about 420 KB for routes of median
-    /// size, 1.4 MB for the largest twenty-five in one box.
+    /// of a merged answer are drawn from comparable budgets. A one-request
+    /// search brings the lines of every route in its box and keeps this many
+    /// of them; a wide one asks for exactly this many by id. Measured cost of
+    /// that geometry pass: about 420 KB for routes of median size, 1.4 MB for
+    /// the largest twenty-five in one box.
     static let geometryBatchLimit = 25
 
     /// How long Overpass is allowed to spend, in seconds, on each pass.
     ///
     /// The listing pass is a tag scan over a box and is quick; the geometry
     /// pass assembles member ways for up to ``geometryBatchLimit`` relations
-    /// and is not. Both sit under the 35-second client timeout
-    /// ``OverpassTrailGraphProvider`` already uses, so the server gives up
-    /// before the socket does and the app gets a diagnosable answer instead of
-    /// a cancelled request.
+    /// and is not. A one-request search draws every line in its box, so it
+    /// takes the geometry pass's figure. Both sit under the 35-second client
+    /// timeout ``OverpassTrailGraphProvider`` already uses, so the server gives
+    /// up before the socket does and the app gets a diagnosable answer instead
+    /// of a cancelled request.
     static let listingTimeoutSeconds = 25
     static let geometryTimeoutSeconds = 30
 
@@ -125,12 +172,14 @@ nonisolated extension CuratedTrailQuery {
     /// The box that circumscribes `area`, or `nil` when the area is too wide
     /// to ask about.
     ///
-    /// Circumscribing rather than inscribed, because the hiker is being
-    /// offered *what is on screen*: a box inside the circle would leave routes
-    /// visible on the map out of the list that claims to describe it. The
-    /// corners bring in a little more than the circle, which is the harmless
-    /// direction — a route just outside the radius is still somewhere the
-    /// hiker can see.
+    /// What an area that is only a circle is asked about — the trail maker's
+    /// place searches are, through ``TrailPointQuery`` — while one the map
+    /// handed over carries the rectangle the hiker could see, and is asked
+    /// about that instead: see ``visibleBox(for:)``.
+    ///
+    /// Circumscribing rather than inscribed, because a box inside the circle
+    /// would leave out routes the circle was meant to reach. The corners bring
+    /// in a little more than the circle, which is the harmless direction.
     ///
     /// **Longitude here is continuous, not wrapped**: a search near the date
     /// line answers with a `west` below −180 or an `east` above 180, which is
@@ -168,9 +217,42 @@ nonisolated extension CuratedTrailQuery {
         )
     }
 
-    /// The boxes a search of `area` asks Overpass about: one, or **two** where
-    /// the circle crosses the antimeridian, or none where there is nothing to
-    /// ask.
+    /// The rectangle the hiker could see when they asked about `area`, or
+    /// `nil` when it carries none or there is nothing in it to ask about.
+    ///
+    /// Exactly the span the map handed over: no floor and no square around it.
+    /// The radius beside it is CloudKit's question, floored where that server
+    /// stops telling distances apart — see ``CommunitySearchArea`` — and
+    /// Overpass, which answers a box exactly, has no such floor to inherit.
+    ///
+    /// The ceiling still holds, measured the way
+    /// ``CommunityQueryPolicy/visibleRadiusMeters(for:)`` measures the region
+    /// the span came from — half the longer edge, on the ground — so the two
+    /// cannot disagree about which rectangles are too wide. Longitude is
+    /// continuous here for the reason ``circumscribingBox(for:)`` gives.
+    static func visibleBox(for area: CommunitySearchArea) -> BoundingBox? {
+        guard let span = area.visibleSpan,
+              span.latitudeDelta > 0, span.longitudeDelta > 0,
+              span.latitudeDelta.isFinite, span.longitudeDelta.isFinite,
+              area.longitude.isFinite, abs(area.latitude) < polarLatitudeLimit
+        else { return nil }
+        let metersPerDegree = RouteGeometry.metersPerDegreeLatitude
+        let halfHeight = span.latitudeDelta / 2 * metersPerDegree
+        let halfWidth = span.longitudeDelta / 2 * metersPerDegree * cos(area.latitude * .pi / 180)
+        guard max(halfHeight, halfWidth) <= maximumRadiusMeters else { return nil }
+        let longitude = RouteGeometry.normalizedLongitude(area.longitude)
+        return BoundingBox(
+            south: max(-90, area.latitude - span.latitudeDelta / 2),
+            west: longitude - span.longitudeDelta / 2,
+            north: min(90, area.latitude + span.latitudeDelta / 2),
+            east: longitude + span.longitudeDelta / 2
+        )
+    }
+
+    /// The boxes a search of `area` asks Overpass about — the rectangle the
+    /// hiker could see when the area carries one, the square around its circle
+    /// when it does not: one box, or **two** where it crosses the antimeridian,
+    /// or none where there is nothing to ask.
     ///
     /// Two rather than a clamp, which is what this used to do and which lost
     /// half the search silently. At 60°N a 40 km radius is 0.72° of longitude,
@@ -181,9 +263,10 @@ nonisolated extension CuratedTrailQuery {
     /// describing different areas is the one thing a merged list may not do.
     ///
     /// Still **one request**: Overpass takes a union of filters, so the two
-    /// boxes cost the same round trip as one — see ``listingQuery(in:)``.
+    /// boxes cost the same round trip as one — see ``areaRequest(in:)``.
     static func searchBoxes(for area: CommunitySearchArea) -> [BoundingBox] {
-        guard let box = circumscribingBox(for: area) else { return [] }
+        let asked = area.visibleSpan == nil ? circumscribingBox(for: area) : visibleBox(for: area)
+        guard let box = asked else { return [] }
         if box.west < -180 {
             return [
                 BoundingBox(south: box.south, west: box.west + 360, north: box.north, east: 180),
@@ -200,21 +283,67 @@ nonisolated extension CuratedTrailQuery {
     }
 }
 
-// MARK: - The two queries
+// MARK: - The queries
 
 nonisolated extension CuratedTrailQuery {
+    /// What one area search sends: the query, the time it gives the server,
+    /// and whether the routes come back with their lines.
+    struct AreaRequest: Equatable, Sendable {
+        let query: String
+        let timeoutSeconds: Int
+        /// Whether this is the whole search — every route in the box with its
+        /// line, see ``listingWithLinesQuery(in:)`` — rather than the listing
+        /// pass a second request completes.
+        let drawsLines: Bool
+    }
+
+    /// The request a search of `boxes` makes, or `nil` when there is nothing
+    /// to ask about.
+    ///
+    /// One request carrying the lines up to
+    /// ``maximumOneRequestAreaSquareMeters`` of box, and the listing pass of
+    /// two beyond it. See this file's header for why the line is drawn on the
+    /// area: it is what the size of the lines scales with, and the one thing
+    /// known before anything has been asked.
+    static func areaRequest(in boxes: [BoundingBox]) -> AreaRequest? {
+        let area = boxes.reduce(0) { $0 + areaSquareMeters(of: $1) }
+        guard area <= maximumOneRequestAreaSquareMeters else {
+            return listingQuery(in: boxes).map { query in
+                AreaRequest(query: query, timeoutSeconds: listingTimeoutSeconds, drawsLines: false)
+            }
+        }
+        return listingWithLinesQuery(in: boxes).map { query in
+            AreaRequest(query: query, timeoutSeconds: geometryTimeoutSeconds, drawsLines: true)
+        }
+    }
+
+    /// How much ground a search box covers, in square metres.
+    ///
+    /// Flat rather than spherical, because the boxes that decide anything are
+    /// tens of kilometres across, where the two differ by less than the width
+    /// of a road. Read off a box ``searchBoxes(for:)`` has already split, whose
+    /// `east` is never west of its `west`.
+    static func areaSquareMeters(of box: BoundingBox) -> Double {
+        let metersPerDegree = RouteGeometry.metersPerDegreeLatitude
+        let middle = (box.south + box.north) / 2
+        let height = (box.north - box.south) * metersPerDegree
+        let width = (box.east - box.west) * metersPerDegree * cos(middle * .pi / 180)
+        return height * width
+    }
+
     /// Every named hiking route whose relation touches `box`, tags and
-    /// bounding box only.
+    /// bounding box only: the first of a wide search's two passes.
     ///
     /// `["name"]` is part of the filter rather than something checked after
     /// the fact, because a route with no name is a row with nothing to say:
     /// 103 of 106 relations in the measured box carry one, so the filter costs
-    /// almost nothing and saves decoding the rest.
+    /// almost nothing and saves decoding the rest. So is
+    /// ``maximumMemberCount`` — see ``routeFilter(in:)``.
     ///
-    /// `out tags bb` is the whole reason a browse can afford this — see the
-    /// file header. Note it is `bb` and not `center`: the centre alone would
-    /// place a pin, and the *box* is what decides whether a route is a day
-    /// hike at all.
+    /// `out tags bb` is the whole reason a wide browse can afford this — see
+    /// the file header. Note it is `bb` and not `center`: the centre alone
+    /// would place a pin, and the *box* is what decides whether a route is a
+    /// day hike at all.
     ///
     /// A union of filters, and a union even when there is one box, because
     /// that is what lets an antimeridian search be a single request rather
@@ -223,16 +352,45 @@ nonisolated extension CuratedTrailQuery {
     /// ask about should not be making a request.
     static func listingQuery(in boxes: [BoundingBox]) -> String? {
         guard !boxes.isEmpty else { return nil }
-        let filters = boxes
-            .map { "  rel[\"route\"=\"hiking\"][\"name\"](\($0.overpassLiteral));" }
-            .joined(separator: "\n")
         return """
         [out:json][timeout:\(listingTimeoutSeconds)];
         (
-        \(filters)
+        \(boxes.map(routeFilter(in:)).joined(separator: "\n"))
         );
         out tags bb;
         """
+    }
+
+    /// The same routes as ``listingQuery(in:)``, each with its line: both
+    /// passes of a small search, asked as one.
+    ///
+    /// `out geom` is what the geometry pass already asks for — the coordinates
+    /// inline on each member way — and it carries every tag and the box as
+    /// well, so this answers everything the two passes would. By box rather
+    /// than by id, which is affordable only because ``areaRequest(in:)`` keeps
+    /// it to small ones. The day-hike filter still runs on the answer: see
+    /// ``CuratedTrailDecoding/trails(fromListingWithLines:)``.
+    static func listingWithLinesQuery(in boxes: [BoundingBox]) -> String? {
+        guard !boxes.isEmpty else { return nil }
+        return """
+        [out:json][timeout:\(geometryTimeoutSeconds)];
+        (
+        \(boxes.map(routeFilter(in:)).joined(separator: "\n"))
+        );
+        out geom;
+        """
+    }
+
+    /// The one filter both shapes of search are written with, so they cannot
+    /// disagree about which routes an area holds.
+    ///
+    /// The member count is a number every relation carries, so testing it
+    /// takes the continental paths out of the set before `out` measures a box
+    /// — or draws a line — from every one of their members. That output was
+    /// where half of the listing pass's time went. See ``maximumMemberCount``.
+    private static func routeFilter(in box: BoundingBox) -> String {
+        "  rel[\"route\"=\"hiking\"][\"name\"](\(box.overpassLiteral))"
+            + "(if: count_members() < \(maximumMemberCount));"
     }
 
     /// The member geometry of the relations named by `ids`.

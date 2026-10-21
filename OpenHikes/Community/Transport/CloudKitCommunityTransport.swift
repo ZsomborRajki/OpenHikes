@@ -123,16 +123,17 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
     /// The scope is deliberately ignored, and this is the conformance where
     /// that is a statement rather than an omission: there is one source here,
     /// and it is the one every scope includes. What decides anything with it
-    /// is ``MergedCommunityTransport``, the only type that holds two.
+    /// is ``MergedCommunityTransport``, the only type that holds two. So is
+    /// the area's visible rectangle, which is Overpass's question: this asks
+    /// about the circle — see ``CommunitySearchArea``.
     @concurrent
     func listings(
-        near coordinate: CLLocationCoordinate2D,
-        radiusMeters: Double,
+        near area: CommunitySearchArea,
         limit: Int,
         excluding: Set<String>,
         scope _: CommunityNearbyScope
     ) async throws -> CommunityNearbyAnswer {
-        let origin = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let origin = CLLocation(latitude: area.latitude, longitude: area.longitude)
         // CloudKit's own distance operator, which is the only one it has: a
         // bounding box would need four comparisons against two fields and
         // would still be a box. The unit is metres, and the server's own
@@ -143,7 +144,7 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
             format: "distanceToLocation:fromLocation:(%K, %@) < %f",
             CommunitySchema.Listing.location,
             origin,
-            radiusMeters
+            area.radiusMeters
         )
         let query = CKQuery(recordType: CommunitySchema.listingType, predicate: predicate)
         query.sortDescriptors = [

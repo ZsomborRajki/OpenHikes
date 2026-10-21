@@ -2,8 +2,8 @@
 //  CuratedTrailSource.swift
 //  OpenHikes
 //
-//  Where the curated hikes come from: two Overpass passes, and a memory of
-//  what the last one answered.
+//  Where the curated hikes come from: one Overpass request for the map most
+//  searches cover and two for a wide one, and a memory of what they answered.
 //
 //  An actor for the reason ``OverpassTrailGraphProvider`` is one — it owns
 //  mutable state that arrives from concurrent requests. It still takes the
@@ -12,21 +12,23 @@
 //  test seams* in the repository instructions — but it no longer *holds* them:
 //  they are handed to ``OverpassConversation``, which is where the rate-limit
 //  gate and the one busy retry moved when a second feature needed the same
-//  manners. What is left here is the two queries and the memory of what they
+//  manners. What is left here is the queries and the memory of what they
 //  answered.
 //
 //  ## Why the cache is keyed by relation, and why there are two of them
 //
 //  ``OverpassTrailGraphProvider``'s z12-tile files are the right shape for its
-//  question and the wrong shape for this one, and the difference is two orders
-//  of magnitude. A z12 tile is 6.9 km across at 47°N; a community search is
-//  10–40 km of *radius*, so the smallest search this feature allows already
-//  spans about 25 tiles and the largest about 400 — against a cache that holds
-//  64 files. One pan would evict the lot.
+//  question and the wrong shape for this one. A z12 tile is 6.9 km across at
+//  47°N, and a community search can be eighty kilometres across, which is
+//  well over a hundred tiles — against a cache that holds 64 files. One pan
+//  would evict the lot.
 //
 //  So the unit here is the **relation**, which is what is actually re-asked
 //  for: panning back to an area, or opening a hike whose line the list already
-//  fetched. Those are hits, and they are the two that happen.
+//  fetched. Those are hits, and they are the two that happen. A small search
+//  brings its lines with its list whether they are here or not — the trade
+//  ``CuratedTrailQuery/areaRequest(in:)`` makes — so what the cache saves there
+//  is everything after the list: the lines the map draws and the hike opened.
 //
 //  The memory cache below is the first of the two, and it answers within a
 //  session. ``CuratedTrailStore`` is the second and answers across launches —
@@ -70,17 +72,21 @@ nonisolated struct CuratedCompletion: Equatable, Sendable {
 /// A protocol for the same reason ``CommunityTransporting`` is one: the
 /// conformance below reaches a volunteer-run public API, and no suite may.
 nonisolated protocol CuratedTrailSourcing: Sendable {
-    /// Waymarked day hikes near `area`, nearest first and **without their
-    /// lines**.
+    /// Waymarked day hikes in `area`, nearest its centre first — **with their
+    /// lines when the area was small enough to ask for both at once**, and
+    /// without them when it was not.
     ///
-    /// The cheap half of a search, split from the expensive half on purpose.
-    /// A caller cannot know how many curated rows it has room for until the
-    /// published half has answered — see ``MergedCommunityTransport``, where
-    /// the limit is spent on CloudKit first — and geometry fetched for a row
-    /// that is then discarded is the single most expensive mistake this
-    /// feature can make: 420 KB to 1.4 MB per page, per search. So the rows
-    /// arrive first and ``completed(_:)`` is asked only about the ones that
-    /// fit.
+    /// The first half of a search, and for a small area the whole of it: see
+    /// ``CuratedTrailQuery/areaRequest(in:)``. A caller cannot know how many
+    /// curated rows it has room for until the published half has answered —
+    /// see ``MergedCommunityTransport``, where the limit is spent on CloudKit
+    /// first — so lines are only *asked* for afterwards, through
+    /// ``completed(_:)``, about the rows that fit: a wide search's geometry
+    /// pass is 420 KB to 1.4 MB a page, and fetching it for rows that are then
+    /// discarded would be the single most expensive mistake this feature could
+    /// make. A small search's lines have already arrived by then, and cost
+    /// less than a second turn in Overpass's queue would; ``completed(_:)``
+    /// keeps them without asking.
     ///
     /// Answers `[]` rather than throwing for an area too wide to ask about —
     /// see ``CuratedTrailQuery/maximumRadiusMeters``. That is an answer: the
@@ -94,7 +100,8 @@ nonisolated protocol CuratedTrailSourcing: Sendable {
     ///
     /// **Partial by contract**, and the listing order is preserved: it is
     /// nearest first, which is the whole answer to the question the hiker
-    /// asked.
+    /// asked. A row that arrived with its line — a small search's — is kept as
+    /// it came and costs no request.
     ///
     /// A line can be missing for two reasons and they are not the same thing,
     /// which is what ``CuratedCompletion`` exists to say. A route whose ways
@@ -313,6 +320,18 @@ actor CuratedTrailSource: CuratedTrailSourcing {
         cachedTrails.move(keys: CollectionOfOne(relationID), to: cachedTrails.count)
     }
 
+    /// Keeps routes that arrived with their lines in both caches — memory,
+    /// and the disk behind it — the way a geometry pass keeps its own.
+    ///
+    /// Written once at the end for the reason ``fetch(_:)`` collects before it
+    /// writes: a per-route save re-enumerates the cache directory per route.
+    private func remember(_ trails: [CuratedTrail]) {
+        for trail in trails {
+            cache(.trail(trail), for: trail.relationID)
+        }
+        store?.save(trails)
+    }
+
     /// Drops the memory of what the last area search answered.
     ///
     /// The cache is untouched: those routes are still true, and re-listing
@@ -333,18 +352,19 @@ extension CuratedTrailSource {
         // ``trails(matching:limit:)`` to answer a different area with. The
         // same area asked twice keeps its rows: that is a refresh, not a move.
         if lastArea != area { forgetLastAnswer() }
-        let boxes = CuratedTrailQuery.searchBoxes(for: area)
         guard limit > 0,
-              let query = CuratedTrailQuery.listingQuery(in: boxes)
+              let request = CuratedTrailQuery.areaRequest(in: CuratedTrailQuery.searchBoxes(for: area))
         else {
             forgetLastAnswer()
             return []
         }
         let listed = try await conversation.fetch(
-            query,
-            awaiting: CuratedTrailQuery.listingTimeoutSeconds
+            request.query,
+            awaiting: request.timeoutSeconds
         ) { body in
-            try CuratedTrailDecoding.trails(fromListing: body)
+            try request.drawsLines
+                ? CuratedTrailDecoding.trails(fromListingWithLines: body)
+                : CuratedTrailDecoding.trails(fromListing: body)
         }
         // Nearest first, by the same measure the published half is sorted by,
         // so a merged list is ordered by one rule rather than by two that
@@ -362,6 +382,12 @@ extension CuratedTrailSource {
             .map { (trail: $0, distance: RouteGeometry.distanceMeters(from: center, to: $0.coordinate)) }
             .min(count: min(limit, CuratedTrailQuery.geometryBatchLimit)) { $0.distance < $1.distance }
             .map(\.trail)
+        // The lines a small search brought, kept the way a geometry pass keeps
+        // its own, so drawing one of these rows or opening it asks nothing
+        // more. Only the page's: the rest of the box was measured and thrown
+        // away, and a cache full of routes nobody was offered would evict the
+        // ones somebody was.
+        if request.drawsLines { remember(nearest) }
         lastArea = area
         return nearest
     }
@@ -375,7 +401,7 @@ extension CuratedTrailSource {
     /// name and a blank for ever, and it stays out. A route whose geometry
     /// pass was *refused* is a row the listing pass already paid a slot for,
     /// about a trail that is really there — Overpass allows a handful of slots
-    /// per address and one search spends two of them, so a refusal on the
+    /// per address and a wide search spends two of them, so a refusal on the
     /// second is an ordinary afternoon rather than an exotic one. Throwing
     /// that page away meant a hiker who had just spent a search got an empty
     /// list; keeping it means they get the names, the pins and what the
@@ -386,7 +412,9 @@ extension CuratedTrailSource {
     /// What comes back is what ``trails(matching:limit:)`` then searches,
     /// lineless rows included: they were offered, so they are findable.
     func completed(_ listed: [CuratedTrail]) async throws -> CuratedCompletion {
-        let gathered = await gather(listed.map(\.relationID))
+        // Only the rows that came without a line. A small search's arrived
+        // with theirs, so a page of them gathers nothing and costs no request.
+        let gathered = await gather(listed.filter(\.route.isEmpty).map(\.relationID))
         // A superseded search is not an outage and must not be reported as
         // one — see ``CuratedTrailOutage/init(_:)``. It is also not an answer,
         // so it leaves the way it arrived rather than as a page of lineless
@@ -400,6 +428,7 @@ extension CuratedTrailSource {
         // cache, so eviction during this very call cannot quietly shorten the
         // list the hiker is looking at.
         let answer = listed.compactMap { trail -> CuratedTrail? in
+            if !trail.route.isEmpty { return trail }
             if let drawn = gathered.found[trail.relationID] { return drawn }
             // No line, so which of the two is it? A relation Overpass has
             // already said it has nothing to draw for is the permanent one and

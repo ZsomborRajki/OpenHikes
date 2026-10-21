@@ -83,11 +83,12 @@ nonisolated enum CommunityNearbyScope: Equatable, Sendable {
     case publishedOnly
     /// The published hikes and the curated OpenStreetMap routes beside them.
     ///
-    /// Two Overpass round trips on top of the CloudKit query — a listing pass
-    /// and a geometry pass — so the things that ask for it are the things a
-    /// hiker does to look for trails: opening the *Community* tab, *Search
-    /// this area*, and the *Try Again* that stands in for it when a search has
-    /// failed.
+    /// An Overpass request on top of the CloudKit query — two, a listing pass
+    /// and a geometry pass, for an area wider than the map above the sheet
+    /// usually is; see ``CuratedTrailQuery/areaRequest(in:)`` — so the things
+    /// that ask for it are the things a hiker does to look for trails: opening
+    /// the *Community* tab, *Search this area*, and the *Try Again* that
+    /// stands in for it when a search has failed.
     case withCuratedTrails
 }
 

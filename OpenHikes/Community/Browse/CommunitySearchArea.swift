@@ -2,7 +2,8 @@
 //  CommunitySearchArea.swift
 //  OpenHikes
 //
-//  The circle of map a nearby answer is about.
+//  The piece of map a nearby answer is about: a circle, and — when the map
+//  asked — the rectangle of it the hiker could see.
 //
 //  Its own value type rather than a loose coordinate-and-radius pair because
 //  three separate things now have to agree about one area: the offer the map
@@ -18,6 +19,18 @@
 //  new, and by `@Observable`, which filters a same-value write only for an
 //  `Equatable` type. See *Render isolation, in practice*.
 //
+//  ## Two shapes, because there are two servers
+//
+//  CloudKit's `distanceToLocation:` takes a circle and resolves at around ten
+//  kilometres, so the published half asks ``radiusMeters``, floored where the
+//  server stops telling distances apart. Overpass takes a box and answers it
+//  exactly, so the OpenStreetMap half asks about ``visibleSpan`` — the map
+//  above the sheet, as wide and as tall as it is. It used to be asked about
+//  the square around the circle instead, floored at twenty kilometres a side:
+//  measured on 2026-10-21, that was 4.8 times the map above a half-height
+//  sheet at any zoom and seventeen times it at a five-kilometre view, and the
+//  rows nearest its centre were the trails under the sheet.
+//
 
 import CoreLocation
 import Foundation
@@ -30,14 +43,33 @@ nonisolated struct CommunitySearchArea: Equatable, Sendable {
     /// by ``CommunityQueryPolicy`` before it ever gets here — see the
     /// minimum and maximum there for why neither bound is the map's own.
     var radiusMeters: Double
+    /// The rectangle of map the hiker could see when the question was put,
+    /// centred on ``coordinate`` — or `nil` for an area that is only a circle.
+    ///
+    /// What the OpenStreetMap half is asked about — see this file's header and
+    /// ``CuratedTrailQuery/searchBoxes(for:)``. `nil` for every area that did
+    /// not come from the map: the trail maker's place searches, a stretch of a
+    /// route, a stored-route lookup. Those keep the square around the circle.
+    var visibleSpan: Span?
 
-    init(coordinate: CLLocationCoordinate2D, radiusMeters: Double) {
+    init(coordinate: CLLocationCoordinate2D, radiusMeters: Double, visibleSpan: Span? = nil) {
         latitude = coordinate.latitude
         longitude = coordinate.longitude
         self.radiusMeters = radiusMeters
+        self.visibleSpan = visibleSpan
     }
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+}
+
+nonisolated extension CommunitySearchArea {
+    /// How far a rectangle reaches either side of its centre, in degrees —
+    /// `MKCoordinateSpan`'s two numbers, held here because MapKit's type is not
+    /// `Equatable` and this one has to be. See this file's header.
+    struct Span: Equatable, Sendable {
+        var latitudeDelta: Double
+        var longitudeDelta: Double
     }
 }

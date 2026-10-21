@@ -53,6 +53,11 @@ struct MergedCommunityTransportTests {
     /// accidentally testing the too-wide-to-ask refusal instead of the merge.
     private static let radiusMeters: Double = 20_000
 
+    /// The question every search in this file asks unless a case says
+    /// otherwise: a circle, the shape every area had before the map started
+    /// handing over the rectangle it shows.
+    static let area = CommunitySearchArea(coordinate: center, radiusMeters: radiusMeters)
+
     /// The page both halves are budgeted from. ``CuratedTrailQuery/geometryBatchLimit``
     /// and ``CommunityBrowser``'s own page are deliberately the same number,
     /// and this is it — a limit split that used two different figures would
@@ -237,11 +242,11 @@ extension MergedCommunityTransportTests {
         _ merged: Merged,
         limit: Int = page,
         scope: CommunityNearbyScope = .withCuratedTrails,
+        area: CommunitySearchArea = MergedCommunityTransportTests.area,
         publishedFirst: @escaping @Sendable ([CommunityListing]) async -> Void = { _ in /* only the whole answer */ }
     ) async throws -> CommunityNearbyAnswer {
         try await merged.transport.listings(
-            near: center,
-            radiusMeters: radiusMeters,
+            near: area,
             limit: limit,
             excluding: [],
             scope: scope,

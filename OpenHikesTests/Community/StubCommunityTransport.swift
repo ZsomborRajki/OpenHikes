@@ -33,7 +33,10 @@ import Synchronization
 final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     struct Recording: Sendable {
         var submissions: [CommunitySubmissionDraft] = []
-        var nearbyRequests: [(coordinate: CLLocationCoordinate2D, radiusMeters: Double)] = []
+        /// The areas a nearby search asked about, in order — the whole area,
+        /// so a case can read the rectangle the map handed over as well as the
+        /// circle CloudKit is asked.
+        var nearbyRequests: [CommunitySearchArea] = []
         var titleQueries: [String] = []
         var detailRequests: [String] = []
         /// The submission ids a publication check asked about, in order. What
@@ -198,14 +201,13 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
 
     @concurrent
     func listings(
-        near coordinate: CLLocationCoordinate2D,
-        radiusMeters: Double,
+        near area: CommunitySearchArea,
         limit: Int,
         excluding: Set<String>,
         scope: CommunityNearbyScope
     ) async throws -> CommunityNearbyAnswer {
         state.withLock { recording in
-            recording.nearbyRequests.append((coordinate: coordinate, radiusMeters: radiusMeters))
+            recording.nearbyRequests.append(area)
             recording.exclusions.append(excluding)
             recording.nearbyScopes.append(scope)
         }
@@ -225,20 +227,13 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     /// above, which is what the protocol's default does too.
     @concurrent
     func listings(
-        near coordinate: CLLocationCoordinate2D,
-        radiusMeters: Double,
+        near area: CommunitySearchArea,
         limit: Int,
         excluding: Set<String>,
         scope: CommunityNearbyScope,
         publishedFirst: @Sendable ([CommunityListing]) async -> Void
     ) async throws -> CommunityNearbyAnswer {
-        let published = try await listings(
-            near: coordinate,
-            radiusMeters: radiusMeters,
-            limit: limit,
-            excluding: excluding,
-            scope: scope
-        )
+        let published = try await listings(near: area, limit: limit, excluding: excluding, scope: scope)
         guard scope == .withCuratedTrails, let curatedHalf else { return published }
         if !published.listings.isEmpty { await publishedFirst(published.listings) }
         await curatedHalf.gate.wait()
