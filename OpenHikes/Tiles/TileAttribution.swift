@@ -125,14 +125,19 @@ nonisolated struct TileAttribution: Hashable, Sendable {
     /// under the cards credits all of them, not only the selected one.
     ///
     /// A party is the same one twice when its licence link is — the rule
-    /// ``drawn(base:layer:)`` uses, and for the same reason the spelling
-    /// already here wins. Apple's unlinked credit is kept, once: a snapshot
-    /// carries no **Legal** link of its own, so in Settings nothing else
-    /// names Apple.
+    /// ``drawn(base:layer:)`` uses. Its first position is kept, but when any
+    /// source requires OpenStreetMap's longer data credit, that wording wins:
+    /// Thunderforest's preview needs it even when another map is selected.
+    /// Apple's unlinked credit is kept, once: a snapshot carries no **Legal**
+    /// link of its own, so in Settings nothing else names Apple.
     func including(previews: [Self]) -> Self {
-        var named = Set(credits.map(Self.identity(of:)))
-        let added = previews.flatMap(\.credits).filter { named.insert(Self.identity(of: $0)).inserted }
-        return Self(credits + added)
+        let candidates = credits + previews.flatMap(\.credits)
+        let needsDataCredit = candidates.contains(.openStreetMapData)
+        var named = Set<String>()
+        return Self(candidates.compactMap { credit in
+            guard named.insert(Self.identity(of: credit)).inserted else { return nil }
+            return needsDataCredit && credit == .openStreetMap ? .openStreetMapData : credit
+        })
     }
 
     private static func identity(of credit: Credit) -> String {

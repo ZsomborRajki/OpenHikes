@@ -32,20 +32,22 @@ struct PreviewAttributionTests {
         }
     }
 
-    @Test("the selected map's credits lead, as the map draws them", arguments: TileProvider.all)
+    @Test("the selected map's parties lead in the map's order", arguments: TileProvider.all)
     func selectedMapLeads(selected: TileProvider) throws {
         let drawn = try #require(TileAttribution.drawn(base: selected.attribution, layer: nil))
         let footer = drawn.including(previews: Self.cards)
-        #expect(Array(footer.credits.prefix(drawn.credits.count)) == drawn.credits)
+        let leading = Array(footer.credits.prefix(drawn.credits.count))
+        #expect(leading.map(\.url) == drawn.credits.map(\.url))
+        #expect(leading.map(\.compactTitle) == drawn.credits.map(\.compactTitle))
     }
 
-    /// Five raster maps credit OpenStreetMap between them, and both Apple
+    /// Four raster maps credit OpenStreetMap between them, and both Apple
     /// entries credit Apple; named once each, the line is the six parties.
     @Test("over OpenStreetMap, each party is named once")
     func eachPartyOnce() throws {
         let footer = try Self.footer(selected: .openStreetMap)
         #expect(footer.credits.map(\.title) == [
-            "OpenStreetMap", "Apple", "Stadia Maps", "OpenMapTiles", "Stamen Design", "Thunderforest",
+            "OpenStreetMap contributors", "Apple", "Stadia Maps", "OpenMapTiles", "Stamen Design", "Thunderforest",
         ])
     }
 
@@ -56,6 +58,36 @@ struct PreviewAttributionTests {
         let footer = try Self.footer(selected: .thunderforestOutdoors)
         #expect(footer.credits.contains(.openStreetMapData))
         #expect(!footer.credits.contains(.openStreetMap))
+    }
+
+    @Test(
+        "Thunderforest's preview keeps its data credit under every map and layer",
+        arguments: TileProvider.all,
+        [false, true]
+    )
+    func thunderforestPreviewKeepsDataCredit(selected: TileProvider, showsHikingRoutes: Bool) throws {
+        let drawn = try #require(TileAttribution.drawn(
+            base: selected.attribution,
+            layer: TileLayer.shown(isOn: showsHikingRoutes)?.attribution
+        ))
+        let footer = drawn.including(previews: Self.cards)
+        let dataCredits = footer.credits.filter { $0.url == TileAttribution.Credit.openStreetMapData.url }
+        #expect(dataCredits == [.openStreetMapData])
+        #expect(footer.credits.contains(.waymarkedTrails) == showsHikingRoutes)
+        #expect(footer.credits.filter { $0 == .apple }.count == 1)
+    }
+
+    @Test(
+        "without Thunderforest imagery the shorter OpenStreetMap credit is kept",
+        arguments: TileProvider.all.filter { $0 != .thunderforestOutdoors }
+    )
+    func noThunderforestLeavesTheShorterCredit(selected: TileProvider) throws {
+        let availableCards = TileProvider.all.filter { $0 != .thunderforestOutdoors }.map(\.attribution)
+        let drawn = try #require(TileAttribution.drawn(base: selected.attribution, layer: nil))
+        let footer = drawn.including(previews: availableCards)
+        #expect(footer.credits.contains(.openStreetMap))
+        #expect(!footer.credits.contains(.openStreetMapData))
+        #expect(!footer.credits.contains(.thunderforest))
     }
 
     @Test("with no cards drawn the credits are unchanged", arguments: TileProvider.all)
