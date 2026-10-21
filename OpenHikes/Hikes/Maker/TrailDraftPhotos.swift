@@ -287,8 +287,9 @@ nonisolated struct TrailDraftPhotoHandOff: Sendable {
     ///
     /// *Already holds* is by Commons page, so an edited trail saved again does
     /// not gain a second copy of a picture its first save kept, and a retry
-    /// copies only what the first attempt missed. A file that can no longer be
-    /// read is not handed back: there is nothing left for a retry to read.
+    /// copies only what the first attempt missed. An unreadable source is
+    /// handed back too: a read failure must be reported, and a later attempt
+    /// may be able to read it.
     @MainActor
     func attach(
         to hike: Hike,
@@ -301,10 +302,13 @@ nonisolated struct TrailDraftPhotoHandOff: Sendable {
             // Re-checked every picture: the hike can be deleted while a dozen
             // are being copied, and writing to a detached row keeps nothing.
             guard hike.isAttached,
-                  !hike.photos.contains(where: { $0.licence?.sourceURL == photo.credit.licence.sourceURL }),
-                  let data = await Self.read(photo.fileURL),
-                  hike.isAttached
+                  !hike.photos.contains(where: { $0.licence?.sourceURL == photo.credit.licence.sourceURL })
             else { continue }
+            guard let data = await Self.read(photo.fileURL) else {
+                missed.append(photo)
+                continue
+            }
+            guard hike.isAttached else { continue }
             let stored = await HikePhotoImport.add(
                 data,
                 to: hike,

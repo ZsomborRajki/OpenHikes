@@ -226,6 +226,7 @@ struct AppLaunchEnvironmentTests {
                 "OpenHikes",
                 "--ui-testing",
                 "--ui-test-fail-first-save",
+                "--ui-test-refuse-trail-photo-copy",
                 "--ui-test-lose-import-selection",
                 "--ui-test-weather",
                 "--ui-test-live-maker",
@@ -236,10 +237,12 @@ struct AppLaunchEnvironmentTests {
         )
 
         #expect(requested.failsFirstSave)
+        #expect(requested.refusesTrailPhotoCopy)
         #expect(requested.losesImportSelection)
         #expect(requested.stubsWeather)
         #expect(requested.asksLiveMakerServices)
         #expect(!quiet.failsFirstSave)
+        #expect(!quiet.refusesTrailPhotoCopy)
         // An import takes the selection on every launch that did not ask for
         // the losing side of that race.
         #expect(!quiet.losesImportSelection)
@@ -288,6 +291,7 @@ struct AppLaunchEnvironmentTests {
                 "--ui-test-seed-photos=8",
                 "--ui-test-seed-hikes=2",
                 "--ui-test-fail-first-save",
+                "--ui-test-refuse-trail-photo-copy",
                 "--ui-test-lose-import-selection",
                 "--ui-test-weather",
                 "--ui-test-live-maker",
@@ -299,6 +303,7 @@ struct AppLaunchEnvironmentTests {
         #expect(configuration.seededPhotoCount == 0)
         #expect(configuration.seededLibraryHikeCount == 0)
         #expect(!configuration.failsFirstSave)
+        #expect(!configuration.refusesTrailPhotoCopy)
         #expect(!configuration.losesImportSelection)
         #expect(!configuration.stubsWeather)
         #expect(!configuration.asksLiveMakerServices)
