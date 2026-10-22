@@ -164,9 +164,11 @@ final class BackgroundTrailTracker: NSObject {
     private var fixPublishSequence: UInt64 = 0
 
     /// Last distance-along-route a fix was actually matched at — the
-    /// continuity reference `RouteProfile.nearestPoint` needs so GPS noise on
-    /// loops/switchbacks can't jump the match. Persisted so it survives a
-    /// background relaunch, which starts with no in-memory state at all.
+    /// continuity reference `RouteProfile.nearestPointHeadingFirst` matches
+    /// the next background fix against, so GPS noise on loops/switchbacks
+    /// can't jump the match while a fix's course has nothing to say against
+    /// it. Persisted so it survives a background relaunch, which starts with
+    /// no in-memory state at all.
     private var lastMatchedDistance: Double? {
         get {
             defaults.object(forKey: SettingsKey.lastMatchedDistance) != nil
