@@ -106,6 +106,20 @@ struct CommunityFailureMappingTests {
         )
     }
 
+    /// The same thing said by the other door. A review notice holds a
+    /// reference to its submission, and saving one whose target has been
+    /// deleted is refused as a reference violation rather than as a missing
+    /// item — which is how finishing an upload whose submission a reviewer has
+    /// since removed is told apart from a flaky connection, and why the
+    /// hike is released instead of being offered the same retry forever.
+    @Test("a reference to a record that has gone reads as no longer available")
+    func referenceViolationIsNoLongerAvailable() {
+        #expect(
+            CloudKitCommunityTransport.failure(from: CKError(.referenceViolation), while: "queueing")
+                == .noLongerAvailable
+        )
+    }
+
     /// The server refusing a reviewer, which only the review path can see.
     ///
     /// Every other method here reads a type `_world` may read or writes one

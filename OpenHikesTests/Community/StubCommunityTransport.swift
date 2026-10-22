@@ -92,10 +92,27 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         var takenDownPhotos: [String] = []
         /// Each photo edit a reviewer made to a *contribution*, in order.
         var contributionPhotoEdits: [(submissionID: String, kept: [CommunityKeptPhoto])] = []
+        /// The hike submissions a queue write was made for, in order. The
+        /// notice ``submit(_:)`` saves straight after an upload counts, and so
+        /// does each repair — which is what proves a repair writes the notice
+        /// and nothing else: it lands here and never in ``submissions``.
+        var queueAttempts: [String] = []
+        /// The same, for a contributed set of photographs.
+        var photoQueueAttempts: [String] = []
     }
 
     /// What each call should do. Set before the call, read inside it.
     var submissionResult: Result<String, CommunityFailure> = .success("submission-1")
+    /// What each queue write answers, in order: `nil` is a notice that saved
+    /// and a failure is one that did not.
+    ///
+    /// The first entry belongs to the notice ``submit(_:)`` or
+    /// ``submitPhotos(_:)`` writes straight after an upload — which, failing,
+    /// throws ``CommunityQueueingFailure`` with the name, as the real
+    /// transport does — and each later one to a repair through
+    /// ``queueForReview(submissionID:)``. Empty, the default, is every write
+    /// succeeding, and so is a write past the end of the script.
+    var queueingScript: [CommunityFailure?] = []
     var listingsResult: Result<[CommunityListing], CommunityFailure> = .success([])
     /// What the curated half of a nearby answer reports, for a suite driving
     /// the caption under *Search this area*. Only ever returned to a
@@ -186,7 +203,11 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     /// appear and disappear around a request in flight.
     var beforeQueueReturns: (@Sendable () async -> Void)?
 
-    private let state = Mutex(Recording())
+    /// Internal rather than private so `StubCommunityTransport+Queueing.swift`,
+    /// split off for length, can record into it.
+    let state = Mutex(Recording())
+    /// How far into ``queueingScript`` the next queue write is.
+    let queueingCursor = Mutex(0)
 
     var recording: Recording { state.withLock { $0 } }
 
@@ -194,7 +215,12 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     func submit(_ draft: CommunitySubmissionDraft) async throws -> String {
         state.withLock { $0.submissions.append(draft) }
         await beforeSubmissionReturns?(draft)
-        return try submissionResult.get()
+        let submissionID = try submissionResult.get()
+        state.withLock { $0.queueAttempts.append(submissionID) }
+        if let failure = nextQueueingFailure() {
+            throw CommunityQueueingFailure(submissionID: submissionID, failure: failure)
+        }
+        return submissionID
     }
 
     @concurrent
@@ -375,7 +401,12 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     func submitPhotos(_ draft: CommunityPhotoDraft) async throws -> String {
         state.withLock { $0.photoDrafts.append(draft) }
         await beforePhotoSubmissionReturns?(draft)
-        return try submissionResult.get()
+        let submissionID = try submissionResult.get()
+        state.withLock { $0.photoQueueAttempts.append(submissionID) }
+        if let failure = nextQueueingFailure() {
+            throw CommunityQueueingFailure(submissionID: submissionID, failure: failure)
+        }
+        return submissionID
     }
 
     @concurrent

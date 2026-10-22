@@ -21,6 +21,17 @@
 //  successful one forever — with no way back, since this app cannot query its
 //  own submissions to find out.
 //
+//  The converse holds just as hard, and is what #916 was. An upload is two
+//  saves, the submission and then the notice that puts it in a reviewer's
+//  queue, and the first can land without the second. The submission's name is
+//  written down as soon as it exists, *whether or not the second save
+//  worked*: forgetting it because a later request failed is how an upload
+//  ended up outside the queue with nothing on the device to say so. What
+//  failed is remembered separately, as a device-local note that the queue
+//  still has to be told — see ``CommunityUploadQueueing`` — and
+//  ``finishQueueing(_:transport:save:)`` sends the one missing write without
+//  uploading anything again.
+//
 
 import CoreLocation
 import Foundation
@@ -110,6 +121,15 @@ nonisolated enum CommunityPublisher {
 
     /// Shares `hike`, waiting for CloudKit to accept it.
     ///
+    /// A share is two saves — the submission, then the entry that puts it in
+    /// front of a reviewer — and only the first is the upload. When the
+    /// second is what fails the answer is
+    /// ``CommunitySendOutcome/uploadedNotQueued(_:)`` and not a refusal: the
+    /// submission is out, its name is kept on the hike and on this device, and
+    /// ``finishQueueing(_:transport:save:)`` sends the entry that is missing
+    /// without uploading anything again. A refusal therefore means nothing
+    /// was uploaded, which is what makes trying again safe.
+    ///
     /// - Parameter authorName: What to publish it under. The hiker's own
     ///   words — see ``SettingsKey/communityAuthorName``.
     /// - Parameter save: The commit seam, the same shape ``HikeImport`` and
@@ -183,8 +203,25 @@ nonisolated enum CommunityPublisher {
         )
 
         let submissionID: String
+        let queueingFailure: CommunityFailure?
         do {
             submissionID = try await transport.submit(staged.draft)
+            queueingFailure = nil
+        } catch let unqueued as CommunityQueueingFailure {
+            // The submission is in the public database; only the write that
+            // puts it in front of a reviewer did not land. Reporting that as a
+            // failed share is what lost the upload, because a second try
+            // makes a second submission under a second name and leaves this
+            // one outside the queue for good. So it is recorded like a
+            // success and reported as what it is.
+            submissionID = unqueued.submissionID
+            queueingFailure = unqueued.failure
+            logger.error(
+                """
+                Shared a hike but could not queue it for review: \
+                \(unqueued.failure.localizedDescription, privacy: .public)
+                """
+            )
         } catch {
             let failure = CommunityFailure(error)
             logger.error(
@@ -193,49 +230,14 @@ nonisolated enum CommunityPublisher {
             return .refused(failure)
         }
 
-        // The upload landed, and only now is anything written down. The hike
-        // may have been deleted while it was in flight — a share is a long
-        // wait and the list is one tap away — in which case the submission
-        // stands and there is simply nothing here left to remember it.
-        guard hike.isAttached else { return .submitted }
-        hike.communitySubmissionID = submissionID
-        // Both columns, together, because they describe one submission between
-        // them: ``Hike/communityListingID`` caches an answer about whichever
-        // submission ``Hike/communitySubmissionID`` names, and the moment that
-        // name changes the cached answer is about a hike nobody is asking
-        // after any more. Leaving it would say *published* about a copy no
-        // reviewer has seen, and — worse, because it is silent —
-        // ``CommunityPublicationCheck`` skips a hike that already has a
-        // listing, so the new submission would never be asked about at all.
-        //
-        // The listing itself is untouched by this; a published hike stays
-        // published and stays findable. What is cleared is only this device's
-        // record of it, which is what the share form promises when it says the
-        // published copy stays as it is.
-        hike.communityListingID = nil
-        // In the same commit as the two columns above, and for a version of
-        // their reason: these stamps say which pictures are now in the public
-        // database, and a hike whose submission was recorded without them
-        // would offer every one of them again as though it were new. See
-        // ``HikePhoto/sentToCommunityAt``.
-        markSent(staged.photoIDs, on: hike)
-        if let context = hike.modelContext {
-            do {
-                try save(context)
-            } catch {
-                // The submission is real either way, so this is not a failed
-                // share. What is lost is only the device's memory of it, which
-                // costs the hiker a share button that offers to send a hike
-                // that is already sent.
-                logger.error(
-                    """
-                    Shared a hike but could not record it locally: \
-                    \(error.localizedDescription, privacy: .public)
-                    """
-                )
-            }
-        }
-        return .submitted
+        return CommunityUploadQueueing.record(
+            .route,
+            submissionID: submissionID,
+            photoIDs: staged.photoIDs,
+            queueingFailure: queueingFailure,
+            on: hike,
+            save: save
+        )
     }
 
     /// How many of `hike`'s photographs this device could actually send.

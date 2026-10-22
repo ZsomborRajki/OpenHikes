@@ -12,9 +12,10 @@
 //  times: the route's answer outranks the photographs' wherever both apply,
 //  the ineligible case is told apart from the *has somewhere to contribute*
 //  case by ``CommunityPublishingEligibility/offersPhotographs``, and only the
-//  first of the three outer states has a fourth branch under it. A change to
-//  any of that had to land in three switches or the button would say one thing
-//  and draw another.
+//  first of the three outer states has a fourth branch under it, and an upload
+//  the review queue was never told about outranks all of it. A change to any
+//  of that had to land in three switches or the button would say one thing and
+//  draw another.
 //
 //  So the walk happens once and produces all three together. Each state names
 //  the whole appearance in one place, which is what makes a glyph that
@@ -25,6 +26,17 @@
 //  listing covers a reviewer who has not looked and one who declined, and this
 //  app cannot tell those apart. See ``Hike/communityListingID``.
 //
+//  **An upload the queue never heard about outranks every other state.** A
+//  hike, or a set of photographs, is two saves — the submission and then the
+//  note that puts it in front of a reviewer — and the second can fail after
+//  the first has landed; see ``CommunityQueueingFailure``. What the hiker holds
+//  then is a submission no person will ever be shown, which *waiting for
+//  review* would describe as the opposite of the truth. It is asked first
+//  because it is the one state in which something is owed, and a button that
+//  said *published* or *waiting* over a debt would hide the only way to clear
+//  it. The photographs' side of it can stand beside a published hike, so it
+//  can win over `person.2.fill`.
+//
 //  **A glyph per state, rather than a badge on one glyph**, which would be
 //  unreadable at the size a toolbar draws this. The slashed one is the state
 //  with nothing to offer at all: a hike that can be neither published nor
@@ -32,7 +44,9 @@
 //  and is not the same thing. The photograph glyphs are a second journey
 //  through the same three states and only their two ends are drawn
 //  differently — *waiting for a person* is the same fact whichever was sent,
-//  so it is the same `hourglass`.
+//  so it is the same `hourglass`. The unfinished upload is one glyph for both
+//  for the same reason: *uploaded, and the queue has not heard* is one fact
+//  whichever was sent, and the label and hint say which.
 //
 
 import Foundation
@@ -47,11 +61,20 @@ struct CommunityShareButtonAppearance {
     /// say what a tap will do. Empty where it does.
     let hint: String
 
+    /// - Parameter unfinished: Which of the hike's uploads is on the server
+    ///   without a review-queue entry, if either is — see
+    ///   ``CommunityUploadKind/unfinished(of:)``. It is asked before anything
+    ///   else.
     init(
         publication: CommunityPublicationState,
         eligibility: CommunityPublishingEligibility,
-        contribution: CommunityContributionState
+        contribution: CommunityContributionState,
+        unfinished: CommunityUploadKind? = nil
     ) {
+        if let unfinished {
+            self = Self.uploadedNotQueued(unfinished)
+            return
+        }
         switch publication {
         case .notShared:
             self = Self.notShared(eligibility: eligibility, contribution: contribution)
@@ -86,6 +109,41 @@ struct CommunityShareButtonAppearance {
         self.symbol = symbol
         self.label = label
         self.hint = hint
+    }
+
+    /// An upload that is on the server and that no reviewer will be shown until
+    /// the hiker finishes sending it.
+    ///
+    /// Worded for what is true rather than for what is reassuring: the upload
+    /// *is* there, it has *not* been sent for review, and the hiker can finish
+    /// it or take it back. Nothing here says it is waiting, because nobody is
+    /// waiting on it.
+    private static func uploadedNotQueued(_ kind: CommunityUploadKind) -> Self {
+        switch kind {
+        case .route:
+            Self(
+                symbol: "exclamationmark.icloud",
+                label: String(localized: "Finish sending to the community"),
+                hint: String(
+                    localized: """
+                    Uploaded, but not yet sent for review, so it can’t appear for \
+                    other hikers. Finish sending it, or ask for it to be taken down.
+                    """
+                )
+            )
+        case .photos:
+            Self(
+                symbol: "exclamationmark.icloud",
+                label: String(localized: "Finish sending your photos"),
+                hint: String(
+                    localized: """
+                    Your photos are uploaded, but not yet sent for review, so they \
+                    can’t appear on the trail. Finish sending them, or ask for them \
+                    to be taken down.
+                    """
+                )
+            )
+        }
     }
 
     /// The first outer state, which is the one with four answers under it

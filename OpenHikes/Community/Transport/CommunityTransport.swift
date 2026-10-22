@@ -135,13 +135,22 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
 
 nonisolated extension CommunityFailure {
     /// `error` as something a screen can say: itself when it is already a
-    /// community failure, which everything a transport throws is, and
-    /// ``unavailable(_:)`` carrying its own description when it is not — a
-    /// file error while staging photographs, say.
+    /// community failure, which everything a transport throws is, the failure
+    /// inside a ``CommunityQueueingFailure`` — which is the same sentence
+    /// with the submission's name attached — and ``unavailable(_:)`` carrying
+    /// its own description when it is neither, a file error while staging
+    /// photographs, say.
     ///
     /// The one spelling of a conversion nine call sites made for themselves.
     init(_ error: any Error) {
-        self = error as? CommunityFailure ?? .unavailable(error.localizedDescription)
+        switch error {
+        case let failure as CommunityFailure:
+            self = failure
+        case let queueing as CommunityQueueingFailure:
+            self = queueing.failure
+        default:
+            self = .unavailable(error.localizedDescription)
+        }
     }
 }
 
@@ -192,14 +201,40 @@ nonisolated protocol CommunityTransporting: Sendable {
     ///
     /// **A submission is not submitted until it is in the queue.** A
     /// conformance writes the ``CommunitySchema/noticeType`` record too, and
-    /// throws if it cannot: an upload no reviewer will ever be shown is worse
-    /// than a failed one, because the hiker is told it was sent and the record
-    /// cannot be found again afterwards — nothing enumerates submissions, by
-    /// design. Returning a name is therefore a promise that somebody will look
-    /// at it, and the share sheet's *Sent for review* is only true because of
-    /// this paragraph.
+    /// says so when it cannot: an upload no reviewer will ever be shown is
+    /// worse than a failed one, because the hiker is told it was sent and the
+    /// record cannot be found again afterwards — nothing enumerates
+    /// submissions, by design. Returning a name is therefore a promise that
+    /// somebody will look at it, and the share sheet's *Sent for review* is
+    /// only true because of this paragraph.
+    ///
+    /// **When only that second write fails, the upload is not lost, and the
+    /// error says so.** By then the submission is in the public database and
+    /// its name is the only handle on it, so a conformance throws
+    /// ``CommunityQueueingFailure`` carrying the name instead of a plain
+    /// ``CommunityFailure``. A caller that read the plain one as *nothing was
+    /// sent* would upload everything again under a new name and leave the
+    /// first copy stranded for good — which is what this did before the name
+    /// was kept. ``queueForReview(submissionID:)`` is the repair.
     @concurrent
     func submit(_ draft: CommunitySubmissionDraft) async throws -> String
+
+    /// Queues a hike submission that was uploaded and never reached the
+    /// reviewer's queue.
+    ///
+    /// The second half of ``submit(_:)`` on its own: one save, with no route
+    /// and no photographs. It is what a ``CommunityQueueingFailure`` is
+    /// repaired with, straight away or after a relaunch, because the
+    /// submission's name is all it takes.
+    ///
+    /// **Repeatable.** Asking for a submission that is already queued
+    /// succeeds and queues it once, which is what lets a repair follow a save
+    /// whose answer never arrived. It throws
+    /// ``CommunityFailure/noLongerAvailable`` when no submission has that name
+    /// any more — a reviewer declined it, or it was taken away — since there
+    /// is then nothing left to queue.
+    @concurrent
+    func queueForReview(submissionID: String) async throws
 
     /// The listing published from `submissionID`, or `nil` if there is not one.
     ///
@@ -493,12 +528,20 @@ nonisolated protocol CommunityTransporting: Sendable {
     /// what the hiker's own device remembers so the button can say the
     /// pictures have already gone, it is not a claim that anybody else can see
     /// them, and **a contribution is not submitted until it is in the queue**
-    /// — a conformance writes the notice too and throws if it cannot, because
-    /// an upload no reviewer will be shown is worse than a failed one.
+    /// — a conformance writes the notice too, and when only that write fails
+    /// it throws ``CommunityQueueingFailure`` with the name rather than a
+    /// plain failure, because an upload no reviewer will be shown is worse
+    /// than a failed one and a second upload is worse than either.
     ///
     /// Needs an Apple Account, like every write here and unlike every read.
     @concurrent
     func submitPhotos(_ draft: CommunityPhotoDraft) async throws -> String
+
+    /// ``queueForReview(submissionID:)`` for a set of contributed photographs:
+    /// the second half of ``submitPhotos(_:)`` on its own, repeatable for the
+    /// same reason, and the repair for the same failure.
+    @concurrent
+    func queuePhotosForReview(submissionID: String) async throws
 
     /// The record name of the contribution published from `photoSubmissionID`,
     /// or `nil` if there is not one.

@@ -6,7 +6,9 @@
 //  conversation is in `CloudKitCommunityTransport+Reviewing.swift`, split off
 //  for length alone — which is why `database`, `logger` and `contents` are
 //  internal rather than private: `private` is file-scoped in Swift, and those
-//  two files are one type.
+//  two files are one type. The write that puts an upload in front of a
+//  reviewer is in `CloudKitCommunityTransport+Queueing.swift`, which is the
+//  one place both kinds of upload are queued through.
 //
 //  It is raw CloudKit rather than anything SwiftData does, and that is not a
 //  choice so much as the absence of one: SwiftData's mirroring drives the
@@ -45,8 +47,19 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
     /// outside this type reads it.
     let containerIdentifier: String
 
+    /// What an upload's two saves go through: the real public database in the
+    /// app, a scripted one in a suite that needs the notice to fail after the
+    /// submission has landed. See ``CommunityRecordWriting``, and the second
+    /// initializer in `CloudKitCommunityTransport+Queueing.swift` for how a
+    /// suite names one.
+    ///
+    /// Internal for the reason ``containerIdentifier`` is: the queueing half
+    /// is a sibling file, and `private` is file-scoped.
+    let writer: any CommunityRecordWriting
+
     init(containerIdentifier: String = CloudSyncCoordinator.containerIdentifier) {
         self.containerIdentifier = containerIdentifier
+        writer = CloudKitRecordWriter(containerIdentifier: containerIdentifier)
     }
 
     var database: CKDatabase {
@@ -55,6 +68,13 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
 
     // MARK: - Submitting
 
+    /// Uploads a hike and queues it for review, in that order and as two
+    /// separate saves.
+    ///
+    /// Returns only once both have landed. When the *second* fails this throws
+    /// ``CommunityQueueingFailure`` rather than a plain ``CommunityFailure``,
+    /// because by then the upload exists and its name is all that is left of
+    /// it: see ``CommunityTransporting/submit(_:)``.
     @concurrent
     func submit(_ draft: CommunitySubmissionDraft) async throws -> String {
         guard !draft.route.isEmpty else { throw CommunityFailure.nothingToShare }
@@ -63,8 +83,7 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
         // the one place the distinction has to be made, and making it up front
         // is what stops a hiker watching a progress spinner for a megabyte of
         // photographs that were never going to be accepted.
-        let container = CKContainer(identifier: containerIdentifier)
-        guard try await container.accountStatus() == .available else {
+        guard try await writer.accountStatus() == .available else {
             throw CommunityFailure.notSignedIn
         }
 
@@ -105,16 +124,17 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
 
         let submissionID: String
         do {
-            let saved = try await database.save(record)
+            let saved = try await writer.save(record)
             submissionID = saved.recordID.recordName
         } catch {
             throw Self.failure(from: error, while: "submitting a hike")
         }
 
-        // A submission nobody is told about is lost rather than waiting —
-        // see ``queueForReview(_:)``, which is why this is awaited and its
-        // failure is thrown.
-        try await queueForReview(submissionID)
+        // A submission nobody is told about waits for nobody, so this is
+        // awaited and its failure is thrown — and thrown *with the name*, the
+        // one thing that makes the rest recoverable. See
+        // ``queueUploadedHike(submissionID:)``.
+        try await queueUploadedHike(submissionID: submissionID)
         return submissionID
     }
 
@@ -745,7 +765,12 @@ nonisolated extension CloudKitCommunityTransport {
         if retryable.contains(ckError.code) { return .unreachable }
         return switch ckError.code {
         case .notAuthenticated, .managedAccountRestricted: .notSignedIn
-        case .unknownItem: .noLongerAvailable
+        // A notice that names a submission which is not there: a reviewer has
+        // already declined it, or it was removed by hand. Nothing is left to
+        // queue, which is what ``CommunityPublisher/finishQueueing(_:transport:save:)``
+        // reads this as — and the same answer as an unknown item, since
+        // both mean the record the caller named does not exist.
+        case .unknownItem, .referenceViolation: .noLongerAvailable
         // The server saying no to a reviewer's action, which is the review
         // path's own failure and reaches no other caller: every other method
         // here reads a type `_world` may read or writes one `_icloud` may

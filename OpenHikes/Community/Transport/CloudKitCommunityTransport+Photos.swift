@@ -55,14 +55,21 @@ nonisolated extension CloudKitCommunityTransport {
 
     // MARK: - Contributing
 
+    /// Uploads a set of contributed photographs and queues it for review, in
+    /// that order and as two separate saves.
+    ///
+    /// The same two-step shape as ``CloudKitCommunityTransport/submit(_:)``,
+    /// with the same consequence: a failure of the *second* save is thrown as
+    /// ``CommunityQueueingFailure``, carrying the submission's name, because
+    /// by then the photographs are uploaded and a plain failure would invite
+    /// uploading them all again.
     @concurrent
     func submitPhotos(_ draft: CommunityPhotoDraft) async throws -> String {
         guard !draft.photoFileURLs.isEmpty else { throw CommunityFailure.noPhotosToShare }
         // Asked before anything is uploaded, for the reason ``submit(_:)``
         // asks it there: a signed-out phone browses perfectly well, and the
         // one thing it cannot do is write.
-        let container = CKContainer(identifier: containerIdentifier)
-        guard try await container.accountStatus() == .available else {
+        guard try await writer.accountStatus() == .available else {
             throw CommunityFailure.notSignedIn
         }
 
@@ -96,47 +103,18 @@ nonisolated extension CloudKitCommunityTransport {
 
         let submissionID: String
         do {
-            submissionID = try await database.save(record).recordID.recordName
+            submissionID = try await writer.save(record).recordID.recordName
         } catch {
             throw Self.failure(from: error, while: "contributing photos")
         }
 
-        // A contribution nobody is told about is lost rather than waiting, the
-        // rule ``CloudKitCommunityTransport/queueForReview(_:)`` states — and
-        // sharper here, because a photo submission has no listing that could
-        // ever lead back to it.
-        try await queuePhotosForReview(submissionID)
+        // A contribution nobody is told about waits for nobody — and sharper
+        // here than for a hike, because a photo submission has no listing
+        // that could ever lead back to it. So this is awaited, and its
+        // failure is thrown with the name: see
+        // ``CloudKitCommunityTransport/queueUploadedPhotos(submissionID:)``.
+        try await queueUploadedPhotos(submissionID: submissionID)
         return submissionID
-    }
-
-    /// Puts a freshly uploaded contribution in the reviewer's queue.
-    ///
-    /// The same notice type a hike's submission is queued through, with the
-    /// other reference field set — see ``CommunitySchema/Notice`` for why one
-    /// type carries both. The record name goes into the log on the way out for
-    /// the reason it does there: it is the only place it will ever appear
-    /// again.
-    private func queuePhotosForReview(_ photoSubmissionID: String) async throws {
-        let notice = CKRecord(recordType: CommunitySchema.noticeType)
-        notice[CommunitySchema.Notice.photoSubmission] = CKRecord.Reference(
-            // `.deleteSelf`, so declining — which is deleting the submission —
-            // takes the queue entry with it server-side, with no second
-            // request to fail.
-            recordID: CKRecord.ID(recordName: photoSubmissionID),
-            action: .deleteSelf
-        )
-        do {
-            _ = try await database.save(notice)
-        } catch {
-            Self.logger.error(
-                """
-                Uploaded contributed photos but could not queue them for review. \
-                They are unreachable until queued by hand: \
-                \(photoSubmissionID, privacy: .public)
-                """
-            )
-            throw Self.failure(from: error, while: "queueing photos for review")
-        }
     }
 
     @concurrent

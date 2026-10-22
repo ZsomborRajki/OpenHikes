@@ -33,6 +33,15 @@
 //  can observe: a reviewer who has not looked and one who declined leave the
 //  same absence behind. See ``CommunityPublicationState``.
 //
+//  And an upload can land without anybody being told about it. A send is two
+//  writes — see ``CommunityQueueingFailure`` — and when the second fails the
+//  route and the photographs are already in the public database. The form is
+//  then replaced rather than reset: it opens on
+//  ``CommunityFinishSendingSection``, which says so and offers the one write
+//  that is left, and it opens that way on a later launch as well, because the
+//  hike remembers (``Hike/pendingCommunityQueueing``). Putting the fields back
+//  would be offering a second upload, which is how the first one was stranded.
+//
 
 import OpenHikesData
 import SwiftData
@@ -48,7 +57,7 @@ struct CommunityShareSheet: View {
 
     @Environment(\.modelContext) private var modelContext
     @AppStorage(SettingsKey.communityAuthorName) private var authorName = ""
-    @State private var phase: CommunitySendPhase = .editing
+    @State private var phase: CommunitySendPhase
     /// What the hiker has written about this walk, held here and committed to
     /// the hike rather than bound straight through to it.
     ///
@@ -104,6 +113,17 @@ struct CommunityShareSheet: View {
     /// which is the single thing that decides where a contribution may be
     /// aimed.
     @State private var contributionTarget: CommunityPhotoTarget?
+
+    init(hike: Hike, transport: any CommunityTransporting, store: HikePhotoStore = .shared) {
+        self.hike = hike
+        self.transport = transport
+        self.store = store
+        // Read here rather than in a `.task`, so a hike that was uploaded and
+        // never queued opens on the one thing left to do instead of on a form
+        // that corrects itself a frame later — which would be, briefly, the
+        // app offering to send it all again.
+        _phase = State(initialValue: hike.pendingCommunityQueueing == nil ? .editing : .awaitingQueue(nil))
+    }
 
     /// Where this hike already is on the way to being published, which decides
     /// whether the form warns about making a second copy of it.
@@ -171,6 +191,11 @@ struct CommunityShareSheet: View {
         switch phase {
         case .sent:
             sentSection
+        case .awaitingQueue, .finishing:
+            // In place of the form, like a refusal and for the same reason:
+            // its fields were already sent, and drawing them again is the
+            // invitation to send them twice.
+            finishSection
         default:
             // A refusal replaces the form rather than sitting above it. The
             // rest of this screen asks for a display name and explains what
@@ -531,6 +556,24 @@ private extension CommunityShareSheet {
         )
     }
 
+    /// What replaces the form for a hike that was uploaded but never queued.
+    var finishSection: some View {
+        CommunityFinishSendingSection(
+            phase: phase,
+            detail: """
+            Your hike and its photos are uploaded, but the request for a person to \
+            review them didn’t go through, so it won’t appear for other hikers yet. \
+            Finishing sends only that request — nothing is uploaded again.
+            """,
+            identifiers: .init(
+                outcome: "community-share-unfinished",
+                failure: "community-share-unfinished-failure",
+                button: "community-share-finish"
+            ),
+            finish: finishSending
+        )
+    }
+
     var toolbarContent: some ToolbarContent {
         CommunitySendToolbar(
             phase: phase,
@@ -578,6 +621,19 @@ private extension CommunityShareSheet {
                 transport: transport,
                 excludingPhotos: excludedPhotoIDs
             )
+            phase = CommunitySendPhase(outcome)
+        }
+    }
+
+    /// Sends the one write an earlier attempt left undone, and nothing else.
+    ///
+    /// Neither ``commitNotes()`` nor ``commitTitle()`` is called first, unlike
+    /// ``share()``: there is no upload left for either to ride on, and the
+    /// fields they commit are not on screen.
+    func finishSending() {
+        phase = .finishing
+        Task {
+            let outcome = await CommunityPublisher.finishQueueing(hike, transport: transport)
             phase = CommunitySendPhase(outcome)
         }
     }

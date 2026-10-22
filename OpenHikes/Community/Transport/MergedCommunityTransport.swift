@@ -346,6 +346,12 @@ nonisolated extension MergedCommunityTransport {
         try await published.submit(draft)
     }
 
+    /// Always CloudKit: a submission is one, whatever the trail it came from.
+    @concurrent
+    func queueForReview(submissionID: String) async throws {
+        try await published.queueForReview(submissionID: submissionID)
+    }
+
     /// Always CloudKit, and it needs no routing.
     ///
     /// The only thing ever passed here is the hiker's own
@@ -421,6 +427,11 @@ nonisolated extension MergedCommunityTransport {
     @concurrent
     func submitPhotos(_ draft: CommunityPhotoDraft) async throws -> String {
         try await published.submitPhotos(draft)
+    }
+
+    @concurrent
+    func queuePhotosForReview(submissionID: String) async throws {
+        try await published.queuePhotosForReview(submissionID: submissionID)
     }
 
     @concurrent
