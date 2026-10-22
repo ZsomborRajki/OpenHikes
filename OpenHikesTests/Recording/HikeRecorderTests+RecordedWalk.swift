@@ -51,10 +51,13 @@ extension HikeRecorderTests {
         #expect(walk.activeSeconds == 120)
         #expect(walk.startedAt == hike.date)
 
-        // The length the summary compares back against the route it draws —
-        // see ``PreparedRecording/routeLengthMeters``.
+        // The scale the summary draws the stretches on — see
+        // ``PreparedRecording/routeLengthMeters``.
         let profileLength = RouteProfile(route: hike.route).totalDistanceMeters
         #expect(walk.routeDistanceMeters.isApproximatelyEqual(to: profileLength, absoluteTolerance: 0.01))
+        // And the line it draws them along: the one the hike was saved with,
+        // or a fresh recording's Show on Map would say the trail had changed.
+        #expect(walk.isAlong(revision: TrailWalkRecord.routeRevision(of: hike.route)))
     }
 
     /// The row and the finalized hike are one commit. A store that refuses it
