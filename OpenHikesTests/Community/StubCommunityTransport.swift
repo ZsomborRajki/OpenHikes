@@ -141,6 +141,10 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     /// What editing a submission's photographs answers.
     var keepPhotosResult: Result<Void, CommunityFailure> = .success(())
     var takeDownResult: Result<Void, CommunityFailure> = .success(())
+    /// What taking a contribution's photographs down answers. Its own result
+    /// rather than ``takeDownResult``'s: a hike takedown is one delete and
+    /// this is two, so the two can fail in different ways.
+    var takeDownPhotosResult: Result<CommunityPhotoTakedownOutcome, CommunityFailure> = .success(.complete)
     /// Held open so a suite can watch two requests overlap — see
     /// `CommunityBrowserTests`.
     var beforeListingsReturn: (@Sendable () async -> Void)?
@@ -455,9 +459,9 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     }
 
     @concurrent
-    func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws {
+    func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws -> CommunityPhotoTakedownOutcome {
         state.withLock { $0.takenDownPhotos.append(contribution.id) }
-        try takeDownResult.get()
+        return try takeDownPhotosResult.get()
     }
 }
 

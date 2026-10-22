@@ -630,13 +630,27 @@ nonisolated protocol CommunityTransporting: Sendable {
     /// Both records, and in that order, for the reason ``takeDown(_:)`` does
     /// it in that order: a failure partway leaves photographs nobody can find
     /// rather than a published record pointing at a submission that is gone.
+    /// The order is not the thing to change when the second delete fails.
+    ///
+    /// **Safe to repeat.** A published record that is already gone is not a
+    /// reason to leave its submission behind, so taking the same set down a
+    /// second time carries on to the submission rather than stopping at the
+    /// first delete — which is what lets a failure after the unlisting be
+    /// finished by asking again.
+    ///
+    /// - Returns: ``CommunityPhotoTakedownOutcome/complete`` when both records
+    ///   are gone, and ``CommunityPhotoTakedownOutcome/unlisted(cleanupFailure:)``
+    ///   when the photographs are off the hike but the submission could not be
+    ///   deleted.
+    /// - Throws: Only when nothing was removed by this call. A caller that
+    ///   sees a throw may treat the photographs as still published.
     ///
     /// The hike it was on is untouched. A contribution is a record of its own
     /// with an author of its own, which is what makes taking one down a thing
     /// that can be done at all — and the reason the hike's own photographs are
     /// never at risk from it.
     @concurrent
-    func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws
+    func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws -> CommunityPhotoTakedownOutcome
 
     /// Openly licensed photographs from Wikimedia Commons taken along
     /// `route`, downloaded into `directory`, for a curated route — and none
