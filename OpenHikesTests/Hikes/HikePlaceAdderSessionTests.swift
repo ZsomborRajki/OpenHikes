@@ -37,6 +37,15 @@ struct HikePlaceAdderSessionTests {
         #endif
     }
 
+    /// The same picture as a picker hands one over: encoded bytes.
+    nonisolated private static func jpeg() -> Data? {
+        #if canImport(UIKit)
+        frame()?.image.jpegData(compressionQuality: 0.8)
+        #else
+        nil
+        #endif
+    }
+
     @Test("a frame off the camera is held with its thumbnail, and Add waits while it is read")
     func capturedFrameIsHeld() async throws {
         let frame = try #require(Self.frame())
@@ -54,6 +63,29 @@ struct HikePlaceAdderSessionTests {
             Issue.record("a frame off the camera is held as a capture, to be filed as one")
             return
         }
+    }
+
+    @Test("a picked picture is held with its library identity, and one that cannot be read is reported")
+    func pickedPicturesAreHeldOrReported() async throws {
+        let jpeg = try #require(Self.jpeg())
+        let session = HikePlaceAdderSession()
+
+        await session.stage(picks: [
+            .init(assetLocalIdentifier: "asset-7") { jpeg },
+            .init(assetLocalIdentifier: "asset-8") { nil },
+        ]).value
+
+        #expect(session.stagingCount == 0)
+        #expect(session.capture.failure == .importFailed, "the picture that could not be read is said")
+        #expect(session.photos.count == 1, "and the one that could is held")
+        let held = try #require(session.photos.first)
+        #expect(held.thumbnail != nil)
+        guard case let .picked(data, identifier) = held.source else {
+            Issue.record("a picked picture is held as a pick, to be filed as one")
+            return
+        }
+        #expect(data == jpeg)
+        #expect(identifier == "asset-7")
     }
 
     @Test("a held photograph is taken back out, and the rest keep their order")
