@@ -56,13 +56,13 @@ struct LibraryTotalsRouteEditTests {
     }
 
     /// Heights read for exactly `draft`'s line, as the maker would have them.
-    private static func heights(for draft: TrailDraft, of metres: [Double]) -> RouteHeightSamples {
+    private static func heights(for draft: TrailDraft, of meters: [Double]) -> RouteHeightSamples {
         let route = draft.routeCoordinates
         return RouteHeightSamples(
             routePointCount: route.count,
             indexes: Array(route.indices),
             coordinates: route,
-            heights: metres
+            heights: meters
         )
     }
 
