@@ -16,6 +16,13 @@
 //  not exactly the same share of its latitude. At these spans the two differ
 //  by a fraction of a per cent.
 //
+//  The pill's tap is the one place the map is read with the sheet wherever it
+//  is, and a lowered sheet shows a taller map. A zoom the pill was enabled at
+//  can therefore be past the zoom ceiling at the tap, where the search would
+//  be refused and the pill left disabled until the map moved. What is pinned
+//  there is that the tap asks about the map that enabled the pill instead,
+//  and that it does so only when the lowered sheet's map is out of reach.
+//
 
 import CoreLocation
 import Foundation
@@ -40,17 +47,46 @@ extension MapCoordinatorTests {
         span: MKCoordinateSpan(latitudeDelta: Searched.span, longitudeDelta: Searched.span)
     )
 
-    /// A map showing ``searchedRegion``, laid out the way the suite lays
-    /// out every map.
+    /// The span of ``nearTheCeiling``, in degrees.
+    private enum Wide {
+        static let latitudeSpan = 1.1
+        static let longitudeSpan = 0.75
+    }
+
+    /// A zoom at which the map above the sheet's middle detent is inside the
+    /// zoom ceiling and the map with the sheet lowered is outside it.
+    private static let nearTheCeiling = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: Searched.latitude, longitude: Searched.longitude),
+        span: MKCoordinateSpan(latitudeDelta: Wide.latitudeSpan, longitudeDelta: Wide.longitudeSpan)
+    )
+
+    /// A map showing ``searchedRegion`` unless told otherwise, laid out the
+    /// way the suite lays out every map.
     private func searchedMap(
         _ view: MapView,
-        _ coordinator: MapView.Coordinator
+        _ coordinator: MapView.Coordinator,
+        showing region: MKCoordinateRegion = Self.searchedRegion
     ) -> MKMapView {
         let map = makeMap(view, coordinator)
         view.update(map, coordinator)
-        map.region = Self.searchedRegion
+        map.region = region
         return map
     }
+
+    #if os(iOS)
+    /// *Search this area*, which sits inside the pill's glass rather than
+    /// among its own subviews.
+    private func communitySearchButton(in pill: UIView) -> UIControl? {
+        var pending: [UIView] = [pill]
+        while let view = pending.popLast() {
+            if view.accessibilityIdentifier == MapAreaSearchView.Identifiers.community.button {
+                return view as? UIControl
+            }
+            pending.append(contentsOf: view.subviews)
+        }
+        return nil
+    }
+    #endif
 
     /// What share of the whole view's height and width `region` covers.
     ///
@@ -65,6 +101,48 @@ extension MapCoordinatorTests {
         return (
             region.span.latitudeDelta / (northWest.latitude - southEast.latitude),
             region.span.longitudeDelta / (southEast.longitude - northWest.longitude)
+        )
+    }
+
+    /// One expectation per number of `region`: the same map read through two
+    /// routes comes out identical, so the tolerance is only for rounding.
+    private static func expectSameRegion(
+        _ region: MKCoordinateRegion,
+        as expected: MKCoordinateRegion,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        let same = 1e-9
+        let figures = [
+            (region.center.latitude, expected.center.latitude),
+            (region.center.longitude, expected.center.longitude),
+            (region.span.latitudeDelta, expected.span.latitudeDelta),
+            (region.span.longitudeDelta, expected.span.longitudeDelta),
+        ]
+        for (actual, wanted) in figures {
+            #expect(
+                actual.isApproximatelyEqual(to: wanted, absoluteTolerance: same),
+                sourceLocation: sourceLocation
+            )
+        }
+    }
+
+    /// What the tests at the ceiling stand on: the sheet's middle detent shows
+    /// a map the search takes and its lowest detent one it does not. Without
+    /// it each of them would pass at any zoom at all, and the numbers are in
+    /// the message so that a zoom MapKit lays out differently can be re-chosen.
+    private static func expectStraddlesTheCeiling(
+        lowered: MKCoordinateRegion,
+        middle: MKCoordinateRegion,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        let ceiling = CommunityQueryPolicy.maximumRadiusMeters
+        let loweredRadius = CommunityQueryPolicy.visibleRadiusMeters(for: lowered)
+        let middleRadius = CommunityQueryPolicy.visibleRadiusMeters(for: middle)
+        let radii = "\(Int(middleRadius)) m at the middle detent, \(Int(loweredRadius)) m lowered"
+        #expect(
+            middleRadius <= ceiling && ceiling < loweredRadius,
+            "precondition: \(radii), against a ceiling of \(Int(ceiling)) m",
+            sourceLocation: sourceLocation
         )
     }
 
@@ -197,6 +275,91 @@ extension MapCoordinatorTests {
         #expect(span.longitudeDelta.isApproximatelyEqual(to: expected.span.longitudeDelta, absoluteTolerance: same))
         #expect(asked.latitude.isApproximatelyEqual(to: expected.center.latitude, absoluteTolerance: same))
         #expect(asked.longitude.isApproximatelyEqual(to: expected.center.longitude, absoluteTolerance: same))
+        #endif
+    }
+
+    /// The zoom ceiling is a rule about the map a search is asked about, and
+    /// the sheet at its lowest detent shows a taller one than at its middle,
+    /// so a zoom the pill was enabled at can be over the ceiling by the time
+    /// it is tapped.
+    @Test("a tap whose lowered-sheet map is over the ceiling asks about the middle detent's map")
+    func aTapPastTheCeilingFallsBackToTheMiddleDetent() {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = searchedMap(mapView(), coordinator, showing: Self.nearTheCeiling)
+        defer { detach(map) }
+        settle(sheetMetrics, at: map.bounds.height * 0.45)
+        sheetMetrics.report(topY: map.bounds.height - 100, atMiddleDetent: false)
+        let lowered = coordinator.communitySearchRegion(of: map, sheet: .whereItIs)
+        let middle = coordinator.communitySearchRegion(of: map, sheet: .atMiddleDetent)
+        Self.expectStraddlesTheCeiling(lowered: lowered, middle: middle)
+
+        Self.expectSameRegion(coordinator.communitySearchRegionForTap(of: map), as: middle)
+        #endif
+    }
+
+    @Test("a tap whose lowered-sheet map is inside the ceiling asks about what the hiker sees")
+    func aTapWithinTheCeilingKeepsTheLoweredMap() {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = searchedMap(mapView(), coordinator)
+        defer { detach(map) }
+        settle(sheetMetrics, at: map.bounds.height * 0.45)
+        sheetMetrics.report(topY: map.bounds.height - 100, atMiddleDetent: false)
+        let lowered = coordinator.communitySearchRegion(of: map, sheet: .whereItIs)
+        let middle = coordinator.communitySearchRegion(of: map, sheet: .atMiddleDetent)
+        #expect(CommunityQueryPolicy.isWithinCeiling(lowered), "precondition: the zoom is far from the ceiling")
+        #expect(lowered.span.latitudeDelta > middle.span.latitudeDelta, "precondition: the lowered sheet shows more")
+
+        Self.expectSameRegion(coordinator.communitySearchRegionForTap(of: map), as: lowered)
+        #endif
+    }
+
+    /// The hole this closes, end to end: with the sheet at its middle detent
+    /// the pill is enabled, lowering the sheet puts the map it shows over the
+    /// ceiling, and the tap used to settle on *that* — which disabled the very
+    /// pill it had been pressed on, asked nothing, and left the browser
+    /// holding a region it refuses until the map moved.
+    @Test("an enabled pill searches, whatever the sheet has done to the zoom ceiling since")
+    func anEnabledPillSearchesPastTheCeiling() async throws {
+        #if os(iOS)
+        let transport = StubCommunityTransport()
+        transport.listingsResult = .success([])
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
+        let coordinator = MapView.Coordinator()
+        let map = searchedMap(mapView(community: browser), coordinator, showing: Self.nearTheCeiling)
+        defer { detach(map) }
+        let pill = try #require(coordinator.areaSearchControl)
+        let button = try #require(communitySearchButton(in: pill))
+        settle(sheetMetrics, at: map.bounds.height * 0.45)
+        coordinator.mapView(map, regionDidChangeAnimated: false)
+        browser.startBrowsing()
+        await settle(until: "the first search to be asked") { !transport.recording.nearbyRequests.isEmpty }
+        await settle(until: "the first search to finish") { !browser.isSearching && browser.requestsInFlight == 0 }
+        await settle(until: "the pill to be enabled") { pill.isEnabled && !pill.isSearching }
+        let asked = transport.recording.nearbyRequests.count
+
+        sheetMetrics.report(topY: map.bounds.height - 100, atMiddleDetent: false)
+        let lowered = coordinator.communitySearchRegion(of: map, sheet: .whereItIs)
+        let middle = coordinator.communitySearchRegion(of: map, sheet: .atMiddleDetent)
+        Self.expectStraddlesTheCeiling(lowered: lowered, middle: middle)
+        button.sendActions(for: .primaryActionTriggered)
+
+        await settle(until: "the tap's search to be asked") { transport.recording.nearbyRequests.count > asked }
+        let area = try #require(transport.recording.nearbyRequests.last)
+        let span = try #require(area.visibleSpan)
+        let same = 1e-9
+        #expect(span.latitudeDelta.isApproximatelyEqual(to: middle.span.latitudeDelta, absoluteTolerance: same))
+        #expect(span.longitudeDelta.isApproximatelyEqual(to: middle.span.longitudeDelta, absoluteTolerance: same))
+        #expect(area.latitude.isApproximatelyEqual(to: middle.center.latitude, absoluteTolerance: same))
+        #expect(area.longitude.isApproximatelyEqual(to: middle.center.longitude, absoluteTolerance: same))
+        await settle(until: "the pill to answer again") { pill.isEnabled && !pill.isSearching }
+
+        // A return to the tab re-reads the region the browser last held, so
+        // that region has to be one the pill can search.
+        browser.stopBrowsing()
+        browser.startBrowsing()
+        #expect(browser.areaPrompt != .zoomIn)
         #endif
     }
 }
