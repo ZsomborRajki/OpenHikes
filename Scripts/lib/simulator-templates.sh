@@ -44,7 +44,11 @@
 # clone of a settled template showed none for 158 seconds — so it counts as
 # settled once the table has stayed empty for OPENHIKES_SIM_TEMPLATE_IDLE_SECONDS
 # (60). That minute is what a refresh gets to start an update in: on the same
-# clone, the first status requests for the model sets came 27 seconds in.
+# clone, the first status requests for the model sets came 27 seconds in. A
+# build's table is given the same minute after it empties, because it grew
+# from four jobs to nine while the first ones ran: an empty moment between two
+# batches would settle a template with half its models, and every clone would
+# fetch the rest until the next refresh.
 #
 # ## Refreshed
 #
@@ -138,17 +142,14 @@ template_lock_held() {
 # Waits for `mobileassetd` on a booted device to have nothing left to download.
 # Returns 1 when it is still downloading at the deadline.
 wait_for_settled_assets() {
-    local udid="$1" started now jobs seen_work=false quiet_since=""
+    local udid="$1" started now jobs quiet_since=""
     started="$(date +%s)"
     while :; do
         now="$(date +%s)"
         jobs="$(template_active_jobs "$udid")"
         if [[ "$jobs" =~ ^[0-9]+$ ]]; then
             if (( jobs > 0 )); then
-                seen_work=true
                 quiet_since=""
-            elif [[ "$seen_work" == true ]]; then
-                return 0
             else
                 quiet_since="${quiet_since:-$now}"
                 (( now - quiet_since < template_idle_seconds )) || return 0
@@ -179,7 +180,8 @@ simulator_template_ready() {
 
 # Prints the UDID of a settled template of this device type on this runtime,
 # building or refreshing it first when it needs it — the one time that costs a
-# download. Progress goes to stderr. Returns 1 when it could not settle one.
+# download. Progress goes to stderr. Returns 1 when it could not settle one that
+# had never settled; one whose refresh runs out of time is still printed.
 simulator_template() {
     local device_type="$1" runtime="$2" name udid
     name="$(simulator_template_name "$device_type" "$runtime")"
@@ -228,6 +230,16 @@ simulator_template() {
     xcrun simctl shutdown "$udid" >/dev/null 2>&1 || true
     if [[ "$settled" == false ]]; then
         release_template_lock
+        if [[ -f "$(template_marker "$udid")" ]]; then
+            # A refresh that ran out of time still leaves a template that
+            # settled once, with all it had then and some of what came since,
+            # so a clone of it has less to fetch than an erased device. The
+            # marker stays as old as it was, so the next clean device carries
+            # the refresh on and the download stays the template's.
+            echo "$name was still catching up after ${template_settle_seconds}s; it is cloned as it is, and the next clean device carries the refresh on." >&2
+            printf '%s\n' "$udid"
+            return 0
+        fi
         echo "$name was still downloading after ${template_settle_seconds}s; the next build carries on from where it stopped." >&2
         return 1
     fi
