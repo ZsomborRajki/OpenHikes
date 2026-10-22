@@ -540,12 +540,14 @@ final class BackgroundTrailTracker: NSObject {
             // read below is the one that fix actually matched at.
             await previous?.value
             guard let self, selectionRevision == revision, trackedHikeID == hikeID else { return }
-            // No equivalent of `HikeDetailView`'s re-seeding rule is needed
-            // here: significant-location-change delivery only happens because
-            // the device moved several hundred metres, so a fix that arrives
-            // without a usable course is the rare one — and whenever the
-            // detail view has been open, `publishLiveFix` has already left a
-            // course-settled `lastMatchedDistance` behind to continue from.
+            // Continuity from the last match, which the course outranks on
+            // every fix here rather than after `FollowAnchor`'s three: these
+            // fixes are hundreds of metres apart, and three of them on the
+            // wrong leg of an out-and-back is most of the walk home (#836).
+            // The same rule covers what the foreground's re-seeding does for
+            // an unconfirmed anchor, so a reference `publishLiveFix` left
+            // behind is never more than one coursed fix from being corrected.
+            // A fix with no usable course keeps continuity alone.
             let reference = lastMatchedDistance
             let matched = await Self.offMainThread {
                 Self.match(

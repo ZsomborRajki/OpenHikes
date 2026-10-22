@@ -458,7 +458,13 @@ not. A hiker looking at a phone and a watch on the same walk must not be told
 they are on the trail by one and off it by the other. The out-and-back is
 settled by the hiker's **course**, not by continuity: an out-and-back is
 symmetric about its turn, so the two candidates are equidistant from the last
-match as well as from the hiker, and continuity alone cannot choose.
+match as well as from the hiker, and continuity alone cannot choose. The
+phone's background feed settles it by course too, through
+`RouteProfile.nearestPointHeadingFirst`, since a significant-change fix arrives
+too seldom for the three contrary fixes the foreground's `FollowAnchor` waits
+for; `RouteProfileHeadingFirstTests` walks one out-and-back through it and
+through `WatchRouteTracker` and fails when the two place the hiker apart on any
+fix, which no constant held equal can show.
 
 **The workout session is not about Health.** It is what keeps the process
 running with the wrist down; watchOS suspends an ordinary app within seconds,

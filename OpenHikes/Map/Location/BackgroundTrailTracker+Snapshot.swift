@@ -96,6 +96,11 @@ extension BackgroundTrailTracker {
     /// `Hike` it vends ever crosses an isolation boundary. Only the
     /// ``HikeRouteInput`` of values taken from that hike leaves.
     ///
+    /// The projection is `RouteProfile.nearestPointHeadingFirst(to:near:heading:)`
+    /// rather than the foreground's `nearestPoint`: a fix's course outranks
+    /// `referenceDistance` at once, because these fixes are too sparse to wait
+    /// for the several that `FollowAnchor` does before believing a turn.
+    ///
     /// Returns `nil` when the hike is gone or too short to match against.
     nonisolated static func match(
         hikeID: UUID,
@@ -114,7 +119,7 @@ extension BackgroundTrailTracker {
         // Taken once and read twice: the match decides whether there is a fix
         // to publish, and its distance from the line is worth reporting even
         // when there is not.
-        let nearest = profile.nearestPoint(
+        let nearest = profile.nearestPointHeadingFirst(
             to: coordinate,
             near: referenceDistance,
             heading: heading

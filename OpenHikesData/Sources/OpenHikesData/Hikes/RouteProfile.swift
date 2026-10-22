@@ -16,7 +16,8 @@ nonisolated public struct RouteProfile: Sendable {
     /// How far off the route (in meters) a GPS fix can be and still count as
     /// "on the trail" — shared by every consumer of
     /// `nearestPoint(to:near:heading:headingOverridesReference:scope:)` (in-app auto-follow, the
-    /// foreground/background widget feeds) so they all agree on the same trail.
+    /// foreground widget feed) and of `nearestPointHeadingFirst(to:near:heading:)` (the background
+    /// one) so they all agree on the same trail.
     public static let followMatchThresholdMeters: Double = 75
 
     /// How far a segment's direction may differ from the hiker's own course
@@ -384,7 +385,8 @@ nonisolated extension RouteProfile {
     /// opinion, and moves to its answer only once the course has kept
     /// disagreeing with continuity (see `FollowAnchor`). Without it, a hiker
     /// walking home along an out-and-back is held on the outbound leg by
-    /// continuity for the whole return.
+    /// continuity for the whole return. A feed too sparse for that kind of
+    /// patience asks ``nearestPointHeadingFirst(to:near:heading:)`` instead.
     ///
     /// A loop's junction stays ambiguous under this test, correctly: both
     /// passes run the same way, so the start assumption still decides it.
@@ -401,7 +403,95 @@ nonisolated extension RouteProfile {
             let offset = RouteGeometry.distanceMeters(from: coordinate, to: only)
             return (0, offset)
         }
+        let course = referenceDistance == nil || headingOverridesReference ? heading : nil
+        return nearestCandidate(
+            to: coordinate,
+            near: referenceDistance,
+            course: course,
+            scope: scope
+        )?.match
+    }
 
+    /// Projects a fix onto the route letting a usable course outrank
+    /// continuity on every fix — the rule the watch's `WatchRouteTracker`
+    /// follows — rather than as the second opinion
+    /// ``nearestPoint(to:near:heading:headingOverridesReference:scope:)``
+    /// offers.
+    ///
+    /// For the background feed, which is too sparse for the patience
+    /// `FollowAnchor` shows in the foreground. Significant-location-change
+    /// delivery arrives every five hundred metres or so at best, so waiting
+    /// for three fixes to disagree with continuity would hold a hiker on the
+    /// wrong leg of an out-and-back for a kilometre and a half — and because
+    /// coverage accrues from whatever this answers, a walk home along the
+    /// outbound leg's mirror never reaches the end at all.
+    ///
+    /// Two steps, and the second is what the sparseness costs. The continuity
+    /// window around `referenceDistance` is asked first, with the course
+    /// settling any tie in it; a winner running the hiker's way is the answer.
+    /// Only when it does not is the whole route asked, because one fix can
+    /// carry a hiker from the outbound leg in the window to a point on the
+    /// return leg outside it. A route-wide winner replaces the windowed one
+    /// only when it runs the hiker's way and is itself on the trail, and it
+    /// can never be more than ``tieBreakToleranceMeters`` farther off the
+    /// route than the window's closest segment, since the whole route's
+    /// closest is never farther than the window's. So a genuinely different
+    /// trail is no more a contender here than it is anywhere else.
+    ///
+    /// What it costs is the jumping continuity exists to prevent, bounded to
+    /// one fix: a course pointing the wrong way within twenty metres of
+    /// another leg moves the match to that leg, and the next fix with an
+    /// honest course moves it back. `LocationFixPolicy.course(of:)` already
+    /// refuses a course worse than 45°, and the test is a disagreement of 90°
+    /// or more. With no course, or no reference to disagree with, this is
+    /// ``nearestPoint(to:near:heading:headingOverridesReference:scope:)``
+    /// exactly — continuity for a Wi-Fi or cell fix that carries no course,
+    /// and for the first fix the course and then the start of the route.
+    public func nearestPointHeadingFirst(
+        to coordinate: CLLocationCoordinate2D,
+        near referenceDistance: Double?,
+        heading: CLLocationDirection?
+    ) -> (distanceAlongRoute: Double, offRouteMeters: Double)? {
+        guard let referenceDistance, let heading, coordinates.count > 1 else {
+            return nearestPoint(to: coordinate, near: referenceDistance, heading: heading)
+        }
+        guard let windowed = nearestCandidate(
+            to: coordinate,
+            near: referenceDistance,
+            course: heading,
+            scope: .wholeRoute
+        ) else { return nil }
+        if Self.runs(windowed, with: heading) { return windowed.match }
+
+        let fullRange = 0..<(coordinates.count - 1)
+        var candidates: [NearestCandidate] = []
+        candidates.reserveCapacity(fullRange.count)
+        var best: NearestCandidate?
+        appendCandidates(to: coordinate, in: fullRange, candidates: &candidates, best: &best)
+        guard let best else { return windowed.match }
+        let routeWide = breakTie(
+            among: candidates,
+            best: best,
+            anchor: referenceDistance,
+            course: heading
+        )
+        guard Self.runs(routeWide, with: heading),
+              routeWide.offRouteMeters <= Self.followMatchThresholdMeters else {
+            return windowed.match
+        }
+        return routeWide.match
+    }
+
+    /// The search both matchers share, on a route of at least two points,
+    /// returning the winning projection whole so a caller can ask which way
+    /// its segment runs. `course` is the one the tie-break consults, already
+    /// decided — `nil` when the caller wants continuity alone.
+    private func nearestCandidate(
+        to coordinate: CLLocationCoordinate2D,
+        near referenceDistance: Double?,
+        course: CLLocationDirection?,
+        scope: SearchScope
+    ) -> NearestCandidate? {
         let fullRange = 0..<(coordinates.count - 1)
         let initialRange = referenceDistance.map { reference in
             candidateSegmentRange(near: reference)
@@ -448,14 +538,6 @@ nonisolated extension RouteProfile {
         }
         guard let best else { return nil }
 
-        let anchor = referenceDistance ?? 0
-        let course = referenceDistance == nil || headingOverridesReference ? heading : nil
-
-        func runsWithTheHiker(_ candidate: NearestCandidate) -> Bool {
-            guard let course else { return false }
-            return RouteGeometry.bearingDifference(course, candidate.bearingDegrees) < Self.courseAgreementDegrees
-        }
-
         // Among every segment projection within `tieBreakToleranceMeters` of
         // the closest one, prefer whichever the hiker is actually heading
         // along; failing that (or between two that both qualify), whichever
@@ -463,8 +545,8 @@ nonisolated extension RouteProfile {
         return breakTie(
             among: candidates,
             best: best,
-            anchor: anchor,
-            runsWithTheHiker: runsWithTheHiker
+            anchor: referenceDistance ?? 0,
+            course: course
         )
     }
 
@@ -509,6 +591,9 @@ nonisolated extension RouteProfile {
         let dx: Double
         let dy: Double
         var bearingDegrees: Double { atan2(dx, dy) * 180 / .pi }
+        var match: (distanceAlongRoute: Double, offRouteMeters: Double) {
+            (distanceAlongRoute, offRouteMeters)
+        }
     }
 
     private func appendCandidates(
@@ -543,15 +628,15 @@ nonisolated extension RouteProfile {
         among candidates: [NearestCandidate],
         best: NearestCandidate,
         anchor: Double,
-        runsWithTheHiker: (NearestCandidate) -> Bool
-    ) -> (distanceAlongRoute: Double, offRouteMeters: Double) {
+        course: CLLocationDirection?
+    ) -> NearestCandidate {
         var tied = best
-        var tiedRunsWith = runsWithTheHiker(best)
+        var tiedRunsWith = Self.runs(best, with: course)
         var bestContinuity = abs(best.distanceAlongRoute - anchor)
         for contender in candidates {
             guard contender.offRouteMeters
                 <= best.offRouteMeters + Self.tieBreakToleranceMeters else { continue }
-            let contenderRunsWith = runsWithTheHiker(contender)
+            let contenderRunsWith = Self.runs(contender, with: course)
             if contenderRunsWith != tiedRunsWith {
                 guard contenderRunsWith else { continue }
                 tied = contender
@@ -565,7 +650,18 @@ nonisolated extension RouteProfile {
                 tied = contender
             }
         }
-        return (tied.distanceAlongRoute, tied.offRouteMeters)
+        return tied
+    }
+
+    /// Whether `candidate`'s segment runs the way the hiker is going — never,
+    /// when there is no course to ask, nor when it lies square across their
+    /// way, as the few metres joining an out-and-back's two legs do.
+    private static func runs(
+        _ candidate: NearestCandidate,
+        with course: CLLocationDirection?
+    ) -> Bool {
+        guard let course else { return false }
+        return RouteGeometry.bearingDifference(course, candidate.bearingDegrees) < courseAgreementDegrees
     }
 
     /// Index of the value in an ascending array closest to `target`. O(log n).
