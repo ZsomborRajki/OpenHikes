@@ -60,15 +60,17 @@ final class BackgroundDeliveryTests {
     private func fix(
         at coordinate: CLLocationCoordinate2D,
         accuracy: CLLocationAccuracy = 10,
-        age: TimeInterval = 0
+        age: TimeInterval = 0,
+        course: CLLocationDirection = -1,
+        speed: CLLocationSpeed = -1
     ) -> CLLocation {
         CLLocation(
             coordinate: coordinate,
             altitude: 0,
             horizontalAccuracy: accuracy,
             verticalAccuracy: -1,
-            course: -1,
-            speed: -1,
+            course: course,
+            speed: speed,
             timestamp: Date().addingTimeInterval(-age)
         )
     }
@@ -289,6 +291,48 @@ final class BackgroundDeliveryTests {
 
         let persisted = defaults.object(forKey: SettingsKey.lastMatchedDistance) as? Double
         #expect((try #require(persisted)).isApproximatelyEqual(to: profile.distances[3], absoluteTolerance: 1))
+    }
+
+    /// The background half of #836. Significant-change fixes arrive hundreds
+    /// of metres apart and an out-and-back's two legs lie under a metre apart,
+    /// so a feed matching by continuity alone put every fix on the way home
+    /// onto the way out: coverage stalled near half, and a walk followed with
+    /// the phone in a pocket never reached its end. Only the course tells the
+    /// legs apart, and here it has to on the first fix past the turn.
+    @Test("a sparse background walk home along an out-and-back reaches the end")
+    func sparseBackgroundWalkHomeReachesTheEnd() async throws {
+        let walked = Fixture.hike(in: context, title: "Out and back", route: Fixture.outAndBackRoute)
+        let profile = RouteProfile(route: walked.route)
+        var record = TrailWalkRecord(
+            hikeID: walked.id,
+            routeDistanceMeters: profile.totalDistanceMeters,
+            startedAt: .now
+        )
+        record.coverage.record(distance: profile.distances[0])
+        walked.walkInProgress = record
+        try context.save()
+        defaults.set(walked.id.uuidString, forKey: SettingsKey.lastSelectedHikeID)
+        let tracker = relaunchedTracker()
+        let session = TrailWalkSession(context: context, tracker: tracker)
+        session.restoreAtLaunch()
+        #expect(tracker.trackedHikeID == walked.id)
+        // A fix every third vertex, about 170 m apart: sparse, yet inside the
+        // gap a walk's coverage bridges, so the walk can only fail to end by
+        // being matched to the wrong leg. The fixture turns at its middle vertex.
+        let turn = profile.coordinates.count / 2
+        let home = profile.coordinates.count - 1
+
+        for index in stride(from: 0, to: turn, by: 3) {
+            await deliver(fix(at: profile.coordinates[index], course: 0, speed: 1.2))
+        }
+        #expect(session.walkedHikeID == walked.id, "halfway, and still walking")
+        for index in Array(stride(from: turn + 1, to: home, by: 3)) + [home] {
+            await deliver(fix(at: profile.coordinates[index], course: 180, speed: 1.2))
+        }
+
+        let ended = try #require(session.lastEndedWalk, "coverage stalled at \(session.coveredFraction)")
+        #expect(ended.endReason == .reachedEnd)
+        #expect(session.walkedHikeID == nil)
     }
 
     // MARK: The boundary an End leaves behind

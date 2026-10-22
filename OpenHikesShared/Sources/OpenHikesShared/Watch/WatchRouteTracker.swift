@@ -34,14 +34,22 @@
 //  work: an out-and-back is *symmetric about its turn*, so the two candidates
 //  are equidistant from the last match as well as from the hiker.
 //
-//  What settles it is the hiker's own direction, which is what `RouteProfile`
-//  uses and which `CLLocation.course` reports on a watch as well as on a
-//  phone. The rule here is the app's, with the same two constants: among the
-//  candidates that are tied on distance from the line, prefer the ones running
-//  *with* the hiker, and among those the one nearest the last match. A fix
-//  with no course to offer — a stationary receiver reports −1 — falls back to
-//  continuity, and then to the first candidate, which is the reading a hiker
-//  who has just opened the app should get.
+//  What settles it is the hiker's own direction, which `CLLocation.course`
+//  reports on a watch as well as on a phone. Among the candidates that are
+//  tied on distance from the line, prefer the ones running *with* the hiker,
+//  and among those the one nearest the last match. A fix with no course to
+//  offer — a stationary receiver reports −1 — falls back to continuity, and
+//  then to the first candidate, which is the reading a hiker who has just
+//  opened the app should get.
+//
+//  The phone shares this file's constants but not, on every path, its rule
+//  (#836). Its foreground follow lets continuity decide and asks the course
+//  for a second opinion that wins only after a run of contrary fixes
+//  (`FollowAnchor`): a fix a second can afford that patience. Its background
+//  feed, whose fixes are hundreds of metres apart, cannot — so it lets the
+//  course win at once, as this does, and goes one step further: it will
+//  search the whole route for a leg running with the hiker, where this keeps
+//  to its window while anything in it is on the trail.
 //
 //  ## Scale
 //
@@ -346,7 +354,9 @@ public struct WatchRouteTracker: Sendable, Equatable {
         }
     }
 
-    /// Whether a segment runs the way the hiker is going.
+    /// Whether a segment runs the way the hiker is going — not when it lies
+    /// square across their way, as the few metres joining an out-and-back's
+    /// two legs do. `RouteProfile` reads that boundary the same way.
     private func runsWithTheHiker(
         _ projection: WatchGeodesy.SegmentProjection,
         courseDegrees: Double?
@@ -356,7 +366,7 @@ public struct WatchRouteTracker: Sendable, Equatable {
         var difference = abs(projection.bearingDegrees - courseDegrees)
             .truncatingRemainder(dividingBy: 360)
         if difference > 180 { difference = 360 - difference }
-        return difference <= Self.courseAgreementDegrees
+        return difference < Self.courseAgreementDegrees
     }
 
     /// The trail's height at a point part-way along a segment.
