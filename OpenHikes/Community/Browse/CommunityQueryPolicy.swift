@@ -204,6 +204,15 @@ struct CommunityQueryPolicy {
             )
         )
 
+        // Both thresholds measure the floored circle CloudKit is asked about,
+        // not the rectangle OpenStreetMap is asked about, so from a view
+        // narrower than the floor a pan can take the rectangle off what was
+        // searched without raising an offer. That decides only whether the
+        // prompt says ``CommunityAreaPrompt/search`` or
+        // ``CommunityAreaPrompt/settled``, which nothing draws today: the
+        // pill is permanent, and a tap with no offer standing re-asks through
+        // ``CommunityBrowser/retry()``, which forgets this memory first. It
+        // would start to matter if an offer were ever drawn again.
         if let committed {
             let moved = RouteGeometry.distanceMeters(
                 from: committed.coordinate,

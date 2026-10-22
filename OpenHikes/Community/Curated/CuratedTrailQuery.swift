@@ -134,10 +134,11 @@ nonisolated enum CuratedTrailQuery {
     /// The listing pass is a tag scan over a box and is quick; the geometry
     /// pass assembles member ways for up to ``geometryBatchLimit`` relations
     /// and is not. A one-request search draws every line in its box, so it
-    /// takes the geometry pass's figure. Both sit under the 35-second client
-    /// timeout ``OverpassTrailGraphProvider`` already uses, so the server gives
-    /// up before the socket does and the app gets a diagnosable answer instead
-    /// of a cancelled request.
+    /// takes the geometry pass's figure. The client's own timeout is derived
+    /// from whichever is sent, by ``OverpassRequest/idleTimeout(forServerTimeout:)``,
+    /// which allows for the queue wait and the transfer on top of it — so the
+    /// server gives up before the socket does and the app gets a diagnosable
+    /// answer instead of a cancelled request.
     static let listingTimeoutSeconds = 25
     static let geometryTimeoutSeconds = 30
 

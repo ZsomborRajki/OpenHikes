@@ -119,9 +119,9 @@ nonisolated enum SeededQueuedHike {
 }
 
 /// What `--ui-test-community=commons` adds: three Wikimedia Commons
-/// photographs on every route, and across the north of the area the tab
-/// searches — where the east one has two more beside it, which the map draws
-/// as one group. Mirrors ``SeededCommonsPhotoSource``.
+/// photographs on every route, and just south of the middle of the area the
+/// tab searches — where the east one has two more beside it, which the map
+/// draws as one group. Mirrors ``SeededCommonsPhotoSource``.
 nonisolated enum SeededCommons {
     static let firstAuthor = "Anna Berger"
     static let license = "CC BY-SA 4.0"
