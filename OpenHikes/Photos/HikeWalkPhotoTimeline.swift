@@ -17,6 +17,12 @@
 //  window and a stretch, not a clock, and this type is deliberately the weaker
 //  thing rather than a second one pretending to be ``HikePhotoTimeline``.
 //
+//  The stretch is metres along the route *as it was walked*, and a route can
+//  change under its walks — *Edit Route* keeps a drawn trail's walks as
+//  history — so it is read only for a walk along the line the hike has now.
+//  Any other walk is left out whole rather than placed by distances that name
+//  other ground: see ``Hike/walkPhotoTimelines``.
+//
 //  Two honest limits are worth stating outright, because both bound what the
 //  placement below is worth.
 //
@@ -124,14 +130,32 @@ nonisolated struct HikeWalkPhotoTimeline: Equatable, Sendable {
 }
 
 extension Hike {
-    /// This hike's finished walks as photo timelines, oldest first.
+    /// This hike's finished walks as photo timelines, oldest first — the walks
+    /// along the line the hike has now, and no others.
+    ///
+    /// A walk's stretches are metres along the route as it stood when the walk
+    /// ended, and *Edit Route* keeps a drawn trail's walks as history, so after
+    /// an edit the same distances name other ground: the far end of a reversed
+    /// line, a different bend of a rerouted one. A walk along another line is
+    /// left out whole. Its window could still say *when* the hiker was out, but
+    /// nothing then says *where*, which is the half the stretches carried, and
+    /// placing a photograph by a stretch that is no longer the walker's would
+    /// pin it to ground they never reached. A walk that records no line is
+    /// along none, the strictness ``HikeWalk/isAlong(revision:)`` states and
+    /// the walk summary already applies.
     ///
     /// Read from the relationship rather than through `HikeWalk`'s `hikeID`
     /// column, because this is the one question that wants the walks *of this
     /// row* and has no list to rank — the reason the relationship exists at
     /// all beyond its cascade.
     var walkPhotoTimelines: [HikeWalkPhotoTimeline] {
-        (walks ?? [])
+        let finished = walks ?? []
+        // The revision reads every point of the route, so a hike with no walks
+        // — most of them — never pays for it.
+        guard !finished.isEmpty else { return [] }
+        let revision = TrailWalkRecord.routeRevision(of: route)
+        return finished
+            .filter { $0.isAlong(revision: revision) }
             .compactMap { walk in
                 HikeWalkPhotoTimeline(
                     startedAt: walk.startedAt,
