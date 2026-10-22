@@ -57,8 +57,17 @@ nonisolated enum PhotoDiscoveryFixture {
         )
     }
 
+    /// The line a fixture walk is along unless a test says otherwise. The same
+    /// for ``route`` and ``unstampedRoute``, because a revision reads positions
+    /// only.
+    static let routeRevision = TrailWalkRecord.routeRevision(of: route)
+
     /// A finished walk along a route, between two moments expressed in route
     /// steps and covering one stretch of it in metres.
+    ///
+    /// Along the fixture route unless `routeRevision` names another line, or
+    /// none, which is what a walk that was not along the hike's current route
+    /// looks like.
     ///
     /// Inserted by the caller, which is also where the relationship to the
     /// hike is set: a walk reaches its hike through `hike`, and a walk built
@@ -68,7 +77,8 @@ nonisolated enum PhotoDiscoveryFixture {
         fromStep: Double,
         toStep: Double,
         covering stretch: ClosedRange<Double>,
-        routeDistanceMeters: Double
+        routeDistanceMeters: Double,
+        routeRevision: String? = Self.routeRevision
     ) -> HikeWalk {
         HikeWalk(
             hikeID: hikeID,
@@ -78,7 +88,8 @@ nonisolated enum PhotoDiscoveryFixture {
             coveredIntervals: [stretch.lowerBound, stretch.upperBound],
             furthestDistanceMeters: stretch.upperBound,
             routeDistanceMeters: routeDistanceMeters,
-            endReason: .ended
+            endReason: .ended,
+            routeRevision: routeRevision
         )
     }
 

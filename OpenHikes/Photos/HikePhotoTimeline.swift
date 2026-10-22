@@ -227,9 +227,11 @@ extension Hike {
     /// pictures of this walk.
     ///
     /// A stamped route is one way to be able to answer and a finished walk
-    /// along the trail is the other — see ``HikePhotoSearchPlan``. An
-    /// imported GPX has neither until somebody walks it, which is what the
-    /// caption under the button says.
+    /// along the trail as it is drawn now is the other — see
+    /// ``HikePhotoSearchPlan``; a walk along a line the hike has since changed
+    /// no longer counts, see ``walkPhotoTimelines``. An imported GPX has
+    /// neither until somebody walks it, which is what the caption under the
+    /// button says.
     var canMatchLibraryPhotos: Bool {
         route.contains { $0.timestamp != nil } || !walkPhotoTimelines.isEmpty
     }
