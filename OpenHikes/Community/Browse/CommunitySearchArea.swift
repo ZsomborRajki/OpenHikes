@@ -34,6 +34,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 /// A place and a distance around it: what one nearby request covers.
 nonisolated struct CommunitySearchArea: Equatable, Sendable {
@@ -65,11 +66,31 @@ nonisolated struct CommunitySearchArea: Equatable, Sendable {
 }
 
 nonisolated extension CommunitySearchArea {
-    /// How far a rectangle reaches either side of its centre, in degrees —
+    /// How tall and how wide a rectangle is, in degrees, edge to edge —
     /// `MKCoordinateSpan`'s two numbers, held here because MapKit's type is not
     /// `Equatable` and this one has to be. See this file's header.
     struct Span: Equatable, Sendable {
         var latitudeDelta: Double
         var longitudeDelta: Double
+    }
+
+    /// Whether `point` stands in this area: inside ``visibleSpan`` when the
+    /// area carries one, and within ``radiusMeters`` of its centre when it
+    /// does not.
+    ///
+    /// The rectangle wins for the reason it is what OpenStreetMap is asked
+    /// about. What this answers is which of the things already on the device
+    /// a refused search draws — see ``OverpassFileStore`` — and those have to
+    /// be in the map the hiker could see, not in the circle floored for
+    /// CloudKit, which at a valley's zoom reaches well past the screen and
+    /// under the sheet. Longitude is compared the short way round, so a view
+    /// across the date line holds what stands on both sides of it.
+    func contains(_ point: CLLocationCoordinate2D) -> Bool {
+        guard let visibleSpan else {
+            return RouteGeometry.distanceMeters(from: coordinate, to: point) <= radiusMeters
+        }
+        let east = RouteGeometry.normalizedLongitudeDelta(point.longitude - longitude)
+        return abs(point.latitude - latitude) <= visibleSpan.latitudeDelta / 2
+            && abs(east) <= visibleSpan.longitudeDelta / 2
     }
 }
