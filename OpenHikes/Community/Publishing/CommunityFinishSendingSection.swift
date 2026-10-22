@@ -70,5 +70,13 @@ struct CommunityFinishSendingSection: View {
                 .disabled(phase.isSending)
                 .accessibilityIdentifier(identifiers.button)
         }
+        // The outcome section knocks once, when it first reaches the screen,
+        // and a retry never takes it off: `.finishing` draws this same view.
+        // So a retry that fails is announced here, on the way back from
+        // `.finishing`, or the second failure would arrive in silence.
+        .sensoryFeedback(trigger: phase) { old, new in
+            guard old == .finishing, case .awaitingQueue(.some) = new else { return nil }
+            return HapticMoment.outcomeFailed.feedback
+        }
     }
 }
