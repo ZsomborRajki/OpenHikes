@@ -28,15 +28,21 @@ import Testing
 
 @Suite("A download that does not finish")
 struct OfflineDownloadResumeTests {
-    /// Deep enough that the plan comfortably exceeds
+    /// Stadia for its download policy — the one provider whose terms permit a
+    /// bulk run — with a template pointing nowhere, since every save is
+    /// injected.
+    ///
+    /// The depth sets the size of the plan, and the plan has to outlast every
+    /// stall a test below sets up: the longest lets three batches land, so a
+    /// plan no bigger than that is a run that can finish on its own before the
+    /// test cancels it. It also has to comfortably exceed
     /// ``OfflineTileDownloader/claimBatchSize``, which is what makes a batch
-    /// fire at all. Stadia for its download policy — the one provider whose
-    /// terms permit a bulk run — with a template pointing nowhere, since every
-    /// save is injected.
+    /// fire at all. Zoom 16 over this route plans fewer tiles than the longest
+    /// stall; see `lossIsBoundedByOneBatch`.
     private static let source = ActiveTileSource(
         providerID: TileProvider.stadiaOutdoors.id,
         urlTemplate: "https://example.invalid/{z}/{x}/{y}.png",
-        maximumZ: 16
+        maximumZ: 18
     )
 
     /// Small enough that a fixture route's plan holds several batches. The
@@ -133,49 +139,6 @@ struct OfflineDownloadResumeTests {
         }
     }
 
-    /// Lets a fixed number of tiles land and then blocks for good, so a run
-    /// can be caught in the middle rather than raced.
-    private actor SavesThenStalls {
-        private var attempted = 0
-        private var landed = 0
-        private let limit: Int
-        /// **An array, not one continuation.** ``OfflineTileDownloader/
-        /// inFlightWindow`` tiles are in the task group at once, so several
-        /// reach the stall together — a single stored continuation would be
-        /// overwritten by the next arrival and the ones it replaced would
-        /// never resume, which hangs `waitForCurrentRun()` rather than failing
-        /// anything.
-        private var parked: [CheckedContinuation<Void, Never>] = []
-
-        init(limit: Int) { self.limit = limit }
-
-        func save() async -> Bool {
-            attempted += 1
-            guard attempted <= limit else {
-                // Parked for the rest of the test. The run is cancelled out
-                // from under this, which is what a suspended process looks
-                // like from inside a tile fetch.
-                await withCheckedContinuation { continuation in parked.append(continuation) }
-                return false
-            }
-            landed += 1
-            return true
-        }
-
-        /// The tiles that actually reached disk — **not** the number of calls.
-        /// A parked save writes nothing and returns `false`, so the run is
-        /// right never to claim it; counting those attempts as fetched tiles
-        /// charges a stopped run for tiles it never got, and how many of them
-        /// pile up is down to how the runner happened to schedule the task
-        /// group.
-        var savedCount: Int { landed }
-
-        func release() {
-            for continuation in parked { continuation.resume() }
-            parked = []
-        }
-    }
-
     // MARK: What a run that never finished keeps
 
     /// **The one the issue was filed about.** Before this, the store held
@@ -250,6 +213,15 @@ struct OfflineDownloadResumeTests {
                 claim: claim(for: started, signalling: signal)
             )
             await downloader.waitForPlanning()
+            // The stall has to be reachable. Were fewer tiles planned than the
+            // stub lets land, nothing would ever park, and the run could take
+            // the last tile and `finalize` before the cancel below arrives — a
+            // complete record, empty of keys, which replaces the very batches
+            // this test then goes to count.
+            #expect(
+                downloader.total > landed,
+                "precondition: the plan has to outlast the stall, or the run can finish before the cancel"
+            )
             // Two batches in, so the third is the one in progress when the run
             // stops — which is the window the bound is about.
             await signal.claims(atLeast: 2)
@@ -438,5 +410,64 @@ struct OfflineDownloadResumeTests {
         ]
 
         #expect(OfflineTileDownloader.resumableKeys(from: records, source: Self.source).isEmpty)
+    }
+}
+
+private extension OfflineDownloadResumeTests {
+    /// Lets a fixed number of tiles land and then blocks until `release()`, so
+    /// a run can be caught in the middle rather than raced.
+    actor SavesThenStalls {
+        private var attempted = 0
+        private var landed = 0
+        private let limit: Int
+        /// **An array, not one continuation.** ``OfflineTileDownloader/
+        /// inFlightWindow`` tiles are in the task group at once, so several
+        /// reach the stall together — a single stored continuation would be
+        /// overwritten by the next arrival and the ones it replaced would
+        /// never resume, which hangs `waitForCurrentRun()` rather than failing
+        /// anything.
+        private var parked: [CheckedContinuation<Void, Never>] = []
+        /// **A latch, not a one-off wake-up.** A save that passed the run's
+        /// cancellation check just before the cancel can still reach this stub
+        /// after `release()` has gone. Parking it then leaves nothing to resume
+        /// it, and `waitForCurrentRun()` hangs rather than failing anything.
+        private var released = false
+
+        init(limit: Int) { self.limit = limit }
+
+        func save() async -> Bool {
+            attempted += 1
+            guard attempted <= limit else {
+                // Parked until released. The run is cancelled out from under
+                // this, which is what a suspended process looks like from
+                // inside a tile fetch. The check and the append share one
+                // synchronous turn of the actor, so a release cannot fall
+                // between them.
+                await withCheckedContinuation { continuation in
+                    if released {
+                        continuation.resume()
+                    } else {
+                        parked.append(continuation)
+                    }
+                }
+                return false
+            }
+            landed += 1
+            return true
+        }
+
+        /// The tiles that actually reached disk — **not** the number of calls.
+        /// A parked save writes nothing and returns `false`, so the run is
+        /// right never to claim it; counting those attempts as fetched tiles
+        /// charges a stopped run for tiles it never got, and how many of them
+        /// pile up is down to how the runner happened to schedule the task
+        /// group.
+        var savedCount: Int { landed }
+
+        func release() {
+            released = true
+            for continuation in parked { continuation.resume() }
+            parked = []
+        }
     }
 }
