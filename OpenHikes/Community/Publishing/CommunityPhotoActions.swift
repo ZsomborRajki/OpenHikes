@@ -279,8 +279,12 @@ private extension View {
     /// Not ``communityFailureAlert(_:failure:)``: that one says what could not
     /// be done and offers the failure's own suggestion, which for a take-down
     /// that *did* happen would read as though it had not. This says what
-    /// happened and what is left, and ends on the same suggestion because it is
-    /// still the sentence that tells a reviewer what to do next.
+    /// happened and what is left, then the failure's own suggestion.
+    ///
+    /// And then where the retry lives, because that suggestion cannot say it.
+    /// This menu is the only way back to the submission: the trail behind the
+    /// gallery stops drawing these photographs the moment they are unlisted,
+    /// so a reopened gallery has no page for them and no menu to ask from.
     func unlistedCleanupAlert(failure binding: Binding<CommunityFailure?>) -> some View {
         alert(
             "Taken down, but not deleted",
@@ -291,7 +295,9 @@ private extension View {
         } message: { failure in
             Text("""
             The photos are off the hike for everybody, but the copy stored with their \
-            submission couldn’t be deleted. \(failure.recoverySuggestion ?? failure.localizedDescription)
+            submission couldn’t be deleted. \(failure.recoverySuggestion ?? failure.localizedDescription) \
+            To finish, take them down again before leaving this photo — once you leave, \
+            the app can’t reach that copy.
             """)
         }
     }
