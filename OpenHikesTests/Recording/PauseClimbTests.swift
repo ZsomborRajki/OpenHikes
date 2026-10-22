@@ -7,11 +7,12 @@
 //  A recording that was paused and resumed somewhere else — a lift, a car, a
 //  night in a hut — resumes at a different height, and the first fix after it
 //  is not a step up from the last one before it. The watch has always ended its
-//  elevation run there. The phone counts climb in five places that share no
-//  code — the live readout, the saved hike's statistics, the profile behind
-//  the chart, the library's cached figure and the trail sent to the watch — and
-//  each of them used to bridge the pause (#910). These pin all five against the
-//  same walk, and the phone against the watch, since agreeing is the claim.
+//  elevation run there. The phone counts climb in five places — the live
+//  readout, the saved hike's statistics, the profile behind the chart, the
+//  library's cached figure and the trail sent to the watch — and each of them
+//  fed `ElevationAccumulator` straight across the pause (#910). These pin all
+//  five against the same walk, and the phone against the watch, since agreeing
+//  is the claim.
 //
 
 import Foundation
