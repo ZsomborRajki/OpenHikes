@@ -65,6 +65,9 @@ struct PhotoLicenseCredit: View {
                 Text(author.map { String(localized: "Photo by \($0)") } ?? String(localized: "Photo"))
                 Text(license.name)
             }
+            // Flush with the edge it stands against, where a menu's label
+            // would otherwise centre a wrapped line.
+            .multilineTextAlignment(.leading)
         }
     }
 
