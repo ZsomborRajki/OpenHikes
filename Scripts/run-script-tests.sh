@@ -2210,12 +2210,33 @@ fi
 pool_one="$pool_one_clone"
 pool_step release --owner eta || true
 
-# A template still downloading at its deadline is no template: the device is
-# erased, as it was before there were templates, rather than not handed out.
+# A refresh still downloading at its deadline leaves the template it started
+# from, which has settled before: the device is cloned from it as it is, not
+# erased into the download the template exists to save.
 asset_jobs_table "$pool_template" 2
+pool_one_clone="A0000000-0000-4000-8000-000000000006"
 OPENHIKES_SIM_TEMPLATE_REFRESH_DAYS=0 OPENHIKES_SIM_TEMPLATE_SETTLE_SECONDS=0 \
-    run_script "sim-pool erases as before when no template settles" \
+STUB_CLONED_UDID="$pool_one_clone" \
+    run_script "sim-pool clones a template whose refresh runs out of time" \
     "$sim_pool" acquire --owner theta
+if expect_status 0 \
+    && expect_contains "$output" "still catching up" "the output" \
+    && expect_contains "$output" "$pool_one_clone" "the output" \
+    && expect_contains "$calls" "simctl shutdown $pool_template" "the recorded calls" \
+    && expect_contains "$calls" "simctl clone $pool_template OpenHikes Pool 1 (replacing)" "the recorded calls" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls"; then
+    pass
+fi
+pool_one="$pool_one_clone"
+pool_step release --owner theta || true
+
+# A template that has never settled and is still downloading at its deadline
+# is no template: the device is erased, as it was before there were templates,
+# rather than not handed out.
+rm -f "$OPENHIKES_SIM_TEMPLATE_DIR/$pool_template.settled"
+OPENHIKES_SIM_TEMPLATE_SETTLE_SECONDS=0 \
+    run_script "sim-pool erases as before when no template settles" \
+    "$sim_pool" acquire --owner iota
 if expect_status 0 \
     && expect_contains "$output" "still downloading" "the output" \
     && expect_contains "$output" "Without a template" "the output" \
