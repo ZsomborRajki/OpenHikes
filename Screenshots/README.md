@@ -146,7 +146,11 @@ had just worked, with both passes in one log. Split, a dark failure is
 reproduced with the dark script alone, and `--frame` narrows it to the one
 test. The shared machinery is `Scripts/lib/screenshots.sh`.
 
-A run erases its simulator, pins the status bar to 9:41 with a full battery
+A run starts its simulator clean — a fresh clone of a settled template rather
+than an erase, so its first boot downloads nothing (an erased iOS 27 simulator
+fetches 1.4 GB of system models; see `Scripts/lib/simulator-templates.sh`), and
+a device passed by UDID is the one exception, erased in place — pins the
+status bar to 9:41 with a full battery
 and full bars — *discharging*, since `charged` is a phone on a cable and draws
 a green battery with a bolt through it — pins the locale, grants location and
 photo access, adds the
@@ -179,7 +183,7 @@ holding the pass.
 `simctl addmedia` is given the whole library in one call with a deadline. One
 photograph at a time, straight after boot, it once hung on the fourth for
 twenty-six minutes before any test had run; when the deadline passes the
-device is erased and prepared again, since the frames pick photographs by
+device is started clean and prepared again, since the frames pick photographs by
 their position in the library and a half-filled one cannot be added to.
 
 The simulators are their own devices on purpose. A simulator that has been

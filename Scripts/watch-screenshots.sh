@@ -82,6 +82,10 @@ repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # pointed at the other platform — see its header for why the two are separate.
 # shellcheck source=lib/simulator.sh
 source "$repository_root/Scripts/lib/simulator.sh"
+# The companion phone is cloned from a settled template rather than created,
+# so its first boot does not download 1.4 GB — see the file's header.
+# shellcheck source=lib/simulator-templates.sh
+source "$repository_root/Scripts/lib/simulator-templates.sh"
 project="$repository_root/OpenHikes.xcodeproj"
 scheme="OpenHikesWatch"
 
@@ -203,17 +207,6 @@ frames=(
     "05-your-iphone-s-hike|$settle_seconds|--ui-testing --ui-test-screen=record --ui-test-phone-recording=running"
 )
 
-# The newest watchOS runtime installed, so the frames show the current system
-# chrome rather than whatever old runtime happens to be installed beside it.
-runtime_id() {
-    xcrun simctl list runtimes --json \
-        | /usr/bin/plutil -extract runtimes json -o - -- - \
-        | /usr/bin/grep -o '"identifier":"com.apple.CoreSimulator.SimRuntime.watchOS-[^"]*"' \
-        | sed 's/.*"\(com[^"]*\)"/\1/' \
-        | sort -V \
-        | tail -1
-}
-
 # Name to UDID, for watchOS.
 #
 # `Scripts/lib/simulator.sh` is sourced above for the companion phone only,
@@ -254,23 +247,14 @@ if (( resolution > 1 )); then
     exit "$resolution"
 fi
 if [[ -z "$udid" ]]; then
-    runtime="$(runtime_id)"
+    # The newest watchOS runtime installed, so the frames show the current
+    # system chrome rather than whatever old runtime is installed beside it.
+    runtime="$(newest_simulator_runtime watchOS)"
     [[ -n "$runtime" ]] || { echo "No watchOS simulator runtime installed." >&2; exit 1; }
     echo "Creating '$device_name' ($device_type on ${runtime##*.})"
     udid="$(xcrun simctl create "$device_name" "$device_type" "$runtime")"
 fi
 echo "Simulator: $device_name ($udid)"
-
-# The iOS runtime to build a companion on. Its own resolution rather than
-# `runtime_id`'s, which is watchOS.
-phone_runtime_id() {
-    xcrun simctl list runtimes --json \
-        | /usr/bin/plutil -extract runtimes json -o - -- - \
-        | /usr/bin/grep -o '"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-[^"]*"' \
-        | sed 's/.*"\(com[^"]*\)"/\1/' \
-        | sort -V \
-        | tail -1
-}
 
 # Every pair this watch is already half of.
 watch_pairs() {
@@ -325,10 +309,13 @@ fi
 if [[ "$skip_pair" == false ]]; then
     companion_udid="$(resolve_simulator_udid "$companion_name" 2>/dev/null || true)"
     if [[ -z "$companion_udid" ]]; then
-        phone_runtime="$(phone_runtime_id)"
+        phone_runtime="$(newest_simulator_runtime iOS)"
         if [[ -z "$phone_runtime" ]]; then
             echo "No iOS simulator runtime installed; continuing unpaired." >&2
             skip_pair=true
+        elif companion_template="$(simulator_template "$companion_type" "$phone_runtime")" \
+            && companion_udid="$(clone_simulator_template "$companion_template" "$companion_name")"; then
+            echo "Cloned '$companion_name' ($companion_type) from its template"
         else
             echo "Creating '$companion_name' ($companion_type)"
             companion_udid="$(xcrun simctl create \

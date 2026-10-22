@@ -116,12 +116,14 @@ gives this one its own device and `--derived-data <path>` its own build.
 above already do: `udid="$(Scripts/sim-pool.sh acquire)"`, then
 `-destination "platform=iOS Simulator,id=$udid"` for `xcodebuild` or
 `--device "$udid" --derived-data <path>` for `Scripts/run-ui-tests.sh`. Do not
-delete a pool device or boot one by name, and do not make a device of your own
+delete a pool device or boot one by name, do not boot, erase or delete an
+`OpenHikes Template (…)` — the pool clones its devices from it, so its loss is
+a 1.4 GB download — and do not make a device of your own
 when `acquire` says the pool is full: `Scripts/sim-pool.sh status` names who
 holds each one, and an idle simulator left over from before the pool is
 `Scripts/sim-pool.sh adopt <name|udid>`'d into it rather than left to sit.
 `release` gives the device back; a session that ends without releasing frees it
-anyway. *Build and test* in the instructions file says how it picks, erases and
+anyway. *Build and test* in the instructions file says how it picks, cleans and
 frees a device.
 
 ## House rules an agent trips over first

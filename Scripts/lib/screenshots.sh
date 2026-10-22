@@ -27,7 +27,11 @@
 # an earlier browse, a photo library somebody dragged something into, a
 # location left over from `simulate-hike.sh`. All three show up in a
 # screenshot, and none of them is reproducible. So each appearance creates its
-# own device, named below, and erases it before every run. It also means a
+# own device, named below, and starts it clean before every run — as a fresh
+# clone of a settled template rather than an erase, which costs 1.4 GB of
+# downloads on the next boot (see Scripts/lib/simulator-templates.sh). Only a
+# device passed by UDID is erased in place instead: that one was named as
+# itself, and replacing it would hand back a different UDID. It also means a
 # screenshot run cannot collide with `run-ui-tests.sh`, which claims its own
 # device for the same reason — see *A second session on this machine* in
 # AGENTS.md.
@@ -38,7 +42,7 @@
 # a real simulator status bar reads whatever time it is with a chipped battery
 # — which looks, in a store listing, like a screenshot somebody forgot to
 # clean up. `simctl status_bar override` is what fixes it, and it has to be
-# re-applied after every erase because an erase takes it with everything else.
+# re-applied every run because a clean device has none.
 #
 # Full and *discharging*, not `charged`. `charged` is the state of a phone that
 # is plugged in, and the status bar draws it that way: a green battery with a
@@ -62,6 +66,8 @@ repository_root="$(cd "$screenshots_lib_dir/../.." && pwd)"
 # Screenshots" — eight of them before anyone counted.
 # shellcheck source=simulator.sh
 source "$screenshots_lib_dir/simulator.sh"
+# shellcheck source=simulator-templates.sh
+source "$screenshots_lib_dir/simulator-templates.sh"
 # shellcheck source=xcodebuild-output.sh
 source "$screenshots_lib_dir/xcodebuild-output.sh"
 
@@ -148,8 +154,9 @@ Options:
   --keep             Leave the simulator booted afterwards
   -h, --help         Show this help
 
-The simulator is erased before every run, so a capture never inherits a tile
-cache, a photo library or a location from an earlier one. Logs and result
+The simulator starts clean before every run — a fresh clone of a settled
+template, or erased when --device names it by UDID — so a capture never
+inherits a tile cache, a photo library or a location from an earlier one. Logs and result
 bundles are kept under the derived-data directory; the path is printed at the
 end of every run.
 EOF
@@ -176,28 +183,45 @@ run_with_deadline() {
     /usr/bin/perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$seconds" "$@"
 }
 
-# The newest iOS runtime available, so the screenshots show the current system
-# chrome rather than whatever old runtime happens to be installed too.
-screenshot_runtime_id() {
-    xcrun simctl list runtimes --json \
-        | /usr/bin/plutil -extract runtimes json -o - -- - \
-        | /usr/bin/grep -o '"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-[^"]*"' \
-        | sed 's/.*"\(com[^"]*\)"/\1/' \
-        | sort -V \
-        | tail -1
-}
-
-# Erases, boots and dresses the device: status bar, locale, appearance,
-# permissions and photographs. Returns non-zero only when the photo library
-# could not be filled in time, which the caller answers by starting over from
-# the erase — a half-filled library is not something to add to, because the
-# frames pick photographs by their position in it.
-prepare_screenshot_device() {
-    # Erase, then boot, then wait. Erasing a booted device is a shutdown in
-    # disguise, so the order matters and `bootstatus` is what makes the wait
-    # an observation rather than a guess.
+# Makes `udid` a clean device named `device_name`: a fresh clone of the
+# template for its type, in place of the one there was, on the newest iOS
+# runtime installed so the frames show the current system chrome. A device
+# named by UDID is erased in place instead, and so is any device when no
+# template can be settled; with no device at all, one is created.
+reset_screenshot_device() {
+    local runtime template clone=""
+    runtime="$(newest_simulator_runtime iOS)"
+    if [[ "$device_pinned" == false && -n "$runtime" ]] \
+        && template="$(simulator_template "$device_type" "$runtime")"; then
+        if [[ -n "$udid" ]]; then
+            clone="$(replace_simulator_with_clone "$udid" "$template" "$device_name")" || clone=""
+        else
+            clone="$(clone_simulator_template "$template" "$device_name")" || clone=""
+        fi
+    fi
+    if [[ -n "$clone" ]]; then
+        udid="$clone"
+        return 0
+    fi
+    if [[ -z "$udid" ]]; then
+        [[ -n "$runtime" ]] || { echo "No iOS simulator runtime installed." >&2; exit 1; }
+        echo "Creating '$device_name' ($device_type on ${runtime##*.})"
+        udid="$(xcrun simctl create "$device_name" "$device_type" "$runtime")"
+        return 0
+    fi
+    # Erasing a booted device is a shutdown in disguise, so it goes first.
     xcrun simctl shutdown "$udid" 2>/dev/null || true
     xcrun simctl erase "$udid"
+}
+
+# Starts the device clean, boots and dresses it: status bar, locale,
+# appearance, permissions and photographs. Returns non-zero only when the photo
+# library could not be filled in time, which the caller answers by starting
+# over from a clean device — a half-filled library is not something to add to,
+# because the frames pick photographs by their position in it.
+prepare_screenshot_device() {
+    reset_screenshot_device
+    # `bootstatus` is what makes the wait an observation rather than a guess.
     xcrun simctl boot "$udid"
     xcrun simctl bootstatus "$udid" -b >/dev/null
 
@@ -211,8 +235,8 @@ prepare_screenshot_device() {
         --batteryState discharging \
         --batteryLevel 100
 
-    # After the erase, which takes these with everything else, and before the
-    # first launch, which is the one that reads them. No reboot is needed: an
+    # On the clean device, which has none of these, and before the first
+    # launch, which is the one that reads them. No reboot is needed: an
     # app resolves `Locale.autoupdatingCurrent` at launch, and every frame
     # here is its own launch.
     xcrun simctl spawn "$udid" defaults write -g AppleLocale -string "$locale_id"
@@ -455,19 +479,17 @@ screenshots_main() {
     fi
 
     udid="$(resolve_simulator_udid "$device_name" 2>/dev/null || true)"
-    if [[ -z "$udid" ]]; then
-        local runtime
-        runtime="$(screenshot_runtime_id)"
-        [[ -n "$runtime" ]] || { echo "No iOS simulator runtime installed." >&2; exit 1; }
-        echo "Creating '$device_name' ($device_type on ${runtime##*.})"
-        udid="$(xcrun simctl create "$device_name" "$device_type" "$runtime")"
+    device_pinned=false
+    if [[ "$device_name" =~ ^[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$ ]]; then
+        device_pinned=true
     fi
-    echo "Simulator: $device_name ($udid), $screenshot_appearance"
 
     if ! prepare_screenshot_device; then
-        echo "Starting the device over from the erase." >&2
+        echo "Starting over from a clean device." >&2
         prepare_screenshot_device || { echo "The photo library could not be filled." >&2; exit 1; }
     fi
+    # After the device is clean, since a clean device is a new UDID.
+    echo "Simulator: $device_name ($udid), $screenshot_appearance"
 
     # Without the stamped library the three frames that import it would only
     # skip, so they are not run — nor retried as though they had failed.

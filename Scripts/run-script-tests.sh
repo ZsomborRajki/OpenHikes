@@ -101,7 +101,9 @@ mkdir -p "$stub_bin"
 # prints, and an empty one makes it fail the way a missing app does.
 # STUB_CREATED_UDID, when set, is what `simctl create` answers, and the device
 # it made is appended to the fixture — under its last runtime, so a fixture
-# that should grow ends with an iOS one.
+# that should grow ends with an iOS one. STUB_CLONED_UDID is the same for
+# `simctl clone`. `delete` and `rename` edit the fixture as the real ones edit
+# the machine, and `list runtimes` answers from STUB_RUNTIMES.
 cat > "$stub_bin/xcrun" <<'STUB'
 #!/usr/bin/env bash
 printf 'xcrun %s\n' "$*" >> "$STUB_CALL_LOG"
@@ -134,13 +136,38 @@ fi
 shift
 case "${1:-}" in
     list)
-        cat "$STUB_DEVICES"
+        if [[ "${2:-}" == "runtimes" ]]; then
+            cat "${STUB_RUNTIMES:-/dev/null}"
+        else
+            cat "$STUB_DEVICES"
+        fi
         ;;
     create)
         if [[ -n "${STUB_CREATED_UDID:-}" ]]; then
             printf '    %s (%s) (Shutdown) \n' "$2" "$STUB_CREATED_UDID" >> "$STUB_DEVICES"
             printf '%s\n' "$STUB_CREATED_UDID"
         fi
+        ;;
+    clone)
+        if [[ -n "${STUB_CLONED_UDID:-}" ]]; then
+            printf '    %s (%s) (Shutdown) \n' "$3" "$STUB_CLONED_UDID" >> "$STUB_DEVICES"
+            printf '%s\n' "$STUB_CLONED_UDID"
+        fi
+        ;;
+    delete)
+        grep -vF "($2)" "$STUB_DEVICES" > "$STUB_DEVICES.next" || true
+        mv "$STUB_DEVICES.next" "$STUB_DEVICES"
+        ;;
+    rename)
+        while IFS= read -r line; do
+            if [[ "$line" == *"($2)"* ]]; then
+                state="${line##*(}"
+                printf '    %s (%s) (%s \n' "$3" "$2" "$state"
+            else
+                printf '%s\n' "$line"
+            fi
+        done < "$STUB_DEVICES" > "$STUB_DEVICES.next"
+        mv "$STUB_DEVICES.next" "$STUB_DEVICES"
         ;;
     get_app_container)
         if [[ -z "${STUB_CONTAINER:-}" ]]; then
@@ -302,6 +329,29 @@ recording_test="${pinned_test#*/}"
 device_lock_dir="$work/device-locks"
 export OPENHIKES_UI_TEST_LOCK_DIR="$device_lock_dir"
 pro_lock="$device_lock_dir/$pro_udid.lock"
+# The same for simulator templates: their settled markers and lock, and the
+# device directories whose asset tables Scripts/lib/simulator-templates.sh
+# reads to decide that a template has settled.
+export OPENHIKES_SIM_TEMPLATE_DIR="$work/sim-templates"
+export OPENHIKES_SIM_DEVICES_DIR="$work/sim-devices"
+# A template with nothing to download counts as settled at once, rather than
+# after the minute of quiet a real one is given.
+export OPENHIKES_SIM_TEMPLATE_IDLE_SECONDS=0
+cat > "$work/runtimes.json" <<'EOF'
+{"runtimes":[{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-27-0"},{"identifier":"com.apple.CoreSimulator.SimRuntime.watchOS-27-0"}]}
+EOF
+export STUB_RUNTIMES="$work/runtimes.json"
+
+# Writes the table `mobileassetd` keeps of its download jobs under way, with
+# that many jobs in it, for the device with this UDID.
+asset_jobs_table() {
+    local directory="$OPENHIKES_SIM_DEVICES_DIR/$1/data/private/var/MobileAsset/AssetsV2/persisted/AutoSetActiveJobDescriptors"
+    local entries="" job
+    for (( job = 0; job < $2; job++ )); do entries+="<string>job $job</string>"; done
+    mkdir -p "$directory"
+    printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>SUCorePersistedStatePolicyFields</key><dict><key>currentEntries</key><array>%s</array></dict></dict></plist>\n' \
+        "$entries" > "$directory/AutoSetActiveJobDescriptors_TableOfContents.state"
+}
 
 echo "Simulator resolution"
 
@@ -1894,18 +1944,59 @@ if expect_status 0 \
     pass
 fi
 
+# A device named rather than given by UDID is the harness's own, and it starts
+# clean as a clone of a settled template instead of an erase, which would
+# download its models again on the next boot. The template does not exist
+# yet, so the run settles one first; the cases above, which pass a UDID, are
+# the ones that still erase.
+screens_old="C0000000-0000-4000-8000-000000000001"
+screens_template="C0000000-0000-4000-8000-000000000002"
+screens_clone="C0000000-0000-4000-8000-000000000003"
+cat > "$work/devices-screens.txt" <<EOF
+== Devices ==
+-- iOS 27.0 --
+    OpenHikes Screenshots Test ($screens_old) (Shutdown)
+EOF
+asset_jobs_table "$screens_template" 0
+STUB_DEVICES="$work/devices-screens.txt" \
+STUB_CREATED_UDID="$screens_template" STUB_CLONED_UDID="$screens_clone" \
+    run_script "screenshots starts a named device clean as a clone of its template" \
+    "$screenshots_light" --frame 1 --no-photos --device "OpenHikes Screenshots Test" \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+template_name="OpenHikes Template (iPhone 18 Pro Max, iOS 27.0)"
+if expect_status 0 \
+    && expect_contains "$calls" \
+        "simctl create $template_name iPhone 18 Pro Max com.apple.CoreSimulator.SimRuntime.iOS-27-0" \
+        "the recorded calls" \
+    && expect_contains "$calls" "simctl clone $screens_template OpenHikes Screenshots Test (replacing)" \
+        "the recorded calls" \
+    && expect_contains "$calls" "simctl delete $screens_old" "the recorded calls" \
+    && expect_contains "$calls" "simctl rename $screens_clone OpenHikes Screenshots Test" "the recorded calls" \
+    && expect_contains "$calls" "simctl ui $screens_clone appearance light" "the recorded calls" \
+    && expect_contains "$output" "Simulator: OpenHikes Screenshots Test ($screens_clone)" "the output" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls"; then
+    pass
+fi
+
 echo
 echo "Simulator pool"
 
 # Scripts/sim-pool.sh decides which device a session's tests land on and
-# whether it is erased first. Every case names its owner, so nothing here reads
+# whether it starts clean. Every case names its owner, so nothing here reads
 # the Claude Code session this suite may itself be running in, and the claims
 # go into the work directory rather than the ones this machine's sessions hold.
+#
+# Starting clean is a clone of the pool's template, settled by the first case
+# below, and an erase only when no template can be settled — see
+# Scripts/lib/simulator-templates.sh for what an erase costs. A clone has a new
+# UDID, so a case that replaces Pool 1 moves `pool_one` on to the clone.
 sim_pool="$repository_root/Scripts/sim-pool.sh"
 export OPENHIKES_SIM_POOL_DIR="$work/sim-pool"
 pool_fixture="$work/devices-pool.txt"
 pool_one="A0000000-0000-4000-8000-000000000001"
 pool_two="A0000000-0000-4000-8000-000000000002"
+pool_template="A0000000-0000-4000-8000-0000000000f0"
+pool_template_name="OpenHikes Template (iPhone 18 Pro, iOS 27.0)"
 cat > "$pool_fixture" <<'EOF'
 == Devices ==
 -- watchOS 27.0 --
@@ -1914,20 +2005,34 @@ cat > "$pool_fixture" <<'EOF'
     iPhone 18 Pro (77777777-7777-7777-7777-777777777777) (Booted)
 EOF
 export STUB_DEVICES="$pool_fixture"
+asset_jobs_table "$pool_template" 0
 
-STUB_CREATED_UDID="$pool_one" \
-    run_script "sim-pool creates the first device when the pool is empty" \
+# The stubs on PATH, for a step between cases that is not itself a case.
+pool_step() {
+    PATH="$stub_bin:/usr/bin:/bin:/usr/sbin:/sbin" "$sim_pool" "$@" >/dev/null 2>&1
+}
+
+STUB_CREATED_UDID="$pool_template" STUB_CLONED_UDID="$pool_one" \
+    run_script "sim-pool settles a template and clones the first device from it" \
     "$sim_pool" acquire --owner alpha
+settled_at="$(call_line "simctl shutdown $pool_template")"
+cloned_at="$(call_line "simctl clone $pool_template OpenHikes Pool 1")"
 if expect_status 0 \
-    && expect_contains "$calls" "simctl create OpenHikes Pool 1 iPhone 18 Pro" "the recorded calls" \
+    && expect_contains "$calls" \
+        "simctl create $pool_template_name iPhone 18 Pro com.apple.CoreSimulator.SimRuntime.iOS-27-0" \
+        "the recorded calls" \
+    && expect_contains "$calls" "simctl bootstatus $pool_template -b" "the recorded calls" \
     && expect_contains "$calls" "simctl bootstatus $pool_one -b" "the recorded calls" \
     && expect_contains "$calls" "simctl privacy $pool_one grant photos tappium.com.OpenHikes" "the recorded calls" \
+    && expect_absent "$calls" "simctl create OpenHikes Pool" "the recorded calls" \
     && expect_absent "$calls" "simctl erase" "the recorded calls" \
     && expect_absent "$calls" "77777777" "the recorded calls"; then
-    if [[ "$(printf '%s\n' "$output" | tail -n 1)" == "$pool_one" ]]; then
-        pass
-    else
+    if [[ "$(printf '%s\n' "$output" | tail -n 1)" != "$pool_one" ]]; then
         fail "did not end its output with the device's UDID" "$output"
+    elif (( settled_at == 0 || settled_at > cloned_at )); then
+        fail "cloned the template before shutting it down — lines $settled_at, $cloned_at" "$calls"
+    else
+        pass
     fi
 fi
 
@@ -1936,17 +2041,20 @@ run_script "sim-pool gives an owner back its own device, data and all" \
 if expect_status 0 \
     && expect_contains "$output" "$pool_one" "the output" \
     && expect_absent "$calls" "simctl create" "the recorded calls" \
+    && expect_absent "$calls" "simctl clone" "the recorded calls" \
     && expect_absent "$calls" "simctl erase" "the recorded calls" \
     && expect_contains "$calls" "simctl privacy $pool_one grant photos tappium.com.OpenHikes" "the recorded calls"; then
     pass
 fi
 
-STUB_CREATED_UDID="$pool_two" \
-    run_script "sim-pool creates the next number when every device is held" \
+STUB_CLONED_UDID="$pool_two" \
+    run_script "sim-pool clones the next number from the settled template" \
     "$sim_pool" acquire --owner beta
 if expect_status 0 \
-    && expect_contains "$calls" "simctl create OpenHikes Pool 2 iPhone 18 Pro" "the recorded calls" \
-    && expect_contains "$output" "$pool_two" "the output"; then
+    && expect_contains "$calls" "simctl clone $pool_template OpenHikes Pool 2" "the recorded calls" \
+    && expect_contains "$output" "$pool_two" "the output" \
+    && expect_absent "$calls" "simctl create" "the recorded calls" \
+    && expect_absent "$calls" "simctl bootstatus $pool_template" "the recorded calls"; then
     pass
 fi
 
@@ -1955,31 +2063,55 @@ OPENHIKES_SIM_POOL_MAX=2 \
     "$sim_pool" acquire --owner gamma
 if expect_status 1 \
     && expect_contains "$output" "at its cap of 2" "the error" \
-    && expect_absent "$calls" "simctl create" "the recorded calls"; then
+    && expect_contains "$output" "$pool_template_name  $pool_template  Shutdown settled 0d ago" \
+        "the status it printed" \
+    && expect_absent "$calls" "simctl create" "the recorded calls" \
+    && expect_absent "$calls" "simctl clone" "the recorded calls"; then
     pass
 fi
 
 run_script "sim-pool release gives the device back" \
     "$sim_pool" release --owner alpha
-if expect_status 0 && expect_contains "$output" "Released OpenHikes Pool 1" "the output"; then
+if expect_status 0 \
+    && expect_contains "$output" "Released OpenHikes Pool 1" "the output" \
+    && expect_contains "$(cat "$OPENHIKES_SIM_POOL_DIR/$pool_one.claim")" "released=" "the claim"; then
     pass
 fi
 
-run_script "sim-pool hands a released device to the next owner, erased" \
-    "$sim_pool" acquire --owner gamma
+# Nobody has had it since, so there is nothing to clean: the same device, as
+# its owner left it.
+run_script "sim-pool gives a released device back to its last owner untouched" \
+    "$sim_pool" acquire --owner alpha
 if expect_status 0 \
     && expect_contains "$output" "$pool_one" "the output" \
-    && expect_contains "$calls" "simctl erase $pool_one" "the recorded calls" \
+    && expect_absent "$calls" "simctl clone" "the recorded calls" \
+    && expect_absent "$calls" "simctl delete" "the recorded calls" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls"; then
+    pass
+fi
+pool_step release --owner alpha || true
+
+pool_one_clone="A0000000-0000-4000-8000-000000000003"
+STUB_CLONED_UDID="$pool_one_clone" \
+    run_script "sim-pool hands a released device to the next owner as a clean clone" \
+    "$sim_pool" acquire --owner gamma
+if expect_status 0 \
+    && expect_contains "$output" "$pool_one_clone" "the output" \
+    && expect_contains "$calls" "simctl clone $pool_template OpenHikes Pool 1 (replacing)" "the recorded calls" \
+    && expect_contains "$calls" "simctl delete $pool_one" "the recorded calls" \
+    && expect_contains "$calls" "simctl rename $pool_one_clone OpenHikes Pool 1" "the recorded calls" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls" \
     && expect_absent "$calls" "simctl create" "the recorded calls"; then
-    # The grant after the erase, which would otherwise wipe it.
-    erase_at="$(call_line "simctl erase $pool_one")"
-    grant_at="$(call_line "simctl privacy $pool_one grant photos")"
-    if (( grant_at > erase_at )); then
+    # The grant on the clone, after it has taken Pool 1's name.
+    renamed_at="$(call_line "simctl rename $pool_one_clone")"
+    grant_at="$(call_line "simctl privacy $pool_one_clone grant photos")"
+    if (( renamed_at > 0 && grant_at > renamed_at )); then
         pass
     else
-        fail "granted the photo library before erasing, or not at all" "$calls"
+        fail "granted the photo library before the clone took over, or not at all" "$calls"
     fi
 fi
+pool_one="$pool_one_clone"
 
 # A claim whose process has exited is one nobody holds. The PID is a process
 # this suite started and waited for, so it is certainly gone.
@@ -1990,18 +2122,21 @@ run_script "sim-pool takes over a claim whose process has exited" \
     "$sim_pool" acquire --owner delta --keep-data
 if expect_status 0 \
     && expect_contains "$output" "$pool_one" "the output" \
+    && expect_absent "$calls" "simctl clone" "the recorded calls" \
     && expect_absent "$calls" "simctl erase" "the recorded calls"; then
     pass
 fi
 
-OPENHIKES_SIM_POOL_TTL_MINUTES=0 \
+pool_one_clone="A0000000-0000-4000-8000-000000000004"
+OPENHIKES_SIM_POOL_TTL_MINUTES=0 STUB_CLONED_UDID="$pool_one_clone" \
     run_script "sim-pool takes over a claim left idle past its lease" \
     "$sim_pool" acquire --owner epsilon
 if expect_status 0 \
-    && expect_contains "$output" "$pool_one" "the output" \
-    && expect_contains "$calls" "simctl erase $pool_one" "the recorded calls"; then
+    && expect_contains "$output" "$pool_one_clone" "the output" \
+    && expect_contains "$calls" "simctl delete $pool_one" "the recorded calls"; then
     pass
 fi
+pool_one="$pool_one_clone"
 
 # Neither device has a claim, but each has a run on it: a process naming Pool
 # 1's UDID — `bash -c` puts it on its own command line as `$0`, and it waits on
@@ -2021,6 +2156,8 @@ wait "$holder_pid" 2>/dev/null || true
 rm -rf "$OPENHIKES_UI_TEST_LOCK_DIR/$pool_two.lock"
 if expect_status 1 \
     && expect_contains "$output" "busy" "the status it printed" \
+    && expect_absent "$calls" "simctl clone" "the recorded calls" \
+    && expect_absent "$calls" "simctl delete" "the recorded calls" \
     && expect_absent "$calls" "simctl erase" "the recorded calls"; then
     pass
 fi
@@ -2029,7 +2166,8 @@ run_script "sim-pool prune keeps the lowest free devices and deletes the rest" \
     "$sim_pool" prune --keep 1
 if expect_status 0 \
     && expect_contains "$calls" "simctl delete $pool_two" "the recorded calls" \
-    && expect_absent "$calls" "simctl delete $pool_one" "the recorded calls"; then
+    && expect_absent "$calls" "simctl delete $pool_one" "the recorded calls" \
+    && expect_absent "$calls" "simctl delete $pool_template" "the recorded calls"; then
     pass
 fi
 
@@ -2038,6 +2176,52 @@ run_script "sim-pool refuses to adopt a booted simulator" \
 if expect_status 1 \
     && expect_contains "$output" "only an idle, shut-down simulator" "the error" \
     && expect_absent "$calls" "simctl rename" "the recorded calls"; then
+    pass
+fi
+
+# Idle and shut down, which is everything adopt asks of a device — and the one
+# simulator whose loss would cost the next hand-off its download again.
+run_script "sim-pool refuses to adopt a template" \
+    "$sim_pool" adopt "$pool_template_name"
+if expect_status 1 \
+    && expect_contains "$output" "is a template the pool clones from" "the error" \
+    && expect_absent "$calls" "simctl rename" "the recorded calls"; then
+    pass
+fi
+
+# A refresh age of no days makes the template due, which a week does for real.
+pool_one_clone="A0000000-0000-4000-8000-000000000005"
+OPENHIKES_SIM_TEMPLATE_REFRESH_DAYS=0 STUB_CLONED_UDID="$pool_one_clone" \
+    run_script "sim-pool refreshes a template that is due before cloning it" \
+    "$sim_pool" acquire --owner eta
+refreshed_at="$(call_line "simctl bootstatus $pool_template -b")"
+settled_at="$(call_line "simctl shutdown $pool_template")"
+cloned_at="$(call_line "simctl clone $pool_template OpenHikes Pool 1 (replacing)")"
+if expect_status 0 \
+    && expect_contains "$output" "Refreshing $pool_template_name" "the output" \
+    && expect_contains "$output" "$pool_one_clone" "the output" \
+    && expect_absent "$calls" "simctl create" "the recorded calls"; then
+    if (( refreshed_at > 0 && refreshed_at < settled_at && settled_at < cloned_at )); then
+        pass
+    else
+        fail "expected boot, shutdown, then clone — got lines $refreshed_at, $settled_at, $cloned_at" "$calls"
+    fi
+fi
+pool_one="$pool_one_clone"
+pool_step release --owner eta || true
+
+# A template still downloading at its deadline is no template: the device is
+# erased, as it was before there were templates, rather than not handed out.
+asset_jobs_table "$pool_template" 2
+OPENHIKES_SIM_TEMPLATE_REFRESH_DAYS=0 OPENHIKES_SIM_TEMPLATE_SETTLE_SECONDS=0 \
+    run_script "sim-pool erases as before when no template settles" \
+    "$sim_pool" acquire --owner theta
+if expect_status 0 \
+    && expect_contains "$output" "still downloading" "the output" \
+    && expect_contains "$output" "Without a template" "the output" \
+    && expect_contains "$calls" "simctl shutdown $pool_template" "the recorded calls" \
+    && expect_contains "$calls" "simctl erase $pool_one" "the recorded calls" \
+    && expect_absent "$calls" "simctl clone" "the recorded calls"; then
     pass
 fi
 
