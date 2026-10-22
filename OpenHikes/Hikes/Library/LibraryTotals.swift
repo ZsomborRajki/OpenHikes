@@ -46,6 +46,19 @@
 //  two-kilometre record. Only the highest is the trail's, because coverage
 //  says how far a walk went and not whether it reached the top.
 //
+//  Both figures a walk borrows from its trail — the climb and the highest
+//  point — describe the line the trail draws now. *Edit Route* keeps the
+//  walks along a drawn trail as history and redraws the line under them,
+//  here or on the other device, and nothing kept the climb or the height of
+//  the line they were walked along: that would be two more mirrored columns
+//  on ``HikeWalk`` for a climb that is only an estimate to begin with. So a
+//  walk whose ``HikeWalk/routeRevision`` is not the route's, or that names
+//  no line at all, still counts as an outing, with the distance and the time
+//  it measured itself, but adds no climb and is never the highest or the
+//  steepest; it can still be the longest (#912). The screen says so whenever
+//  one is left out, and ``WalkSummaryView`` will not draw or climb such a
+//  walk's stretches for the same reason.
+//
 //  ## Where it is worked out
 //
 //  Not in a body. Every route in the library is walked once, off the main
@@ -65,7 +78,9 @@ nonisolated struct LibraryOuting: Equatable, Sendable {
     let hikeID: UUID
     let date: Date
     let distanceMeters: Double
-    let climbMeters: Double
+    /// `nil` for a walk along a line its trail has been redrawn from since,
+    /// whose climb nothing kept.
+    let climbMeters: Double?
     let movingSeconds: TimeInterval
 }
 
@@ -103,24 +118,38 @@ nonisolated struct LibraryWalkFacts: Equatable, Sendable {
     let routeDistanceMeters: Double
     let activeSeconds: TimeInterval
     let isRecordingsOwn: Bool
+    /// The trail has been redrawn since this walk: the route's revision is not
+    /// the one the walk was measured along, or the walk names none — the test
+    /// ``WalkSummaryView`` makes. `false` for a walk whose trail is not among
+    /// the hikes the sweep sums, since nothing is known to have changed about
+    /// a line that is not there.
+    let trailHasChanged: Bool
 }
 
 nonisolated struct LibraryTotals: Equatable, Sendable {
-    /// The five figures a period is summed into.
+    /// The figures a period is summed into.
     struct Figures: Equatable, Sendable {
         var distanceMeters = 0.0
+        /// Leaves out the outings counted in ``outingsWithoutClimb``.
         var climbMeters = 0.0
         var movingSeconds: TimeInterval = 0
         /// Outings, not hikes: a trail walked twice is two.
         var outings = 0
         /// Distinct trails among them.
         var trails = 0
+        /// Outings whose climb is not in ``climbMeters``: walks along a trail
+        /// that has been redrawn since.
+        var outingsWithoutClimb = 0
 
         init(_ outings: some Sequence<LibraryOuting>) {
             var trailIDs = Set<UUID>()
             for outing in outings {
                 distanceMeters += outing.distanceMeters
-                climbMeters += outing.climbMeters
+                if let climb = outing.climbMeters {
+                    climbMeters += climb
+                } else {
+                    outingsWithoutClimb += 1
+                }
                 movingSeconds += outing.movingSeconds
                 self.outings += 1
                 trailIDs.insert(outing.hikeID)
@@ -162,12 +191,15 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
         let byID = Self.byID(hikes)
         let candidates = outings.compactMap { outing -> LibraryRecordCandidate? in
             guard let hike = byID[outing.hikeID] else { return nil }
+            // An outing with no climb was along a line its trail has been
+            // redrawn from since, so the trail's highest point is the new
+            // line's and says nothing about where that walk went.
             return LibraryRecordCandidate(
                 hikeID: hike.hikeID,
                 title: hike.title,
                 distanceMeters: outing.distanceMeters,
                 climbMeters: hike.climbMeters == nil ? nil : outing.climbMeters,
-                highestMeters: hike.highestMeters
+                highestMeters: outing.climbMeters == nil ? nil : hike.highestMeters
             )
         }
         longest = candidates.max { $0.distanceMeters < $1.distanceMeters }
@@ -203,7 +235,9 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
                 hikeID: walk.hikeID,
                 date: walk.startedAt,
                 distanceMeters: walk.coveredMeters * share,
-                climbMeters: (byID[walk.hikeID]?.climbMeters ?? 0) * covered * share,
+                climbMeters: walk.trailHasChanged
+                    ? nil
+                    : (byID[walk.hikeID]?.climbMeters ?? 0) * covered * share,
                 movingSeconds: walk.activeSeconds * share
             )
         }
@@ -282,10 +316,20 @@ nonisolated enum LibraryTotalsSweep {
         assertOffMainThread("Summing the library walks every route, and must stay off the main thread")
         let context = ModelContext(container)
         let hikes = try reads.hikes(context)
+        let walks = try reads.walks(context)
+        // The line each walked trail draws now, to tell a walk along it from
+        // one along a line the trail has been redrawn from since. Hashed from
+        // the route its figures are measured from, so a route is read once.
+        let walkedIDs = Set(walks.map(\.hikeID))
+        var revisions: [UUID: String] = [:]
         let hikeFacts = hikes.compactMap { hike -> LibraryHikeFacts? in
             // A recording still being drawn is not a walk yet.
             guard !hike.isRecording else { return nil }
-            let statistics = HikeRouteStatistics(distanceMeters: hike.distanceMeters, route: hike.route)
+            let route = hike.route
+            if walkedIDs.contains(hike.id), revisions[hike.id] == nil {
+                revisions[hike.id] = TrailWalkRecord.routeRevision(of: route)
+            }
+            let statistics = HikeRouteStatistics(distanceMeters: hike.distanceMeters, route: route)
             return LibraryHikeFacts(
                 hikeID: hike.id,
                 title: hike.displayTitle,
@@ -300,7 +344,6 @@ nonisolated enum LibraryTotalsSweep {
                 isFromCommunity: hike.importedFromListingID != nil
             )
         }
-        let walks = try reads.walks(context)
         let walkFacts = walks.map { walk in
             LibraryWalkFacts(
                 hikeID: walk.hikeID,
@@ -309,7 +352,8 @@ nonisolated enum LibraryTotalsSweep {
                 coveredMeters: walk.coverage.coveredMeters,
                 routeDistanceMeters: walk.routeDistanceMeters,
                 activeSeconds: walk.activeSeconds,
-                isRecordingsOwn: walk.endReason == .recorded
+                isRecordingsOwn: walk.endReason == .recorded,
+                trailHasChanged: revisions[walk.hikeID].map { !walk.isAlong(revision: $0) } ?? false
             )
         }
         return (hikeFacts, walkFacts)

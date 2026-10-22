@@ -59,6 +59,49 @@ struct LibraryTotalsSweepTests {
         #expect(read.walks.map(\.coveredMeters) == [1500])
     }
 
+    private static func walk(of hikeID: UUID, covering meters: Double, along revision: String?) -> HikeWalk {
+        HikeWalk(
+            hikeID: hikeID,
+            startedAt: .now,
+            endedAt: .now.addingTimeInterval(3600),
+            activeSeconds: 3000,
+            coveredIntervals: [0, meters],
+            furthestDistanceMeters: meters,
+            routeDistanceMeters: 2000,
+            endReason: .ended,
+            routeRevision: revision
+        )
+    }
+
+    /// The test the walk's own summary makes, so *Totals* does not credit a
+    /// walk with the line its trail was redrawn to afterwards (#912). A walk
+    /// whose trail is not there has nothing to have changed.
+    @Test("a walk is told from one along a line its trail has been redrawn from since")
+    func redrawnTrailsAreMarked() async throws {
+        let container = try ModelContainer.openHikes(isStoredInMemoryOnly: true)
+        let context = ModelContext(container)
+        let hike = Hike(
+            title: "Drawn Ridge",
+            distanceMeters: 2000,
+            route: [
+                RouteCoordinate(latitude: 47.55, longitude: 12.97, elevation: 600),
+                RouteCoordinate(latitude: 47.57, longitude: 12.97, elevation: 900),
+            ]
+        )
+        context.insert(hike)
+        // Told apart by what each covered.
+        context.insert(Self.walk(of: hike.id, covering: 100, along: TrailWalkRecord.routeRevision(of: hike.route)))
+        context.insert(Self.walk(of: hike.id, covering: 200, along: "a line drawn before"))
+        context.insert(Self.walk(of: hike.id, covering: 300, along: nil))
+        context.insert(Self.walk(of: UUID(), covering: 400, along: nil))
+        try context.save()
+
+        let read = try await LibraryTotalsSweep.read(from: container)
+        let changed = read.walks.sorted { $0.coveredMeters < $1.coveredMeters }.map(\.trailHasChanged)
+
+        #expect(changed == [false, true, true, false])
+    }
+
     @Test("a failed hike fetch fails the read")
     func hikeFetchFails() async throws {
         let container = try Self.library()

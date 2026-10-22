@@ -91,6 +91,7 @@ struct LibraryTotalsView: View {
 private struct LibraryTotalsContent: View {
     private static let sectionSpacing: CGFloat = 28
     private static let headingSpacing: CGFloat = 12
+    private static let footnoteSpacing: CGFloat = 8
 
     let totals: LibraryTotals
     let onOpenHike: (UUID) -> Void
@@ -113,10 +114,19 @@ private struct LibraryTotalsContent: View {
                     }
                 }
             }
-            Text(
-                "Recordings and GPX files with times count as hiked, and so does every activity along a saved trail. "
-                    + "A trail you drew or saved counts once you hike it."
-            )
+            VStack(alignment: .leading, spacing: Self.footnoteSpacing) {
+                Text(
+                    "Recordings and GPX files with times count as hiked, "
+                        + "and so does every activity along a saved trail. "
+                        + "A trail you drew or saved counts once you hike it."
+                )
+                if totals.allTime.outingsWithoutClimb > 0 {
+                    Text("""
+                    Climb, Highest and Steepest leave out activities along trails \
+                    that have changed since you hiked them.
+                    """)
+                }
+            }
             .font(.footnote)
             .foregroundStyle(.secondary)
         }
