@@ -9,15 +9,16 @@
 # machine collected one per issue. The pool replaces that with devices named
 # `OpenHikes Pool 1`, `OpenHikes Pool 2`, … and a claim per device:
 #
-#   udid="$(Scripts/sim-pool.sh acquire)"   # a free device, erased, booted, granted
+#   udid="$(Scripts/sim-pool.sh acquire)"   # a free device, clean, booted, granted
 #   xcodebuild test … -destination "platform=iOS Simulator,id=$udid"
 #   Scripts/sim-pool.sh release             # shut it down, give it back
 #
-# `acquire` hands out the lowest-numbered free device, and creates one only
+# `acquire` hands out the lowest-numbered free device, and makes one only
 # when every existing one is held — never more than OPENHIKES_SIM_POOL_MAX
 # (default 5), so the pool cannot grow into the hundred devices it replaces.
 # Calling it again from the same owner returns the same device and renews the
-# claim, which is why it is safe to run before every test command.
+# claim, which is why it is safe to run before every test command. So does
+# calling it after a `release`, as long as nobody has taken the device since.
 #
 # ## Who holds a device, and when that stops being true
 #
@@ -39,16 +40,25 @@
 # Scripts/run-ui-tests.sh holds its device lock, claimed or not: that is a run
 # already on it, and erasing under it is the failure this exists to prevent.
 #
-# ## Erasing
+# ## Starting clean
 #
-# A device changing hands is erased first, because what the last owner left —
-# an installed build, a granted permission, a simulated location still playing
-# — is exactly what makes a test pass or fail for a reason that is not the
-# code. Its own owner coming back keeps its data. `--keep-data` skips the erase.
+# A device changing hands starts clean, because what the last owner left — an
+# installed build, a granted permission, a simulated location still playing —
+# is exactly what makes a test pass or fail for a reason that is not the code.
+# Its own owner coming back keeps its data, and `--keep-data` keeps it anyway.
+#
+# Clean means a clone of the pool's template, not an erase: the device is
+# deleted and a clone of `OpenHikes Template (<device type>, <runtime>)` takes
+# its name, and its number, with a new UDID. A device the pool makes is a clone
+# too. An erase cost 1.4 GB of downloads on the next boot; a clone costs none —
+# Scripts/lib/simulator-templates.sh has the measurements, and settles the
+# template the first time one is needed. A template that cannot be settled is
+# reported, and the device is erased, or created, the way it was before
+# templates.
 #
 # ## Granting
 #
-# Every device it hands out has the photo library granted to the app, erased or
+# Every device it hands out has the photo library granted to the app, clean or
 # not. `PhotosLibraryReaderTests` asks the real PhotoKit for an asset, and on a
 # device that has never answered, PhotoKit raises the permission alert on its
 # own — over the unit tests' host app for the rest of the run, and again on the
@@ -69,8 +79,10 @@ set -euo pipefail
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/simulator.sh
 source "$script_directory/lib/simulator.sh"
+# shellcheck source=lib/simulator-templates.sh
+source "$script_directory/lib/simulator-templates.sh"
 
-pool_prefix="OpenHikes Pool"
+pool_prefix="${OPENHIKES_SIM_POOL_PREFIX:-OpenHikes Pool}"
 pool_max="${OPENHIKES_SIM_POOL_MAX:-5}"
 ttl_minutes="${OPENHIKES_SIM_POOL_TTL_MINUTES:-180}"
 device_type="${OPENHIKES_SIM_POOL_DEVICE_TYPE:-iPhone 18 Pro}"
@@ -85,10 +97,14 @@ usage() {
 Usage: Scripts/sim-pool.sh <command> [options]
 
 Commands:
-  acquire              Claim a free pool simulator, erase it if it changed
-                       hands, boot it, and print its UDID
+  acquire              Claim a free pool simulator, replace it with a clean
+                       clone if it changed hands, boot it, and print its UDID
   release              Shut down and give back the device this owner holds
-  status               List the pool's devices and who holds each
+  status               List the pool's devices, who holds each, and the
+                       templates they are cloned from
+  template             Settle the pool's template now, or refresh it if it is
+                       due — the one step that downloads, so it can be run
+                       while on an unmetered connection
   adopt <name|udid>    Rename an idle iOS simulator into the pool
   prune                Delete free pool devices beyond the lowest --keep
 
@@ -97,7 +113,7 @@ Options:
                        id, else the checkout's top-level path)
   --owner-pid <pid>    A process whose exit ends the claim (default: Claude
                        Code's own PID inside a session, else none)
-  --keep-data          acquire: do not erase a device that changed hands
+  --keep-data          acquire: keep the data of a device that changed hands
   --keep <n>           prune: how many free devices to keep (default 2)
   -h, --help           Show this help
 
@@ -106,6 +122,13 @@ Environment:
   OPENHIKES_SIM_POOL_TTL_MINUTES   Idle minutes before a claim lapses (180)
   OPENHIKES_SIM_POOL_DEVICE_TYPE   Device type created (iPhone 18 Pro)
   OPENHIKES_SIM_POOL_DIR           Where claims are recorded
+  OPENHIKES_SIM_POOL_PREFIX        The devices' name before their number
+                                   (OpenHikes Pool); another prefix is
+                                   another pool, for trying out this script
+  OPENHIKES_SIM_TEMPLATE_REFRESH_DAYS  Days before a template is booted
+                                   again to catch up (7)
+  OPENHIKES_SIM_TEMPLATE_SETTLE_SECONDS  Longest a template's downloads may
+                                   take before it is given up on (1800)
 EOF
 }
 
@@ -142,7 +165,7 @@ while [[ $# -gt 0 ]]; do
                 exit 2
             fi
             keep_free="$2"; shift 2 ;;
-        acquire|release|status|prune)
+        acquire|release|status|template|prune)
             if [[ -n "$command_name" ]]; then echo "One command at a time." >&2; exit 2; fi
             command_name="$1"; shift ;;
         adopt)
@@ -257,29 +280,39 @@ claim_age_minutes() {
 # Prints `mine`, `held`, `busy` or `free` for a device. `busy` is a device in
 # use with no live claim — a run that never asked the pool — and is as
 # untouchable as a held one.
+#
+# A released claim is kept rather than deleted, with `released=` in it, so the
+# device still knows who had it last. To everyone else it is free. To that
+# owner it is still `mine` — nobody has used it since, so there is nothing to
+# clean — unless something has started using it in the meantime.
 device_standing() {
     local udid="$1" file
     file="$(claim_file "$udid")"
     if [[ -f "$file" ]]; then
-        local holder
+        local holder released
         holder="$(claim_field "$file" owner)"
-        if [[ "$holder" == "$owner" ]]; then
-            echo mine
-            return
-        fi
-        local alive=true
-        if ! claim_pid_alive "$file"; then
-            alive=false
-        elif (( $(claim_age_minutes "$file") >= ttl_minutes )) && ! process_names "$udid"; then
-            alive=false
-        fi
-        if [[ "$alive" == true ]]; then
-            echo held
-            return
+        released="$(claim_field "$file" released)"
+        if [[ -z "$released" ]]; then
+            if [[ "$holder" == "$owner" ]]; then
+                echo mine
+                return
+            fi
+            local alive=true
+            if ! claim_pid_alive "$file"; then
+                alive=false
+            elif (( $(claim_age_minutes "$file") >= ttl_minutes )) && ! process_names "$udid"; then
+                alive=false
+            fi
+            if [[ "$alive" == true ]]; then
+                echo held
+                return
+            fi
         fi
     fi
     if process_names "$udid" || ui_test_run_holds "$udid"; then
         echo busy
+    elif [[ -f "$file" && -n "${released:-}" && "${holder:-}" == "$owner" ]]; then
+        echo mine
     else
         echo free
     fi
@@ -322,49 +355,114 @@ release_pool_lock() {
 
 # MARK: Commands
 
-acquire() {
-    take_pool_lock
-    local devices chosen="" chosen_state="" changed_hands=false
-    devices="$(pool_devices)"
+# The UDID of the settled template every pool device is cloned from, settling
+# it first if it needs it.
+pool_template() {
+    local runtime
+    runtime="$(newest_simulator_runtime iOS)"
+    if [[ -z "$runtime" ]]; then
+        echo "No iOS simulator runtime installed to build a template on." >&2
+        return 1
+    fi
+    simulator_template "$device_type" "$runtime"
+}
 
-    # Your own device first, so a second call is a renewal and not a second
-    # device; then the lowest-numbered free one.
-    local udid state number standing
-    while IFS=$'\t' read -r udid state number; do
-        [[ -n "$udid" ]] || continue
-        if [[ "$(device_standing "$udid")" == mine ]]; then
-            chosen="$udid"; chosen_state="$state"
-            break
-        fi
-    done <<< "$devices"
-    if [[ -z "$chosen" ]]; then
+acquire() {
+    local devices chosen chosen_state chosen_name changed_hands
+    local template="" template_failed=false clone clone_status
+    while :; do
+        take_pool_lock
+        devices="$(pool_devices)"
+        chosen=""; chosen_state=""; chosen_name=""; changed_hands=false
+
+        # Your own device first, so a second call is a renewal and not a
+        # second device; then the lowest-numbered free one.
+        local udid state number standing
         while IFS=$'\t' read -r udid state number; do
             [[ -n "$udid" ]] || continue
-            standing="$(device_standing "$udid")"
-            if [[ "$standing" == free ]]; then
-                chosen="$udid"; chosen_state="$state"; changed_hands=true
+            if [[ "$(device_standing "$udid")" == mine ]]; then
+                chosen="$udid"; chosen_state="$state"; chosen_name="$pool_prefix $number"
                 break
             fi
         done <<< "$devices"
-    fi
+        if [[ -z "$chosen" ]]; then
+            while IFS=$'\t' read -r udid state number; do
+                [[ -n "$udid" ]] || continue
+                standing="$(device_standing "$udid")"
+                if [[ "$standing" == free ]]; then
+                    chosen="$udid"; chosen_state="$state"; chosen_name="$pool_prefix $number"
+                    changed_hands=true
+                    break
+                fi
+            done <<< "$devices"
+        fi
+
+        if [[ -z "$chosen" ]]; then
+            local count
+            count="$(printf '%s\n' "$devices" | grep -c . || true)"
+            if (( count >= pool_max )); then
+                release_pool_lock
+                echo "Every pool simulator is in use and the pool is at its cap of $pool_max." >&2
+                status >&2
+                echo "Release one (Scripts/sim-pool.sh release from its owner), wait for a run" >&2
+                echo "to finish, or raise OPENHIKES_SIM_POOL_MAX." >&2
+                exit 1
+            fi
+            chosen_name="$pool_prefix $(next_free_number "$(printf '%s\n' "$devices" | cut -f3)")"
+        fi
+
+        # A device to make, or one changing hands, is a clone of the template.
+        # Settling a template can take minutes, so it is never done under the
+        # pool lock: the lock is let go, the template settled, and the choice
+        # made again, since the pool may have moved on in the meantime. The
+        # template settled here is then used as it is — asking again whether
+        # it is due a refresh is how an acquire would refresh it forever.
+        local needs_clean=false
+        if [[ -z "$chosen" || ( "$changed_hands" == true && "$keep_data" == false ) ]]; then
+            needs_clean=true
+        fi
+        if [[ "$needs_clean" == true && "$template_failed" == false && -z "$template" ]]; then
+            release_pool_lock
+            if ! template="$(pool_template)"; then
+                template=""
+                template_failed=true
+                echo "Without a template, $chosen_name is made the way it was before templates, and its first boot downloads about 1.4 GB." >&2
+            fi
+            continue
+        fi
+
+        if [[ "$needs_clean" == true && -n "$template" ]]; then
+            clone_status=0
+            if [[ -z "$chosen" ]]; then
+                echo "Cloning $chosen_name from the template." >&2
+                clone="$(clone_simulator_template "$template" "$chosen_name" --no-wait)" || clone_status=$?
+            else
+                echo "Replacing $chosen_name with a clean clone of the template for its new owner." >&2
+                clone="$(replace_simulator_with_clone "$chosen" "$template" "$chosen_name" --no-wait)" \
+                    || clone_status=$?
+            fi
+            if (( clone_status == 2 )); then
+                # Somebody started refreshing the template a moment ago; wait
+                # for it outside the pool lock, as above.
+                release_pool_lock
+                template=""
+                continue
+            fi
+            if (( clone_status == 0 )); then
+                [[ -z "$chosen" ]] || rm -f "$(claim_file "$chosen")"
+                chosen="$clone"; chosen_state="Shutdown"; changed_hands=false
+            else
+                template_failed=true
+            fi
+        fi
+        break
+    done
 
     if [[ -z "$chosen" ]]; then
-        local count
-        count="$(printf '%s\n' "$devices" | grep -c . || true)"
-        if (( count >= pool_max )); then
+        echo "Creating $chosen_name ($device_type)." >&2
+        if ! chosen="$(xcrun simctl create "$chosen_name" "$device_type")" || [[ -z "$chosen" ]]; then
             release_pool_lock
-            echo "Every pool simulator is in use and the pool is at its cap of $pool_max." >&2
-            status >&2
-            echo "Release one (Scripts/sim-pool.sh release from its owner), wait for a run" >&2
-            echo "to finish, or raise OPENHIKES_SIM_POOL_MAX." >&2
-            exit 1
-        fi
-        local name
-        name="$pool_prefix $(next_free_number "$(printf '%s\n' "$devices" | cut -f3)")"
-        echo "Creating $name ($device_type)." >&2
-        if ! chosen="$(xcrun simctl create "$name" "$device_type")" || [[ -z "$chosen" ]]; then
-            release_pool_lock
-            echo "simctl could not create '$name' as a '$device_type'." >&2
+            echo "simctl could not create '$chosen_name' as a '$device_type'." >&2
             exit 1
         fi
         chosen_state="Shutdown"
@@ -406,7 +504,10 @@ release() {
         local file
         file="$(claim_file "$udid")"
         [[ -f "$file" && "$(claim_field "$file" owner)" == "$owner" ]] || continue
-        rm -f "$file"
+        [[ -z "$(claim_field "$file" released)" ]] || continue
+        # Kept, marked released, so a later `acquire` from this owner can tell
+        # the device is still as it left it — see `device_standing`.
+        printf 'owner=%s\nreleased=%s\n' "$owner" "$(date +%s)" > "$file"
         if [[ "$state" != "Shutdown" ]]; then
             xcrun simctl shutdown "$udid" >/dev/null 2>&1 || true
         fi
@@ -419,22 +520,36 @@ release() {
 }
 
 status() {
-    local devices udid state number
+    local devices udid state number name
     devices="$(pool_devices)"
     if [[ -z "$devices" ]]; then
         echo "The pool is empty; the first acquire creates $pool_prefix 1."
-        return
     fi
     while IFS=$'\t' read -r udid state number; do
         [[ -n "$udid" ]] || continue
         local standing file detail=""
         standing="$(device_standing "$udid")"
         file="$(claim_file "$udid")"
-        if [[ -f "$file" && ( "$standing" == held || "$standing" == mine ) ]]; then
+        if [[ -f "$file" && -n "$(claim_field "$file" released)" ]]; then
+            detail="  released by $(claim_field "$file" owner) $(claim_age_minutes "$file")m ago"
+        elif [[ -f "$file" && ( "$standing" == held || "$standing" == mine ) ]]; then
             detail="  $(claim_field "$file" owner), renewed $(claim_age_minutes "$file")m ago"
         fi
         printf '%s %s  %s  %-8s %s%s\n' "$pool_prefix" "$number" "$udid" "$state" "$standing" "$detail"
     done <<< "$devices"
+    while IFS=$'\t' read -r udid state name; do
+        [[ -n "$udid" ]] || continue
+        local marker detail="not settled"
+        marker="$(template_marker "$udid")"
+        if [[ -f "$marker" ]]; then
+            detail="settled $(( ($(date +%s) - $(stat -f %m "$marker")) / 86400 ))d ago"
+        fi
+        printf '%s  %s  %-8s %s\n' "$name" "$udid" "$state" "$detail"
+    done < <(simulator_devices | awk -F'\t' -v prefix="$template_prefix (" 'index($3, prefix) == 1')
+}
+
+template() {
+    pool_template >/dev/null
 }
 
 adopt() {
@@ -442,6 +557,12 @@ adopt() {
     local udid state
     udid="$(resolve_simulator_udid "$adopt_target")" || { release_pool_lock; exit 1; }
     state="$(simulator_devices | awk -F'\t' -v udid="$udid" '$1 == udid { print $2 }')"
+    if simulator_devices | awk -F'\t' -v udid="$udid" -v prefix="$template_prefix (" \
+        '$1 == udid && index($3, prefix) == 1 { found = 1 } END { exit !found }'; then
+        release_pool_lock
+        echo "$adopt_target is a template the pool clones from, not a device to hand out." >&2
+        exit 1
+    fi
     if [[ "$state" != "Shutdown" ]] || process_names "$udid" || ui_test_run_holds "$udid"; then
         release_pool_lock
         echo "$adopt_target is $state or in use; only an idle, shut-down simulator is adopted." >&2
@@ -457,7 +578,7 @@ adopt() {
     name="$pool_prefix $(next_free_number "$(printf '%s\n' "$devices" | cut -f3)")"
     xcrun simctl rename "$udid" "$name"
     # Its contents belong to whoever made it, so it joins as a device that
-    # changes hands on its first acquire and is erased then.
+    # changes hands on its first acquire, and is replaced with a clone then.
     rm -f "$(claim_file "$udid")"
     release_pool_lock
     echo "Adopted $adopt_target as $name." >&2
