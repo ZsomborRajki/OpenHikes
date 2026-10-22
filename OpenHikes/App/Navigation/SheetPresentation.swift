@@ -227,6 +227,9 @@ final class SheetPresentation {
     @ObservationIgnored private var communityPhotoSelections: [SheetRoute: CommunityPhotoSelection] = [:]
     /// The same, for a walk summary's share card — see ``WalkShareSession``.
     @ObservationIgnored private var walkShares: [SheetRoute: WalkShareSession] = [:]
+    /// The screens that have brought what they are about into view — see
+    /// ``claimsFirstFraming(of:)``.
+    @ObservationIgnored private var framedRoutes: Set<SheetRoute> = []
 
     func hikeInteraction(for hike: Hike) -> HikeDetailInteraction {
         if let existing = hikeInteractions[hike.id] { return existing }
@@ -429,6 +432,19 @@ final class SheetPresentation {
         return session
     }
 
+    /// Whether this is the first time since `route` was pushed that its
+    /// screen asks to bring what it is about into view: `true` once, then
+    /// `false` until the route is popped.
+    ///
+    /// Here rather than in the screen's own `@State` for the reason the
+    /// objects above are. A rotation replaces the host, and a Commons
+    /// photograph's screen built again in the new one asked again on its way
+    /// back from the gallery over it — taking the camera off whichever picture
+    /// that gallery's *Show on Map* had just framed. See ``CommonsPhotoView``.
+    func claimsFirstFraming(of route: SheetRoute) -> Bool {
+        framedRoutes.insert(route).inserted
+    }
+
     @ObservationIgnored private var storedPath: [SheetRoute] = []
     @ObservationIgnored private var storedDetent: PresentationDetent
     @ObservationIgnored private var storedLayout: SheetLayout = .bottomSheet
@@ -606,6 +622,7 @@ final class SheetPresentation {
         photoSelections = photoSelections.filter { storedPath.contains($0.key) }
         communityPhotoSelections = communityPhotoSelections.filter { storedPath.contains($0.key) }
         walkShares = walkShares.filter { storedPath.contains($0.key) }
+        framedRoutes = framedRoutes.filter { storedPath.contains($0) }
         let recording = storedPath.last == .recording
         if isRecordingPresented != recording { isRecordingPresented = recording }
         let drafting = storedPath.last == .trailDraft
