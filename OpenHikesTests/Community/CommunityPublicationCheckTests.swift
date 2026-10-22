@@ -388,4 +388,61 @@ struct CommunityPublicationCheckTests {
 
         #expect(!forgotten)
     }
+
+    /// What the report alone does not cover. The columns are cleared before
+    /// the save is attempted, so a refusal that left them cleared would show
+    /// the hike as *not shared* at once — and, since the context still holds
+    /// the clearing, make the refused reset durable with whatever unrelated
+    /// save came next.
+    @Test("a refused commit leaves the hike published, now and after the next save")
+    func refusedForgetRestoresBothColumns() throws {
+        let container = try Fixture.modelContainer()
+        let context = ModelContext(container)
+        let hike = Self.publishedHike(in: context)
+        try context.save()
+
+        let forgotten = CommunityPublicationCheck.forgetPublication(
+            hike,
+            save: { _ in throw CocoaError(.fileWriteNoPermission) }
+        )
+
+        #expect(!forgotten)
+        #expect(hike.communitySubmissionID == "submission-1")
+        #expect(hike.communityListingID == "listing-1")
+
+        try context.save()
+
+        let fresh = ModelContext(container)
+        let reloaded = try #require(fresh.fetch(FetchDescriptor<Hike>()).first)
+        #expect(reloaded.communitySubmissionID == "submission-1")
+        #expect(reloaded.communityListingID == "listing-1")
+    }
+
+    /// Why the restore is two assignments and not `rollback()`: the context
+    /// holds whatever else the hiker changed since the last save, and a
+    /// refused reset has no business discarding it.
+    @Test("a refused commit puts back the two columns and discards nothing else")
+    func refusedForgetKeepsOtherEdits() throws {
+        let container = try Fixture.modelContainer()
+        let context = ModelContext(container)
+        let hike = Self.publishedHike(in: context)
+        try context.save()
+        hike.title = "Renamed on the way"
+
+        let forgotten = CommunityPublicationCheck.forgetPublication(
+            hike,
+            save: { _ in throw CocoaError(.fileWriteNoPermission) }
+        )
+
+        #expect(!forgotten)
+        #expect(hike.title == "Renamed on the way")
+
+        try context.save()
+
+        let fresh = ModelContext(container)
+        let reloaded = try #require(fresh.fetch(FetchDescriptor<Hike>()).first)
+        #expect(reloaded.title == "Renamed on the way")
+        #expect(reloaded.communitySubmissionID == "submission-1")
+        #expect(reloaded.communityListingID == "listing-1")
+    }
 }

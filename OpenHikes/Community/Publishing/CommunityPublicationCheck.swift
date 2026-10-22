@@ -148,8 +148,10 @@ enum CommunityPublicationCheck {
     /// trail it was aimed at is already a defined state rather than a dangling
     /// reference — see ``CommunityPhotoTarget``.
     ///
-    /// - Returns: Whether anything was written, which is what a suite asserts
-    ///   on.
+    /// - Returns: Whether the hike was reset and the reset saved. `false` means
+    ///   it is exactly as it was — a refused save puts both columns back — so
+    ///   the caller can say the reset did not happen instead of showing a hike
+    ///   that looks unshared and is not.
     @discardableResult static func forgetPublication(
         _ hike: Hike,
         save: (ModelContext) throws -> Void = { try $0.save() }
@@ -159,15 +161,22 @@ enum CommunityPublicationCheck {
               let context = hike.modelContext
         else { return false }
 
+        let submissionID = hike.communitySubmissionID
+        let listingID = hike.communityListingID
         hike.communitySubmissionID = nil
         hike.communityListingID = nil
         do {
             try save(context)
         } catch {
-            // Unlike the cache above, this does not come right on the next
-            // launch: nothing re-asks a hike that has no submission id, so a
-            // failed save leaves the hike reading *published* until the hiker
-            // taps again. Logged rather than swallowed for that reason.
+            // Put back by hand, not with `context.rollback()`, which would
+            // also discard whatever else the hiker changed since the last
+            // save. Left cleared, the hike would read *not shared* from here
+            // on, and the next unrelated save would make this refused reset
+            // durable — the two record names a removal request quotes, gone
+            // without a confirmed reset. Nothing re-asks a hike that has no
+            // submission id, so there is no later pass to repair that.
+            hike.communitySubmissionID = submissionID
+            hike.communityListingID = listingID
             logger.error(
                 """
                 Could not forget a hike's publication locally: \
