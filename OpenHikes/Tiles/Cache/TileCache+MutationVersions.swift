@@ -41,17 +41,17 @@ nonisolated extension TileCache {
         /// versions order writes against — not a lossy approximation of the
         /// key — and it cannot under-invalidate, because deleting a file bumps
         /// every key that could have written it. Real keys don't collide
-        /// anyway: `providerID/z/x/y@scale` has four trailing separator-free
-        /// fields, so the provider id is recoverable and the mapping is
-        /// injective over the catalog.
+        /// anyway: ``TileCacheKey`` spells one `providerID/z/x/y`, three
+        /// trailing separator-free fields, so the provider id is recoverable
+        /// and the mapping is injective over the catalog.
         ///
         /// Keyed this way because the deleting paths have names rather than
         /// keys — ``TileCache/trimCache(claimedBy:limit:)`` and
         /// ``TileCache/reclaimDurableBytes(forProviderID:protecting:byteCount:)``
-        /// enumerate *files*, and the flattening is one-way (`/` and `@` both
-        /// become `_`), so reversing it would need a stored key or a reverse
-        /// map. Going this direction needs neither: every reader of a token
-        /// already holds the key and can flatten it.
+        /// enumerate *files*, and the flattening is one-way (`/` becomes `_`,
+        /// which provider ids contain too), so reversing it would need a
+        /// stored key or a reverse map. Going this direction needs neither:
+        /// every reader of a token already holds the key and can flatten it.
         var names: [String: UInt64] = [:]
 
         /// Injectable for the same reason `trimCache(claimedBy:limit:)`'s
