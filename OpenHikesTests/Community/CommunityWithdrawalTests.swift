@@ -252,4 +252,26 @@ struct CommunityWithdrawalTests {
         #expect(photos.submissionID == "photo-submission-9")
         #expect(photos.listingID == "contribution-9")
     }
+
+    /// The half-written state of an upload whose review notice failed: the
+    /// device-local marker committed and the mirrored column did not. The
+    /// upload is on the server, and the menu that offers *Finish Sending*
+    /// offers to ask for it back beside it — which has to have a name to ask
+    /// with, or the sheet opens on nothing.
+    @Test("an upload only the queueing marker remembers can still be withdrawn")
+    @MainActor
+    func markerAloneIsEnoughToWithdraw() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        hike.unqueuedSubmissionID = "submission-7"
+        hike.unqueuedPhotoSubmissionID = "photo-submission-7"
+
+        let own = try #require(CommunityWithdrawal(hike: hike))
+        let photos = try #require(CommunityWithdrawal(contributedPhotosOf: hike))
+
+        #expect(own.submissionID == "submission-7")
+        #expect(!own.isPublished)
+        #expect(photos.submissionID == "photo-submission-7")
+        #expect(!photos.isPublished)
+    }
 }

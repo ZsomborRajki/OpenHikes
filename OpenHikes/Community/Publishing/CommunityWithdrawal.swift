@@ -134,8 +134,13 @@ nonisolated struct CommunityWithdrawal: Equatable, Sendable {
 
     /// Built from the hiker's own row, or `nil` for a hike that was never
     /// sent — which is the state with nothing to ask about.
+    ///
+    /// The device-local marker stands in for the mirrored column when it is
+    /// the only one that survived (``Hike/pendingCommunityQueueing``): the
+    /// upload is on the server either way, and a hike that offers to ask for
+    /// it back has to be able to name it.
     init?(hike: Hike, note: String = "") {
-        guard let sent = hike.communitySubmissionID else { return nil }
+        guard let sent = hike.communitySubmissionID ?? hike.pendingCommunityQueueing else { return nil }
         self.init(
             submissionID: sent,
             listingID: hike.communityListingID,
@@ -150,9 +155,11 @@ nonisolated struct CommunityWithdrawal: Equatable, Sendable {
     ///
     /// The title is still their own hike's, which is the right one: it is what
     /// they will call the walk when they write about it, and the reviewer
-    /// finds the records by name rather than by the trail.
+    /// finds the records by name rather than by the trail. The marker stands
+    /// in for the mirrored column as it does in ``init(hike:note:)``.
     init?(contributedPhotosOf hike: Hike, note: String = "") {
-        guard let sent = hike.communityPhotoSubmissionID else { return nil }
+        guard let sent = hike.communityPhotoSubmissionID ?? hike.pendingCommunityPhotoQueueing
+        else { return nil }
         self.init(
             submissionID: sent,
             listingID: hike.communityPhotoContributionID,
