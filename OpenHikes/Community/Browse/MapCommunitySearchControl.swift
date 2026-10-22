@@ -772,7 +772,10 @@ extension MapView {
     /// The tap tells the browser what is on screen before it asks, with the
     /// sheet where it is at that moment: a settle measures the map above the
     /// sheet's middle detent, and a hiker who lowered the sheet since is
-    /// looking at more map than that — see `MapCommunitySearchRegion.swift`.
+    /// looking at more map than that — unless that is more than the zoom
+    /// ceiling allows, when the middle detent's map is what is asked about, so
+    /// that an enabled pill always searches something. See
+    /// `MapCommunitySearchRegion.swift`.
     func addAreaSearchControl(
         to mapView: MKMapView,
         _ coordinator: Coordinator,
@@ -782,7 +785,7 @@ extension MapView {
             identifiers: .community,
             onTap: { [community, weak coordinator, weak mapView] in
                 if let coordinator, let mapView {
-                    community.regionDidSettle(coordinator.communitySearchRegion(of: mapView, sheet: .whereItIs))
+                    community.regionDidSettle(coordinator.communitySearchRegionForTap(of: mapView))
                 }
                 community.searchVisibleArea()
             },

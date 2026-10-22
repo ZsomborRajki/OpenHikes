@@ -187,22 +187,17 @@ struct CommunityQueryPolicy {
     /// of one gesture would withdraw the offer the first one made.
     func action(for region: MKCoordinateRegion) -> CommunityQueryAction {
         guard isBrowsing else { return .ignore }
-        // The *unclamped* radius is what the ceiling is tested against, and
-        // the distinction is load-bearing: clamping first would make every
-        // region look like it was exactly at the ceiling and the guard below
-        // could never fire.
-        let visibleRadius = Self.visibleRadiusMeters(for: region)
         // Above the ceiling nothing is offered and nothing is forgotten:
         // zooming out to look at the country and back in to the same valley
         // should leave the valley's results standing rather than re-fetch
         // them.
-        guard visibleRadius <= Self.maximumRadiusMeters else { return .tooFarOut }
+        guard Self.isWithinCeiling(region) else { return .tooFarOut }
         // Both shapes of the one question: the floored circle CloudKit is
         // asked about, and the rectangle itself, which is what OpenStreetMap
         // is asked about — see ``CommunitySearchArea``.
         let area = CommunitySearchArea(
             coordinate: region.center,
-            radiusMeters: max(visibleRadius, Self.minimumRadiusMeters),
+            radiusMeters: max(Self.visibleRadiusMeters(for: region), Self.minimumRadiusMeters),
             visibleSpan: CommunitySearchArea.Span(
                 latitudeDelta: region.span.latitudeDelta,
                 longitudeDelta: region.span.longitudeDelta
@@ -245,6 +240,22 @@ struct CommunityQueryPolicy {
         committed = nil
     }
 
+    /// Whether `region` is zoomed in far enough to be asked about at all.
+    ///
+    /// The *unclamped* radius is what the ceiling is tested against, and the
+    /// distinction is load-bearing: clamping first would make every region
+    /// look like it was exactly at the ceiling and this could never refuse
+    /// one. Written as "within" rather than "past" so a region whose radius is
+    /// not a number is refused rather than searched.
+    ///
+    /// Shared with the pill's tap, not only ``action(for:)``. A region the tap
+    /// hands the browser has to be one this accepts, or the browser settles on
+    /// a map it refuses, dims the pill it came from and asks nothing — see
+    /// ``MapView/Coordinator/communitySearchRegionForTap(of:)``.
+    static func isWithinCeiling(_ region: MKCoordinateRegion) -> Bool {
+        visibleRadiusMeters(for: region) <= maximumRadiusMeters
+    }
+
     /// Half the longer edge of the visible region, unclamped.
     ///
     /// The longer edge rather than the shorter so the corners of the screen
@@ -252,9 +263,8 @@ struct CommunityQueryPolicy {
     /// the map, and a radius that excluded it would be showing a hike and
     /// refusing to list it.
     ///
-    /// Returned raw so ``action(for:)`` can tell "zoomed out past the ceiling"
-    /// from "at the ceiling", which are different answers — see the guard
-    /// there.
+    /// Returned raw so ``isWithinCeiling(_:)`` can tell "zoomed out past the
+    /// ceiling" from "at the ceiling", which are different answers.
     static func visibleRadiusMeters(for region: MKCoordinateRegion) -> Double {
         let metersPerDegree = RouteGeometry.metersPerDegreeLatitude
         let latitudeMeters = region.span.latitudeDelta * metersPerDegree
