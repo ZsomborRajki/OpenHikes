@@ -2357,6 +2357,9 @@
     "Taken %@" : {
 
     },
+    "Taken down, but not deleted" : {
+
+    },
     "taken on a recorded point of this hike" : {
 
     },
@@ -2413,6 +2416,9 @@
 
     },
     "The photos are deleted for good. The hiker is not told, and their app goes on reading “waiting for review”. The trail itself is not touched." : {
+
+    },
+    "The photos are off the hike for everybody, but the copy stored with their submission couldn’t be deleted. %@" : {
 
     },
     "The published copy stays in the community; deleting this hike does not take it down." : {

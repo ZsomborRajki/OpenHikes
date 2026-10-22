@@ -288,6 +288,32 @@ final class CommunityReviewQueue {
         takenDownContributions.insert(id)
     }
 
+    /// Takes a published contribution's photographs down through `transport`,
+    /// and records them as gone the moment they are.
+    ///
+    /// Recorded on *both* outcomes and never on a throw, which is the reason
+    /// this is a method here and not two lines in the view. The photographs
+    /// are off the hike for everybody once the first delete lands, so
+    /// ``CommunityPhotoTakedownOutcome/unlisted(cleanupFailure:)`` has to hide
+    /// them from the trail behind the gallery exactly as
+    /// ``CommunityPhotoTakedownOutcome/complete`` does — a trail whose detail
+    /// was downloaded before the delete would otherwise go on drawing
+    /// photographs the next open will not return. A throw is the opposite
+    /// claim, that nothing was removed, and recording it would hide pictures
+    /// that are still published.
+    ///
+    /// Safe to call again after a partial outcome: the transport tolerates the
+    /// published record already being gone, and recording an id twice changes
+    /// nothing.
+    func takeDown(
+        _ contribution: CommunityPhotoContribution,
+        through transport: any CommunityTransporting
+    ) async throws -> CommunityPhotoTakedownOutcome {
+        let outcome = try await transport.takeDownPhotos(contribution)
+        tookDown(contribution: contribution.id)
+        return outcome
+    }
+
     /// The launch's one question is spent: acting is the thing that changes
     /// the answer, so the next time the tab is taken this asks again rather
     /// than redrawing a list from before the decision.

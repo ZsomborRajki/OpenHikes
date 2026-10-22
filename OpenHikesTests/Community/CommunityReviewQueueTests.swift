@@ -20,6 +20,17 @@ import Testing
 @MainActor
 @Suite("Community review queue")
 struct CommunityReviewQueueTests {
+    /// A published set of photographs a reviewer may take down.
+    private static let photos = CommunityPhotoContribution(
+        id: "contribution-1",
+        photoSubmissionID: "submission-1",
+        authorName: "Aino",
+        authorID: "author-1",
+        publishedAt: Date(timeIntervalSince1970: 0),
+        photoPins: [],
+        photoFileURLs: []
+    )
+
     /// Waits on the effect rather than a duration, the way the browser suites
     /// do.
     private func settle(_ queue: CommunityReviewQueue) async {
@@ -285,6 +296,55 @@ struct CommunityReviewQueueTests {
         await settle(queue)
         #expect(transport.recording.queueRequests == 1, "nothing about the queue changed")
         #expect(queue.takenDownContributions == ["contribution-1"], "and it outlives the tab")
+    }
+
+    /// The published record is gone, so the photographs are off the hike for
+    /// everybody, even though the cleanup behind them was refused. The trail
+    /// behind the gallery has to stop drawing them exactly as it does after a
+    /// clean takedown, and the answer has to reach the screen so it can say
+    /// what is left to do.
+    @Test("an unlisting whose cleanup failed hides the photographs and reports the failure")
+    func aPartialTakeDownHidesThePhotographs() async throws {
+        let transport = StubCommunityTransport()
+        transport.takeDownPhotosResult = .success(.unlisted(cleanupFailure: .unreachable))
+        let queue = CommunityReviewQueue(transport: nil)
+
+        let outcome = try await queue.takeDown(Self.photos, through: transport)
+
+        #expect(outcome == .unlisted(cleanupFailure: .unreachable))
+        #expect(queue.takenDownContributions == [Self.photos.id])
+    }
+
+    /// Nothing was removed, so nothing may be hidden: a recorded id here would
+    /// take pictures that are still published off a trail's strip.
+    @Test("a takedown that removed nothing hides nothing")
+    func aFailedTakeDownHidesNothing() async {
+        let transport = StubCommunityTransport()
+        transport.takeDownPhotosResult = .failure(.unreachable)
+        let queue = CommunityReviewQueue(transport: nil)
+
+        await #expect(throws: CommunityFailure.unreachable) {
+            try await queue.takeDown(Self.photos, through: transport)
+        }
+
+        #expect(queue.takenDownContributions.isEmpty)
+    }
+
+    /// The retry the partial outcome leaves open: the same contribution, asked
+    /// again, finishes and changes nothing about what is hidden.
+    @Test("taking the same photographs down again after a partial outcome finishes the job")
+    func retryingAfterAPartialTakeDown() async throws {
+        let transport = StubCommunityTransport()
+        let queue = CommunityReviewQueue(transport: nil)
+
+        transport.takeDownPhotosResult = .success(.unlisted(cleanupFailure: .unreachable))
+        _ = try await queue.takeDown(Self.photos, through: transport)
+        transport.takeDownPhotosResult = .success(.complete)
+        let retried = try await queue.takeDown(Self.photos, through: transport)
+
+        #expect(retried == .complete)
+        #expect(queue.takenDownContributions == [Self.photos.id])
+        #expect(transport.recording.takenDownPhotos == [Self.photos.id, Self.photos.id])
     }
 
     /// The guard that keeps two requests from overlapping has to survive a

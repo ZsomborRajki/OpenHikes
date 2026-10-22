@@ -483,7 +483,7 @@ nonisolated extension MergedCommunityTransport {
     }
 
     @concurrent
-    func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws {
+    func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws -> CommunityPhotoTakedownOutcome {
         try await published.takeDownPhotos(contribution)
     }
 }

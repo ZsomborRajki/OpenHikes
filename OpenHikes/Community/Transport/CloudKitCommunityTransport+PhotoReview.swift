@@ -197,21 +197,56 @@ nonisolated extension CloudKitCommunityTransport {
     }
 
     @concurrent
-    func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws {
+    func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws -> CommunityPhotoTakedownOutcome {
+        // One database for both deletes, taken here so the closure below
+        // captures a value rather than this struct.
+        let publicDatabase = database
+        return try await Self.takeDownPhotos(contribution, deleting: { id in
+            _ = try await publicDatabase.deleteRecord(withID: id)
+        })
+    }
+
+    /// The two deletes behind ``takeDownPhotos(_:)``, with the delete itself
+    /// passed in.
+    ///
+    /// Split out so a suite can make either delete fail, or find its record
+    /// already gone, without a database to do it against — and a suite must
+    /// never reach the real one. The call order is part of the contract: the
+    /// contribution's id, then its submission's.
+    ///
+    /// Safe to repeat, which is the point of the shape. What a retry meets
+    /// after a failure past the first delete is a published record that no
+    /// longer exists, and that is where the first delete was headed rather
+    /// than a reason to stop before the submission.
+    static func takeDownPhotos(
+        _ contribution: CommunityPhotoContribution,
+        deleting delete: (CKRecord.ID) async throws -> Void
+    ) async throws -> CommunityPhotoTakedownOutcome {
         // The published record first. A failure between the two leaves a
         // submission nobody can reach — unlisted, unenumerable, effectively
         // gone — where the other order would leave photographs on a hike
         // pointing at nothing.
         do {
-            _ = try await database.deleteRecord(
-                withID: CKRecord.ID(recordName: contribution.id)
+            try await delete(CKRecord.ID(recordName: contribution.id))
+        } catch let error where Self.isAlreadyGone(error) {
+            Self.logger.info(
+                """
+                Contributed photos \(contribution.id, privacy: .public) were already \
+                unlisted; deleting their submission
+                """
             )
         } catch {
+            // Nothing has been removed, so this is the whole operation failing.
             throw Self.failure(from: error, while: "taking contributed photos down")
         }
         do {
-            _ = try await database.deleteRecord(
-                withID: CKRecord.ID(recordName: contribution.photoSubmissionID)
+            try await delete(CKRecord.ID(recordName: contribution.photoSubmissionID))
+        } catch let error where Self.isAlreadyGone(error) {
+            Self.logger.info(
+                """
+                Contributed photo submission \(contribution.photoSubmissionID, privacy: .public) \
+                was already deleted
+                """
             )
         } catch {
             Self.logger.error(
@@ -221,8 +256,29 @@ nonisolated extension CloudKitCommunityTransport {
                 \(error.localizedDescription, privacy: .public)
                 """
             )
-            throw Self.failure(from: error, while: "deleting a contributed photo submission")
+            // Reported rather than thrown: the photographs are off the hike
+            // for everybody, and a throw would say they are not.
+            return .unlisted(
+                cleanupFailure: Self.failure(from: error, while: "deleting a contributed photo submission")
+            )
         }
+        return .complete
+    }
+
+    /// Whether `error` says the record it was deleting was not there.
+    ///
+    /// Both spellings of that, because which one a delete of a single missing
+    /// record raises has not been observed here: the direct `unknownItem`,
+    /// and a `partialFailure` in which every item is one. A partial failure
+    /// with any other reason in it is a real failure and is not this.
+    private static func isAlreadyGone(_ error: any Error) -> Bool {
+        guard let cloudKitError = error as? CKError else { return false }
+        if cloudKitError.code == .unknownItem { return true }
+        guard cloudKitError.code == .partialFailure,
+              let items = cloudKitError.partialErrorsByItemID,
+              !items.isEmpty
+        else { return false }
+        return items.values.allSatisfy { ($0 as? CKError)?.code == .unknownItem }
     }
 
     /// Rewrites a submission's two photo fields so they carry only `kept`.

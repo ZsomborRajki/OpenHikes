@@ -86,6 +86,13 @@ struct CommunityPhotoActions: View {
     @State private var isConfirmingTakeDown = false
     @State private var isTakingDown = false
     @State private var takeDownFailure: CommunityFailure?
+    /// What was left over when a take-down unlisted the photographs and then
+    /// could not delete the submission behind them.
+    ///
+    /// Its own state beside ``takeDownFailure`` because it is the opposite
+    /// claim: that one says nothing was removed, this one says the photographs
+    /// are already gone for everybody.
+    @State private var unlistedCleanupFailure: CommunityFailure?
 
     var body: some View {
         Menu {
@@ -157,6 +164,7 @@ struct CommunityPhotoActions: View {
             """)
         }
         .communityFailureAlert("Couldn’t take them down", failure: $takeDownFailure)
+        .unlistedCleanupAlert(failure: $unlistedCleanupFailure)
     }
 }
 
@@ -196,18 +204,34 @@ private extension CommunityPhotoActions {
         onLeave()
     }
 
-    /// Deletes the contribution and its submission, then leaves.
+    /// Deletes the contribution and its submission, then leaves — unless the
+    /// second delete could not finish.
     ///
     /// A reviewer's action and gated by the server rather than by
     /// ``isReviewer``: a build that forced the item on gets a permission
     /// failure, which is reported here on the screen that asked — the rule
     /// ``CommunityReviewView`` states about a reviewer's actions, as against
     /// the queue's deliberate silence.
+    ///
+    /// Three ends, because the two deletes are not one claim. A throw means
+    /// nothing was removed, so the screen stays and says so.
+    /// ``CommunityPhotoTakedownOutcome/complete`` leaves.
+    /// ``CommunityPhotoTakedownOutcome/unlisted(cleanupFailure:)`` is the one
+    /// in between: the photographs are already off the hike for everybody,
+    /// which is recorded on the way through the queue, but the submission
+    /// behind them is still there. The screen stays for that one too,
+    /// deliberately, because its menu is the only way to ask again — the
+    /// transport tolerates the published record being gone, so a second try
+    /// goes straight to the part that failed.
     func takeDown() {
+        // The item that leads here is drawn only for a reviewer, who always has
+        // a queue; without one there is nothing to record against.
+        guard let review else { return }
         isTakingDown = true
         Task {
+            let outcome: CommunityPhotoTakedownOutcome
             do {
-                try await transport.takeDownPhotos(
+                outcome = try await review.takeDown(
                     CommunityPhotoContribution(
                         id: contribution.contributionID,
                         photoSubmissionID: contribution.photoSubmissionID,
@@ -216,7 +240,8 @@ private extension CommunityPhotoActions {
                         publishedAt: .now,
                         photoPins: [],
                         photoFileURLs: []
-                    )
+                    ),
+                    through: transport
                 )
             } catch {
                 isTakingDown = false
@@ -225,16 +250,49 @@ private extension CommunityPhotoActions {
                 return
             }
             isTakingDown = false
-            // Said here rather than left to the screen that follows: the
-            // success of a take-down *is* this screen going away, and a screen
-            // on its way out is no place to hang a confirmation.
-            HapticMoment.outcomeSucceeded.play()
-            // Before the screen goes, because the screen it goes *to* is the
-            // one still drawing these photographs: the trail's detail was
-            // downloaded when it opened and nothing fetches it again on the
-            // way back. See ``CommunityReviewQueue/tookDown(contribution:)``.
-            review?.tookDown(contribution: contribution.contributionID)
-            onLeave()
+            switch outcome {
+            case .complete:
+                // Said here rather than left to the screen that follows: the
+                // success of a take-down *is* this screen going away, and a
+                // screen on its way out is no place to hang a confirmation.
+                HapticMoment.outcomeSucceeded.play()
+                // The queue has already recorded the takedown, which is what
+                // the screen this goes back to needs: it is the one still
+                // drawing these photographs, because the trail's detail was
+                // downloaded when it opened and nothing fetches it again. See
+                // ``CommunityReviewQueue/takeDown(_:through:)``.
+                onLeave()
+            case .unlisted(let cleanupFailure):
+                unlistedCleanupFailure = cleanupFailure
+                HapticMoment.outcomeFailed.play()
+            }
+        }
+    }
+}
+
+// MARK: - The alert for the half-finished one
+
+private extension View {
+    /// What a take-down that unlisted the photographs and could not delete
+    /// their submission ends in.
+    ///
+    /// Not ``communityFailureAlert(_:failure:)``: that one says what could not
+    /// be done and offers the failure's own suggestion, which for a take-down
+    /// that *did* happen would read as though it had not. This says what
+    /// happened and what is left, and ends on the same suggestion because it is
+    /// still the sentence that tells a reviewer what to do next.
+    func unlistedCleanupAlert(failure binding: Binding<CommunityFailure?>) -> some View {
+        alert(
+            "Taken down, but not deleted",
+            isPresented: binding.isPresent(),
+            presenting: binding.wrappedValue
+        ) { _ in
+            Button("OK", role: .cancel) { binding.wrappedValue = nil }
+        } message: { failure in
+            Text("""
+            The photos are off the hike for everybody, but the copy stored with their \
+            submission couldn’t be deleted. \(failure.recoverySuggestion ?? failure.localizedDescription)
+            """)
         }
     }
 }

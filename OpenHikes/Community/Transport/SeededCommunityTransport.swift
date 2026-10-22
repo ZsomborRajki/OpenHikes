@@ -473,8 +473,9 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
     }
 
     @concurrent
-    func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws {
+    func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws -> CommunityPhotoTakedownOutcome {
         guard scenario != .failing else { throw CommunityFailure.unreachable }
+        return .complete
     }
 
     /// Whether ``Scenario/takenDown`` has already given out its one yes.
