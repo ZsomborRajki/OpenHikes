@@ -118,6 +118,10 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
     /// wandering across the ground, which the altitude filter has already
     /// smoothed vertically; subtracting a climb that the hiker's own legs
     /// may well have made would be the larger error.
+    ///
+    /// A resume does end the run being counted, as it does in the watch's
+    /// accumulator: the height either side of a pause is two observations,
+    /// and the lift or the drive between them is not a climb.
     var elevationGainMeters: Double? {
         elevation.hasChange ? elevation.gainMeters : nil
     }
@@ -187,6 +191,10 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
     }
 
     private mutating func accumulate(_ point: RecordingPoint) -> Double {
+        // The height a recording resumes at is an observation, but it is not
+        // a step from the one before the pause: that is the same break the
+        // watch's own accumulator makes, so the two count one walk alike.
+        if point.flags.contains(.resumed) { elevation.endRun() }
         elevation.record(point.elevation)
         guard let previous else {
             previous = point

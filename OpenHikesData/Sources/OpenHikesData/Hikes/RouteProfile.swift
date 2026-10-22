@@ -164,7 +164,7 @@ nonisolated public struct RouteProfile: Sendable {
             if index > 0, point.isPauseBoundary {
                 routePauseDistances.append(cumulative)
             }
-            elevations.record(point.elevation)
+            elevations.record(point)
             // `isFinite`, and here rather than in each consumer: a height that
             // is not a number is not a height, and admitted into `samples` it
             // goes wrong differently in every place that reads them. The
