@@ -99,7 +99,7 @@
 //  query returns the rows the caller may read, and for everybody but the
 //  reviewer that is none of them.
 //
-//  Two things about its shape are deliberate:
+//  Three things about its shape are deliberate:
 //
 //  - **It carries a reference and no copied fields.** A title or a distance
 //    denormalised onto it would be text a client wrote, shown to a reviewer as
@@ -109,6 +109,10 @@
 //    outlines. Nothing on a notice can lie about what it points at.
 //  - **The order is `___createTime`, not a field.** A client-supplied date
 //    could be set to last year to jump the queue. The server stamps this one.
+//  - **Its name is derived from the submission's.** See
+//    ``Notice/recordName(forSubmission:)``: queueing a submission twice is
+//    queueing it once, which is what lets a notice be retried after an answer
+//    that never arrived without being able to leave a second one behind.
 //
 //  What a notice cannot do is make a submission *trustworthy*: anybody with an
 //  Apple Account can create one pointing anywhere, so the queue is a list of
@@ -332,6 +336,31 @@ nonisolated enum CommunitySchema {
         /// `___createTime`, and this field is only ever read off a row that
         /// query already returned.
         static let photoSubmission = "photoSubmission"
+
+        /// The record name the notice for `submissionID` is saved under, for a
+        /// hike submission and a photo submission alike.
+        ///
+        /// Derived rather than left to CloudKit's random one, because the
+        /// notice is the one write of an upload that is *retried on its own*.
+        /// With a random name a retry after an answer that was lost on the way
+        /// back — the save had landed — made a second notice, and two notices
+        /// are two chances to publish one upload twice. With this one the
+        /// second save collides with the first and the server says so, which
+        /// ``CloudKitCommunityTransport/queueForReview(submissionID:)`` reads
+        /// as *already queued*.
+        ///
+        /// A submission's name is a UUID CloudKit chose, so the result is
+        /// ASCII and well under the 255 characters a record name may have, and
+        /// the prefix keeps it clear of the leading underscore CloudKit
+        /// reserves. It is also a storage contract once a notice has been
+        /// written under it: changing it later strands the retry of any upload
+        /// that was waiting on one, which would then queue a second notice
+        /// under the new name. The reviewer's queue tolerates that — it
+        /// de-duplicates by the submission a notice names — but nothing else
+        /// should be spent on finding out.
+        static func recordName(forSubmission submissionID: String) -> String {
+            "notice-\(submissionID)"
+        }
     }
 
     /// Fields on ``photoSubmissionType``.

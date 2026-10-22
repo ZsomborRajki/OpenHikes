@@ -8,15 +8,16 @@ import SwiftUI
 
 /// The centred symbol, headline and sentence a Community form ends on.
 ///
-/// Four screens finish this way and they arrived at it from two directions:
-/// the two publishing forms through ``CommunitySentSection``, and the two
-/// sheets that mail the reviewer through ``CommunityMailOutcomeSections``.
+/// Five screens finish this way and they arrived at it from two directions:
+/// the two publishing forms through ``CommunitySentSection`` and
+/// ``CommunityFinishSendingSection``, and the two sheets that mail the
+/// reviewer through ``CommunityMailOutcomeSections``.
 /// Each of those was already a fold of two copies — and the two folds were
 /// the same eleven lines again, down to the vertical padding and the single
 /// combined accessibility element.
 ///
 /// What a form ends on is the last thing a hiker reads before putting the
-/// phone away, so the four being the same size and the same shape is the
+/// phone away, so the five being the same size and the same shape is the
 /// point rather than a coincidence worth preserving by hand.
 ///
 /// `Text` rather than `LocalizedStringKey` for the two strings, because the
@@ -29,16 +30,20 @@ struct CommunityOutcomeSection: View {
     let headline: Text
     let detail: Text
     let identifier: String
-    /// How this ending felt, which is the one thing about it the four callers
-    /// genuinely disagree about: three of them are good news and
+    /// How this ending felt, which is the one thing about it the callers
+    /// genuinely disagree about: some of them are good news and
     /// ``CommunityMailOutcomeSections`` has one that is not.
     ///
     /// Here rather than at each call site for the same reason the symbol and
     /// the tint are: what a form ends on is the last thing a hiker reads, and
-    /// the four being the same shape is the point. A haptic written into each
-    /// form separately is four chances for one of them to end louder than the
-    /// others.
-    let moment: HapticMoment
+    /// the callers being the same shape is the point. A haptic written into
+    /// each form separately is a chance for one of them to end louder than
+    /// the others.
+    ///
+    /// `nil` is an ending that is *not news*: a form opened on something an
+    /// earlier launch left standing has not just happened to anybody, and a
+    /// knock on arrival would announce an event that is not one.
+    let moment: HapticMoment?
 
     /// Flipped once, when the section reaches the screen.
     ///
@@ -68,6 +73,8 @@ struct CommunityOutcomeSection: View {
             .accessibilityIdentifier(identifier)
         }
         .onAppear { appeared = true }
-        .sensoryFeedback(moment.feedback, trigger: appeared)
+        .sensoryFeedback(trigger: appeared) { _, isShown in
+            isShown ? moment?.feedback : nil
+        }
     }
 }

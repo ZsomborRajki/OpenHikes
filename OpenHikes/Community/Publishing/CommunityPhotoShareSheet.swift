@@ -42,6 +42,14 @@
 //  the only thing true at the moment an upload lands. Whether a reviewer said
 //  yes is asked later and elsewhere — see ``CommunityContributionCheck``.
 //
+//  **That an upload can land without anybody being told about it.** A send is
+//  two writes — see ``CommunityQueueingFailure`` — and when the second fails
+//  the pictures are already in the public database with nobody on the way to
+//  look at them. The form is then replaced rather than reset, and opens on
+//  ``CommunityFinishSendingSection`` on a later launch as well, because the
+//  hike remembers (``Hike/pendingCommunityPhotoQueueing``). Putting the strip
+//  back would be offering the same photographs again.
+//
 
 import OpenHikesData
 import SwiftData
@@ -59,7 +67,7 @@ struct CommunityPhotoShareSheet: View {
     var store: HikePhotoStore = .shared
 
     @AppStorage(SettingsKey.communityAuthorName) private var authorName = ""
-    @State private var phase: CommunitySendPhase = .editing
+    @State private var phase: CommunitySendPhase
     /// The photographs struck off the strip, by id.
     ///
     /// Seeded rather than empty, which is this form's one departure from the
@@ -101,6 +109,12 @@ struct CommunityPhotoShareSheet: View {
         // itself a frame later would be telling the hiker, briefly, that it
         // was about to send the lot.
         _excludedPhotoIDs = State(initialValue: CommunityPublisher.alreadySentPhotoIDs(of: hike))
+        // Likewise the phase: a set of photographs that was uploaded and never
+        // queued opens on the one thing left to do, not on a strip that offers
+        // to send them again a frame before it corrects itself.
+        _phase = State(
+            initialValue: hike.pendingCommunityPhotoQueueing == nil ? .editing : .awaitingQueue(nil)
+        )
     }
 
     /// Where these photographs already are on the way to being published,
@@ -197,6 +211,8 @@ struct CommunityPhotoShareSheet: View {
         switch phase {
         case .sent:
             sentSection
+        case .awaitingQueue, .finishing:
+            finishSection
         default:
             targetSection
             contentsSection
@@ -368,6 +384,25 @@ private extension CommunityPhotoShareSheet {
         )
     }
 
+    /// What replaces the form for photographs that were uploaded but never
+    /// queued.
+    var finishSection: some View {
+        CommunityFinishSendingSection(
+            phase: phase,
+            detail: """
+            Your photos are uploaded, but the request for a person to review them \
+            didn’t go through, so they won’t appear on this trail yet. Finishing \
+            sends only that request — nothing is uploaded again.
+            """,
+            identifiers: .init(
+                outcome: "community-photos-unfinished",
+                failure: "community-photos-unfinished-failure",
+                button: "community-photos-finish"
+            ),
+            finish: finishSending
+        )
+    }
+
     var toolbarContent: some ToolbarContent {
         CommunitySendToolbar(
             phase: phase,
@@ -399,6 +434,15 @@ private extension CommunityPhotoShareSheet {
                 excludingPhotos: excludedPhotoIDs,
                 store: store
             )
+            phase = CommunitySendPhase(outcome)
+        }
+    }
+
+    /// Sends the one write an earlier attempt left undone, and nothing else.
+    func finishSending() {
+        phase = .finishing
+        Task {
+            let outcome = await CommunityPhotoPublisher.finishQueueing(hike, transport: transport)
             phase = CommunitySendPhase(outcome)
         }
     }

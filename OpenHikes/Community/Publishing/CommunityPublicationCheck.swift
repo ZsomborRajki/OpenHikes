@@ -148,10 +148,17 @@ enum CommunityPublicationCheck {
     /// trail it was aimed at is already a defined state rather than a dangling
     /// reference — see ``CommunityPhotoTarget``.
     ///
+    /// **The device-local note that the queue was never told goes too**
+    /// (``Hike/unqueuedSubmissionID``). A listing that was seen makes the note
+    /// stale — see ``CommunityQueueingMarker`` — but only while the listing
+    /// column is there to say so. Clear the columns and leave the note, and
+    /// the stale note reads as a debt again: a *Finish Sending* prompt for a
+    /// submission this hike has just forgotten.
+    ///
     /// - Returns: Whether the hike was reset and the reset saved. `false` means
-    ///   it is exactly as it was — a refused save puts both columns back — so
-    ///   the caller can say the reset did not happen instead of showing a hike
-    ///   that looks unshared and is not.
+    ///   it is exactly as it was — a refused save puts both columns and the
+    ///   note back — so the caller can say the reset did not happen instead of
+    ///   showing a hike that looks unshared and is not.
     @discardableResult static func forgetPublication(
         _ hike: Hike,
         save: (ModelContext) throws -> Void = { try $0.save() }
@@ -163,8 +170,10 @@ enum CommunityPublicationCheck {
 
         let submissionID = hike.communitySubmissionID
         let listingID = hike.communityListingID
+        let unqueuedSubmissionID = hike.unqueuedSubmissionID
         hike.communitySubmissionID = nil
         hike.communityListingID = nil
+        if unqueuedSubmissionID != nil { hike.unqueuedSubmissionID = nil }
         do {
             try save(context)
         } catch {
@@ -177,6 +186,7 @@ enum CommunityPublicationCheck {
             // submission id, so there is no later pass to repair that.
             hike.communitySubmissionID = submissionID
             hike.communityListingID = listingID
+            if unqueuedSubmissionID != nil { hike.unqueuedSubmissionID = unqueuedSubmissionID }
             logger.error(
                 """
                 Could not forget a hike's publication locally: \

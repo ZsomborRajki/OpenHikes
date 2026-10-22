@@ -69,6 +69,16 @@
 //  control exists to answer — what have I already done with this walk? —
 //  unanswerable at a glance.
 //
+//  **An upload the review queue was never told about outranks all of it.** A
+//  hike, or a set of photographs, is two saves, and when the second fails the
+//  first is still on the server with nobody to show it to. The mirrored
+//  columns read *waiting for review* about it, which is the opposite of the
+//  truth, so ``CommunityUploadKind/unfinished(of:)`` is asked before any of the
+//  states above and gets a menu of its own: *Finish Sending*, which sends the
+//  queue entry and nothing else, and the removal request the other states
+//  already have. It is never disabled by the route floor below — what is owed
+//  is owed whether or not the hike could be shared again today.
+//
 
 import Foundation
 import OpenHikesData
@@ -122,12 +132,21 @@ extension HikeDetailView {
                 submissionID: hike.communityPhotoSubmissionID,
                 contributionID: hike.communityPhotoContributionID
             )
+            let unfinished = CommunityUploadKind.unfinished(of: hike)
             let appearance = CommunityShareButtonAppearance(
                 publication: publication,
                 eligibility: eligibility,
-                contribution: contribution
+                contribution: contribution,
+                unfinished: unfinished
             )
-            communityControl(appearance, publication, eligibility, contribution, transport)
+            communityControl(
+                appearance,
+                publication,
+                eligibility,
+                contribution,
+                transport,
+                unfinished: unfinished
+            )
                 .accessibilityLabel(appearance.label)
                 // A state's name says where the hike is, not what a tap will
                 // do, so the hint is where that is explained.
@@ -136,8 +155,11 @@ extension HikeDetailView {
                 // A hike with no route can still carry photographs, and the
                 // contribution path does not send one — so the floor that
                 // holds the share button applies only where a route is what
-                // is being sent.
-                .disabled(hike.pointCount < 2 && !eligibility.offersPhotographs)
+                // is being sent. And never to an upload that already left:
+                // finishing it or asking for it back must stay reachable.
+                .disabled(
+                    unfinished == nil && hike.pointCount < 2 && !eligibility.offersPhotographs
+                )
                 // Asks once per appearance, and only for a hike that has been
                 // sent and not yet seen live — see
                 // ``CommunityPublicationCheck``. Here rather than on the detail
@@ -239,37 +261,122 @@ extension HikeDetailView {
     /// eligibility's rather than this view's: a hike with somewhere for its
     /// photographs to go gets the contribution control, and one with nowhere
     /// gets the form that explains why. See this file's header.
+    ///
+    /// An upload the review queue was never told about is decided before any
+    /// of that, and is not a case of the switch: its submission's name is
+    /// already on the hike, so ``publication`` reads *waiting for review* for
+    /// it — the one state it must be told apart from. See ``unfinishedControl``.
     @ViewBuilder
     private func communityControl(
         _ appearance: CommunityShareButtonAppearance,
         _ publication: CommunityPublicationState,
         _ eligibility: CommunityPublishingEligibility,
         _ contribution: CommunityContributionState,
-        _ transport: any CommunityTransporting
+        _ transport: any CommunityTransporting,
+        unfinished: CommunityUploadKind?
     ) -> some View {
-        switch publication {
-        case .notShared:
-            if let target = eligibility.photoTarget {
-                contributionControl(appearance, target, contribution)
-            } else {
-                Button { isSharingToCommunity = true } label: {
+        if let unfinished {
+            unfinishedControl(unfinished, appearance, eligibility)
+        } else {
+            switch publication {
+            case .notShared:
+                if let target = eligibility.photoTarget {
+                    contributionControl(appearance, target, contribution)
+                } else {
+                    Button { isSharingToCommunity = true } label: {
+                        Self.shareButtonRow(appearance)
+                    }
+                    .buttonStyle(.plain)
+                }
+            case .awaitingReview:
+                Button { isWithdrawingFromCommunity = true } label: {
                     Self.shareButtonRow(appearance)
                 }
                 .buttonStyle(.plain)
+            case .published:
+                Menu {
+                    publishedMenuItems(contribution, transport)
+                } label: {
+                    Self.shareButtonRow(appearance)
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
             }
-        case .awaitingReview:
-            Button { isWithdrawingFromCommunity = true } label: {
-                Self.shareButtonRow(appearance)
+        }
+    }
+
+    /// What a hike offers when its upload is in the public database and the
+    /// review queue was never told.
+    ///
+    /// Always a menu, because there are always two true things to do with an
+    /// upload nobody is going to look at: send the notice that is missing, or
+    /// ask for the upload back. A lone *Finish Sending* would leave a hiker who
+    /// no longer wants it published with no way out that does not go through
+    /// sending it.
+    ///
+    /// Neither item uploads anything. *Finish Sending* opens the form that
+    /// sent it, which opens on ``CommunityFinishSendingSection`` because the
+    /// hike remembers — see ``Hike/pendingCommunityQueueing``.
+    @ViewBuilder
+    private func unfinishedControl(
+        _ kind: CommunityUploadKind,
+        _ appearance: CommunityShareButtonAppearance,
+        _ eligibility: CommunityPublishingEligibility
+    ) -> some View {
+        Menu {
+            switch kind {
+            case .route:
+                Button("Finish Sending", systemImage: "paperplane") {
+                    isSharingToCommunity = true
+                }
+                .accessibilityIdentifier("community-finish-button")
+                Button("Ask for Removal", systemImage: "envelope", role: .destructive) {
+                    isWithdrawingFromCommunity = true
+                }
+                .accessibilityIdentifier("community-withdraw-button")
+            case .photos:
+                Button("Finish Sending Photos", systemImage: "paperplane") {
+                    finishSendingPhotos(eligibility)
+                }
+                .accessibilityIdentifier("community-finish-photos-button")
+                Button("Ask for Photo Removal", systemImage: "photo.badge.exclamationmark") {
+                    isWithdrawingPhotosFromCommunity = true
+                }
+                .accessibilityIdentifier("community-photo-withdraw-button")
             }
-            .buttonStyle(.plain)
-        case .published:
-            Menu {
-                publishedMenuItems(contribution, transport)
-            } label: {
-                Self.shareButtonRow(appearance)
+        } label: {
+            Self.shareButtonRow(appearance)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+    }
+
+    /// Opens the form that sent the photographs, which opens on finishing them.
+    ///
+    /// That form has to be built with a target although it uses none while
+    /// finishing, and a made-up one is worse than none: should the notice turn
+    /// out to be for a submission that is gone, the form falls back to its
+    /// strip and would aim the next send at it. So the target is one this hike
+    /// really has — an import's listing, or its own — and a hike with neither
+    /// was sent as a retread of an earlier walk, which only
+    /// ``CommunityPublishingCheck`` can find. Failing that, the share form,
+    /// which says why the photographs have nowhere to go.
+    private func finishSendingPhotos(_ eligibility: CommunityPublishingEligibility) {
+        let known = eligibility.photoTarget ?? CommunityPhotoTarget.published(
+            listingID: hike.communityListingID,
+            title: hike.displayTitle
+        )
+        if let known {
+            contributionTarget = known
+            return
+        }
+        Task {
+            let resolved = await CommunityPublishingCheck.eligibility(of: hike, in: modelContext)
+            if let target = resolved.photoTarget {
+                contributionTarget = target
+            } else {
+                isSharingToCommunity = true
             }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
         }
     }
 

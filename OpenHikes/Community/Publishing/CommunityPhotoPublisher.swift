@@ -19,7 +19,9 @@
 //  - the `@Model` is read once, on the main actor, before any suspension;
 //  - ``Hike/communityPhotoSubmissionID`` is written **after** CloudKit has
 //    accepted, because writing it first would make a failed send look like a
-//    successful one for good;
+//    successful one for good — and written even when only the review notice
+//    failed, because the pictures are up there either way and forgetting them
+//    would send them again; see ``CommunityUploadQueueing``;
 //  - the re-encode, the cap and the ordering are ``CommunityPublisher``'s own
 //    constants rather than a second opinion about them.
 //
@@ -74,6 +76,13 @@ nonisolated enum CommunityPhotoPublisher {
     /// Offers `hike`'s photographs to the hike `target` names, waiting for
     /// CloudKit to accept them.
     ///
+    /// Two saves, as ``CommunityPublisher/share(_:authorName:transport:excludingPhotos:store:save:)``
+    /// is: when only the one that queues the set for review fails, the answer
+    /// is ``CommunitySendOutcome/uploadedNotQueued(_:)``, the set's name is
+    /// kept, and ``finishQueueing(_:transport:save:)`` sends the missing entry.
+    /// A retry that uploaded again would leave a second copy of every
+    /// photograph and the first outside the queue.
+    ///
     /// - Parameter target: Where they go. Comes from
     ///   ``CommunityPublishingEligibility/photographsOnly(_:because:)``, which
     ///   is the only thing that produces one — so a contribution can never be
@@ -123,8 +132,24 @@ nonisolated enum CommunityPhotoPublisher {
         guard !staged.draft.photoFileURLs.isEmpty else { return .refused(.noPhotosToShare) }
 
         let submissionID: String
+        let queueingFailure: CommunityFailure?
         do {
             submissionID = try await transport.submitPhotos(staged.draft)
+            queueingFailure = nil
+        } catch let unqueued as CommunityQueueingFailure {
+            // The pictures are in the public database; only the write that
+            // puts them in front of a reviewer did not land. The same
+            // reasoning as ``CommunityPublisher/share``, and with more at
+            // stake: a retry that uploads again leaves a second copy of every
+            // photograph behind, and the first one outside the queue.
+            submissionID = unqueued.submissionID
+            queueingFailure = unqueued.failure
+            logger.error(
+                """
+                Contributed photos but could not queue them for review: \
+                \(unqueued.failure.localizedDescription, privacy: .public)
+                """
+            )
         } catch {
             let failure = CommunityFailure(error)
             logger.error(
@@ -133,40 +158,14 @@ nonisolated enum CommunityPhotoPublisher {
             return .refused(failure)
         }
 
-        // The upload landed, and only now is anything written down. The hike
-        // may have been deleted while it was in flight, in which case the
-        // submission stands and there is nothing here left to remember it.
-        guard hike.isAttached else { return .submitted }
-        hike.communityPhotoSubmissionID = submissionID
-        // Both columns together, because they describe one upload between
-        // them — the rule ``CommunityPublisher/share`` follows for the other
-        // pair, and the consequence of breaking it is the same: a stale
-        // *published* about a set no reviewer has seen, and a check that skips
-        // the new submission forever because the old answer is still sitting
-        // there.
-        hike.communityPhotoContributionID = nil
-        // And with them, which pictures are now up there — in this same
-        // commit, for the reason the pair above are written in one. A top-up
-        // opens on what this leaves behind: the photographs already sent,
-        // struck off, and whatever has been added since, ticked.
-        CommunityPublisher.markSent(staged.photoIDs, on: hike)
-        if let context = hike.modelContext {
-            do {
-                try save(context)
-            } catch {
-                // The submission is real either way, so this is not a failed
-                // contribution. What is lost is the device's memory of it,
-                // which costs the hiker a button offering to send pictures
-                // that are already sent.
-                logger.error(
-                    """
-                    Contributed photos but could not record it locally: \
-                    \(error.localizedDescription, privacy: .public)
-                    """
-                )
-            }
-        }
-        return .submitted
+        return CommunityUploadQueueing.record(
+            .photos,
+            submissionID: submissionID,
+            photoIDs: staged.photoIDs,
+            queueingFailure: queueingFailure,
+            on: hike,
+            save: save
+        )
     }
 
     /// Re-encodes the photographs and assembles the draft, entirely off the

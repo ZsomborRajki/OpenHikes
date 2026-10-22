@@ -2,7 +2,7 @@
 //  CommunityShareButtonAppearanceTests.swift
 //  OpenHikesTests
 //
-//  The eight things the community button on a hike's toolbar can be, and the
+//  The things the community button on a hike's toolbar can be, and the
 //  precedence that picks between them.
 //
 //  ``CommunityShareButtonAppearance`` exists because a glyph, a spoken label
@@ -41,12 +41,14 @@ struct CommunityShareButtonAppearanceTests {
     private static func appearance(
         _ publication: CommunityPublicationState,
         _ eligibility: CommunityPublishingEligibility,
-        _ contribution: CommunityContributionState = .notShared
+        _ contribution: CommunityContributionState = .notShared,
+        unfinished: CommunityUploadKind? = nil
     ) -> CommunityShareButtonAppearance {
         CommunityShareButtonAppearance(
             publication: publication,
             eligibility: eligibility,
-            contribution: contribution
+            contribution: contribution,
+            unfinished: unfinished
         )
     }
 
@@ -120,6 +122,51 @@ struct CommunityShareButtonAppearanceTests {
         #expect(hints.allSatisfy { !$0.isEmpty })
     }
 
+    @Test("an upload the queue never heard about outranks every other state")
+    func unfinishedOutranksEverything() {
+        // The one state in which something is owed. A hike that drew
+        // `person.2.fill` over it would hide the only way to settle it, and one
+        // that drew `hourglass` would say a person was looking at something no
+        // person has been shown.
+        for kind in Self.everyUnfinished {
+            for publication in Self.everyPublication {
+                for eligibility in Self.everyEligibility {
+                    for contribution in Self.everyContribution {
+                        let button = Self.appearance(
+                            publication, eligibility, contribution, unfinished: kind
+                        )
+                        #expect(
+                            button.symbol == "exclamationmark.icloud",
+                            "\(publication) / \(contribution) outranked an unfinished \(kind) upload"
+                        )
+                        #expect(!button.label.isEmpty)
+                        #expect(!button.hint.isEmpty, "an unfinished upload has to say what a tap offers")
+                    }
+                }
+            }
+        }
+    }
+
+    @Test("the two kinds of unfinished upload are told apart by what is said")
+    func unfinishedNamesWhichUploadItIs() {
+        let route = Self.appearance(.awaitingReview, .eligible, unfinished: .route)
+        let photos = Self.appearance(.awaitingReview, .eligible, unfinished: .photos)
+        #expect(route.symbol == photos.symbol, "one fact, so one glyph")
+        #expect(route.label != photos.label, "the label is all that tells a hiker which upload is owed")
+        #expect(route.hint != photos.hint)
+    }
+
+    @Test("an unfinished upload is not described as one that is waiting for a person")
+    func unfinishedIsNotWaiting() {
+        let waiting = Self.appearance(.awaitingReview, .eligible)
+        for kind in Self.everyUnfinished {
+            let button = Self.appearance(.awaitingReview, .eligible, unfinished: kind)
+            #expect(button.symbol != waiting.symbol)
+            #expect(button.label != waiting.label)
+            #expect(button.hint != waiting.hint)
+        }
+    }
+
     @Test("nothing waiting for review is ever called rejected")
     func neverRejected() {
         // The absence of a listing covers a reviewer who has not looked and
@@ -138,20 +185,30 @@ struct CommunityShareButtonAppearanceTests {
         }
     }
 
+    private static let everyPublication: [CommunityPublicationState] = [
+        .notShared, .awaitingReview, .published,
+    ]
+
+    /// `nil` is the ordinary case, and is what every other test here is about.
+    private static let everyUnfinished: [CommunityUploadKind] = [.route, .photos]
+
+    private static let everyEligibility: [CommunityPublishingEligibility] = [
+        .eligible,
+        .photographsOnly(target, because: .savedFromOpenStreetMap),
+        .refused(.tooShort(meters: 420)),
+        .refused(.retreads(title: "Königssee")),
+        .refused(.savedFromTheCommunity(author: nil)),
+    ]
+
     /// Every combination the button can be asked for, which is what makes the
     /// two claims above claims about the type rather than about one branch.
     private static func everyMatrixEntry() -> [CommunityShareButtonAppearance] {
-        let eligibilities: [CommunityPublishingEligibility] = [
-            .eligible,
-            .photographsOnly(target, because: .savedFromOpenStreetMap),
-            .refused(.tooShort(meters: 420)),
-            .refused(.retreads(title: "Königssee")),
-            .refused(.savedFromTheCommunity(author: nil)),
-        ]
-        let publications: [CommunityPublicationState] = [.notShared, .awaitingReview, .published]
-        return publications.flatMap { publication in
-            eligibilities.flatMap { eligibility in
-                everyContribution.map { appearance(publication, eligibility, $0) }
+        let unfinished: [CommunityUploadKind?] = [nil] + everyUnfinished
+        return everyPublication.flatMap { publication in
+            everyEligibility.flatMap { eligibility in
+                everyContribution.flatMap { contribution in
+                    unfinished.map { appearance(publication, eligibility, contribution, unfinished: $0) }
+                }
             }
         }
     }

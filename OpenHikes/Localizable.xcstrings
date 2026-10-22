@@ -1012,6 +1012,18 @@
     "Finding a path…" : {
 
     },
+    "Finish Sending" : {
+
+    },
+    "Finish Sending Photos" : {
+
+    },
+    "Finish sending to the community" : {
+
+    },
+    "Finish sending your photos" : {
+
+    },
     "First of %lld photos taken here" : {
 
     },
@@ -2589,6 +2601,12 @@
     "Unlocks on every device signed in to your Apple Account." : {
 
     },
+    "Uploaded, but not yet sent for review, so it can’t appear for other hikers. Finish sending it, or ask for it to be taken down." : {
+
+    },
+    "Uploaded, not yet sent for review" : {
+
+    },
     "Version" : {
 
     },
@@ -2715,6 +2733,9 @@
     "Your drawing wasn’t lost. Check that the device has storage available, then save again." : {
 
     },
+    "Your hike and its photos are uploaded, but the request for a person to review them didn’t go through, so it won’t appear for other hikers yet. Finishing sends only that request — nothing is uploaded again." : {
+
+    },
     "Your Hikes" : {
 
     },
@@ -2728,6 +2749,12 @@
 
     },
     "Your photographs are yours, and %@ is already in the list. They go on it with the spot each one was taken, and a person reviews them before anybody else sees them." : {
+
+    },
+    "Your photos are uploaded, but not yet sent for review, so they can’t appear on the trail. Finish sending them, or ask for them to be taken down." : {
+
+    },
+    "Your photos are uploaded, but the request for a person to review them didn’t go through, so they won’t appear on this trail yet. Finishing sends only that request — nothing is uploaded again." : {
 
     },
     "Your report opens in your mail app so you can send it. You don’t need an account to report a hike." : {

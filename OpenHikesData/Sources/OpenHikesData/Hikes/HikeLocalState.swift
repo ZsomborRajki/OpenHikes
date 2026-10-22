@@ -145,6 +145,45 @@ public final class HikeLocalState {
     public var climbMeters: Double?
     public var descentMeters: Double?
 
+    /// The community submission this device has uploaded and still owes a
+    /// review-queue entry for, or `nil` when there is nothing to finish.
+    ///
+    /// Sharing a hike is two separate saves — the submission, then the notice
+    /// that puts it in front of a reviewer — and the second can fail after the
+    /// first has succeeded. The submission is on the server by then and
+    /// nothing can amend it, so the only repair that does not leave an orphan
+    /// is to send the missing notice for *the same submission*; this is the
+    /// name of the one to send it for. Written the moment the upload lands,
+    /// cleared the moment the notice does.
+    ///
+    /// It is a to-do and not a fact about the hike, and that is why it is here
+    /// rather than beside ``Hike/communitySubmissionID``. The mirrored column
+    /// says *sent*, which is true on every device the moment it syncs; this
+    /// says *this device still has to finish sending*, which is true of
+    /// exactly one. Mirroring it would show a second phone a prompt it can
+    /// answer — the notice save is idempotent, so that would even work — but
+    /// it would also have two devices racing to repair one record, and it
+    /// would cost a new `CD_Hike` column in two CloudKit environments for a
+    /// state that lasts as long as one retry. The cost of keeping it here is
+    /// stated rather than hidden: another device shows *waiting for review*
+    /// until the first one repairs, and a reinstall that loses this row loses
+    /// the prompt, which leaves the hike where it was before this existed.
+    ///
+    /// Read through ``Hike/pendingCommunityQueueing``, which says when the
+    /// marker still counts — see ``CommunityQueueingMarker`` for the stale
+    /// cases. ``CommunityPublisher/finishQueueing(_:transport:save:)`` clears
+    /// it when the notice lands, and a newer send or a takedown clears it
+    /// because it no longer describes anything.
+    public var unqueuedSubmissionID: String?
+
+    /// The contribution twin of ``unqueuedSubmissionID``: the photo submission
+    /// this device has uploaded and still owes a review-queue entry for.
+    ///
+    /// A separate column for the reason the mirrored columns are a second
+    /// pair — a hike can be in both conversations at once, and one marker
+    /// would let a repaired route hide an unqueued set of pictures.
+    public var unqueuedPhotoSubmissionID: String?
+
     public init(hikeID: UUID) {
         self.hikeID = hikeID
     }

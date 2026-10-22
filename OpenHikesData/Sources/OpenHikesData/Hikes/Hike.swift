@@ -469,6 +469,22 @@ extension Hike {
         set { mutableLocalState?.descentMeters = newValue }
     }
 
+    /// The submission this device still owes a review-queue entry for — see
+    /// ``HikeLocalState/unqueuedSubmissionID`` for what it is and why it is
+    /// device-local, and ``pendingCommunityQueueing`` for when it still
+    /// counts.
+    public var unqueuedSubmissionID: String? {
+        get { localState?.unqueuedSubmissionID }
+        set { mutableLocalState?.unqueuedSubmissionID = newValue }
+    }
+
+    /// The photo submission this device still owes a review-queue entry for —
+    /// the contribution half of ``unqueuedSubmissionID``.
+    public var unqueuedPhotoSubmissionID: String? {
+        get { localState?.unqueuedPhotoSubmissionID }
+        set { mutableLocalState?.unqueuedPhotoSubmissionID = newValue }
+    }
+
     /// Removes the sidecar, for a hike on its way out of the store.
     ///
     /// Explicit because the two rows are in different stores and so cannot be

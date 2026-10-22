@@ -36,43 +36,6 @@ import os
 
 nonisolated extension CloudKitCommunityTransport {
 
-    /// Puts a freshly uploaded submission in the reviewer's queue.
-    ///
-    /// Called by ``CloudKitCommunityTransport/submit(_:)`` and awaited there,
-    /// because a submission that never reaches the queue is not *waiting* — it
-    /// is lost. Nothing enumerates submissions, by design, so no query can
-    /// find one afterwards and no reviewer will ever be shown it, while the
-    /// hiker has been told it was sent. That is the one outcome worth failing
-    /// a share over.
-    ///
-    /// The record name goes into the log on the way out, because it is the
-    /// only place it will ever appear again: a submission stranded here can be
-    /// queued by hand from that line, and without it there is nothing to queue
-    /// it *by*.
-    func queueForReview(_ submissionID: String) async throws {
-        let notice = CKRecord(recordType: CommunitySchema.noticeType)
-        notice[CommunitySchema.Notice.submission] = CKRecord.Reference(
-            // `.deleteSelf` rather than `.none`, so the queue cannot outlive
-            // what it points at: deleting a submission — which is what
-            // declining one is — takes its notice with it, server-side, with
-            // no second request to fail. See ``decline(_:)``.
-            recordID: CKRecord.ID(recordName: submissionID),
-            action: .deleteSelf
-        )
-        do {
-            _ = try await database.save(notice)
-        } catch {
-            Self.logger.error(
-                """
-                Uploaded a submission but could not queue it for review. \
-                It is unreachable until it is queued by hand: \
-                \(submissionID, privacy: .public)
-                """
-            )
-            throw Self.failure(from: error, while: "queueing a hike for review")
-        }
-    }
-
     @concurrent
     func detail(
         ofPending pending: CommunityPendingSubmission,
