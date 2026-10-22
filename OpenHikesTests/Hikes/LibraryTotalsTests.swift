@@ -54,7 +54,8 @@ struct LibraryTotalsTests {
         covered: Double,
         of route: Double,
         lasting: TimeInterval = 1800,
-        recordingsOwn: Bool = false
+        recordingsOwn: Bool = false,
+        trailChanged: Bool = false
     ) -> LibraryWalkFacts {
         LibraryWalkFacts(
             hikeID: hikeID,
@@ -63,7 +64,8 @@ struct LibraryTotalsTests {
             coveredMeters: covered,
             routeDistanceMeters: route,
             activeSeconds: lasting,
-            isRecordingsOwn: recordingsOwn
+            isRecordingsOwn: recordingsOwn,
+            trailHasChanged: trailChanged
         )
     }
 
@@ -249,6 +251,58 @@ struct LibraryTotalsTests {
         #expect(totals.monthsThisYear[2] == 1500)
         #expect(totals.monthsThisYear.reduce(0, +) == 1500)
         #expect(totals.monthsLastYear[11] == 700)
+    }
+
+    // MARK: A trail redrawn since
+
+    /// A drawn trail climbing a thousand metres to 1,600, as *Edit Route*
+    /// left it.
+    private static func redrawnTrail(_ id: UUID) -> LibraryHikeFacts {
+        hike(on: date(2025, 1), meters: 8000, id: id, title: "Redrawn", climb: 1000, highest: 1600, clock: false)
+    }
+
+    /// *Edit Route* keeps a trail's walks and replaces the line they were
+    /// along, so the trail's climb and highest point now describe a route
+    /// nobody walked (#912).
+    @Test("a walk along a trail redrawn since keeps its outing, distance and time, and adds no climb")
+    func redrawnTrailWithholdsTheClimb() {
+        let trail = UUID()
+        let totals = Self.totals(
+            [Self.redrawnTrail(trail)],
+            [Self.walk(of: trail, on: Self.date(2026, 5), covered: 8000, of: 8000, trailChanged: true)]
+        )
+
+        #expect(totals.allTime.outings == 1)
+        #expect(totals.allTime.distanceMeters == 8000)
+        #expect(totals.allTime.movingSeconds == 1800)
+        #expect(totals.allTime.climbMeters == 0)
+        #expect(totals.allTime.outingsWithoutClimb == 1)
+        #expect(totals.longest?.title == "Redrawn", "how far it went is still known")
+        #expect(totals.highest == nil)
+        #expect(totals.steepest == nil)
+    }
+
+    /// The walks along the line the trail draws now still climb it, and still
+    /// make it a record.
+    @Test("a walk along the trail as it is now still climbs it, beside one that does not")
+    func onlyTheRedrawnWalkLosesItsClimb() {
+        let trail = UUID()
+        let totals = Self.totals(
+            [Self.redrawnTrail(trail)],
+            [
+                Self.walk(of: trail, on: Self.date(2026, 5), covered: 8000, of: 8000, trailChanged: true),
+                Self.walk(of: trail, on: Self.date(2026, 6), covered: 4000, of: 8000),
+            ]
+        )
+
+        #expect(totals.allTime.outings == 2)
+        #expect(totals.allTime.distanceMeters == 12_000)
+        #expect(totals.allTime.climbMeters == 500, "half the new line's climb, once")
+        #expect(totals.allTime.outingsWithoutClimb == 1)
+        #expect(totals.longest?.distanceMeters == 8000)
+        #expect(totals.highest?.distanceMeters == 4000)
+        #expect(totals.highest?.highestMeters == 1600)
+        #expect(totals.steepest?.distanceMeters == 4000)
     }
 
     // MARK: Records
