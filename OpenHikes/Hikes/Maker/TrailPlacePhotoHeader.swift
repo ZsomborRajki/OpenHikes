@@ -81,6 +81,11 @@ struct TrailPlacePhotoHeader: View {
 /// old host. The *Community* tab's photograph screen pushes the same gallery
 /// instead, which is what survives a turn. See
 /// ``SheetRoute/commonsGallery(_:_:)``.
+///
+/// Holding `isViewing` somewhere that outlives the host is not enough, and
+/// was tried: the cover came back, but after a turn back upright — the sheet,
+/// the card and the cover all presented again at once — it took no touches
+/// at all, which is worse than closing.
 struct TrailDraftPhotoHeader: View {
     let photo: CommonsPhoto
     /// Every photograph the full-screen viewer pages through. Read when the
