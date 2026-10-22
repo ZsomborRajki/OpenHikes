@@ -45,7 +45,8 @@ nonisolated extension TileCache {
     /// again, so this is an occasional job rather than a per-tile one.
     private static var durableTrimTargetFraction: Double { 4.0 / 5.0 }
 
-    /// The provider that owns `key`, which is namespaced `providerID/z/x/y@scale`.
+    /// The provider that owns `key`, which ``TileCacheKey`` namespaces
+    /// `providerID/z/x/y`.
     static func providerID(forKey key: String) -> String? {
         guard let slash = key.firstIndex(of: "/") else { return nil }
         return String(key[key.startIndex..<slash])

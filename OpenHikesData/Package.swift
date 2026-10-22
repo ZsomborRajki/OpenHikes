@@ -6,12 +6,14 @@ import PackageDescription
 /// for this app. See issue #573 and *Architecture* in the repository
 /// instructions for why it is a package of its own.
 ///
-/// **A sibling of `OpenHikesShared`, not a target inside it**, because the two
-/// want different default isolations and one package cannot have both. This
-/// one is main-actor by default, exactly as the app target is
-/// (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`), so code moved here from the
-/// app means what it meant there. `OpenHikesShared` deliberately is not: the
-/// widget reads it off the main actor.
+/// **A sibling of `OpenHikesShared`, not a target inside it**, because that
+/// is Backyard Birds' layout — one package per domain, each with a manifest
+/// of its own — and not because the toolchain asks for it: default isolation
+/// is a per-target setting, so one package could hold a main-actor target
+/// beside a nonisolated one. This one is main-actor by default, exactly as
+/// the app target is (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`), so code
+/// moved here from the app means what it meant there. `OpenHikesShared`
+/// deliberately is not: the widget reads it off the main actor.
 ///
 /// What stayed in the app is the container: `ModelContainer.openHikes(…)`,
 /// the two-store configuration, the iCloud switch read at launch and the
@@ -60,7 +62,7 @@ extension [SwiftSetting] {
     /// thing it compiled to there: `OpenHikesShared`'s two upcoming features,
     /// the one `SWIFT_APPROACHABLE_CONCURRENCY` adds to them in Swift 6 mode
     /// (isolated conformances), and main-actor default isolation — the
-    /// setting that package cannot have and this one exists to carry.
+    /// setting `OpenHikesShared` must not have.
     static var data: Self {
         [
             .enableUpcomingFeature("MemberImportVisibility"),

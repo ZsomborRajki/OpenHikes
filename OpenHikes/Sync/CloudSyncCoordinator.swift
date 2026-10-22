@@ -43,8 +43,10 @@ final class CloudSyncCoordinator {
     /// that it matches the entitlement literally.
     ///
     /// Mirroring picks its own container from the entitlement and never reads
-    /// this. The account check does, which is the only CloudKit call this app
-    /// still makes by hand.
+    /// this. The account check does — the only CloudKit call sync makes by
+    /// hand — and so does ``CloudKitCommunityTransport``, whose queries,
+    /// fetches, saves and deletes against the public database are all raw
+    /// CloudKit.
     nonisolated static let containerIdentifier = "iCloud.tappium.com.OpenHikes"
 
     let status: CloudSyncStatus
