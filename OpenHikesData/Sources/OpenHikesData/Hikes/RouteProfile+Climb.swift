@@ -18,16 +18,30 @@ nonisolated public extension RouteProfile {
     ///
     /// Through ``ElevationAccumulator``, the same deadband every other climb
     /// in the app is counted with, so a stretch's figure agrees with the
-    /// detail screen's for the whole route. O(log n) to find the stretch and
-    /// linear in the heights inside it — cheap enough to ask per matched fix,
-    /// which is how often a walk asks it.
+    /// detail screen's for the whole route — including that a pause ends the
+    /// run, so a stretch spanning one leaves out the rise across it, however
+    /// far the hiker was carried. O(log n) to find the stretch and linear in
+    /// the heights inside it — cheap enough to ask per matched fix, which is
+    /// how often a walk asks it.
     func climb(from start: Double, to end: Double) -> (gainMeters: Double, lossMeters: Double)? {
         let lower = min(start, end)
         let upper = max(start, end)
         var accumulator = ElevationAccumulator()
         let first = samples.partitioningIndex { $0.distanceMeters >= lower }
+        // A pause is spent by the first sample at or after it, by distance
+        // rather than by identity: the plotted samples may have dropped the
+        // very one the recording resumed on. The one case distance cannot
+        // tell apart is a pause with no length across it, which ends the run
+        // a sample early — and there the step it bridges is a few metres of
+        // sensor drift, not a lift.
+        let firstPause = pauseDistances.partitioningIndex { $0 > lower }
+        var pauses = pauseDistances[firstPause...]
         for sample in samples[first...] {
             guard sample.distanceMeters <= upper else { break }
+            if let pause = pauses.first, pause <= sample.distanceMeters {
+                accumulator.endRun()
+                pauses = pauses.drop { $0 <= sample.distanceMeters }
+            }
             accumulator.record(sample.elevation)
         }
         guard accumulator.hasChange else { return nil }

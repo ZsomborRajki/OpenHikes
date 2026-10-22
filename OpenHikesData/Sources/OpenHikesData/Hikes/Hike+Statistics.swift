@@ -218,7 +218,7 @@ nonisolated public struct HikeRouteStatistics: Sendable {
             // at the first stamped point is still outside the clock.
             recordCoverage(point, segmentMeters: meters)
             record(timestamp: point.timestamp)
-            elevation.record(point.elevation)
+            elevation.record(point)
             movingTime.record(point)
             recordSpeed(to: point, segmentMeters: meters)
             recordInferred(to: point, segmentMeters: meters)

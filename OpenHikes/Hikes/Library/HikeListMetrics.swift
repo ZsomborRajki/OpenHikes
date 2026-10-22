@@ -94,10 +94,12 @@ nonisolated enum HikeListMetrics {
     /// the cached number would disagree with the one the hike's own detail
     /// screen draws — which is the whole reason that deadband lives in the
     /// accumulator and not at a call site. Non-finite heights are skipped
-    /// there too, so one `nan` cannot poison a total.
+    /// there too, so one `nan` cannot poison a total, and a pause ends the
+    /// run — the hiker may have been carried a thousand metres up between the
+    /// two points either side of it, and that is not a climb.
     private static func elevationTotals(of route: [RouteCoordinate]) -> ElevationAccumulator {
         var accumulator = ElevationAccumulator()
-        for coordinate in route { accumulator.record(coordinate.elevation) }
+        for coordinate in route { accumulator.record(coordinate) }
         return accumulator
     }
 }

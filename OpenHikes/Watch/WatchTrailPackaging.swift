@@ -16,7 +16,8 @@
 //  What they must agree on is the trail's *length* and its *climb*, and they
 //  do: both read `Hike.distanceMeters` rather than measuring the line they
 //  send, and both count the climb over the whole route with
-//  `ElevationAccumulator` — the snapshot through `RouteProfile`, this directly.
+//  `ElevationAccumulator` — the snapshot through `RouteProfile`, this directly
+//  — ending its run at a pause, as the watch's own recorder does.
 //
 //  ## Off the main actor
 //
@@ -97,10 +98,11 @@ nonisolated enum WatchTrailPackaging {
     /// metre a GPX altitude wobbles as climb — so the watch's trail screen
     /// stated a figure the phone's never would for the same hike. Measured
     /// before decimation, because dropping points removes the rises they
-    /// spanned.
+    /// spanned — and a pause ends the run, so a recording that was carried up
+    /// a hill while paused does not send the watch a climb nobody walked.
     private static func climb(of route: [RouteCoordinate]) -> RouteElevationSummary {
         var accumulator = ElevationAccumulator()
-        for point in route { accumulator.record(point.elevation) }
+        for point in route { accumulator.record(point) }
         return RouteElevationSummary(accumulator)
     }
 }
