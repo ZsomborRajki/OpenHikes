@@ -70,7 +70,9 @@
 //  unanswerable at a glance.
 //
 
+import Foundation
 import OpenHikesData
+import SwiftData
 import SwiftUI
 
 extension HikeDetailView {
@@ -178,12 +180,12 @@ extension HikeDetailView {
                         CommunityWithdrawalSheet(withdrawal: withdrawal)
                     }
                 }
-                // An alert rather than a sheet, and the only alert this
-                // control raises: all three answers are one sentence, and one
-                // of them needs a decision made on top of the sentence. A
-                // sheet for that would be a screen whose whole content is a
-                // line of text, which is what the refusal form already is and
-                // is only tolerable there because it explains a rule.
+                // An alert rather than a sheet: all three answers are one
+                // sentence, and one of them needs a decision made on top of
+                // the sentence. A sheet for that would be a screen whose whole
+                // content is a line of text, which is what the refusal form
+                // already is and is only tolerable there because it explains a
+                // rule.
                 .alert(
                     publicationLiveness.map(Self.livenessTitle) ?? "",
                     isPresented: $publicationLiveness.isPresent(),
@@ -194,7 +196,7 @@ extension HikeDetailView {
                         // names a removal request quotes, which is the one
                         // thing here that cannot be undone from this screen.
                         Button("Reset", role: .destructive) {
-                            CommunityPublicationCheck.forgetPublication(hike)
+                            resetPublication()
                         }
                         .accessibilityIdentifier("community-liveness-reset-button")
                         Button("Cancel", role: .cancel) {
@@ -209,6 +211,18 @@ extension HikeDetailView {
                     }
                 } message: { answer in
                     Text(Self.livenessMessage(answer))
+                }
+                // A second alert rather than a fourth answer above, because
+                // *Reset* is a button of that one: an answer written back into
+                // the state it is dismissing is one SwiftUI never opens an
+                // alert for. The trail maker's Save and its refusal are two
+                // alerts for the same reason.
+                .alert("Couldn’t reset", isPresented: $isShowingResetRefusal) {
+                    Button("OK", role: .cancel) {
+                        // Told, not acted on: the hike reads the way it did.
+                    }
+                } message: {
+                    Text(Self.resetRefusalMessage)
                 }
         }
     }
@@ -428,6 +442,41 @@ extension HikeDetailView {
         }
     }
 
+    /// *Reset*, and the sentence a refusal gets.
+    ///
+    /// ``CommunityPublicationCheck/forgetPublication(_:save:)`` puts the two
+    /// record names back when the store refuses the save, so a refusal leaves
+    /// the hike reading the way it did — and with nothing on screen changed,
+    /// the tap just made would look as though it had done nothing at all. It
+    /// also answers `false` for a hike that is gone or has nothing left to
+    /// forget, as one reset on another device and mirrored in while the alert
+    /// was up does, and *Couldn’t reset* would be untrue of that hike. So the
+    /// sentence is for a hike that is still here and still has something to
+    /// forget, which only a refused save leaves behind.
+    private func resetPublication() {
+        let reset = CommunityPublicationCheck.forgetPublication(hike, save: Self.resetSave)
+        guard !reset, hike.isAttached else { return }
+        let publication = CommunityPublicationState(
+            submissionID: hike.communitySubmissionID,
+            listingID: hike.communityListingID
+        )
+        guard publication != .notShared else { return }
+        // A turn later, deliberately. The alert that asked is still being
+        // dismissed, and a presentation requested while it is gets dropped.
+        Task { isShowingResetRefusal = true }
+    }
+
+    /// The save *Reset* makes. A refused write is not something automation can
+    /// ask a disk for, so `--ui-test-refuse-publication-reset` supplies one.
+    private static var resetSave: (ModelContext) throws -> Void {
+        #if DEBUG
+        if AppLaunchEnvironment.refusesPublicationReset {
+            return { _ in throw CocoaError(.fileWriteUnknown) }
+        }
+        #endif
+        return { try $0.save() }
+    }
+
     /// Never *rejected*, for the reason the share button's label never is.
     private static func livenessTitle(_ answer: CommunityLivenessAnswer) -> String {
         switch answer {
@@ -469,6 +518,18 @@ extension HikeDetailView {
                 """
             )
         }
+    }
+
+    /// What a refused *Reset* says. It names what did not happen and what did
+    /// not change, and the way back to it: a new check from the same menu.
+    private static var resetRefusalMessage: String {
+        String(
+            localized: """
+            Couldn’t save the reset just now, so this hike still reads the \
+            way it did and nothing was forgotten. Check again from the same \
+            menu to try once more.
+            """
+        )
     }
 }
 

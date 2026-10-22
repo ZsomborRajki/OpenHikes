@@ -140,6 +140,14 @@ struct HikeDetailView: View {
     /// ``CommunityPublicationCheck/Liveness``, which this adds the failure to
     /// for the reason the check itself throws rather than swallowing.
     @State var publicationLiveness: CommunityLivenessAnswer?
+    /// Whether the alert saying *Reset* was refused is up.
+    ///
+    /// Its own flag rather than a case of ``publicationLiveness``: *Reset* is a
+    /// button of the alert that state presents, and an answer written back into
+    /// the state that alert is dismissing is one SwiftUI never opens an alert
+    /// for. The trail maker's Save and its refusal are two presentations for
+    /// the same reason.
+    @State var isShowingResetRefusal = false
     // swiftlint:enable private_swiftui_state
     /// Owned by the navigation session so changing presentation hosts keeps
     /// the selected section and an unfinished rename. Read only by this screen.

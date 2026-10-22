@@ -84,11 +84,12 @@ nonisolated final class CommunityPublishedPhotosUITests: XCTestCase {
     /// class's scenario quietly becomes another's.
     @MainActor
     private func shareTheImportedHike(
-        scenario: SeededCommunityScenario = .published
+        scenario: SeededCommunityScenario = .published,
+        extraArguments: [String] = []
     ) -> XCUIApplication {
         let app = launchCommunity(
             scenario: scenario,
-            extraArguments: ["--ui-test-import-gpx=\(UITestFixture.gpxName)"]
+            extraArguments: ["--ui-test-import-gpx=\(UITestFixture.gpxName)"] + extraArguments
         )
         openHikeDetail(in: app)
 
@@ -148,6 +149,57 @@ nonisolated final class CommunityPublishedPhotosUITests: XCTestCase {
             element("community-author-field", in: app)
                 .waitForExistence(timeout: UITestTimeout.existence),
             "a forgotten hike should be shareable again, which is the whole point of forgetting it"
+        )
+    }
+
+    /// The way back has to say so when the store refuses it.
+    ///
+    /// ``CommunityPublicationCheckTests`` pins the model's half: a refused save
+    /// puts both record names back and leaves unrelated edits alone. What only
+    /// a launch can show is that the tap *tells* the hiker — a reset that was
+    /// refused and said nothing looks exactly like one that was never pressed —
+    /// and that the hike afterwards still is what its menu says it is, rather
+    /// than reading unshared on screen while the store still holds both names.
+    ///
+    /// A disk that fails on request is not something automation can ask for,
+    /// so `--ui-test-refuse-publication-reset` makes the save throw.
+    @MainActor
+    func testARefusedResetIsToldAndLeavesTheHikePublished() {
+        let app = shareTheImportedHike(
+            scenario: .takenDown,
+            extraArguments: ["--ui-test-refuse-publication-reset"]
+        )
+        popScreen(in: app)
+        openHikeDetail(in: app)
+
+        tapWhenReady(element("community-share-button", in: app))
+        let check = element("community-liveness-button", in: app)
+        XCTAssertTrue(
+            check.waitForExistence(timeout: UITestTimeout.existence),
+            "a live hike should offer to check whether it is still live"
+        )
+        tapWhenReady(check)
+        tapWhenReady(element("community-liveness-reset-button", in: app))
+
+        let refusal = app.alerts["Couldn’t reset"]
+        XCTAssertTrue(
+            refusal.waitForExistence(timeout: UITestTimeout.existence),
+            "a reset the store refused should say so, not look as though it did nothing"
+        )
+        refusal.buttons["OK"].tap()
+        XCTAssertTrue(waitUntil { !refusal.exists }, "OK should close the notice")
+
+        // Reaching the published menu again is the assertion: a hike whose
+        // reset had gone through is shareable, and its button opens the form.
+        tapWhenReady(element("community-share-button", in: app))
+        XCTAssertTrue(
+            element("community-liveness-button", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "a hike whose reset was refused should still read as published"
+        )
+        XCTAssertFalse(
+            element("community-author-field", in: app).exists,
+            "and must not offer the share form a forgotten hike would"
         )
     }
 }

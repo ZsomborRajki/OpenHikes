@@ -775,7 +775,13 @@
     "Couldn’t reach the community list just now, so this hike still reads the way it did. Try again when you’re back online." : {
 
     },
+    "Couldn’t reset" : {
+
+    },
     "Couldn’t Save Photo" : {
+
+    },
+    "Couldn’t save the reset just now, so this hike still reads the way it did and nothing was forgotten. Check again from the same menu to try once more." : {
 
     },
     "Couldn’t Search" : {

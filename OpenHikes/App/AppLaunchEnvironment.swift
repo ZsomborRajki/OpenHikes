@@ -47,6 +47,7 @@ nonisolated enum AppLaunchEnvironment {
         let routeHue: Double?
         let failsFirstSave: Bool
         let refusesTrailPhotoCopy: Bool
+        let refusesPublicationReset: Bool
         let losesImportSelection: Bool
         let stubsWeather: Bool
         let grantsPaidMaps: Bool
@@ -85,6 +86,7 @@ nonisolated enum AppLaunchEnvironment {
             routeHue = nil
             failsFirstSave = false
             refusesTrailPhotoCopy = false
+            refusesPublicationReset = false
             losesImportSelection = false
             stubsWeather = false
             grantsPaidMaps = false
@@ -108,6 +110,7 @@ nonisolated enum AppLaunchEnvironment {
         private static let routeHuePrefix = "--ui-test-route-hue="
         private static let failFirstSaveArgument = "--ui-test-fail-first-save"
         private static let refuseTrailPhotoCopyArgument = "--ui-test-refuse-trail-photo-copy"
+        private static let refusePublicationResetArgument = "--ui-test-refuse-publication-reset"
         private static let loseImportSelectionArgument =
             "--ui-test-lose-import-selection"
         private static let stubWeatherArgument = "--ui-test-weather"
@@ -183,6 +186,8 @@ nonisolated enum AppLaunchEnvironment {
                 && arguments.contains(Self.failFirstSaveArgument)
             refusesTrailPhotoCopy = isUITesting
                 && arguments.contains(Self.refuseTrailPhotoCopyArgument)
+            refusesPublicationReset = isUITesting
+                && arguments.contains(Self.refusePublicationResetArgument)
             losesImportSelection = isUITesting
                 && arguments.contains(Self.loseImportSelectionArgument)
             stubsWeather = isUITesting
@@ -409,6 +414,11 @@ nonisolated enum AppLaunchEnvironment {
     /// Refuses the maker's photo metadata writes so automation can exercise
     /// its retry and Skip buttons without depending on an actual disk fault.
     static let refusesTrailPhotoCopy = configuration.refusesTrailPhotoCopy
+
+    /// Refuses the save that *Reset* makes on a hike whose listing is gone,
+    /// so automation can reach the alert that says the hike is still as it
+    /// was, without depending on an actual disk fault.
+    static let refusesPublicationReset = configuration.refusesPublicationReset
 
     /// Whether an import should give up the selection it would otherwise
     /// take.
