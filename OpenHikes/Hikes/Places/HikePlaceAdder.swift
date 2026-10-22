@@ -122,12 +122,11 @@ struct HikePlaceAdder: View {
                     .accessibilityIdentifier("hike-place-adder-cancel")
             }
             ToolbarItem(placement: .confirmationAction) {
-                if session.isAdding || session.stagingCount > 0 {
-                    ProgressView()
-                } else {
-                    Button(role: .confirm, action: add)
-                        .accessibilityIdentifier("hike-place-adder-add")
-                }
+                // A view of its own: a `.toolbar` closure is evaluated with
+                // the body around it, so reading the staging count here would
+                // re-run this whole form at every photograph's arrival — the
+                // thing the strip reads the session itself to avoid.
+                HikePlaceAdderAddButton(session: session, add: add)
             }
         }
         .background {
@@ -265,6 +264,22 @@ private struct HikePlaceAdderLocation: View {
 
     var body: some View {
         TrailPlaceFactsAndLocation(facts: [], coordinate: (placePins?.placement(of: spot) ?? spot).coordinate)
+    }
+}
+
+/// *Add*, or a spinner while it cannot be tapped yet: while photographs are
+/// still being read into the strip, or are being filed under the new place.
+private struct HikePlaceAdderAddButton: View {
+    let session: HikePlaceAdderSession
+    let add: () -> Void
+
+    var body: some View {
+        if session.isAdding || session.stagingCount > 0 {
+            ProgressView()
+        } else {
+            Button(role: .confirm, action: add)
+                .accessibilityIdentifier("hike-place-adder-add")
+        }
     }
 }
 
