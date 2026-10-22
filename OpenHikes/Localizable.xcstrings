@@ -2412,7 +2412,7 @@
     "The photos are deleted for good. The hiker is not told, and their app goes on reading “waiting for review”. The trail itself is not touched." : {
 
     },
-    "The photos are off the hike for everybody, but the copy stored with their submission couldn’t be deleted. %@" : {
+    "The photos are off the hike for everybody, but the copy stored with their submission couldn’t be deleted. %@ To finish, take them down again before leaving this photo — once you leave, the app can’t reach that copy." : {
 
     },
     "The published copy stays in the community; deleting this hike does not take it down." : {

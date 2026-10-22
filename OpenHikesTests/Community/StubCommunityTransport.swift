@@ -142,8 +142,9 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     var keepPhotosResult: Result<Void, CommunityFailure> = .success(())
     var takeDownResult: Result<Void, CommunityFailure> = .success(())
     /// What taking a contribution's photographs down answers. Its own result
-    /// rather than ``takeDownResult``'s: a hike takedown is one delete and
-    /// this is two, so the two can fail in different ways.
+    /// rather than ``takeDownResult``'s: both are two deletes, but a hike
+    /// takedown keeps a failed second one to its log, and this one answers
+    /// how far it got.
     var takeDownPhotosResult: Result<CommunityPhotoTakedownOutcome, CommunityFailure> = .success(.complete)
     /// Held open so a suite can watch two requests overlap — see
     /// `CommunityBrowserTests`.
