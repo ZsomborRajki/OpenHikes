@@ -63,7 +63,7 @@ OpenStreetMap is the keyless default and neither Apple option needs a key either
 
 8. Build and run. `OpenHikes.storekit` at the repository root describes the OpenHikes Pro subscription and the shared scheme already points its Run action at it, so a local build has a working paywall with no Apple account involved.
 
-Shipping the subscription for real additionally needs a matching auto-renewable subscription in App Store Connect and an active Paid Apps agreement; `.github/copilot-instructions.md` carries the exact contract, including the product ID that can never change.
+Shipping the subscription for real additionally needs a matching auto-renewable subscription in App Store Connect and an active Paid Apps agreement; *Platform contracts* in [`AGENTS.md`](AGENTS.md) carries the exact contract, including the product ID that can never change.
 
 ## Recording demo
 
@@ -124,21 +124,20 @@ Scripts/run-script-tests.sh
 
 Against a cold simulator, `xcodebuild test` fails with "The test runner hung before establishing connection" after several minutes without a single test having reported — which is why the boot is the first line above rather than an optional one.
 
-These commands name the same device CI does. `iPhone 18 Pro` is the Pro model an iOS 27 runtime ships, and `.github/workflows/ci.yml` names it too, on a runner image that carries the same Xcode 27.0 build as a current local install. On an Xcode 26 install there is no such simulator — name whichever device your own runtimes do have.
+These commands name the same device CI does. `iPhone 18 Pro` is the Pro model an iOS 27 runtime ships, and `.github/workflows/ci.yml` names it too, on a runner image pinned to Xcode 27.0; any Xcode 27 compiles the project with the same Swift. On an Xcode 26 install there is no such simulator — name whichever device your own runtimes do have.
 
 Unit and integration tests use Swift Testing; `OpenHikesUITests` uses XCUITest, because Apple's UI automation and launch metrics are not available through Swift Testing.
 
 `brew install xcbeautify periphery xcode-build-server` installs the optional tooling. None of it is required: each tool is used if present and skipped if not. `periphery` has to be the version in `.periphery-version` or newer — run it through `Scripts/periphery.sh`, which checks that first, because an older Periphery reads none of `.periphery.yml` and reports a clean scan anyway. `xcode-build-server` is per-machine — run `xcode-build-server config -project OpenHikes.xcodeproj -scheme OpenHikes` locally, and again after adding or renaming a target.
 
-CI runs strict SwiftLint, the shell scripts' own smoke tests, the shared package suite in both debug and release, the app and widget unit tests with a coverage floor, warning-free debug and release builds, an unsigned device archive, the concurrency suites under Thread Sanitizer, and both accessibility UI classes. CodeQL and a dependency review run beside it. The functional UI automation stays out, because it leans on real gestures and timing-sensitive waits that a shared runner makes slow and flaky — run it locally before a change that touches recording, the map or render isolation.
+CI runs strict SwiftLint, the shell scripts' own smoke tests, both local packages' suites in debug and release, the app and widget unit tests with a coverage floor, warning-free debug and release builds, an unsigned device archive, the concurrency suites under Thread Sanitizer, and both accessibility UI classes. CodeQL and a dependency review run beside it. The functional UI automation stays out, because it leans on real gestures and timing-sensitive waits that a shared runner makes slow and flaky — run it locally before a change that touches recording, the map or render isolation.
 
 ## Documentation
 
-- [`AGENTS.md`](AGENTS.md) and [`.github/copilot-instructions.md`](.github/copilot-instructions.md) — the architecture, the conventions, the energy policies, and the decisions already settled.
+- [`AGENTS.md`](AGENTS.md) — how code is written here: the commands, the architecture, the conventions, and the decisions already settled.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — the short version for a first change.
 - [`SECURITY.md`](SECURITY.md) — how to report a vulnerability privately, and what the public community database grants to whom.
 - [`Screenshots/README.md`](Screenshots/README.md) — capturing the App Store screenshot set, and the route and photographs the frames are built from.
-- [`APP_REVIEW.md`](APP_REVIEW.md) — the notes the App Store listing carries for its reviewer, including why the app asks for background location.
 - [Issues](https://github.com/ZsomborRajki/OpenHikes/issues) — the open work: bugs, missing features, and product decisions that are still open.
 
 ## Project layout

@@ -3,7 +3,7 @@
 # Runs UI tests under Instruments and reports which of the app's SwiftUI
 # bodies each step of each test made it evaluate, and why.
 #
-# The render-isolation rules in .github/copilot-instructions.md were each
+# The render-isolation rules in AGENTS.md were each
 # measured once, by a harness that needed a signpost compiled into every body
 # it counted. That harness is gone, and a rule nobody can re-measure is a rule
 # that drifts. This measures the same thing without touching the app: the

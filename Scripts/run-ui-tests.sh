@@ -562,11 +562,12 @@ command=(
 )
 # Clones, not a second xcodebuild against the same device. The distinction is
 # the whole reason this is safe: two `xcodebuild test` runs sharing a simulator
-# install the same bundle identifier over each other, which is the failure the
-# instructions file describes at length. Here xcodebuild owns the fan-out, each
-# worker gets its own cloned device, and the clones are made *from* the device
-# resolved above — so the location cleared below, and any `simctl privacy` grant
-# made before this script runs, are inherited rather than bypassed.
+# install the same bundle identifier over each other, which is the failure
+# *A second session on this machine* in `AGENTS.md` describes. Here xcodebuild
+# owns the fan-out, each worker gets its own cloned device, and the clones are
+# made *from* the device resolved above — so the location cleared below, and
+# any `simctl privacy` grant made before this script runs, are inherited rather
+# than bypassed.
 #
 # The clones live in their own device set, `~/Library/Developer/XCTestDevices`,
 # named `Clone N of <device>`, and `xcodebuild` deletes them when the run ends

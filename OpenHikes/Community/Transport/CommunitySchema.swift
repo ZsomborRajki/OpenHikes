@@ -232,7 +232,7 @@
 //
 //  Nothing here contacts CloudKit, and nothing here is verified against a
 //  live container. See *Schema and migration policy* for the standing rule
-//  that a deployment fact is recorded in the instructions file rather than in
+//  that a deployment fact is recorded in `AGENTS.md` rather than in
 //  runtime code.
 //
 

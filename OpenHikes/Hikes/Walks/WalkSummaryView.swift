@@ -90,8 +90,8 @@ struct WalkSummaryView: View {
                     .accessibilityIdentifier("walk-share")
             }
         }
-        // From the sheet's contents, never beside it — see *Repository-specific
-        // conventions* in the repository instructions.
+        // From the sheet's contents, never beside it — see *Present modals from
+        // inside the sheet's contents* in `AGENTS.md`.
         // A rotation takes this view away with the cover still meant to be
         // up, so only a dismissal that cleared the flag closes the session.
         .fullScreenCover(isPresented: $share.isPresented, onDismiss: share.closed) {

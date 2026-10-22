@@ -22,7 +22,7 @@
 //
 //  That relaunch is the answer, not a placeholder for one. Rebuilding the
 //  container in place was considered and declined — see *Settled decisions* in
-//  `.github/copilot-instructions.md`, and `CloudSyncRecordingTests` for the
+//  `AGENTS.md`, and `CloudSyncRecordingTests` for the
 //  case that decided it.
 //
 

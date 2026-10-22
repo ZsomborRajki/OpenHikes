@@ -238,7 +238,7 @@ func expectShape(
 
         \(versionNote)
         For an intentional change, update this fixture and follow "Schema and \
-        migration policy" in .github/copilot-instructions.md.
+        migration policy" in AGENTS.md.
         """),
         sourceLocation: sourceLocation
     )

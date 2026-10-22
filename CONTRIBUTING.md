@@ -6,9 +6,9 @@ points at it rather than repeating it.
 
 - [`README.md`](README.md) — what the app is, what it needs, how to build and
   run it, and what lives where.
-- [`.github/copilot-instructions.md`](.github/copilot-instructions.md) — the
-  architecture rules, the conventions, the energy policies, and the decisions
-  that have already been settled and should not be re-opened.
+- [`AGENTS.md`](AGENTS.md) — the commands, the architecture rules, the
+  conventions, and the decisions that have already been settled and should not
+  be re-opened. It is written for coding agents and serves people just as well.
 - [GitHub issues](https://github.com/ZsomborRajki/OpenHikes/issues) — the open
   work: bugs, missing features, and product decisions that are still open. A
   good place to find something worth doing.
@@ -21,8 +21,7 @@ OpenHikes account — and a feature that does not fit it is better discussed
 before it is written. Sharing a hike to the
 community is the one thing that leaves the device for a database the developer
 owns, and it is an exception argued for in *The community feature* in
-[`.github/copilot-instructions.md`](.github/copilot-instructions.md) rather than
-a precedent for the next one.
+[`AGENTS.md`](AGENTS.md) rather than a precedent for the next one.
 
 ## Setting up
 
@@ -53,7 +52,7 @@ xcrun simctl bootstatus "iPhone 18 Pro" -b
 
 # The app and widget unit suites. The -only-testing: scoping is what makes
 # this the run CI gates on: the scheme's test plan carries OpenHikesUITests
-# too, and without it this becomes thirteen extra minutes of UI automation.
+# too, and without it this becomes most of an hour of UI automation.
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
   -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
   -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
@@ -88,8 +87,8 @@ Scripts/run-ui-tests.sh --all
 A change on the render path is measured rather than argued: run the tests that
 reach it under the render trace on `main` and on your branch, and compare. The
 report says which SwiftUI bodies each step of each test made the app evaluate,
-and which property made them; *Render isolation, in practice* in the
-instructions file says how to read it.
+and which property made them; *Render isolation, in practice* in `AGENTS.md`
+says how to read it.
 
 ```sh
 Scripts/render-trace.sh --suite PlaceUITests --all --output TestResults/render-trace/branch
@@ -99,9 +98,8 @@ Scripts/render-trace.sh --report TestResults/render-trace/branch \
 
 ## Writing code here
 
-The conventions live in
-[`.github/copilot-instructions.md`](.github/copilot-instructions.md) and the
-linter enforces what it can. The handful that catch people out:
+The conventions live in [`AGENTS.md`](AGENTS.md) and the linter enforces what
+it can. The handful that catch people out:
 
 - **Render isolation.** High-frequency state lives in stable `@Observable`
   reference types, and parent SwiftUI bodies must not read it. Adding a read in
@@ -130,8 +128,8 @@ linter enforces what it can. The handful that catch people out:
 - Keep a pull request to one subject, and say what you did and how you know it
   works. The template asks for exactly that.
 - Documentation is owned by exactly one file each — see the *Documentation*
-  section of `.github/copilot-instructions.md` before adding a fact to two
-  places. Open work belongs in an issue, not in a checked-in list.
+  section of `AGENTS.md` before adding a fact to two places. Open work
+  belongs in an issue, not in a checked-in list.
 - Do not commit `OpenHikes/Secrets.plist`, API keys, or anything else that
   belongs to you rather than to the repository.
 

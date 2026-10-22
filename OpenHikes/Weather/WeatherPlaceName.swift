@@ -19,7 +19,7 @@
 //  ## Why this is a seam
 //
 //  For the reason every injected dependency in this repository is one — see
-//  *Deliberate test seams* in the instructions. It reaches the network, so a
+//  *Deliberate test seams* in `AGENTS.md`. It reaches the network, so a
 //  suite using the real thing would geocode from a test run, on somebody's
 //  rate limit, and get a different answer depending on where the machine is.
 //  ``WeatherManager``'s parameter defaults to `nil`, and the UI-testing

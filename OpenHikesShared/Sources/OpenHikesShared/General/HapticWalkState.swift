@@ -7,7 +7,7 @@
 //
 //  `HikeRecorder.Phase` lives in the app and `WatchRecorder.Phase` lives in
 //  the watch app; neither can see the other, and the watch has no test bundle
-//  at all — see *The watch app* in the instructions file. Writing the mapping
+//  at all — see *The watch app* in `AGENTS.md`. Writing the mapping
 //  twice would mean the two drifting silently, on exactly the surface where
 //  agreement is the feature: a hiker records on the wrist one day and in a
 //  pocket the next, and Pause has to feel like Pause both times.

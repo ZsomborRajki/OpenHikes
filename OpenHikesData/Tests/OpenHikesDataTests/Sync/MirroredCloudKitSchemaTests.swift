@@ -43,7 +43,7 @@ struct MirroredCloudKitSchemaTests {
             Record: \(recorded)
 
             Update the current field record and follow "Schema and migration \
-            policy" in .github/copilot-instructions.md for the CloudKit deployment.
+            policy" in AGENTS.md for the CloudKit deployment.
             """
         )
     }

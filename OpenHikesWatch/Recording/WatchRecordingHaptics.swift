@@ -15,7 +15,7 @@
 //  the hiker pressed it on. The table is tested on the macOS host by
 //  `HapticWalkStateTests`, which is the only place a watch-side rule can be
 //  asserted at all — there is no watch test bundle, and no watch simulator in
-//  any gate. See *The watch app* in the instructions file.
+//  any gate. See *The watch app* in `AGENTS.md`.
 //
 //  A line per case and nothing else, for that same reason: everything here is
 //  checked by the compiler's exhaustiveness and by reading, so everything that
