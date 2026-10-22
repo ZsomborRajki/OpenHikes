@@ -89,8 +89,8 @@ extension OrientationUITests {
         let app = launchCommunity(scenario: .commons)
         XCTAssertTrue(waitForPortrait(app), "the app should have started upright")
         selectCommunityTab(in: app)
-        // Tapped upright: the pins stand across the north of the map, and in
-        // landscape the panel is over the leading third of it.
+        // Tapped upright: the pins stand across the middle of the map above
+        // the sheet, and in landscape the panel is over the leading third of it.
         let pin = communityCommonsPhotoPin(in: app)
         XCTAssertTrue(pin.waitForExistence(timeout: UITestTimeout.trace))
         pin.tap()
