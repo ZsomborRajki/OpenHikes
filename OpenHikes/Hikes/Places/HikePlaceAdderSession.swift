@@ -68,17 +68,33 @@ final class HikePlaceAdderSession {
     /// it and a picture that cannot be read is reported while the hiker is
     /// still choosing.
     @discardableResult func stage(_ items: [PhotosPickerItem]) -> Task<Void, Never> {
+        stage(picks: items.map { item in
+            Pick(assetLocalIdentifier: item.itemIdentifier) {
+                try? await item.loadTransferable(type: Data.self)
+            }
+        })
+    }
+
+    /// One picked picture and how its bytes are read: through the picker's
+    /// item in the app, handed straight over by the suites, which have no
+    /// picker to ask.
+    struct Pick {
+        let assetLocalIdentifier: String?
+        let load: () async -> Data?
+    }
+
+    @discardableResult func stage(picks: [Pick]) -> Task<Void, Never> {
         stagingCount += 1
         return Task {
             defer { stagingCount -= 1 }
-            for item in items {
-                guard let data = try? await item.loadTransferable(type: Data.self) else {
+            for pick in picks {
+                guard let data = await pick.load() else {
                     capture.failure = .importFailed
                     continue
                 }
                 let thumbnail = await HikePlaceStagedPhoto.thumbnail(of: data)
                 photos.append(HikePlaceStagedPhoto(
-                    source: .picked(data, assetLocalIdentifier: item.itemIdentifier),
+                    source: .picked(data, assetLocalIdentifier: pick.assetLocalIdentifier),
                     thumbnail: thumbnail
                 ))
             }
