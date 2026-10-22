@@ -194,8 +194,10 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
         // The height a recording resumes at is an observation, but it is not
         // a step from the one before the pause: that is the same break the
         // watch's own accumulator makes, so the two count one walk alike.
-        if point.flags.contains(.resumed) { elevation.endRun() }
-        elevation.record(point.elevation)
+        // Through the route point rather than the flag, so the live figure
+        // and the saved one end their runs by one rule — `routeCoordinate`
+        // is where `.resumed` becomes the saved route's pause boundary.
+        elevation.record(point.routeCoordinate)
         guard let previous else {
             previous = point
             movementWindowStart = point
