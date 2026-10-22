@@ -509,6 +509,18 @@ extension XCTestCase {
     /// where the search has scrolled to. So this keeps looking until a
     /// deadline, and reverses every few swipes rather than pinning itself to
     /// the bottom.
+    ///
+    /// The deadline is a floor on time and a sweep up and back a floor on
+    /// effort, and on a slow machine only the second means anything. One pass —
+    /// the reachability check, the container search, the swipe and its wait for
+    /// idle — takes about a second on a quiet machine and about five on a
+    /// loaded CI runner, so the fifteen seconds that buy fifteen swipes locally
+    /// bought three there. That is what failed
+    /// `testBlockedHikersSectionPassesAccessibilityAudit`, on its retry as
+    /// well: the Settings *Blocked* section was only just entering at the
+    /// bottom edge when the search gave up. A search that finds its target is
+    /// unaffected; one that does not runs until the deadline or until the
+    /// sweep is done, whichever is later.
     @MainActor
     @discardableResult func scrollUntilVisible(
         _ target: XCUIElement,
@@ -517,7 +529,7 @@ extension XCTestCase {
     ) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         var swipes = 0
-        while Date() < deadline {
+        while Date() < deadline || swipes < Self.swipesPerSweep * 2 {
             if isReachable(target, in: app) { return true }
             let container = scrollContainer(in: app)
             if swipes % (Self.swipesPerSweep * 2) < Self.swipesPerSweep {
