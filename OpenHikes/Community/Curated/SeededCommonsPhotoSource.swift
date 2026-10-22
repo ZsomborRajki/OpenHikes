@@ -63,12 +63,16 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
         return try await Self.photos(at: spots, downloadingInto: directory)
     }
 
-    /// The same three, across the northern half of the area on screen rather
-    /// than along a route — the trail maker's *Search this area* under
-    /// `--ui-test-trail-points=seeded` — and the two beside the third. North
-    /// of the middle because the area is the whole map's and its lower half
-    /// is under the sheet, where a pin can be neither seen nor tapped. A
-    /// second search over the same area finds the five already shown and adds
+    /// The same three, across the area on screen rather than along a route —
+    /// the trail maker's *Search this area* under
+    /// `--ui-test-trail-points=seeded` and the *Community* tab's — and the two
+    /// beside the third. Where they stand depends on whose area it is. The
+    /// trail maker's is the whole map's and its lower half is under the
+    /// sheet, where a pin can be neither seen nor tapped, so the three go
+    /// north of the middle. The *Community* tab's carries the rectangle it
+    /// measured above the sheet, so all of it is visible and the three go
+    /// just south of the middle, clear of the pill along the top. A second
+    /// search over the same area finds the five already shown and adds
     /// nothing, which is what the real source does too.
     @concurrent
     func photos(

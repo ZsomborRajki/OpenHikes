@@ -17,11 +17,11 @@
 //  Commons photograph is shown with who took it and under what licence.
 //
 //  The same scenario seeds the *Community* tab's own *Search this area*,
-//  which stands three photographs across the north of the area, and two more
-//  beside the east one — see ``SeededCommonsPhotoSource``. The last two cases
-//  follow one of them from its pin to its screen and on into the trail maker,
-//  and the group of three from its one pin to its grid and to a photograph's
-//  screen over it.
+//  which stands three photographs just south of the middle of the area on
+//  screen, and two more beside the east one — see
+//  ``SeededCommonsPhotoSource``. The last two cases follow one of them from
+//  its pin to its screen and on into the trail maker, and the group of three
+//  from its one pin to its grid and to a photograph's screen over it.
 //
 
 import XCTest
