@@ -8,7 +8,7 @@
 //  Every case here runs against a directory of its own under the system's
 //  temporary one and against a clock the case holds, for the reason every
 //  other cache suite in this repository does — see *Deliberate test seams* in
-//  the instructions. The default directory is the app's own `Caches`, and a
+//  `AGENTS.md`. The default directory is the app's own `Caches`, and a
 //  suite that used it would be asserting about whatever the last run left
 //  behind.
 //

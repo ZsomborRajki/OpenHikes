@@ -48,8 +48,7 @@ import SwiftUI
 // `canImport(UIKit)` is *true* on watchOS — the module is there — while every
 // feedback generator in it is unavailable, so the platform has to be named as
 // well. The guard written the obvious way compiles for the phone and fails the
-// watch build, which is the shape of trap the instructions file records under
-// *Toolchain isolation*.
+// watch build.
 #if canImport(UIKit) && !os(watchOS)
 import UIKit
 #endif
@@ -172,7 +171,7 @@ public extension HapticMoment {
     /// Two kinds of call site need it and both are real: `MKMapView`'s
     /// delegate, which is where a tap on a drawn route or a pin is resolved
     /// and which is not on the SwiftUI path at all — see *Older API that is
-    /// justified, not legacy* in the instructions file for why the map is a
+    /// justified, not legacy* in `AGENTS.md` for why the map is a
     /// `UIViewRepresentable` — and the `async` outcome handlers, where the
     /// alternative is a `@State` counter that exists only to be a trigger and
     /// invalidates its declaring view for it.

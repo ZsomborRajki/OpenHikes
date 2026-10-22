@@ -8,7 +8,7 @@
 # The iPhone set is captured by a UI test that taps its way to each screen.
 # There is no watch equivalent and there is not going to be one: `OpenHikesWatch`
 # has no test bundle and no gate boots a watch simulator — see *The watch app*
-# in the instructions file — and `simctl` can install, launch and photograph a
+# in `AGENTS.md` — and `simctl` can install, launch and photograph a
 # watch app but cannot tap one.
 #
 # So each frame is a *launch* rather than a journey. The app is launched once

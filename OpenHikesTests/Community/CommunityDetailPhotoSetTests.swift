@@ -16,8 +16,8 @@
 //
 //  `CKRecord`-free, like `CommunityPhotoPairingTests` beside it and for the
 //  same reason: what is worth pinning down is the arithmetic on the values,
-//  and the fetch around it needs the public database — see *the tests that
-//  never reach the real transport* in the instructions.
+//  and the fetch around it needs the public database — see *A suite must
+//  never reach the real transport* in `AGENTS.md`.
 //
 
 import CoreLocation

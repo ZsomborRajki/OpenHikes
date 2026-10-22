@@ -1,6 +1,6 @@
 <!--
 Keep this short. The point is what changed and how you know it works — the
-conventions themselves live in .github/copilot-instructions.md, and CONTRIBUTING.md
+conventions themselves live in AGENTS.md, and CONTRIBUTING.md
 says which commands to run.
 -->
 

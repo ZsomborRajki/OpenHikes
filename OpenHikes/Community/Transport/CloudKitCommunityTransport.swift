@@ -672,7 +672,7 @@ nonisolated extension CommunityListing {
 /// ``CloudKitCommunityTransport/submit(_:)``, because it is the half of an
 /// upload a suite can hold to account: `submit` needs an Apple Account and the
 /// public database, and there is no sandbox for the second — see *A suite must
-/// never reach the real transport* in the instructions. `CommunityStagingTests`
+/// never reach the real transport* in `AGENTS.md`. `CommunityStagingTests`
 /// asserts against this that every file a submission puts on disk lands inside
 /// the directory the draft names, which is the directory the publisher deletes.
 nonisolated extension CloudKitCommunityTransport {

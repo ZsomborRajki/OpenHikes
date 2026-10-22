@@ -2,8 +2,8 @@
 //  RenderIsolationTests.swift
 //  OpenHikesTests
 //
-//  The app's central performance idea (the "Preserve render isolation"
-//  convention in `.github/copilot-instructions.md`) is that high-frequency
+//  The app's central performance idea (the *Render isolation* rules in
+//  `AGENTS.md`) is that high-frequency
 //  state lives in `@Observable` reference types that the owning views never
 //  read in their own `body`, so a GPS fix or a sheet drag moves one
 //  annotation instead of re-diffing a view tree. That only holds if two

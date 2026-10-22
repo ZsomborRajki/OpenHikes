@@ -244,7 +244,7 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// fetch that took its token before the deletion from writing the tile
     /// back after it. Doing the two under separate acquisitions reintroduces
     /// exactly the interleaving the lock exists to forbid — see *Types that
-    /// should not become actors* in `.github/copilot-instructions.md` for why
+    /// should not become actors* in `AGENTS.md` for why
     /// this is a `Mutex` and not an actor.
     ///
     /// The bump is **this tile's own row** — its file name — and never the

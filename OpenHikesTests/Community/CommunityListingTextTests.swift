@@ -20,7 +20,7 @@
 //  A `CKRecord` built here reaches nothing: it is an in-memory object until
 //  something saves it, and nothing here does. What is deliberately *not* done
 //  is the fetch around it — see *A suite must never reach the real transport*
-//  in the instructions.
+//  in `AGENTS.md`.
 //
 
 import CloudKit

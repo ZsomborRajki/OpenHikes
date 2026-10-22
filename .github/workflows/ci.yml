@@ -15,12 +15,13 @@ permissions:
   contents: read
 
 # The runner image is `xcode-27` rather than `macos-26`, and that is what
-# makes the three values below match a development machine exactly. `macos-26`
+# makes the three values below match a development machine. `macos-26`
 # tops out at Xcode 26.6, so for as long as this workflow ran there, CI
 # compiled the project with a different Swift than anybody who works on it —
-# see *Build and test* in `.github/copilot-instructions.md` for what that cost.
-# `xcode-27` carries Xcode 27.0 build 27A266a, the same build as a current
-# local install, and iOS 27.0 runtimes, whose Pro model is `iPhone 18 Pro`.
+# see *CI* in `AGENTS.md` for what that cost.
+# `xcode-27` carries Xcode 27.0 build 27A266a, which compiles with the same
+# Swift 6.4 as any local Xcode 27, and iOS 27.0 runtimes, whose Pro model is
+# `iPhone 18 Pro`.
 #
 # DEVELOPER_DIR names the versioned symlink and not the real directory, which
 # on this image is `/Applications/Xcode_27_Release_Candidate.app` and will be
@@ -41,13 +42,12 @@ jobs:
   # `builds` matrix entries, `archive`, `thread-sanitizer` and
   # `accessibility-ui-tests`. None of them is a *required* check: `main`'s
   # branch protection carries `required_pull_request_reviews`,
-  # `enforce_admins`, `required_conversation_resolution` and no force pushes,
-  # and no `required_status_checks` at all. So a red run here is an annotation
+  # `enforce_admins` and `required_conversation_resolution`, and no
+  # `required_status_checks` at all. So a red run here is an annotation
   # rather than a block, and "fails the workflow" in this file means "reports
   # red" — #182 and #185 both merged with `Thread sanitizer` red. This comment
-  # used to assert the opposite, which is the same claim
-  # .github/copilot-instructions.md was corrected to refute; naming the seven
-  # in the repository settings is the change that would make it true.
+  # used to assert the opposite; naming the seven in the repository settings
+  # is the change that would make it true.
   #
   # The filtering below is a job-level `if:` rather than a `paths-ignore:` on
   # the trigger, and that choice is what keeps the option open. A required

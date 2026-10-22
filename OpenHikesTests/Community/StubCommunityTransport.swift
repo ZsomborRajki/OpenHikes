@@ -5,7 +5,7 @@
 //  What the community suites talk to instead of CloudKit.
 //
 //  The seam exists for the reason every other injected transport in this
-//  repository does — see *Deliberate test seams* in the instructions — and
+//  repository does — see *Deliberate test seams* in `AGENTS.md` — and
 //  more sharply here than most: the real transport writes to a **public**
 //  database. There is no sandbox for one. A suite that reached it would put a
 //  record in front of every other user of this app, from a machine running

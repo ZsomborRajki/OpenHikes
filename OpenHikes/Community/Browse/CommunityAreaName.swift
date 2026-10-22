@@ -15,7 +15,7 @@
 //  ## Why this is a seam
 //
 //  For the reason every injected transport in this repository is one — see
-//  *Deliberate test seams* in the instructions. This one reaches the network,
+//  *Deliberate test seams* in `AGENTS.md`. This one reaches the network,
 //  so a suite that used the real thing would geocode from a test run, on
 //  somebody's rate limit, and get a different answer depending on where the
 //  machine is. ``OpenHikesModel`` hands the browser `nil` for exactly the
