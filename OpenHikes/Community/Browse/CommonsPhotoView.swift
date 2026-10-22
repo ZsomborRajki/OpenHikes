@@ -31,6 +31,15 @@ struct CommonsPhotoView: View {
     let found: CommunityCommonsPhotos
     let mapController: MapController
     let maker: TrailDraftController
+    /// Whether the map is still to be asked to bring the photograph into
+    /// view, so it is asked once a push. `.task` runs again when the gallery
+    /// pushed over this screen is popped, and that gallery's own *Show on
+    /// Map* has just put the camera on whichever picture it was paged to.
+    ///
+    /// Asked of the sheet's presentation rather than kept in this screen's
+    /// `@State`, which a rotation drops with the host — see
+    /// ``SheetPresentation/claimsFirstFraming(of:)``.
+    let claimsFirstFraming: () -> Bool
     /// Pushes the gallery over this screen: the photographs to page through,
     /// and the one to open at.
     let onOpenGallery: (_ photos: [CommonsPhoto], _ opening: CommonsPhoto) -> Void
@@ -38,11 +47,6 @@ struct CommonsPhotoView: View {
     /// The address MapKit found, `nil` until it answers and for a spot it
     /// cannot place.
     @State private var address: String?
-    /// The photograph the map was last asked to bring into view, so it is
-    /// asked once. `.task` runs again when the gallery pushed over this screen
-    /// is popped, and that gallery's own *Show on Map* has just put the camera
-    /// on whichever picture it was paged to.
-    @State private var framed: URL?
     /// The photograph with a file still on disk, once the one this screen
     /// opened on has lost its own — see ``CommunityCommonsPhotos/usable(_:)``.
     @State private var restored: CommonsPhoto?
@@ -52,12 +56,14 @@ struct CommonsPhotoView: View {
         among found: CommunityCommonsPhotos,
         map: MapController,
         maker: TrailDraftController,
+        claimsFirstFraming: @escaping () -> Bool,
         onOpenGallery: @escaping (_ photos: [CommonsPhoto], _ opening: CommonsPhoto) -> Void
     ) {
         self.photo = photo
         self.found = found
         mapController = map
         self.maker = maker
+        self.claimsFirstFraming = claimsFirstFraming
         self.onOpenGallery = onOpenGallery
     }
 
@@ -101,8 +107,7 @@ struct CommonsPhotoView: View {
         .softScrollEdgeEffect(for: .top)
         .accessibilityIdentifier("commons-photo-screen")
         .task(id: photo.fileURL) {
-            if framed != photo.fileURL {
-                framed = photo.fileURL
+            if claimsFirstFraming() {
                 // Up from under the sheet, where a pin near the bottom of the
                 // search area would otherwise be hidden behind the screen it
                 // opened — and nothing more. The pin was tapped where it
@@ -187,8 +192,9 @@ struct CommonsPhotoView: View {
 
 extension CommonsPhotoView: Equatable {
     /// The photograph and what the screen draws from, by identity — and not
-    /// ``onOpenGallery``, which appends to the sheet's path whichever copy of
-    /// it runs. See `HikeDetailView+Equatable.swift`.
+    /// the two closures, which ask and append to the sheet's presentation
+    /// about this photograph whichever copy of them runs. See
+    /// `HikeDetailView+Equatable.swift`.
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.photo == rhs.photo && lhs.found === rhs.found && lhs.mapController === rhs.mapController
             && lhs.maker === rhs.maker

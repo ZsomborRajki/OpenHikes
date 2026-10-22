@@ -23,12 +23,19 @@ extension MapSheet {
     func commonsDestination(for route: SheetRoute, among found: CommunityCommonsPhotos) -> some View {
         switch route {
         case let .commonsPhoto(photo):
-            CommonsPhotoView(photo, among: found, map: mapController, maker: trailMaker) { photos, opening in
-                // Over the photograph's screen rather than in a cover from
-                // it, so a rotation moves the gallery instead of closing it,
-                // and Back comes back to the photograph.
-                presentation.path.append(.commonsGallery(photos, opening))
-            }
+            CommonsPhotoView(
+                photo,
+                among: found,
+                map: mapController,
+                maker: trailMaker,
+                claimsFirstFraming: { presentation.claimsFirstFraming(of: route) },
+                onOpenGallery: { photos, opening in
+                    // Over the photograph's screen rather than in a cover
+                    // from it, so a rotation moves the gallery instead of
+                    // closing it, and Back comes back to the photograph.
+                    presentation.path.append(.commonsGallery(photos, opening))
+                }
+            )
             // A push over the photograph runs this builder again, and the
             // closure above makes every copy a new view — see
             // `HikeDetailView+Equatable.swift`.

@@ -10,7 +10,8 @@
 //  photograph is the same screen whatever search downloaded it. A photograph
 //  opened from a group's grid is the one step deeper, and goes over it; the
 //  gallery a photograph's screen opens is one step deeper again, and holds
-//  the page it is on for as long as it is pushed.
+//  the page it is on for as long as it is pushed. A photograph's screen
+//  brings it into view once a push, whichever host draws it.
 //
 
 import CoreLocation
@@ -196,5 +197,25 @@ struct SheetCommonsPhotoTests {
 
         #expect(presentation.path == [.commonsPhoto(Self.photo(3))])
         #expect(presentation.detent == .medium)
+    }
+
+    /// A rotation builds the photograph's screen again in the other host, and
+    /// a gallery popped back to it there must not take the camera off the
+    /// picture its *Show on Map* framed — see ``CommonsPhotoView``.
+    @Test("a photograph's screen frames it once a push, however often it is built")
+    func framesOncePerPush() {
+        let presentation = SheetPresentation(detent: .medium)
+        let screen = SheetRoute.commonsPhoto(Self.photo(1))
+        presentation.showCommonsPhoto(Self.photo(1))
+
+        #expect(presentation.claimsFirstFraming(of: screen))
+        presentation.path.append(.commonsGallery([Self.photo(1), Self.photo(2)], Self.photo(1)))
+        presentation.path.removeLast()
+        #expect(!presentation.claimsFirstFraming(of: screen))
+
+        // Replaced by another photograph and opened again: a new push.
+        presentation.showCommonsPhoto(Self.photo(2))
+        presentation.showCommonsPhoto(Self.photo(1))
+        #expect(presentation.claimsFirstFraming(of: screen))
     }
 }

@@ -10,7 +10,7 @@
 //  ``SheetRoute/commonsGallery(_:_:)`` — which is what lets it survive the
 //  phone being turned. The maker's place card is already a sheet over the
 //  sheet, with no stack of its own to push onto, so it presents this in a
-//  cover — see ``TrailPlacePhotoHeader``.
+//  cover — see ``TrailDraftPhotoHeader``.
 //
 
 import OpenHikesData
