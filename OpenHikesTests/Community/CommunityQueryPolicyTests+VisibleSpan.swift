@@ -17,6 +17,7 @@
 import Foundation
 import MapKit
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 extension CommunityQueryPolicyTests {
@@ -62,5 +63,54 @@ extension CommunityQueryPolicyTests {
         }
 
         #expect(area.radiusMeters == CommunityQueryPolicy.minimumRadiusMeters)
+    }
+
+    /// What a refused search draws from the device is what is *in* the area,
+    /// and an offer's circle is CloudKit's floor rather than the map: a point
+    /// a few kilometres off a valley's rectangle is inside it. See
+    /// ``CommunitySearchArea/contains(_:)``.
+    @Test("an offer's rectangle, not its floored circle, says what is in it")
+    func theRectangleSaysWhatIsInIt() {
+        var policy = CommunityQueryPolicy()
+        policy.startBrowsing()
+
+        guard case .offer(let area) = policy.action(for: Self.valley) else {
+            Issue.record("a valley is a question")
+            return
+        }
+        let inside = CLLocationCoordinate2D(latitude: Valley.latitude + 0.008, longitude: Valley.longitude - 0.019)
+        let southOfIt = CLLocationCoordinate2D(latitude: Valley.latitude - 0.03, longitude: Valley.longitude)
+
+        #expect(area.contains(inside))
+        #expect(!area.contains(southOfIt), "three kilometres south is in the circle and off the map")
+        #expect(RouteGeometry.distanceMeters(from: area.coordinate, to: southOfIt) < area.radiusMeters)
+    }
+
+    /// A view across the date line is a narrow rectangle with the line through
+    /// it, and both sides of the line are on screen.
+    @Test("a rectangle across the date line holds both sides of it")
+    func aRectangleAcrossTheDateLine() {
+        let area = CommunitySearchArea(
+            coordinate: CLLocationCoordinate2D(latitude: -16.8, longitude: 179.99),
+            radiusMeters: CommunityQueryPolicy.minimumRadiusMeters,
+            visibleSpan: CommunitySearchArea.Span(latitudeDelta: 0.02, longitudeDelta: 0.04)
+        )
+
+        #expect(area.contains(CLLocationCoordinate2D(latitude: -16.8, longitude: -179.995)))
+        #expect(area.contains(CLLocationCoordinate2D(latitude: -16.8, longitude: 179.975)))
+        #expect(!area.contains(CLLocationCoordinate2D(latitude: -16.8, longitude: -179.97)))
+    }
+
+    /// An area that is only a circle — the trail maker's, a stretch of a
+    /// route — keeps answering by its radius.
+    @Test("an area without a rectangle is its circle")
+    func aCircleIsItsRadius() {
+        let area = CommunitySearchArea(
+            coordinate: CLLocationCoordinate2D(latitude: Valley.latitude, longitude: Valley.longitude),
+            radiusMeters: CommunityQueryPolicy.minimumRadiusMeters
+        )
+
+        #expect(area.contains(CLLocationCoordinate2D(latitude: Valley.latitude - 0.08, longitude: Valley.longitude)))
+        #expect(!area.contains(CLLocationCoordinate2D(latitude: Valley.latitude - 0.1, longitude: Valley.longitude)))
     }
 }

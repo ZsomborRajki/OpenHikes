@@ -214,6 +214,32 @@ extension CuratedTrailStoreTests {
         #expect(near.map(\.relationID) == [4_811_001])
     }
 
+    /// A refused search of the map above the sheet draws what is in that map.
+    /// The circle beside the rectangle is CloudKit's, floored at ten
+    /// kilometres, and at a valley's zoom it holds routes standing well off
+    /// the rectangle Overpass would have been asked about — under the sheet,
+    /// or past the edge of the screen — which is the over-reach the visible
+    /// area exists to end. See ``CommunitySearchArea/contains(_:)``.
+    @Test("a refused search of the map on screen draws only the routes pinned in it")
+    func aVisibleAreaKeepsToItsRectangle() {
+        let directory = Self.scratch()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = CuratedTrailStore(directory: directory, clock: { .now })
+        store.save(Self.trail(4_811_001, metersNorth: 1000))
+        // Inside the ten-kilometre circle, and south of a rectangle about
+        // five kilometres tall.
+        store.save(Self.trail(4_811_002, metersNorth: -4000))
+        let visible = CommunitySearchArea(
+            coordinate: Self.center,
+            radiusMeters: CommunityQueryPolicy.minimumRadiusMeters,
+            visibleSpan: CommunitySearchArea.Span(latitudeDelta: 0.044, longitudeDelta: 0.0665)
+        )
+
+        let near = store.trails(near: visible, limit: 25)
+
+        #expect(near.map(\.relationID) == [4_811_001])
+    }
+
     /// The limit is a page, and this path is reached when something has
     /// already failed — it is not the moment to hand back four hundred rows.
     @Test("the limit is honoured")

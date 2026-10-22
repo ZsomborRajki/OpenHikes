@@ -157,6 +157,10 @@ nonisolated extension OverpassFileStore {
 nonisolated extension OverpassFileStore {
     /// Stored values standing within `area`, nearest its centre first.
     ///
+    /// Within the rectangle the hiker could see when the area carries one —
+    /// see ``CommunitySearchArea/contains(_:)`` — and within its radius when
+    /// it does not.
+    ///
     /// Every file is read, because nothing indexes them. That is the cost
     /// these caches deliberately do not pay up front — an index is the
     /// coherence problem each of their headers declines — and it is paid only
@@ -190,8 +194,9 @@ nonisolated extension OverpassFileStore {
                   let stored = try? JSONDecoder().decode(Entry.self, from: data),
                   now.timeIntervalSince(stored.fetchedAt) <= OverpassCache.lifetime
             else { return nil }
-            let distance = RouteGeometry.distanceMeters(from: center, to: coordinate(stored.value))
-            guard distance <= area.radiusMeters else { return nil }
+            let point = coordinate(stored.value)
+            guard area.contains(point) else { return nil }
+            let distance = RouteGeometry.distanceMeters(from: center, to: point)
             return (url: url, value: stored.value, distance: distance)
         }
         // `min(count:)` rather than a full sort and a `prefix`: hundreds of
