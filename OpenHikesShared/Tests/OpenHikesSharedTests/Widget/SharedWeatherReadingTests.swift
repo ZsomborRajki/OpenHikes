@@ -2,9 +2,10 @@
 //  SharedWeatherReadingTests.swift
 //  OpenHikesSharedTests
 //
-//  The temperature the app hands the widget. It is a four-field payload and
-//  almost all of it is policy: what the unit on the wire is, when the number
-//  stops being worth drawing, and which of the two spellings each reader gets.
+//  The temperature the app hands the widget. It is a small payload and almost
+//  all of it is policy: what the unit on the wire is, when the number stops
+//  being worth drawing, beside what it may be drawn, and which of the two
+//  spellings each reader gets.
 //
 
 import Foundation
@@ -19,11 +20,13 @@ struct SharedWeatherReadingTests {
 
     private static func reading(
         celsius temperature: Double = 12.3456,
-        ageSeconds: TimeInterval = 0
+        ageSeconds: TimeInterval = 0,
+        about subject: SharedWeatherReading.Subject = .hiker
     ) -> SharedWeatherReading? {
         SharedWeatherReading(
             temperatureCelsius: temperature,
-            capturedAt: now.addingTimeInterval(-ageSeconds)
+            capturedAt: now.addingTimeInterval(-ageSeconds),
+            subject: subject
         )
     }
 
@@ -43,17 +46,49 @@ struct SharedWeatherReadingTests {
     /// than a value refused where it came from.
     @Test("a non-finite temperature is refused", arguments: [Double.nan, .infinity, -.infinity])
     func nonFiniteIsRefused(temperature: Double) {
-        #expect(SharedWeatherReading(temperatureCelsius: temperature, capturedAt: Self.now) == nil)
+        #expect(
+            SharedWeatherReading(temperatureCelsius: temperature, capturedAt: Self.now, subject: .hiker) == nil
+        )
     }
 
+    /// With the trail it is about: the one subject with a value of its own,
+    /// and the one a widget matches against.
     @Test("a reading survives the App Group round trip")
     func codableRoundTrip() throws {
-        let reading = try #require(Self.reading())
+        let reading = try #require(Self.reading(about: .trail(hikeID: UUID())))
         let decoded = try JSONDecoder().decode(
             SharedWeatherReading.self,
             from: JSONEncoder().encode(reading)
         )
         #expect(decoded == reading)
+    }
+
+    // MARK: What it is about
+
+    /// Two widgets pinned to two trails read the one file, so a reading
+    /// taken for one of them is drawn beside that one alone.
+    @Test("a reading is about the trail it was taken for and no other")
+    func aReadingIsAboutItsOwnTrail() throws {
+        let ridge = UUID()
+        let reading = try #require(Self.reading(about: .trail(hikeID: ridge)))
+
+        #expect(reading.isAbout(trail: ridge))
+        #expect(!reading.isAbout(trail: UUID()))
+        #expect(!reading.isAboutHiker, "a recording does not take over a trail's reading")
+    }
+
+    /// A searched place is about neither, however near either it is. The
+    /// hiker's reading is a recording's, and no trail's: the widget cannot
+    /// tell whether the hiker is anywhere near the trail it draws.
+    @Test("a reading about the hiker or a place is about no trail")
+    func aReadingAboutNoTrail() throws {
+        let hiker = try #require(Self.reading(about: .hiker))
+        let place = try #require(Self.reading(about: .place))
+
+        #expect(hiker.isAboutHiker)
+        #expect(!hiker.isAbout(trail: UUID()))
+        #expect(!place.isAboutHiker)
+        #expect(!place.isAbout(trail: UUID()))
     }
 
     // MARK: Age

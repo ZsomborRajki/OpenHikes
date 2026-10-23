@@ -96,11 +96,13 @@ struct WeatherWidgetPublisherTests {
 
     private static func reading(
         celsius: Double,
-        ageSeconds: TimeInterval = 0
+        ageSeconds: TimeInterval = 0,
+        about subject: SharedWeatherReading.Subject = .hiker
     ) -> SharedWeatherReading? {
         SharedWeatherReading(
             temperatureCelsius: celsius,
-            capturedAt: now.addingTimeInterval(-ageSeconds)
+            capturedAt: now.addingTimeInterval(-ageSeconds),
+            subject: subject
         )
     }
 
@@ -158,6 +160,27 @@ struct WeatherWidgetPublisherTests {
 
         #expect(redrew)
         #expect(reloads.value == 2)
+    }
+
+    /// Each widget draws the number only beside what it is about, so a
+    /// reading about somewhere else changes the picture at the same degree:
+    /// the trail the badge left loses its temperature. Comparing the strings
+    /// alone would leave that trail's widget drawing a searched city's
+    /// weather until the next reload happened to come.
+    @Test("a new subject at the same degree redraws")
+    func newSubjectRedraws() async throws {
+        let reloads = Reloads()
+        let store = MemoryStore()
+        let publisher = WeatherWidgetPublisher(reload: reloads.record, store: store.seam)
+        let trail = try #require(Self.reading(celsius: 12, about: .trail(hikeID: UUID())))
+        let searched = try #require(Self.reading(celsius: 12, about: .place))
+
+        await publisher.publish(trail, asOf: Self.now, locale: Self.locale)
+        let redrew = await publisher.publish(searched, asOf: Self.now, locale: Self.locale)
+
+        #expect(redrew)
+        #expect(reloads.value == 2)
+        #expect(store.reading?.subject == .place)
     }
 
     /// A subject the app cannot get a forecast for leaves no number behind —
@@ -242,6 +265,30 @@ struct WeatherWidgetPublisherTests {
 
         #expect(reading.temperatureCelsius.isApproximatelyEqual(to: 20, absoluteTolerance: 0.001))
         #expect(reading.capturedAt == Self.now, "the provider's clock, not this one")
+    }
+
+    /// The widget matches a reading against what it draws by identity, so
+    /// the badge's subject crosses without its coordinate or its name: a
+    /// trail whose subject has followed the hiker onto its hillside is still
+    /// that trail, and the hiker is the hiker wherever they have walked.
+    @Test("the reading says what the badge was about")
+    func readingSaysWhatItIsAbout() {
+        let hikeID = UUID()
+        let snapshot = Self.snapshot(celsius: 12, capturedAt: Self.now)
+        let subjects: [(badge: WeatherSubject, widget: SharedWeatherReading.Subject)] = [
+            (.me(Self.budapest), .hiker),
+            (.me(Self.vienna), .hiker),
+            (.place(Self.budapest, name: "Budapest"), .place),
+            (.trail(Self.budapest, hikeID: hikeID, name: "Gellért Hill"), .trail(hikeID: hikeID)),
+            (.trail(Self.vienna, hikeID: hikeID, name: "Gellért Hill"), .trail(hikeID: hikeID)),
+        ]
+
+        for subject in subjects {
+            #expect(
+                WeatherBadgeState.reading(snapshot, subject: subject.badge).sharedReading?.subject
+                    == subject.widget
+            )
+        }
     }
 
     /// The write is what the next timeline reads, so a write that did not
