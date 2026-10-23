@@ -63,19 +63,31 @@ actor TrackJournal {
     private static let recordFlagsOffset = 40
 
     private let clock: @Sendable () -> Date
-    private var fileHandle: FileHandle?
+    private let openHandle: @Sendable (URL) throws -> any TrackJournalHandle
+    private var fileHandle: (any TrackJournalHandle)?
+    /// Where the last complete record ends. A write that fails is cut back to
+    /// here, because a retry appended after a torn record would put every
+    /// fixed-width record behind it at the wrong offset.
+    private var committedByteCount: UInt64 = 0
+    /// A failed write whose cut back failed too. Nothing more is written
+    /// until the cut succeeds.
+    private var hasTornTail = false
     private var pending: [RecordingPoint] = []
     private var metadata: TrackJournalMetadata?
     private var lastFlushAt: Date?
 
     init(
         directory: URL,
-        clock: @escaping @Sendable () -> Date = { Date() }
+        clock: @escaping @Sendable () -> Date = { Date() },
+        openHandle: @escaping @Sendable (URL) throws -> any TrackJournalHandle = { url in
+            try FileHandle(forWritingTo: url)
+        }
     ) {
         self.directory = directory
         journalURL = directory.appendingPathComponent("recording.otrk")
         metadataURL = directory.appendingPathComponent("recording.json")
         self.clock = clock
+        self.openHandle = openHandle
     }
 
     deinit {
@@ -101,8 +113,10 @@ actor TrackJournal {
 
             try Self.header(sessionID: sessionID, startedAt: startedAt)
                 .write(to: journalURL, options: .atomic)
-            fileHandle = try FileHandle(forWritingTo: journalURL)
-            try fileHandle?.seekToEnd()
+            let newHandle = try openHandle(journalURL)
+            fileHandle = newHandle
+            committedByteCount = try newHandle.seekToEnd()
+            hasTornTail = false
             let newMetadata = TrackJournalMetadata(
                 sessionID: sessionID,
                 startedAt: startedAt,
@@ -223,8 +237,7 @@ actor TrackJournal {
             for point in pending {
                 bytes.append(Self.encode(point))
             }
-            try fileHandle.write(contentsOf: bytes)
-            try fileHandle.synchronize()
+            try appendRecords(bytes, to: fileHandle)
             pending.removeAll(keepingCapacity: true)
             lastFlushAt = clock()
             if var updatedMetadata = metadata {
@@ -289,7 +302,7 @@ actor TrackJournal {
                     header.startedAt.timeIntervalSince(reopenedMetadata.startedAt)
                   ) < Self.timestampMatchTolerance else { throw TrackJournalError.invalidHeader }
 
-            let newHandle = try FileHandle(forWritingTo: journalURL)
+            let newHandle = try openHandle(journalURL)
             fileHandle = newHandle
             let size = try newHandle.seekToEnd()
             let completeSize = UInt64(
@@ -300,7 +313,8 @@ actor TrackJournal {
             if size != completeSize {
                 try newHandle.truncate(atOffset: completeSize)
             }
-            try newHandle.seekToEnd()
+            committedByteCount = try newHandle.seekToEnd()
+            hasTornTail = false
             metadata = reopenedMetadata
             lastFlushAt = clock()
         } catch let error as TrackJournalError {
@@ -358,6 +372,33 @@ private extension TrackJournal {
         } catch {
             throw TrackJournalError.io(error.localizedDescription)
         }
+    }
+
+    /// Writes whole records after the last complete one, or leaves the file
+    /// ending where it did.
+    ///
+    /// The points stay pending until this returns, so a retry writes them
+    /// again — and it must write them at `committedByteCount`, not after
+    /// whatever part of the failed attempt reached the disk. A `synchronize()`
+    /// that fails is cut back too: the bytes may be in the file, and leaving
+    /// them would write the same fixes twice.
+    func appendRecords(_ bytes: Data, to handle: any TrackJournalHandle) throws {
+        if hasTornTail {
+            try handle.truncate(atOffset: committedByteCount)
+            hasTornTail = false
+        }
+        do {
+            try handle.write(contentsOf: bytes)
+            try handle.synchronize()
+        } catch {
+            do {
+                try handle.truncate(atOffset: committedByteCount)
+            } catch {
+                hasTornTail = true
+            }
+            throw error
+        }
+        committedByteCount += UInt64(bytes.count)
     }
 
     func writeMetadata(_ metadata: TrackJournalMetadata) throws {
