@@ -137,6 +137,17 @@ nonisolated enum WidgetRecordingFixPolicy {
                 longitude: location.coordinate.longitude
             )
     }
+
+    /// The height an accepted anchor carries, or `nil` to send its position
+    /// without one.
+    ///
+    /// ``AltitudePolicy``'s rule rather than a looser one for a coarse fix:
+    /// the phone merges the anchor into a recording that holds its own GPS
+    /// heights to that rule, and a height it would refuse from its own
+    /// receiver is no better for having come through the widget.
+    static func elevation(of location: CLLocation) -> CLLocationDistance? {
+        AltitudePolicy.trustedAltitude(location.altitude, verticalAccuracy: location.verticalAccuracy)
+    }
 }
 
 @MainActor
@@ -471,10 +482,6 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
                    location,
                    now: now
                ) {
-                let elevation = AltitudePolicy.trustedAltitude(
-                    location.altitude,
-                    verticalAccuracy: location.verticalAccuracy
-                )
                 _ = try? SharedStore.appendPendingRecordingFix(
                     SharedRecordingFix(
                         sessionID: requestedSessionID,
@@ -482,7 +489,7 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
                         longitude: location.coordinate.longitude,
                         timestamp: location.timestamp,
                         horizontalAccuracy: location.horizontalAccuracy,
-                        elevation: elevation,
+                        elevation: WidgetRecordingFixPolicy.elevation(of: location),
                         course: location.course >= 0 ? location.course : nil,
                         speed: location.speed >= 0 ? location.speed : nil
                     )
