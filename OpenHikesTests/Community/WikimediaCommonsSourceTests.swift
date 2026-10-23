@@ -19,6 +19,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Synchronization
 import Testing
 
@@ -181,7 +182,9 @@ struct WikimediaCommonsSourceTests {
 
         #expect(photos.map(\.credit.author) == ["Hiker 1", "Hiker 2", "Hiker 3"])
         #expect(photos.allSatisfy { $0.credit.license.name == "CC BY-SA 4.0" })
-        #expect(photos.allSatisfy { abs(($0.pin.coordinate?.longitude ?? 0) - Self.longitude) < 0.00001 })
+        #expect(photos.allSatisfy { photo in
+            Self.longitude.isApproximatelyEqual(to: photo.pin.coordinate?.longitude ?? 0, absoluteTolerance: 0.00001)
+        })
         #expect(Set(downloads.files) == ["commons-1.jpeg", "commons-2.jpeg", "commons-3.jpeg"])
         #expect(
             commons.requests.allSatisfy { $0.value(forHTTPHeaderField: "User-Agent") == TileCache.userAgent },

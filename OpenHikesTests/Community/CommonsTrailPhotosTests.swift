@@ -66,9 +66,12 @@ struct CommonsTrailPhotosTests {
 
         #expect(kept.map(\.pageID) == [1, 2])
         let offset = try #require(kept.last)
-        #expect(abs(offset.longitude - Self.longitude) < 0.00001, "pinned on the line, not where the camera stood")
-        #expect(abs(offset.offRouteMeters - 50) < 3)
-        #expect(abs(offset.distanceAlongRoute - 2500) < 15)
+        #expect(
+            offset.longitude.isApproximatelyEqual(to: Self.longitude, absoluteTolerance: 0.00001),
+            "pinned on the line, not where the camera stood"
+        )
+        #expect(offset.offRouteMeters.isApproximatelyEqual(to: 50, absoluteTolerance: 3))
+        #expect(offset.distanceAlongRoute.isApproximatelyEqual(to: 2500, absoluteTolerance: 15))
     }
 
     @Test("a file two circles both found is kept once")
