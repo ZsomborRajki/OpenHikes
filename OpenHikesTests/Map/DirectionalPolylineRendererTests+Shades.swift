@@ -144,7 +144,7 @@ extension DirectionalPolylineRendererTests {
     }
 
     /// Draws `polyline` solid with `shades` over it, in the canvas
-    /// ``renderMeeting(alpha:)`` frames.
+    /// ``renderMeeting(alpha:length:)`` frames at its default length.
     private static func render(
         _ polyline: MKPolyline,
         shades: [DirectionalPolylineRenderer.Shade],
