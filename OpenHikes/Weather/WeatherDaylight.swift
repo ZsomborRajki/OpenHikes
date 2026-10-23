@@ -90,21 +90,33 @@ extension WeatherDaylight {
     /// **The day the reading is about, not the first day of the forecast.**
     /// `.daily` begins at today and runs for ten days; picking `.first` is
     /// right until a reading is restored near midnight, when the stored blob's
-    /// day and the forecast's first day are not the same day. Matched against
-    /// `capturedAt` in the current calendar, which is also what makes "today's
-    /// sunset" mean today's.
+    /// day and the forecast's first day are not the same day.
     ///
-    /// `nil` when nothing in the forecast covers that day, which is what a
-    /// provider with no daily data for the point answers — the same shape an
-    /// empty hourly strip takes.
+    /// **The day `date` falls in, not the day whose start shares its calendar
+    /// day** — see ``WeatherForecastDay``. Each day starts at midnight where
+    /// the forecast is, so in the reader's calendar Tokyo's Friday starts on
+    /// Thursday, and a calendar-day match read from Berlin on Friday picked
+    /// Saturday: a sunset and a dusk a day late, on the sheet and in the
+    /// walk's finish estimate. The span between starts is the same answer in
+    /// every zone, which is also what makes "today's sunset" mean today's.
+    /// `calendar` decides only when the last day ends.
+    ///
+    /// The first day when nothing in the forecast covers `date`, and `nil`
+    /// for an empty forecast, which is what a provider with no daily data for
+    /// the point answers — the same shape an empty hourly strip takes.
     nonisolated static func forDay(
         of date: Date,
         in forecast: Forecast<DayWeather>,
         calendar: Calendar = .autoupdatingCurrent
     ) -> Self? {
-        guard let day = forecast.first(where: { calendar.isDate($0.date, inSameDayAs: date) })
-            ?? forecast.first
+        let days = Array(forecast)
+        guard let index = WeatherForecastDay.index(
+            containing: date,
+            startingAt: days.map(\.date),
+            calendar: calendar
+        ) ?? days.indices.first
         else { return nil }
+        let day = days[index]
         return Self(
             sunrise: day.sun.sunrise,
             sunset: day.sun.sunset,
