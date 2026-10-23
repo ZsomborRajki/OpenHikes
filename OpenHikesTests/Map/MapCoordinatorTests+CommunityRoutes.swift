@@ -105,6 +105,40 @@ extension MapCoordinatorTests {
         #expect(drawn.allSatisfy { polyline in map.overlays.contains { $0 === polyline } })
     }
 
+    /// *Plan a Trail Here* opens the maker on the *Community* tab's map, and a
+    /// tab selection survives the push — so without the rule every shared
+    /// route in the area was drawn across the destination it had just set.
+    /// See ``MapView/Coordinator/withdrawCommunityForDrawing(_:on:)``.
+    @Test("drawing a trail takes the shared hikes off the map, and closing the maker brings them back")
+    func drawingATrailWithdrawsTheSharedHikes() async {
+        let browser = await browserWithLines(
+            [.stub(id: "ridge")],
+            outlines: ["ridge": Self.line()]
+        )
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(community: browser), coordinator)
+        defer { detach(map) }
+        await settle(until: "the line and its pin to reach the map") {
+            coordinator.communityRoutes.count == 1 && coordinator.communityAnnotations.count == 1
+        }
+        let shared = coordinator.communityRoutes.map(\.polyline)
+
+        trailMaker.setEditing(true)
+        await settle(until: "the maker to take the shared hikes off the map") {
+            coordinator.communityRoutes.isEmpty && coordinator.communityAnnotations.isEmpty
+        }
+        #expect(!map.overlays.contains { overlay in shared.contains { $0 === overlay } })
+        #expect(!map.annotations.contains { $0 is CommunityMapAnnotation })
+        #expect(browser.routeLines.count == 1, "the tab's answer is kept, only not drawn")
+
+        trailMaker.setEditing(false)
+        await settle(until: "closing the maker to bring them back") {
+            coordinator.communityRoutes.count == 1 && coordinator.communityAnnotations.count == 1
+        }
+        let restored = coordinator.communityRoutes.map(\.polyline)
+        #expect(restored.allSatisfy { polyline in map.overlays.contains { $0 === polyline } })
+    }
+
     /// Somebody else's trail at half strength, so it is legible without ever
     /// competing with the route the hiker chose a colour for.
     @Test("a shared hike's line is drawn faded")
