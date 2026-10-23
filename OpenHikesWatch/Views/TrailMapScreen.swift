@@ -57,8 +57,31 @@ import SwiftUI
 /// has left the trail. On a map, with terrain either side and a halo saying
 /// how sure the receiver is, it reads as what it is. How far off the trail
 /// they are is still said exactly, in the figures.
+///
+/// The line is drawn run by run rather than as one array (#997): the walked
+/// runs solid and cased, the paused legs between them dotted. `walkedRuns`
+/// and `pausedLegs` are ``WatchTrailPackage/walkedRuns`` and
+/// ``WatchTrailPackage/pausedLegs`` — indices into `coordinates`, read from
+/// the pauses exactly as ``WatchRouteTracker`` reads them.
 @MapContentBuilder
-func trailMapContent(coordinates: [CLLocationCoordinate2D], tint: Color) -> some MapContent {
+func trailMapContent(
+    coordinates: [CLLocationCoordinate2D],
+    walkedRuns: [Range<Int>],
+    pausedLegs: [Int],
+    tint: Color
+) -> some MapContent {
+    // A pause, or the jump between two GPX track segments: ground nobody
+    // walked, which the tracker gives no length and never matches onto.
+    // Drawn so the two pieces still read as one outing, but in the phone's
+    // paused style — the tint faded and dotted — with no casing and under
+    // everything else, so it never reads as a line to follow.
+    ForEach(pausedLegs, id: \.self) { leg in
+        MapPolyline(coordinates: [coordinates[leg], coordinates[leg + 1]])
+            .stroke(
+                tint.opacity(pausedOpacity),
+                style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: pausedDash)
+            )
+    }
     // A dark casing under the coloured line, drawn first so the line sits on
     // top of it. The phone's `TrailStroke` has done this since the beginning
     // and the watch was the one place going without: a 3 pt line in a hike's
@@ -66,13 +89,20 @@ func trailMapContent(coordinates: [CLLocationCoordinate2D], tint: Color) -> some
     // shaded north face, and the hiker does not get to choose which of those
     // the next kilometre is drawn on. The casing is what makes the route the
     // same line everywhere.
-    MapPolyline(coordinates: coordinates)
-        .stroke(
-            .black.opacity(casingOpacity),
-            style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
-        )
-    MapPolyline(coordinates: coordinates)
-        .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+    //
+    // Every run's casing before any run's line, so where two runs cross the
+    // later casing does not cut through the earlier line.
+    ForEach(walkedRuns, id: \.self) { run in
+        MapPolyline(coordinates: Array(coordinates[run]))
+            .stroke(
+                .black.opacity(casingOpacity),
+                style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
+            )
+    }
+    ForEach(walkedRuns, id: \.self) { run in
+        MapPolyline(coordinates: Array(coordinates[run]))
+            .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+    }
     // Which end is which, which a line alone never says. On an out-and-back
     // the two are the same place and one marker covers the other, which is
     // the truth about an out-and-back; on a loop they are the gate you parked
@@ -108,6 +138,14 @@ func trailMapContent(coordinates: [CLLocationCoordinate2D], tint: Color) -> some
 /// Enough to separate the line from whatever it crosses, and not so much that
 /// the route reads as a black line with a coloured core on a dark basemap.
 private let casingOpacity = 0.45
+
+/// How faint, and how broken, a paused leg is.
+///
+/// The phone's paused stretch, `MapCoordinator+RouteStyles.swift`: its alpha
+/// and its dots, so a hiker reads the same mark on both screens as the same
+/// statement.
+private let pausedOpacity = 0.4
+private let pausedDash: [CGFloat] = [1, 6]
 
 extension WatchTrailPackage {
     var mapCoordinates: [CLLocationCoordinate2D] {
@@ -283,7 +321,7 @@ private struct TrailMapFull: View {
 
     @Binding var isShowingFigures: Bool
 
-    /// `.automatic` frames the `MapPolyline`, which is what a trail should
+    /// `.automatic` frames the `MapPolyline`s, which is what a trail should
     /// open as — the whole walk, before any of it has been done. It also keeps
     /// this view out of the business of a route straddling ±180°, where the
     /// extremes of the raw longitudes would zoom out to the whole planet.
@@ -304,7 +342,12 @@ private struct TrailMapFull: View {
 
     var body: some View {
         Map(position: $camera) {
-            trailMapContent(coordinates: trail.mapCoordinates, tint: trail.mapTint)
+            trailMapContent(
+                coordinates: trail.mapCoordinates,
+                walkedRuns: trail.walkedRuns,
+                pausedLegs: trail.pausedLegs,
+                tint: trail.mapTint
+            )
         }
         .mapStyle(Self.hikingStyle)
         .accessibilityLabel("Map of \(trail.title)")
