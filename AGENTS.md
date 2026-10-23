@@ -289,7 +289,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     it, then assert.
 - **Compare floating-point values with `isApproximatelyEqual`.** Write
   `a.isApproximatelyEqual(to: b, absoluteTolerance: t)`, from swift-numerics'
-  `RealModule`, which `OpenHikesTests` and `OpenHikesSharedTests` link. Put any
+  `RealModule`, rather than `abs(a - b) < t`. If the test target does not link
+  the module yet, add it as a dependency rather than writing a helper. Put any
   optional chain on the `to:` side. Bounds and inequality stay written out,
   because `!isApproximatelyEqual` passes a NaN.
 - **Report a missing environment capability through `SuitePrecondition`.**
