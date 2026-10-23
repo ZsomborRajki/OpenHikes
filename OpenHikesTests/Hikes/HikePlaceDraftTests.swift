@@ -28,7 +28,7 @@ struct HikePlaceDraftTests {
 
     @Test("the prefilled name follows the kind, and a typed one stays")
     func nameFollowsTheKindUntilTyped() {
-        var draft = HikePlaceDraft()
+        let draft = HikePlaceDraft()
         draft.setKind(.summit)
         #expect(draft.name == TrailPlaceSymbol.summit.label)
 
@@ -47,7 +47,7 @@ struct HikePlaceDraftTests {
 
     @Test("the place is the hiker's own, at the spot, under the spot's id")
     func placeIsAtTheSpot() {
-        var draft = HikePlaceDraft()
+        let draft = HikePlaceDraft()
         draft.name = "  Watzmann view  "
         draft.note = "Best in the morning"
 
@@ -72,7 +72,7 @@ struct HikePlaceDraftTests {
 
     @Test("the placeholder pin is the place's kind at its spot, and carries no name")
     func placeholderCarriesNoName() {
-        var draft = HikePlaceDraft()
+        let draft = HikePlaceDraft()
         draft.name = "Watzmann view"
         let before = draft.placeholder(at: Self.spot)
 
@@ -83,5 +83,33 @@ struct HikePlaceDraftTests {
 
         draft.setKind(.summit)
         #expect(draft.placeholder(at: Self.spot).place.symbol == .summit)
+    }
+
+    /// The name and the note are written once a keystroke, and the form's
+    /// fields, title, kind picker and pin each read only their own answer —
+    /// see ``HikePlaceAdder``. That keeps a keystroke to its own field's
+    /// readers only while a write to one answer wakes no reader of another,
+    /// which it did while the draft was a value held whole by the session
+    /// (#935).
+    @Test("a keystroke wakes the readers of the answer typed into, and nobody else")
+    func answersAreObservedApart() async {
+        let draft = HikePlaceDraft()
+        let names = ObservationCounter { _ = draft.name }
+        let kinds = ObservationCounter { _ = draft.symbol }
+        let notes = ObservationCounter { _ = draft.note }
+
+        draft.name = "L"
+        await names.settle()
+
+        #expect(names.count == 1, "precondition: the keystroke reached the name's readers")
+        #expect(kinds.count == 0, "the kind picker and the pin are not readers of the name")
+        #expect(notes.count == 0, "nor is the note")
+
+        draft.note = "B"
+        await notes.settle()
+
+        #expect(notes.count == 1, "precondition: the keystroke reached the note's readers")
+        #expect(names.count == 1, "the name field and the title are not readers of the note")
+        #expect(kinds.count == 0)
     }
 }

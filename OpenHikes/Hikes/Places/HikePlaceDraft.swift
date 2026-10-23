@@ -5,14 +5,29 @@
 //  What *Add Place* from the map's pill has been told so far, before anything
 //  is on the hike.
 //
-//  A value apart from ``HikePlaceAdder`` for the reason ``HikePlaceCard`` is
-//  one apart from its screen: what the form starts out saying, how the name
-//  follows the kind, and what is finally written are decisions, and a decision
-//  inside a body is one only a UI test can check.
+//  Apart from ``HikePlaceAdder`` for the reason ``HikePlaceCard`` is apart
+//  from its screen: what the form starts out saying, how the name follows the
+//  kind, and what is finally written are decisions, and a decision inside a
+//  body is one only a UI test can check.
+//
+//  ## Each answer observed on its own
+//
+//  An `@Observable` class rather than a value, because the name is written
+//  once a keystroke. As one value held by ``HikePlaceAdderSession``, a read of
+//  any part of it was a read of all of it: the kind picker, the note and the
+//  pin were readers of every keystroke, and so was the form that read the
+//  kind for its pin and its badge. A render trace of typing "Lookout" ran
+//  twelve of the form's views at every keystroke — the form itself, its photo
+//  buttons, *Add*, the strip's arrival watch and the kind picker among them —
+//  and runs two now, the field and the title (#935). The name, the kind and
+//  the note are observed apart here, and a reader of one is not a reader of
+//  the others; the form's leaves each read only what they show — see
+//  ``HikePlaceAdder``.
 //
 
 import CoreLocation
 import Foundation
+import Observation
 import OpenHikesData
 
 /// Where a place about to be added stands, and the id it will be added under.
@@ -38,23 +53,28 @@ nonisolated struct HikePlaceSpot: Hashable, Sendable {
 
 /// The three things a hiker says about a place of their own — the same three
 /// ``HikePlaceEditor`` asks about one already on the hike.
-nonisolated struct HikePlaceDraft: Equatable, Sendable {
+@Observable
+final class HikePlaceDraft {
     /// What a place added from the pill is until the hiker says otherwise.
     /// The pill is on the map, and what a hiker stops on a trail to mark is
     /// most often the view.
-    static let defaultKind: TrailPlaceSymbol = .viewpoint
+    nonisolated static let defaultKind: TrailPlaceSymbol = .viewpoint
 
     /// Starts as the kind's own name, so the field is filled in rather than
     /// showing a prompt — the user's choice, 2026-09-24.
-    var name = Self.defaultKind.label
-    private(set) var symbol: TrailPlaceSymbol? = Self.defaultKind
+    var name = HikePlaceDraft.defaultKind.label
+    private(set) var symbol: TrailPlaceSymbol? = HikePlaceDraft.defaultKind
     var note = ""
+
+    /// Non-isolated so releasing the last reference never requires proving
+    /// we're on the main actor — see ``LocationManager``'s deinit for why.
+    nonisolated deinit { /* intentionally empty */ }
 
     /// Changes the kind, and the name with it for as long as the name is still
     /// the old kind's own — a hiker who picks *Summit* over the prefilled
     /// *Viewpoint* would otherwise be adding a summit called "Viewpoint". A
     /// name the hiker typed is theirs and stays.
-    mutating func setKind(_ kind: TrailPlaceSymbol?) {
+    func setKind(_ kind: TrailPlaceSymbol?) {
         if name.trimmingCharacters(in: .whitespacesAndNewlines) == Self.label(of: symbol) {
             name = Self.label(of: kind)
         }

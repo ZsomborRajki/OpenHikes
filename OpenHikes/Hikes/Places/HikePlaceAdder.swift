@@ -55,6 +55,16 @@
 //  side panel, which replaces this view; see that type for what it cost while
 //  all of it was this view's own state.
 //
+//  ## A keystroke is the name's, not the form's
+//
+//  The name is written once a keystroke, so nothing this view's body builds —
+//  the `ScrollViewReader` closure the form is drawn in included, which SwiftUI
+//  runs as a body of its own — reads the draft or makes a binding to it. The
+//  title row, each field and the pin's claim are views of their own that do,
+//  each reading only the answer it shows, so typing a name re-runs the field
+//  and the title and nothing else on the form. ``HikePlaceDraft`` says what
+//  the form cost while it read the draft itself.
+//
 
 import OpenHikesData
 import SwiftData
@@ -86,7 +96,7 @@ struct HikePlaceAdder: View {
         ScrollViewReader { scroller in
             ScrollView {
                 VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
-                    header
+                    HikePlaceAdderHeader(draft: session.draft, spot: spot)
                     Text("Move the map to put the pin where the place is.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -99,7 +109,7 @@ struct HikePlaceAdder: View {
                                 withAnimation { scroller.scrollTo(Self.stripID) }
                             }
                         }
-                    fields
+                    HikePlaceAdderFields(draft: session.draft)
                     HikePlaceAdderLocation(spot: spot, placePins: placePins)
                 }
                 .padding()
@@ -130,7 +140,7 @@ struct HikePlaceAdder: View {
             }
         }
         .background {
-            HikePlacePinClaim(hike: hike, controller: placePins, placeholder: session.draft.placeholder(at: spot))
+            HikePlaceAdderPinClaim(hike: hike, controller: placePins, draft: session.draft, spot: spot)
         }
         // The session's own staging rather than this view's: a camera this
         // form presented can outlive it by a turn of the phone, and its
@@ -149,20 +159,6 @@ struct HikePlaceAdder: View {
         .accessibilityIdentifier("hike-place-adder")
     }
 
-    private var header: some View {
-        let shown = session.draft.placeholder(at: spot).place
-        return PlaceCardHeader {
-            TrailPlaceBadge(systemImage: shown.systemImageName, tint: shown.tint)
-        } title: {
-            Text(session.draft.displayName)
-                .lineLimit(2)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("hike-place-adder-title")
-        } subtitle: {
-            Text("Added by you")
-        }
-    }
-
     private var actions: some View {
         HStack(spacing: 8) {
             TrailPlacePhotoButtons(
@@ -177,29 +173,6 @@ struct HikePlaceAdder: View {
         }
         .buttonBorderShape(.roundedRectangle(radius: TrailPlaceActionLabelStyle.cornerRadius))
         .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var fields: some View {
-        StatList(title: String(localized: "Details")) {
-            TextField(
-                "Name",
-                text: $session.draft.name,
-                prompt: Text(TrailPlace.unnamedName(for: session.draft.symbol))
-            )
-            .trailPlaceRow()
-            .accessibilityIdentifier("hike-place-adder-name")
-            LabeledContent("Kind") {
-                TrailPlaceKindPicker(
-                    selection: Binding(get: { session.draft.symbol }, set: { session.draft.setKind($0) })
-                )
-                .labelsHidden()
-            }
-            .trailPlaceRow()
-            TextField("Note", text: $session.draft.note, axis: .vertical)
-                .lineLimit(1...6)
-                .trailPlaceRow()
-                .accessibilityIdentifier("hike-place-adder-note")
-        }
     }
 
     /// Opens this screen's own camera — see the header for why not the pill's.
@@ -264,6 +237,107 @@ private struct HikePlaceAdderLocation: View {
 
     var body: some View {
         TrailPlaceFactsAndLocation(facts: [], coordinate: (placePins?.placement(of: spot) ?? spot).coordinate)
+    }
+}
+
+/// The form's title row: the kind's glyph, the name as it will read, and whose
+/// place it is.
+///
+/// Reads the kind, for the badge, and leaves the name to
+/// ``HikePlaceAdderTitle``, so a keystroke redraws the title and not the row.
+private struct HikePlaceAdderHeader: View {
+    let draft: HikePlaceDraft
+    let spot: HikePlaceSpot
+
+    var body: some View {
+        let shown = draft.placeholder(at: spot).place
+        PlaceCardHeader {
+            TrailPlaceBadge(systemImage: shown.systemImageName, tint: shown.tint)
+        } title: {
+            HikePlaceAdderTitle(draft: draft)
+        } subtitle: {
+            Text("Added by you")
+        }
+    }
+}
+
+/// The name as the place will read: what was typed, or the kind's own when the
+/// field is blank. The one view besides the field that a keystroke redraws.
+private struct HikePlaceAdderTitle: View {
+    let draft: HikePlaceDraft
+
+    var body: some View {
+        Text(draft.displayName)
+            .lineLimit(2)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("hike-place-adder-title")
+    }
+}
+
+/// Name, kind and note: ``HikePlaceEditor``'s three questions.
+///
+/// Reads none of them. Whichever body makes a field's binding is re-run by
+/// every write through it, so each row is a view that makes its own; made
+/// here, a keystroke in the name re-ran the kind picker and the note.
+private struct HikePlaceAdderFields: View {
+    let draft: HikePlaceDraft
+
+    var body: some View {
+        StatList(title: String(localized: "Details")) {
+            HikePlaceAdderNameField(draft: draft)
+            LabeledContent("Kind") {
+                HikePlaceAdderKindPicker(draft: draft)
+                    .labelsHidden()
+            }
+            .trailPlaceRow()
+            HikePlaceAdderNoteField(draft: draft)
+        }
+    }
+}
+
+/// The name, whose empty prompt is what a blank name will read as.
+private struct HikePlaceAdderNameField: View {
+    @Bindable var draft: HikePlaceDraft
+
+    var body: some View {
+        TextField("Name", text: $draft.name, prompt: Text(TrailPlace.unnamedName(for: draft.symbol)))
+            .trailPlaceRow()
+            .accessibilityIdentifier("hike-place-adder-name")
+    }
+}
+
+/// The kind, which takes the name with it while the name is still the kind's
+/// own — see ``HikePlaceDraft/setKind(_:)``. A binding's getter is read as it
+/// is built, so this body is a reader of the kind and of nothing else.
+private struct HikePlaceAdderKindPicker: View {
+    let draft: HikePlaceDraft
+
+    var body: some View {
+        TrailPlaceKindPicker(selection: Binding(get: { draft.symbol }, set: { draft.setKind($0) }))
+    }
+}
+
+private struct HikePlaceAdderNoteField: View {
+    @Bindable var draft: HikePlaceDraft
+
+    var body: some View {
+        TextField("Note", text: $draft.note, axis: .vertical)
+            .lineLimit(1...6)
+            .trailPlaceRow()
+            .accessibilityIdentifier("hike-place-adder-note")
+    }
+}
+
+/// The hike's pins, with the place about to be added among them in its kind's
+/// glyph. Its own view so that a reader of the kind is not the form.
+private struct HikePlaceAdderPinClaim: View {
+    let hike: Hike
+    let controller: TrailPlacePinController?
+    let draft: HikePlaceDraft
+    let spot: HikePlaceSpot
+
+    var body: some View {
+        HikePlacePinClaim(hike: hike, controller: controller, placeholder: draft.placeholder(at: spot))
     }
 }
 

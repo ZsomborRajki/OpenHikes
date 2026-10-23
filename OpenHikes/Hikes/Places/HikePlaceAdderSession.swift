@@ -31,8 +31,10 @@ final class HikePlaceAdderSession {
     /// we're on the main actor — see ``LocationManager``'s deinit for why.
     nonisolated deinit { /* intentionally empty */ }
 
-    /// The name, kind and note the hiker has given so far.
-    var draft = HikePlaceDraft()
+    /// The name, kind and note the hiker has given so far. A reference of its
+    /// own rather than a value here, so a keystroke is a change to the name
+    /// and not to the session — see ``HikePlaceDraft``.
+    let draft = HikePlaceDraft()
     /// What was taken or picked and is waiting for *Add*, in that order.
     private(set) var photos: [HikePlaceStagedPhoto] = []
     /// The form's own camera and picker — see ``HikePlaceAdder`` for why not

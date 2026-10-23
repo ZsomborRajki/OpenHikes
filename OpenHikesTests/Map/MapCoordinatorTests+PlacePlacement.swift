@@ -173,7 +173,7 @@ extension MapCoordinatorTests {
         sheetMetrics.detentCommitted(toMiddle: true)
         settle(sheetMetrics, at: map.bounds.height * 0.6)
         #expect(distance(before, coordinator.focusPoint(in: map)) > 10, "precondition: the middle moved")
-        var draft = HikePlaceDraft()
+        let draft = HikePlaceDraft()
         draft.name = "Spring"
         placePins.update([], token: token, placeholder: draft.placeholder(at: spot))
 
