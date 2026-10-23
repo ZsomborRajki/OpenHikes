@@ -2,9 +2,10 @@
 //  CommonsAreaDateLineTests.swift
 //  OpenHikesTests
 //
-//  The trail maker's *Search this area* picks the same Commons photographs
-//  whichever side of the date line the area's middle stands on: a picture a
-//  kilometre over ±180° is a kilometre away, not a lap of the planet.
+//  The Commons photographs an area search picks, in the trail maker and on
+//  the *Community* tab alike, are the same whichever side of the date line
+//  the area's middle stands on: a picture a kilometre over ±180° is a
+//  kilometre away, not a lap of the planet.
 //
 
 import CoreLocation
