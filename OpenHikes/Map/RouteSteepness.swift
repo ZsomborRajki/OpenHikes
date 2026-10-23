@@ -81,6 +81,13 @@ nonisolated enum RouteSteepness {
     /// The last window of a stretch is usually short; under half a window, it
     /// is folded into the stretch before it, because a slope over a few
     /// metres is the noise the window exists to average away.
+    ///
+    /// A pause closes the window too, and the next starts on the fix the
+    /// pause ended at. The leg between is not trail (see ``RouteBoundary``):
+    /// the height across it was carried by car or by lift, and measured as a
+    /// slope, a drive up to a second level walk was the steepest ground on
+    /// the scale (#992). The stretches either side never join, whatever their
+    /// shades.
     static func runs(route: [RouteCoordinate]) -> [Run] {
         let heights = smoothedHeights(of: route)
         var builder = Builder(route: route, heights: heights)
@@ -93,6 +100,12 @@ nonisolated enum RouteSteepness {
                 continue
             }
             guard let start = windowStart else {
+                windowStart = index
+                windowLength = 0
+                continue
+            }
+            guard !route[index].isPauseBoundary else {
+                builder.closeTail(from: start, to: index - 1, length: windowLength)
                 windowStart = index
                 windowLength = 0
                 continue
@@ -117,10 +130,10 @@ nonisolated enum RouteSteepness {
     /// The average is over distance, not over points: a snapped line's nodes
     /// bunch up on every hairpin and a timed track's on every stop, and
     /// counting them would pull a point on a steady climb towards the height
-    /// of the nearest bend. It never reaches across a gap in the heights, and
-    /// near the end of a stretch it narrows to the same distance either side,
-    /// so a steady climb keeps its grade right to its last point rather than
-    /// being flattened by an average that can only look back.
+    /// of the nearest bend. It never reaches across a gap in the heights or a
+    /// pause, and near the end of a stretch it narrows to the same distance
+    /// either side, so a steady climb keeps its grade right to its last point
+    /// rather than being flattened by an average that can only look back.
     static func smoothedHeights(of route: [RouteCoordinate]) -> [Double?] {
         var smoothed = [Double?](repeating: nil, count: route.count)
         var index = route.startIndex
@@ -129,7 +142,10 @@ nonisolated enum RouteSteepness {
                 index += 1
                 continue
             }
-            let stretch = index..<(route[index...].firstIndex { $0.elevation?.isFinite != true } ?? route.endIndex)
+            // Up to the next point with no height, or the next one a pause
+            // ended at, which starts a stretch of its own.
+            let end = route[(index + 1)...].firstIndex { $0.elevation?.isFinite != true || $0.isPauseBoundary }
+            let stretch = index..<(end ?? route.endIndex)
             smoothStretch(route[stretch], into: &smoothed)
             index = stretch.upperBound
         }

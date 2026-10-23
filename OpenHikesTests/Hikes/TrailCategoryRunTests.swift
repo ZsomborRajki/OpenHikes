@@ -151,6 +151,28 @@ struct TrailCategoryRunTests {
         #expect(runs.map(\.category) == [.hiking, .unmapped, .hiking])
     }
 
+    /// A pause can end on the way it began on, and then the grade is the same
+    /// on both sides of it. The stretch between was not walked (#992), so the
+    /// line stops at the fix before the pause and starts again at the one
+    /// after, rather than one run being drawn straight across.
+    @Test("a pause ends a run even when the same grade resumes after it")
+    func aPauseEndsTheRun() async throws {
+        var walked = Self.route([Self.south, 47.6302, 47.6304, 47.6306, 47.6308])
+        walked[3].boundary = .paused
+
+        let runs = try await TrailBreakdownAnalyzer.runs(
+            of: TrailDifficulty.self,
+            route: walked,
+            graph: Self.splitGraph()
+        )
+
+        #expect(runs.map(\.category) == [.hiking, .hiking])
+        #expect(runs.first?.coordinates.last?.latitude == walked[2].latitude)
+        #expect(runs.last?.coordinates.first?.latitude == walked[3].latitude)
+        let drawn = runs.reduce(0) { total, run in total + RouteGeometry.lengthMeters(of: run.coordinates) }
+        #expect(drawn.isApproximatelyEqual(to: walked.lengthMeters, absoluteTolerance: 0.5))
+    }
+
     @Test("a route of one point has no runs")
     func aDegenerateRouteHasNoRuns() async throws {
         let runs = try await TrailBreakdownAnalyzer.runs(

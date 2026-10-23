@@ -4,8 +4,8 @@
 //
 //  How steep each stretch of a route is: the thresholds the scale steps at,
 //  the window grades are measured over, the heights averaged before them,
-//  and what a gap in the heights, a short last window or a short stretch
-//  does to the stretches.
+//  and what a gap in the heights, a pause, a short last window or a short
+//  stretch does to the stretches.
 //
 //  Routes are built along a meridian with heights set from the distance
 //  actually walked, so a stretch built at 12% measures at 12%.
@@ -123,6 +123,62 @@ struct RouteSteepnessTests {
         #expect(runs.allSatisfy { $0.shade == .easiest })
         let coordinates = runs.flatMap(\.coordinates)
         #expect(!coordinates.contains { $0.latitude == route[20].latitude })
+    }
+
+    /// Two level walks a kilometre apart, the second a thousand metres higher,
+    /// with the recording paused between them (#992). Measured across the
+    /// pause, the height carried up was the steepest ground on the scale.
+    @Test("a height carried across a pause is no climb")
+    func aPausedTransferIsNoClimb() {
+        let route = [
+            RouteCoordinate(latitude: 47.000, longitude: 12, elevation: 0),
+            RouteCoordinate(latitude: 47.001, longitude: 12, elevation: 0),
+            RouteCoordinate(latitude: 47.011, longitude: 12, elevation: 1000, boundary: .paused),
+            RouteCoordinate(latitude: 47.012, longitude: 12, elevation: 1000),
+        ]
+
+        let runs = RouteSteepness.runs(route: route)
+
+        #expect(runs.map(\.shade) == [.easiest, .easiest])
+        #expect(runs.map(\.coordinates.count) == [2, 2])
+    }
+
+    /// Level ground at one height either side of a drive: nothing in the
+    /// heights tells the two walks apart, so only the pause keeps the
+    /// stretch from being drawn straight across the drive.
+    @Test("a pause splits the stretch even when the ground either side of it matches")
+    func aPauseSplitsTheStretch() {
+        let walk = Self.route([(400, 0)])
+        let resumed = walk.map { point in
+            RouteCoordinate(latitude: point.latitude, longitude: point.longitude + 0.02, elevation: point.elevation)
+        }
+        var route = walk + resumed
+        route[walk.count].boundary = .paused
+
+        let runs = RouteSteepness.runs(route: route)
+
+        #expect(runs.map(\.shade) == [.easiest, .easiest])
+        #expect(runs.map(\.coordinates.count) == [walk.count, resumed.count])
+    }
+
+    /// A pause a few metres across, with a hundred metres of height carried
+    /// over it, still separates two walks. Averaged across it, the heights
+    /// either side would lean towards each other, and the level ground beside
+    /// it would read as the start of a climb.
+    @Test("heights are never averaged across a pause")
+    func heightsAreNotAveragedAcrossAPause() throws {
+        var route = Self.route([(400, 0)])
+        for index in 21..<route.count {
+            route[index].elevation = route[index].elevation.map { $0 + 100 }
+        }
+        route[21].boundary = .paused
+
+        let smoothed = RouteSteepness.smoothedHeights(of: route)
+
+        for (point, height) in zip(route, smoothed) {
+            let expected = try #require(point.elevation)
+            #expect(try #require(height).isApproximatelyEqual(to: expected, absoluteTolerance: 0.01))
+        }
     }
 
     /// A slope over a few metres is the noise the window exists to average
