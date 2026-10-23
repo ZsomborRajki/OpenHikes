@@ -3,22 +3,32 @@
 //  OpenHikes
 //
 //  Where one coloured stretch of the line meets the next, the colour slides
-//  from one into the other over a short distance rather than changing at a
-//  hard edge — see ``DirectionalPolylineRenderer``'s stretches.
+//  from one into the other rather than changing at a hard edge — see
+//  ``DirectionalPolylineRenderer``'s stretches.
 //
-//  Each stretch is still drawn flat, in its own colour, and a short *piece* of
-//  line is drawn over every place two of them meet: the last ``blendMeters`` of
-//  one and the first of the next, filled with a gradient from the one colour to
-//  the other. Only the pieces are gradients. MapKit's own gradient renderer
-//  draws the whole line as one, and measured on a 2,000-point route it took
-//  fourteen times as long per tile as the flat stretches; one Core Graphics
-//  gradient clipped to each piece costs less than the flat stretches do, and
-//  the same at any zoom.
+//  Each stretch is still drawn flat, in its own colour, and a *piece* of line
+//  is drawn over every place two of them meet: the end of one and the start of
+//  the next, filled with a gradient from the one colour to the other. Only the
+//  pieces are gradients. MapKit's own gradient renderer draws the whole line as
+//  one, and measured on a 2,000-point route it took fourteen times as long per
+//  tile as the flat stretches; one Core Graphics gradient clipped to each piece
+//  costs less than the flat stretches do, and the same at any zoom.
 //
-//  A piece reaches ``blendMeters`` into each side, or half of a short
-//  stretch, so even the shortest stretch still shows its own colour at its
-//  middle. Nothing blends across a gap, or into a stretch that does not start
-//  where the last one ended.
+//  A piece reaches ``reachShare`` of the shorter of its two stretches into
+//  each of them. The same distance either side, so the colour is half one and
+//  half the other exactly where the stretches meet; and a share of the shorter,
+//  so neither end of a stretch gives up more than that share and every stretch
+//  keeps its middle in its own colour. A share of the stretches rather than a
+//  fixed distance, because a fade the renderer is to draw has to be longer than
+//  the line is wide: steepness stretches are at least
+//  ``RouteSteepness/minimumStretchMeters`` long, and a fixed 25 m either side
+//  came to under three points of the Königssee fixture seen whole, so the
+//  renderer left every one of them out and the line changed colour at hard
+//  edges until it was zoomed well in. Tied to the stretches, a long climb fades
+//  over a few hundred metres and a short difficulty grade over a few.
+//
+//  Nothing blends across a gap, or into a stretch that does not start where the
+//  last one ended.
 //
 
 import Algorithms
@@ -26,10 +36,11 @@ import CoreGraphics
 import MapKit
 
 nonisolated enum RouteShadeBlend {
-    /// How far into each stretch a blend reaches from a change of colour: a
-    /// quarter of the window steepness is measured over, so a stretch is mostly
-    /// its own colour and the change still reads as a change.
-    static let blendMeters = 25.0
+    /// How far into each of its two stretches a blend reaches from the point
+    /// they share, as a share of the shorter one — see the file header. A
+    /// quarter, so every stretch keeps at least its middle half in its own
+    /// colour and a change of colour still reads as one.
+    static let reachShare = 0.25
 
     /// The line either side of one change of colour.
     struct Piece {
@@ -75,11 +86,11 @@ nonisolated enum RouteShadeBlend {
                   to: next.color.copy(alpha: 1) ?? next.color
               )
         else { return nil }
-        // In map points, the unit the line is drawn in. A hike spans too
-        // little latitude for the scale to drift along one change of colour.
-        let blend = blendMeters * MKMapPointsPerMeterAtLatitude(end.coordinate.latitude)
-        let tail = leading(before.reversed(), reach: min(blend, length(of: before) / 2))
-        let head = leading(after, reach: min(blend, length(of: after) / 2))
+        // In map points, the unit the line is drawn in, the same distance
+        // into each stretch — see the file header.
+        let reach = reachShare * min(length(of: before), length(of: after))
+        let tail = leading(before.reversed(), reach: reach)
+        let head = leading(after, reach: reach)
         let line = Array(tail.reversed() + head.dropFirst())
         guard line.count > 1 else { return nil }
         let bounds = MKPolyline(points: line, count: line.count).boundingMapRect

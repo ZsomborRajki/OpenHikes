@@ -147,23 +147,23 @@ extension DirectionalPolylineRendererTests {
         return canvas
     }
 
-    /// A solid green line east along a parallel, drawn red over its first
-    /// half and blue over its second, at `alpha`, centred in a canvas just
-    /// wider than it — so the canvas's middle row is the line and its middle
-    /// column the place the stretches meet.
-    private static func renderMeeting(alpha: CGFloat) throws -> Canvas {
-        let whole = meetingPoints(0, meetingLength)
+    /// A solid green line `length` metres east along a parallel, drawn red
+    /// over its first half and blue over its second, at `alpha`, centred in a
+    /// canvas just wider than it — so the canvas's middle row is the line and
+    /// its middle column the place the stretches meet.
+    private static func renderMeeting(alpha: CGFloat, length: Double = meetingLength) throws -> Canvas {
+        let whole = meetingPoints(0, length)
         let polyline = MKPolyline(points: whole, count: whole.count)
         let renderer = Self.renderer(.solid, on: polyline)
         renderer.strokeColor = UIColor.green.withAlphaComponent(alpha)
-        let half = meetingLength / 2
+        let half = length / 2
         renderer.setShades([
             stretch(0, half, CGColor(red: 1, green: 0, blue: 0, alpha: alpha)),
-            stretch(half, meetingLength, CGColor(red: 0, green: 0, blue: 1, alpha: alpha)),
+            stretch(half, length, CGColor(red: 0, green: 0, blue: 1, alpha: alpha)),
         ])
         let canvas = try Canvas()
         let perMeter = MKMapPointsPerMeterAtLatitude(meetingLatitude)
-        let shown = (meetingLength + meetingMargin * 2) * perMeter
+        let shown = (length + meetingMargin * 2) * perMeter
         let zoom = CGFloat(Double(canvas.context.width) / shown)
         let rect = MKMapRect(
             x: meetingStart.x - meetingMargin * perMeter,
@@ -266,6 +266,22 @@ extension DirectionalPolylineRendererTests {
             middle.red > Self.dim && middle.blue > Self.dim && middle.green < Self.dim,
             "the meeting point should be a mix of the two, and none of the line under them"
         )
+    }
+
+    /// Three kilometres across a 256-pixel canvas is about the scale of a
+    /// whole hike on a phone, where a blend no longer than the line is wide
+    /// is left out. A fixed 25 m either side was, so long stretches met at a
+    /// hard edge; a share of the stretches is long enough to draw.
+    @Test("long stretches seen whole still blend where they meet")
+    func longStretchesBlendSeenWhole() throws {
+        let length = 3000.0
+        let canvas = try Self.renderMeeting(alpha: 1, length: length)
+        let shown = length + Self.meetingMargin * 2
+        let column = { (meters: Double) in Int((Self.meetingMargin + meters) / shown * Double(canvas.context.width)) }
+        for meters in [length / 2 - 80, length / 2 + 80] {
+            let pixel = Self.pixel(in: canvas, x: column(meters), y: canvas.context.height / 2)
+            #expect(pixel.red > Self.dim && pixel.blue > Self.dim, "\(meters) m along should mix red and blue")
+        }
     }
 
     /// The blend is laid over the ends of the stretches it joins; drawn
