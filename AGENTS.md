@@ -748,7 +748,9 @@ answer.
 
 **Measuring.** `Scripts/render-trace.sh` runs a UI-test selection under
 Instruments and credits every body evaluation, with the property changes that
-caused it, to the test step it ran in.
+caused it, to the test step it ran in. Give it the pool device and the
+checkout's own build, as `run-ui-tests.sh` takes them
+(`--device "$udid" --derived-data DerivedData`).
 
 - `report.md` leads with hot spots (a view that ran three or more times in one
   step). `bodies.tsv` holds the counts.

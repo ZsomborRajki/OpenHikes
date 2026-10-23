@@ -96,7 +96,7 @@ xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikes \
 Scripts/lint.sh
 ```
 
-The test commands — the app and widget unit tests, both local packages, the shell scripts' own tests and UI automation — are in *Build and test* in [`AGENTS.md`](AGENTS.md), written the way CI runs them, and the render trace is under *Render isolation, in practice* in the same file. Every run that needs a simulator takes one from `Scripts/sim-pool.sh` and builds into the checkout's own `DerivedData`, because two runs that share either a device or a build folder break each other without saying so; *A second session on this machine* in the same file says why, and how to give the device back.
+The test commands — the app and widget unit tests, both local packages, the shell scripts' own tests and UI automation — are in *Build and test* in [`AGENTS.md`](AGENTS.md), written the way CI runs them, and the render trace is under *Render isolation, in practice* in the same file. Every run that needs a simulator takes one from `Scripts/sim-pool.sh` and builds into the checkout's own `DerivedData`; *A second session on this machine* in the same file says why, and how to give the device back.
 
 Unit and integration tests use Swift Testing; `OpenHikesUITests` uses XCUITest, because Apple's UI automation and launch metrics are not available through Swift Testing.
 

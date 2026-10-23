@@ -37,22 +37,20 @@ default, so a build with no keys works; the paid providers simply stay locked.
 
 ## Before you open a pull request
 
-Run what CI runs: strict SwiftLint (`Scripts/lint.sh`), the app and widget
-unit tests, and both local packages with warnings as errors. The commands are
-in *Build and test* in [`AGENTS.md`](AGENTS.md), written the way CI runs them,
-so a green run there is a green run in CI. Copy them from there rather than
-from memory: the unit tests take a simulator from `Scripts/sim-pool.sh` in the
-same shell and build into the checkout's own `DerivedData`, so a second
-checkout on the same machine never installs over your run or waits on your
-build. Give the simulator back with `Scripts/sim-pool.sh release` when you are
-done testing.
+Run strict SwiftLint (`Scripts/lint.sh`), the app and widget unit tests, and
+both local packages with warnings as errors. Copy the commands from *Build and
+test* in [`AGENTS.md`](AGENTS.md), which writes them the way CI runs them,
+rather than from memory: the unit tests take a simulator from
+`Scripts/sim-pool.sh` in the same shell and build into the checkout's own
+`DerivedData` (*A second session on this machine* says why). Give the
+simulator back with `Scripts/sim-pool.sh release` when you are done testing.
 
 `Scripts/install-git-hooks.sh` installs an opt-in pre-push hook that runs the
 linter for you.
 
 Changing something under `Scripts/` rather than the app? CI runs the shell
-scripts' own tests too (`Scripts/run-script-tests.sh`, against stubbed
-`xcrun`, `xcodebuild` and `swiftlint`), and nothing above touches them.
+scripts' own tests too (`Scripts/run-script-tests.sh`), and nothing above
+touches them.
 
 The functional UI automation stays out of CI because a shared runner makes real
 gestures and timing-sensitive waits slow and unreliable. Run
