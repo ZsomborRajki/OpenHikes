@@ -105,16 +105,20 @@ enum LiveActivityHarness {
         )
     }
 
+    /// - Parameter session: which recording this is. Every suite but one
+    ///   means the same recording throughout; the one that does not is
+    ///   asking whether something outlives it into the next.
     static func recordingRequest(
         distanceMeters: Double = 1000,
         runState: HikeActivityAttributes.ContentState.RunState = .running,
         offRouteMeters: Double? = nil,
         elapsedSeconds: TimeInterval = 600,
-        at date: Date = start
+        at date: Date = start,
+        session: UUID = sessionID
     ) -> HikeActivityRequest {
         HikeActivityRequest(
             attributes: .recording(
-                sessionID: sessionID,
+                sessionID: session,
                 title: "Morning walk",
                 tintHex: "#34C759",
                 startedAt: start

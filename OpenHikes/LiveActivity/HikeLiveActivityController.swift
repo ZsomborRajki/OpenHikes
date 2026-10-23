@@ -152,6 +152,13 @@ final class HikeLiveActivityController {
     @ObservationIgnored private var lastRouteFlipAt: Date?
     /// What the panel should be saying about the last button tap, carried
     /// onto every push until the run state proves it is no longer true.
+    ///
+    /// Belongs to ``current`` and to nothing after it: it is taken only while
+    /// a panel is up to draw it, and cleared with the rest of that panel's
+    /// state when it ends or is replaced. A refusal that outlived its panel
+    /// used to reach the next recording's first interval update, telling a
+    /// hiker whose walk had started perfectly well about a tap on a panel
+    /// that was already gone.
     @ObservationIgnored private var pendingRefusal: HikeActivityControlRefusal?
 
     /// Chains the framework calls so they land in the order they were asked
@@ -266,9 +273,15 @@ final class HikeLiveActivityController {
     /// just touched the panel and is looking at it — so it bypasses the
     /// twenty-second update floor exactly as a pause does, and pays the
     /// ten-second one instead.
+    ///
+    /// Dropped when there is no panel to say it on, rather than kept for
+    /// whichever one comes next — see ``pendingRefusal``. A cold launch made to
+    /// run the tap loses nothing by that: the coordinator settles recovery
+    /// before it acts, and recovery republishes, so a live recording's panel
+    /// has been adopted by the time a refusal gets here.
     func noteControlRefusal(_ refusal: HikeActivityControlRefusal) {
-        pendingRefusal = refusal
         guard isEnabled, let showing = current else { return }
+        pendingRefusal = refusal
         let now = clock()
         guard elapsed(since: lastRunStateFlipAt, now: now, atLeast: Self.minimumFlipInterval)
         else { return }
@@ -527,6 +540,9 @@ final class HikeLiveActivityController {
         lastUpdateAt = now
         lastRunStateFlipAt = nil
         lastRouteFlipAt = nil
+        // Whatever the replaced panel was saying about its buttons, this one's
+        // have not been pressed.
+        pendingRefusal = nil
         enqueue { [presenter] in
             // Ended first and awaited, not fired alongside: two activities of
             // the same attributes type can be on screen at once, and a
@@ -551,6 +567,7 @@ final class HikeLiveActivityController {
         lastUpdateAt = nil
         lastRunStateFlipAt = nil
         lastRouteFlipAt = nil
+        pendingRefusal = nil
         enqueue { [presenter] in
             await presenter.end(
                 finalState: finalState,
