@@ -220,6 +220,11 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     private var memory: OrderedDictionary<TrailGraphRegion, CachedGraph> = [:]
     private var inFlight: [TrailGraphRegion: InFlightFetch] = [:]
     private var retryAfter: Date?
+    /// Every caller currently suspended in ``joinFetch(for:startingIfNeeded:)``,
+    /// keyed by the same ID as its claim in ``InFlightFetch/waiters``. Kept
+    /// apart from `inFlight` because a fetch leaves `inFlight` the moment it
+    /// lands, before its waiters have been handed the result.
+    private var suspendedWaiters: [UUID: CheckedContinuation<TrailGraph, any Error>] = [:]
 
     init(
         directory: URL? = FileManager.default.urls(
@@ -296,15 +301,58 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         // without double-releasing somebody else's claim.
         defer { releaseWaiter(waiterID, from: key, fetchID: fetch.id) }
 
+        // Each caller suspends on its own continuation rather than on
+        // `task.value`, because only then can giving up end *this* wait while
+        // the download goes on for whoever still wants it. Awaiting the task
+        // directly could not: dropping the claim cancels nothing while another
+        // waiter remains, so the caller who gave up stayed suspended until the
+        // other caller's download finished — and Stop, which races its
+        // prefetches against a budget in a task group that waits for its
+        // cancelled children, waited with it. The continuation is resumed
+        // exactly once, by whichever comes first: the fetch's outcome or this
+        // caller's cancellation (``resumeWaiter(_:with:)``).
         return try await withTaskCancellationHandler {
-            try await fetch.task.value
+            try await withCheckedThrowingContinuation { continuation in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                suspendedWaiters[waiterID] = continuation
+                // Inherits the actor, so the hand-back is a plain call. A
+                // waiter that has already left is no longer in
+                // `suspendedWaiters`, which makes this a no-op for it.
+                Task {
+                    let outcome = await fetch.task.result
+                    self.resumeWaiter(waiterID, with: outcome)
+                }
+            }
         } onCancel: {
             // Runs synchronously wherever cancellation happened, so it cannot
-            // touch actor state; the hop is one task per cancellation rather
-            // than one per fetch. Dropping the last waiter here is what makes
-            // `task.value` above resume at all.
-            Task { await self.releaseWaiter(waiterID, from: key, fetchID: fetch.id) }
+            // touch actor state. A cancellation that lands before the
+            // continuation is stored is caught by the `Task.isCancelled` check
+            // above: the flag is set before this handler runs, and the actor
+            // is not given up between that check and the store.
+            Task { await self.abandonWait(waiterID, from: key, fetchID: fetch.id) }
         }
+    }
+
+    /// Ends one caller's wait with `outcome`, if it is still waiting.
+    private func resumeWaiter(
+        _ waiterID: UUID,
+        with outcome: Result<TrailGraph, any Error>
+    ) {
+        suspendedWaiters.removeValue(forKey: waiterID)?.resume(with: outcome)
+    }
+
+    /// One caller giving up: its own wait ends now, and its claim on the
+    /// download goes, which cancels the download only if it was the last.
+    private func abandonWait(
+        _ waiterID: UUID,
+        from key: TrailGraphRegion,
+        fetchID: UUID
+    ) {
+        resumeWaiter(waiterID, with: .failure(CancellationError()))
+        releaseWaiter(waiterID, from: key, fetchID: fetchID)
     }
 
     private func beginFetch(for key: TrailGraphRegion) -> InFlightFetch {
