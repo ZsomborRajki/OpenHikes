@@ -167,19 +167,37 @@ public enum WatchRecordingRecovery: Sendable, Equatable {
     /// The walk already reached the outbound queue, and only the journal's
     /// removal was lost. Offering it again would be offering it twice.
     case alreadyQueued
+    /// A file named for the walk is on the queue, which only reading it can
+    /// turn into ``alreadyQueued`` — see ``confirming(_:on:)``. Until then
+    /// the journal is the copy to keep.
+    case confirm(WatchRecoveredRecording)
     /// No journal, or none that could be read.
     case nothing
     case offer(WatchRecoveredRecording)
 
-    /// - Parameter queued: the session IDs already on the outbound queue.
+    /// - Parameter queued: the session IDs on the outbound queue, from the
+    ///   file names alone — ``WatchWalkQueue/listedSessionIDs()``.
     ///
     /// Stop writes the walk to the queue *before* it removes the journal, so
     /// a process killed between the two leaves both. The queue is the one
     /// that counts, because it is what the phone is sent.
     public static func resolve(_ recording: WatchRecoveredRecording?, queued: Set<UUID>) -> Self {
         guard let recording else { return .nothing }
-        if queued.contains(recording.sessionID) { return .alreadyQueued }
+        if queued.contains(recording.sessionID) { return .confirm(recording) }
         return .offer(recording)
+    }
+
+    /// Settles a ``confirm(_:)`` by reading the queued walk, off the main
+    /// actor.
+    ///
+    /// A name says a write began, not that it left a walk: a file that will
+    /// not decode is never sent, and a journal let go beside it would be the
+    /// hike lost. So the journal is offered unless the queue hands its walk
+    /// back — one that cannot be read just now included, because offering a
+    /// walk that is already queued costs the hiker a question, and the other
+    /// mistake costs the walk.
+    public static func confirming(_ recording: WatchRecoveredRecording, on queue: WatchWalkQueue) async -> Self {
+        await queue.walk(recording.sessionID) == nil ? .offer(recording) : .alreadyQueued
     }
 }
 

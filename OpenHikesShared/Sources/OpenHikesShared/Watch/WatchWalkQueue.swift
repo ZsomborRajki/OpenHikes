@@ -71,7 +71,9 @@ public actor WatchWalkQueue {
 
     nonisolated public let directory: URL
     /// Every queued walk by session, built from a directory listing the first
-    /// time anything is asked — see ``isIndexed``.
+    /// time anything is asked — see ``isIndexed``. A walk that will not
+    /// decode stays here, uncounted, so a fresh copy of it can replace its
+    /// file rather than sit beside it.
     private var entries: [UUID: Entry] = [:]
     private var isIndexed = false
     private var revision = 0
@@ -90,16 +92,16 @@ public actor WatchWalkQueue {
     /// Reads one walk, for sending.
     ///
     /// `nil` for a walk not on the queue, or one that cannot be read. A file
-    /// that reads but does not decode never will, so it leaves the index for
+    /// that reads but does not decode never will, so it stops counting for
     /// the rest of this process — counted, it would be a hike waiting for an
     /// iPhone forever — but stays on disk. One that cannot be read at all is
     /// kept, because that can pass.
     public func walk(_ sessionID: UUID) -> WatchRecordedWalk? {
-        guard let entry = index()[sessionID] else { return nil }
+        guard let entry = index()[sessionID], !entry.isUndecodable else { return nil }
         let url = url(of: entry.fileName)
         guard let data = try? Data(contentsOf: url) else { return nil }
         guard let walk = Self.decode(data, named: entry.fileName) else {
-            entries[sessionID] = nil
+            entries[sessionID]?.isUndecodable = true
             revision += 1
             return nil
         }
@@ -114,8 +116,13 @@ public actor WatchWalkQueue {
     /// could write over the only copy. A listing is cheap at any queue length.
     /// Read beside the actor rather than through it, which is safe only
     /// because nothing has written to the queue that early in the process.
+    ///
+    /// A name is not a walk, so a session listed here is only *probably*
+    /// queued — ``WatchRecordingRecovery/confirming(_:on:)`` reads it before
+    /// a journal is let go. A listing that fails answers empty, which offers
+    /// the journal: the side that keeps a copy.
     nonisolated public func listedSessionIDs() -> Set<UUID> {
-        Set(Self.fileNames(in: directory).compactMap { Entry.Name(parsing: $0)?.sessionID })
+        Set(((try? Self.fileNames(in: directory)) ?? []).compactMap { Entry.Name(parsing: $0)?.sessionID })
     }
 
     // MARK: Changing
@@ -198,14 +205,26 @@ public actor WatchWalkQueue {
         /// To the millisecond the name carries, so a walk sorts the same
         /// whether it was enqueued in this process or listed from disk.
         let endedAt: Date
-        /// Its own name, except for an older file whose rename failed.
+        /// Its own name, except for an older file whose rename failed or
+        /// that would not decode.
         var fileName: String
+        /// Read, and found not to be a walk. Never counted or read again, but
+        /// kept so the next write of its session removes the file.
+        var isUndecodable = false
 
         init(sessionID: UUID, endedAt: Date) {
             let milliseconds = Int64((endedAt.timeIntervalSince1970 * 1000).rounded(.down))
             self.sessionID = sessionID
             self.endedAt = Self.date(milliseconds: milliseconds)
             fileName = "\(milliseconds)_\(sessionID.uuidString).json"
+        }
+
+        /// An older file that read but did not decode, so has no end to name.
+        init(undecodable fileName: String, sessionID: UUID) {
+            self.sessionID = sessionID
+            endedAt = .distantPast
+            self.fileName = fileName
+            isUndecodable = true
         }
 
         static func date(milliseconds: Int64) -> Date {
@@ -215,26 +234,47 @@ public actor WatchWalkQueue {
 
     private func index() -> [UUID: Entry] {
         if isIndexed { return entries }
+        // Left unindexed when the listing fails, so the next call lists
+        // again. Marked indexed, an empty answer from a directory that could
+        // not be read would hide every walk on it until the next launch.
+        let fileNames: [String]
+        do {
+            fileNames = try Self.fileNames(in: directory)
+        } catch {
+            Self.logger.error("The queue could not be listed: \(error.localizedDescription, privacy: .public)")
+            return entries
+        }
         var built: [UUID: Entry] = [:]
-        for fileName in Self.fileNames(in: directory) {
+        for fileName in fileNames {
             guard let name = Entry.Name(parsing: fileName) else { continue }
-            if let endedAt = name.endedAt {
-                built[name.sessionID] = Entry(sessionID: name.sessionID, endedAt: endedAt)
-            } else if let entry = adopt(olderFile: fileName) {
-                built[entry.sessionID] = entry
+            let entry = if let endedAt = name.endedAt {
+                Entry(sessionID: name.sessionID, endedAt: endedAt)
+            } else {
+                adopt(olderFile: fileName, sessionID: name.sessionID)
             }
+            // A walk beside a file of its session that is not one — left by
+            // a process that died between writing the one and removing the
+            // other — is the one to keep.
+            guard let entry, built[entry.sessionID]?.isUndecodable ?? true else { continue }
+            built[entry.sessionID] = entry
         }
         entries = built
         isIndexed = true
+        // A count from before the listing, or from one that failed, is not
+        // as late as this one.
+        revision += 1
         return built
     }
 
     /// Reads a file named before the index once, and renames it so the next
-    /// launch need not. Left out when it does not decode, as it always was.
-    private func adopt(olderFile fileName: String) -> Entry? {
-        guard let data = try? Data(contentsOf: url(of: fileName)),
-              let walk = Self.decode(data, named: fileName)
-        else { return nil }
+    /// launch need not. One that reads but does not decode is indexed
+    /// uncounted, like any other — see ``Entry/isUndecodable``. One that
+    /// cannot be read is left out.
+    private func adopt(olderFile fileName: String, sessionID: UUID) -> Entry? {
+        guard let data = try? Data(contentsOf: url(of: fileName)) else { return nil }
+        guard let walk = Self.decode(data, named: fileName) else {
+            return Entry(undecodable: fileName, sessionID: sessionID)
+        }
         var entry = Entry(sessionID: walk.sessionID, endedAt: walk.endedAt)
         do {
             try FileManager.default.moveItem(at: url(of: fileName), to: url(of: entry.fileName))
@@ -245,7 +285,7 @@ public actor WatchWalkQueue {
     }
 
     private func snapshot(of entries: [UUID: Entry]) -> WatchQueuedWalks {
-        let ordered = entries.values.sorted { lhs, rhs in
+        let ordered = entries.values.filter { !$0.isUndecodable }.sorted { lhs, rhs in
             lhs.endedAt != rhs.endedAt
                 ? lhs.endedAt < rhs.endedAt
                 : lhs.sessionID.uuidString < rhs.sessionID.uuidString
@@ -259,8 +299,15 @@ public actor WatchWalkQueue {
         directory.appendingPathComponent(fileName)
     }
 
-    private static func fileNames(in directory: URL) -> [String] {
-        (try? FileManager.default.contentsOfDirectory(atPath: directory.path(percentEncoded: false))) ?? []
+    /// Throws when the directory is there and could not be listed, which is
+    /// not the same answer as an empty queue.
+    private static func fileNames(in directory: URL) throws -> [String] {
+        do {
+            return try FileManager.default.contentsOfDirectory(atPath: directory.path(percentEncoded: false))
+        } catch CocoaError.fileReadNoSuchFile {
+            // Nothing has been queued on this watch yet.
+            return []
+        }
     }
 
     private static func decode(_ data: Data, named fileName: String) -> WatchRecordedWalk? {
