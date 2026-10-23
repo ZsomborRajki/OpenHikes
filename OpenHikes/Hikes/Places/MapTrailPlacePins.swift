@@ -94,10 +94,20 @@ final class TrailPlacePinController {
     /// ``TrailPlacesAround``. Here because it is the same map layer, drawn for
     /// the same hike's screens.
     @ObservationIgnored let around: TrailPlacesAround
+    /// The open hike's places in order along its line, measured once per line
+    /// and shared by every screen that lists or pins them — see
+    /// ``HikePlaceRows``. Here because every one of those screens already
+    /// holds this controller.
+    @ObservationIgnored let placeRows: HikePlaceRows
 
-    init(defaults: UserDefaults? = nil, around: TrailPlacesAround = TrailPlacesAround()) {
+    init(
+        defaults: UserDefaults? = nil,
+        around: TrailPlacesAround = TrailPlacesAround(),
+        placeRows: HikePlaceRows = HikePlaceRows()
+    ) {
         self.defaults = defaults
         self.around = around
+        self.placeRows = placeRows
         // What is stored is the switch turned *off*, so an empty store is the
         // default: places are drawn.
         showsPins = !(defaults?.bool(forKey: SettingsKey.trailPlacePinsHidden) ?? false)
@@ -278,9 +288,10 @@ private struct TrailPlacePinsModifier: ViewModifier {
 /// segment switch never reaches, so the pins stay for as long as the hike's
 /// screen does.
 ///
-/// A view of its own, and reading ``Hike/orderedPlaces`` in its own body, so
-/// a place arriving from CloudKit redraws this and not the screen that hosts
-/// it.
+/// A view of its own, and reading the hike's places in its own body, so a
+/// place arriving from CloudKit redraws this and not the screen that hosts
+/// it. Read through ``HikePlaceRows``, so that redraw measures nothing the
+/// line has not moved.
 ///
 /// *Add Place* claims the pins through this too, with the place it is about to
 /// add as the placeholder — see ``HikePlaceAdder`` — so what that form's
@@ -295,7 +306,12 @@ struct HikePlacePinClaim: View {
     var body: some View {
         Color.clear
             .accessibilityHidden(true)
-            .trailPlacePins(controller, rows: hike.orderedPlaces, placeholder: placeholder, onOpen: onOpen)
+            .trailPlacePins(
+                controller,
+                rows: hike.orderedPlaces(preparedBy: controller?.placeRows),
+                placeholder: placeholder,
+                onOpen: onOpen
+            )
     }
 }
 

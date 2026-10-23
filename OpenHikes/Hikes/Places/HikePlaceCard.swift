@@ -43,9 +43,11 @@ struct HikePlaceCard: Equatable {
 
     /// `nil` for a place the hike no longer has — removed here, or on another
     /// device — which closes the screen.
+    ///
+    /// Read through `rows` where there is one — see ``HikePlaceRows``.
     @MainActor
-    init?(hike: Hike, placeID: UUID) {
-        guard let row = hike.placeRow(id: placeID) else { return nil }
+    init?(hike: Hike, placeID: UUID, preparedBy rows: HikePlaceRows? = nil) {
+        guard let row = hike.placeRow(id: placeID, preparedBy: rows) else { return nil }
         self.init(row: row)
     }
 

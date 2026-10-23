@@ -45,7 +45,10 @@ struct HikePlacesAroundView: View {
 
     var body: some View {
         let candidates = search.candidates(showing: filter.shown, held: hike.places)
-        let listing = TrailPlaceAroundListing(held: hike.orderedPlaces, candidates: candidates)
+        let listing = TrailPlaceAroundListing(
+            held: hike.orderedPlaces(preparedBy: placePins?.placeRows),
+            candidates: candidates
+        )
         PlacesAroundScreen(
             hike: hike,
             around: around,

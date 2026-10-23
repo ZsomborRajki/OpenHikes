@@ -58,7 +58,11 @@ struct HikePlacesNearbyView: View {
 
     var body: some View {
         let candidates = search.candidates(showing: filter.shown, held: hike.places)
-        let entries = PlacesNearbyEntry.sorted(held: hike.orderedPlaces, candidates: candidates, from: origin)
+        let entries = PlacesNearbyEntry.sorted(
+            held: hike.orderedPlaces(preparedBy: placePins?.placeRows),
+            candidates: candidates,
+            from: origin
+        )
         PlacesAroundScreen(
             hike: hike,
             around: around,

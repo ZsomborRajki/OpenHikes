@@ -61,10 +61,10 @@ struct HikePlaceSection: View {
 
     @ViewBuilder var body: some View {
         // Ordered once and handed down, the way ``HikePhotoSection`` orders
-        // its photographs once: ``Hike/orderedPlaces`` projects every row and
-        // sorts them against the route, and asking twice in one pass would do
-        // all of it twice.
-        let rows = hike.orderedPlaces
+        // its photographs once, and through ``HikePlaceRows``: this re-runs
+        // for every photograph added, and none of them moves a place along
+        // the line.
+        let rows = hike.orderedPlaces(preparedBy: mapPins?.placeRows)
         if !rows.isEmpty || canSearch {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
@@ -153,8 +153,16 @@ struct SharedTrailPlaceSection: View {
     let places: [TrailPlace]
     let route: [RouteCoordinate]
 
+    /// The preview's own, for as long as it is up: what a saved hike's
+    /// screens share through ``TrailPlacePinController/placeRows``, for a
+    /// trail that is not anybody's hike yet. See ``HikePlaceRows``.
+    @State private var prepared = HikePlaceRows()
+
+    /// Who ``prepared`` keeps the anchors for. It holds one trail's only.
+    private static let owner = UUID()
+
     @ViewBuilder var body: some View {
-        let rows = TrailPlaceOrder.ordered(places, along: route)
+        let rows = prepared.rows(of: places, along: route, for: Self.owner)
         if !rows.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Places")
