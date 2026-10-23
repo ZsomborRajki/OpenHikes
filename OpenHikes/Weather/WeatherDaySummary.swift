@@ -88,22 +88,87 @@ extension WeatherDaySummary {
     /// and it keeps the day in progress, which is the point: a hiker reading
     /// this at four o'clock is still deciding about this evening.
     ///
-    /// Through a `Calendar` rather than by adding 86,400 seconds, for the
-    /// reason the mapping gives: a real week crosses a daylight-saving
-    /// boundary twice a year.
+    /// A day ends where the next one starts — see ``WeatherForecastDay`` —
+    /// so `calendar` decides only when the last one does.
     nonisolated static func upcoming(
         in week: [Self],
         asOf date: Date,
         calendar: Calendar = .autoupdatingCurrent
     ) -> [Self] {
-        week.filter { day in
-            guard let end = calendar.date(byAdding: .day, value: 1, to: day.date) else {
-                // A calendar that cannot add a day to a date is not a reason
-                // to hide the forecast; the row is kept and reads as it did.
-                return true
+        let starts = week.map(\.date)
+        return week.indices
+            .filter { index in
+                guard let end = WeatherForecastDay.end(ofDayAt: index, startingAt: starts, calendar: calendar) else {
+                    // A calendar that cannot add a day to a date is not a
+                    // reason to hide the forecast; the row is kept and reads
+                    // as it did.
+                    return true
+                }
+                return end > date
             }
-            return end > date
-        }
+            .map { week[$0] }
+    }
+
+    /// Whether this is the day in progress as of `date`, which the sheet
+    /// names *Today*.
+    ///
+    /// Asked only of a day ``upcoming(in:asOf:calendar:)`` kept, which is what
+    /// makes a start alone enough: every day kept is still to end, and the
+    /// only one of them already begun is the one `date` falls in. That is the
+    /// forecast's own today rather than the reader's — Tokyo's Saturday is
+    /// already under way on a Friday evening in Berlin, and is the row to
+    /// name — which a calendar-day test in the reader's zone gets wrong for
+    /// every forecast more than a few hours away.
+    nonisolated func isInProgress(asOf date: Date) -> Bool {
+        self.date <= date
+    }
+}
+
+/// Which forecast day an instant falls in, decided by the days' own starts.
+///
+/// **A day runs from its start to the next day's start**, and that is the
+/// whole of the rule. `DayWeather` is dated at midnight in the *forecast's*
+/// zone, which WeatherKit does not say, so any test that buckets a start into
+/// a calendar day is asking the reader's calendar about somebody else's
+/// midnight: Tokyo's Friday begins on Thursday afternoon in Berlin, and
+/// "the day whose start falls on today" is then Tokyo's Saturday. The span
+/// between two starts needs no zone at all, and it is also exact across a
+/// daylight-saving change at the forecast's end, where a day is 23 or 25
+/// hours long and the reader's calendar may not change its clocks that night.
+///
+/// The last day has no next start, and only there is a `Calendar` asked —
+/// one day on from its start, which is right whenever the reader's clocks and
+/// the forecast's do not change on different nights that week.
+nonisolated enum WeatherForecastDay {
+    /// The reader's calendar, in the zone a forecast's days are dated in —
+    /// which is the one to ask when the last of them ends.
+    static func calendar(in timeZone: TimeZone) -> Calendar {
+        var calendar = Calendar.autoupdatingCurrent
+        calendar.timeZone = timeZone
+        return calendar
+    }
+
+    /// When the day starting at `starts[index]` ends, or `nil` when `calendar`
+    /// cannot say.
+    ///
+    /// `starts` is in order, which is how `.daily` arrives and how
+    /// ``WeatherDaySummary/summaries(from:notBefore:calendar:)`` keeps it.
+    static func end(ofDayAt index: Int, startingAt starts: [Date], calendar: Calendar) -> Date? {
+        let next = starts.index(after: index)
+        return next < starts.endIndex
+            ? starts[next]
+            : calendar.date(byAdding: .day, value: 1, to: starts[index])
+    }
+
+    /// The index of the day `date` falls in, or `nil` when it is before the
+    /// first day or after the last.
+    static func index(containing date: Date, startingAt starts: [Date], calendar: Calendar) -> Int? {
+        guard let index = starts.lastIndex(where: { $0 <= date }) else { return nil }
+        // The same allowance ``WeatherDaySummary/upcoming(in:asOf:calendar:)``
+        // makes: a calendar that cannot add a day keeps the last day rather
+        // than losing it.
+        guard let end = end(ofDayAt: index, startingAt: starts, calendar: calendar) else { return index }
+        return date < end ? index : nil
     }
 }
 

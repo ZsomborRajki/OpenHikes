@@ -16,6 +16,18 @@
 //  is the answer to the question a hiker actually has — *where is this
 //  forecast from* — and the one a weather app would give.
 //
+//  ## And what day it is there
+//
+//  The same answer carries the place's time zone, which WeatherKit does not:
+//  a `DayWeather` is dated at midnight *there*, and the week's weekday names
+//  are only right when they are read in that zone — Tokyo's Friday, formatted
+//  in Berlin, is a Thursday afternoon. So a searched place is looked up too,
+//  for its zone alone, while keeping the name the hiker searched for; and
+//  `me` is not, because *here* is the reader's own zone. Which day is today,
+//  and which day's sun ends a walk, need no zone at all — see
+//  ``WeatherForecastDay`` — so a launch with no geocoder loses only the
+//  weekday names abroad, and draws them as it always did.
+//
 //  ## Why this is a seam
 //
 //  For the reason every injected dependency in this repository is one — see
@@ -42,13 +54,21 @@ import Foundation
 import MapKit
 import os
 
+/// What the geocoder said about the place a forecast is for.
+nonisolated struct WeatherPlaceDescription: Equatable, Sendable {
+    /// The city the coordinate falls in, `nil` on open hillside.
+    var cityName: String?
+    /// The zone the forecast's days begin at midnight in.
+    var timeZone: TimeZone?
+}
+
 /// Turns the coordinate a forecast was fetched for into somewhere to call it.
 @MainActor
 protocol WeatherPlaceNaming: AnyObject {
-    /// The city `coordinate` falls in, or `nil` when there is nothing to call
-    /// it. A name is a nicety, so every failure — no network, no result, a
-    /// cancelled request — is the same answer.
-    func cityName(at coordinate: CLLocationCoordinate2D) async -> String?
+    /// The city `coordinate` falls in and its time zone, or `nil` when there
+    /// is nothing to say about it. Both are niceties, so every failure — no
+    /// network, no result, a cancelled request — is the same answer.
+    func place(at coordinate: CLLocationCoordinate2D) async -> WeatherPlaceDescription?
 }
 
 /// MapKit's own answer, which is the same one the search field's suggestions
@@ -65,7 +85,7 @@ final class GeocodedWeatherPlaceNames: WeatherPlaceNaming {
     /// after it.
     private var request: MKReverseGeocodingRequest?
 
-    func cityName(at coordinate: CLLocationCoordinate2D) async -> String? {
+    func place(at coordinate: CLLocationCoordinate2D) async -> WeatherPlaceDescription? {
         request?.cancel()
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         guard let pending = MKReverseGeocodingRequest(location: location) else { return nil }
@@ -79,9 +99,14 @@ final class GeocodedWeatherPlaceNames: WeatherPlaceNaming {
             // fallback exists so a header always says something; here the
             // fallback is the hike's own title, which is already better than a
             // street or a summit would be. A trail anchored on open
-            // hillside has no city, and saying so by answering `nil` is how
-            // the sheet knows to keep the name it had.
-            return items.first?.addressRepresentations?.cityName
+            // hillside has no city, and saying so with a `nil` one is how
+            // the sheet knows to keep the name it had — while its zone is
+            // still worth having.
+            guard let item = items.first else { return nil }
+            return WeatherPlaceDescription(
+                cityName: item.addressRepresentations?.cityName,
+                timeZone: item.timeZone
+            )
         } catch {
             // Logged and no more. A sheet headed with the hike's name instead
             // of the valley's is not something a hiker can act on, and there

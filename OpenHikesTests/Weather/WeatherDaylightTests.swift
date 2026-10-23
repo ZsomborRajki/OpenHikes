@@ -11,7 +11,9 @@
 //  ``WeatherReadingStore``, which is where a stored reading is either kept or
 //  thrown away. That split is the same one the rest of the weather suites
 //  make, and for the same reason: everything worth asserting sits on this
-//  side of the network.
+//  side of the network. Which of the forecast's days it reads is the one part
+//  of it that is a rule rather than a mapping, and ``WeatherForecastDay`` —
+//  pinned in `WeatherForecastDayTests` — is that rule on plain day starts.
 //
 
 import Foundation

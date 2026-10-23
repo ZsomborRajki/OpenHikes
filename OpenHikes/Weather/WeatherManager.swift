@@ -403,17 +403,17 @@ final class WeatherManager {
     /// before that file existed.
     @ObservationIgnored private let placeNames: (any WeatherPlaceNaming)?
 
-    /// The city a subject's forecast turned out to be for, keyed by
+    /// The city and zone a subject's forecast turned out to be for, keyed by
     /// ``WeatherSubject/key``.
     ///
     /// The same key and the same limit as ``cache``, so a hiker going back to
     /// a trail gets its title back for free alongside its reading. A city is a
     /// property of the anchor rather than of the weather, so unlike a snapshot
     /// it never goes stale: nothing here expires.
-    @ObservationIgnored private var cities: OrderedDictionary<String, String> = [:]
+    @ObservationIgnored private var places: OrderedDictionary<String, WeatherPlaceDescription> = [:]
 
-    /// The city name the detail sheet heads itself with, and which subject it
-    /// belongs to.
+    /// What the detail sheet heads itself with and names its days in, and
+    /// which subject it belongs to.
     ///
     /// Observed, because the title is drawn before the geocode lands and has
     /// to be redrawn when it does. Carries the key rather than only the name
@@ -421,7 +421,7 @@ final class WeatherManager {
     /// ``cityName`` rather than published over a different trail — the same
     /// rule ``CommunityBrowser``'s `areaName` follows, and for the same
     /// reason.
-    private var resolvedCity: (key: String, name: String)?
+    private var resolvedPlace: (key: String, place: WeatherPlaceDescription)?
 
     /// What to call the place the current reading is for, or `nil` to fall
     /// back to whatever the subject calls itself.
@@ -429,8 +429,19 @@ final class WeatherManager {
     /// Computed against the live subject, so it answers `nil` the instant the
     /// badge moves on rather than leaving a stale city over a new trail.
     var cityName: String? {
-        guard let resolvedCity, resolvedCity.key == state.subject?.key else { return nil }
-        return resolvedCity.name
+        currentPlace?.cityName
+    }
+
+    /// The zone the current reading's days begin at midnight in, or `nil`
+    /// when it is the reader's own or nobody has said — see
+    /// ``WeatherPlaceNaming``.
+    var forecastTimeZone: TimeZone? {
+        currentPlace?.timeZone
+    }
+
+    private var currentPlace: WeatherPlaceDescription? {
+        guard let resolvedPlace, resolvedPlace.key == state.subject?.key else { return nil }
+        return resolvedPlace.place
     }
 
     /// Whether ``restoreLastReading()`` has already run.
@@ -460,8 +471,8 @@ final class WeatherManager {
         self.widgetPublisher = widgetPublisher
     }
 
-    /// Looks up the city the current subject's forecast is for, if it is the
-    /// kind of subject that borrows one.
+    /// Looks up the city the current subject's forecast is for, and its time
+    /// zone, if it is the kind of subject that borrows them.
     ///
     /// **Called when the detail sheet opens, not when the subject changes.**
     /// Only the sheet draws the name, and a hiker who selects six trails
@@ -471,27 +482,32 @@ final class WeatherManager {
     ///
     /// Idempotent and cheap on the second call: a cached city is published
     /// without a round trip, so reopening the sheet costs nothing.
-    func resolveCityName() async {
-        // A trail only. ``WeatherSubject/place`` is already a place the hiker
-        // named by searching for it, and replacing what they typed with its
-        // administrative parent would be answering a question nobody asked;
+    func resolvePlace() async {
+        guard let subject = state.subject else { return }
         // ``WeatherSubject/me`` is *here*, which the sheet says by saying
-        // "Weather".
-        guard let subject = state.subject, case .trail = subject else { return }
+        // "Weather", and whose days begin at the reader's own midnight.
+        if case .me = subject { return }
         let key = subject.key
-        if let known = cities[key] {
-            resolvedCity = (key, known)
+        if let known = places[key] {
+            resolvedPlace = (key, known)
             return
         }
-        guard let placeNames, let city = await placeNames.cityName(at: subject.coordinate) else {
+        guard let placeNames, var place = await placeNames.place(at: subject.coordinate) else {
             return
         }
-        cities[key] = city
-        cities.move(keys: CollectionOfOne(key), to: cities.count)
-        if cities.count > WeatherRequestState.trackedSubjectLimit {
-            cities.removeFirst()
+        // A searched place keeps its zone and nothing else. It is already a
+        // place the hiker named by searching for it, and replacing what they
+        // typed with its administrative parent would be answering a question
+        // nobody asked.
+        if case .place = subject {
+            place.cityName = nil
         }
-        resolvedCity = (key, city)
+        places[key] = place
+        places.move(keys: CollectionOfOne(key), to: places.count)
+        if places.count > WeatherRequestState.trackedSubjectLimit {
+            places.removeFirst()
+        }
+        resolvedPlace = (key, place)
     }
 
     /// Puts the stored reading back on the badge, once, after the first frame.
@@ -712,7 +728,7 @@ final class WeatherManager {
         await notifier.post(
             MovementReminderWording.severeWeather(
                 worst,
-                placeName: cities[subject.key] ?? subject.placeName ?? ""
+                placeName: places[subject.key]?.cityName ?? subject.placeName ?? ""
             )
         )
     }

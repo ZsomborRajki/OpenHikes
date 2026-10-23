@@ -195,9 +195,9 @@ struct WeatherDetailView: View {
         // Separate from the credits' task rather than sequenced behind it:
         // the two are independent round trips, and a title should not wait on
         // Apple Weather's legal marks to appear. See
-        // ``WeatherManager/resolveCityName()`` for why the lookup happens on
+        // ``WeatherManager/resolvePlace()`` for why the lookup happens on
         // the sheet opening rather than when the subject changes.
-        .task { await weather.resolveCityName() }
+        .task { await weather.resolvePlace() }
     }
 
     /// Which place the reading is for, or `nil` when it is simply here.
@@ -787,7 +787,18 @@ extension WeatherDetailView {
         // carried across midnight with the app in a rucksack — still begins
         // on a day that has gone. Drawn as-is it opens on yesterday's
         // weekday, with no row saying *Today* under it.
-        let upcoming = WeatherDaySummary.upcoming(in: days, asOf: .now)
+        //
+        // Named in the forecast's own zone where the geocoder has said what
+        // it is, because each day starts at midnight *there* — see
+        // ``WeatherPlaceNaming``. Which row is today needs no zone, and is
+        // right even before that answer lands.
+        let now = Date.now
+        let timeZone = weather.forecastTimeZone ?? .autoupdatingCurrent
+        let upcoming = WeatherDaySummary.upcoming(
+            in: days,
+            asOf: now,
+            calendar: WeatherForecastDay.calendar(in: timeZone)
+        )
         if !upcoming.isEmpty {
             // No identifier on the `Section` itself, which is what the
             // daylight section above does and is a trap here: an
@@ -797,15 +808,15 @@ extension WeatherDetailView {
             // test looks for, so the rows are what is named.
             Section("Next days") {
                 ForEach(upcoming) { day in
-                    dayRow(day)
+                    dayRow(day, isToday: day.isInProgress(asOf: now), in: timeZone)
                 }
             }
         }
     }
 
-    private func dayRow(_ day: WeatherDaySummary) -> some View {
+    private func dayRow(_ day: WeatherDaySummary, isToday: Bool, in timeZone: TimeZone) -> some View {
         HStack(spacing: Self.DayStrip.spacing) {
-            Text(Self.weekday(day.date))
+            Text(Self.weekday(day.date, isToday: isToday, in: timeZone))
                 .font(.subheadline.weight(.medium))
                 .frame(minWidth: Self.DayStrip.dayWidth, alignment: .leading)
             Image(systemName: day.symbolName)
@@ -832,7 +843,7 @@ extension WeatherDetailView {
         // A day, a sky and a range are one fact about one day — the shape
         // ``hourColumn(_:)`` and ``DetailRow`` both take.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.spokenWeekday(day.date))
+        .accessibilityLabel(Self.spokenWeekday(day.date, isToday: isToday, in: timeZone))
         .accessibilityValue(Self.spokenDay(day))
         // The same identifier on every row, so a test can count them: the
         // horizon is the decision this section was filed about, and a strip
@@ -848,8 +859,12 @@ extension WeatherDetailView {
     ///
     /// Abbreviated below that: seven full weekday names down a sheet is a
     /// column of text where the point is the numbers beside it.
-    private static func weekday(_ date: Date) -> String {
-        Self.today(date) ?? date.formatted(.dateTime.weekday(.abbreviated))
+    ///
+    /// Formatted in `timeZone`, the forecast's, because `date` is midnight
+    /// there: read in the reader's zone, Tokyo's Friday is Thursday afternoon
+    /// in Berlin, and every row is a weekday early.
+    static func weekday(_ date: Date, isToday: Bool, in timeZone: TimeZone) -> String {
+        isToday ? today : date.formatted(Date.FormatStyle(timeZone: timeZone).weekday(.abbreviated))
     }
 
     /// The same day, spelled out, which is what the row is called aloud.
@@ -858,15 +873,14 @@ extension WeatherDetailView {
     /// reading "Sat" is the screen's shorthand read back rather than the day
     /// it stands for, and a reader stepping down seven rows is the one person
     /// here with no column of numbers to line it up against.
-    private static func spokenWeekday(_ date: Date) -> String {
-        Self.today(date) ?? date.formatted(.dateTime.weekday(.wide))
+    static func spokenWeekday(_ date: Date, isToday: Bool, in timeZone: TimeZone) -> String {
+        isToday ? today : date.formatted(Date.FormatStyle(timeZone: timeZone).weekday(.wide))
     }
 
-    /// "Today" when `date` falls on it, and `nil` otherwise — the one word
-    /// both spellings of a weekday share.
-    private static func today(_ date: Date) -> String? {
-        guard Calendar.autoupdatingCurrent.isDateInToday(date) else { return nil }
-        return String(localized: "Today", comment: "The first row of the daily forecast")
+    /// The one word both spellings of a weekday share, for the day in
+    /// progress — see ``WeatherDaySummary/isInProgress(asOf:)``.
+    private static var today: String {
+        String(localized: "Today", comment: "The first row of the daily forecast")
     }
 
     /// What one day says out loud.

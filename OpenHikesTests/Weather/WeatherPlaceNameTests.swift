@@ -9,7 +9,8 @@
 //  than the place being described. What is pinned here is the replacement and,
 //  more importantly, the four ways it is allowed to *not* happen: two subjects
 //  that keep the name they have, a launch with no geocoder, and an answer that
-//  arrives after the hiker has moved on.
+//  arrives after the hiker has moved on. The same answer carries the zone the
+//  week's days are named in (#934), and is held to the same four.
 //
 //  The cost assertions matter as much as the name ones. A geocode is a network
 //  round trip against somebody's rate limit, so `asked` is counted in every
@@ -21,10 +22,11 @@ import Foundation
 @testable import OpenHikes
 import Testing
 
-/// Answers a fixed city, and records how often it was asked.
+/// Answers a fixed city and zone, and records how often it was asked.
 @MainActor
 private final class StubPlaceNames: WeatherPlaceNaming {
     var answer: String?
+    var timeZone = TimeZone(identifier: "Europe/Berlin")
     private(set) var asked: [CLLocationCoordinate2D] = []
     /// Held open so a test can drive the subject changing mid-flight.
     var beforeReturning: (@Sendable () async -> Void)?
@@ -33,10 +35,10 @@ private final class StubPlaceNames: WeatherPlaceNaming {
         self.answer = answer
     }
 
-    func cityName(at coordinate: CLLocationCoordinate2D) async -> String? {
+    func place(at coordinate: CLLocationCoordinate2D) async -> WeatherPlaceDescription? {
         asked.append(coordinate)
         await beforeReturning?()
-        return answer
+        return WeatherPlaceDescription(cityName: answer, timeZone: timeZone)
     }
 }
 
@@ -73,9 +75,10 @@ extension WeatherPlaceNameTests {
         let manager = manager(names)
         focused(manager, on: trail())
 
-        await manager.resolveCityName()
+        await manager.resolvePlace()
 
         #expect(manager.cityName == "Berchtesgaden")
+        #expect(manager.forecastTimeZone?.identifier == "Europe/Berlin")
         #expect(names.asked.count == 1)
     }
 
@@ -88,8 +91,8 @@ extension WeatherPlaceNameTests {
         let subject = trail()
         focused(manager, on: subject)
 
-        await manager.resolveCityName()
-        await manager.resolveCityName()
+        await manager.resolvePlace()
+        await manager.resolvePlace()
 
         #expect(manager.cityName == "Berchtesgaden")
         #expect(names.asked.count == 1, "the second open is answered from memory")
@@ -103,14 +106,15 @@ extension WeatherPlaceNameTests {
         let manager = manager(names)
         let first = trail(named: "Saturday loop")
         focused(manager, on: first)
-        await manager.resolveCityName()
+        await manager.resolvePlace()
 
         names.answer = "Salzburg"
         focused(manager, on: .place(budapest, name: "Budapest"))
         #expect(manager.cityName == nil, "a different subject is not the trail's city")
+        #expect(manager.forecastTimeZone == nil, "nor its zone, before it is looked up")
 
         focused(manager, on: first)
-        await manager.resolveCityName()
+        await manager.resolvePlace()
 
         #expect(manager.cityName == "Berchtesgaden")
         #expect(names.asked.count == 1)
@@ -122,30 +126,37 @@ extension WeatherPlaceNameTests {
 extension WeatherPlaceNameTests {
     /// A searched place is already a place the hiker named by searching for
     /// it. Replacing what they typed with its administrative parent would be
-    /// answering a question nobody asked — and would spend a round trip doing
-    /// it.
-    @Test("a searched place keeps the name the hiker searched for")
-    func aSearchedPlaceIsLeftAlone() async {
-        let names = StubPlaceNames()
+    /// answering a question nobody asked — so the round trip is spent on its
+    /// zone alone, which the week's weekday names need (#934).
+    @Test("a searched place keeps the name the hiker searched for, and borrows its zone")
+    func aSearchedPlaceKeepsItsName() async {
+        let names = StubPlaceNames(answer: "Budapest V. kerület")
+        names.timeZone = TimeZone(identifier: "Europe/Budapest")
         let manager = manager(names)
         focused(manager, on: .place(budapest, name: "Budapest"))
 
-        await manager.resolveCityName()
+        await manager.resolvePlace()
 
         #expect(manager.cityName == nil)
-        #expect(names.asked.isEmpty, "nothing to look up, so nothing is spent")
+        #expect(manager.forecastTimeZone?.identifier == "Europe/Budapest")
+        #expect(names.asked.count == 1)
+
+        await manager.resolvePlace()
+        #expect(names.asked.count == 1, "the zone is remembered as the city is")
     }
 
-    /// `me` is *here*, which the sheet says by saying "Weather".
-    @Test("the hiker's own forecast borrows no city")
+    /// `me` is *here*, which the sheet says by saying "Weather", and whose
+    /// days begin at the reader's own midnight.
+    @Test("the hiker's own forecast borrows no city and no zone")
     func hereIsNotACity() async {
         let names = StubPlaceNames()
         let manager = manager(names)
         focused(manager, on: .me(budapest))
 
-        await manager.resolveCityName()
+        await manager.resolvePlace()
 
         #expect(manager.cityName == nil)
+        #expect(manager.forecastTimeZone == nil)
         #expect(names.asked.isEmpty)
     }
 
@@ -156,22 +167,24 @@ extension WeatherPlaceNameTests {
         let manager = manager(nil)
         focused(manager, on: trail())
 
-        await manager.resolveCityName()
+        await manager.resolvePlace()
 
         #expect(manager.cityName == nil)
     }
 
     /// A trail anchored on open hillside belongs to no settlement. MapKit
-    /// answering `nil` is how the sheet knows to keep the hike's own name.
+    /// answering `nil` is how the sheet knows to keep the hike's own name —
+    /// and the hillside is still in a time zone.
     @Test("nowhere in particular keeps the hike's name")
     func noCityIsAnAnswer() async {
         let names = StubPlaceNames(answer: nil)
         let manager = manager(names)
         focused(manager, on: trail())
 
-        await manager.resolveCityName()
+        await manager.resolvePlace()
 
         #expect(manager.cityName == nil)
+        #expect(manager.forecastTimeZone?.identifier == "Europe/Berlin")
         #expect(names.asked.count == 1)
     }
 
@@ -188,8 +201,9 @@ extension WeatherPlaceNameTests {
             await MainActor.run { manager.focus(on: .me(self.budapest), willRequest: false) }
         }
 
-        await manager.resolveCityName()
+        await manager.resolvePlace()
 
         #expect(manager.cityName == nil, "the badge has moved on, so there is no city to draw")
+        #expect(manager.forecastTimeZone == nil, "nor a zone to name its days in")
     }
 }
