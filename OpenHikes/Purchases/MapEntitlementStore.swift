@@ -237,12 +237,12 @@ final class MapEntitlementStore {
     /// Re-reads the entitlement and publishes it, unless a read that started
     /// later has already published.
     ///
-    /// Reads are not serialized: launch, every foreground, the listener, a
-    /// restore and a purchase finishing each start one, and nothing orders
-    /// their answers. Publishing whichever answer arrived last let an older
-    /// read finish after a purchase's and lock Pro again, persisting the
-    /// refusal for the next launch too — or, the other way round, keep a lapsed
-    /// grant.
+    /// Reads are not serialized: launch, every foreground, a restore and the
+    /// listener (which is how a finished purchase arrives) each start one, and
+    /// nothing orders their answers. Publishing whichever answer arrived last
+    /// let an older read finish after a purchase's and lock Pro again,
+    /// persisting the refusal for the next launch too — or, the other way
+    /// round, keep a lapsed grant.
     ///
     /// The rule is "no older answer replaces a newer one", not "only the
     /// newest read may publish". The second would leave the store on its
@@ -276,6 +276,11 @@ final class MapEntitlementStore {
             return .failed(error.localizedDescription)
         }
         await refresh()
+        // From the published answer, not this read's own. When a read that
+        // started later has already published, ``refresh()`` drops this one,
+        // and the newer answer is what the store shows. The paywall closes on
+        // `isEntitled`, so `.restored` beside a store that stayed locked would
+        // report a success the screen does not show.
         return isEntitled ? .restored : .nothingToRestore
     }
 
