@@ -126,6 +126,11 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored var sessionID: UUID?
     @ObservationIgnored var sessionUptimeBase: TimeInterval?
     @ObservationIgnored var lastAcceptedPoint: RecordingPoint?
+    /// The stretch of walk behind ``lastAcceptedPoint``, with its timestamps,
+    /// so a photo is placed at its shutter rather than at the Use Photo tap —
+    /// see ``RecentRecordingFixes``. Unobserved for the same reason: it is
+    /// written on every accepted fix.
+    @ObservationIgnored var recentFixes = RecentRecordingFixes()
     /// Whether this pause has reached the point where its sensors were parked
     /// — see ``parkLocationSensors()``, which runs on the journal queue once
     /// the pause is durably written, and ``rearmPausedMovementWatch(at:)``,
@@ -474,6 +479,9 @@ extension HikeRecorder {
         movementReminders?.recordingDidResume()
         let elevationAnchor = lastAcceptedPoint?.elevation
         pendingResumeFlag = true
+        // `recentFixes` is kept: the pause is marked on the next fix by the
+        // flag above, and a photo taken before it is still placed by the leg
+        // it was taken on.
         lastAcceptedPoint = nil
         // With no accepted point to be newer than, the window is all that
         // stands between the new leg and a fix taken while it was paused.

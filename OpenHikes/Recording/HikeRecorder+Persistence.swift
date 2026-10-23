@@ -534,6 +534,7 @@ extension HikeRecorder {
         sessionID = nil
         sessionUptimeBase = nil
         lastAcceptedPoint = nil
+        recentFixes.removeAll()
         accumulator = RecordingDistanceAccumulator()
         elevationFilter.reset()
         latestMotionState = .unknown
@@ -616,6 +617,7 @@ extension HikeRecorder {
         elevationFilter.reset()
         latestMotionState = .unknown
         lastAcceptedPoint = nil
+        recentFixes.removeAll()
         pendingReviewSave = nil
         pendingPreparedSave = nil
         pendingResumeFlag = false

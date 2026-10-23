@@ -69,7 +69,7 @@ extension MapCoordinatorTests {
 
         // The pill is only drawn at all while a screen is offering it, so the
         // fade can only be compared once something has.
-        photoCapture.attach(to: hike) { nil }
+        photoCapture.attach(to: hike) { _ in nil }
         await settleDelegateHop(until: "the camera pill to appear") {
             !controls.isHidden
         }
@@ -118,7 +118,7 @@ extension MapCoordinatorTests {
         #if os(iOS)
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
-        photoCapture.attach(to: hike) { nil }
+        photoCapture.attach(to: hike) { _ in nil }
 
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
@@ -142,7 +142,7 @@ extension MapCoordinatorTests {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
 
-        let token = photoCapture.attach(to: hike) { nil }
+        let token = photoCapture.attach(to: hike) { _ in nil }
         await settleDelegateHop(until: "the camera pill to appear") {
             !controls.isHidden
         }
@@ -175,7 +175,7 @@ extension MapCoordinatorTests {
         let hike = Fixture.hike(in: context)
 
         // A screen offering photographs only — a place's own, or a recording.
-        let photosOnly = photoCapture.attach(to: hike) { nil }
+        let photosOnly = photoCapture.attach(to: hike) { _ in nil }
         await settleDelegateHop(until: "the camera pill to appear") { !controls.isHidden }
         #expect(addPlace.isHidden)
         map.layoutIfNeeded()
@@ -183,7 +183,7 @@ extension MapCoordinatorTests {
         #expect(twoTall.height > twoTall.width, "the photo buttons are stacked, not side by side")
 
         // A hike's screen, which also says where a place would go.
-        let detail = photoCapture.attach(to: hike, placeAnchor: { nil }, anchor: { nil })
+        let detail = photoCapture.attach(to: hike, placeAnchor: { nil }, anchor: { _ in nil })
         photoCapture.detach(token: photosOnly)
         await settleDelegateHop(until: "Add Place to join the pill") { !addPlace.isHidden }
         map.layoutIfNeeded()
@@ -255,7 +255,7 @@ extension MapCoordinatorTests {
         #expect(button.alpha > 0)
         #expect(button.alpha < 1)
 
-        photoCapture.attach(to: hike) { nil }
+        photoCapture.attach(to: hike) { _ in nil }
         await settleDelegateHop(until: "the camera pill to come back") {
             !controls.isHidden
         }
@@ -285,7 +285,7 @@ extension MapCoordinatorTests {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
 
-        let token = photoCapture.attach(to: hike) { nil }
+        let token = photoCapture.attach(to: hike) { _ in nil }
         await settleDelegateHop(until: "the camera pill to take taps") {
             controls.isUserInteractionEnabled
         }

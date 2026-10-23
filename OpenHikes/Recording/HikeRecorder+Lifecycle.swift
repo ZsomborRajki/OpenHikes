@@ -262,6 +262,7 @@ extension HikeRecorder {
         let accepted = point
         let previous = lastAcceptedPoint
         lastAcceptedPoint = accepted
+        recentFixes.append(accepted)
         acceptedFixRevision &+= 1
         let liveMatchingEnabled = trailGraphProvider != nil
         if liveMatchingEnabled {

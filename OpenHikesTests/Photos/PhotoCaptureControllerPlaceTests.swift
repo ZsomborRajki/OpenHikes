@@ -27,7 +27,7 @@ struct PhotoCaptureControllerPlaceTests {
         let controller = PhotoCaptureController()
         let places = FeedReader(controller.placeRequests())
 
-        controller.attach(to: hike) { nil }
+        controller.attach(to: hike) { _ in nil }
         controller.requestPlace()
         // Nothing can be sent afterwards to prove the absence against — this
         // screen has nowhere to put a place — so the reader is given the turns
@@ -48,7 +48,7 @@ struct PhotoCaptureControllerPlaceTests {
         let places = FeedReader(controller.placeRequests())
         let spot = Spot()
 
-        controller.attach(to: hike, placeAnchor: { spot.coordinate }, anchor: { nil })
+        controller.attach(to: hike, placeAnchor: { spot.coordinate }, anchor: { _ in nil })
         #expect(controller.canAddPlace)
         // The route is still being built: nowhere to put one yet.
         #expect(controller.placeSpot() == nil)
@@ -68,7 +68,7 @@ struct PhotoCaptureControllerPlaceTests {
         let hike = Fixture.hike(in: context)
         let controller = PhotoCaptureController()
         let places = FeedReader(controller.placeRequests())
-        let detail = controller.attach(to: hike, placeAnchor: { nil }, anchor: { nil })
+        let detail = controller.attach(to: hike, placeAnchor: { nil }, anchor: { _ in nil })
 
         controller.setHostScreenPresent(false)
         #expect(controller.canAddPlace == false)
@@ -84,7 +84,7 @@ struct PhotoCaptureControllerPlaceTests {
         #expect(places.received.count == 1)
 
         // A place's screen claims the pill for its photographs only.
-        let place = controller.attach(to: hike, place: UUID()) { nil }
+        let place = controller.attach(to: hike, place: UUID()) { _ in nil }
         controller.detach(token: detail)
         #expect(controller.isAvailable)
         #expect(controller.canAddPlace == false)

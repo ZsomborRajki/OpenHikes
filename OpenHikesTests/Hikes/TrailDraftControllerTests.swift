@@ -77,7 +77,7 @@ struct TrailDraftControllerTests {
             camera.setHostScreenPresent(isPushed)
             // The strongest case for the camera: a screen is pushed *and* it
             // has attached something to photograph.
-            if isPushed { camera.attach(to: hike) { nil } }
+            if isPushed { camera.attach(to: hike) { _ in nil } }
 
             #expect(
                 !(maker.isAvailable && camera.isAvailable),

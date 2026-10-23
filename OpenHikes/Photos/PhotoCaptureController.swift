@@ -31,6 +31,17 @@ final class PhotoCaptureController {
     /// we're on the main actor — see ``LocationManager``'s deinit for why.
     nonisolated deinit { /* intentionally empty */ }
 
+    /// Where on the trail a photo goes, asked once it is handed over.
+    ///
+    /// Given the moment the camera says its shutter fired, or `nil` when it
+    /// said nothing readable or the photo came from the library picker. The
+    /// recording screen needs it: the walk goes on while the camera's review
+    /// screen is up, so where the hiker is at the hand-over is not where the
+    /// picture was taken (#970). A screen whose position is one the hiker
+    /// chose — a place's own screen, a point on the elevation graph — ignores
+    /// it, because that choice is what the photo is of.
+    typealias Anchor = (_ shutter: Date?) -> CLLocationCoordinate2D?
+
     /// The screen a photo taken now would be filed under, and where on the
     /// trail it would be pinned.
     struct Subject {
@@ -41,7 +52,7 @@ final class PhotoCaptureController {
         let placeID: UUID?
         /// Resolved at capture time — see the note above. `nil` means the
         /// photo joins the gallery without a place on the map.
-        let anchor: () -> CLLocationCoordinate2D?
+        let anchor: Anchor
         /// Where a place added from the pill would stand, resolved when the
         /// pill's *Add Place* is tapped. `nil` for a screen that does not
         /// offer one — the recording screen has its own *Add Place*, and a
@@ -57,7 +68,7 @@ final class PhotoCaptureController {
     }
 
     /// Where a photo taken now goes, resolved at the shutter — see
-    /// ``currentSubject()``.
+    /// ``currentSubject(shutter:)``.
     struct Filing {
         let hike: Hike
         let coordinate: CLLocationCoordinate2D?
@@ -112,7 +123,7 @@ final class PhotoCaptureController {
         place placeID: UUID? = nil,
         placeAnchor: (() -> CLLocationCoordinate2D?)? = nil,
         depth: Int = 0,
-        anchor: @escaping () -> CLLocationCoordinate2D?
+        anchor: @escaping Anchor
     ) -> Int {
         let token = claims.attach(
             Subject(hike: hike, placeID: placeID, anchor: anchor, placeAnchor: placeAnchor),
@@ -224,7 +235,7 @@ final class PhotoCaptureController {
     }
 
     /// The hike a place added now belongs to, and where it would stand —
-    /// read once, at the tap, for the reason ``currentSubject()`` reads its
+    /// read once, at the tap, for the reason ``currentSubject(shutter:)`` reads its
     /// anchor at the shutter. `nil` when the pill offers no *Add Place*, or
     /// the screen cannot say where yet (its route is still being built).
     func placeSpot() -> PlaceSpot? {
@@ -237,8 +248,12 @@ final class PhotoCaptureController {
     /// Resolved together so the two can't come from different moments — the
     /// hiker moves between the tap and the shutter, and a coordinate taken
     /// after the subject changed would pin a photo to a trail it isn't of.
-    func currentSubject() -> Filing? {
+    ///
+    /// - Parameter shutter: When the camera says the picture was taken, handed
+    ///   to the screen's ``Anchor``. `nil` for a library pick, whose own
+    ///   timestamp is placed elsewhere — see ``PickedPhotoPlacement``.
+    func currentSubject(shutter: Date? = nil) -> Filing? {
         guard let subject else { return nil }
-        return Filing(hike: subject.hike, coordinate: subject.anchor(), placeID: subject.placeID)
+        return Filing(hike: subject.hike, coordinate: subject.anchor(shutter), placeID: subject.placeID)
     }
 }

@@ -89,9 +89,9 @@ struct ScreenClaimsTests {
         let placeID = UUID()
         let controller = PhotoCaptureController()
 
-        controller.attach(to: hike, depth: 1) { nil }
-        let place = controller.attach(to: hike, place: placeID, depth: 3) { nil }
-        controller.attach(to: hike, depth: 1) { nil }
+        controller.attach(to: hike, depth: 1) { _ in nil }
+        let place = controller.attach(to: hike, place: placeID, depth: 3) { _ in nil }
+        controller.attach(to: hike, depth: 1) { _ in nil }
 
         #expect(controller.currentSubject()?.placeID == placeID)
         controller.detach(token: place)

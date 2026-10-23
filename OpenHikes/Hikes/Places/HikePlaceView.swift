@@ -124,8 +124,9 @@ struct HikePlaceView: View {
             Text("Its photos stay in this hike’s gallery.")
         }
         .hikePlaceRefusalAlert($refusal)
-        // A photograph taken now is of this place, pinned where it stands.
-        .photoCaptureSubject(photoCapture, for: hike, place: placeID) { card.coordinate }
+        // A photograph taken now is of this place, pinned where it stands —
+        // whenever its shutter fired.
+        .photoCaptureSubject(photoCapture, for: hike, place: placeID) { _ in card.coordinate }
         .photoMapPins(photoPins, photos: hike.photos(ofPlace: placeID)) { photoID in
             guard let photo = hike.photos.first(where: { $0.id == photoID }) else { return }
             onOpenPhoto(photo)

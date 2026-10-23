@@ -107,4 +107,43 @@ nonisolated enum PhotoTrailAnchor {
         guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
         return coordinate
     }
+
+    /// The coordinate for a photo taken while recording, at the moment its
+    /// shutter fired rather than the moment it was handed over (#970).
+    ///
+    /// The camera delivers a picture only once Use Photo is tapped, and the
+    /// walk goes on while its review screen is up. So when the recorder has
+    /// accepted a fix *after* the shutter, the latest fix is somewhere the
+    /// hiker walked on to, and the walk's own fixes either side of the shutter
+    /// say where the picture was taken — through ``HikePhotoTimeline``, which
+    /// is what places a library photo on a saved walk, under the same rules:
+    /// nothing is interpolated across a pause, and a moment the walk cannot
+    /// account for is `nil` rather than a plausible point.
+    ///
+    /// Otherwise — no shutter time to go on, or nothing accepted since it —
+    /// the answer is ``recordingCoordinate(_:)``'s: the newest evidence there
+    /// is. That holds however old the fix is, because a hiker standing still
+    /// produces no new ones (the displacement gate refuses them), and is
+    /// `nil` straight after a resume, when the leg has no fix yet.
+    ///
+    /// - Parameters:
+    ///   - shutter: When the camera says the picture was taken — see
+    ///     ``CameraCaptureMetadata`` — or `nil` when it said nothing readable.
+    ///   - recent: The fixes the recorder has accepted lately, oldest first —
+    ///     see ``RecentRecordingFixes``.
+    ///   - latest: The recorder's last accepted fix on the current leg.
+    static func recordingCoordinate(
+        atShutter shutter: Date?,
+        recent: [RecordingPoint],
+        latest: RecordingPoint?
+    ) -> CLLocationCoordinate2D? {
+        guard let shutter, let newest = recent.last, newest.timestamp > shutter else {
+            return recordingCoordinate(latest)
+        }
+        guard let timeline = HikePhotoTimeline(route: recent.map(\.routeCoordinate)),
+              let position = timeline.position(at: shutter),
+              CLLocationCoordinate2DIsValid(position.coordinate)
+        else { return nil }
+        return position.coordinate
+    }
 }

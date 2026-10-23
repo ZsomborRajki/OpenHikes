@@ -121,14 +121,16 @@ struct RecordingView: View {
         // modifier's body, though this one is free either way: the body above
         // already reads `phase`.
         .keepsScreenAwake { recorder.isActive }
-        // Each photo is pinned to the hiker's last accepted fix — read at the
-        // shutter, so a picture taken twenty minutes in is pinned twenty
-        // minutes along. The recorder's live fix, not the draft `Hike`'s
-        // `route`: that is only written when the recording stops. A draft only
-        // exists once recording starts, which is why the modifier takes an
-        // optional hike.
-        .photoCaptureSubject(photoCapture, for: recorder.currentHike) {
-            PhotoTrailAnchor.recordingCoordinate(recorder.lastAcceptedPoint)
+        // Each photo is pinned where the walk was when its shutter fired, so
+        // a picture taken twenty minutes in is pinned twenty minutes along —
+        // and one handed over a minute after it was taken is not pinned a
+        // minute further on. The recorder's own fixes, not the draft `Hike`'s
+        // `route`: that is only written when the recording stops. See
+        // ``HikeRecorder/photoCoordinate(atShutter:)``. A draft only exists
+        // once recording starts, which is why the modifier takes an optional
+        // hike.
+        .photoCaptureSubject(photoCapture, for: recorder.currentHike) { shutter in
+            recorder.photoCoordinate(atShutter: shutter)
         }
         // …and each one stands on the map as soon as it is taken, rather than
         // only once the walk has been saved. A background because the claim is

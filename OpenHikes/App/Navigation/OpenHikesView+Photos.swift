@@ -34,11 +34,13 @@ extension OpenHikesView {
     /// Files a frame from the camera under whichever screen offered the pill.
     ///
     /// The subject is read here rather than captured when the camera opened:
-    /// the walk continues while the viewfinder is up, and on the recording
-    /// screen the coordinate this resolves to is the one the hiker is
-    /// standing on when the shutter fires.
+    /// the walk continues while the viewfinder is up. It is read with the
+    /// frame's shutter time, because the walk also continues while the
+    /// camera's review screen is up, and on the recording screen the
+    /// coordinate has to be the one the hiker stood on when the shutter
+    /// fired rather than the one they reached by tapping Use Photo (#970).
     func attachCapturedPhoto(_ frame: CapturedFrame) {
-        guard let subject = photoCapture.currentSubject() else { return }
+        guard let subject = photoCapture.currentSubject(shutter: frame.capturedAt) else { return }
         Task {
             let stored = await HikePhotoImport.add(
                 captured: frame,

@@ -30,8 +30,10 @@ extension View {
     ///     preview or a test that doesn't care about photos passes.
     ///   - hike: `nil` while there is nothing to attach to yet — a recording
     ///     has no draft until it starts.
-    ///   - anchor: Evaluated at the shutter, never before. See
-    ///     ``PhotoCaptureController`` for why this is a closure.
+    ///   - anchor: Evaluated when the photo is handed over, never before, and
+    ///     given the camera's shutter time. See ``PhotoCaptureController`` for
+    ///     why this is a closure, and ``PhotoCaptureController/Anchor`` for
+    ///     which screens use the time.
     ///   - place: The place on the trail this screen is about, which files
     ///     a photo under it — see ``HikePhoto/placeID``.
     ///   - placeAnchor: Where the pill's *Add Place* would put a place,
@@ -42,7 +44,7 @@ extension View {
         for hike: Hike?,
         place: UUID? = nil,
         placeAnchor: (() -> CLLocationCoordinate2D?)? = nil,
-        anchor: @escaping () -> CLLocationCoordinate2D?
+        anchor: @escaping PhotoCaptureController.Anchor
     ) -> some View {
         modifier(
             PhotoCaptureSubject(
@@ -84,7 +86,9 @@ extension View {
                     scrubbed: tracker.trackerDistance
                 )
             },
-            anchor: {
+            // The shutter time is not consulted: the graph's position is the
+            // hiker's own choice of where the picture belongs.
+            anchor: { _ in
                 PhotoTrailAnchor.coordinate(
                     profile: profile(),
                     live: tracker.liveTrackerDistance,
@@ -100,7 +104,7 @@ private struct PhotoCaptureSubject: ViewModifier {
     let hike: Hike?
     let place: UUID?
     let placeAnchor: (() -> CLLocationCoordinate2D?)?
-    let anchor: () -> CLLocationCoordinate2D?
+    let anchor: PhotoCaptureController.Anchor
 
     @State private var token: Int?
     @Environment(\.sheetDepth) private var depth
