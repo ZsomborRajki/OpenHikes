@@ -112,8 +112,8 @@ public struct WatchWalkAccumulator: Sendable, Equatable {
     public var lastFix: WatchRecordedFix? { fixes.last }
 
     /// Metres per second over the time actually spent walking, or `nil` before
-    /// there is any. Pace rather than speed is the watch's own presentation
-    /// choice; this is the figure both are read off.
+    /// there is any. The recording screen draws it as a speed, captioned as the
+    /// phone captions its own — see ``WatchRecordingFigures``.
     public var averageSpeedMetersPerSecond: Double? {
         guard activeSeconds > 0, distanceMeters > 0 else { return nil }
         return distanceMeters / activeSeconds

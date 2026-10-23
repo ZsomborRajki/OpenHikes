@@ -274,24 +274,31 @@ private struct UnsavedWalkPanel: View {
     }
 }
 
-/// The live figures, and the only view that reads them.
+/// The live figures, and the only view that reads them. What each is called
+/// and how it reads is ``WatchRecordingFigures``'s; this lays them out.
 private struct RecordingFigures: View {
     @Environment(WatchModel.self) private var model
 
     var body: some View {
         let stats = model.recorder.stats
+        let figures = WatchRecordingFigures(
+            distanceMeters: stats.distanceMeters,
+            elevationGainMeters: stats.elevationGainMeters,
+            averageSpeedMetersPerSecond: stats.averageSpeedMetersPerSecond,
+            heartRateBPM: stats.heartRateBPM
+        )
         return VStack(spacing: 4) {
             Text(WidgetFormat.duration(seconds: stats.activeSeconds))
                 .font(.title2.monospacedDigit())
                 .accessibilityLabel("Time hiking")
             Grid(horizontalSpacing: 8, verticalSpacing: 4) {
                 GridRow {
-                    WatchFigure(title: "Distance", value: WidgetFormat.length(meters: stats.distanceMeters))
-                    WatchFigure(title: "Climb", value: WidgetFormat.elevation(meters: stats.elevationGainMeters))
+                    WatchFigure(figures.distance)
+                    WatchFigure(figures.climb)
                 }
                 GridRow {
-                    WatchFigure(title: "Pace", value: paceText(stats))
-                    WatchFigure(title: "Heart", value: heartText(stats))
+                    WatchFigure(figures.averageSpeed)
+                    WatchFigure(figures.heartRate)
                 }
             }
             if stats.fixCount == 0 {
@@ -300,19 +307,6 @@ private struct RecordingFigures: View {
                     .foregroundStyle(.secondary)
             }
         }
-    }
-
-    private func paceText(_ stats: WatchRecordingStats) -> String {
-        guard let speed = stats.averageSpeedMetersPerSecond else { return "—" }
-        return WidgetFormat.speed(metersPerSecond: speed)
-    }
-
-    /// An em dash rather than a zero when the sensor has nothing to say — a
-    /// sleeve over a watch reads as no heart rate, and drawing that as 0 bpm
-    /// is the one number on this screen that would be alarming.
-    private func heartText(_ stats: WatchRecordingStats) -> String {
-        guard let beats = stats.heartRateBPM else { return "—" }
-        return "\(Int(beats.rounded()))"
     }
 }
 
