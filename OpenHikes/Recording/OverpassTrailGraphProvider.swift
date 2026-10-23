@@ -162,9 +162,13 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     /// leave room, and each live match moves its regions back to the newest
     /// end, so what is taken is a region that a whole cache's worth of others
     /// have been read since. An in-flight fetch holds nothing here until it
-    /// lands, and then it lands newest. Losing an entry costs a decode from
-    /// disk while its file lasts, and a download only once the disk trim has
-    /// taken that too.
+    /// lands, and then it lands newest; its waiters are handed the fetch's own
+    /// result, so an eviction can never take a graph from under one. Losing an
+    /// entry costs a decode from disk while its file lasts, and a download only
+    /// once the disk trim has taken that too. So no caller can treat a region
+    /// it was once given as kept for good, which is why the recorder asks
+    /// again on arriving in one
+    /// (``HikeRecorder/prefetchTrailGraphIfNeeded(around:after:)``).
     private static let maximumMemoryRegions = maximumCacheFiles
     /// How long Overpass is allowed to spend on one tile's graph, in seconds.
     ///

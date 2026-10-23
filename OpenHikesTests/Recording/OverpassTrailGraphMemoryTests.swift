@@ -42,6 +42,9 @@ struct OverpassTrailGraphMemoryTests {
     /// expected value from the code asserts only that the code equals itself.
     private static let memoryCapacity = 64
 
+    /// Thirty days, written out for the same reason.
+    private static let cacheLifetime: TimeInterval = 30 * 24 * 60 * 60
+
     /// The centre-ish of a distinct z12 region per index. A z12 tile is
     /// 360 / 4096 ≈ 0.088° wide, so a 0.1° step never lands twice in one.
     private static func coordinate(_ index: Int) -> CLLocationCoordinate2D {
@@ -86,17 +89,51 @@ struct OverpassTrailGraphMemoryTests {
 
     /// An eviction is meant to cost a decode, not a download, for as long as
     /// the region's file is still on disk.
+    ///
+    /// Asked through `prefetch`, because that is the read that downloads on a
+    /// miss: `cachedGraph(covering:)` never starts a request, so a count taken
+    /// after it would hold whatever the provider did.
     @Test("a region let go of comes back from disk without a request")
     func evictedRegionIsReadBackFromDisk() async throws {
-        try await withProvider { provider, transport, _ in
+        try await withProvider { provider, transport, directory in
             try await fill(provider)
             _ = try await provider.cachedGraph(covering: [Self.coordinate(0)])
             try await provider.prefetch(around: Self.coordinate(Self.memoryCapacity))
 
+            try await provider.prefetch(around: Self.coordinate(1))
+
+            #expect(await transport.callCount == Self.memoryCapacity + 1)
+            // Held again: it answers with the directory gone.
+            try FileManager.default.removeItem(at: directory)
             let graph = try await provider.cachedGraph(covering: [Self.coordinate(1)])
             #expect(graph?.edges.isEmpty == false)
-            #expect(await provider.hasCompleteCachedGraph(covering: [Self.coordinate(1)]))
+        }
+    }
+
+    /// A refetch replaces an entry that is already held, and assigning through
+    /// the subscript leaves it where it stood. For a region fetched before
+    /// all the others, that is the oldest end, so the download that has just
+    /// landed would be the next region let go of.
+    @Test("a region fetched again counts as just used")
+    func refetchedRegionMovesToTheNewestEnd() async throws {
+        let clock = TestClock()
+        try await withProvider(clock: clock) { provider, transport, directory in
+            // Region 0 first, the rest half a lifetime later, and then far
+            // enough on that only region 0 has expired.
+            try await provider.prefetch(around: Self.coordinate(0))
+            clock.advance(by: Self.cacheLifetime / 2)
+            for index in 1..<Self.memoryCapacity {
+                try await provider.prefetch(around: Self.coordinate(index))
+            }
+            clock.advance(by: Self.cacheLifetime / 2 + 1)
+
+            try await provider.prefetch(around: Self.coordinate(0))
             #expect(await transport.callCount == Self.memoryCapacity + 1)
+            try await provider.prefetch(around: Self.coordinate(Self.memoryCapacity))
+            try FileManager.default.removeItem(at: directory)
+
+            #expect(await provider.hasCompleteCachedGraph(covering: [Self.coordinate(0)]))
+            #expect(await provider.hasCompleteCachedGraph(covering: [Self.coordinate(1)]) == false)
         }
     }
 
@@ -126,12 +163,12 @@ struct OverpassTrailGraphMemoryTests {
     }
 
     private func withProvider(
+        clock: TestClock = TestClock(),
         _ body: (OverpassTrailGraphProvider, CountingGraphTransport, URL) async throws -> Void
     ) async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("trail-graph-memory-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let clock = TestClock()
         let transport = CountingGraphTransport()
         let provider = OverpassTrailGraphProvider(
             directory: directory,

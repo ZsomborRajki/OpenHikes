@@ -260,6 +260,7 @@ extension HikeRecorder {
         // An immutable copy: the journal append below hands this to a
         // `@Sendable` closure, which cannot capture the mutable `point`.
         let accepted = point
+        let previous = lastAcceptedPoint
         lastAcceptedPoint = accepted
         acceptedFixRevision &+= 1
         let liveMatchingEnabled = trailGraphProvider != nil
@@ -308,7 +309,7 @@ extension HikeRecorder {
         // stopped moving gets the wider distance filter on the strength of the
         // fix that proved it rather than one fix later.
         updateEnergyProfile()
-        prefetchTrailGraphIfNeeded(around: accepted.coordinate)
+        prefetchTrailGraphIfNeeded(around: accepted.coordinate, after: previous?.coordinate)
         scheduleLiveMatching()
         enqueueJournalOperation { journal in
             try await journal.append(accepted)
@@ -340,7 +341,24 @@ extension HikeRecorder {
         }
     }
 
-    func prefetchTrailGraphIfNeeded(around coordinate: CLLocationCoordinate2D) {
+    /// Downloads the region `coordinate` falls in, unless it is being fetched,
+    /// is backing off, or was loaded and the hiker has not just arrived in it.
+    ///
+    /// `.loaded` means the provider had the region, not that it still does:
+    /// the provider keeps a bounded number of regions and lets go of the
+    /// least recently used. A region the hiker is walking in stays, because
+    /// live matching reads it on every fix; one left behind on an
+    /// out-and-back, or sat in through a pause spent browsing other hikes,
+    /// can be gone when the hiker is back in it. So arriving asks again, and
+    /// a region still in the cache answers that without a request.
+    ///
+    /// - Parameter previous: The fix accepted before this one, or `nil` for
+    ///   the first fix of a recording or of a resumed leg. Arriving means
+    ///   coming from another region, or from no fix at all.
+    func prefetchTrailGraphIfNeeded(
+        around coordinate: CLLocationCoordinate2D,
+        after previous: CLLocationCoordinate2D?
+    ) {
         guard let trailGraphProvider,
               let region = trailGraphProvider.region(containing: coordinate) else { return }
 
@@ -350,7 +368,10 @@ extension HikeRecorder {
         case let .waiting(failures, retryAt):
             guard clock() >= retryAt else { return }
             previousFailures = failures
-        case .fetching, .loaded: return
+        case .fetching: return
+        case .loaded:
+            guard previous.flatMap(trailGraphProvider.region(containing:)) != region else { return }
+            previousFailures = 0
         }
 
         trailGraphPrefetchStates[region] = .fetching(
