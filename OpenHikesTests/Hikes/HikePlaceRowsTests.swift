@@ -18,12 +18,14 @@ import Testing
 @Suite("Hike place rows")
 struct HikePlaceRowsTests {
     /// The real projection, counted: how often it ran, how many places it was
-    /// asked about, and how often that was on the main thread.
+    /// asked about, how often that was on the main thread, and how many runs
+    /// have finished.
     nonisolated private final class Tally: Sendable {
         private struct Counts {
             var calls = 0
             var places = 0
             var onMainThread = 0
+            var finished = 0
         }
 
         private let counts = Mutex(Counts())
@@ -31,6 +33,7 @@ struct HikePlaceRowsTests {
         var calls: Int { counts.withLock { $0.calls } }
         var places: Int { counts.withLock { $0.places } }
         var onMainThread: Int { counts.withLock { $0.onMainThread } }
+        var finished: Int { counts.withLock { $0.finished } }
 
         func measure(_ places: [TrailPlace], _ route: [RouteCoordinate]) -> [UUID: TrailPlaceAnchor] {
             let onMain = pthread_main_np() != 0
@@ -39,7 +42,9 @@ struct HikePlaceRowsTests {
                 counts.places += places.count
                 if onMain { counts.onMainThread += 1 }
             }
-            return TrailPlaceOrder.anchors(of: places, along: route)
+            let anchors = TrailPlaceOrder.anchors(of: places, along: route)
+            counts.withLock { $0.finished += 1 }
+            return anchors
         }
     }
 
@@ -210,11 +215,30 @@ struct HikePlaceRowsTests {
         _ = rows.rows(of: hike)
         hike.route = Self.route(northward: false)
         _ = rows.rows(of: hike)
-        await settleDelegateHop(until: "both lines are measured") { tally.calls == 2 && rows.revision >= 1 }
+        // Both measurements finished, so each one's landing is queued on the
+        // main actor behind it, and the round trips after this run after
+        // both: the stale one has been dropped, not just not landed yet.
+        await settleDelegateHop(until: "both lines are measured") { tally.finished == 2 && rows.revision >= 1 }
         await settleDelegateHop()
 
         #expect(rows.revision == 1, "only the edited line's answer is drawn")
         #expect(rows.rows(of: hike) == hike.orderedPlaces)
+    }
+
+    /// What makes a screen that drew without distances draw again once they
+    /// arrive — and only then, not for what a read writes down.
+    @Test("a read is redrawn once, when the anchors it lacked land")
+    func readIsRedrawnWhenAnchorsLand() async throws {
+        let (hike, _) = try hike()
+        let tally = Tally()
+        let rows = Self.rows(tally, budget: 0)
+
+        let reads = ObservationCounter { _ = rows.rows(of: hike) }
+        await settleDelegateHop(until: "the anchors land") { rows.revision == 1 }
+        await reads.settle()
+
+        #expect(reads.count == 1)
+        #expect(tally.calls == 1, "the read after the landing has everything it needs")
     }
 
     // MARK: The detached-row guard
