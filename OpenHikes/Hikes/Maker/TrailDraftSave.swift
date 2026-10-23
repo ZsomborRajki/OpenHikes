@@ -169,7 +169,9 @@ enum TrailDraftSave {
             // With whatever heights were read for it, on every point: read at
             // two hundred and interpolated between them, the heights the maker
             // coloured the line from while it was drawn — see
-            // ``RouteHeightSamples/interpolating(_:)``. That is the whole of
+            // ``RouteHeightSamples/interpolating(_:)``. A degraded leg keeps
+            // its heights too: the maker left it uncoloured so its dashes
+            // showed, and a saved line draws no dashes. That is the whole of
             // what makes a drawn trail open with a profile, a climb, a descent
             // and its colours by steepness: nothing downstream of here knows
             // where a height came from, so the detail screen, the stat grid,
