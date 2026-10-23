@@ -164,6 +164,9 @@ public struct WatchRouteTracker: Sendable, Equatable {
     private let lineDistances: [Double]
     /// The legs a pause opened, by the index of the point they leave. Never
     /// matched against.
+    ///
+    /// ``WatchTrailPackage/pausedLegs``, which is also what the map draws as
+    /// a pause, so the leg the map breaks is exactly the leg refused here.
     private let pausedSegments: Set<Int>
     /// Trail metres per line metre. See this file's header.
     private let scale: Double
@@ -175,11 +178,7 @@ public struct WatchRouteTracker: Sendable, Equatable {
 
     public init(_ package: WatchTrailPackage) {
         points = package.points
-        let paused = Set(
-            package.pauseIndices
-                .filter { $0 > 0 && $0 < package.points.count }
-                .map { $0 - 1 }
-        )
+        let paused = Set(package.pausedLegs)
         pausedSegments = paused
         var cumulative: [Double] = []
         cumulative.reserveCapacity(package.points.count)

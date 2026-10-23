@@ -94,9 +94,11 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
     /// That leg is a drive or a lift between two recorded pieces, so the watch
     /// gives it no length and never matches a fix onto it — the rule the
     /// phone's `RouteProfile` keeps, and what ``totalDistanceMeters`` already
-    /// leaves out (#962). The phone keeps both ends of every paused leg when
-    /// it decimates, so a pause is always exactly one leg of the line here.
-    /// Bounded by the number of pauses, not by the length of the walk.
+    /// leaves out (#962) — and its map does not draw it as trail (#997). The
+    /// tracker and the map both read it through ``pausedLegs``. The phone
+    /// keeps both ends of every paused leg when it decimates, so a pause is
+    /// always exactly one leg of the line here. Bounded by the number of
+    /// pauses, not by the length of the walk.
     public var pauseIndices: [Int]
     /// The request this answers. A newer request supersedes this answer even
     /// when the phone sends nothing because the watch already has its revision.
