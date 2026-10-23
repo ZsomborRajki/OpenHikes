@@ -30,7 +30,8 @@
 //  widgets follow it, and ``SharedStore/pruneTrailSnapshots(keeping:)`` throws
 //  away the rest. A widget pinned to a trail that has never been published
 //  draws its empty state until the next sweep, which is the honest cost of not
-//  keeping three hundred routes warm.
+//  keeping three hundred routes warm. When WidgetKit cannot say what is
+//  pinned, nothing is thrown away, because no answer is not an empty one.
 //
 
 import Foundation
@@ -75,7 +76,7 @@ nonisolated enum SharedHikeCatalogPublisher {
     ) {
         Task.detached(priority: .utility) {
             await publishCatalog(from: coordinator, watch: watch)
-            await publishPinnedTrails(container: container)
+            await publishPinnedTrails(.live(container: container))
         }
     }
 
@@ -101,39 +102,33 @@ nonisolated enum SharedHikeCatalogPublisher {
     /// A trail snapshot for each hike a placed widget is pinned to, and
     /// nothing for the hikes none is.
     ///
-    /// The selected trail is deliberately **not** in the kept set here: it has
-    /// its own file, written by ``BackgroundTrailTracker``, and mirroring it
-    /// into the per-hike store is `SharedStore.save(_:)`'s job. What this adds
-    /// is the trails nothing would otherwise publish.
+    /// The selected trail is deliberately **not** published here for being
+    /// selected: it has its own file, written by ``BackgroundTrailTracker``,
+    /// and mirroring it into the per-hike store is `SharedStore.save(_:)`'s
+    /// job. What this adds is the trails nothing would otherwise publish.
     ///
     /// Each pinned trail gets its **map** here too. The renderer keeps a set
     /// per trail, but only the selection's feed ever asked it for one, so a
     /// trail pinned without being selected — or pinned before sets were kept
     /// per trail — drew its line on a grey fill for good.
-    static func publishPinnedTrails(container: ModelContainer) async {
-        let answer = await pinnedTrails()
-        let pinned: Set<UUID> = if case .known(let hikeIDs) = answer { hikeIDs } else { [] }
-        guard !pinned.isEmpty else {
-            // Nothing pinned: keep only whatever the selected trail's mirror
-            // left behind, which `selectedHikeID` answers.
-            SharedStore.pruneTrailSnapshots(keeping: selectedHikeIDs())
-            await pruneBasemaps(given: answer)
-            return
-        }
+    ///
+    /// **Only an answer prunes.** When WidgetKit cannot say what is pinned,
+    /// this publishes nothing and deletes nothing, the snapshots and the maps
+    /// alike. Reading the failure as "nothing is pinned" deleted the snapshot
+    /// a pinned widget draws its trail from while sparing the map under it,
+    /// and with one sweep a launch the widget drew its empty state until the
+    /// next. A snapshot nothing draws costs bytes until WidgetKit answers; one
+    /// deleted on the guess costs a pinned widget its trail.
+    static func publishPinnedTrails(_ sweep: PinnedTrailSweep) async {
+        guard case .known(let pinned) = await sweep.pinnedTrails() else { return }
         for hikeID in pinned {
-            await publishTrail(hikeID, container: container)
+            await sweep.publishTrail(hikeID)
         }
-        SharedStore.pruneTrailSnapshots(keeping: pinned.union(selectedHikeIDs()))
-        await pruneBasemaps(given: answer)
-    }
-
-    /// The basemap half of the prune, and only when WidgetKit answered: the
-    /// snapshots above can afford to read a failure as "nothing pinned",
-    /// because a missing snapshot is rebuilt by the next sweep, where a
-    /// deleted map is four network renders.
-    private static func pruneBasemaps(given answer: PinnedTrails) async {
-        guard case .known(let pinned) = answer else { return }
-        await TrailBasemapRenderer.shared.prune(keeping: pinned.union(selectedHikeIDs()))
+        // The selected trail's mirror survives too, because the unconfigured
+        // widgets are following it.
+        let kept = pinned.union(sweep.selectedHikeIDs())
+        sweep.pruneTrailSnapshots(kept)
+        await sweep.pruneBasemaps(kept)
     }
 
     /// One hike's snapshot, built the same way the tracker builds the selected
@@ -171,11 +166,13 @@ nonisolated enum SharedHikeCatalogPublisher {
     /// The hikes the placed widgets are pinned to, or that WidgetKit cannot
     /// answer.
     ///
-    /// Each caller decides what no answer means, because the safe reading is
-    /// opposite for the two. For the snapshots it reads as "nothing is pinned"
-    /// — publishing every hike because the system was momentarily unavailable
-    /// is the cost this whole policy exists to avoid. For the basemaps it
-    /// reads as "keep everything" — see `TrailBasemapRenderer.PinnedHikes`.
+    /// What no answer means depends on the question, because the safe reading
+    /// is opposite for the two. For what to *publish* it reads as "nothing is
+    /// pinned" — publishing every hike because the system was momentarily
+    /// unavailable is the cost this whole policy exists to avoid. For what to
+    /// *delete* it reads as "keep everything", the snapshots and the maps
+    /// alike — see ``publishPinnedTrails(_:)`` and
+    /// `TrailBasemapRenderer.PinnedHikes`.
     static func pinnedTrails() async -> PinnedTrails {
         #if canImport(WidgetKit)
         let configurations = try? await WidgetCenter.shared.currentConfigurations()
@@ -197,5 +194,39 @@ nonisolated enum SharedHikeCatalogPublisher {
             forKey: SettingsKey.lastSelectedHikeID
         ), let id = UUID(uuidString: stored) else { return [] }
         return [id]
+    }
+
+    /// Everything the pinned-trail sweep reads and writes, so a suite can hand
+    /// it an answer WidgetKit never gives the test host and see what it does
+    /// with it. ``live(container:)`` is the app's.
+    ///
+    /// A seam for the reason `TrailBasemapRenderer.PinnedHikes` is one, and
+    /// wider: the sweep's writes land in the App Group the renderer's own
+    /// suite checks for strays, and a pinned trail's map is a MapKit render.
+    nonisolated struct PinnedTrailSweep: Sendable {
+        /// Which trails the placed widgets are pinned to, or that WidgetKit
+        /// cannot say.
+        let pinnedTrails: @Sendable () async -> PinnedTrails
+        /// The selected trail, which every unconfigured widget follows.
+        let selectedHikeIDs: @Sendable () -> Set<UUID>
+        /// Writes one pinned trail's snapshot and map.
+        let publishTrail: @Sendable (UUID) async -> Void
+        /// Deletes every per-hike snapshot but these.
+        let pruneTrailSnapshots: @Sendable (Set<UUID>) -> Void
+        /// Deletes every trail's map but these.
+        let pruneBasemaps: @Sendable (Set<UUID>) async -> Void
+
+        /// WidgetKit, the app's own defaults, `container` and the App Group.
+        static func live(container: ModelContainer) -> Self {
+            Self(
+                pinnedTrails: SharedHikeCatalogPublisher.pinnedTrails,
+                selectedHikeIDs: SharedHikeCatalogPublisher.selectedHikeIDs,
+                publishTrail: { hikeID in
+                    await SharedHikeCatalogPublisher.publishTrail(hikeID, container: container)
+                },
+                pruneTrailSnapshots: { SharedStore.pruneTrailSnapshots(keeping: $0) },
+                pruneBasemaps: { await TrailBasemapRenderer.shared.prune(keeping: $0) }
+            )
+        }
     }
 }
