@@ -57,7 +57,7 @@ struct HikePlaceView: View {
 
     var body: some View {
         Group {
-            if let card = HikePlaceCard(hike: hike, placeID: placeID) {
+            if let card = HikePlaceCard(hike: hike, placeID: placeID, preparedBy: placePins?.placeRows) {
                 content(card)
             } else {
                 // Removed — here, or on another device while this was open.
@@ -70,7 +70,11 @@ struct HikePlaceView: View {
         #endif
         // Every place of the trail stays on the map while one of them is
         // open, so the hiker can see where this one sits and tap the next.
-        .trailPlacePins(placePins, rows: hike.orderedPlaces, onOpen: onOpenPlace)
+        .trailPlacePins(
+            placePins,
+            rows: hike.orderedPlaces(preparedBy: placePins?.placeRows),
+            onOpen: onOpenPlace
+        )
     }
 
     private func content(_ card: HikePlaceCard) -> some View {

@@ -447,7 +447,18 @@ nonisolated public enum TrailPlaceOrder {
         _ places: [TrailPlace],
         along route: [RouteCoordinate]
     ) -> [TrailPlaceRow] {
-        let anchors = anchors(of: places, along: route)
+        ordered(places, anchors: anchors(of: places, along: route))
+    }
+
+    /// `places` in the order `anchors` puts them, for a caller that measured
+    /// them already — ``anchors(of:along:)`` is the expensive half, and a
+    /// screen that keeps its answer while the line is unchanged only pays
+    /// for this one. A place missing from `anchors` sorts as one with no line
+    /// to be measured against: after every measured place, in marked order.
+    public static func ordered(
+        _ places: [TrailPlace],
+        anchors: [UUID: TrailPlaceAnchor]
+    ) -> [TrailPlaceRow] {
         guard !anchors.isEmpty else {
             return places.map { TrailPlaceRow(place: $0, anchor: nil) }
         }

@@ -115,6 +115,28 @@ struct TrailPlaceTests {
         #expect(ordered.allSatisfy { $0.anchor == nil })
     }
 
+    /// What a screen holding anchors measured earlier draws while a newly
+    /// marked place is still being measured: the measured ones in order, and
+    /// the new one after them rather than at a guessed distance.
+    @Test("a place not yet measured sorts after the measured ones")
+    func unmeasuredPlaceSortsLast() {
+        let route = Self.route(from: Line.south, to: Line.north)
+        let far = Self.place(Line.north - 0.002, name: "Far")
+        let near = Self.place(Line.south + 0.002, name: "Near")
+        let fresh = Self.place(Line.south + 0.001, name: "Fresh")
+        let measured = TrailPlaceOrder.anchors(of: [far, near], along: route)
+
+        let ordered = TrailPlaceOrder.ordered([fresh, far, near], anchors: measured)
+
+        #expect(ordered.map(\.place.name) == ["Near", "Far", "Fresh"])
+        #expect(ordered.last?.anchor == nil)
+        #expect(ordered.last?.offRouteMeters == nil)
+        #expect(
+            TrailPlaceOrder.ordered([far, near], anchors: measured)
+                == TrailPlaceOrder.ordered([far, near], along: route)
+        )
+    }
+
     /// Nearest to the line wins, not first along it. A trail that doubles back
     /// passes a spot twice, and the crossing the hiker means is the one it
     /// actually touches.

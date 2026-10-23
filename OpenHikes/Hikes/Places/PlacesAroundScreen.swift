@@ -72,7 +72,7 @@ struct PlacesAroundScreen<Content: View>: View {
             if let token { around.show(rows, token: token) }
         }
         .sheet(isPresented: $search.selection.isPresent()) {
-            HikePlaceAroundCard(search: search, hike: hike, onAdd: add) { photo in
+            HikePlaceAroundCard(search: search, hike: hike, placeRows: placePins?.placeRows, onAdd: add) { photo in
                 // The card goes first: a push under a presented sheet lands
                 // behind it.
                 search.selection = nil
