@@ -33,8 +33,9 @@
 //  ## Off the main actor, past a budget
 //
 //  Measuring that fits ``synchronousBudget`` is done there and then, so a
-//  short trail — or one place added to a long one — never draws without its
-//  distances. Anything bigger is measured off the main actor, and the rows
+//  short trail — or one place added to a line of up to ten thousand points —
+//  never draws without its distances. Anything bigger, including one place
+//  added to a day's recording, is measured off the main actor, and the rows
 //  read meanwhile carry what is already known: an unmeasured place sorts last
 //  with no distance, as the maker's list does while its own ranking is out —
 //  see ``TrailDraft/placeRows``. ``revision`` is the one observed property,
