@@ -72,7 +72,9 @@ struct OpenHikesApp: App {
             // Spotlight, which is the half of ``HikeEntity`` a hiker gets
             // without having to say anything. Here beside the registration
             // because it wants the same coordinator, and off the main actor
-            // because it is a whole-library fetch nothing on screen waits for.
+            // because it is a whole-library fetch, and a decode of every
+            // route, that nothing on screen waits for — the read itself
+            // leaves the main actor, see `HikeIntentCoordinator.finishedHikes()`.
             HikeSpotlightIndex.donate(from: coordinator)
             // The App Group's copy of the library, and a trail snapshot for
             // every hike a placed widget is pinned to. Beside the Spotlight

@@ -86,9 +86,7 @@ nonisolated enum SharedHikeCatalogPublisher {
         watch: WatchSessionCoordinator? = nil
     ) async {
         do {
-            let summaries = try await MainActor.run {
-                try coordinator.finishedHikes().map(HikeEntity.summary(of:))
-            }
+            let summaries = try await coordinator.finishedHikes().map(HikeEntity.summary(of:))
             let catalog = SharedHikeCatalog(hikes: summaries)
             SharedStore.saveHikeCatalog(catalog)
             if let watch { await watch.publish(catalog) }

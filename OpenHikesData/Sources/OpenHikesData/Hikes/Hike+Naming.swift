@@ -23,7 +23,9 @@ public extension Hike {
         return title
     }
 
-    var distance: Measurement<UnitLength> {
+    /// `nonisolated` for the same reason: the intents' library read builds a
+    /// report of every hike from a context of its own, off the main actor.
+    nonisolated var distance: Measurement<UnitLength> {
         Measurement(value: distanceMeters, unit: .meters)
     }
 

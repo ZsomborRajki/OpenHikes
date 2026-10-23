@@ -32,9 +32,10 @@ final class HikeIntentCoordinator {
     /// The trail being walked, or `nil` — the walk session's answer, asked
     /// rather than kept for the reason the recorder is: one authority each.
     private let walkUnderWay: @MainActor () -> String?
-    /// How the library is read for what has been walked. The app only ever
-    /// reads the store; a suite hands in a failing read, because a
-    /// `ModelContext` cannot be made to throw on demand.
+    /// How the library is read, for what has been walked and for the finished
+    /// hikes the launch sweeps publish. The app only ever reads the store; a
+    /// suite hands in a failing read, because a `ModelContext` cannot be made
+    /// to throw on demand, or one that notes which thread it ran on.
     private let libraryReads: LibraryTotalsSweep.Reads
 
     /// Where a store failure's own words go. They are logged rather than
@@ -390,12 +391,42 @@ extension HikeIntentCoordinator {
     /// hundreds of rows, Spotlight wants all of them, and the entity query's
     /// name match reads a folded title per row either way — so paging would
     /// buy a second code path and no work saved.
-    func finishedHikes() throws(HikeIntentFailure) -> [FinishedHikeReport] {
-        let descriptor = FetchDescriptor<Hike>(
-            predicate: #Predicate { !$0.isRecording },
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        return try fetch(descriptor).map(Self.report(for:))
+    ///
+    /// Read off the main actor, in a context of its own, through the same
+    /// seam as ``readLibrary()``. Every report reads its route for the clock,
+    /// and a route is external storage decoded whole: a library of long
+    /// recordings is a few hundred milliseconds of decoding, which the two
+    /// launch sweeps that read this each did on the main actor while the map
+    /// was coming up (#999).
+    func finishedHikes() async throws(HikeIntentFailure) -> [FinishedHikeReport] {
+        do {
+            return try await Self.readFinishedHikes(from: container, using: libraryReads)
+        } catch {
+            // As in `fetch(_:)`: logged, not carried, because the failure is
+            // read out loud.
+            Self.logger.error("Reading hikes for an intent failed: \(error.localizedDescription, privacy: .public)")
+            throw .storage
+        }
+    }
+
+    /// The finished ones of every hike `reads` returns, newest first.
+    ///
+    /// `@concurrent`, because a `nonisolated async` function runs on its
+    /// caller's executor and both launch sweeps reach here through the main
+    /// actor. Filtered and sorted here rather than by a predicate, because the
+    /// rows come through ``LibraryTotalsSweep/Reads``, which is how a suite
+    /// sees where the read ran. Only what leaves is `Sendable`: the context
+    /// and its hikes are made, read and dropped inside this call.
+    @concurrent
+    nonisolated private static func readFinishedHikes(
+        from container: ModelContainer,
+        using reads: LibraryTotalsSweep.Reads
+    ) async throws -> [FinishedHikeReport] {
+        assertOffMainThread("Reading every route for its clock must stay off the main thread")
+        return try reads.hikes(ModelContext(container))
+            .filter { !$0.isRecording }
+            .map(report(for:))
+            .sorted { $0.date > $1.date }
     }
 
     /// The named hikes, in the order asked for, skipping any that are gone.
@@ -425,10 +456,10 @@ extension HikeIntentCoordinator {
     /// width, and it is ``Hike/displayTitle`` rather than a stored column,
     /// since a renamed hike keeps its imported `title` and the hiker has only
     /// ever seen the new name.
-    func finishedHikes(matchingName query: String) throws(HikeIntentFailure) -> [FinishedHikeReport] {
+    func finishedHikes(matchingName query: String) async throws(HikeIntentFailure) -> [FinishedHikeReport] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
-        let hikes = try finishedHikes()
+        let hikes = try await finishedHikes()
         return HikeNameMatch
             .rankedIndices(of: hikes.map(\.title), matching: trimmed)
             .map { hikes[$0] }
@@ -448,16 +479,17 @@ extension HikeIntentCoordinator {
     ///
     /// That property is documented at its declaration as deriving every
     /// statistic "from scratch, on the calling thread, on every read", and
-    /// this coordinator is `@MainActor` — so a saved multi-hour hike, which is
-    /// thousands of points, would run a full accumulator pass on the main
-    /// actor inside an intent that has a system execution budget. Stopping
-    /// reaches here immediately after a save, and every read of the whole
-    /// library once per saved hike.
+    /// stopping reaches here on the main actor immediately after a save — so
+    /// a saved multi-hour hike, which is thousands of points, would run a full
+    /// accumulator pass on the main actor inside an intent that has a system
+    /// execution budget. The read of the whole library reaches here once per
+    /// saved hike, off the main actor, where two searches still cost less
+    /// than an accumulator pass each.
     ///
     /// The answer is the same one: `HikeRouteStatistics` takes its duration
     /// between the first and last *stamped* points, which is what these two
     /// searches find, and calls it `nil` unless the clock actually ran.
-    private static func report(for hike: Hike) -> FinishedHikeReport {
+    nonisolated private static func report(for hike: Hike) -> FinishedHikeReport {
         let route = hike.route
         let first = route.first { $0.timestamp != nil }?.timestamp
         let last = route.last { $0.timestamp != nil }?.timestamp
