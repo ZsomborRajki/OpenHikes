@@ -74,16 +74,10 @@ final class WatchModel {
     /// package is the answer the screen is waiting for or a late one — see
     /// ``WatchTrailSelection``.
     @ObservationIgnored private var selection = WatchTrailSelection()
-    /// Whether a trail screen is asking for live position right now.
-    ///
-    /// Remembered rather than answered on the spot, because the feed and the
-    /// trail arrive in either order: the *first* trail a watch is ever sent
-    /// is asked for by a screen that opened with nothing to match against, so
-    /// a request refused for want of a trail has to be honoured when one
-    /// lands. It is also what puts the feed back after a recording along a
-    /// trail ends — ``WatchRecorder/stop()`` stops the receiver, and the
-    /// screen that wanted it is still open.
-    @ObservationIgnored private var isFollowing = false
+    /// Whether a trail screen is asking for live position right now, and so
+    /// what a screen coming and going, a trail landing and a recording
+    /// stopping each do to the receiver — see ``WatchFollowClaim``.
+    @ObservationIgnored private var followClaim = WatchFollowClaim()
     /// Whether ``start()`` has run. `false` on a seeded launch, whose queue
     /// count is the fixture's and must not be recounted from a disk it never
     /// wrote.
@@ -187,7 +181,7 @@ final class WatchModel {
     /// recording. See ``WatchRecorder/startFollowingFeed()`` for what this
     /// does and does not buy.
     func startFollowing() {
-        isFollowing = true
+        let change = followClaim.screenAppeared(holdingTrail: trail != nil, recording: recorder.phase.isActive)
         #if DEBUG
         // A seeded launch already has the position it was asked for, matched
         // through the real tracker — see ``applySeededFixture()``. Starting
@@ -196,13 +190,21 @@ final class WatchModel {
         // screenshot of a hiker a continent off their trail.
         if WatchLaunchEnvironment.configuration.isUITesting { return }
         #endif
-        guard trail != nil else { return }
-        recorder.startFollowingFeed()
+        apply(change)
     }
 
+    /// The trail screen left. Its claim goes with it whether or not anything
+    /// is recording; a recording keeps the receiver, which is its own.
     func stopFollowing() {
-        isFollowing = false
-        recorder.stopFollowingFeed()
+        apply(followClaim.screenLeft(recording: recorder.phase.isActive))
+    }
+
+    private func apply(_ change: WatchFollowClaim.FeedChange) {
+        switch change {
+        case .start: recorder.startFollowingFeed()
+        case .stop: recorder.stopFollowingFeed()
+        case .unchanged: break
+        }
     }
 
     private func advanceFollow(with location: CLLocation) {
@@ -289,8 +291,8 @@ final class WatchModel {
         // is where they are. Nothing is cleared — but the receiver is: the
         // recording owned it and stopping took it down, and a trail screen
         // left open behind it would freeze the hiker's dot where they
-        // pressed Stop.
-        if isFollowing { recorder.startFollowingFeed() }
+        // pressed Stop. A screen already gone asks for nothing.
+        apply(followClaim.recordingStopped())
     }
 
     /// Tries again to write a walk that Stop could not. A success goes
@@ -371,7 +373,7 @@ final class WatchModel {
             // nothing to match against, which is every first launch: its
             // ``startFollowing()`` had no trail to start a feed for. This is
             // that moment arriving.
-            if isFollowing { recorder.startFollowingFeed() }
+            apply(followClaim.trailArrived(recording: recorder.phase.isActive))
         case .walkKept(let sessionID):
             Task { [weak self, store] in
                 let queued = await store.walks.remove(sessionID)
