@@ -15,9 +15,10 @@
 //
 //  A full replace at launch cannot disagree. A hiker's library is tens or
 //  hundreds of rows, the whole set is one fetch the intent coordinator already
-//  performs, and it runs once per cold launch off the main actor. The cost of
-//  being wrong the other way is small and self-correcting: a hike saved this
-//  session is searchable next launch.
+//  performs, and it runs once per cold launch off the main actor — the fetch
+//  and every route it reads for a clock included, in a context of the
+//  coordinator's own (#999). The cost of being wrong the other way is small
+//  and self-correcting: a hike saved this session is searchable next launch.
 //
 //  ## Why it is behind the test guard
 //
@@ -45,9 +46,7 @@ nonisolated enum HikeSpotlightIndex {
     static func donate(from coordinator: HikeIntentCoordinator) {
         Task.detached(priority: .utility) {
             do {
-                let entities = try await MainActor.run {
-                    try coordinator.finishedHikes().map(HikeEntity.init)
-                }
+                let entities = try await coordinator.finishedHikes().map(HikeEntity.init)
                 let index = CSSearchableIndex.default()
                 // Deleted before indexed, which is what makes this a replace
                 // rather than an accumulation: a hike deleted last session has

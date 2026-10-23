@@ -37,30 +37,30 @@ final class HikeEntityQueryTests {
     // MARK: - Naming a hike
 
     @Test("a hike is found by a word from the middle of its name")
-    func aNameMatchesWithoutBeingAnchored() throws {
+    func aNameMatchesWithoutBeingAnchored() async throws {
         try insert(title: "North Ridge Trail")
         try insert(title: "Thumsee Loop")
 
-        let found = try coordinator().finishedHikes(matchingName: "ridge")
+        let found = try await coordinator().finishedHikes(matchingName: "ridge")
         #expect(found.map(\.title) == ["North Ridge Trail"])
     }
 
     /// The whole reason the rule is shared: a name dictated to Siri and one
     /// typed on a German keyboard differ in exactly these ways.
     @Test("case and diacritics are folded away, as they are in the search field")
-    func nameMatchingFoldsTheSameWayTheSearchFieldDoes() throws {
+    func nameMatchingFoldsTheSameWayTheSearchFieldDoes() async throws {
         try insert(title: "Zugspitze über den Stopselzieher")
 
-        #expect(try coordinator().finishedHikes(matchingName: "ZUGSPITZE").count == 1)
-        #expect(try coordinator().finishedHikes(matchingName: "uber").count == 1)
+        #expect(try await coordinator().finishedHikes(matchingName: "ZUGSPITZE").count == 1)
+        #expect(try await coordinator().finishedHikes(matchingName: "uber").count == 1)
     }
 
     @Test("a name that starts with the query is ranked above one that merely contains it")
-    func prefixMatchesComeFirst() throws {
+    func prefixMatchesComeFirst() async throws {
         try insert(title: "Old Ridge Path")
         try insert(title: "Ridge Direct")
 
-        let found = try coordinator().finishedHikes(matchingName: "ridge")
+        let found = try await coordinator().finishedHikes(matchingName: "ridge")
         #expect(found.map(\.title) == ["Ridge Direct", "Old Ridge Path"])
     }
 
@@ -68,33 +68,33 @@ final class HikeEntityQueryTests {
     /// the same problem: a renamed hike keeps its imported `title`, and the
     /// new name is the only one the hiker has ever seen.
     @Test("a renamed hike is found by the name the hiker gave it")
-    func renamedHikesAreFoundByTheirNewName() throws {
+    func renamedHikesAreFoundByTheirNewName() async throws {
         try insert(title: "2026-07-04 14:12") { hike in
             hike.customName = "Kalvarienberg"
         }
 
-        #expect(try coordinator().finishedHikes(matchingName: "Kalvarienberg").count == 1)
+        #expect(try await coordinator().finishedHikes(matchingName: "Kalvarienberg").count == 1)
         #expect(
-            try coordinator().finishedHikes(matchingName: "2026-07-04").isEmpty,
+            try await coordinator().finishedHikes(matchingName: "2026-07-04").isEmpty,
             "the imported title is not a name anybody has seen"
         )
     }
 
     @Test("an empty query matches nothing rather than everything")
-    func anEmptyQueryIsNotAWildcard() throws {
+    func anEmptyQueryIsNotAWildcard() async throws {
         try insert(title: "Thumsee Loop")
 
-        #expect(try coordinator().finishedHikes(matchingName: "").isEmpty)
-        #expect(try coordinator().finishedHikes(matchingName: "   ").isEmpty)
+        #expect(try await coordinator().finishedHikes(matchingName: "").isEmpty)
+        #expect(try await coordinator().finishedHikes(matchingName: "   ").isEmpty)
     }
 
     @Test("a recording in progress cannot be named")
-    func aDraftIsNotNameable() throws {
+    func aDraftIsNotNameable() async throws {
         try insert(title: "Being walked now") { hike in
             hike.isRecording = true
         }
 
-        #expect(try coordinator().finishedHikes(matchingName: "walked").isEmpty)
+        #expect(try await coordinator().finishedHikes(matchingName: "walked").isEmpty)
     }
 
     // MARK: - Resolving an identifier
@@ -131,9 +131,9 @@ final class HikeEntityQueryTests {
     // MARK: - What the entity carries
 
     @Test("the entity carries the name the hiker sees and a subtitle under it")
-    func theEntityDescribesItself() throws {
+    func theEntityDescribesItself() async throws {
         try insert(title: "Thumsee Loop", distanceMeters: 8400)
-        let report = try #require(try coordinator().finishedHikes().first)
+        let report = try #require(try await coordinator().finishedHikes().first)
 
         let entity = HikeEntity(report)
         #expect(entity.name == "Thumsee Loop")
@@ -142,12 +142,12 @@ final class HikeEntityQueryTests {
     }
 
     @Test("suggestions are the most recent hikes, newest first")
-    func suggestionsAreRecentFirst() throws {
+    func suggestionsAreRecentFirst() async throws {
         try insert(title: "Older", daysAgo: 3)
         try insert(title: "Newest", daysAgo: 1)
         try insert(title: "Middle", daysAgo: 2)
 
-        let all = try coordinator().finishedHikes()
+        let all = try await coordinator().finishedHikes()
         #expect(all.map(\.title) == ["Newest", "Middle", "Older"])
     }
 
