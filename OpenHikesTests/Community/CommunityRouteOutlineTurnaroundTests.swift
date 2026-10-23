@@ -150,6 +150,37 @@ struct CommunityRouteOutlineTurnaroundTests {
         )
     }
 
+    /// The reported case set off just west of 180°, so that the turnaround and
+    /// the finish lie east of it. Each point is measured in its own tangent
+    /// plane, and only the short way round keeps the two legs on one line
+    /// there: the long way would put every point past 180° half a world from
+    /// the chord, and keep them all.
+    @Test("a turnaround across the antimeridian survives thinning")
+    func turnaroundAcrossTheAntimeridian() {
+        let shift = Self.antimeridianStart
+        let route = (Self.leg(from: 0, to: 100) + Self.leg(from: 99, to: 50)).map { point in
+            RouteCoordinate(latitude: point.latitude, longitude: Self.wrapped(point.longitude + shift))
+        }
+        #expect(route.count > CommunityRouteOutline.maximumPoints)
+
+        Self.expectTurnaround(
+            CommunityRouteOutline.simplified(route),
+            start: CLLocationCoordinate2D(latitude: Self.latitude, longitude: shift),
+            turn: CLLocationCoordinate2D(latitude: Self.latitude, longitude: Self.wrapped(100 * Self.step + shift)),
+            end: CLLocationCoordinate2D(latitude: Self.latitude, longitude: Self.wrapped(50 * Self.step + shift))
+        )
+    }
+
+    /// Where the antimeridian case starts: 180° falls between two fixes, some
+    /// 360 m east of the start, rather than on one.
+    private static let antimeridianStart = 179.99525
+
+    /// `longitude` brought back into `-180...180`, as a recording east of the
+    /// antimeridian reports it.
+    private static func wrapped(_ longitude: Double) -> Double {
+        longitude > 180 ? longitude - 360 : longitude
+    }
+
     /// What reaches the map: the encoded outline, read back, still goes as
     /// far as the walk did.
     @Test("the published outline reaches the turnaround")

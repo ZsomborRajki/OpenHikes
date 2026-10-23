@@ -201,7 +201,10 @@ nonisolated enum CommunityRouteOutline {
 // caller here is either the `@concurrent` upload path or the map's own
 // nonisolated decode.
 nonisolated private extension CommunityRouteOutline {
-    /// The classic algorithm, with an explicit stack rather than recursion.
+    /// The classic algorithm, with two departures: each point is measured
+    /// against the segment it would be replaced by rather than the line
+    /// through it (see ``segmentDistanceMeters(of:from:to:)``), and the spans
+    /// wait on an explicit stack rather than in recursion.
     ///
     /// A recorded day is tens of thousands of points and the worst case for
     /// this split is one point per level, so recursion here is a stack
