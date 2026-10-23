@@ -10,6 +10,7 @@ import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesShared
+import OrderedCollections
 
 nonisolated struct TrailGraphRegion: Codable, Hashable, Sendable {
     let zoom: Int
@@ -147,6 +148,24 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
 
     private static let cacheZoom = 12
     private static let maximumCacheFiles = 64
+    /// How many decoded regions are kept in memory, least recently used
+    /// dropped first.
+    ///
+    /// The disk cap, so the two halves of the cache advertise one bound: a
+    /// long session holds at most as many graphs as the directory would, where
+    /// it used to hold every region it had ever read. It is also well above
+    /// the working set, which is what makes the eviction free on the paths
+    /// that matter. A live match reads the one to four regions its twenty-fix
+    /// window touches; a recording keeps the three-by-three block around the
+    /// hiker downloaded; a route measurement fetches at most
+    /// ``TrailGraphProviding/maximumPrefetchRegions``. Even all three at once
+    /// leave room, and each live match moves its regions back to the newest
+    /// end, so what is taken is a region that a whole cache's worth of others
+    /// have been read since. An in-flight fetch holds nothing here until it
+    /// lands, and then it lands newest. Losing an entry costs a decode from
+    /// disk while its file lasts, and a download only once the disk trim has
+    /// taken that too.
+    private static let maximumMemoryRegions = maximumCacheFiles
     /// How long Overpass is allowed to spend on one tile's graph, in seconds.
     ///
     /// Named rather than spelled in the query alone, because the client's own
@@ -191,7 +210,10 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     private let endpoint: URL
     private let transport: Transport
     private let clock: @Sendable () -> Date
-    private var memory: [TrailGraphRegion: CachedGraph] = [:]
+    /// Ordered least to most recently used: a hit moves its region to the
+    /// back, and ``remember(_:for:)`` drops from the front past
+    /// ``maximumMemoryRegions``.
+    private var memory: OrderedDictionary<TrailGraphRegion, CachedGraph> = [:]
     private var inFlight: [TrailGraphRegion: InFlightFetch] = [:]
     private var retryAfter: Date?
 
@@ -315,7 +337,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     ) throws {
         clearFetch(key, fetchID: fetchID)
         let cached = CachedGraph(fetchedAt: clock(), graph: graph, format: Self.cacheFormat)
-        memory[key] = cached
+        remember(cached, for: key)
         try write(cached, for: key)
         OverpassCache.trim(directory, keeping: Self.maximumCacheFiles)
     }
@@ -433,7 +455,9 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         allowExpired: Bool
     ) throws -> CachedGraph? {
         if let cached = memory[key] {
-            return allowExpired || isCurrent(cached) ? cached : nil
+            guard allowExpired || isCurrent(cached) else { return nil }
+            touch(key)
+            return cached
         }
 
         let url = fileURL(for: key)
@@ -444,12 +468,32 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
                 from: Data(contentsOf: url)
             )
             guard allowExpired || isCurrent(cached) else { return nil }
-            memory[key] = cached
+            remember(cached, for: key)
             return cached
         } catch {
             try? FileManager.default.removeItem(at: url)
             throw TrailGraphProviderError.storage(error.localizedDescription)
         }
+    }
+
+    /// Keeps `cached` as the most recently used region, dropping the least
+    /// recently used past ``maximumMemoryRegions``.
+    ///
+    /// Assigned where it stands and *then* moved, as
+    /// ``CuratedTrailSource`` does: a refetch replaces an entry the subscript
+    /// would otherwise leave at its old place in the order.
+    private func remember(_ cached: CachedGraph, for key: TrailGraphRegion) {
+        memory[key] = cached
+        touch(key)
+        if memory.count > Self.maximumMemoryRegions {
+            memory.removeFirst(memory.count - Self.maximumMemoryRegions)
+        }
+    }
+
+    /// Moves `key` to the newest end of the eviction order.
+    private func touch(_ key: TrailGraphRegion) {
+        guard memory[key] != nil else { return }
+        memory.move(keys: CollectionOfOne(key), to: memory.count)
     }
 
     private func isCurrent(_ cached: CachedGraph) -> Bool {
