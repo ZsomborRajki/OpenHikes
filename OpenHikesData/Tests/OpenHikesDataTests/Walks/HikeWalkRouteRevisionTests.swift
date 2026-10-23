@@ -11,6 +11,7 @@
 
 import Foundation
 @testable import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Hike walk route revision")
@@ -53,7 +54,9 @@ struct HikeWalkRouteRevisionTests {
     func reversedRouteDoesNotMatch() {
         let reversed = Array(Self.route.reversed())
         let length = RouteProfile(route: Self.route).totalDistanceMeters
-        #expect(abs(RouteProfile(route: reversed).totalDistanceMeters - length) < 1)
+        #expect(
+            RouteProfile(route: reversed).totalDistanceMeters.isApproximatelyEqual(to: length, absoluteTolerance: 1)
+        )
 
         #expect(!Self.isAlong(Self.walk(revision: TrailWalkRecord.routeRevision(of: Self.route)), along: reversed))
     }
@@ -66,7 +69,9 @@ struct HikeWalkRouteRevisionTests {
             RouteCoordinate(latitude: point.latitude, longitude: 24 - point.longitude)
         }
         let length = RouteProfile(route: Self.route).totalDistanceMeters
-        #expect(abs(RouteProfile(route: mirrored).totalDistanceMeters - length) < 1)
+        #expect(
+            RouteProfile(route: mirrored).totalDistanceMeters.isApproximatelyEqual(to: length, absoluteTolerance: 1)
+        )
 
         #expect(!Self.isAlong(Self.walk(revision: TrailWalkRecord.routeRevision(of: Self.route)), along: mirrored))
     }

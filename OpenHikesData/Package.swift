@@ -22,6 +22,11 @@ import PackageDescription
 ///
 /// Built statically, like `OpenHikesShared`: launch time is measured here,
 /// and a dynamic library is a dylib load on the launch path for nothing.
+///
+/// swift-numerics is linked by the test target only, for
+/// `isApproximatelyEqual(to:absoluteTolerance:)`, as it is in
+/// `OpenHikesShared`. swift-algorithms already resolves it for the library,
+/// so naming it by the same URL adds no checkout and no module to a product.
 let package = Package(
     name: "OpenHikesData",
     platforms: [
@@ -36,7 +41,8 @@ let package = Package(
     dependencies: [
         .package(path: "../OpenHikesShared"),
         .package(url: "https://github.com/apple/swift-collections/", from: "1.6.0"),
-        .package(url: "https://github.com/apple/swift-algorithms/", from: "1.2.1")
+        .package(url: "https://github.com/apple/swift-algorithms/", from: "1.2.1"),
+        .package(url: "https://github.com/apple/swift-numerics.git", from: "1.1.1")
     ],
     targets: [
         .target(
@@ -51,7 +57,10 @@ let package = Package(
         ),
         .testTarget(
             name: "OpenHikesDataTests",
-            dependencies: ["OpenHikesData"],
+            dependencies: [
+                "OpenHikesData",
+                .product(name: "RealModule", package: "swift-numerics")
+            ],
             swiftSettings: .data
         )
     ]

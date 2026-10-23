@@ -19,6 +19,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikesData
 import OpenHikesShared
+import RealModule
 import Testing
 
 @Suite("Heading-first route matching")
@@ -68,7 +69,10 @@ struct RouteProfileHeadingFirstTests {
             near: reference,
             heading: 180
         ))
-        #expect(abs(match.distanceAlongRoute - expected) < Self.tolerance, "matched at \(match.distanceAlongRoute)")
+        #expect(
+            match.distanceAlongRoute.isApproximatelyEqual(to: expected, absoluteTolerance: Self.tolerance),
+            "matched at \(match.distanceAlongRoute)"
+        )
     }
 
     /// The whole route is searched only for a leg the window's tie would have
@@ -82,7 +86,10 @@ struct RouteProfileHeadingFirstTests {
             near: 200,
             heading: 180
         ))
-        #expect(abs(match.distanceAlongRoute - 200) < Self.tolerance, "matched at \(match.distanceAlongRoute)")
+        #expect(
+            match.distanceAlongRoute.isApproximatelyEqual(to: 200, absoluteTolerance: Self.tolerance),
+            "matched at \(match.distanceAlongRoute)"
+        )
     }
 
     /// The cost of believing the course: one pointing the wrong way moves the
@@ -102,7 +109,10 @@ struct RouteProfileHeadingFirstTests {
             near: misled.distanceAlongRoute,
             heading: 0
         ))
-        #expect(abs(recovered.distanceAlongRoute - 310) < Self.tolerance, "matched at \(recovered.distanceAlongRoute)")
+        #expect(
+            recovered.distanceAlongRoute.isApproximatelyEqual(to: 310, absoluteTolerance: Self.tolerance),
+            "matched at \(recovered.distanceAlongRoute)"
+        )
     }
 
     /// Out and back at two hundred metres a fix, each matched against the
@@ -175,6 +185,9 @@ struct RouteProfileHeadingFirstTests {
         // A metre lets `RouteGeometry` and `WatchGeodesy` round differently; the
         // other leg is over twenty metres away one fix past the turn, and
         // twenty more with every fix after it.
-        #expect(abs(worst.phone - worst.watch) < 1, "fix \(worst.step): phone \(worst.phone), watch \(worst.watch)")
+        #expect(
+            worst.phone.isApproximatelyEqual(to: worst.watch, absoluteTolerance: 1),
+            "fix \(worst.step): phone \(worst.phone), watch \(worst.watch)"
+        )
     }
 }
