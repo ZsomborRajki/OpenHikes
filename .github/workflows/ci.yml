@@ -19,9 +19,9 @@ permissions:
 # tops out at Xcode 26.6, so for as long as this workflow ran there, CI
 # compiled the project with a different Swift than anybody who works on it —
 # see *CI* in `AGENTS.md` for what that cost.
-# `xcode-27` carries Xcode 27.0 build 27A266a, which compiles with the same
-# Swift 6.4 as any local Xcode 27, and iOS 27.0 runtimes, whose Pro model is
-# `iPhone 18 Pro`.
+# `xcode-27` carries Xcode 27.0 build 27A266a, whose Swift is 6.4 (a local
+# Xcode 27 matches it only while its own Swift is 6.4 too), and iOS 27.0
+# runtimes, whose Pro model is `iPhone 18 Pro`.
 #
 # DEVELOPER_DIR names the versioned symlink and not the real directory, which
 # on this image is `/Applications/Xcode_27_Release_Candidate.app` and will be

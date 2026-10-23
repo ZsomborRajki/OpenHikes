@@ -14,8 +14,8 @@
 //
 //  `CKRecord`-free on purpose. What is worth pinning is the pairing, and the
 //  fetch around it needs the public database and an asset CloudKit actually
-//  stored — see *the tests that never reach the real transport* in the
-//  instructions.
+//  stored — see *A suite must never reach the real transport* in
+//  `AGENTS.md`.
 //
 
 import CoreLocation

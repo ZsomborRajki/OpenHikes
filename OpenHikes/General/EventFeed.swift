@@ -16,8 +16,8 @@
 //  view graph in the same frame, each updating the sheet's `NavigationStack`,
 //  and SwiftUI reports it: "Update NavigationRequestObserver tried to update
 //  multiple times per frame". Read from a stream by the view's own task, they
-//  run outside any update and land in one transaction, as a tap's do. See the
-//  repository instructions, *Render isolation, in practice*.
+//  run outside any update and land in one transaction, as a tap's do. See *The
+//  map screen* in `AGENTS.md`.
 //
 //  ## Why a stream per reader
 //

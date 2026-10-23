@@ -7,9 +7,9 @@
 //  ## Why there is a seam at all
 //
 //  HealthKit is unavailable in a hosted unit test the way ActivityKit and
-//  `StoreKitTest` are — see *Environment capabilities that are absent, not
-//  missing*. So everything worth asserting is arranged to sit *above* this
-//  protocol, and ``OpenHikesModel/makeWorkoutWriter()`` returns `nil` under
+//  `StoreKitTest` are — see *Settled decisions* in `AGENTS.md`. So everything
+//  worth asserting is arranged to sit *above* this protocol, and
+//  ``OpenHikesModel/makeWorkoutWriter()`` returns `nil` under
 //  `isRunningTests`, matching `makeCommunityTransport()` and
 //  `makeLiveActivityController(defaults:)`.
 //
