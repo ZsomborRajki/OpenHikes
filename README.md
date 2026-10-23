@@ -63,7 +63,7 @@ OpenStreetMap is the keyless default and neither Apple option needs a key either
 
 8. Build and run. `OpenHikes.storekit` at the repository root describes the OpenHikes Pro subscription and the shared scheme already points its Run action at it, so a local build has a working paywall with no Apple account involved.
 
-Shipping the subscription for real additionally needs a matching auto-renewable subscription in App Store Connect and an active Paid Apps agreement; *Platform contracts* in [`AGENTS.md`](AGENTS.md) carries the exact contract, including the product ID that can never change.
+Shipping the subscription for real additionally needs a matching auto-renewable subscription in App Store Connect and an active Paid Apps agreement. The product itself (its ID, group, period and price) is `MapEntitlementStore.productID` and `OpenHikes.storekit`, and *Platform contracts* in [`AGENTS.md`](AGENTS.md) holds the rules around it, including that the product ID can never change.
 
 ## Recording demo
 
@@ -124,7 +124,7 @@ Scripts/run-script-tests.sh
 
 Against a cold simulator, `xcodebuild test` fails with "The test runner hung before establishing connection" after several minutes without a single test having reported — which is why the boot is the first line above rather than an optional one.
 
-These commands name the same device CI does. `iPhone 18 Pro` is the Pro model an iOS 27 runtime ships, and `.github/workflows/ci.yml` names it too, on a runner image pinned to Xcode 27.0; any Xcode 27 compiles the project with the same Swift. On an Xcode 26 install there is no such simulator — name whichever device your own runtimes do have.
+These commands name the same device CI does. `iPhone 18 Pro` is the Pro model an iOS 27 runtime ships, and `.github/workflows/ci.yml` names it too, on a runner image pinned to Xcode 27.0 (*CI* in [`AGENTS.md`](AGENTS.md) says when a local Xcode matches it). On an Xcode 26 install there is no such simulator — name whichever device your own runtimes do have.
 
 Unit and integration tests use Swift Testing; `OpenHikesUITests` uses XCUITest, because Apple's UI automation and launch metrics are not available through Swift Testing.
 

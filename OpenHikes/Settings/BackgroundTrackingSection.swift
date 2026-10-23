@@ -12,11 +12,11 @@
 //  the two disagreeing.
 //
 //  **The footer and `NSLocationAlwaysAndWhenInUseUsageDescription` say the
-//  same thing on purpose**, and both name both surfaces. That string is the
-//  whole of what App Review reads about Always access — see *Platform
-//  contracts* in `AGENTS.md` — and a switch whose own description claimed
-//  less than the prompt would be the app disagreeing with itself in the one
-//  place a reviewer compares the two.
+//  same thing on purpose**, and both name both surfaces. That string is what
+//  the binary tells App Review about Always access, beside the notes in App
+//  Store Connect — see *Platform contracts* in `AGENTS.md` — and a switch
+//  whose own description claimed less than the prompt would be the app
+//  disagreeing with itself in the one place a reviewer compares the two.
 //
 
 import SwiftUI

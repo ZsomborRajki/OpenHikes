@@ -27,7 +27,8 @@ below names a type, a file or a test, that is where the longer reasoning lives.
   declaring body. A screen that is always on screen reads settings from
   `StoredSettings`, never `@AppStorage`.
 - **One test class or `@Suite` per file.** Tests use Swift Testing everywhere
-  except `OpenHikesUITests`. SwiftLint enforces both rules.
+  except `OpenHikesUITests`. SwiftLint enforces the one-per-file half
+  (`single_test_class` and `one_suite_per_file`); nothing enforces the other.
 - **No fixed sleeps as barriers.** Wait on the effect, never on a duration.
 - **A suite never reaches the network, CloudKit or the app's singletons.** See
   *Deliberate test seams* and *A suite must never reach the real transport*.
@@ -59,9 +60,11 @@ xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
 #   -only-testing:OpenHikesTests/HikeStatisticsTests
 #   -only-testing:'OpenHikesTests/HikeStatisticsTests/elevationGainAndLoss()'
 
-# The two local packages, on the macOS host (--filter MercatorTests for one suite)
-swift test --package-path OpenHikesShared
-swift test --package-path OpenHikesData
+# The two local packages, on the macOS host, with warnings as errors as CI runs
+# them (CI repeats both with --configuration release). Add --filter <Suite> for
+# one suite, such as MercatorTests in OpenHikesShared.
+swift test --package-path OpenHikesShared -Xswiftc -warnings-as-errors
+swift test --package-path OpenHikesData -Xswiftc -warnings-as-errors
 
 # The shell scripts, against stubbed xcrun, xcodebuild, swiftlint and periphery
 Scripts/run-script-tests.sh
@@ -71,7 +74,8 @@ Scripts/run-script-tests.sh
 xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikesWatch \
   -destination 'generic/platform=watchOS Simulator'
 
-# UI automation, which CI does not run: four simulator clones, then a serial pass
+# UI automation (CI runs only the two accessibility classes): four simulator
+# clones, then a serial pass
 Scripts/run-ui-tests.sh --all --device "$udid" --derived-data DerivedData
 
 # Give the simulator back once this session's testing is done
@@ -121,9 +125,11 @@ same device.
   reports success and so would not block a check made required later. A push
   to `main` builds everything.
 - **The toolchain is pinned.** CI uses the `xcode-27` image with Xcode 27.0
-  pinned by `DEVELOPER_DIR` at the top of `ci.yml`. A local Xcode 27.x compiles
-  with the same Swift 6.4. While CI ran Xcode 26.6, that version difference
-  broke `main` three times with errors no local build could show.
+  pinned by `DEVELOPER_DIR` at the top of `ci.yml`, and its Swift is 6.4. A
+  local Xcode 27.x matches only while `xcrun swift --version` says 6.4 too; a
+  point release that moves the Swift minor reopens the gap. While CI ran Xcode
+  26.6, that version difference broke `main` three times with errors no local
+  build could show.
 - **CodeQL is the exception.** `codeql.yml` stays on `macos-26` with Xcode 26.6
   until a CodeQL bundle supports Swift 6.4 (watch `swift/ql/lib/CHANGELOG.md`).
   That makes it the one job compiling with the older Swift, so it catches code
@@ -133,8 +139,8 @@ same device.
     module)
   - a memberwise init hidden by a `private` stored property (write the init out)
 
-  `reorderable()`, the app's one iOS 27 API, sits behind
-  `#if compiler(>=6.4)` so that this job still builds.
+  `reorderable()` and `reorderContainer(for:)`, the app's only iOS 27 APIs, sit
+  behind `#if compiler(>=6.4)` so that this job still builds.
 - **The coverage floor.** `OpenHikes.app` line coverage must stay at or above
   76% (`COVERAGE_FLOOR`). The measurement leaves out the files in
   `Scripts/coverage-exclusions.txt`, which are entirely SwiftUI body code that
@@ -177,8 +183,10 @@ either: the second run waits silently on the first run's build lock.
 - **Never boot, erase or delete an `OpenHikes Template (…)`.** Losing one means
   downloading those 1.4 GB again, and `adopt` refuses templates.
   `Scripts/sim-pool.sh template` settles a template, or refreshes one older than
-  `OPENHIKES_SIM_TEMPLATE_REFRESH_DAYS` (7). It is the only step that downloads,
-  so run it on an unmetered connection.
+  `OPENHIKES_SIM_TEMPLATE_REFRESH_DAYS` (7). Settling or refreshing downloads
+  about 1.4 GB, and `acquire` does either on its own when it needs a clean
+  device and the template is missing or stale (or erases instead, which also
+  downloads), so run `template` first on an unmetered connection.
 - **When the pool is full, do not make a device of your own**, and never delete
   a pool device or boot one by name. Instead:
   - `status` shows who holds each device and how old each template is.
@@ -233,7 +241,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
   isolated `UserDefaults`. Further `DEBUG`-only `--ui-test-…` arguments seed
   data, force failures or replace a network source; each takes effect only
   alongside `--ui-testing`. `AppLaunchEnvironment` is the list, and a new
-  argument goes there.
+  argument goes there. One does the reverse: `--ui-test-live-maker` lets the
+  trail maker ask Apple Maps and the billed Stadia elevation for real, and
+  belongs to the App Store frame of a drawn trail alone.
 - **Reuse the shared helpers.** `OpenHikesUITests/UITestSupport.swift` has the
   fixtures, launch helpers and gestures, and `AccessibilityAuditSupport.swift`
   has the audit support. A file named `Suite+Something.swift` extends `Suite`;
@@ -339,6 +349,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
   and an archive succeeds without it, shipping paid map styles that draw
   nothing. CI archives without keys on purpose, so this check cannot be a CI
   step.
+- **Promote the CloudKit schema before uploading.** An App Store Connect
+  upload, TestFlight included, is signed for the production container, and a
+  save there cannot add a field. Check production against the model first (see
+  *CloudKit*).
 - **Tag each archived commit.** Use an annotated tag,
   `git tag -a v<MARKETING_VERSION>-<CURRENT_PROJECT_VERSION>`, and add a GitHub
   Release for App Store builds. There are no release branches, so a tag is the
@@ -387,8 +401,14 @@ a change to recording, the map, the sheet or the render path; the PR template,
   `OpenHikesWatchWidgets`.
   - The app embeds the watch app, so building `OpenHikes` builds the watch
     too. Breaking the watch cannot leave CI green.
-  - The `canImport(UIKit)` and `#if os(iOS)` guards are kept for possible later
-    platforms, but nothing builds them. Treat them as unbuilt.
+  - An embedded extension's device family stays a subset of its host's, so
+    `OpenWidgetExtension` moves with the app; the archive job's
+    `ValidateEmbeddedBinary` enforces it.
+  - In the app targets, the `canImport(UIKit)` and `#if os(iOS)` guards are kept
+    for possible later platforms, and nothing builds their other branch. In
+    `OpenHikesShared` they are load-bearing: the watch build compiles it, where
+    `canImport(UIKit)` is true, and `swift test` compiles its macOS side. Guard
+    iOS-only API there with `os(iOS)` (or `canImport(UIKit) && !os(watchOS)`).
 - **Synchronized folders compile everything in them**, and bundle their
   resources flat.
   - `OpenWidget/` feeds both the extension and `OpenWidgetTests`, minus
@@ -442,16 +462,18 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - **Bound to its line.** A walk ends when its route is edited
     (`routeRevision`). Its stretches, climb and photo matches are read only
     along the same revision. In `LibraryTotals`, a walk on an older revision
-    keeps its distance and time, but adds no climb and sets no records.
+    keeps its distance and time and can still be the longest, but adds no climb
+    and is never the highest or the steepest.
   - **A saved recording writes its own walk.** Its active time is
     `PreparedRecording.recordedSeconds`, the gaps between saved points, and
     never wall clock minus the pause list. The pause list is incomplete: a
     recovered session is parked without a pause, and nothing records the time
     before a relaunch. The watch measures the same way
     (`WatchWalkAccumulator`).
-- **A recording always outranks a followed trail**, on every surface. Three
-  places hold the rule and must agree: `TrailWidgetEntry.init`,
-  `HikeLiveActivityController.accepts(_:)` and
+- **A recording always outranks a followed trail**, on every surface, because
+  it is the one that would be *lost*: a follow is re-derived from the trail and
+  the next fix, and a recording is not. Three places hold the rule and must
+  agree: `TrailWidgetEntry.init`, `HikeLiveActivityController.accepts(_:)` and
   `HikeRecordingControlState.init(snapshot:)`.
 - **App Intents perform through `HikeIntentCoordinator`.** The system can launch
   the process just to run an intent, so no view state is reachable.
@@ -592,12 +614,15 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **Present modals from inside the sheet's contents.** `MapSheet` is presented
   permanently in portrait. A `.sheet`, cover, picker, importer or alert attached
   beside it never presents, and an alert can even take the sheet down. Every map
-  alert lives in `MapScreenAlerts`, and `MapScreenAlertUITests` checks it.
+  alert lives in `MapScreenAlerts`, and `MapScreenAlertUITests` checks them,
+  except the trail maker's missed-photo alert: it is attached beside them on the
+  same contents, because a seventh parameter is past the lint limit.
 - **The primary surface has two shapes, and landscape is not the sheet.**
   - Landscape ignores detents, so `MapSidePanel` draws the same `MapSheet`
     beside the map, and `SheetPresentation.layout` settles the differences.
   - `verticalSizeClass` is read only in `SheetLayoutReader`.
-  - Only the map ignores the horizontal safe area.
+  - Only the map ignores the horizontal safe area, plus a photo viewer, which
+    `MapSidePanel` widens to edge to edge.
   - `SheetPresentation` keeps each pushed screen's state objects until the
     route pops, so rotation keeps them. A cover driven by a destination's own
     `@State` closes on a turn.
@@ -665,7 +690,7 @@ a change to recording, the map, the sheet or the render path; the PR template,
     Connect together.
   - Everything else is free, the community included.
   - The paywall stays reachable from About even when no keys are bundled.
-- **Remember only a negative entitlement answer.** `MapEntitlementStore` starts
+- **Remember only the negative entitlement answer.** `MapEntitlementStore` starts
   as `.notEntitled` if that was the last answer, and as `.unknown` otherwise.
   `.unknown` is already permissive, so a subscriber's map never flickers locked,
   and a non-subscriber never gets billed tiles while waiting for StoreKit.
@@ -679,7 +704,10 @@ answer.
 
 - **Only a `View` type is a boundary.** A helper `func`, a computed `var` and a
   `.toolbar`, `.overlay` or `.safeAreaInset` closure are all inlined into the
-  declaring body. A `ViewModifier` *is* a boundary.
+  declaring body. A `ViewModifier` is a boundary for its own dynamic properties
+  and the reads in its `body(content:)`, but its arguments are evaluated in the
+  body that applies it: a `.sensoryFeedback(_:trigger:)` written on a screen
+  makes its trigger an input of that screen.
 - **A binding belongs to the body that creates it.** That body re-runs on every
   write, and `Binding(get:set:)` reads its getter during construction.
   - Fix shapes: `HikeTitleEditor`, which makes its own binding
@@ -744,8 +772,8 @@ in its source header. Do not weaken one without a measurement.
   above. `.fair` is excluded, because a phone in a sunny pocket sits there all
   summer. `distanceFilter` also widens when the hiker stands still.
 - **Tile fetching is split by purpose** (`Tiles/TileNetworkPolicy.swift`).
-  `.interactive` (someone is looking) and `.speculative` (auto-save) are
-  treated differently:
+  `.interactive` (someone is looking) and `.speculative` (bulk downloads and
+  prefetching ahead of need) are treated differently:
 
   | Condition | `.interactive` | `.speculative` |
   |---|---|---|
@@ -756,10 +784,12 @@ in its source header. Do not weaken one without a measurement.
   The policy has no setting. Every refusal logs a stable `reason` and serves
   saved coverage.
 - **A pause spends nothing unless something will read it**
-  (`Reminders/MovementReminderController.swift`). With reminders off, or before
-  the first fix, GPS stops. Otherwise the app uses the cheapest delivery that
-  still notices a departure: significant-change monitoring with Always access,
-  or a 100-meter feed with When In Use.
+  (`Reminders/MovementReminderController.swift` decides whether to watch;
+  `SystemRecordingLocationSource.startMovementWatch()` in
+  `Recording/HikeRecorder+State.swift` picks the feed). With reminders off, or
+  before the first fix, GPS stops. Otherwise the app uses the cheapest delivery
+  that still notices a departure: significant-change monitoring with Always
+  access, or a 100-meter feed with When In Use.
 - **The screen stays awake only on a claim, and only if asked**
   (`General/ScreenWake.swift`). `SettingsKey.keepScreenAwake` is off by default.
   The switch, a live subject and an active scene must all agree.
@@ -809,11 +839,13 @@ in its source header. Do not weaken one without a measurement.
   lacks.
 - **Records and schema differ.** Development records are disposable. A
   production schema can only be added to; nothing in it can be deleted, renamed
-  or retyped.
+  or retyped. Resetting the development environment restores the production
+  schema, so a field staged in development and not yet promoted is lost.
 - **Only a Console promote changes production.** SwiftData creates a column in
   development on the first non-nil save, but a save in production cannot add a
-  field. So a new synced field must be promoted before a build that writes it
-  ships:
+  field. So a new synced field must be promoted before any build that writes it
+  reaches the production environment, and an App Store Connect upload,
+  TestFlight included, does:
   1. `xcrun cktool export-schema`, then add the line.
   2. `validate-schema`, then `import-schema --environment development`.
   3. Re-export and check the result.
@@ -824,19 +856,21 @@ in its source header. Do not weaken one without a measurement.
   | Swift type | CloudKit field |
   |---|---|
   | `String?` | `STRING QUERYABLE SEARCHABLE SORTABLE` |
-  | `Data?` or a `Codable` array | `BYTES QUERYABLE SORTABLE` |
+  | `Data?` or a `Codable` array, without external storage | `BYTES QUERYABLE SORTABLE` |
   | `Int` or `Bool` | `INT64 QUERYABLE SORTABLE` |
 
   A hand-declared shape is inferred, so let a development build save the field
-  once before promoting.
+  once before promoting. An `@Attribute(.externalStorage)` column, such as
+  `Hike.route`, also mirrors through a `CD_<name>_ckAsset` asset field: check
+  that the development export has it, and promote both.
 - **Deployment state, checked 2026-10-22.** Both environments exported
   byte-identical, `md5 ed35377b48036c8c927e359c049eb394`. One model field is
   missing from both: **`CD_HikeWalk.CD_routeRevision`**
   (`HikeWalk.routeRevision`). Declare it as
-  `STRING QUERYABLE SEARCHABLE SORTABLE` and promote it before the next
-  release. Re-export before believing these numbers, and update this paragraph
-  when they move. Deployment facts
-  live here, not in code.
+  `STRING QUERYABLE SEARCHABLE SORTABLE` and promote it before the next upload
+  to App Store Connect: `main` already writes it on every walk, and a TestFlight
+  build uses production. Re-export before believing these numbers, and update
+  this paragraph when they move. Deployment facts live here, not in code.
 
 ## The community feature
 
@@ -904,8 +938,9 @@ is world-readable, because browsing needs no account.
 - **Publication has three derived states.** `CommunityPublicationState` derives
   `notShared`, `awaitingReview` or `published` from two columns on `Hike`.
   - A decline leaves no record, so the UI never says *rejected*.
-  - `CommunityPublicationCheck.refresh` is the only writer of
-    `communityListingID`, and it fails silently.
+  - Only `CommunityPublicationCheck.refresh` learns `communityListingID`, and
+    it fails silently. A new route share clears it
+    (`CommunityUploadQueueing.record`), and so does `forgetPublication`.
   - Un-publishing happens only through an explicit *Check Whether It's Still
     Live*. `forgetPublication` clears both columns only after the listing is
     confirmed gone, because queries are eventually consistent.
@@ -942,13 +977,17 @@ is world-readable, because browsing needs no account.
   - `CommunityHike.photoCount` stays the author's count.
   - Contributions load when a hike opens, never for a list, budgeted to 20 sets
     and 60 photos.
-  - `HikePhoto.sentToCommunityAt` prevents sending a photo twice.
+  - `HikePhoto.sentToCommunityAt` starts a photo already sent struck off the
+    contribution form, and one tap puts it back: a default, not a filter.
 - **What is sent is stated, and the statements move together.**
   `CommunityShareDisclosureTests` holds the share footer to the payload. The
   privacy manifest, `docs/privacy/` and `docs/terms/` change whenever what is
-  sent changes, what a reviewer may do changes, or
-  `CommunityPublisher.maximumPhotos` (36) changes. That limit is the first
-  number to lower if storage costs bite.
+  sent changes, what a reviewer may do changes, the removal, *Check Whether
+  It's Still Live*, reset or *Finish Sending* flows change, what the Commons
+  requests ask for or keep changes, or `CommunityPublisher.maximumPhotos` (36)
+  changes. That limit is the first number to lower if storage costs bite.
+  App Store Connect's own privacy answers are separate, and the manifest does
+  not update them.
 
 ### OpenStreetMap and Wikimedia Commons
 
@@ -969,7 +1008,8 @@ is world-readable, because browsing needs no account.
   - All requests share `OverpassConversation`'s gate and its single retry.
   - Relations are cached on disk (`CuratedTrailStore`), and a refused search
     falls back to them while still showing the outage.
-- **Stadia elevation is Pro-only, fetched on open, and never for a list.**
+- **Stadia elevation is Pro-only and never fetched for a list.** A curated
+  route asks once, on open; the trail maker asks once the drawing settles.
   `StadiaElevationSource` is billed per call, so it refuses before forming a
   request unless `MapEntitlement.current` is entitled (`.unknown` refuses too).
   The default source is `DormantElevationSource`.
@@ -1011,7 +1051,9 @@ this before changing `OpenHikesWatch/`, `OpenHikes/Watch/` or the shared
   while the phone records. The reverse is unguarded: the phone never learns of
   a watch recording.
 - **Which `WCSession` door a payload uses is a decision.** The library goes as
-  the application context (latest wins). Everything else, including the trail
+  the application context (latest wins). The live recording mirror goes by
+  `sendMessage` with no reply and is dropped when the watch is out of reach,
+  because a late reading is a wrong one. Everything else, including the trail
   request, goes by `transferUserInfo`, because `sendMessage` fails out of range.
   `WatchLink` is the only encoder, with one function pair per
   `WatchMessageKind`.
@@ -1069,7 +1111,9 @@ Reopening one needs new evidence, not a fresh reading of the same code.
     change, and it cannot host the tracking button or the custom renderers.
   - `CLLocationManager` rather than `liveUpdates()`, which stalls under
     `simctl location`.
-  - The few GCD uses, each required by an API with no async form.
+  - The few GCD uses, each required by an API with no async form or by
+    synchronous blocking work that should not be awaited (`TileCache`'s
+    maintenance queue, `TrailBasemapRenderer`'s render executor).
   - `UIImagePickerController` for the camera.
   - The lint-pragma'd force unwraps of literal URLs in `MapPurchaseLinks` and
     `TileAttribution`.
@@ -1098,11 +1142,16 @@ Reopening one needs new evidence, not a fresh reading of the same code.
   - `Activity` is boxed in a `nonisolated` `@unchecked Sendable` handle.
   - `ActivityState` is matched positively.
   - A running activity is adopted, never requested twice.
-- **A live recording outranks the selected trail, without exception.**
+- **A live recording outranks the selected trail, on every surface, without
+  qualification.**
   - The widget replaces the trail rather than badging it, and a paused
     recording keeps the widget.
   - The takeover writes nothing, so the trail returns the moment the recording
     clears.
+  - A finished recording still lingers on the Lock Screen while the widget
+    returns to the trail at once. That split is deliberate: the panel shows a
+    result the hiker may not have read yet, and the widget shows what is
+    happening now.
   - Who owns the widget, whether it is worth spending on (`isCapturingFixes`)
     and what the Control Center button does are three different predicates on
     purpose.

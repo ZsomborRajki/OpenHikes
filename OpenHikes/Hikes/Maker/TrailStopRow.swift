@@ -71,7 +71,7 @@ import SwiftUI
 /// `nonisolated` on the type, because `SWIFT_DEFAULT_ACTOR_ISOLATION` is
 /// `MainActor` here and `Shape` is not — SwiftUI calls `path(in:)` off the main
 /// actor, and an unannotated conformance is refused for exactly that reason.
-/// See *Repository-specific conventions*.
+/// See *Concurrency* in `AGENTS.md`.
 nonisolated struct TrailStopConnector: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
