@@ -86,8 +86,10 @@ extension View {
                     scrubbed: tracker.trackerDistance
                 )
             },
-            // The shutter time is not consulted: the graph's position is the
-            // hiker's own choice of where the picture belongs.
+            // The shutter time is not consulted. A scrubbed position is the
+            // hiker's own choice of where the picture belongs, and a live
+            // match is only ever the latest one, with no history to look the
+            // shutter up in.
             anchor: { _ in
                 PhotoTrailAnchor.coordinate(
                     profile: profile(),
