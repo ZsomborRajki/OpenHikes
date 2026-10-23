@@ -184,7 +184,7 @@ nonisolated enum CommunityStaging {
     /// Fire-and-forget and off the main actor — ``StagedFiles/remove(_:)``,
     /// which the Commons photographs' directories go through too: what is
     /// left behind on a kill is wasted space in a temporary directory the
-    /// system reclaims on its own — and which ``sweep()`` above collects
+    /// system reclaims on its own — and which ``sweep()`` below collects
     /// anyway — which is the cheapest failure either publisher has.
     static func discard(_ directory: URL) {
         StagedFiles.remove(directory)

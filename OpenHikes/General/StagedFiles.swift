@@ -3,7 +3,7 @@
 //  OpenHikes
 //
 //  The sweeps that clear up a staging directory nobody came back for, and the
-//  deletion they all end in.
+//  deletion of one its owner lets go of.
 //
 //  Three features write files into `tmp` and mean to remove them afterwards —
 //  a GPX export, a hike archive, and Community's downloads and uploads — and
@@ -26,19 +26,22 @@
 //  way. Nothing either downloads can be wanted by the next launch, so instead
 //  of dating entries a launch sweeps everything under its parent but the
 //  directory it is already using, and while the app is running each
-//  controller deletes a directory the moment it lets go of it. Those three calls were written out
-//  in both controllers, identically, and are here for the same reason the
-//  purge is. Which directory is current, which is kept beside it and for how
-//  long are each controller's own, and stay there.
+//  controller deletes a directory the moment it lets go of it. Naming a fresh
+//  directory, that sweep and that deletion were written out in both
+//  controllers, identically, and are here for the same reason the purge is.
+//  Which directory is current, which is kept beside it and for how long are
+//  each controller's own, and stay there.
 //
-//  The deletion is the one every owner of a staging directory ends in, not
-//  only those two: ``CommunityStaging/discard(_:)`` and a saved trail's
-//  ``TrailDraftPhotoHandOff/discard()`` call it too.
+//  The deletion is not only theirs: ``CommunityStaging/discard(_:)`` and a
+//  saved trail's ``TrailDraftPhotoHandOff/discard()`` call it too.
+//  ``CommunityHikeView/discardDownloads(at:after:)`` does not: it waits out
+//  the work still reading from or writing into its directory first, and that
+//  ordering is its own.
 //
 
 import Foundation
 
-/// Creates, sweeps and removes the app's staging directories in `tmp`.
+/// Names, sweeps and removes the app's staging directories in `tmp`.
 nonisolated enum StagedFiles {
     /// Removes everything in `parent` last written before `cutoff`.
     ///
@@ -81,11 +84,12 @@ nonisolated enum StagedFiles {
 
     /// Removes whatever an earlier launch left in `parent`, except `current`.
     ///
-    /// `current` is the directory this launch has already handed out: the
-    /// sweep runs off the main actor, so by the time it lists `parent` a
-    /// search may be writing there, and it can only spare what it knows the
-    /// name of. Silent about every failure, for the reason ``purge(in:before:)``
-    /// is.
+    /// `current` is the entry of `parent` this launch has already handed out,
+    /// and it is spared by its name, so a directory further down would go
+    /// with the entry above it. The sweep runs off the main actor, so by the
+    /// time it lists `parent` a search may be writing into `current`, and it
+    /// can only spare what it knows the name of. Silent about every failure,
+    /// for the reason ``purge(in:before:)`` is.
     ///
     /// Answers the sweep, which every caller lets go and a suite waits out:
     /// what it spares is only visible once it has finished, since a sweep
@@ -105,8 +109,8 @@ nonisolated enum StagedFiles {
     /// Removes `url` and everything in it, off the main actor and
     /// fire-and-forget: a directory of photographs can be a few megabytes of
     /// thumbnails, and what a kill leaves behind is housekeeping the next
-    /// launch's sweep — or the system — does anyway. Answers the deletion,
-    /// for a suite to wait out.
+    /// sweep of its parent — or the system — does anyway. Answers the
+    /// deletion, for a suite to wait out.
     @discardableResult static func remove(_ url: URL) -> Task<Void, Never> {
         Task.detached(priority: .utility) {
             try? FileManager.default.removeItem(at: url)
