@@ -79,6 +79,23 @@ struct CommonsTrailPhotosTests {
         #expect(kept.count == 1)
     }
 
+    @Test("a file's first answer is the one placed, wherever a later one puts it")
+    func theFirstAnswerIsPlaced() throws {
+        let kept = CommonsTrailPhotos.placed(
+            [Self.candidate(7, kilometers: 1), Self.candidate(7, kilometers: 3)],
+            on: Self.profile
+        )
+        #expect(kept.count == 1)
+        let placed = try #require(kept.first)
+        #expect(abs(placed.distanceAlongRoute - 1000) < 15)
+
+        let offTheLineFirst = CommonsTrailPhotos.placed(
+            [Self.candidate(8, kilometers: 4.5, east: Self.hundredFiftyMetersEast), Self.candidate(8, kilometers: 4.5)],
+            on: Self.profile
+        )
+        #expect(offTheLineFirst.isEmpty)
+    }
+
     // MARK: - Spread along the walk
 
     /// The reason the spread exists: a summit or a hut terrace holds dozens of

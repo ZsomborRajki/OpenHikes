@@ -46,6 +46,28 @@ struct CommonsAreaPhotosTests {
         #expect(kept.map(\.pageID) == [1])
     }
 
+    /// Commons gives a file one primary coordinate, so two circles answer it
+    /// at the same spot; this pins that a file is judged once, by its first
+    /// answer, before anything is measured.
+    @Test("a file's first answer is the one judged, wherever a later one puts it")
+    func theFirstAnswerIsJudged() throws {
+        let kept = CommonsAreaPhotos.spread(
+            [Self.candidate(1, north: 500), Self.candidate(1, north: 1500)],
+            in: Self.area,
+            limit: 16
+        )
+        #expect(kept.count == 1)
+        let shown = try #require(kept.first)
+        #expect(abs(shown.latitude - Self.candidate(1, north: 500).latitude) < 1e-9)
+
+        let outsideFirst = CommonsAreaPhotos.spread(
+            [Self.candidate(2, north: 2500), Self.candidate(2, north: 500)],
+            in: Self.area,
+            limit: 16
+        )
+        #expect(outsideFirst.isEmpty)
+    }
+
     /// The reason the grid exists: a geosearch answers nearest its centre
     /// first, so forty pictures of the village at the middle of the screen
     /// used to be the whole answer.
