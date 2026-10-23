@@ -431,8 +431,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - `Hike` is the persisted truth. `RouteProfile` is the distance and elevation
     index that scrubbing and GPS matching share.
   - A pause, or a GPX `<trkseg>` break, is not distance and not trail
-    (`RouteBoundary`). Every sum along a route gives the paused leg no length,
-    and no matcher projects a fix onto it, the watch's included.
+    (`RouteBoundary`). A route's length and every distance along it give the
+    paused leg none (`RouteCoordinate.legMeters(from:)`), and nothing
+    projects a fix or a place onto it, the watch's tracker included.
   - A recording that the matcher moved or found ambiguous stops in
     `.reviewing`, and only `saveReviewedRecording()` writes it.
 - **The map is imperative MapKit behind `MapView`.** `MapView.Coordinator`
