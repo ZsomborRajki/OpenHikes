@@ -5,7 +5,8 @@
 //  `RouteReviewSection.pointsMoved(_:from:)` is the one rule for whether a
 //  line moved off its recorded fixes. Preparation reads it to keep a raw
 //  trace, review reads it to pick the legs a hiker answers for; these pin the
-//  rule itself, and the review's own empty-leg guard on top of it.
+//  rule itself, the review's own empty-leg guard on top of it, and that the
+//  save and review answer alike for the same leg.
 //
 
 import CoreLocation
@@ -123,5 +124,74 @@ struct RouteMovedPredicateTests {
         // The shared rule calls this a move; the review's guard overrules it.
         #expect(RouteReviewSection.pointsMoved(leg.defaultPoints, from: leg.rawPoints))
         #expect(!RouteReviewSection.legMoved(leg))
+    }
+
+    /// The reason there is one rule: the save keeps the raw trace beside the
+    /// matched line exactly when review calls the same geometry moved. The
+    /// tests above pin the rule; this pins that preparation still reads it,
+    /// so a copy with its own threshold or count check fails here.
+    @Test("a save keeps the raw trace exactly when review calls the leg moved")
+    func saveAgreesWithReview() throws {
+        let fixes = Array(raw.prefix(2))
+        let threshold = RouteReviewSection.movedThresholdMeters
+
+        let under = try verdicts(
+            matched: Array(displaced(by: threshold / 2).prefix(2)),
+            fixes: fixes
+        )
+        #expect(!under.reviewed)
+        #expect(under.saved == under.reviewed)
+
+        let past = try verdicts(
+            matched: Array(displaced(by: threshold * 2).prefix(2)),
+            fixes: fixes
+        )
+        #expect(past.reviewed)
+        #expect(past.saved == past.reviewed)
+
+        // One point more than the fixes, and every pair the two share still
+        // lines up within the threshold: only the count rule calls it moved.
+        let last = fixes[1]
+        let extra = try verdicts(
+            matched: fixes + [
+                point(last.latitude + threshold / 2 / metersPerDegree, last.longitude, at: 61),
+            ],
+            fixes: fixes
+        )
+        #expect(extra.reviewed)
+        #expect(extra.saved == extra.reviewed)
+    }
+
+    /// What review and the save each make of one leg drawn as `matched`
+    /// across `fixes`: whether review calls it moved, and whether the
+    /// prepared hike keeps a raw trace.
+    private func verdicts(
+        matched: [RecordingPoint],
+        fixes: [RecordingPoint]
+    ) throws -> (reviewed: Bool, saved: Bool) {
+        let leg = TrailMatchLeg(
+            index: 0,
+            defaultPoints: matched,
+            rawPoints: fixes,
+            alternatives: [],
+            trailNames: ["Ridge Path"]
+        )
+        let match = TrailMatchResult(
+            points: matched,
+            matchedLegCount: 1,
+            ambiguousLegCount: 0,
+            matchedTrailName: "Ridge Path",
+            currentTrail: nil,
+            didMoveRoute: false,
+            ambiguities: [],
+            legs: [leg]
+        )
+        let prepared = try RecordingPreparation.prepareResolved(
+            points: fixes,
+            startedAt: start,
+            matchResult: match,
+            choices: [0: .matched]
+        )
+        return (RouteReviewSection.legMoved(leg), !prepared.rawRoute.isEmpty)
     }
 }
