@@ -157,7 +157,7 @@ extension MapCoordinatorTests {
         // A hike screen pushed, offering a photograph.
         trailMaker.setHostScreenPresent(true)
         photoCapture.setHostScreenPresent(true)
-        photoCapture.attach(to: hike) { nil }
+        photoCapture.attach(to: hike) { _ in nil }
         await settle(until: "the camera pill to appear") { !camera.isHidden }
         await settle(until: "the maker pill to leave") { maker.alpha == 0 }
         #expect(!(maker.alpha > 0 && camera.alpha > 0))

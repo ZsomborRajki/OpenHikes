@@ -168,7 +168,7 @@ struct HikePhotoPlaceTests {
         let (hike, _) = try hike()
         let controller = PhotoCaptureController()
 
-        controller.attach(to: hike, place: Self.spring.id) { Self.spring.clCoordinate }
+        controller.attach(to: hike, place: Self.spring.id) { _ in Self.spring.clCoordinate }
 
         let filing = try #require(controller.currentSubject())
         #expect(filing.placeID == Self.spring.id)

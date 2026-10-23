@@ -6,6 +6,7 @@
 //  may belong to another phone; automatic cleanup requires a local claim.
 //
 
+import CoreLocation
 import Foundation
 import OpenHikesData
 import SwiftData
@@ -125,4 +126,17 @@ extension HikeRecorder {
         }
     }
 
+    /// Where a photo the camera says it took at `shutter` stands on this
+    /// walk — see ``PhotoTrailAnchor/recordingCoordinate(atShutter:recent:latest:)``.
+    ///
+    /// Read once, when the camera hands the picture over, and never by a
+    /// body: both stores it reads are unobserved, for the reason
+    /// ``lastAcceptedPoint`` is.
+    func photoCoordinate(atShutter shutter: Date?) -> CLLocationCoordinate2D? {
+        PhotoTrailAnchor.recordingCoordinate(
+            atShutter: shutter,
+            recent: recentFixes.points,
+            latest: lastAcceptedPoint
+        )
+    }
 }

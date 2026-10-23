@@ -652,6 +652,7 @@ extension HikeRecorder {
 
     func rebuildLiveState(from points: [RecordingPoint]) {
         cancelLiveMatching(clearWindow: true)
+        recentFixes.replace(with: points)
         accumulator = RecordingDistanceAccumulator()
         for point in points {
             accumulator.append(point)

@@ -57,7 +57,7 @@ struct PhotoCaptureControllerTests {
         let controller = PhotoCaptureController()
         let coordinate = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
 
-        controller.attach(to: hike) { coordinate }
+        controller.attach(to: hike) { _ in coordinate }
 
         #expect(controller.isAvailable)
         let subject = try #require(controller.currentSubject())
@@ -73,12 +73,33 @@ struct PhotoCaptureControllerTests {
         // Stands in for the hiker moving between opening the camera and
         // taking the picture.
         let position = Position()
-        controller.attach(to: hike) { position.coordinate }
+        controller.attach(to: hike) { _ in position.coordinate }
 
         #expect(controller.currentSubject()?.coordinate == nil)
         position.coordinate = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
 
         #expect(controller.currentSubject()?.coordinate != nil)
+    }
+
+    /// The recording screen places a photo by when its shutter fired (#970),
+    /// so the time the camera reported has to reach the screen's anchor — and
+    /// a library pick, which has its own placement, hands it nothing.
+    @Test("the camera's shutter time is handed to the anchor")
+    func shutterReachesTheAnchor() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let controller = PhotoCaptureController()
+        var asked: [Date?] = []
+        controller.attach(to: hike) { shutter in
+            asked.append(shutter)
+            return nil
+        }
+        let shutter = Date(timeIntervalSince1970: 1_700_000_000)
+
+        _ = controller.currentSubject(shutter: shutter)
+        _ = controller.currentSubject()
+
+        #expect(asked == [shutter, nil])
     }
 
     @Test("an outgoing screen cannot cancel the one that replaced it")
@@ -91,8 +112,8 @@ struct PhotoCaptureControllerTests {
         // SwiftUI's real ordering: the new screen appears, then the old one
         // disappears. Stopping a recording lands on that recording's own
         // detail screen, so the two can even be the same hike.
-        let firstToken = controller.attach(to: outgoing) { nil }
-        controller.attach(to: incoming) { nil }
+        let firstToken = controller.attach(to: outgoing) { _ in nil }
+        controller.attach(to: incoming) { _ in nil }
         controller.detach(token: firstToken)
 
         #expect(controller.isAvailable)
@@ -105,7 +126,7 @@ struct PhotoCaptureControllerTests {
         let hike = Fixture.hike(in: context)
         let controller = PhotoCaptureController()
 
-        let token = controller.attach(to: hike) { nil }
+        let token = controller.attach(to: hike) { _ in nil }
         controller.detach(token: token)
 
         #expect(controller.isAvailable == false)
@@ -116,7 +137,7 @@ struct PhotoCaptureControllerTests {
     func requestsAdvanceTokens() throws {
         let context = try Fixture.modelContext()
         let controller = PhotoCaptureController()
-        controller.attach(to: Fixture.hike(in: context)) { nil }
+        controller.attach(to: Fixture.hike(in: context)) { _ in nil }
         let camera = controller.cameraRequest
         let library = controller.libraryRequest
 
@@ -154,7 +175,7 @@ struct PhotoCaptureControllerTests {
     func anEmptyStackWithdrawsThePill() throws {
         let context = try Fixture.modelContext()
         let controller = PhotoCaptureController()
-        controller.attach(to: Fixture.hike(in: context)) { nil }
+        controller.attach(to: Fixture.hike(in: context)) { _ in nil }
 
         controller.setHostScreenPresent(false)
 
@@ -170,7 +191,7 @@ struct PhotoCaptureControllerTests {
     func anAbandonedPopRestoresThePill() throws {
         let context = try Fixture.modelContext()
         let controller = PhotoCaptureController()
-        controller.attach(to: Fixture.hike(in: context)) { nil }
+        controller.attach(to: Fixture.hike(in: context)) { _ in nil }
 
         controller.setHostScreenPresent(false)
         controller.setHostScreenPresent(true)
@@ -185,7 +206,7 @@ struct PhotoCaptureControllerTests {
         let controller = PhotoCaptureController()
 
         controller.setHostScreenPresent(false)
-        controller.attach(to: Fixture.hike(in: context)) { nil }
+        controller.attach(to: Fixture.hike(in: context)) { _ in nil }
 
         #expect(controller.isAvailable == false)
     }
@@ -198,7 +219,7 @@ struct PhotoCaptureControllerTests {
     func importIsCancelledWhenTheStackEmpties() async throws {
         let context = try Fixture.modelContext()
         let controller = PhotoCaptureController()
-        controller.attach(to: Fixture.hike(in: context)) { nil }
+        controller.attach(to: Fixture.hike(in: context)) { _ in nil }
         let progress = ImportProgress()
 
         controller.runLibraryImport { await progress.run() }
@@ -223,7 +244,7 @@ struct PhotoCaptureControllerTests {
     func aSecondImportCancelsTheFirst() async throws {
         let context = try Fixture.modelContext()
         let controller = PhotoCaptureController()
-        controller.attach(to: Fixture.hike(in: context)) { nil }
+        controller.attach(to: Fixture.hike(in: context)) { _ in nil }
         let first = ImportProgress()
         let second = ImportProgress()
 
@@ -251,11 +272,11 @@ struct PhotoCaptureControllerTests {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
         let controller = PhotoCaptureController()
-        let token = controller.attach(to: hike) { nil }
+        let token = controller.attach(to: hike) { _ in nil }
         let progress = ImportProgress()
 
         controller.runLibraryImport { await progress.run(steps: 3) }
-        controller.attach(to: hike) { nil }
+        controller.attach(to: hike) { _ in nil }
         controller.detach(token: token)
 
         await settleDelegateHop(until: "the import to run to completion") {
