@@ -88,10 +88,10 @@ struct LastHikeIntent: AppIntent, HikeCoordinatingIntent {
 /// reason ``HikeEntity`` exists — "How long was my Thumsee hike?" was
 /// unanswerable while every intent here was parameterless.
 ///
-/// It reads its clock the way ``LastHikeIntent`` does, off the route's own end
-/// stamps through ``HikeIntentCoordinator``, rather than through
-/// `Hike.routeStatistics` — which walks every point on the calling thread,
-/// inside an intent with a system execution budget.
+/// It reads its clock off the route's own end stamps through
+/// ``HikeIntentCoordinator`` — the figure ``LastHikeIntent`` gives the same
+/// recording — rather than through `Hike.routeStatistics`, which walks every
+/// point on the calling thread, inside an intent with a system execution budget.
 struct HikeDurationIntent: AppIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Hike Summary"
     // periphery:ignore - see `CurrentHikeProgressIntent.description`.
