@@ -216,6 +216,37 @@ struct RouteProfilePausedTransferTests {
         #expect(pieces[0][2].longitude == 0.002)
     }
 
+    /// A route can end on a pause: a recording resumed and stopped on its
+    /// next fix, or a GPX file whose last segment is one point. That point
+    /// stands at the route's last distance, beside the fix before the pause,
+    /// and the end reads as that fix like any other join does. Otherwise a
+    /// hiker at the end of the walked line is drawn a drive away, and a walk
+    /// that covered the whole route is drawn across the drive.
+    @Test("a route that ends on a pause ends where the walking did")
+    func routeEndingOnAPause() throws {
+        let profile = RouteProfile(route: Self.route(
+            [0, 0.001, 0.002, 0.010],
+            resumingAt: [3],
+            elevations: [100, 110, 120, 500]
+        ))
+        let total = profile.totalDistanceMeters
+
+        let atEnd = try #require(profile.coordinate(atDistance: total))
+        #expect(atEnd.longitude.isApproximatelyEqual(to: 0.002, absoluteTolerance: 1e-9))
+        #expect(profile.sample(atDistance: total)?.elevation == 120)
+
+        let match = try #require(profile.nearestPoint(to: Self.at(0.002)))
+        let placed = try #require(profile.coordinate(atDistance: match.distanceAlongRoute))
+        #expect(placed.longitude.isApproximatelyEqual(to: 0.002, absoluteTolerance: 1e-9))
+
+        // Also for a range stored on a longer axis, which reaches past the end.
+        for upper in [total, total + 500] {
+            let drawn = profile.stretches(covering: 0...upper).joined()
+            #expect(!drawn.isEmpty)
+            #expect(drawn.allSatisfy { $0.longitude < 0.005 }, "nothing drawn across the drive")
+        }
+    }
+
     @Test("a route whose every leg is a pause has nothing to match against")
     func onlyPausedLegsMatchNothing() {
         let profile = RouteProfile(route: Self.route([0, 0.010], resumingAt: [1]))

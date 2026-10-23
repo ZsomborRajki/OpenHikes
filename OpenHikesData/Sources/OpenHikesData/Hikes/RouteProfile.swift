@@ -378,12 +378,18 @@ nonisolated public struct RouteProfile: Sendable {
 
     /// Map coordinate at a distance along the route, interpolated within the
     /// bracketing segment. O(log n).
+    ///
+    /// Past the end it is the *first* point at the last distance, not the
+    /// last point. They are one place unless the route ends on a pause, and
+    /// then the lone fix after it stands at the same distance as the one
+    /// before it: the end is a join, and a join reads as the fix before the
+    /// pause (see ``RouteBoundary``).
     public func coordinate(atDistance target: Double) -> CLLocationCoordinate2D? {
         guard let firstDistance = distances.first, let lastDistance = distances.last,
-              let firstCoordinate = coordinates.first, let lastCoordinate = coordinates.last
+              let firstCoordinate = coordinates.first
         else { return nil }
         if target <= firstDistance { return firstCoordinate }
-        if target >= lastDistance { return lastCoordinate }
+        if target >= lastDistance { return coordinates[distances.partitioningIndex { $0 >= lastDistance }] }
 
         let upper = distances.partitioningIndex { $0 >= target }
         let lower = upper - 1
@@ -750,10 +756,14 @@ nonisolated extension RouteProfile {
     }
 
     /// Index of the value in an ascending array closest to `target`. O(log n).
+    ///
+    /// The first of several equal values, at the end as everywhere else, for
+    /// the reason ``coordinate(atDistance:)`` gives: a route that ends on a
+    /// pause ends on a join.
     private func nearestIndex(in sorted: [Double], to target: Double) -> Int? {
         guard let first = sorted.first, let last = sorted.last else { return nil }
         if target <= first { return 0 }
-        if target >= last { return sorted.count - 1 }
+        if target >= last { return sorted.partitioningIndex { $0 >= last } }
 
         // First index at or past `target`; the endpoints are handled above, so
         // it is always strictly interior and `upper - 1` is always valid.

@@ -74,15 +74,16 @@ nonisolated public struct OfflineDownloadFootprint: Codable, Hashable, Sendable 
 /// Identified by its own distance rather than a per-instance `UUID`: the chart's
 /// `ForEach` diffs the plotted samples by `id`, so a fresh identity per instance
 /// made every rebuild of the same route diff as a wholesale replacement. Distance
-/// along the route is unique within a profile but for one case, and identical
-/// across rebuilds — and costs nothing to derive, where `UUID()` is allocated
-/// per sample.
+/// along the route is identical across rebuilds, and costs nothing to derive,
+/// where `UUID()` is allocated per sample.
 ///
-/// The one case is a pause. A paused leg has no length (see ``RouteBoundary``),
-/// so the fix before it and the fix after it stand at the same distance, and the
-/// chart steps between their two heights there. ``resumesAfterPause`` is what
-/// tells that pair apart, and ``RouteProfile`` keeps at most that pair at any
-/// one distance.
+/// A pause puts two samples at one distance. A paused leg has no length (see
+/// ``RouteBoundary``), so the fix before it and the fix after it stand at the
+/// same distance, and the chart steps between their two heights there.
+/// ``resumesAfterPause`` is what tells that pair apart. A downsampled series
+/// keeps no more than that pair at any one distance; a route short enough to be
+/// drawn whole keeps every point it has, so two fixes recorded at one place
+/// still share a distance, and an identity, there.
 nonisolated public struct ElevationSample: Identifiable, Equatable, Sendable {
     public struct Identity: Hashable, Sendable {
         public let distanceMeters: Double
