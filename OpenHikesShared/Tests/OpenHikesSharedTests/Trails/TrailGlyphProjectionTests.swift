@@ -333,6 +333,84 @@ struct TrailGlyphProjectionTests {
         #expect(projected.liveFixPoint == nil)
     }
 
+    // MARK: - The antimeridian
+
+    /// Two short routes near Greenwich, one heading east and one west, that
+    /// are each turned into a crossing of ±180° by ``acrossTheAntimeridian(_:)``.
+    /// The second point is the one on the far side of the line from the first.
+    nonisolated private static let greenwichRoutes: [[Coordinate]] = [
+        [
+            Coordinate(latitude: 0, longitude: -0.01),
+            Coordinate(latitude: 0.02, longitude: 0.01),
+            Coordinate(latitude: 0.01, longitude: 0.015),
+        ],
+        [
+            Coordinate(latitude: 0, longitude: 0.01),
+            Coordinate(latitude: 0.02, longitude: -0.01),
+            Coordinate(latitude: 0.01, longitude: -0.015),
+        ],
+    ]
+
+    /// The same route turned half a world, written the way a fix reports it:
+    /// every longitude back inside `-180...180`, so the points either side of
+    /// the line are numbered almost 360° apart.
+    private static func acrossTheAntimeridian(_ route: [Coordinate]) -> [Coordinate] {
+        route.map { coordinate in
+            let turned = coordinate.longitude + 180
+            return Coordinate(latitude: coordinate.latitude, longitude: turned > 180 ? turned - 360 : turned)
+        }
+    }
+
+    /// The fit is centred on the route itself, so moving a route east or west
+    /// changes nothing it draws — and that has to hold for a move that carries
+    /// it over ±180°, too. Plain min/max on longitude reads 179.99° and
+    /// -179.99° as opposite ends of the world, and fits a nearly 360° line
+    /// whose north-south shape is flattened to nothing and whose direction is
+    /// reversed.
+    @Test("a route across the antimeridian is drawn as the same route anywhere else", arguments: greenwichRoutes)
+    func antimeridianCrossingKeepsItsShape(greenwich: [Coordinate]) throws {
+        let crossing = Self.acrossTheAntimeridian(greenwich)
+        #expect(
+            crossing[0].longitude.sign != crossing[1].longitude.sign,
+            "precondition: the first two points are either side of the line"
+        )
+
+        let control = try #require(project(greenwich)).points
+        let projected = try #require(project(crossing)).points
+
+        #expect(projected.count == control.count)
+        for (point, expected) in zip(projected, control) {
+            #expect(point.x.isApproximatelyEqual(to: expected.x, absoluteTolerance: Self.tolerance))
+            #expect(point.y.isApproximatelyEqual(to: expected.y, absoluteTolerance: Self.tolerance))
+        }
+    }
+
+    /// The dot has to be measured along the same unwrapped longitudes as the
+    /// line. A fix that repeats a route coordinate would pass however the line
+    /// was unwrapped, since it would share the line's mistake; one halfway
+    /// along the crossing segment, standing on the line itself, does not.
+    /// Both spellings of that meridian name the same place, so both have to
+    /// land in the middle of the segment rather than at one edge of the glyph.
+    @Test(
+        "a live fix on the antimeridian lands on the route",
+        arguments: greenwichRoutes, [180.0, -180.0]
+    )
+    func antimeridianLiveFixLandsOnTheRoute(greenwich: [Coordinate], fixLongitude: Double) throws {
+        let crossing = Self.acrossTheAntimeridian(greenwich)
+        let midway = Coordinate(
+            latitude: (crossing[0].latitude + crossing[1].latitude) / 2,
+            longitude: fixLongitude
+        )
+
+        let projected = try #require(project(crossing, liveFix: midway))
+        let fixPoint = try #require(projected.liveFixPoint)
+
+        let expectedX = (projected.points[0].x + projected.points[1].x) / 2
+        let expectedY = (projected.points[0].y + projected.points[1].y) / 2
+        #expect(fixPoint.x.isApproximatelyEqual(to: expectedX, absoluteTolerance: Self.tolerance))
+        #expect(fixPoint.y.isApproximatelyEqual(to: expectedY, absoluteTolerance: Self.tolerance))
+    }
+
     // MARK: - Shape
 
     @Test("every coordinate is projected, in order")
