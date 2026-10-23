@@ -283,8 +283,10 @@ extension MapView.Coordinator {
         // And the strip at the top of the map, which the maker takes from the
         // *Community* tab for as long as it is up — the one exclusion in this
         // feature that does not fall out of an existing definition. See
-        // ``withdrawAreaSearchForDrawing(_:)``.
-        withdrawAreaSearchForDrawing(isDrawing)
+        // ``withdrawAreaSearchForDrawing(_:)``. With it, what the tab found:
+        // its pins and lines are not the trail being drawn — see
+        // ``withdrawCommunityForDrawing(_:on:)``.
+        withdrawCommunityForDrawing(isDrawing, on: mapView)
         // And the map's own labels, which a tap may pick only while drawing —
         // see `MapTrailDraftFeatures.swift`.
         refreshTrailDraftFeatureSelection(on: mapView)

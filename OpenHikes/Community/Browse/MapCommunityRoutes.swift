@@ -122,12 +122,19 @@ extension MapView.Coordinator {
     }
 
     private func trackCommunityRoutes(_ browser: CommunityBrowser, on mapView: MKMapView) {
-        applyCommunityRoutes(browser.routeLines, on: mapView)
+        applyCommunityRoutes(drawnCommunityRoutes(of: browser), on: mapView)
+        // Read whether or not they are drawn, as the pins' registration is.
         reobserving(self, mapView, browser) {
             _ = browser.routeLines
         } onChange: { coordinator, map, model in
             coordinator.trackCommunityRoutes(model, on: map)
         }
+    }
+
+    /// The browser's lines, or none while a trail is being drawn — see
+    /// ``withdrawCommunityForDrawing(_:on:)``.
+    func drawnCommunityRoutes(of browser: CommunityBrowser) -> [CommunityRouteLine] {
+        isDrawingTrail ? [] : browser.routeLines
     }
 
     /// Rebuilds the lines wholesale rather than diffing them, for the reason

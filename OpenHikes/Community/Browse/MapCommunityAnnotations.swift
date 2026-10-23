@@ -109,17 +109,51 @@ extension MapView.Coordinator {
     }
 
     private func trackCommunityPins(_ browser: CommunityBrowser, on mapView: MKMapView) {
-        applyCommunityPins(browser.nearbyListings, on: mapView)
-        // And the area's photographs, which come and go with the rows — see
-        // `MapCommunityCommonsPhotos.swift`. Each apply has its own guard, so
-        // one changing does not redraw the other.
-        applyCommunityCommonsPhotos(browser.commonsPins, on: mapView)
+        applyCommunityAnswer(browser, on: mapView)
+        // Read whether or not they are drawn, so an answer that lands while
+        // the maker is up is the one its closing brings back.
         reobserving(self, mapView, browser) {
             _ = browser.nearbyListings
             _ = browser.commonsPins
         } onChange: { coordinator, map, model in
             coordinator.trackCommunityPins(model, on: map)
         }
+    }
+
+    /// The tab's answer as pins — or none of it while a trail is being drawn,
+    /// see ``withdrawCommunityForDrawing(_:on:)``.
+    private func applyCommunityAnswer(_ browser: CommunityBrowser, on mapView: MKMapView) {
+        applyCommunityPins(isDrawingTrail ? [] : browser.nearbyListings, on: mapView)
+        // And the area's photographs, which come and go with the rows — see
+        // `MapCommunityCommonsPhotos.swift`. Each apply has its own guard, so
+        // one changing does not redraw the other.
+        applyCommunityCommonsPhotos(isDrawingTrail ? [] : browser.commonsPins, on: mapView)
+    }
+
+    /// Takes what the *Community* tab found off the map while a trail is
+    /// being drawn — its pins, its Commons photographs and its lines — and
+    /// puts it all back when the maker closes.
+    ///
+    /// The pill's rule, ``withdrawAreaSearchForDrawing(_:)``, carried on to
+    /// what the pill found, and for that rule's reason: a tab selection
+    /// survives a push. *Plan a Trail Here* on one of the tab's photographs is
+    /// where it showed: the maker opened on the tab's map with every shared
+    /// route in the area drawn across the destination it had just been given,
+    /// and the stops, the legs and the routes they were choosing between were
+    /// one tangle with trails the hiker was not drawing. The maker's map is
+    /// the trail being drawn. The tab underneath is not disturbed — the list
+    /// still describes the area it described — so Back brings it all back.
+    ///
+    /// Guarded on a change, because the maker's pass calls this on every
+    /// frame of a drag. Re-applied from the browser rather than remembered,
+    /// so what comes back is whatever the tab holds by then.
+    func withdrawCommunityForDrawing(_ drawing: Bool, on mapView: MKMapView) {
+        guard isDrawingTrail != drawing else { return }
+        // The flag every half reads, set by the pill's rule.
+        withdrawAreaSearchForDrawing(drawing)
+        guard let community else { return }
+        applyCommunityAnswer(community, on: mapView)
+        applyCommunityRoutes(drawnCommunityRoutes(of: community), on: mapView)
     }
 
     /// Rebuilds the pins wholesale rather than diffing them.
