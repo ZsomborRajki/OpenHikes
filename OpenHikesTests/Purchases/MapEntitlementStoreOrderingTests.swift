@@ -4,15 +4,18 @@
 //
 //  Two entitlement reads in flight at once, answering out of order.
 //
-//  Launch, every foreground, the StoreKit listener, a restore and a purchase
-//  finishing each start a read of their own, and nothing serializes them. The
-//  bug this suite keeps fixed: the store published whichever answer arrived
-//  *last*, so a read started before a purchase could come back after it with
-//  "no", lock Pro again and persist the refusal for the next launch.
+//  Launch, every foreground, a restore and the StoreKit listener (which is how
+//  a finished purchase arrives) each start a read of their own, and nothing
+//  serializes them. The bug this suite keeps fixed: the store published
+//  whichever answer arrived *last*, so a read started before a purchase could
+//  come back after it with "no", lock Pro again and persist the refusal for
+//  the next launch.
 //
 //  Every read here is held open by ``HeldEntitlementReads`` until the test
 //  answers it, so both completion orders are written out rather than raced.
-//  ``MapEntitlement`` is process-wide, so each test restores it.
+//  A read that is never answered would leave its test suspended for good,
+//  which is what the time limit turns into a failure. ``MapEntitlement`` is
+//  process-wide, so each test restores it.
 //
 
 import Foundation
@@ -35,17 +38,33 @@ private final class HeldEntitlementReads: Sendable {
     }
 
     /// Answers the read that started `index`-th (from zero).
-    func answer(_ index: Int, with entitled: Bool) {
-        let continuation = pending.withLock { reads in
+    ///
+    /// A read that never started, or was already answered, is an issue rather
+    /// than a trap: an index out of range would take the whole hosted bundle
+    /// down instead of failing one test.
+    func answer(
+        _ index: Int,
+        with entitled: Bool,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        let continuation = pending.withLock { reads -> CheckedContinuation<Bool, Never>? in
+            guard reads.indices.contains(index) else { return nil }
             defer { reads[index] = nil }
             return reads[index]
         }
-        continuation?.resume(returning: entitled)
+        guard let continuation else {
+            Issue.record(
+                "Read \(index) was never started, or was already answered",
+                sourceLocation: sourceLocation
+            )
+            return
+        }
+        continuation.resume(returning: entitled)
     }
 }
 
 @MainActor
-@Suite("Map entitlement read ordering", .serialized)
+@Suite("Map entitlement read ordering", .serialized, .timeLimit(.minutes(1)))
 struct MapEntitlementStoreOrderingTests {
     private static func defaults() throws -> UserDefaults {
         let name = "MapEntitlementStoreOrderingTests-\(UUID().uuidString)"
@@ -171,5 +190,35 @@ struct MapEntitlementStoreOrderingTests {
         #expect(store.state == .entitled)
         #expect(MapEntitlement.current == .entitled)
         #expect(defaults.bool(forKey: SettingsKey.lastKnownMapEntitlement))
+    }
+
+    /// The other way round: a read started after the restore's publishes
+    /// first, so the restore's own answer is dropped, and the restore reports
+    /// what the store now shows. The paywall closes on `isEntitled`, so an
+    /// outcome taken from the dropped read would contradict the screen.
+    @Test(
+        "a restore overtaken by a newer read reports the newer answer",
+        arguments: [true, false]
+    )
+    func overtakenRestoreReportsTheNewerAnswer(newerEntitled: Bool) async throws {
+        defer { MapEntitlement.resetForTesting() }
+        let defaults = try Self.defaults()
+        let reads = HeldEntitlementReads()
+        let store = Self.store(defaults: defaults, reads: reads)
+
+        let restore = Task { await store.restore() }
+        await settleDelegateHop(until: "the restore's read to be in flight") {
+            reads.started == 1
+        }
+        let newer = await Self.startRefresh(store, reads: reads)
+
+        reads.answer(1, with: newerEntitled)
+        await newer.value
+        reads.answer(0, with: !newerEntitled)
+
+        #expect(await restore.value == (newerEntitled ? .restored : .nothingToRestore))
+        #expect(store.state == (newerEntitled ? .entitled : .notEntitled))
+        #expect(MapEntitlement.current == store.state)
+        #expect(defaults.bool(forKey: SettingsKey.lastKnownMapEntitlement) == newerEntitled)
     }
 }
