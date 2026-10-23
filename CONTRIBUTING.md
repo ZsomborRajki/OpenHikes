@@ -27,7 +27,7 @@ owns, and it is an exception argued for in *The community feature* in
 
 See [Requirements](README.md#requirements) and [Setup](README.md#setup). In
 short: Xcode 27 or later, an iOS 27.0 deployment target, and an Apple
-development team that can sign the WeatherKit entitlement, the App Group, the
+development team that can sign the WeatherKit entitlement, both App Groups, the
 iCloud container, push, Time Sensitive Notifications and HealthKit.
 
 `OpenHikes/Secrets.plist` holds the optional Stadia and Thunderforest keys. It

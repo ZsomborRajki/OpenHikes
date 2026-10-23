@@ -37,7 +37,7 @@ That is local-first with one deliberate exception. There is no OpenHikes account
   CodeQL workflow is the one exception and still builds on Xcode 26.6, because
   CodeQL's Swift extractor does not read Swift 6.4 yet — it builds without the
   maker's drag, which is the one iOS 27 API in the app.
-- An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container, the push and Time Sensitive Notifications entitlements and HealthKit.
+- An Apple development team that can sign the WeatherKit entitlement, both App Groups, the iCloud container, the push and Time Sensitive Notifications entitlements and HealthKit.
 - iPhone, plus an optional Apple Watch app. The phone targets set
   `TARGETED_DEVICE_FAMILY = 1`; `OpenHikesWatch` sets `4` and deploys to
   watchOS 26.0. The watch app is embedded in the phone app, so building the
@@ -47,9 +47,13 @@ OpenStreetMap is the keyless default and neither Apple option needs a key either
 
 ## Setup
 
-1. Open `OpenHikes.xcodeproj` and set your development team for `OpenHikes`, `OpenWidgetExtension` and `OpenHikesWatch`.
+1. Open `OpenHikes.xcodeproj` and set your development team for all four shipping targets: `OpenHikes`, `OpenWidgetExtension`, `OpenHikesWatch` and `OpenHikesWatchWidgets`. Each has its own signing settings, and the `OpenHikes` scheme builds all four (the app embeds the widget and the watch app, and the watch app embeds its widgets), so one left on the original team fails to sign. On a team other than the project's, also replace the `tappium.com.OpenHikes` prefix of all four bundle identifiers, because an App ID belongs to one team: the widget's and the watch's identifiers stay under the app's, and `WKCompanionAppBundleIdentifier` in `OpenHikesWatch/Info.plist` names the app's.
 2. Enable WeatherKit for the app's App ID in Certificates, Identifiers & Profiles, in both **App Services** and **App Capabilities**, then refresh its signing assets. The capability and entitlement are checked in, but Apple still returns HTTP 401 until the App ID itself is enabled.
-3. If your team cannot use `group.tappium.com.OpenHikes`, replace it in both entitlement files and in `SharedStore.appGroupID`.
+3. There are two App Groups. If your team cannot use one, replace it in both of its entitlement files and in its store constant:
+   - `group.tappium.com.OpenHikes`, shared by the phone app and its widget: `OpenHikes/OpenHikes.entitlements`, `OpenWidgetExtension.entitlements` and `SharedStore.appGroupID`.
+   - `group.tappium.com.OpenHikes.watch`, shared by the watch app and its complication: `OpenHikesWatch/OpenHikesWatch.entitlements`, `OpenHikesWatchWidgets/OpenHikesWatchWidgets.entitlements` and `WatchGlanceStore.appGroupID`.
+
+   A constant that names a group its entitlements lack gets no container, and the app says nothing: the widget or the complication just has nothing to draw. Leave these replacements, and the bundle identifiers from step 1, out of a pull request.
 4. HealthKit needs no portal step in the ordinary case: the capability and both usage strings are checked in, and the App ID picks it up when Xcode refreshes signing assets. Enable it by hand in **App Capabilities** if signing refuses. The app only ever *writes* a finished hike into the hiker's own store — `HealthKitWorkoutWriter` asks for share types and no read types — and the switch is off until they turn it on.
 5. Time Sensitive Notifications needs no portal step in the ordinary case either, and the entitlement is checked in. Without it the two warnings the app can send — a severe-weather alert and leaving the trail — are delivered at the ordinary level, which any Focus mode silences; nothing reports that, so the symptom is a warning a hiker never sees.
 6. iCloud sync needs a CloudKit container. Xcode creates `iCloud.tappium.com.OpenHikes` on the first signed build; to use another identifier, replace it in `OpenHikes/OpenHikes.entitlements` and in `CloudSyncCoordinator.containerIdentifier`. SwiftData's mirroring creates the development schema from the model on first run.
