@@ -148,21 +148,32 @@ final class PhoneLink: NSObject {
     /// too recently to be worth the whole payload again.
     func send(_ walk: WatchRecordedWalk) {
         let sessionID = walk.sessionID
-        // The first offer in this process may find the last one's transfer
-        // still queued: `WCSession` keeps it across the relaunch this set
-        // did not survive. Adopted rather than duplicated, and its finish
-        // arrives here like any other.
-        if delivery.hasNeverOffered(sessionID), isCrossing(sessionID) {
-            delivery.handedOver(sessionID)
-            return
-        }
-        guard delivery.shouldOffer(sessionID, at: .now) else { return }
+        guard isDue(sessionID) else { return }
         // Marked only once the system has actually taken it. A build that
         // threw was never handed over, and a walk recorded as crossing on
         // the strength of an attempt that failed would sit on the disk queue
         // unoffered until the app was relaunched.
         guard transfer({ try WatchLink.message(walk) }) else { return }
         delivery.handedOver(sessionID)
+    }
+
+    /// Whether a queued walk would be sent if it were offered now.
+    ///
+    /// Asked by a drain *before* it reads the walk off disk, which is the
+    /// expensive half: a walk still crossing, or waiting out a retry, is
+    /// never decoded just to be turned away. ``send(_:)`` asks again, so a
+    /// walk that became due or stopped being due during the read is judged
+    /// as it stands then.
+    func isDue(_ sessionID: UUID) -> Bool {
+        // The first offer in this process may find the last one's transfer
+        // still queued: `WCSession` keeps it across the relaunch this set
+        // did not survive. Adopted rather than duplicated, and its finish
+        // arrives here like any other.
+        if delivery.hasNeverOffered(sessionID), isCrossing(sessionID) {
+            delivery.handedOver(sessionID)
+            return false
+        }
+        return delivery.shouldOffer(sessionID, at: .now)
     }
 
     /// Forgets that a walk was ever sent.

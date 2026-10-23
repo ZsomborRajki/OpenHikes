@@ -10,18 +10,18 @@ import Testing
 @Suite("Watch stopped walk")
 struct WatchStoppedWalkTests {
     @Test("A refused write keeps the walk, and a retry queues that same walk exactly once")
-    func refusedWriteIsRetried() {
+    func refusedWriteIsRetried() async {
         let queue = Queue(refusing: 1)
         let walk = Fixture.walk()
 
-        let stopped = WatchStoppedWalk.settle(walk, writing: queue.enqueue)
+        let stopped = await WatchStoppedWalk.settle(walk, writing: queue.enqueue)
         #expect(stopped == .unsaved(walk))
         #expect(queue.walks.isEmpty)
 
         // Storage recovers; the hiker presses Retry, then presses it again
         // before the screen has caught up.
-        let retried = stopped.retried(writing: queue.enqueue)
-        let again = retried.retried(writing: queue.enqueue)
+        let retried = await stopped.retried(writing: queue.enqueue)
+        let again = await retried.retried(writing: queue.enqueue)
 
         #expect(retried == .saved(walk))
         #expect(again == .saved(walk))
@@ -31,9 +31,9 @@ struct WatchStoppedWalkTests {
     }
 
     @Test("A retry that is refused again still holds the walk")
-    func refusedRetryStillHolds() {
+    func refusedRetryStillHolds() async {
         let queue = Queue(refusing: 2)
-        let stopped = WatchStoppedWalk.settle(Fixture.walk(), writing: queue.enqueue)
+        let stopped = await WatchStoppedWalk.settle(Fixture.walk(), writing: queue.enqueue)
             .retried(writing: queue.enqueue)
 
         #expect(stopped == .unsaved(Fixture.walk()))
@@ -42,10 +42,10 @@ struct WatchStoppedWalkTests {
     }
 
     @Test("Only an unsaved walk holds off a new recording")
-    func onlyUnsavedHolds() {
+    func onlyUnsavedHolds() async {
         let queue = Queue(refusing: 0)
-        let saved = WatchStoppedWalk.settle(Fixture.walk(), writing: queue.enqueue)
-        let tooShort = WatchStoppedWalk.settle(nil, writing: queue.enqueue)
+        let saved = await WatchStoppedWalk.settle(Fixture.walk(), writing: queue.enqueue)
+        let tooShort = await WatchStoppedWalk.settle(nil, writing: queue.enqueue)
 
         #expect(saved == .saved(Fixture.walk()))
         #expect(!saved.holdsUnsavedWalk)
@@ -56,10 +56,10 @@ struct WatchStoppedWalkTests {
     }
 
     @Test("Retrying something that is not unsaved writes nothing")
-    func retryWithoutUnsavedWalkWritesNothing() {
+    func retryWithoutUnsavedWalkWritesNothing() async {
         let queue = Queue(refusing: 0)
-        #expect(WatchStoppedWalk.tooShort.retried(writing: queue.enqueue) == .tooShort)
-        #expect(WatchStoppedWalk.saved(Fixture.walk()).retried(writing: queue.enqueue) == .saved(Fixture.walk()))
+        #expect(await WatchStoppedWalk.tooShort.retried(writing: queue.enqueue) == .tooShort)
+        #expect(await WatchStoppedWalk.saved(Fixture.walk()).retried(writing: queue.enqueue) == .saved(Fixture.walk()))
         #expect(queue.attempts == 0)
     }
 

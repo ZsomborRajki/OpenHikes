@@ -25,6 +25,11 @@
 //  whenever the app comes to the front, which covers a phone that refused a
 //  walk and then stayed in range.
 //
+//  Every queue call is awaited on ``WatchWalkQueue``, off the main actor. The
+//  count comes from file names and a walk is read only when the link is about
+//  to send it, so a queue that grew while the phone was away costs this
+//  actor nothing to count.
+//
 
 import CoreLocation
 import Foundation
@@ -41,8 +46,9 @@ final class WatchModel {
     private(set) var library: WatchLibraryDigest
     /// The trail the watch holds, if any.
     private(set) var trail: WatchTrailPackage?
-    /// How many finished walks are still waiting for the phone.
-    private(set) var queuedWalkCount: Int
+    /// How many finished walks are still waiting for the phone. Zero until
+    /// ``start()``'s drain has asked the queue.
+    private(set) var queuedWalkCount = 0
     /// What the *phone's* recorder is doing, as far as this watch knows.
     ///
     /// `nil` until a reading has arrived, which is a different thing from
@@ -82,16 +88,19 @@ final class WatchModel {
     /// count is the fixture's and must not be recounted from a disk it never
     /// wrote.
     @ObservationIgnored private var isStarted = false
+    /// The queue as last applied to ``queuedWalkCount``, so an answer that
+    /// resumes after a later one cannot put the count back — see
+    /// ``WatchQueuedWalks/isNewer(than:)``.
+    @ObservationIgnored private var queuedWalks: WatchQueuedWalks?
 
     init(store: WatchStore = WatchStore()) {
         self.store = store
         recorder = WatchRecorder(store: store)
         library = store.loadLibrary()
         trail = store.loadTrail()
-        queuedWalkCount = store.queuedWalks().count
         if let trail { tracker = WatchRouteTracker(trail) }
         recorder.onFix = { [weak self] location in self?.advanceFollow(with: location) }
-        recorder.onWalkQueued = { [weak self] walk in self?.walkQueued(walk) }
+        recorder.onWalkQueued = { [weak self] walk, queued in self?.walkQueued(walk, queued: queued) }
     }
 
     #if DEBUG
@@ -272,12 +281,10 @@ final class WatchModel {
         follow.clear()
     }
 
-    /// Stops. The walk, if there was one, goes through ``walkQueued(_:)``.
-    func stopRecording() {
-        recorder.stop()
-        // The too-short and out-of-storage paths leave nothing on the queue
-        // and never reach the hook, so the count is refreshed either way.
-        queuedWalkCount = store.queuedWalks().count
+    /// Stops. The walk, if there was one, goes through
+    /// ``walkQueued(_:queued:)``.
+    func stopRecording() async {
+        await recorder.stop()
         // A walk along a trail leaves the hiker where they finished it, which
         // is where they are. Nothing is cleared — but the receiver is: the
         // recording owned it and stopping took it down, and a trail screen
@@ -287,9 +294,9 @@ final class WatchModel {
     }
 
     /// Tries again to write a walk that Stop could not. A success goes
-    /// through ``walkQueued(_:)`` like any other.
-    func retrySavingWalk() {
-        recorder.retrySave()
+    /// through ``walkQueued(_:queued:)`` like any other.
+    func retrySavingWalk() async {
+        await recorder.retrySave()
     }
 
     /// Throws away a walk that could not be written.
@@ -307,9 +314,9 @@ final class WatchModel {
     }
 
     /// Keeps a walk the last process never finished, as it stood. A walk kept
-    /// goes through ``walkQueued(_:)`` like any other.
-    func saveInterruptedRecording() {
-        recorder.saveInterrupted()
+    /// goes through ``walkQueued(_:queued:)`` like any other.
+    func saveInterruptedRecording() async {
+        await recorder.saveInterrupted()
     }
 
     func discardInterruptedRecording() {
@@ -322,8 +329,8 @@ final class WatchModel {
     /// recording does not always end with the hiker's Stop: a workout session
     /// that fails takes it down, and the walk it leaves behind would otherwise
     /// sit on disk until the next launch or the next reachability change.
-    private func walkQueued(_ walk: WatchRecordedWalk) {
-        queuedWalkCount = store.queuedWalks().count
+    private func walkQueued(_ walk: WatchRecordedWalk, queued: WatchQueuedWalks) {
+        apply(queued)
         link.send(walk)
     }
 
@@ -366,9 +373,13 @@ final class WatchModel {
             // that moment arriving.
             if isFollowing { recorder.startFollowingFeed() }
         case .walkKept(let sessionID):
-            store.removeWalk(sessionID)
-            link.forget(sessionID)
-            queuedWalkCount = store.queuedWalks().count
+            Task { [weak self, store] in
+                let queued = await store.walks.remove(sessionID)
+                // Forgotten only once the file is gone, so a drain in between
+                // still finds the walk crossing rather than due again.
+                self?.link.forget(sessionID)
+                self?.apply(queued)
+            }
         case .phoneRecording(let recording):
             apply(recording)
         case .commandOutcome(let outcome):
@@ -410,10 +421,33 @@ final class WatchModel {
     /// which is why a receipt can be lost without costing anything but one
     /// more transfer. See `WatchWalkImport` on the phone.
     private func drainQueue() {
-        let queued = store.queuedWalks()
-        queuedWalkCount = queued.count
+        Task { [weak self] in await self?.drain() }
+    }
+
+    private func drain() async {
+        let queued = await store.walks.pending()
+        apply(queued)
         guard !queued.isEmpty else { return }
         Self.logger.debug("Offering \(queued.count, privacy: .public) queued walk(s) to the phone")
-        for walk in queued { link.send(walk) }
+        var isAnyUnread = false
+        for sessionID in queued.sessionIDs where link.isDue(sessionID) {
+            // One at a time, and only a walk the link will take: the read is
+            // the whole recording.
+            guard let walk = await store.walks.walk(sessionID) else {
+                isAnyUnread = true
+                continue
+            }
+            link.send(walk)
+        }
+        // A walk that does not decode leaves the queue's count — see
+        // ``WatchWalkQueue/walk(_:)`` — and the screen should say so. One
+        // whose receipt landed mid-drain has already said so itself.
+        if isAnyUnread { apply(await store.walks.pending()) }
+    }
+
+    private func apply(_ queued: WatchQueuedWalks) {
+        guard queued.isNewer(than: queuedWalks) else { return }
+        queuedWalks = queued
+        queuedWalkCount = queued.count
     }
 }

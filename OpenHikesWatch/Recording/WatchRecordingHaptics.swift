@@ -34,6 +34,9 @@ extension WatchRecorder.Phase {
         case .preparing: .preparing
         case .recording: .running
         case .paused: .paused
+        // Silent on the way in — Stop is the hiker's own press — and the
+        // `finished` or `failed` that follows is the news.
+        case .saving: .saving
         // The watch stops on a screen showing the walk rather than returning
         // to an idle recorder, which is the whole reason the shared table has
         // a `finished` the phone never reaches.

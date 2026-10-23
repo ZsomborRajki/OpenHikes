@@ -40,22 +40,23 @@ public enum WatchStoppedWalk: Equatable, Sendable {
     /// The first attempt to keep a walk, made the moment it stops.
     ///
     /// - Parameter write: puts a walk on the disk queue and says whether it
-    ///   is there — `WatchStore.enqueue(_:)` on a watch.
+    ///   is there — ``WatchWalkQueue/enqueue(_:)`` on a watch, awaited off
+    ///   the main actor, so a walk is called saved only once it has landed.
     public static func settle(
         _ walk: WatchRecordedWalk?,
-        writing write: (WatchRecordedWalk) -> Bool
-    ) -> Self {
+        writing write: (WatchRecordedWalk) async -> Bool
+    ) async -> Self {
         guard let walk else { return .tooShort }
-        return write(walk) ? .saved(walk) : .unsaved(walk)
+        return await write(walk) ? .saved(walk) : .unsaved(walk)
     }
 
     /// Another attempt at an unsaved walk.
     ///
     /// Anything else is returned unchanged **without writing**: a walk that is
     /// already queued is queued once, however many times a retry is pressed.
-    public func retried(writing write: (WatchRecordedWalk) -> Bool) -> Self {
+    public func retried(writing write: (WatchRecordedWalk) async -> Bool) async -> Self {
         guard case .unsaved(let walk) = self else { return self }
-        return Self.settle(walk, writing: write)
+        return await Self.settle(walk, writing: write)
     }
 
     /// Whether this still holds the only copy of a walk, which is what must
