@@ -62,10 +62,10 @@ struct CommunityRouteOutlineTests {
     ///
     /// Shape at several scales is what fixes that, because it gives RDP points
     /// at many different deviations instead of one. Measured against this
-    /// fixture: 682 points at 8 m, 153 at 16 m, and 102 at 32 m, which is the
-    /// pass the budget accepts. So the doubling loop in
+    /// fixture: 656 points at 8 m, 359 at 16 m, 156 at 32 m, and 107 at 64 m,
+    /// which is the pass the budget accepts. So the doubling loop in
     /// ``CommunityRouteOutline/simplified(_:maximumPoints:)`` really runs —
-    /// three passes rather than one — and lands comfortably inside the budget
+    /// four passes rather than one — and lands comfortably inside the budget
     /// rather than on its floor. The whole fixture is thinned in about a
     /// quarter of a second in a Debug build, against the old one's 24.
     ///
@@ -217,7 +217,7 @@ struct CommunityRouteOutlineTests {
     }
 
     /// Below this the outline has stopped describing the walk. Both are set
-    /// well under what this fixture actually produces — 102 points and 515
+    /// well under what this fixture actually produces — 107 points and 543
     /// bytes — so an ordinary change to the simplifier moves neither, and a
     /// collapse moves both.
     private static let thinnedFloor = 32

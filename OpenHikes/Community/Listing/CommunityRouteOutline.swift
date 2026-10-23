@@ -222,7 +222,7 @@ nonisolated private extension CommunityRouteOutline {
             var farthest = span.first
             var farthestDistance = 0.0
             for index in (span.first + 1)..<span.last {
-                let distance = perpendicularDistanceMeters(
+                let distance = segmentDistanceMeters(
                     of: points[index],
                     from: points[span.first],
                     to: points[span.last]
@@ -242,29 +242,29 @@ nonisolated private extension CommunityRouteOutline {
     }
 
     /// How far `point` lies from the segment between `start` and `end`, in
-    /// metres.
+    /// metres: from the nearest point *on the segment*, not on the line
+    /// through it.
     ///
-    /// On the local tangent plane through `start`, which is what
-    /// ``RouteGeometry/localOffset(from:to:)`` already gives the route matcher:
-    /// over the length of one RDP span the curvature of the earth is far
-    /// below the tolerance being measured against, and the flat-plane answer
-    /// is the one that costs no trigonometry per candidate point.
-    static func perpendicularDistanceMeters(
+    /// The textbook RDP measure is the perpendicular to the infinite line, and
+    /// on a trail that is wrong in a way a hiker sees. An out-and-back that
+    /// finishes partway along its way out has its turnaround on that line,
+    /// beyond the finish, so the perpendicular calls the far end of the walk
+    /// zero metres off and the outline stops where the hiker turned for home
+    /// (#964). Clamping to the segment measures that turnaround by how far it
+    /// really is from the line that would replace it.
+    ///
+    /// ``RouteGeometry/project(_:onSegmentFrom:to:)`` is that clamped
+    /// projection, on the local tangent plane through `point` — the one the
+    /// route matcher already judges fixes with. Over the length of one RDP
+    /// span the curvature of the earth is far below the tolerance being
+    /// measured against. A degenerate span, where the route stood still,
+    /// projects onto its one point, which is the honest answer.
+    static func segmentDistanceMeters(
         of point: CLLocationCoordinate2D,
         from start: CLLocationCoordinate2D,
         to end: CLLocationCoordinate2D
     ) -> Double {
-        let segment = RouteGeometry.localOffset(from: start, to: end)
-        let candidate = RouteGeometry.localOffset(from: start, to: point)
-        let lengthSquared = segment.x * segment.x + segment.y * segment.y
-        // A degenerate span — the route stood still — leaves the distance to
-        // the point itself, which is the honest answer and keeps the maths
-        // out of a division by zero.
-        guard lengthSquared > 0 else {
-            return (candidate.x * candidate.x + candidate.y * candidate.y).squareRoot()
-        }
-        let cross = candidate.x * segment.y - candidate.y * segment.x
-        return abs(cross) / lengthSquared.squareRoot()
+        RouteGeometry.project(point, onSegmentFrom: start, to: end).offRouteMeters
     }
 }
 
