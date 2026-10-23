@@ -62,11 +62,12 @@ struct CommunityRouteOutlineTests {
     ///
     /// Shape at several scales is what fixes that, because it gives RDP points
     /// at many different deviations instead of one. Measured against this
-    /// fixture: 656 points at 8 m, 359 at 16 m, 156 at 32 m, and 107 at 64 m,
-    /// which is the pass the budget accepts. So the doubling loop in
-    /// ``CommunityRouteOutline/simplified(_:maximumPoints:)`` really runs —
-    /// four passes rather than one — and lands comfortably inside the budget
-    /// rather than on its floor. The whole fixture is thinned in about a
+    /// fixture: 656 points at 8 m, 359 at 16 m and 156 at 32 m, then about 140
+    /// from 64 m to 256 m, where the turns of the switchbacks are all that is
+    /// left, and 107 at 512 m, which is the pass the budget accepts. So the
+    /// doubling loop in ``CommunityRouteOutline/simplified(_:maximumPoints:)``
+    /// really runs — seven passes rather than one — and lands inside the
+    /// budget rather than on its floor. The whole fixture is thinned in about a
     /// quarter of a second in a Debug build, against the old one's 24.
     ///
     /// Deterministic, deliberately: the noise comes from hashing the index
