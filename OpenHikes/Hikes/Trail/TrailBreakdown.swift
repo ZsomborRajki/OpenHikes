@@ -67,7 +67,8 @@ nonisolated struct TrailBreakdown<Category: TrailCategory>: Equatable, Sendable 
     let shares: [Share]
     /// Route length as measured by this walk, which is the sum of the shares
     /// rather than ``Hike/distanceMeters`` — using the sum keeps the fractions
-    /// adding up to exactly 1.
+    /// adding up to exactly 1. Like that distance, it leaves out every leg a
+    /// pause opened.
     let totalMeters: Double
 
     static var empty: Self { Self(shares: [], totalMeters: 0) }
@@ -207,6 +208,8 @@ nonisolated enum TrailBreakdownAnalyzer {
     /// Consecutive runs share their boundary point, so drawn end to end they
     /// leave no gap; a boundary falls between two samples, which is to say
     /// within ``samplingStepMeters`` of where the tagging actually changes.
+    /// The one gap is a pause: the run before it ends on the fix the pause
+    /// began at, and the next starts on the fix it ended at.
     @concurrent
     static func runs<Category: TrailCategory>(
         of categoryType: Category.Type,
@@ -227,6 +230,13 @@ nonisolated enum TrailBreakdownAnalyzer {
     /// The walk both of the above are made of: every sample along `route`, in
     /// order, with the category the way beneath it puts it in. Visits nothing
     /// for a route or graph with nothing to measure.
+    ///
+    /// A leg a pause opened is never sampled. It is not trail (see
+    /// ``RouteBoundary``): the ground across it was crossed by car or by
+    /// lift, or not at all, and measured, a drive between two walks was most
+    /// of a breakdown, unmapped distance the hike never covered (#992). The
+    /// first sample after one says so, so a run ends at the pause even where
+    /// the same category carries on beyond it.
     private static func walk<Category: TrailCategory>(
         _: Category.Type,
         route: [RouteCoordinate],
@@ -240,8 +250,14 @@ nonisolated enum TrailBreakdownAnalyzer {
 
         var previousWayID: Int64?
         var samplesTaken = 0
+        // Whether a pause has opened a leg since the last sample.
+        var resumesAfterPause = false
 
         for (start, end) in route.adjacentPairs() {
+            guard !end.isPauseBoundary else {
+                resumesAfterPause = true
+                continue
+            }
             let from = start.clCoordinate
             let to = end.clCoordinate
             let segmentMeters = RouteGeometry.distanceMeters(from: from, to: to)
@@ -286,9 +302,11 @@ nonisolated enum TrailBreakdownAnalyzer {
                         to: to,
                         step: step,
                         steps: steps,
-                        meters: stepMeters
+                        meters: stepMeters,
+                        resumesAfterPause: resumesAfterPause
                     )
                 )
+                resumesAfterPause = false
             }
         }
     }
@@ -354,6 +372,9 @@ nonisolated struct TrailCategorySample<Category: TrailCategory> {
     let step: Int
     let steps: Int
     let meters: Double
+    /// Whether a pause opened the leg before this sample's segment, which
+    /// ends the run before it whatever the two categories are.
+    let resumesAfterPause: Bool
 
     /// Whether this is the segment's last sub-step, which ends on the route's
     /// own next point.
@@ -375,6 +396,10 @@ nonisolated struct TrailCategorySample<Category: TrailCategory> {
 /// point per twenty metres would be thousands of points drawing the same
 /// line. The end of the last sample is kept aside instead, and put down only
 /// if the run closes mid-segment.
+///
+/// A pause closes the run too, even when the same category resumes after it:
+/// carried on, the run would draw a line straight across the drive between
+/// the fix before the pause and the fix after it.
 nonisolated struct TrailCategoryRunBuilder<Category: TrailCategory> {
     private var runs: [TrailCategoryRun<Category>] = []
     private var category: Category?
@@ -382,7 +407,7 @@ nonisolated struct TrailCategoryRunBuilder<Category: TrailCategory> {
     private var pendingEnd: CLLocationCoordinate2D?
 
     mutating func add(_ sample: TrailCategorySample<Category>) {
-        if sample.category != category {
+        if sample.category != category || sample.resumesAfterPause {
             close()
             category = sample.category
             coordinates = [sample.start]

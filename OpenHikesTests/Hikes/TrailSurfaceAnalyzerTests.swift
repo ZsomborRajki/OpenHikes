@@ -232,6 +232,36 @@ struct TrailSurfaceAnalyzerTests {
         #expect(breakdown.shares.map(\.category) == [.gravel])
     }
 
+    /// 111 m walked, a kilometre driven with the recording paused, 111 m
+    /// walked (#992). The drive has no way beneath it, so measured as trail it
+    /// was most of the breakdown, all of it unmapped; a paused leg is not
+    /// trail (see `RouteBoundary`), and the total is the hike's own distance.
+    @Test("a paused transfer is no part of the breakdown")
+    func pausedTransferIsNotMeasured() async throws {
+        let graph = makeGraph(
+            nodes: [(1, 47.000, 12), (2, 47.001, 12), (3, 47.011, 12), (4, 47.012, 12)],
+            ways: [
+                WayFixture(id: 10, nodeIDs: [1, 2], surface: "gravel"),
+                WayFixture(id: 11, nodeIDs: [3, 4], surface: "gravel"),
+            ]
+        )
+        let walked = [
+            RouteCoordinate(latitude: 47.000, longitude: 12),
+            RouteCoordinate(latitude: 47.001, longitude: 12),
+            RouteCoordinate(latitude: 47.011, longitude: 12, boundary: .paused),
+            RouteCoordinate(latitude: 47.012, longitude: 12),
+        ]
+
+        let breakdown = try await TrailBreakdownAnalyzer.breakdown(
+            of: TrailSurface.self,
+            route: walked,
+            graph: graph
+        )
+
+        #expect(breakdown.shares.map(\.category) == [.gravel])
+        #expect(breakdown.totalMeters.isApproximatelyEqual(to: walked.lengthMeters, absoluteTolerance: 0.5))
+    }
+
     @Test("nothing to measure against produces nothing")
     func emptyInputs() async throws {
         let walked = route([
