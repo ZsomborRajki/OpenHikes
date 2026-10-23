@@ -10,7 +10,9 @@
 //  more importantly, the four ways it is allowed to *not* happen: two subjects
 //  that keep the name they have, a launch with no geocoder, and an answer that
 //  arrives after the hiker has moved on. The same answer carries the zone the
-//  week's days are named in (#934), and is held to the same four.
+//  week's days are named in (#934), and is held to the same four — and to one
+//  more, because a trail's reading moves with the hiker: an answer stands only
+//  for the reading it was asked about.
 //
 //  The cost assertions matter as much as the name ones. A geocode is a network
 //  round trip against somebody's rate limit, so `asked` is counted in every
@@ -47,9 +49,25 @@ private final class StubPlaceNames: WeatherPlaceNaming {
 struct WeatherPlaceNameTests {
     private let watzmann = CLLocationCoordinate2D(latitude: 47.5553, longitude: 12.9225)
     private let budapest = CLLocationCoordinate2D(latitude: 47.4979, longitude: 19.0402)
+    /// Twin towns on the Arizona–Utah line, a mile apart and, in summer, an
+    /// hour apart.
+    private let coloradoCity = CLLocationCoordinate2D(latitude: 36.9908, longitude: -112.9757)
+    private let hildale = CLLocationCoordinate2D(latitude: 37.0036, longitude: -112.9663)
 
     private func manager(_ names: StubPlaceNames?) -> WeatherManager {
         WeatherManager(placeNames: names, widgetPublisher: .inert)
+    }
+
+    /// A reading as a fetch leaves it in the cache. Only where it was fetched
+    /// matters here, so the weather in it is anything.
+    private func reading(capturedAt: Date) -> WeatherSnapshot {
+        WeatherSnapshot(
+            symbolName: "sun.max.fill",
+            temperature: Measurement(value: 31, unit: UnitTemperature.celsius),
+            conditionDescription: "Clear",
+            capturedAt: capturedAt,
+            conditions: .preview
+        )
     }
 
     private func focused(
@@ -118,6 +136,43 @@ extension WeatherPlaceNameTests {
 
         #expect(manager.cityName == "Berchtesgaden")
         #expect(names.asked.count == 1)
+    }
+
+    /// A trail's key outlives its place. Once the hiker is out on it, its
+    /// coordinate follows them — see ``WeatherFocus/hikerMoved(to:)`` — and a
+    /// forecast fetched across a border is another town's, with days that
+    /// begin at another zone's midnight. Arizona keeps no summer time and Utah
+    /// does, so in July Utah's Saturday begins at 06:00Z, which in Arizona is
+    /// still Friday: named in the old zone, every row is a weekday early.
+    @Test("a trail followed across a zone border is asked about again")
+    func aTrailFollowedAcrossABorder() async {
+        let names = StubPlaceNames(answer: "Colorado City")
+        names.timeZone = TimeZone(identifier: "America/Phoenix")
+        let manager = manager(names)
+        let arizona = WeatherSubject.trail(coloradoCity, hikeID: UUID(), name: "Canyon loop")
+        let fetched = Date.now
+        manager.applyUITestSnapshot(reading(capturedAt: fetched), subject: arizona)
+        await manager.resolvePlace()
+
+        // The badge follows the hiker at once, and the reading on it is still
+        // the one fetched in Arizona — which is what the zone is about.
+        let utah = arizona.moved(to: hildale)
+        manager.focus(on: utah, willRequest: true)
+        await manager.resolvePlace()
+        #expect(manager.forecastTimeZone?.identifier == "America/Phoenix")
+        #expect(names.asked.count == 1, "nothing the sheet draws has moved yet")
+
+        names.answer = "Hildale"
+        names.timeZone = TimeZone(identifier: "America/Denver")
+        manager.applyUITestSnapshot(reading(capturedAt: fetched.addingTimeInterval(60)), subject: utah)
+        #expect(manager.forecastTimeZone == nil, "Arizona's zone is not put on Utah's days")
+        #expect(manager.cityName == nil, "nor its town over the forecast")
+
+        await manager.resolvePlace()
+        #expect(manager.forecastTimeZone?.identifier == "America/Denver")
+        #expect(manager.cityName == "Hildale")
+        #expect(names.asked.count == 2)
+        #expect(names.asked.last?.latitude == hildale.latitude)
     }
 }
 
