@@ -84,51 +84,19 @@ Scripts/simulate-hike.sh stop           # stop and clear location playback
 ## Build and test
 
 ```sh
-# Boot the simulator first — the test commands below need it awake
-xcrun simctl boot "iPhone 18 Pro" || true
-xcrun simctl bootstatus "iPhone 18 Pro" -b
-
 # Build the app, its embedded widget and the watch app. The watch target is a
 # dependency of the app, so this compiles it for watchOS as well — there is no
-# separate build to remember, and no way to break it without breaking this.
+# separate build to remember, and no way to break it without breaking this. A
+# generic destination needs no simulator, and the relative DerivedData keeps
+# each checkout's build its own.
 xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
-
-# The watch app on its own, which is the faster loop while working on it
-xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikesWatch \
-  -destination 'generic/platform=watchOS Simulator'
-
-# Unit and integration tests, app and widget
-xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
-  -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
-
-# The standalone shared-package suite
-swift test --package-path OpenHikesShared
-
-# The data package's suite: the models and their logic, on the macOS host
-swift test --package-path OpenHikesData
-
-# Simulator UI automation, across four simulator clones; --serial for one,
-# and --list shows the available tests. A second run on the same machine needs
-# its own of both: --device <name|udid> and --derived-data <path>
-Scripts/run-ui-tests.sh --all
-
-# The same UI tests under Instruments: which SwiftUI bodies each step made the
-# app evaluate, and why. --baseline compares against another run's bodies.tsv
-Scripts/render-trace.sh --suite PlaceUITests --all
+  -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData
 
 # Strict SwiftLint, the same one CI runs; --fix applies what it can correct
 Scripts/lint.sh
-
-# The shell scripts' own tests, against stubbed xcrun/xcodebuild — nothing is
-# built and no simulator is touched. CI runs this one too.
-Scripts/run-script-tests.sh
 ```
 
-Against a cold simulator, `xcodebuild test` fails with "The test runner hung before establishing connection" after several minutes without a single test having reported — which is why the boot is the first line above rather than an optional one.
-
-These commands name the same device CI does. `iPhone 18 Pro` is the Pro model an iOS 27 runtime ships, and `.github/workflows/ci.yml` names it too, on a runner image pinned to Xcode 27.0 (*CI* in [`AGENTS.md`](AGENTS.md) says when a local Xcode matches it). On an Xcode 26 install there is no such simulator — name whichever device your own runtimes do have.
+The test commands — the app and widget unit tests, both local packages, the shell scripts' own tests and UI automation — are in *Build and test* in [`AGENTS.md`](AGENTS.md), written the way CI runs them, and the render trace is under *Render isolation, in practice* in the same file. Every run that needs a simulator takes one from `Scripts/sim-pool.sh` and builds into the checkout's own `DerivedData`, because two runs that share either a device or a build folder break each other without saying so; *A second session on this machine* in the same file says why, and how to give the device back.
 
 Unit and integration tests use Swift Testing; `OpenHikesUITests` uses XCUITest, because Apple's UI automation and launch metrics are not available through Swift Testing.
 
