@@ -9,6 +9,7 @@
 //  value is two swipes to hear one figure.
 //
 
+import OpenHikesShared
 import SwiftUI
 
 struct WatchFigure: View {
@@ -42,5 +43,13 @@ struct WatchFigure: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(value)
+    }
+}
+
+extension WatchFigure {
+    /// A figure whose caption and value were decided together, in the shared
+    /// package — see ``WatchRecordingFigures``.
+    init(_ figure: WatchRecordingFigures.Figure) {
+        self.init(title: figure.title, value: figure.value)
     }
 }
