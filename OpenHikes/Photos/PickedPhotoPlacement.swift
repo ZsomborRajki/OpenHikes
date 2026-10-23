@@ -187,8 +187,8 @@ nonisolated struct PickedPhotoPlacement: Equatable, Sendable {
         }
         // No clock to place it by, but a position on this trail: projected
         // onto the line where the camera was. Onto the line, not its nearest
-        // vertex as a recording's own `.place` is: a recorded route is sampled
-        // every few metres, and this tier is mostly for trails that were
+        // vertex, for the reason a scan's own `.place` is (see
+        // ``RecordedRouteLegs``): this tier is mostly for trails that were
         // imported or drawn, whose points can be a straight half-kilometre
         // apart — far enough that a camera standing on the trail between two
         // of them would be refused as off it.

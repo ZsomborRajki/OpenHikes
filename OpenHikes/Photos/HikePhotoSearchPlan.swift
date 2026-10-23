@@ -35,8 +35,12 @@ nonisolated struct HikePhotoSearchPlan: Sendable {
     let timeline: HikePhotoTimeline?
     /// Finished walks along this trail, oldest first.
     let walks: [HikeWalkPhotoTimeline]
-    /// The raw route, for ``LibraryPhotoMatcher``'s off-route test.
+    /// The raw route, which the picker profiles — see ``PickedPhotoPlacement``.
     let route: [RouteCoordinate]
+    /// The route's measured legs, for ``LibraryPhotoMatcher``'s off-route
+    /// test. Built here, once per search, rather than once per photo, and
+    /// only with a ``timeline``: the walks test against ``profile`` instead.
+    let legs: RecordedRouteLegs?
     /// Built only when there are walks to place photographs with, or when
     /// the caller asks for it, because building one is route-sized work and
     /// the timeline path has no use for it.
@@ -54,6 +58,7 @@ nonisolated struct HikePhotoSearchPlan: Sendable {
         self.timeline = timeline
         self.walks = walks
         self.route = route
+        legs = timeline == nil ? nil : RecordedRouteLegs(route: route)
         profile = walks.isEmpty && !profilesRoute ? nil : RouteProfile(route: route)
     }
 
@@ -104,8 +109,8 @@ nonisolated struct HikePhotoSearchPlan: Sendable {
 
     /// The precedence in this file's header, applied to one asset.
     private func match(_ asset: PhotoLibraryAsset) -> LibraryPhotoMatch? {
-        if let timeline, timeline.searchWindow.contains(asset.createdAt) {
-            return LibraryPhotoMatcher.match(asset, timeline: timeline, route: route)
+        if let timeline, let legs, timeline.searchWindow.contains(asset.createdAt) {
+            return LibraryPhotoMatcher.match(asset, timeline: timeline, legs: legs)
         }
         guard let profile else { return nil }
         // The first walk whose window holds the moment. Walks along one trail

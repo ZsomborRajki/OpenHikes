@@ -82,7 +82,7 @@ struct LibraryPhotoMatchTests {
             LibraryPhotoMatcher.match(
                 Self.asset("a", atStep: 3),
                 timeline: Self.timeline(),
-                route: Self.route
+                legs: RecordedRouteLegs(route: Self.route)
             )
         )
 
@@ -106,7 +106,7 @@ struct LibraryPhotoMatchTests {
                     coordinate: Self.offRoute(fromStep: 3, byMeters: 20)
                 ),
                 timeline: Self.timeline(),
-                route: Self.route
+                legs: RecordedRouteLegs(route: Self.route)
             )
         )
 
@@ -133,7 +133,7 @@ struct LibraryPhotoMatchTests {
         let match = LibraryPhotoMatcher.match(
             Self.asset("a", atStep: 3, coordinate: farAway),
             timeline: try Self.timeline(),
-            route: Self.route
+            legs: RecordedRouteLegs(route: Self.route)
         )
 
         #expect(match == nil)
@@ -168,7 +168,7 @@ struct LibraryPhotoMatchTests {
                     coordinate: onRoute
                 ),
                 timeline: timeline,
-                route: gapped
+                legs: RecordedRouteLegs(route: gapped)
             )
         )
 
@@ -198,7 +198,7 @@ struct LibraryPhotoMatchTests {
                 createdAt: Self.epoch.addingTimeInterval(gap / 2)
             ),
             timeline: timeline,
-            route: gapped
+            legs: RecordedRouteLegs(route: gapped)
         )
 
         #expect(match == nil)
@@ -269,7 +269,7 @@ struct LibraryPhotoMatchTests {
                     coordinate: Self.offRoute(fromStep: 3, byMeters: nearly)
                 ),
                 timeline: Self.timeline(),
-                route: Self.route
+                legs: RecordedRouteLegs(route: Self.route)
             )
         )
 
@@ -292,7 +292,7 @@ struct LibraryPhotoMatchTests {
                 coordinate: Self.offRoute(fromStep: 0, byMeters: -far)
             ),
             timeline: try Self.timeline(),
-            route: Self.route
+            legs: RecordedRouteLegs(route: Self.route)
         )
 
         #expect(match == nil)
