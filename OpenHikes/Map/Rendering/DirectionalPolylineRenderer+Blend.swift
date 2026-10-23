@@ -40,9 +40,13 @@ nonisolated extension DirectionalPolylineRenderer {
     /// half with the flat colour beneath, and the change of colour half as
     /// gradual as on an opaque line.
     ///
-    /// The gradient runs straight from the piece's first point to its last.
-    /// A piece is a few tens of metres, so a bend inside one shifts where the
-    /// mix falls by a little and never colours it outside the two it joins.
+    /// The gradient runs straight from the piece's first point to its last,
+    /// not along the line. A piece between two long stretches is a few
+    /// hundred metres and bends, through switchbacks as often as not, so a
+    /// point's mix follows how far across the ground it is from the start
+    /// rather than how far along the line — the same fade, read off the map.
+    /// It never colours the line outside the two it joins: past either end
+    /// the gradient holds that end's colour.
     func drawBlend(_ piece: RouteShadeBlend.Piece, zoomScale: MKZoomScale, context: CGContext) {
         guard let start = piece.points.first, let end = piece.points.last else { return }
         let width = lineWidth * contentScaleFactor / zoomScale

@@ -3,9 +3,10 @@
 //  OpenHikesTests
 //
 //  Where the blend between two coloured stretches is drawn: over the place
-//  they meet, reaching the same distance into each, never past the middle of
-//  a short one, and nowhere two stretches do not actually meet or do not
-//  differ. `DirectionalPolylineRendererTests+Shades` checks the drawing.
+//  they meet, reaching the same share of the shorter stretch into each, so
+//  further between long stretches than between short ones, and nowhere two
+//  stretches do not actually meet or do not differ.
+//  `DirectionalPolylineRendererTests+Shades` checks the drawing.
 //
 
 import CoreGraphics
@@ -50,22 +51,45 @@ struct RouteShadeBlendTests {
         let piece = try #require(pieces.count == 1 ? pieces[0] : nil)
         let start = try #require(piece.points.first)
         let end = try #require(piece.points.last)
-        let reach = RouteShadeBlend.blendMeters
+        let reach = RouteShadeBlend.reachShare * 200
         #expect(Self.meters(at: start).isApproximatelyEqual(to: 200 - reach, absoluteTolerance: 0.01))
         #expect(Self.meters(at: end).isApproximatelyEqual(to: 200 + reach, absoluteTolerance: 0.01))
         #expect(piece.points.contains { Self.meters(at: $0).isApproximatelyEqual(to: 200, absoluteTolerance: 0.01) })
     }
 
-    /// The shortest stretch has to show its own colour somewhere, so a
-    /// blend may take half of it from each end and no more.
-    @Test("a blend reaches no further than the middle of a short stretch")
-    func shortStretchIsHalved() throws {
+    /// The colour is half one and half the other where the stretches meet,
+    /// and the short stretch keeps its middle in its own colour — so the
+    /// blend reaches as far into the long one as into the short one.
+    @Test("a blend reaches a share of the shorter stretch into each side")
+    func reachFollowsTheShorterStretch() throws {
         let pieces = RouteShadeBlend.pieces(between: [
-            Self.stretch(0, 200, Self.red), Self.stretch(200, 230, Self.blue),
+            Self.stretch(0, 400, Self.red), Self.stretch(400, 480, Self.blue),
         ])
 
+        let start = try #require(pieces.first??.points.first)
         let end = try #require(pieces.first??.points.last)
-        #expect(Self.meters(at: end).isApproximatelyEqual(to: 215, absoluteTolerance: 0.01))
+        let reach = RouteShadeBlend.reachShare * 80
+        #expect(Self.meters(at: start).isApproximatelyEqual(to: 400 - reach, absoluteTolerance: 0.01))
+        #expect(Self.meters(at: end).isApproximatelyEqual(to: 400 + reach, absoluteTolerance: 0.01))
+    }
+
+    /// Steepness stretches are hundreds of metres long, and a blend of a
+    /// fixed few tens of metres was too short to draw with a whole hike on
+    /// screen — see `RouteShadeBlend.swift`'s header.
+    @Test("a blend between long stretches reaches further than one between short ones")
+    func longStretchesBlendFurther() throws {
+        let short = RouteShadeBlend.pieces(between: [
+            Self.stretch(0, 100, Self.red), Self.stretch(100, 200, Self.blue),
+        ])
+        let long = RouteShadeBlend.pieces(between: [
+            Self.stretch(0, 1000, Self.red), Self.stretch(1000, 2000, Self.blue),
+        ])
+
+        let shortStart = try #require(short.first??.points.first)
+        let longStart = try #require(long.first??.points.first)
+        let share = RouteShadeBlend.reachShare
+        #expect((100 - Self.meters(at: shortStart)).isApproximatelyEqual(to: share * 100, absoluteTolerance: 0.01))
+        #expect((1000 - Self.meters(at: longStart)).isApproximatelyEqual(to: share * 1000, absoluteTolerance: 0.01))
     }
 
     @Test("stretches that do not meet, or meet in one colour, do not blend")
