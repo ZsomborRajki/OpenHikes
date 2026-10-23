@@ -56,17 +56,18 @@ struct LibraryPhotoMatchSparseLegTests {
         ]
     }
 
+    /// What a search finds for a photo taken at `coordinate` halfway through
+    /// the leg, ten minutes from either fix.
     private static func matches(
         on route: [RouteCoordinate],
-        at coordinate: CLLocationCoordinate2D,
-        after seconds: TimeInterval = legSeconds / 2
+        at coordinate: CLLocationCoordinate2D
     ) throws -> [LibraryPhotoMatch] {
         let timeline = try #require(HikePhotoTimeline(route: route))
         return HikePhotoSearchPlan(timeline: timeline, walks: [], route: route).matches(
             assets: [
                 PhotoLibraryAsset(
                     localIdentifier: "photo",
-                    createdAt: epoch.addingTimeInterval(seconds),
+                    createdAt: epoch.addingTimeInterval(legSeconds / 2),
                     coordinate: coordinate
                 ),
             ]

@@ -109,8 +109,11 @@ nonisolated struct HikePhotoSearchPlan: Sendable {
 
     /// The precedence in this file's header, applied to one asset.
     private func match(_ asset: PhotoLibraryAsset) -> LibraryPhotoMatch? {
-        if let timeline, let legs, timeline.searchWindow.contains(asset.createdAt) {
-            return LibraryPhotoMatcher.match(asset, timeline: timeline, legs: legs)
+        if let timeline, timeline.searchWindow.contains(asset.createdAt) {
+            // The route's to answer, a refusal included. The legs are unwrapped
+            // inside the branch rather than beside `timeline`, so that a plan
+            // without them could never hand the route's moment to a walk.
+            return legs.flatMap { LibraryPhotoMatcher.match(asset, timeline: timeline, legs: $0) }
         }
         guard let profile else { return nil }
         // The first walk whose window holds the moment. Walks along one trail
