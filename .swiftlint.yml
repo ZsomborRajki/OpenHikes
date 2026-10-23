@@ -528,12 +528,19 @@ custom_rules:
 
   # `ForEach` takes `photos.enumerated()` as it is: enumerating a random-access
   # collection gives a random-access collection. Wrapped in `Array(…)` it is
-  # copied into a fresh array of pairs every time the body runs (#220). The
-  # wrapper came out of every view once (#229) and came back with the walk
-  # share gallery (#940), so this keeps it out.
+  # copied into a fresh array of pairs every time the body runs (#220). A
+  # sweep took the wrapper out of every view (#229), and two views had it back
+  # by #940, so this keeps it out.
+  #
+  # Each `\s*` lets the match cross a line break, so a call wrapped the way
+  # `multiline_arguments_brackets` lays it out is caught as well as one on a
+  # single line. The base itself is held to one line, so a match cannot run on
+  # past the call into the code below it. A base that is not random access (a
+  # `Set`, a `zip`) does need a copy: copy the base, `Array(set).enumerated()`,
+  # which this does not match.
   foreach_enumerated_without_array:
     name: "ForEach Without Array Around enumerated()"
-    regex: 'ForEach\(\s*Array\([^\n]*?\.enumerated\(\)\s*\)'
+    regex: 'ForEach\(\s*Array\(\s*[^\n]*?\.enumerated\(\)\s*\)'
     excluded_match_kinds:
       - comment
       - doccomment

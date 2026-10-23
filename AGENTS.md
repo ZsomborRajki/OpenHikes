@@ -314,6 +314,7 @@ a change to recording, the map, the sheet or the render path; the PR template,
     - American spelling in names and in literals outside the test bundles
       (color, center, license, meter, gray)
     - the typographic ’ in user-visible copy
+    - `x.enumerated()` handed to `ForEach` as it is, not wrapped in `Array(…)`
 
     Somebody else's vocabulary, such as an OSM tag or a wire key, carries
     `swiftlint:disable:this`.
