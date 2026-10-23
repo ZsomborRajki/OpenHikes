@@ -11,6 +11,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Synchronization
 import Testing
 
@@ -179,7 +180,7 @@ struct TrailDraftPhotosTests {
 
         #expect(kept.map(\.credit.author) == ["Hiker 0"])
         let pin = try #require(kept.first?.pin.coordinate)
-        #expect(abs(pin.latitude - Self.onTheLine.latitude) < 0.0001)
+        #expect(pin.latitude.isApproximatelyEqual(to: Self.onTheLine.latitude, absoluteTolerance: 0.0001))
     }
 
     @Test("a hand-off takes the files with it, so a discard after it deletes nothing it needs")
