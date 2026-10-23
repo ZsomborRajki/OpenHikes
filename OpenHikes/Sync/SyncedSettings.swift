@@ -92,6 +92,54 @@ nonisolated enum SyncedSettingsMerge {
         }
         return (pull, push)
     }
+
+    /// After startup, a local change sends only what this device edited: the
+    /// synced values that differ from `baseline`, the value each key held
+    /// when the two stores last agreed.
+    ///
+    /// Not every local value that differs from iCloud's. A local value that
+    /// still matches the baseline is stale rather than chosen, and differs
+    /// from iCloud only because another device's change has not been pulled
+    /// yet; sending it would undo that change.
+    static func pushing(
+        local: [String: SyncedSettingValue],
+        baseline: [String: SyncedSettingValue]
+    ) -> [String: SyncedSettingValue] {
+        var push: [String: SyncedSettingValue] = [:]
+        for setting in SyncedSetting.all {
+            guard let value = local[setting.key], value != baseline[setting.key] else { continue }
+            push[setting.key] = value
+        }
+        return push
+    }
+
+    /// After startup, an incoming change to `keys` takes iCloud's value,
+    /// except where this device has edited the same key and not yet sent it.
+    ///
+    /// That edit has not reached the store yet, so it is the later write to
+    /// it, and the store's own last-writer-wins would keep it over the change
+    /// that arrived first. It is sent instead of overwritten. Keys outside
+    /// `keys` are left alone, so a pending edit to one setting survives a
+    /// change to another.
+    static func reconciling(
+        keys: Set<String>,
+        local: [String: SyncedSettingValue],
+        remote: [String: SyncedSettingValue],
+        baseline: [String: SyncedSettingValue]
+    ) -> (pull: [String: SyncedSettingValue], push: [String: SyncedSettingValue]) {
+        var pull: [String: SyncedSettingValue] = [:]
+        var push: [String: SyncedSettingValue] = [:]
+        for setting in SyncedSetting.all where keys.contains(setting.key) {
+            let localValue = local[setting.key]
+            let remoteValue = remote[setting.key]
+            if let value = localValue, value != baseline[setting.key] {
+                if value != remoteValue { push[setting.key] = value }
+            } else if let value = remoteValue, value != localValue {
+                pull[setting.key] = value
+            }
+        }
+        return (pull, push)
+    }
 }
 
 /// Keeps the allowlisted keys the same on every device signed into one Apple
@@ -100,25 +148,32 @@ nonisolated enum SyncedSettingsMerge {
 final class SyncedSettingsMirror {
 
     private let defaults: UserDefaults
-    private let store: NSUbiquitousKeyValueStore
+    private let store: any SyncedSettingsCloudStore
+    private let notificationCenter: NotificationCenter
     private var observers: [any NSObjectProtocol] = []
-    /// Raised while this type is the one writing to `UserDefaults`.
+    /// Each synced key's value as the two stores last agreed on it.
     ///
-    /// A backstop rather than the loop guard, and only that: the observers
-    /// below are registered on `.main` rather than with `queue: nil`, so
-    /// `UserDefaults.didChangeNotification` is delivered a runloop turn later
-    /// — by which time this has already come down. What actually stops the two
-    /// stores talking to each other forever is that ``apply(_:to:)`` and
-    /// ``write(_:to:)`` only write a value that differs, so the round trip
-    /// converges after one pass.
-    private var isMirroring = false
+    /// This is how the mirror knows which side edited a key, which the two
+    /// stores alone cannot say: a local value that differs from it is an edit
+    /// made here, and one that matches it is merely stale. Without it, any
+    /// defaults notification pushed every local value that differed from
+    /// iCloud's, so an unrelated write that ran before another device's
+    /// change had been pulled sent the old choice back up over the new one.
+    /// It also replaces a "the mirror is writing" flag as the loop guard,
+    /// because the notifications are delivered on `.main`, a runloop turn
+    /// after any such flag would have come down: the mirror's own write
+    /// matches the baseline by the time its notification arrives, so it sends
+    /// nothing back.
+    private var baseline: [String: SyncedSettingValue] = [:]
 
     init(
         defaults: UserDefaults,
-        store: NSUbiquitousKeyValueStore = .default
+        store: any SyncedSettingsCloudStore = NSUbiquitousKeyValueStore.default,
+        notificationCenter: NotificationCenter = .default
     ) {
         self.defaults = defaults
         self.store = store
+        self.notificationCenter = notificationCenter
     }
 
     var isRunning: Bool { !observers.isEmpty }
@@ -126,21 +181,22 @@ final class SyncedSettingsMirror {
     func start() {
         guard observers.isEmpty else { return }
         observers.append(
-            NotificationCenter.default.addObserver(
+            notificationCenter.addObserver(
                 forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
                 object: store,
                 queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.pullFromCloud() }
+            ) { [weak self] notification in
+                let change = SyncedSettingsCloudChange(notification)
+                MainActor.assumeIsolated { self?.cloudDidChange(change) }
             }
         )
         observers.append(
-            NotificationCenter.default.addObserver(
+            notificationCenter.addObserver(
                 forName: UserDefaults.didChangeNotification,
                 object: defaults,
                 queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.pushToCloud() }
+                MainActor.assumeIsolated { self?.defaultsDidChange() }
             }
         )
         // `synchronize()` only flushes the in-memory copy to disk; it does not
@@ -153,26 +209,54 @@ final class SyncedSettingsMirror {
 
     func stop() {
         for observer in observers {
-            NotificationCenter.default.removeObserver(observer)
+            notificationCenter.removeObserver(observer)
         }
         observers = []
     }
 
     // MARK: - Directions
 
+    /// Remote-first, over the whole allowlist; see
+    /// ``SyncedSettingsMerge/adopting(local:remote:)``.
     private func adopt() {
         let plan = SyncedSettingsMerge.adopting(local: localValues(), remote: remoteValues())
         apply(plan.pull, to: defaults)
         write(plan.push, to: store)
+        baseline = localValues()
     }
 
-    private func pullFromCloud() {
-        apply(remoteValues(), to: defaults)
+    /// iCloud's store said something changed.
+    ///
+    /// A new account, or the first download after joining one, is the
+    /// restored-device case again and adopts remote-first. Anything else is
+    /// confined to the keys the notification names, so that pulling one
+    /// setting cannot overwrite a pending local edit to another.
+    func cloudDidChange(_ change: SyncedSettingsCloudChange) {
+        switch change.reason {
+        case .initialSync, .accountChange:
+            adopt()
+        case .server, .quotaViolation:
+            let plan = SyncedSettingsMerge.reconciling(
+                keys: change.keys,
+                local: localValues(),
+                remote: remoteValues(),
+                baseline: baseline
+            )
+            apply(plan.pull, to: defaults)
+            write(plan.push, to: store)
+            let local = localValues()
+            for setting in SyncedSetting.all where change.keys.contains(setting.key) {
+                baseline[setting.key] = local[setting.key]
+            }
+        }
     }
 
-    private func pushToCloud() {
-        guard !isMirroring else { return }
-        write(localValues(), to: store)
+    /// Something in the defaults suite changed, synced or not: sends only the
+    /// synced values that moved since the stores last agreed.
+    func defaultsDidChange() {
+        let local = localValues()
+        write(SyncedSettingsMerge.pushing(local: local, baseline: baseline), to: store)
+        baseline = local
     }
 
     // MARK: - Reading and writing
@@ -198,12 +282,13 @@ final class SyncedSettingsMirror {
     private func remoteValues() -> [String: SyncedSettingValue] {
         var values: [String: SyncedSettingValue] = [:]
         for setting in SyncedSetting.all {
-            guard store.object(forKey: setting.key) != nil else { continue }
+            let object = store.object(forKey: setting.key)
             switch setting.kind {
             case .boolean:
-                values[setting.key] = .boolean(store.bool(forKey: setting.key))
+                guard let flag = object as? Bool else { continue }
+                values[setting.key] = .boolean(flag)
             case .text:
-                guard let text = store.string(forKey: setting.key) else { continue }
+                guard let text = object as? String else { continue }
                 values[setting.key] = .text(text)
             }
         }
@@ -212,16 +297,14 @@ final class SyncedSettingsMirror {
 
     /// Writes only what actually differs.
     ///
-    /// The guard is what stops the two observers above talking to each other
-    /// forever: a write that changes nothing posts no notification, and a
-    /// write that does is one the other side will find equal and leave alone.
+    /// A write that changes nothing posts no notification, so the steady
+    /// state stays silent in both stores; ``baseline`` is what stops a write
+    /// that does change something from coming back.
     private func apply(
         _ values: [String: SyncedSettingValue],
         to defaults: UserDefaults
     ) {
         let current = localValues()
-        isMirroring = true
-        defer { isMirroring = false }
         for (key, value) in values where current[key] != value {
             switch value {
             case .boolean(let flag): defaults.set(flag, forKey: key)
@@ -232,7 +315,7 @@ final class SyncedSettingsMirror {
 
     private func write(
         _ values: [String: SyncedSettingValue],
-        to store: NSUbiquitousKeyValueStore
+        to store: any SyncedSettingsCloudStore
     ) {
         let current = remoteValues()
         for (key, value) in values where current[key] != value {
