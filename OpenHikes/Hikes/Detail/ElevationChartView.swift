@@ -5,9 +5,33 @@
 //  The interactive elevation graph, split out so it only re-renders when its own
 //  inputs change — not when unrelated parent state (line width, download progress)
 //  moves. `Equatable` (via `.equatable()`) covers `tint`/`profile` changes;
-//  `tracker`'s properties are read directly in `body` below, so `Observation`
-//  invalidates this view (and only this view) whenever they change, without
+//  `tracker`'s positions are read directly — by this view's `body` for what it
+//  speaks, and by ``ElevationChartMarks`` for what it draws — so `Observation`
+//  invalidates those two (and only those two) whenever they change, without
 //  needing an equality check.
+//
+//  ## What moves is drawn apart from what does not
+//
+//  ``ElevationChartPlot`` draws what stays put — the area, the line, the pause
+//  rules and the axes — and ``ElevationChartMarks`` draws what moves over it —
+//  the scrub rule, the tracker's point and its callout, the live position — in
+//  charts of its own laid over the plot through `chartOverlay`, and takes the
+//  finger as well. A scrub step or a fix re-evaluates the marks and leaves the
+//  plot, and Swift Charts' work on it, alone.
+//
+//  The plot is nearly all of the cost: a pass lays out every plotted sample
+//  twice, once for the area and once for the line. Neither the vectorized
+//  `AreaPlot`/`LinePlot` spellings nor a plainer interpolation made it any
+//  cheaper; both were measured. Traced with `Scripts/render-trace.sh` over the
+//  drag in `AccessibilityLabelUITests`, Swift Charts' own display ran 27 times
+//  for 127.6 ms of body time while the graph was one chart, and 39 times for
+//  2.4 ms once the plot was left alone — a Debug build on a simulator, so the
+//  ratio is the finding rather than the figures.
+//
+//  The finger moved with the marks because it had to. A chart that carries a
+//  selection and the gesture driving it is laid out again on every drag event,
+//  whatever its own body does, so with them on the plot the split saved
+//  nothing: the plot's body was skipped and its display ran anyway.
 //
 
 import Charts
@@ -27,17 +51,9 @@ struct ElevationChartView: View, Equatable {
     /// Live chart selection under the finger (transient); owned here so scrubbing
     /// doesn't touch the parent until it resolves a distance.
     @State private var selectedDistance: Double?
-    /// Whether a finger is currently on the plot area.
-    ///
-    /// `@GestureState` rather than `@State` because it is what makes the
-    /// release path *total*: SwiftUI resets it when a gesture is cancelled as
-    /// well as when it completes, while `onEnded` is delivered only on the
-    /// completed one. A selection left standing is not a cosmetic leak — it
-    /// reads upward as a scrub that never ended, which pins `isScrubbing`
-    /// true in `HikeDetailView` and stops ``FollowInteractionPolicy`` handing
-    /// the tracker and the map pin back to auto-follow for the life of the
-    /// screen.
-    @GestureState private var isTouchingChart = false
+    /// The copy of the selection the touch chart's binding reads back — see
+    /// ``ElevationScrubSelection``. Never reassigned, so it never invalidates.
+    @State private var scrub = ElevationScrubSelection()
     /// Measured plot width, used to keep vertical exaggeration consistent
     /// regardless of screen size. `0` until the first layout pass reports it.
     @State private var plotWidth: CGFloat = 0
@@ -54,32 +70,6 @@ struct ElevationChartView: View, Equatable {
     /// mathematically "flat" is right, but centering that on the real data
     /// pushes the axis down into implausible (even negative) elevations.
     private static let maxSpanMultiplier: Double = 4
-
-    /// Opacity for the area-fill gradient: top (opaque-ish) and bottom (faint).
-    ///
-    /// The bottom stop was 0.05 until #382: a fade to *nothing* rather than to
-    /// a baseline, which read while the sheet's glass supplied a backdrop of
-    /// its own and stopped reading on iOS 27 when it thinned. #411 took the
-    /// surface #382 added back out, and this stop stays where #382 put it —
-    /// it is the half of that change the graph still needs, since a fade to a
-    /// baseline is legible over map tiles and a fade to nothing is not.
-    private static let areaGradientTopOpacity: Double = 0.45
-    private static let areaGradientBottomOpacity: Double = 0.14
-    /// Opacity for the scrub rule line.
-    private static let ruleOpacity: Double = 0.4
-    /// Opacity for the pause rules. Fainter than the scrub line: the scrub
-    /// line answers a finger and should follow it plainly, while these are
-    /// part of the trail's own story and must not compete with the profile
-    /// they annotate.
-    private static let pauseRuleOpacity: Double = 0.35
-    /// Dotted rather than dashed, which is what tells it apart from the scrub
-    /// rule above at a glance.
-    private static let pauseRuleDash: [CGFloat] = [2, 4]
-    /// Symbol sizes for the "my location" live-dot: outer white halo and inner blue fill.
-    private static let liveHaloSymbolSize: CGFloat = 170
-    private static let liveFillSymbolSize: CGFloat = 110
-    /// Opacity for the callout shadow.
-    private static let shadowOpacity: Double = 0.15
     /// Padding fraction applied to elevation domain so data never hugs the axis edges.
     private static let domainPaddingFraction: Double = 0.15
     /// How many swipes an adjustable-action user needs to cross the whole
@@ -114,88 +104,19 @@ struct ElevationChartView: View, Equatable {
         // Live follow is *meant* to invalidate this body (and the progress
         // row) once per published fix, and only while the hiker is moving.
         // Any other body re-running at that rate is following location it was
-        // supposed to be insulated from.
+        // supposed to be insulated from — the plot below included, which is
+        // handed equal inputs on every one of those passes and skipped.
         let domain = elevationDomain(profile, plotWidth: plotWidth)
         let trackerSample = profile.sample(atDistance: tracker.trackerDistance)
-        let liveSample = tracker.liveTrackerDistance.flatMap { profile.sample(atDistance: $0) }
-        // No surface behind the plot, deliberately. #382 put one here so the
-        // grid lines and axis labels had something to be read against on
-        // iOS 27's thinner glass; #411 took it back out, because a card in the
-        // middle of a sheet that is otherwise glass reads as a panel stuck on
-        // top of the page rather than as part of it. The graph is glass.
-        //
-        // What stays from #382 is the half that does not need a card: the area
-        // fill ends at a baseline rather than fading to nothing — see
-        // ``areaGradientBottomOpacity`` — which is legible over map tiles
-        // whatever is behind it. The scrub callout keeps its own surface, as it
-        // always had one: a `Chart` annotation gives Liquid Glass no backdrop
-        // worth sampling, and that is a different problem from this one.
-        return plot(domain: domain, tracker: trackerSample, live: liveSample)
-    }
-
-    /// The graph itself, split from ``body`` so each of the two is an
-    /// expression the type-checker can finish.
-    ///
-    /// Not a cosmetic split: adding two modifiers to the chain below took the
-    /// whole of `body` past the solver's budget and failed the build outright.
-    private func plot(
-        domain: ClosedRange<Double>,
-        tracker trackerSample: ElevationSample?,
-        live liveSample: ElevationSample?
-    ) -> some View {
-        Chart {
-            routeMarks(domain: domain)
-            pauseMarks()
-            trackerMarks(sample: trackerSample)
-            liveMarks(sample: liveSample)
-        }
-        .chartXSelection(value: $selectedDistance)
-        // Swift Charts' own selection gesture resolves nothing until the touch
-        // has lasted roughly a tenth of a second — measured on iOS 26.5 as
-        // between 0.08 s and 0.10 s, with a moving touch engaging it at once —
-        // so a brisk tap lands and lifts having selected nothing. Starting at
-        // touch-down is what puts a tap and a drag on the same selection path,
-        // and it is the response a scrubber is expected to have. See #206.
-        .chartGesture { proxy in
-            DragGesture(minimumDistance: 0)
-                .updating($isTouchingChart) { _, touching, _ in touching = true }
-                .onChanged { proxy.selectXValue(at: $0.location.x) }
-                // The ordinary release. A cancelled one never arrives here and
-                // is caught by `isTouchingChart` below instead; both clear, and
-                // clearing twice costs nothing because `onChange(of:)` only
-                // fires on a real change.
-                .onEnded { _ in selectedDistance = nil }
-        }
-        .chartXScale(domain: 0...(profile.samples.last?.distanceMeters ?? 1))
-        .chartYScale(domain: domain)
-        .chartXAxis {
-            AxisMarks { value in
-                AxisGridLine()
-                AxisValueLabel {
-                    if let meters = value.as(Double.self) {
-                        Text(Measurement(value: meters, unit: UnitLength.meters)
-                            .formatted(.measurement(width: .abbreviated, usage: .road)))
-                    }
-                }
-            }
-        }
-        // The y axis reads in the reader's own unit, like the x axis two
-        // blocks up. The scale stays in metres — the samples are metres and so
-        // is the scrub — so a US tick lands on 1,640 ft rather than a round
-        // figure. A label in the wrong unit beside an x axis in the right one
-        // is the worse of the two.
-        .chartYAxis {
-            AxisMarks { value in
-                AxisGridLine()
-                AxisValueLabel {
-                    if let meters = value.as(Double.self) {
-                        Text(HikeFormat.elevation(
-                            Measurement(value: meters, unit: UnitLength.meters)
-                        ))
-                    }
-                }
-            }
-        }
+        return ElevationChartPlot(
+            profile: profile,
+            tint: tint,
+            domain: domain,
+            tracker: tracker,
+            scrub: scrub,
+            select: { selectedDistance = $0 }
+        )
+        .equatable()
         .frame(height: Self.chartHeight)
         // The graph is a selection target with no leaves of its own, so without
         // this it is invisible to VoiceOver and its scrub is unreachable. One
@@ -223,145 +144,6 @@ struct ElevationChartView: View, Equatable {
             guard let distance else { return }
             onScrub(distance)
         }
-        // The cancellation half of the reset above — see ``isTouchingChart``.
-        .onChange(of: isTouchingChart) { _, touching in
-            guard !touching else { return }
-            selectedDistance = nil
-        }
-    }
-
-    /// The area and the line, as two series rather than one interleaved loop.
-    ///
-    /// The styling is applied to each `ForEach` instead of to the marks inside
-    /// it, which is the whole reason for the split: a modifier on a mark is
-    /// evaluated per mark, so the previous spelling built a `LinearGradient` —
-    /// and the two `Color.opacity` calls behind it — once for every plotted
-    /// sample, up to ``RouteProfile/plottedSampleBudget`` of them. Applied to
-    /// the series it is built once and the fill is identical, because both
-    /// spellings paint the same gradient over the same area.
-    ///
-    /// That cost is paid on every pass of this body, and the app does not
-    /// control how often that is: going to the background, UIKit lays the
-    /// hosting view out twice for the app-switcher snapshot, and both passes
-    /// go through here.
-    ///
-    /// Drawing order is unchanged. Swift Charts groups marks into series
-    /// before it draws, so "every area, then every line" and "each sample's
-    /// area then its line" are the same picture — and it is the one the line
-    /// has to be on top of.
-    @ChartContentBuilder
-    private func routeMarks(domain: ClosedRange<Double>) -> some ChartContent {
-        ForEach(profile.samples) { sample in
-            AreaMark(
-                x: .value("Distance", sample.distanceMeters),
-                yStart: .value("Base", domain.lowerBound),
-                yEnd: .value("Elevation", sample.elevation)
-            )
-        }
-        .interpolationMethod(.catmullRom)
-        .foregroundStyle(
-            LinearGradient(
-                colors: [tint.opacity(Self.areaGradientTopOpacity), tint.opacity(Self.areaGradientBottomOpacity)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-        ForEach(profile.samples) { sample in
-            LineMark(
-                x: .value("Distance", sample.distanceMeters),
-                y: .value("Elevation", sample.elevation)
-            )
-        }
-        .interpolationMethod(.catmullRom)
-        .foregroundStyle(tint)
-        .lineStyle(StrokeStyle(lineWidth: 2))
-    }
-
-    /// Where the hiker stopped recording, as a rule through the profile.
-    ///
-    /// A rule rather than a break in the line. The paused leg is no distance
-    /// (see ``RouteBoundary``), so the two recorded pieces meet at one point on
-    /// the x-axis and the line steps there from the height before the pause to
-    /// the height after it; the rule says why it steps. Declared before the
-    /// tracker so a scrub landing on a pause draws over it rather than under.
-    ///
-    /// Bounded by the number of pauses, not by the length of the route.
-    @ChartContentBuilder
-    private func pauseMarks() -> some ChartContent {
-        ForEach(profile.pauseDistances, id: \.self) { distance in
-            RuleMark(x: .value("Distance", distance))
-                .foregroundStyle(.secondary.opacity(Self.pauseRuleOpacity))
-                .lineStyle(StrokeStyle(lineWidth: 1, dash: Self.pauseRuleDash))
-        }
-    }
-
-    @ChartContentBuilder
-    private func trackerMarks(sample: ElevationSample?) -> some ChartContent {
-        if let sample {
-            RuleMark(x: .value("Distance", sample.distanceMeters))
-                .foregroundStyle(.secondary.opacity(Self.ruleOpacity))
-                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
-            PointMark(
-                x: .value("Distance", sample.distanceMeters),
-                y: .value("Elevation", sample.elevation)
-            )
-            .foregroundStyle(tint)
-            .symbolSize(90)
-            .annotation(
-                position: .top,
-                spacing: 4,
-                overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
-            ) {
-                calloutLabel(sample)
-            }
-        }
-    }
-
-    @ChartContentBuilder
-    private func liveMarks(sample: ElevationSample?) -> some ChartContent {
-        // The live GPS position, mirroring the map's "my location" dot
-        // (white halo + blue center). Declared last so it draws over the
-        // tracker pin when the two land close together.
-        if let sample {
-            PointMark(
-                x: .value("Distance", sample.distanceMeters),
-                y: .value("Elevation", sample.elevation)
-            )
-            .foregroundStyle(.white)
-            .symbolSize(Self.liveHaloSymbolSize)
-            PointMark(
-                x: .value("Distance", sample.distanceMeters),
-                y: .value("Elevation", sample.elevation)
-            )
-            .foregroundStyle(.blue)
-            .symbolSize(Self.liveFillSymbolSize)
-        }
-    }
-
-    private func calloutLabel(_ sample: ElevationSample) -> some View {
-        VStack(spacing: 1) {
-            Text(HikeFormat.elevation(Measurement(value: sample.elevation, unit: .meters)))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.primary)
-            Text(Measurement(value: sample.distanceMeters, unit: UnitLength.meters)
-                .formatted(.measurement(width: .abbreviated, usage: .road)))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        // Opaque (not a material) so it never picks up the graph colours behind
-        // it, and deliberately not `glassSurface` either: a Chart annotation
-        // gives Liquid Glass no backdrop worth sampling, so over the near-white
-        // plot area the surface and its text both wash out to the point of
-        // being unreadable. Verified on device.
-        //
-        // The same surface the plot area itself now carries, one layer up, so
-        // the callout reads as a card lifted off the graph rather than as a
-        // second colour — see ``Color/contentSurface``, where the argument this
-        // comment used to make on its own now lives.
-        .background(.contentSurface, in: RoundedRectangle(cornerRadius: 8))
-        .shadow(color: .black.opacity(Self.shadowOpacity), radius: 3, y: 1)
     }
 
     // MARK: Accessibility
@@ -442,6 +224,428 @@ struct ElevationChartView: View, Equatable {
         let padding = span * Self.domainPaddingFraction
         let mid = (low + high) / 2
         return (mid - span / 2 - padding)...(mid + span / 2 + padding)
+    }
+}
+
+// MARK: - What stays put
+
+/// What stays put on the graph: the area, the line, the pause rules and the
+/// axes.
+///
+/// Evaluated when what it draws changes, and not otherwise — not on a scrub
+/// step, and not on a fix. ``ElevationChartView`` re-runs on both and hands
+/// this view equal inputs each time; the tracker, the selection's copy and the
+/// closure that writes it are only passed through to ``ElevationChartMarks``.
+///
+/// **Nothing here may be tied to the selection.** Swift Charts lays a chart
+/// out again whenever the selection it carries changes, so `chartXSelection`
+/// and the gesture driving it live on the marks' own touch chart, never here.
+/// And a `Binding` held as a property makes its holder a reader of the state
+/// behind it, so this view is handed a plain reference and a closure instead —
+/// see ``ElevationScrubSelection``.
+struct ElevationChartPlot: View, Equatable {
+    let profile: RouteProfile
+    let tint: Color
+    /// The y-scale, which ``ElevationChartView`` derives from the measured
+    /// width — see `elevationDomain` there.
+    let domain: ClosedRange<Double>
+    /// Passed through to ``ElevationChartMarks``, and never read here.
+    let tracker: TrackerState
+    /// What the finger last selected — passed through, and never read here.
+    let scrub: ElevationScrubSelection
+    /// Hands a new selection to ``ElevationChartView``, which owns it.
+    let select: (Double?) -> Void
+
+    /// Opacity for the area-fill gradient: top (opaque-ish) and bottom (faint).
+    ///
+    /// The bottom stop was 0.05 until #382: a fade to *nothing* rather than to
+    /// a baseline, which read while the sheet's glass supplied a backdrop of
+    /// its own and stopped reading on iOS 27 when it thinned. #411 took the
+    /// surface #382 added back out, and this stop stays where #382 put it —
+    /// it is the half of that change the graph still needs, since a fade to a
+    /// baseline is legible over map tiles and a fade to nothing is not.
+    private static let areaGradientTopOpacity: Double = 0.45
+    private static let areaGradientBottomOpacity: Double = 0.14
+    /// Opacity for the pause rules. Fainter than the scrub line: the scrub
+    /// line answers a finger and should follow it plainly, while these are
+    /// part of the trail's own story and must not compete with the profile
+    /// they annotate.
+    private static let pauseRuleOpacity: Double = 0.35
+    /// Dotted rather than dashed, which is what tells it apart from the scrub
+    /// rule above at a glance.
+    private static let pauseRuleDash: [CGFloat] = [2, 4]
+
+    /// The x-scale all three charts share: the route from its start to its
+    /// last plotted sample.
+    static func distanceDomain(of profile: RouteProfile) -> ClosedRange<Double> {
+        0...(profile.samples.last?.distanceMeters ?? 1)
+    }
+
+    // Everything this body draws comes from these four, compared as
+    // ``ElevationChartView/==(_:_:)`` compares them — the samples in full, and
+    // the pauses beside them. What moves on the graph is left out: the tracker
+    // reaches ``ElevationChartMarks`` through Observation, and the selection
+    // never reaches this view at all.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.tint == rhs.tint
+            && lhs.domain == rhs.domain
+            && lhs.profile.samples == rhs.profile.samples
+            && lhs.profile.pauseDistances == rhs.profile.pauseDistances
+    }
+
+    var body: some View {
+        // No surface behind the plot, deliberately. #382 put one here so the
+        // grid lines and axis labels had something to be read against on
+        // iOS 27's thinner glass; #411 took it back out, because a card in the
+        // middle of a sheet that is otherwise glass reads as a panel stuck on
+        // top of the page rather than as part of it. The graph is glass.
+        //
+        // What stays from #382 is the half that does not need a card: the area
+        // fill ends at a baseline rather than fading to nothing — see
+        // ``areaGradientBottomOpacity`` — which is legible over map tiles
+        // whatever is behind it. The scrub callout keeps its own surface, as it
+        // always had one: a `Chart` annotation gives Liquid Glass no backdrop
+        // worth sampling, and that is a different problem from this one.
+        Chart {
+            routeMarks()
+            pauseMarks()
+        }
+        .chartXScale(domain: Self.distanceDomain(of: profile))
+        .chartYScale(domain: domain)
+        .chartXAxis {
+            AxisMarks { value in
+                AxisGridLine()
+                AxisValueLabel {
+                    if let meters = value.as(Double.self) {
+                        Text(Measurement(value: meters, unit: UnitLength.meters)
+                            .formatted(.measurement(width: .abbreviated, usage: .road)))
+                    }
+                }
+            }
+        }
+        // The y axis reads in the reader's own unit, like the x axis two
+        // blocks up. The scale stays in metres — the samples are metres and so
+        // is the scrub — so a US tick lands on 1,640 ft rather than a round
+        // figure. A label in the wrong unit beside an x axis in the right one
+        // is the worse of the two.
+        .chartYAxis {
+            AxisMarks { value in
+                AxisGridLine()
+                AxisValueLabel {
+                    if let meters = value.as(Double.self) {
+                        Text(HikeFormat.elevation(
+                            Measurement(value: meters, unit: UnitLength.meters)
+                        ))
+                    }
+                }
+            }
+        }
+        .chartOverlay { proxy in
+            ElevationChartMarks(
+                proxy: proxy,
+                profile: profile,
+                tint: tint,
+                domain: domain,
+                tracker: tracker,
+                scrub: scrub,
+                select: select
+            )
+        }
+    }
+
+    /// The area and the line, as two series rather than one interleaved loop.
+    ///
+    /// The styling is applied to each `ForEach` instead of to the marks inside
+    /// it, which is the whole reason for the split: a modifier on a mark is
+    /// evaluated per mark, so the previous spelling built a `LinearGradient` —
+    /// and the two `Color.opacity` calls behind it — once for every plotted
+    /// sample, up to ``RouteProfile/plottedSampleBudget`` of them. Applied to
+    /// the series it is built once and the fill is identical, because both
+    /// spellings paint the same gradient over the same area.
+    ///
+    /// That cost is paid on every pass of this body, and the app does not
+    /// control how often that is: going to the background, UIKit lays the
+    /// hosting view out twice for the app-switcher snapshot, and both passes
+    /// go through here.
+    ///
+    /// Drawing order is unchanged. Swift Charts groups marks into series
+    /// before it draws, so "every area, then every line" and "each sample's
+    /// area then its line" are the same picture — and it is the one the line
+    /// has to be on top of.
+    @ChartContentBuilder
+    private func routeMarks() -> some ChartContent {
+        ForEach(profile.samples) { sample in
+            AreaMark(
+                x: .value("Distance", sample.distanceMeters),
+                yStart: .value("Base", domain.lowerBound),
+                yEnd: .value("Elevation", sample.elevation)
+            )
+        }
+        .interpolationMethod(.catmullRom)
+        .foregroundStyle(
+            LinearGradient(
+                colors: [tint.opacity(Self.areaGradientTopOpacity), tint.opacity(Self.areaGradientBottomOpacity)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+        ForEach(profile.samples) { sample in
+            LineMark(
+                x: .value("Distance", sample.distanceMeters),
+                y: .value("Elevation", sample.elevation)
+            )
+        }
+        .interpolationMethod(.catmullRom)
+        .foregroundStyle(tint)
+        .lineStyle(StrokeStyle(lineWidth: 2))
+    }
+
+    /// Where the hiker stopped recording, as a rule through the profile.
+    ///
+    /// A rule rather than a break in the line. The paused leg is no distance
+    /// (see ``RouteBoundary``), so the two recorded pieces meet at one point on
+    /// the x-axis and the line steps there from the height before the pause to
+    /// the height after it; the rule says why it steps. Drawn under the
+    /// tracker, which lives on the chart laid over this one, so a scrub
+    /// landing on a pause draws over it rather than under.
+    ///
+    /// Bounded by the number of pauses, not by the length of the route.
+    @ChartContentBuilder
+    private func pauseMarks() -> some ChartContent {
+        ForEach(profile.pauseDistances, id: \.self) { distance in
+            RuleMark(x: .value("Distance", distance))
+                .foregroundStyle(.secondary.opacity(Self.pauseRuleOpacity))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: Self.pauseRuleDash))
+        }
+    }
+}
+
+/// The copy of the finger's selection that the touch chart's binding reads
+/// back.
+///
+/// A plain reference — not `@Observable`, not `@State` storage — because the
+/// one thing it must never do is make a view depend on it. A binding to
+/// ``ElevationChartView``'s own state would carry the same value, but
+/// ``ElevationChartPlot`` would have to hold it to pass it on, and a `Binding`
+/// held as a property re-runs its holder on every write through it — one per
+/// drag event — equatable, equal and unread as the holder is
+/// (`ElevationChartLayersTests`). The selection itself still lives in that
+/// view's `@State`, where `onChange` hands it on; this is only what the
+/// binding's getter answers.
+final class ElevationScrubSelection {
+    var distance: Double?
+}
+
+// MARK: - What moves
+
+/// What moves on the graph — the scrub rule, the tracker's point and its
+/// callout, the live position — and the finger that moves it, as two charts
+/// laid over ``ElevationChartPlot``. The one view here that reads the tracker:
+/// re-evaluated on every scrub step and every fix, and cheap, because neither
+/// of its charts has a series to lay out.
+///
+/// **The drawn chart** covers the plot's whole frame, axes included, and its
+/// scales are padded onto the plot area beneath it. That keeps the callout
+/// clamping against the edges it always did: `.fit(to: .chart)` means this
+/// chart's bounds, which are the plot's. The y-scale's padding starts at the
+/// bottom edge, where its values start. The scrub rule spans the y-domain
+/// explicitly, because a rule with no span runs the height of its own chart's
+/// plot area, and this chart's would run on through the x-axis labels. It
+/// takes no touches. Rendered beside the single chart it replaced, at the
+/// start, middle and end of a trail on a simulator, everything it draws lands
+/// within a third of a point of where that chart drew it.
+///
+/// **The touch chart** has no marks and covers exactly the plot area, so a
+/// touch lands where it always did — on the plot, not on the axis labels,
+/// where a vertical drag still scrolls the sheet — and is reported in the same
+/// coordinates. Laid over the plot area with the same x-domain, it selects the
+/// same distance at every position as the plot did, past either end included.
+private struct ElevationChartMarks: View {
+    let proxy: ChartProxy
+    let profile: RouteProfile
+    let tint: Color
+    let domain: ClosedRange<Double>
+    let tracker: TrackerState
+    let scrub: ElevationScrubSelection
+    let select: (Double?) -> Void
+
+    /// Whether a finger is currently on the plot area.
+    ///
+    /// `@GestureState` rather than `@State` because it is what makes the
+    /// release path *total*: SwiftUI resets it when a gesture is cancelled as
+    /// well as when it completes, while `onEnded` is delivered only on the
+    /// completed one. A selection left standing is not a cosmetic leak — it
+    /// reads upward as a scrub that never ended, which pins `isScrubbing`
+    /// true in `HikeDetailView` and stops ``FollowInteractionPolicy`` handing
+    /// the tracker and the map pin back to auto-follow for the life of the
+    /// screen.
+    @GestureState private var isTouchingChart = false
+
+    /// Opacity for the scrub rule line.
+    private static let ruleOpacity: Double = 0.4
+    /// Symbol sizes for the "my location" live-dot: outer white halo and inner blue fill.
+    private static let liveHaloSymbolSize: CGFloat = 170
+    private static let liveFillSymbolSize: CGFloat = 110
+    /// Opacity for the callout shadow.
+    private static let shadowOpacity: Double = 0.15
+
+    var body: some View {
+        let trackerSample = profile.sample(atDistance: tracker.trackerDistance)
+        let liveSample = tracker.liveTrackerDistance.flatMap { profile.sample(atDistance: $0) }
+        let selection = Binding(
+            get: { scrub.distance },
+            set: { distance in
+                scrub.distance = distance
+                select(distance)
+            }
+        )
+        GeometryReader { geometry in
+            if let plotFrame = proxy.plotFrame {
+                let plot = geometry[plotFrame]
+                drawnChart(tracker: trackerSample, live: liveSample, plot: plot, size: geometry.size)
+                touchChart(selection: selection)
+                    .frame(width: plot.width, height: plot.height)
+                    .position(x: plot.midX, y: plot.midY)
+            }
+        }
+        // The cancellation half of the reset in ``touchChart(selection:)`` —
+        // see ``isTouchingChart``.
+        .onChange(of: isTouchingChart) { _, touching in
+            guard !touching else { return }
+            selection.wrappedValue = nil
+        }
+    }
+
+    /// The scrub rule, the tracker's point and its callout, and the live
+    /// position, scaled onto the plot area beneath.
+    private func drawnChart(
+        tracker trackerSample: ElevationSample?,
+        live liveSample: ElevationSample?,
+        plot: CGRect,
+        size: CGSize
+    ) -> some View {
+        Chart {
+            trackerMarks(sample: trackerSample)
+            liveMarks(sample: liveSample)
+        }
+        .chartXScale(
+            domain: ElevationChartPlot.distanceDomain(of: profile),
+            range: .plotDimension(startPadding: plot.minX, endPadding: size.width - plot.maxX)
+        )
+        .chartYScale(
+            domain: domain,
+            range: .plotDimension(startPadding: size.height - plot.maxY, endPadding: plot.minY)
+        )
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        .allowsHitTesting(false)
+    }
+
+    /// The plot area's twin, which takes the finger.
+    ///
+    /// Its data is empty rather than its builder: an empty `Chart {}` needs
+    /// the iOS 27 SDK, and the CodeQL job still builds with Xcode 26.6 — see
+    /// *CI* in AGENTS.md.
+    private func touchChart(selection: Binding<Double?>) -> some View {
+        Chart([ElevationSample]()) { sample in
+            PointMark(
+                x: .value("Distance", sample.distanceMeters),
+                y: .value("Elevation", sample.elevation)
+            )
+        }
+        .chartXSelection(value: selection)
+        // Swift Charts' own selection gesture resolves nothing until the touch
+        // has lasted roughly a tenth of a second — measured on iOS 26.5 as
+        // between 0.08 s and 0.10 s, with a moving touch engaging it at once —
+        // so a brisk tap lands and lifts having selected nothing. Starting at
+        // touch-down is what puts a tap and a drag on the same selection path,
+        // and it is the response a scrubber is expected to have. See #206.
+        .chartGesture { chart in
+            DragGesture(minimumDistance: 0)
+                .updating($isTouchingChart) { _, touching, _ in touching = true }
+                .onChanged { chart.selectXValue(at: $0.location.x) }
+                // The ordinary release. A cancelled one never arrives here and
+                // is caught by `isTouchingChart` instead; both clear, and
+                // clearing twice costs nothing because `onChange(of:)` only
+                // fires on a real change.
+                .onEnded { _ in selection.wrappedValue = nil }
+        }
+        .chartXScale(domain: ElevationChartPlot.distanceDomain(of: profile))
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+    }
+
+    @ChartContentBuilder
+    private func trackerMarks(sample: ElevationSample?) -> some ChartContent {
+        if let sample {
+            RuleMark(
+                x: .value("Distance", sample.distanceMeters),
+                yStart: .value("Elevation", domain.lowerBound),
+                yEnd: .value("Elevation", domain.upperBound)
+            )
+            .foregroundStyle(.secondary.opacity(Self.ruleOpacity))
+            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
+            PointMark(
+                x: .value("Distance", sample.distanceMeters),
+                y: .value("Elevation", sample.elevation)
+            )
+            .foregroundStyle(tint)
+            .symbolSize(90)
+            .annotation(
+                position: .top,
+                spacing: 4,
+                overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+            ) {
+                calloutLabel(sample)
+            }
+        }
+    }
+
+    @ChartContentBuilder
+    private func liveMarks(sample: ElevationSample?) -> some ChartContent {
+        // The live GPS position, mirroring the map's "my location" dot
+        // (white halo + blue center). Declared last so it draws over the
+        // tracker pin when the two land close together.
+        if let sample {
+            PointMark(
+                x: .value("Distance", sample.distanceMeters),
+                y: .value("Elevation", sample.elevation)
+            )
+            .foregroundStyle(.white)
+            .symbolSize(Self.liveHaloSymbolSize)
+            PointMark(
+                x: .value("Distance", sample.distanceMeters),
+                y: .value("Elevation", sample.elevation)
+            )
+            .foregroundStyle(.blue)
+            .symbolSize(Self.liveFillSymbolSize)
+        }
+    }
+
+    private func calloutLabel(_ sample: ElevationSample) -> some View {
+        VStack(spacing: 1) {
+            Text(HikeFormat.elevation(Measurement(value: sample.elevation, unit: .meters)))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+            Text(Measurement(value: sample.distanceMeters, unit: UnitLength.meters)
+                .formatted(.measurement(width: .abbreviated, usage: .road)))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        // Opaque (not a material) so it never picks up the graph colours behind
+        // it, and deliberately not `glassSurface` either: a Chart annotation
+        // gives Liquid Glass no backdrop worth sampling, so over the near-white
+        // plot area the surface and its text both wash out to the point of
+        // being unreadable. Verified on device.
+        //
+        // The same surface the plot area itself now carries, one layer up, so
+        // the callout reads as a card lifted off the graph rather than as a
+        // second colour — see ``Color/contentSurface``, where the argument this
+        // comment used to make on its own now lives.
+        .background(.contentSurface, in: RoundedRectangle(cornerRadius: 8))
+        .shadow(color: .black.opacity(Self.shadowOpacity), radius: 3, y: 1)
     }
 }
 
