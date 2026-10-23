@@ -91,8 +91,8 @@ final class TrailDraftPhotos {
         self.source = source
         self.root = root
         self.photoCopy = photoCopy
-        directory = Self.freshDirectory(in: root)
-        Self.sweep(root, keeping: directory)
+        directory = StagedFiles.freshDirectory(in: root)
+        StagedFiles.sweep(root, keeping: directory)
     }
 
     nonisolated deinit { /* intentionally empty */ }
@@ -144,8 +144,8 @@ final class TrailDraftPhotos {
     func clear() {
         cancelSearch()
         if !photos.isEmpty { photos = [] }
-        Self.remove(directory)
-        directory = Self.freshDirectory(in: root)
+        StagedFiles.remove(directory)
+        directory = StagedFiles.freshDirectory(in: root)
     }
 
     /// Takes a photograph found somewhere else onto this drawing's map — the
@@ -187,7 +187,7 @@ final class TrailDraftPhotos {
         guard !kept.isEmpty else { return nil }
         let handOff = TrailDraftPhotoHandOff(photos: kept, directory: directory)
         photos = []
-        directory = Self.freshDirectory(in: root)
+        directory = StagedFiles.freshDirectory(in: root)
         return handOff
     }
 
@@ -235,32 +235,6 @@ final class TrailDraftPhotos {
             return copy
         } catch {
             return nil
-        }
-    }
-
-    private static func freshDirectory(in root: URL) -> URL {
-        root.appending(path: UUID().uuidString, directoryHint: .isDirectory)
-    }
-
-    /// Whatever an earlier launch left under `root`: nothing here outlives
-    /// one. Everything but `current`, which a search may already be writing
-    /// into by the time this runs.
-    private static func sweep(_ root: URL, keeping current: URL) {
-        let kept = current.lastPathComponent
-        Task.detached(priority: .utility) {
-            let manager = FileManager.default
-            let left = (try? manager.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
-            for url in left where url.lastPathComponent != kept {
-                try? manager.removeItem(at: url)
-            }
-        }
-    }
-
-    /// Off the main actor: a drawing's photographs can be a few megabytes of
-    /// thumbnails.
-    private static func remove(_ url: URL) {
-        Task.detached(priority: .utility) {
-            try? FileManager.default.removeItem(at: url)
         }
     }
 }

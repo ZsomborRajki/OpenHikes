@@ -123,12 +123,12 @@ final class CommunityCommonsPhotos {
         self.source = source
         self.filter = filter
         self.isHidden = isHidden
-        launch = Self.freshDirectory(in: root)
-        directory = Self.freshDirectory(in: launch)
-        restored = Self.freshDirectory(in: launch)
+        launch = StagedFiles.freshDirectory(in: root)
+        directory = StagedFiles.freshDirectory(in: launch)
+        restored = StagedFiles.freshDirectory(in: launch)
         // One with nowhere to ask writes nothing, and every suite's browser
         // is one of those, so it leaves the directory to the one that does.
-        if source != nil { Self.sweep(root, keeping: launch) }
+        if source != nil { StagedFiles.sweep(root, keeping: launch) }
     }
 
     nonisolated deinit { /* intentionally empty */ }
@@ -159,7 +159,7 @@ final class CommunityCommonsPhotos {
         isSearching = true
         // A directory per search, so a superseded one still writing cannot
         // put a file beside the answer that replaced it.
-        let target = Self.freshDirectory(in: launch)
+        let target = StagedFiles.freshDirectory(in: launch)
         task = Task { [weak self] in
             let found: [CommonsPhoto]
             do {
@@ -173,7 +173,7 @@ final class CommunityCommonsPhotos {
                 found = []
             }
             guard let self, !Task.isCancelled else {
-                Self.remove(target)
+                StagedFiles.remove(target)
                 return
             }
             receive(found, in: target)
@@ -186,15 +186,15 @@ final class CommunityCommonsPhotos {
         task = nil
         if isSearching { isSearching = false }
         if !photos.isEmpty { photos = [] }
-        Self.remove(directory)
-        if let retired { Self.remove(retired) }
+        StagedFiles.remove(directory)
+        if let retired { StagedFiles.remove(retired) }
         retired = nil
-        directory = Self.freshDirectory(in: launch)
+        directory = StagedFiles.freshDirectory(in: launch)
         for download in restoring.values { download.cancel() }
         restoring = [:]
         restoredCopies = [:]
-        Self.remove(restored)
-        restored = Self.freshDirectory(in: launch)
+        StagedFiles.remove(restored)
+        restored = StagedFiles.freshDirectory(in: launch)
         revision += 1
     }
 
@@ -235,33 +235,10 @@ final class CommunityCommonsPhotos {
         isSearching = false
         // An empty answer still replaces the last one: it is an answer about
         // the new area, and the old pictures are of somewhere else.
-        if let retired { Self.remove(retired) }
+        if let retired { StagedFiles.remove(retired) }
         retired = directory
         directory = target
         if photos != found { photos = found }
         revision += 1
-    }
-
-    private static func freshDirectory(in root: URL) -> URL {
-        root.appending(path: UUID().uuidString, directoryHint: .isDirectory)
-    }
-
-    /// Whatever an earlier launch left under `root`, except `current`.
-    private static func sweep(_ root: URL, keeping current: URL) {
-        let kept = current.lastPathComponent
-        Task.detached(priority: .utility) {
-            let manager = FileManager.default
-            let left = (try? manager.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
-            for url in left where url.lastPathComponent != kept {
-                try? manager.removeItem(at: url)
-            }
-        }
-    }
-
-    /// Off the main actor, for the reason ``TrailDraftPhotos`` gives.
-    nonisolated private static func remove(_ url: URL) {
-        Task.detached(priority: .utility) {
-            try? FileManager.default.removeItem(at: url)
-        }
     }
 }
