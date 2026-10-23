@@ -328,10 +328,13 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
             }
         } onCancel: {
             // Runs synchronously wherever cancellation happened, so it cannot
-            // touch actor state. A cancellation that lands before the
-            // continuation is stored is caught by the `Task.isCancelled` check
-            // above: the flag is set before this handler runs, and the actor
-            // is not given up between that check and the store.
+            // touch actor state and hops instead. That hop is what keeps the
+            // order safe: `abandonWait` needs this actor, and the caller does
+            // not give it up until it has stored its continuation and
+            // suspended, so a cancellation that lands anywhere before the store
+            // still finds the continuation to resume. The `Task.isCancelled`
+            // check above is only a shortcut for a caller that arrives already
+            // cancelled.
             Task { await self.abandonWait(waiterID, from: key, fetchID: fetch.id) }
         }
     }
