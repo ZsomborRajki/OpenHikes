@@ -91,6 +91,12 @@ struct TrailGlyphView: View {
     /// it to exact outputs: it is the only maths in the widget's fallback, it
     /// divides by three separately-floored quantities, and a canvas cannot be
     /// asked afterwards where it put the line.
+    ///
+    /// Longitude is unwrapped before anything is measured: every point, the
+    /// live fix included, is placed the short way round from the middle of the
+    /// narrowest arc holding the route — the one ``UnitMercatorRect`` bounds
+    /// the basemap with. Raw longitudes would read a step from 179.99° to
+    /// -179.99° as nearly a whole world westward, and fit that instead.
     static func project(
         polyline: [SharedTrailSnapshot.CodableCoordinate],
         liveFix: SharedTrailSnapshot.CodableCoordinate?,
@@ -100,17 +106,21 @@ struct TrailGlyphView: View {
         guard let first = polyline.first else { return nil }
 
         var minLat = first.latitude, maxLat = first.latitude
-        var minLon = first.longitude, maxLon = first.longitude
         for point in polyline {
             minLat = min(minLat, point.latitude); maxLat = max(maxLat, point.latitude)
-            minLon = min(minLon, point.longitude); maxLon = max(maxLon, point.longitude)
         }
         let centerLat = (minLat + maxLat) / 2
         let cosLat = max(cos(centerLat * .pi / 180), Self.minCosLat)
+        // The box refuses a route with a non-finite coordinate in it. Any
+        // point of the route is a good enough reference for one of those,
+        // whose line is already broken where that coordinate falls.
+        let centerLon = UnitMercatorRect(bounding: polyline)
+            .map { Mercator.longitude(unitX: $0.originX + $0.width / 2) } ?? first.longitude
 
         func flat(_ c: SharedTrailSnapshot.CodableCoordinate) -> CGPoint {
+            let longitude = centerLon + WatchGeodesy.normalizedLongitudeDelta(c.longitude - centerLon)
             // Screen y grows downward; latitude grows north, so flip it.
-            CGPoint(x: c.longitude * cosLat, y: -c.latitude)
+            return CGPoint(x: longitude * cosLat, y: -c.latitude)
         }
 
         let rawPoints = polyline.map(flat)
