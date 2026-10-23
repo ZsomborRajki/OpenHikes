@@ -85,6 +85,52 @@ struct SyncedSettingsMergeTests {
         #expect(result.push.isEmpty)
     }
 
+    /// After startup a local value that still matches the baseline is stale,
+    /// not chosen, however much it differs from iCloud's.
+    @Test("Only values edited since the stores last agreed are pushed")
+    func pushSendsOnlyEdits() {
+        let push = SyncedSettingsMerge.pushing(
+            local: [
+                SettingsKey.tileProviderID: .text(Constants.osm),
+                SettingsKey.savePhotosToLibrary: .boolean(true),
+            ],
+            baseline: [
+                SettingsKey.tileProviderID: .text(Constants.osm),
+                SettingsKey.savePhotosToLibrary: .boolean(false),
+            ]
+        )
+
+        #expect(push == [SettingsKey.savePhotosToLibrary: .boolean(true)])
+    }
+
+    /// An incoming change is taken key by key: a key it does not name stays,
+    /// and a key edited here and not yet sent is sent rather than overwritten.
+    @Test("An incoming change pulls its own keys and keeps unsent local edits")
+    func reconcileRespectsKeysAndPendingEdits() {
+        let baseline: [String: SyncedSettingValue] = [
+            SettingsKey.tileProviderID: .text(Constants.osm),
+            SettingsKey.showsHikingRoutes: .boolean(false),
+            SettingsKey.savePhotosToLibrary: .boolean(false),
+        ]
+        let result = SyncedSettingsMerge.reconciling(
+            keys: [SettingsKey.tileProviderID, SettingsKey.savePhotosToLibrary],
+            local: [
+                SettingsKey.tileProviderID: .text(Constants.osm),
+                SettingsKey.showsHikingRoutes: .boolean(false),
+                SettingsKey.savePhotosToLibrary: .boolean(true),
+            ],
+            remote: [
+                SettingsKey.tileProviderID: .text(Constants.stadia),
+                SettingsKey.showsHikingRoutes: .boolean(true),
+                SettingsKey.savePhotosToLibrary: .boolean(false),
+            ],
+            baseline: baseline
+        )
+
+        #expect(result.pull == [SettingsKey.tileProviderID: .text(Constants.stadia)])
+        #expect(result.push == [SettingsKey.savePhotosToLibrary: .boolean(true)])
+    }
+
     @Test("The allowlist holds exactly the device-independent preferences")
     func allowlistContents() {
         let keys = Set(SyncedSetting.all.map(\.key))
