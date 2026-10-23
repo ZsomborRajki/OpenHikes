@@ -129,7 +129,7 @@ nonisolated enum LibraryPhotoMatcher {
     static func match(
         _ asset: PhotoLibraryAsset,
         timeline: HikePhotoTimeline,
-        route: [RouteCoordinate]
+        legs: RecordedRouteLegs
     ) -> LibraryPhotoMatch? {
         guard timeline.searchWindow.contains(asset.createdAt) else { return nil }
         let position = timeline.position(at: asset.createdAt)
@@ -168,8 +168,10 @@ nonisolated enum LibraryPhotoMatcher {
         // question: is the camera's own position on this route? If it is, the
         // photo was taken on the walk and the reading is better than nothing.
         // If it isn't, the picture was taken somewhere this walk never went,
-        // and it is not a photo of it however well the clock lines up.
-        guard let nearest = nearestRoutePoint(to: camera, in: route),
+        // and it is not a photo of it however well the clock lines up. "On"
+        // means on the line the walk measured, not merely near one of its
+        // fixes — see ``RecordedRouteLegs``.
+        guard let nearest = legs.nearestPoint(to: camera),
               nearest.meters <= Self.maximumOffRouteMeters
         else { return nil }
         return LibraryPhotoMatch(
@@ -246,30 +248,5 @@ nonisolated enum LibraryPhotoMatcher {
             // the evidence is what the grid says about this match instead.
             secondsFromFix: 0
         )
-    }
-
-    /// The route point closest to `coordinate`, and how far away it is.
-    ///
-    /// Vertices rather than segments. A route is sampled every few metres, so
-    /// the nearest vertex is within a couple of metres of the nearest point on
-    /// the line — far inside ``maximumOffRouteMeters``, and the answer is
-    /// being used to decide whether something is on the trail at all rather
-    /// than to position a tracker along it.
-    private static func nearestRoutePoint(
-        to coordinate: CLLocationCoordinate2D,
-        in route: [RouteCoordinate]
-    ) -> (coordinate: CLLocationCoordinate2D, meters: Double)? {
-        var best: (coordinate: CLLocationCoordinate2D, meters: Double)?
-        for point in route {
-            let candidate = point.clCoordinate
-            let meters = RouteGeometry.distanceMeters(
-                from: coordinate,
-                to: candidate
-            )
-            if meters < (best?.meters ?? .infinity) {
-                best = (candidate, meters)
-            }
-        }
-        return best
     }
 }
