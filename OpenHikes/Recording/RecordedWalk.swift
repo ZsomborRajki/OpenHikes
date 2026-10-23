@@ -64,7 +64,9 @@ extension HikeWalk {
             // ``PreparedRecording/recordedSeconds``.
             activeSeconds: prepared.recordedSeconds,
             // One interval covering the whole route, which is the union a
-            // walk along this line could ever have reached.
+            // walk along this line could ever have reached — written low to
+            // high, because a recording's route is stored the way it was
+            // walked.
             coveredIntervals: [0, routeLength],
             furthestDistanceMeters: routeLength,
             routeDistanceMeters: routeLength,

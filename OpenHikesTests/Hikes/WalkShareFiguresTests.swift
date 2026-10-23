@@ -3,9 +3,9 @@
 //  OpenHikesTests
 //
 //  What a walk's share card prints. Every figure is the walk's own — the
-//  covered distance, the covered stretches' climb, that distance over the
-//  active clock — and a figure with nothing true to say is left off rather
-//  than printed as a dash on somebody else's screen.
+//  covered distance, the covered stretches' climb the way they were walked,
+//  that distance over the active clock — and a figure with nothing true to
+//  say is left off rather than printed as a dash on somebody else's screen.
 //
 
 import Foundation
@@ -90,5 +90,87 @@ struct WalkShareFiguresTests {
 
         #expect(summed.gainMeters.isApproximatelyEqual(to: a.gainMeters + b.gainMeters, absoluteTolerance: 1e-9))
         #expect(profile.climb(over: []) == nil)
+    }
+
+    // MARK: Which way the walk went
+
+    /// About 760 m rising a steady 100 m, a height every 15 m or so: each
+    /// step is a match well inside the gap bound, and the midpoint is a
+    /// height of its own.
+    private static let hill = RouteProfile(route: (0...50).map { index in
+        RouteCoordinate(latitude: 47, longitude: 11 + Double(index) * 0.0002, elevation: 100 + Double(index) * 2)
+    })
+
+    /// The card of a walk matched at each of `indices` along ``hill`` in
+    /// turn, closed into the row the History segment keeps.
+    private func card(walking indices: [Int]) -> WalkShareFigures {
+        let profile = Self.hill
+        var record = TrailWalkRecord(
+            hikeID: UUID(),
+            routeDistanceMeters: profile.totalDistanceMeters,
+            startedAt: Date(timeIntervalSince1970: 1_750_000_000)
+        )
+        for index in indices {
+            record.coverage.record(distance: profile.distances[index])
+        }
+        let walk = HikeWalk(closing: record, at: record.startedAt.addingTimeInterval(1800), reason: .ended)
+        return WalkShareFigures(walk: walk, title: "Hill", profile: profile)
+    }
+
+    private func expectClimb(
+        _ card: WalkShareFigures,
+        ascent: Double,
+        descent: Double,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        #expect(
+            card.ascentMeters?.isApproximatelyEqual(to: ascent, absoluteTolerance: 0.001) == true,
+            "ascent \(String(describing: card.ascentMeters))",
+            sourceLocation: sourceLocation
+        )
+        #expect(
+            card.descentMeters?.isApproximatelyEqual(to: descent, absoluteTolerance: 0.001) == true,
+            "descent \(String(describing: card.descentMeters))",
+            sourceLocation: sourceLocation
+        )
+    }
+
+    @Test("a walk up the trail climbs what the trail climbs")
+    func walkUpClimbs() {
+        let card = card(walking: Array(0...50))
+
+        expectClimb(card, ascent: 100, descent: 0)
+        #expect(card.completion.isApproximatelyEqual(to: 1, absoluteTolerance: 1e-9))
+    }
+
+    /// The direction a GPX stores its points in is the importer's, and a walk
+    /// from the stored end finishes like any other — so its card must not
+    /// print the climb of a hill the hiker walked down (#993).
+    @Test("a walk from the trail's stored end descends what the trail climbs")
+    func walkDownDescends() {
+        let card = card(walking: Array((0...50).reversed()))
+
+        expectClimb(card, ascent: 0, descent: 100)
+        #expect(card.completion.isApproximatelyEqual(to: 1, absoluteTolerance: 1e-9))
+    }
+
+    @Test("part of the trail walked down descends only that part")
+    func partWalkedDownDescendsThatPart() {
+        let card = card(walking: Array((25...50).reversed()))
+
+        expectClimb(card, ascent: 0, descent: 50)
+        #expect(card.completion.isApproximatelyEqual(to: 0.5, absoluteTolerance: 1e-9))
+    }
+
+    /// The union covers the stretch once, and the hiker climbed it and came
+    /// back down it: the card counts the climb each way, and the distance and
+    /// completion stay the ground covered.
+    @Test("there and back over part of the trail climbs it and descends it")
+    func thereAndBackClimbsBothWays() {
+        let card = card(walking: Array(0...25) + Array((0...24).reversed()))
+
+        expectClimb(card, ascent: 50, descent: 50)
+        #expect(card.completion.isApproximatelyEqual(to: 0.5, absoluteTolerance: 1e-9))
+        #expect(card.walkedMeters.isApproximatelyEqual(to: Self.hill.distances[25], absoluteTolerance: 1e-9))
     }
 }

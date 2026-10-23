@@ -102,16 +102,33 @@ nonisolated public enum TrailWalkPhase: String, Codable, Hashable, Sendable {
 }
 
 /// The union of along-route intervals a walk's consecutive on-route matches
-/// have spanned, and the furthest point any of them reached.
+/// have spanned, which way each was walked, and the furthest point any of
+/// them reached.
 ///
 /// Coverage, not position. A hiker who opens the app on the return leg of
 /// an out-and-back and walks to the end covers half the route, and this
 /// says half where a position along the route would say all of it. Walking
 /// a section twice adds nothing; skipping a section by road subtracts it.
+///
+/// Which way, because the climb depends on it and nothing else can say it
+/// afterwards. The direction a route is stored in is its importer's, and a
+/// walk from the stored end finishes like any other — see
+/// ``TrailWalkPolicy/reachedEndFraction`` — so a union that forgot it put the
+/// trail's ascent on the share card of a hiker who walked down it (#993).
+/// Each way is a union of its own, so a stretch walked there and back is
+/// climbed both ways and still covered once.
 nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
-    /// Flat `start, end` pairs in metres along the route, merged and sorted
-    /// by start. Flat so the sidecar and the mirrored row store the same
-    /// bytes; ``ranges`` is the structured reading.
+    /// Flat pairs in metres along the route, each written the way it was
+    /// walked — where the stretch began, then where it ended — so a pair that
+    /// runs downwards was walked towards the route's stored start.
+    ///
+    /// The pairs walked each way are merged and sorted by start among
+    /// themselves, the ones towards the end first. Flat so the sidecar and
+    /// the mirrored row store the same bytes, and the direction rides in the
+    /// order of each pair rather than in a column of its own: a reader that
+    /// wants only the ground covered takes each pair's lower and upper ends,
+    /// whichever way round they are written. ``ranges`` is that reading,
+    /// ``walkedTowardsEnd`` and ``walkedTowardsStart`` the directed ones.
     public private(set) var intervals: [Double] = []
     public private(set) var furthestDistanceMeters: Double = 0
     /// Where the last on-route match landed, or `nil` before the first. The
@@ -127,14 +144,14 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
     /// The flat storage read as `(start, end)` pairs, dropping a trailing
     /// element with no partner rather than trapping on it.
     ///
-    /// That rule is what the three readers below all need, and what
+    /// That rule is what every reader below needs, and what
     /// `stride(from: 0, to: intervals.count - 1, by: 2)` used to encode as an
     /// off-by-one: the `- 1` is the whole of what kept an odd-length array off
     /// `intervals[pair + 1]` and an empty one out of `0..<(-1)`. Load-bearing,
     /// non-obvious, and previously restated at each site. Stated once here.
     ///
-    /// Lazy, because ``insert(_:_:)`` runs per on-route match while a walk is
-    /// being recorded and should not allocate to read its own storage.
+    /// Lazy, because ``insert(from:to:)`` runs per on-route match while a
+    /// walk is being recorded and should not allocate to read its own storage.
     private static func pairs(
         of intervals: [Double]
     ) -> some Sequence<(start: Double, end: Double)> {
@@ -144,13 +161,33 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
         }
     }
 
+    /// The stored stretches walked one way — towards the route's stored start
+    /// when `back`, towards its end otherwise — as ranges along the route. A
+    /// pair with no length went nowhere, and reads as towards the end.
+    private static func stretches(
+        of intervals: [Double],
+        back: Bool
+    ) -> some Sequence<ClosedRange<Double>> {
+        pairs(of: intervals).lazy.compactMap { pair -> ClosedRange<Double>? in
+            guard (pair.end < pair.start) == back else { return nil }
+            return min(pair.start, pair.end)...max(pair.start, pair.end)
+        }
+    }
+
+    /// `stretch` as ``intervals`` stores it: low to high towards the end,
+    /// high to low back.
+    private static func pair(_ stretch: ClosedRange<Double>, back: Bool) -> [Double] {
+        back ? [stretch.upperBound, stretch.lowerBound] : [stretch.lowerBound, stretch.upperBound]
+    }
+
     /// The same union, from stored pairs. Pairs are trusted to be merged —
-    /// they were written by ``record(distance:)`` — but re-merged anyway, so
-    /// a row edited by hand still reads as a union.
+    /// they were written by ``record(distance:)`` — but re-merged anyway, each
+    /// with the pairs walked its way, so a row edited by hand still reads as
+    /// a union.
     public init(intervals: [Double], furthestDistanceMeters: Double) {
         var built = Self()
         for (start, end) in Self.pairs(of: intervals) {
-            built.insert(min(start, end), max(start, end))
+            built.insert(from: start, to: end)
         }
         // A row whose furthest point was never written still reached the end
         // of its last pair.
@@ -166,7 +203,7 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
               last != distance,
               abs(distance - last) <= TrailWalkPolicy.gapBoundMeters
         else { return }
-        insert(min(last, distance), max(last, distance))
+        insert(from: last, to: distance)
     }
 
     /// Drops the continuity reference, so the next match starts a fresh
@@ -189,8 +226,32 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
         ranges.reduce(0) { total, range in total + (range.upperBound - range.lowerBound) }
     }
 
+    /// The ground covered, whichever way: both ways' stretches merged into
+    /// one union, sorted by start.
     public var ranges: [ClosedRange<Double>] {
-        Self.pairs(of: intervals).map { $0.start...$0.end }
+        let towardsStart = walkedTowardsStart
+        guard !towardsStart.isEmpty else { return walkedTowardsEnd }
+        var union: [ClosedRange<Double>] = []
+        for stretch in (walkedTowardsEnd + towardsStart).sorted(by: { $0.lowerBound < $1.lowerBound }) {
+            if let last = union.last, stretch.lowerBound <= last.upperBound {
+                union[union.count - 1] = last.lowerBound...max(last.upperBound, stretch.upperBound)
+            } else {
+                union.append(stretch)
+            }
+        }
+        return union
+    }
+
+    /// The stretches walked the way the route's distances run, merged and
+    /// sorted by start.
+    public var walkedTowardsEnd: [ClosedRange<Double>] {
+        Array(Self.stretches(of: intervals, back: false))
+    }
+
+    /// The stretches walked back towards the route's stored start, merged and
+    /// sorted by start. A stretch walked there and back is in both.
+    public var walkedTowardsStart: [ClosedRange<Double>] {
+        Array(Self.stretches(of: intervals, back: true))
     }
 
     /// Covered length over the route's, clamped to 0…1 with the same
@@ -207,29 +268,36 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
         coveredMeters >= TrailWalkPolicy.minimumCoverageMeters
     }
 
-    /// Adds `[start, end]` to the union, merging every stored pair it
-    /// touches. O(pairs), and a walk has as many pairs as it has gaps.
-    private mutating func insert(_ start: Double, _ end: Double) {
-        var mergedStart = start
-        var mergedEnd = end
+    /// Adds the stretch walked from `start` to `end` to the union of those
+    /// walked its way, merging every stored pair of that way it touches; the
+    /// other way's pairs are copied as they stand. O(pairs), and a walk has
+    /// as many pairs as it has gaps and turns.
+    private mutating func insert(from start: Double, to end: Double) {
+        let walksBack = end < start
+        var mergedStart = min(start, end)
+        var mergedEnd = max(start, end)
         var kept: [Double] = []
         kept.reserveCapacity(intervals.count + 2)
-        var placed = false
-        for (lower, upper) in Self.pairs(of: intervals) {
-            if upper < mergedStart {
-                kept.append(contentsOf: [lower, upper])
-            } else if lower > mergedEnd {
-                if !placed {
-                    kept.append(contentsOf: [mergedStart, mergedEnd])
-                    placed = true
+        // Towards the end first, then back, whatever order they were walked
+        // in: the same ground walked the same ways stores the same bytes.
+        for back in [false, true] {
+            var placed = back != walksBack
+            for stretch in Self.stretches(of: intervals, back: back) {
+                if back != walksBack || stretch.upperBound < mergedStart {
+                    kept.append(contentsOf: Self.pair(stretch, back: back))
+                } else if stretch.lowerBound > mergedEnd {
+                    if !placed {
+                        kept.append(contentsOf: Self.pair(mergedStart...mergedEnd, back: back))
+                        placed = true
+                    }
+                    kept.append(contentsOf: Self.pair(stretch, back: back))
+                } else {
+                    mergedStart = min(mergedStart, stretch.lowerBound)
+                    mergedEnd = max(mergedEnd, stretch.upperBound)
                 }
-                kept.append(contentsOf: [lower, upper])
-            } else {
-                mergedStart = min(mergedStart, lower)
-                mergedEnd = max(mergedEnd, upper)
             }
+            if !placed { kept.append(contentsOf: Self.pair(mergedStart...mergedEnd, back: back)) }
         }
-        if !placed { kept.append(contentsOf: [mergedStart, mergedEnd]) }
         intervals = kept
     }
 }

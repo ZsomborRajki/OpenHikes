@@ -47,7 +47,11 @@ public final class HikeWalk {
     public var endedAt = Date.distantPast
     /// The clock minus pauses.
     public var activeSeconds: Double = 0
-    /// Flat start/end pairs along the route, in metres — the merged union.
+    /// Flat pairs along the route, in metres, each written the way it was
+    /// walked — ``TrailWalkCoverage/intervals`` as the walk closed. Read
+    /// through ``coverage``: a pair's order is which way the hiker went, which
+    /// the climb needs, and its two ends are the ground covered, which
+    /// everything else does.
     public var coveredIntervals: [Double] = []
     public var furthestDistanceMeters: Double = 0
     /// The route's length at the time of the walk. A route re-imported or

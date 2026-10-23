@@ -6,11 +6,13 @@
 //  is opened rather than on every pass of the editor.
 //
 //  Every figure is the walk's own, never the trail's: the distance is what the
-//  walk covered, the climb is what the covered stretches climb, and the speed
-//  is that distance over the active clock — so a walk abandoned halfway does
-//  not advertise the whole trail's ascent, and breaks do not drag the pace
-//  down. The summary screen beside it shows the trail's figures for context;
-//  a card sent to somebody else has no such context to lean on.
+//  walk covered, the climb is what the covered stretches climb the way they
+//  were walked, and the speed is that distance over the active clock — so a
+//  walk abandoned halfway does not advertise the whole trail's ascent, a walk
+//  down from the trail's stored end does not advertise its climb, and breaks
+//  do not drag the pace down. The summary screen beside it shows the trail's
+//  figures for context; a card sent to somebody else has no such context to
+//  lean on.
 //
 
 import Foundation
@@ -72,7 +74,8 @@ nonisolated struct WalkShareFigures: Equatable, Sendable {
     /// What the walk covered — the union of its stretches, not the trail.
     let walkedMeters: Double
     let activeSeconds: Double
-    /// The covered stretches' climb, or `nil` when it cannot be said: no
+    /// The covered stretches' climb, each the way it was walked — see
+    /// ``RouteProfile/climb(walking:)`` — or `nil` when it cannot be said: no
     /// heights on the route, or a route changed since the walk.
     let ascentMeters: Double?
     let descentMeters: Double?
@@ -119,7 +122,7 @@ extension WalkShareFigures {
     ///   climb on another would be measuring somewhere else.
     init(walk: HikeWalk, title: String, profile: RouteProfile?) {
         let coverage = walk.coverage
-        let climb = profile.flatMap { $0.climb(over: coverage.ranges) }
+        let climb = profile.flatMap { $0.climb(walking: coverage) }
         self.init(
             title: title,
             walkedMeters: coverage.coveredMeters,
