@@ -28,12 +28,18 @@ nonisolated public extension RouteProfile {
     /// ``coordinate(atDistance:)``, which at a pause's own distance answers
     /// the fix *before* the pause: a range starting there starts on the piece
     /// after it.
+    ///
+    /// The end is clamped to the route's length, so a range stored on a
+    /// longer axis stops where the line does. Unclamped, it would take in
+    /// every point to the last one, and on a route that ends on a pause that
+    /// is the lone fix across the drive.
     func stretches(covering range: ClosedRange<Double>) -> [[CLLocationCoordinate2D]] {
-        guard range.upperBound > range.lowerBound,
-              let end = coordinate(atDistance: range.upperBound)
+        let upper = min(range.upperBound, totalDistanceMeters)
+        guard upper > range.lowerBound,
+              let end = coordinate(atDistance: upper)
         else { return [] }
         let first = distances.partitioningIndex { $0 > range.lowerBound }
-        let last = distances.partitioningIndex { $0 >= range.upperBound }
+        let last = distances.partitioningIndex { $0 >= upper }
         guard let start = start(of: range.lowerBound, onLegArrivingAt: first) else { return [] }
 
         // Neither end's own leg can be a pause — a paused leg has no length,
