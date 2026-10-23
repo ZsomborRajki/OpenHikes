@@ -169,8 +169,8 @@ struct CommunityCommonsPhotosTests {
         await photos.settle()
         let answer = try #require(photos.photos.first).fileURL
 
-        while FileManager.default.fileExists(atPath: earlier.path) {
-            await Task.yield()
+        await settleDelegateHop(until: "the earlier launch's directory to be swept") {
+            !FileManager.default.fileExists(atPath: earlier.path)
         }
         #expect(FileManager.default.fileExists(atPath: answer.path))
     }
