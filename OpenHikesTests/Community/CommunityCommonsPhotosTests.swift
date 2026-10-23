@@ -154,6 +154,27 @@ struct CommunityCommonsPhotosTests {
         }
     }
 
+    /// The sweep runs off the main actor while the first search may already
+    /// be writing, so what it spares is the launch's directory, not the
+    /// answer's — which it has no name for yet.
+    @Test("a launch sweeps what an earlier one left, and keeps its own answers", .timeLimit(.minutes(1)))
+    func launchSweepsEarlierLaunches() async throws {
+        let root = Root()
+        let earlier = root.url.appendingPathComponent("earlier", isDirectory: true)
+        try FileManager.default.createDirectory(at: earlier, withIntermediateDirectories: true)
+        try PhotoDiscoveryFixture.sampleImageData().write(to: earlier.appendingPathComponent("left.jpeg"))
+
+        let photos = CommunityCommonsPhotos(source: StubSource(), root: root.url)
+        photos.search(in: Self.area(latitude: 47.6))
+        await photos.settle()
+        let answer = try #require(photos.photos.first).fileURL
+
+        while FileManager.default.fileExists(atPath: earlier.path) {
+            await Task.yield()
+        }
+        #expect(FileManager.default.fileExists(atPath: answer.path))
+    }
+
     @Test("a newer search supersedes one still out")
     func newerSearchWins() async {
         let root = Root()

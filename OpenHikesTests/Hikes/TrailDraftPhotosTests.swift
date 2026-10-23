@@ -148,6 +148,25 @@ struct TrailDraftPhotosTests {
         }
     }
 
+    /// The sweep runs off the main actor, so a search may already be writing
+    /// into this drawing's directory by the time it lists the root.
+    @Test("a launch sweeps what an earlier one left, and keeps this drawing's", .timeLimit(.minutes(1)))
+    func launchSweepsEarlierLaunches() async throws {
+        let root = Root()
+        let earlier = root.url.appendingPathComponent("earlier", isDirectory: true)
+        try FileManager.default.createDirectory(at: earlier, withIntermediateDirectories: true)
+        try PhotoDiscoveryFixture.sampleImageData().write(to: earlier.appendingPathComponent("left.jpeg"))
+
+        let photos = TrailDraftPhotos(source: StubSource([Self.onTheLine]), root: root.url)
+        await Self.searched(photos)
+        let file = try #require(photos.photos.first?.fileURL)
+
+        while FileManager.default.fileExists(atPath: earlier.path) {
+            await Task.yield()
+        }
+        #expect(FileManager.default.fileExists(atPath: file.path))
+    }
+
     // MARK: - What a save keeps
 
     @Test("only the photographs the line passes are kept, pinned onto it")
