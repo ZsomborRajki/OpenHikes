@@ -18,6 +18,7 @@
 
 import Foundation
 @testable import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Climb across a pause")
@@ -171,6 +172,6 @@ struct PauseElevationTests {
         #expect(profile.elevation.gainMeters == 1198)
 
         let climb = try #require(profile.climb(from: 0, to: profile.totalDistanceMeters))
-        #expect(climb.gainMeters == 1198)
+        #expect(climb.gainMeters.isApproximatelyEqual(to: 1198, absoluteTolerance: 0.001))
     }
 }

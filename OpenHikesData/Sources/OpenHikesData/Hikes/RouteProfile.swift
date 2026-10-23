@@ -321,9 +321,10 @@ nonisolated public struct RouteProfile: Sendable {
         // series stays ascending without losing the route's end; only a
         // pause's step keeps two (see ``append(_:to:mergingRepeats:)``).
         //
-        // A pause whose resumed sample was not picked still ends the climb's
-        // run: it is carried to the next sample that was, which is the first
-        // plotted one past the pause.
+        // A pause whose resumed sample was not picked is carried to the next
+        // sample that was, which is the first plotted one past the pause, so
+        // the flag still means a pause falls between a sample and the one
+        // plotted before it.
         var plotted: [ElevationSample] = []
         plotted.reserveCapacity(picked.count)
         var previousIndex = -1
