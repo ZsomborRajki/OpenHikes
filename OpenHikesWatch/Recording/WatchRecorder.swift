@@ -483,7 +483,12 @@ final class WatchRecorder: NSObject {
         // before Start would otherwise be the first kept, and the gap from it
         // to the next would be counted as walking.
         guard phase == .recording, window.admits(location.timestamp) else { return }
-        let elevation = location.verticalAccuracy > 0 ? location.altitude : nil
+        // The position is offered whatever its height is worth; a height too
+        // uncertain to climb on is dropped on its own (#932).
+        let elevation = AltitudePolicy.trustedAltitude(
+            location.altitude,
+            verticalAccuracy: location.verticalAccuracy
+        )
         let kept = accumulator.accept(
             latitude: location.coordinate.latitude,
             longitude: location.coordinate.longitude,

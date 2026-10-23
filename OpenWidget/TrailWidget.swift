@@ -471,13 +471,10 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
                    location,
                    now: now
                ) {
-                let elevation: Double?
-                if location.verticalAccuracy >= 0,
-                   location.verticalAccuracy <= 30 {
-                    elevation = location.altitude
-                } else {
-                    elevation = nil
-                }
+                let elevation = AltitudePolicy.trustedAltitude(
+                    location.altitude,
+                    verticalAccuracy: location.verticalAccuracy
+                )
                 _ = try? SharedStore.appendPendingRecordingFix(
                     SharedRecordingFix(
                         sessionID: requestedSessionID,
