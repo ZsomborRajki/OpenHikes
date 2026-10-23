@@ -23,7 +23,9 @@
 //  what a journal is replayed into, and a journal keeps the height without the
 //  accuracy it was judged by. A refused height must not cost its fix, though.
 //  Each caller keeps the position and drops only the altitude, so a walk under
-//  a poor sky still has its full track and simply no climb on that stretch.
+//  a poor sky still has its full track. `ElevationAccumulator` skips a missing
+//  height without breaking the chain, so the climb across that stretch is
+//  still counted, from the trusted height before it to the one after.
 //
 
 import Foundation
@@ -32,8 +34,8 @@ import Foundation
 public enum AltitudePolicy {
     /// Above this many metres of vertical uncertainty a height is a guess.
     /// Raw GPS height wanders by ±5–15 m even under a clear sky, which is
-    /// what `ElevationAccumulator`'s deadband is sized against; past that,
-    /// the swings are as large as the hills.
+    /// already more than `ElevationAccumulator`'s deadband can clean; past
+    /// that, the swings are as large as the hills.
     public static let maximumVerticalAccuracy: Double = 15
 
     /// `altitude`, or `nil` when it should not be recorded.

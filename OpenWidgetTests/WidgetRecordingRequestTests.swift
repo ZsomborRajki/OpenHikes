@@ -9,6 +9,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesShared
 import Testing
 import WidgetKit
 
@@ -18,16 +19,18 @@ struct WidgetRecordingRequestTests {
 
     private func location(
         age: TimeInterval,
-        accuracy: CLLocationAccuracy
+        accuracy: CLLocationAccuracy,
+        altitude: CLLocationDistance = 600,
+        verticalAccuracy: CLLocationAccuracy = 5
     ) -> CLLocation {
         CLLocation(
             coordinate: CLLocationCoordinate2D(
                 latitude: 47.63,
                 longitude: 12.86
             ),
-            altitude: 600,
+            altitude: altitude,
             horizontalAccuracy: accuracy,
-            verticalAccuracy: 5,
+            verticalAccuracy: verticalAccuracy,
             course: 0,
             speed: 1,
             timestamp: now.addingTimeInterval(-age)
@@ -79,6 +82,27 @@ struct WidgetRecordingRequestTests {
                 now: now
             )
         )
+    }
+
+    /// The phone holds its own GPS heights to `AltitudePolicy`, so an anchor
+    /// merged into its recording is held to the same rule.
+    @Test("an anchor carries a height only when AltitudePolicy trusts it")
+    func anchorHeightFollowsAltitudePolicy() {
+        let limit = AltitudePolicy.maximumVerticalAccuracy
+        func height(_ altitude: CLLocationDistance, at verticalAccuracy: CLLocationAccuracy) -> CLLocationDistance? {
+            WidgetRecordingFixPolicy.elevation(
+                of: location(age: 0, accuracy: 50, altitude: altitude, verticalAccuracy: verticalAccuracy)
+            )
+        }
+
+        #expect(height(600, at: 0) == 600)
+        #expect(height(600, at: limit) == 600)
+        #expect(height(600, at: limit.nextUp) == nil)
+        // The widget's own limit, before it took the phone's.
+        #expect(height(600, at: 30) == nil)
+        #expect(height(600, at: -1) == nil)
+        // A NaN height made the encoder throw, which lost the position too.
+        #expect(height(.nan, at: 5) == nil)
     }
 
     @MainActor
