@@ -361,6 +361,47 @@ struct TrailDraftSaveTests {
         #expect(hike.route.allSatisfy { $0.elevation == nil })
     }
 
+    /// Heights read at fewer points than the line has — every snapped trail
+    /// longer than one question's two hundred — go on all of them, the
+    /// points between two readings by how far along the line they are.
+    ///
+    /// Written on the points they were read at alone, a saved trail lost the
+    /// steepness colours the maker drew it in, because ``RouteSteepness``
+    /// closes its window at a point with no height. The climb is the
+    /// readings' either way: a straight run between two of them adds nothing.
+    @Test("heights read at some of the points are saved on all of them")
+    func savesHeightsOnEveryPoint() throws {
+        let context = try context()
+        // Five stops evenly spaced along the line, read at the first, the
+        // middle and the last: up to the top and back down.
+        let draft = Self.draft((0...4).map { Line.south + Double($0) * (Line.north - Line.south) / 4 })
+        let route = draft.routeCoordinates
+        try #require(route.count == 5, "precondition: a freehand line is its stops")
+        let heights = RouteHeightSamples(
+            routePointCount: route.count,
+            indexes: [0, 2, 4],
+            coordinates: [route[0], route[2], route[4]],
+            heights: [Heights.bottom, Heights.top, Heights.bottom]
+        )
+
+        let hike = try #require(
+            TrailDraftSave.hike(from: draft, named: "Ridge", into: context, heights: heights).hike
+        )
+
+        let halfway = (Heights.bottom + Heights.top) / 2
+        let expected = [Heights.bottom, halfway, Heights.top, halfway, Heights.bottom]
+        #expect(hike.route.count == expected.count)
+        for (point, wanted) in zip(hike.route, expected) {
+            let height = try #require(point.elevation, "every point has a height")
+            #expect(height.isApproximatelyEqual(to: wanted, absoluteTolerance: 0.01))
+        }
+        let profile = RouteProfile(route: hike.route).elevation
+        let gained = try #require(profile.gainMeters)
+        let lost = try #require(profile.lossMeters)
+        #expect(gained.isApproximatelyEqual(to: Heights.gained, absoluteTolerance: 0.01))
+        #expect(lost.isApproximatelyEqual(to: Heights.gained, absoluteTolerance: 0.01), "and all the way back down")
+    }
+
     /// And the saved row is one the detail screen draws a profile and a climb
     /// from.
     ///

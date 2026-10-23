@@ -15,6 +15,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftData
 import Testing
 
@@ -213,6 +214,32 @@ struct TrailDraftEditTests {
         _ = TrailDraftSave.update(hike, from: Self.draft([Line.south, Line.further]), openedWith: [], into: context)
         #expect(hike.climbMeters == nil)
         #expect(hike.descentMeters == nil)
+    }
+
+    /// An edit's heights go on every point of the new line, the ones between
+    /// two readings by how far along it they are — as a new trail's do, and
+    /// for the same reason: ``RouteSteepness`` closes its window at a point
+    /// with no height. See ``TrailDraftSaveTests``.
+    @Test("an edit's heights are saved on every point, not only where they were read")
+    func anEditSavesHeightsOnEveryPoint() throws {
+        let context = try Fixture.modelContext()
+        let hike = try savedTrail(in: context)
+        let edited = Self.draft([Line.south, Line.middle, Line.north])
+        let route = edited.routeCoordinates
+        try #require(route.count == 3, "precondition: a freehand line is its stops")
+        let heights = RouteHeightSamples(
+            routePointCount: route.count,
+            indexes: [0, 2],
+            coordinates: [route[0], route[2]],
+            heights: [600, 700]
+        )
+
+        let saved = try #require(
+            TrailDraftSave.update(hike, from: edited, openedWith: [], into: context, heights: heights).hike
+        )
+
+        let middle = try #require(saved.route[1].elevation, "the stop between the readings has a height")
+        #expect(middle.isApproximatelyEqual(to: 650, absoluteTolerance: 0.01))
     }
 
     @Test("editing a shared trail marks its shared copy as out of date")

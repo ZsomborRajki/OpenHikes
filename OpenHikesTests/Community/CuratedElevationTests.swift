@@ -326,7 +326,7 @@ struct CuratedElevationTests {
         let samples = try #require(await source.samples(of: route))
 
         #expect(samples.describes(route))
-        #expect(samples.filling(route).compactMap(\.elevation) == [600, 620, 640])
+        #expect(samples.interpolating(route).compactMap(\.elevation) == [600, 620, 640])
     }
 
     /// And a line that has changed under them is refused rather than filled
@@ -346,7 +346,7 @@ struct CuratedElevationTests {
         let longer = Self.route(4)
 
         #expect(!samples.describes(longer), "four points is a different question")
-        #expect(samples.filling(longer).allSatisfy { $0.elevation == nil })
+        #expect(samples.interpolating(longer).allSatisfy { $0.elevation == nil })
     }
 
     /// A route the same length whose points have moved is refused too — the
@@ -362,10 +362,10 @@ struct CuratedElevationTests {
         moved[1].latitude += Self.aLongWayOff
 
         #expect(!samples.describes(moved))
-        #expect(samples.filling(moved).allSatisfy { $0.elevation == nil })
+        #expect(samples.interpolating(moved).allSatisfy { $0.elevation == nil })
     }
 
-    /// The maker measures steepness from these, and a window closes at any
+    /// The map measures steepness from these, and a window closes at any
     /// point without a height — so every point between two readings needs
     /// one, placed by how far along the line it is.
     @Test("interpolating puts a height on every point between two readings")

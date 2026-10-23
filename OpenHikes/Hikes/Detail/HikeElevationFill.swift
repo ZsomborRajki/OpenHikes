@@ -13,14 +13,15 @@
 //  the hike is opened rather than for the whole library at once: a library
 //  imported in bulk is a bill for routes nobody may look at.
 //
-//  ## Interpolated onto every point, unlike the maker's save
+//  ## Interpolated onto every point
 //
 //  The readings are two hundred along the line, and they are written onto
-//  every point between them, by distance — ``RouteHeightSamples/interpolating(_:)``.
-//  Two hundred heights on a line of thousands of points would draw the chart
-//  but not the *Elevation* colours: ``RouteSteepness`` stops at a point with
-//  no height. The climb comes out the same either way, because a straight run
-//  between two readings adds nothing to it.
+//  every point between them, by distance — ``RouteHeightSamples/interpolating(_:)``,
+//  as the maker's save and a curated route write theirs. Two hundred heights
+//  on a line of thousands of points would draw the chart but not the
+//  *Elevation* colours: ``RouteSteepness`` stops at a point with no height.
+//  The climb comes out the same either way, because a straight run between
+//  two readings adds nothing to it.
 //
 //  ## Only a hike with no heights at all
 //

@@ -202,7 +202,7 @@ struct TrailDraftElevationTests {
         elevation.drawingDidChange()
         await Self.measured(elevation, by: source)
 
-        let filled = elevation.samples?.filling(draft.routeCoordinates) ?? []
+        let filled = elevation.samples?.interpolating(draft.routeCoordinates) ?? []
         #expect(filled.compactMap(\.elevation) == Heights.all)
     }
 
