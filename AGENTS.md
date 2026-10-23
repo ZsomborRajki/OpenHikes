@@ -865,14 +865,13 @@ in its source header. Do not weaken one without a measurement.
   once before promoting. An `@Attribute(.externalStorage)` column, such as
   `Hike.route`, also mirrors through a `CD_<name>_ckAsset` asset field: check
   that the development export has it, and promote both.
-- **Deployment state, checked 2026-10-22.** Both environments exported
-  byte-identical, `md5 ed35377b48036c8c927e359c049eb394`. One model field is
-  missing from both: **`CD_HikeWalk.CD_routeRevision`**
-  (`HikeWalk.routeRevision`). Declare it as
-  `STRING QUERYABLE SEARCHABLE SORTABLE` and promote it before the next upload
-  to App Store Connect: `main` already writes it on every walk, and a TestFlight
-  build uses production. Re-export before believing these numbers, and update
-  this paragraph when they move. Deployment facts live here, not in code.
+- **Deployment state, checked 2026-10-23.** Both environments exported
+  byte-identical, `md5 c652e74eea29171e927aeee8a4be698a`, and every attribute
+  in `MirroredCloudKitSchema.recordTypes` has its column. The only live columns
+  the contract does not name are SwiftData's own `CD_entityName` and the
+  to-one reference columns that the contract lists as relationships. Re-export
+  before believing these numbers, and update this paragraph when they move.
+  Deployment facts live here, not in code.
 
 ## The community feature
 
