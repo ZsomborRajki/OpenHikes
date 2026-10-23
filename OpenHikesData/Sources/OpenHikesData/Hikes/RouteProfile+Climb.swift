@@ -89,6 +89,22 @@ nonisolated public extension RouteProfile {
             (total.gainMeters + climb.gainMeters, total.lossMeters + climb.lossMeters)
         }
     }
+
+    /// What a walk climbed and dropped over the stretches it covered, each
+    /// the way it was walked: ``climb(over:)`` of those walked towards the
+    /// route's end, and of those walked back towards its start turned round,
+    /// since a descent walked uphill is an ascent. A stretch walked there and
+    /// back is climbed both ways. `nil` when no stretch had two heights to
+    /// compare.
+    func climb(walking coverage: TrailWalkCoverage) -> (gainMeters: Double, lossMeters: Double)? {
+        let onward = climb(over: coverage.walkedTowardsEnd)
+        let back = climb(over: coverage.walkedTowardsStart)
+        guard onward != nil || back != nil else { return nil }
+        return (
+            (onward?.gainMeters ?? 0) + (back?.lossMeters ?? 0),
+            (onward?.lossMeters ?? 0) + (back?.gainMeters ?? 0)
+        )
+    }
 }
 
 nonisolated extension RouteProfile {
