@@ -14,6 +14,7 @@
 
 import CoreLocation
 @testable import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Trail places")
@@ -163,6 +164,36 @@ struct TrailPlaceTests {
         )
         #expect(anchor.distanceAlongRouteMeters > total, "the return leg is the nearer crossing")
         #expect(anchor.describesTheRoute)
+    }
+
+    /// A pause is not distance and not trail (see ``RouteBoundary``): the leg
+    /// between the fix before it and the fix after it was driven, not walked.
+    /// So a place beside the drive is not on the hike, and a place past it is
+    /// as far along as the walking that reached it, which is the figure the
+    /// hike's distance and its chart use.
+    @Test("a paused leg is not part of the line a place is measured along")
+    func pausedLegIsNotMeasuredAlong() throws {
+        // A thousandth of a degree north, a pause across nine more, then one.
+        let step = 0.001
+        let route = [0, 1, 10, 11].map { offset in
+            RouteCoordinate(
+                latitude: Line.south + Double(offset) * step,
+                longitude: Line.longitude,
+                boundary: offset == 10 ? .paused : nil
+            )
+        }
+        let inTheCarPark = Self.place(Line.south + 5 * step)
+        let pastIt = Self.place(Line.south + 10.5 * step)
+
+        let anchors = TrailPlaceOrder.anchors(of: [inTheCarPark, pastIt], along: route)
+
+        let carPark = try #require(anchors[inTheCarPark.id])
+        #expect(!carPark.describesTheRoute)
+        #expect(TrailPlaceOrder.touched([inTheCarPark], along: route).isEmpty)
+
+        let walked = RouteGeometry.distanceMeters(from: route[0].clCoordinate, to: route[1].clCoordinate)
+        let past = try #require(anchors[pastIt.id])
+        #expect(past.distanceAlongRouteMeters.isApproximatelyEqual(to: 1.5 * walked, absoluteTolerance: 1))
     }
 
     // MARK: What a save keeps

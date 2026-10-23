@@ -388,7 +388,14 @@ nonisolated public enum TrailPlaceOrder {
         var best: [UUID: TrailPlaceAnchor] = [:]
         best.reserveCapacity(places.count)
         var traveled: Double = 0
-        for (start, end) in coordinates.adjacentPairs() {
+        // A paused leg is neither distance nor trail (see ``RouteBoundary``),
+        // so nothing is measured against it and it adds nothing: a place
+        // beside the drive between two recorded pieces is not on the hike,
+        // and one past it is as far along as the walking that reached it,
+        // the figure ``RouteProfile``'s axis and the hike's distance use.
+        for index in route.indices.dropFirst() where !route[index].isPauseBoundary {
+            let start = coordinates[index - 1]
+            let end = coordinates[index]
             let length = RouteGeometry.distanceMeters(from: start, to: end)
             for target in targets {
                 let projection = RouteGeometry.project(
