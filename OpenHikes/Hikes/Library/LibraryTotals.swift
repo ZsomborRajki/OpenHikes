@@ -82,6 +82,10 @@ nonisolated struct LibraryOuting: Equatable, Sendable {
     /// whose climb nothing kept.
     let climbMeters: Double?
     let movingSeconds: TimeInterval
+    /// One walk along a saved trail rather than a clocked hike: the trail is
+    /// what it is called, and its time is its own ``movingSeconds`` rather
+    /// than any clock the trail carries.
+    let isWalk: Bool
 }
 
 /// A hike that was walked, with the figures its records are chosen by.
@@ -221,7 +225,8 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
                 date: hike.date,
                 distanceMeters: hike.distanceMeters,
                 climbMeters: hike.climbMeters ?? 0,
-                movingSeconds: hike.movingSeconds ?? 0
+                movingSeconds: hike.movingSeconds ?? 0,
+                isWalk: false
             )
         }
         let followed = walks.compactMap { walk -> LibraryOuting? in
@@ -238,7 +243,8 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
                 climbMeters: walk.trailHasChanged
                     ? nil
                     : (byID[walk.hikeID]?.climbMeters ?? 0) * covered * share,
-                movingSeconds: walk.activeSeconds * share
+                movingSeconds: walk.activeSeconds * share,
+                isWalk: true
             )
         }
         return clocked + followed

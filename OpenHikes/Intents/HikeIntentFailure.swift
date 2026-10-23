@@ -33,6 +33,10 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     case noActiveRecording
     /// Nothing has been recorded or imported yet.
     case noHikesYet
+    /// The library holds hikes, but none of them has been walked: drawn
+    /// lines, trails saved from the community, a GPX with no clock. Not
+    /// ``noHikesYet``, whose sentence the library would contradict.
+    case nothingWalkedYet
     /// Asked to resume one that is not paused.
     case notPaused
     /// The recorder refused, in its own words.
@@ -66,13 +70,14 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
         case .awaitingRouteReview:
             "Your hike is saved, but it needs you to pick which trail you followed."
         case .noHikesYet: "There aren’t any hikes in OpenHikes yet."
+        case .nothingWalkedYet: "You haven’t walked any of your hikes yet."
         case .storage: "Your hikes couldn’t be read."
         }
     }
 
     var recoverySuggestion: String? {
         switch self {
-        case .alreadyRecording, .noActiveRecording, .notPaused, .noHikesYet, .unknownDay, .walking:
+        case .alreadyRecording, .noActiveRecording, .notPaused, .noHikesYet, .nothingWalkedYet, .unknownDay, .walking:
             nil
         case .busyFinishing: "Try again in a moment."
         case .recording(let failure): failure.recoverySuggestion

@@ -267,19 +267,37 @@ extension HikeIntentCoordinator: HikeRecordingControlHandling {
 // MARK: - Reading what has been walked
 
 extension HikeIntentCoordinator {
-    /// The most recent finished hike.
+    /// The most recent of the outings *Totals* counts: a clocked hike, or
+    /// one walk along a saved trail (#942).
     ///
-    /// Drafts are excluded by `isRecording`: a recording in progress owns a
-    /// persisted row from the moment it starts, and it is not something to
-    /// report as "your last hike" while it is still being walked.
-    func lastFinishedHike() throws(HikeIntentFailure) -> FinishedHikeReport {
-        var descriptor = FetchDescriptor<Hike>(
-            predicate: #Predicate { !$0.isRecording },
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
+    /// Not the newest `Hike` row, for the reasons ``totals(from:to:)`` is
+    /// not a fetch of the day's rows: a trail drawn or saved today has not
+    /// been walked, and a walk today along a trail saved last year is dated
+    /// by the trail. The newest row read a plan's saved length back as "your
+    /// last hike", and passed over the walk the hiker had just come home
+    /// from. The latest is the one that started last, which is the date
+    /// ``LibraryTotals`` places an outing by.
+    ///
+    /// A recording still being walked is not one — the sweep leaves drafts
+    /// out — and a hike asked about by name is ``finishedHike(withID:)``'s,
+    /// which answers for any saved row, walked or not.
+    func lastOuting() async throws(HikeIntentFailure) -> FinishedHikeReport {
+        let library = try await readLibrary()
+        let trails = Dictionary(
+            library.hikes.map { ($0.hikeID, $0) },
+            uniquingKeysWith: { first, _ in first }
         )
-        descriptor.fetchLimit = 1
-        guard let hike = try fetch(descriptor).first else { throw .noHikesYet }
-        return Self.report(for: hike)
+        // A walk whose trail the sweep did not return — its row not synced
+        // down yet — has no name to be reported by, and is passed over.
+        let latest = LibraryTotals.outings(hikes: library.hikes, walks: library.walks)
+            .compactMap { outing in trails[outing.hikeID].map { (outing: outing, trail: $0) } }
+            .max { $0.outing.date < $1.outing.date }
+        guard let latest else {
+            // A library of plans is not an empty one, and saying it is would
+            // contradict the sheet the hiker opens next.
+            throw library.hikes.isEmpty ? .noHikesYet : .nothingWalkedYet
+        }
+        return Self.report(for: latest.outing, along: latest.trail)
     }
 
     /// What was walked on the calendar day containing `date`.
@@ -310,15 +328,7 @@ extension HikeIntentCoordinator {
     /// whose `date` is outside it, and the overlap is what keeps it from
     /// counting twice.
     func totals(from start: Date, to end: Date) async throws(HikeIntentFailure) -> HikeTotalsReport {
-        let library: (hikes: [LibraryHikeFacts], walks: [LibraryWalkFacts])
-        do {
-            library = try await LibraryTotalsSweep.read(from: container)
-        } catch {
-            // As in `fetch(_:)`: logged, not carried, because the failure is
-            // read out loud.
-            Self.logger.error("Reading hikes for an intent failed: \(error.localizedDescription, privacy: .public)")
-            throw .storage
-        }
+        let library = try await readLibrary()
         let outings = LibraryTotals.outings(hikes: library.hikes, walks: library.walks)
             .filter { $0.date >= start && $0.date < end }
         return HikeTotalsReport(
@@ -333,6 +343,21 @@ extension HikeIntentCoordinator {
     /// Today, by the hiker's own calendar and the injected clock.
     func totalsForToday() async throws(HikeIntentFailure) -> HikeTotalsReport {
         try await totals(forDayContaining: clock())
+    }
+
+    /// The whole library as ``LibraryTotalsSweep`` reads it, off the main
+    /// actor, for the two questions about what has been walked.
+    private func readLibrary() async throws(HikeIntentFailure) -> (
+        hikes: [LibraryHikeFacts], walks: [LibraryWalkFacts]
+    ) {
+        do {
+            return try await LibraryTotalsSweep.read(from: container)
+        } catch {
+            // As in `fetch(_:)`: logged, not carried, because the failure is
+            // read out loud.
+            Self.logger.error("Reading hikes for an intent failed: \(error.localizedDescription, privacy: .public)")
+            throw .storage
+        }
     }
 
     /// A context per query rather than one held for the coordinator's life:
@@ -353,19 +378,6 @@ extension HikeIntentCoordinator {
         }
     }
 
-    /// Reads the elapsed clock off the route's own end stamps rather than
-    /// through ``Hike/routeStatistics``.
-    ///
-    /// That property is documented at its declaration as deriving every
-    /// statistic "from scratch, on the calling thread, on every read", and
-    /// this coordinator is `@MainActor` — so a saved multi-hour hike, which is
-    /// thousands of points, would run a full accumulator pass on the main
-    /// actor inside an intent that has a system execution budget. Both report
-    /// paths reach here, and one of them lands immediately after a save.
-    ///
-    /// The answer is the same one: `HikeRouteStatistics` takes its duration
-    /// between the first and last *stamped* points, which is what these two
-    /// searches find, and calls it `nil` unless the clock actually ran.
     /// Every finished hike, newest first, as reports.
     ///
     /// The whole store rather than a page of it. A hiker's library is tens or
@@ -425,6 +437,19 @@ extension HikeIntentCoordinator {
         return report
     }
 
+    /// Reads the elapsed clock off the route's own end stamps rather than
+    /// through ``Hike/routeStatistics``.
+    ///
+    /// That property is documented at its declaration as deriving every
+    /// statistic "from scratch, on the calling thread, on every read", and
+    /// this coordinator is `@MainActor` — so a saved multi-hour hike, which is
+    /// thousands of points, would run a full accumulator pass on the main
+    /// actor inside an intent that has a system execution budget. Both report
+    /// paths reach here, and one of them lands immediately after a save.
+    ///
+    /// The answer is the same one: `HikeRouteStatistics` takes its duration
+    /// between the first and last *stamped* points, which is what these two
+    /// searches find, and calls it `nil` unless the clock actually ran.
     private static func report(for hike: Hike) -> FinishedHikeReport {
         let route = hike.route
         let first = route.first { $0.timestamp != nil }?.timestamp
@@ -440,6 +465,29 @@ extension HikeIntentCoordinator {
             date: hike.date,
             distance: hike.distance,
             duration: duration
+        )
+    }
+
+    /// An outing by the figures *Totals* sums for it, so the two cannot
+    /// disagree about how far it went.
+    ///
+    /// Its time is the one its own screen shows. A clocked hike's is its
+    /// clock, first stamp to last — what ``report(for:)`` reads off the
+    /// route, so *Last Hike* and *Hike Summary* say the same of one
+    /// recording. A walk's is its active time, the figure its History row
+    /// speaks, and never the clock of the recording or file its trail came
+    /// from.
+    private static func report(
+        for outing: LibraryOuting,
+        along trail: LibraryHikeFacts
+    ) -> FinishedHikeReport {
+        let seconds = outing.isWalk ? outing.movingSeconds : trail.clock?.duration
+        return FinishedHikeReport(
+            id: trail.hikeID,
+            title: trail.title,
+            date: outing.date,
+            distance: Measurement(value: outing.distanceMeters, unit: .meters),
+            duration: seconds.flatMap { $0 > 0 ? $0 : nil }
         )
     }
 }

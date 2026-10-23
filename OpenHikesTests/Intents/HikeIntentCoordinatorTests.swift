@@ -225,7 +225,7 @@ final class HikeIntentCoordinatorTests {
         // Saved, not merely stopped: the row has to be in the store and no
         // longer flagged as a draft, which is what makes it the answer to
         // "what was my last hike".
-        let saved = try coordinator.lastFinishedHike()
+        let saved = try await coordinator.lastOuting()
         #expect(saved.id == hike.id)
     }
 
@@ -256,7 +256,7 @@ final class HikeIntentCoordinatorTests {
         await #expect(throws: HikeIntentFailure.noActiveRecording) {
             try await coordinator.currentRecording()
         }
-        #expect(try coordinator.lastFinishedHike().distance.value > 0)
+        #expect(try await coordinator.lastOuting().distance.value > 0)
     }
 
     @Test("the control opens the app for an unasked location permission")

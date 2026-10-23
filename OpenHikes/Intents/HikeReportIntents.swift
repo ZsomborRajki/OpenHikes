@@ -70,7 +70,7 @@ struct LastHikeIntent: AppIntent, HikeCoordinatingIntent {
     @Dependency var appCoordinator: HikeIntentCoordinator
 
     func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
-        let hike = try await coordinator.lastFinishedHike()
+        let hike = try await coordinator.lastOuting()
         // The value is returned as well as spoken so a Shortcut can carry the
         // sentence into a message or a note, which is most of what anybody
         // builds a shortcut around this for.
