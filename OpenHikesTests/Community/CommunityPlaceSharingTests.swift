@@ -67,6 +67,14 @@ struct CommunityPlaceSharingTests {
         try JSONEncoder().encode(document)
     }
 
+    /// The hut's place under a new id and another name, at the hut's position.
+    private static func named(_ name: String) -> CommunityPlace {
+        var place = CommunityPlace(hut)
+        place.id = UUID()
+        place.name = name
+        return place
+    }
+
     // MARK: Out and back
 
     @Test("a place round-trips through the route's asset")
@@ -121,6 +129,49 @@ struct CommunityPlaceSharingTests {
         var second = CommunityPlace(Self.hut)
         second.name = "Impostor"
         let kept = CommunityRoutePayload.places([CommunityPlace(Self.hut), second])
+        #expect(kept.map(\.name) == ["Kärlingerhaus"])
+    }
+
+    @Test("an empty list reads as no places")
+    func emptyListReadsEmpty() {
+        #expect(CommunityRoutePayload.places([]).isEmpty)
+    }
+
+    /// The first place *kept* wins its id, not the first one listed: a place
+    /// dropped for being off the map must not take a later, usable one with it.
+    @Test("a place off the map does not claim its id from a later one")
+    func droppedPlaceClaimsNoID() {
+        var offMap = CommunityPlace(Self.hut)
+        offMap.name = "Nowhere"
+        offMap.latitude = .nan
+        let kept = CommunityRoutePayload.places([offMap, CommunityPlace(Self.hut)])
+        #expect(kept.map(\.name) == ["Kärlingerhaus"])
+    }
+
+    @Test("repeats keep the first of each id, in the order the file lists them")
+    func repeatsKeepFirstInOrder() {
+        let first = Self.named("A")
+        let second = Self.named("B")
+        var firstAgain = Self.named("A again")
+        firstAgain.id = first.id
+        var secondAgain = Self.named("B again")
+        secondAgain.id = second.id
+        let kept = CommunityRoutePayload.places([first, second, firstAgain, Self.named("C"), secondAgain])
+        #expect(kept.map(\.name) == ["A", "B", "C"])
+    }
+
+    @Test("two places at one spot are two places")
+    func samePositionIsNotSameID() {
+        let kept = CommunityRoutePayload.places([Self.named("Hut"), Self.named("Spring")])
+        #expect(kept.map(\.name) == ["Hut", "Spring"])
+    }
+
+    /// The cap is spent on the list as it arrived, repeats included, so a
+    /// file cannot pad itself past the cap with copies of one place.
+    @Test("the cap counts repeats, so a place past it is never read")
+    func capCountsRepeats() {
+        let repeats = Array(repeating: CommunityPlace(Self.hut), count: GPXImport.maximumPlaces)
+        let kept = CommunityRoutePayload.places(repeats + [Self.named("Past the cap")])
         #expect(kept.map(\.name) == ["Kärlingerhaus"])
     }
 

@@ -56,6 +56,7 @@
 //  network or the public database. See `CommunityRoutePayloadTests`.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -169,32 +170,36 @@ nonisolated enum CommunityRoutePayload {
     /// they are bounded and limited to the tags this app shows.
     ///
     /// Duplicate ids keep the first: a photograph names its place by id, and
-    /// two places answering to one id would be a photograph on both.
+    /// two places answering to one id would be a photograph on both. The
+    /// first is the first place *kept*, so one dropped for being off the map
+    /// takes no id with it; and the cap is spent before either, on the list
+    /// as it arrived.
     static func places(_ raw: [CommunityPlace]) -> [TrailPlace] {
-        var seen: Set<UUID> = []
-        return raw.prefix(GPXImport.maximumPlaces).compactMap { place in
-            guard Mercator.isRepresentable(latitude: place.latitude, longitude: place.longitude),
-                  seen.insert(place.id).inserted
-            else { return nil }
-            let osm: TrailPlaceOSM? = {
-                guard let type = place.osmElementType, TrailPlaceOSM.elementTypes.contains(type),
-                      let id = place.osmElementID, id > 0 else { return nil }
-                return TrailPlaceOSM(
-                    elementType: type,
-                    elementID: id,
-                    facts: TrailPlaceFact.facts(in: place.osmTags ?? [:])
-                )
-            }()
-            return TrailPlace(
-                latitude: place.latitude,
-                longitude: place.longitude,
-                name: BoundedText.boundedOrEmpty(place.name, to: .title),
-                symbol: place.symbol.flatMap(TrailPlaceSymbol.named),
-                note: BoundedText.boundedOrEmpty(place.note, to: .notes),
-                osm: osm,
-                id: place.id
+        raw.prefix(GPXImport.maximumPlaces).compactMap(trailPlace).uniqued(on: \.id)
+    }
+
+    /// One place as this app will keep it, or `nil` for one off the map.
+    private static func trailPlace(_ place: CommunityPlace) -> TrailPlace? {
+        guard Mercator.isRepresentable(latitude: place.latitude, longitude: place.longitude)
+        else { return nil }
+        let osm: TrailPlaceOSM? = {
+            guard let type = place.osmElementType, TrailPlaceOSM.elementTypes.contains(type),
+                  let id = place.osmElementID, id > 0 else { return nil }
+            return TrailPlaceOSM(
+                elementType: type,
+                elementID: id,
+                facts: TrailPlaceFact.facts(in: place.osmTags ?? [:])
             )
-        }
+        }()
+        return TrailPlace(
+            latitude: place.latitude,
+            longitude: place.longitude,
+            name: BoundedText.boundedOrEmpty(place.name, to: .title),
+            symbol: place.symbol.flatMap(TrailPlaceSymbol.named),
+            note: BoundedText.boundedOrEmpty(place.note, to: .notes),
+            osm: osm,
+            id: place.id
+        )
     }
 
     /// The same, from bytes already in hand.
