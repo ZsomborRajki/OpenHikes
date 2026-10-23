@@ -155,7 +155,7 @@ struct TrailDraftElevationTests {
 
     /// Spins the main actor until `condition` holds, which is what waiting on
     /// the effect looks like here — see the file header.
-    static func settle(until condition: () -> Bool) async {
+    private static func settle(until condition: () -> Bool) async {
         for _ in 0..<yieldBudget {
             if condition() { return }
             await Task.yield()
