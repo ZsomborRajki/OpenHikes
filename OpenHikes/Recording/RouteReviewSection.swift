@@ -26,8 +26,9 @@ nonisolated struct RouteReviewSection: Identifiable, Sendable {
     }
 
     /// How far the matched line has to sit from the recorded fix before the
-    /// leg counts as moved. Shared with ``RecordingPreparation`` so "moved"
-    /// means one thing across preparation and review.
+    /// leg counts as moved. Applied only by ``pointsMoved(_:from:)``, which
+    /// preparation and review both call, so "moved" means one thing across
+    /// them.
     static let movedThresholdMeters = 1.0
 
     /// A run stays open across short stretches the matcher left alone, so a
@@ -212,13 +213,33 @@ nonisolated extension RouteReviewSection {
         return sections
     }
 
+    /// Whether a leg counts as moved for review. A leg with no recorded fixes
+    /// has nothing to hand back to GPS, so it is never offered as moved — a
+    /// classification decision of the review's own, kept out of
+    /// ``pointsMoved(_:from:)``.
     static func legMoved(_ leg: TrailMatchLeg) -> Bool {
         guard !leg.rawPoints.isEmpty else { return false }
-        guard leg.defaultPoints.count == leg.rawPoints.count else { return true }
-        return zip(leg.defaultPoints, leg.rawPoints).contains { matched, raw in
+        return pointsMoved(leg.defaultPoints, from: leg.rawPoints)
+    }
+
+    /// Whether `points` differ from the recorded `raw` fixes they stand in
+    /// for: a different count, or any corresponding pair further apart than
+    /// ``movedThresholdMeters``.
+    ///
+    /// The one rule for "moved", read by ``legMoved(_:)`` to pick the legs a
+    /// hiker reviews and by ``RecordingPreparation`` to decide whether a saved
+    /// hike keeps its raw trace beside the matched line. Two copies of the
+    /// comparison could drift apart, so a leg review called moved would save
+    /// without the trace it was moved from, or the reverse.
+    static func pointsMoved(
+        _ points: [RecordingPoint],
+        from raw: [RecordingPoint]
+    ) -> Bool {
+        guard points.count == raw.count else { return true }
+        return zip(points, raw).contains { point, rawPoint in
             RouteGeometry.distanceMeters(
-                from: matched.coordinate,
-                to: raw.coordinate
+                from: point.coordinate,
+                to: rawPoint.coordinate
             ) > movedThresholdMeters
         }
     }

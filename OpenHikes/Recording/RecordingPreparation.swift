@@ -160,7 +160,7 @@ nonisolated enum RecordingPreparation {
         } else {
             preparedPoints = match?.points ?? deduplicated
         }
-        let usesMatchedRoute = routeMoved(
+        let usesMatchedRoute = RouteReviewSection.pointsMoved(
             preparedPoints,
             from: deduplicated
         )
@@ -246,18 +246,5 @@ nonisolated enum RecordingPreparation {
             deduplicated.append(point)
         }
         return deduplicated
-    }
-
-    private static func routeMoved(
-        _ route: [RecordingPoint],
-        from raw: [RecordingPoint]
-    ) -> Bool {
-        guard route.count == raw.count else { return true }
-        return zip(route, raw).contains { routePoint, rawPoint in
-            RouteGeometry.distanceMeters(
-                from: routePoint.coordinate,
-                to: rawPoint.coordinate
-            ) > RouteReviewSection.movedThresholdMeters
-        }
     }
 }
