@@ -27,17 +27,28 @@
 //  be paid on the main thread every second.
 //
 //  It is also the more consistent answer. A stretch is credited with exactly
-//  what the whole route's count credited to the ground inside it, so:
+//  what the whole route's count credited between its first height and its
+//  last, so:
 //  - the whole route agrees with ``RouteProfile/elevation`` to the metre;
-//  - stretches that meet add up to the stretch they make, which is what
-//    ``RouteProfile/climb(over:)`` relies on;
+//  - stretches that meet at a height add up to the stretch they make, which
+//    is what ``RouteProfile/climb(over:)`` relies on. A cut that falls
+//    between two heights leaves the step it falls on to neither side, as a
+//    count over each stretch's own heights always did;
 //  - a pause needs no lookup, because the count already ended its run there.
+//    Its figures do not move across one either, so a stretch that begins or
+//    ends at a join, where the fix before a pause and the fix after it stand
+//    at one distance, reads the same whichever of the two it lands on.
 //
-//  What it gives up is the deadband's judgment at a stretch's own ends. One
-//  that begins on a wobble inside a run takes the route's verdict on it
-//  rather than counting the wobble afresh, so the two readings differ by
-//  less than ``ElevationAccumulator/reversalThresholdMeters`` an end — and
-//  the route's verdict, which saw the ground either side, is the better one.
+//  What it gives up is the deadband's judgment at a stretch's start. A count
+//  begun there would judge the first few metres for itself; this one carries
+//  on the route's run. A stretch that starts within the deadband of a run's
+//  peak (or trough) starts, as far as the count goes, at that peak: a turn
+//  from it is credited from the peak once the route confirms it, even when
+//  the part inside the stretch is smaller than the deadband, and a climb on
+//  past it counts only above it. The two readings differ by less than twice
+//  ``ElevationAccumulator/reversalThresholdMeters``, and only at that end —
+//  and the route's verdict, which saw the ground either side, is the better
+//  one.
 //
 
 import Algorithms
@@ -61,9 +72,9 @@ nonisolated public extension RouteProfile {
         guard past - first >= 2 else { return nil }
         let entry = climbMarks[first]
         let exit = climbMarks[past - 1]
-        // The count only ever grows, so this is never below zero but by a
-        // rounding: a run's provisional figure and the committed one that
-        // replaces it are the same sum, added up in a different order.
+        // The count never goes down — a run's provisional figure is committed
+        // as the very sum it reported — so neither difference is below zero.
+        // The floor only guards that.
         return (max(0, exit.gainMeters - entry.gainMeters), max(0, exit.lossMeters - entry.lossMeters))
     }
 

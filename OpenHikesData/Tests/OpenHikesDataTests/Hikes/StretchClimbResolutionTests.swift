@@ -109,9 +109,32 @@ struct StretchClimbResolutionTests {
         #expect(climb.lossMeters.isApproximatelyEqual(to: 90, absoluteTolerance: 0.001))
     }
 
+    /// The trade the file header of `RouteProfile+Climb.swift` makes at a
+    /// stretch's start: it carries on the route's run rather than judging its
+    /// first few metres afresh.
+    @Test("a stretch that starts just below a peak is credited with the route's turn from it")
+    func stretchStartTakesTheRoutesVerdict() throws {
+        let heights = [100.0, 200, 198, 196]
+        let profile = RouteProfile(route: heights.enumerated().map { index, height in
+            RouteCoordinate(latitude: 47, longitude: 11 + Double(index) * 0.001, elevation: height)
+        })
+
+        // 198 to 196 is 2 m, inside the deadband, so a count begun at 198
+        // would read nothing. The route turned 4 m down from its 200 m peak,
+        // and this stretch is where it confirmed the turn.
+        let climb = try #require(profile.climb(from: profile.distances[2], to: profile.distances[3]))
+
+        #expect(climb.gainMeters.isApproximatelyEqual(to: 0, absoluteTolerance: 0.001))
+        #expect(climb.lossMeters.isApproximatelyEqual(to: 4, absoluteTolerance: 0.001))
+    }
+
+    /// Every cut lands on a height, which is what the file header promises
+    /// adds up. The one at 2,000 is a join: the paused leg has no length, so
+    /// the fix before the pause stands at the same distance.
     @Test("a route's stretches add up to the whole")
     func stretchesAddUpToTheWhole() throws {
         let profile = RouteProfile(route: Self.rollingRoute(count: 6001, resumingAt: [2000, 4000]))
+        try #require(profile.distances[1999] == profile.distances[2000])
         let total = profile.totalDistanceMeters
         let cuts = [0, profile.distances[777], profile.distances[2000], profile.distances[3500], total]
         let stretches = zip(cuts, cuts.dropFirst()).map { $0...$1 }

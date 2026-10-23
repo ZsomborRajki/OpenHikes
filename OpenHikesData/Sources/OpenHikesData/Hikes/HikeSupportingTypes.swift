@@ -94,8 +94,9 @@ nonisolated public struct ElevationSample: Identifiable, Equatable, Sendable {
     public let distanceMeters: Double
     public let elevation: Double
     /// Whether a pause falls between this sample and the one plotted before
-    /// it — so a climb counted along the samples ends its run here rather than
-    /// reading the lift or the drive as a rise.
+    /// it, which is what tells the two samples at a join apart. A stretch's
+    /// climb does not read it: that is counted over every height, not along
+    /// the plotted samples (see ``RouteProfile/climb(from:to:)``).
     public let resumesAfterPause: Bool
 
     public init(distanceMeters: Double, elevation: Double, resumesAfterPause: Bool = false) {
