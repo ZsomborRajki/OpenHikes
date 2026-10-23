@@ -141,7 +141,12 @@ final class TrailDraftElevation {
     @ObservationIgnored private let draft: TrailDraft
     @ObservationIgnored private let source: (any CuratedElevationSourcing)?
     @ObservationIgnored private let pause: @Sendable (TimeInterval) async throws -> Void
-    @ObservationIgnored private var task: Task<Void, Never>?
+    /// The question in flight, if any, from the settle to the answer.
+    ///
+    /// Readable so a suite can wait for it to finish. A cancelled question
+    /// finishes without changing anything here, so there is no effect to wait
+    /// on instead.
+    @ObservationIgnored private(set) var task: Task<Void, Never>?
     @ObservationIgnored private var deliver: ((RouteHeightSamples) -> Void)?
 
     /// - Parameters:
