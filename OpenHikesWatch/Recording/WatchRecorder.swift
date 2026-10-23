@@ -79,6 +79,11 @@ final class WatchRecorder: NSObject {
         /// and off the main actor — see ``WatchWalkQueue`` — but a walk is
         /// called kept only once it has landed.
         case saving
+        /// At launch, a journal whose walk is named on the disk queue, while
+        /// the queue reads it to say whether the journal can go — see
+        /// ``confirmQueued(_:)``. Not ``saving``: nothing is being kept, and
+        /// leaving `.saving` for `.idle` is what a save feels like.
+        case checkingQueue
         /// Stopped, and the walk is on disk waiting for the phone.
         case saved(WatchRecordedWalk)
         /// Stopped, and the walk could not be written. This is the only copy
@@ -93,7 +98,7 @@ final class WatchRecorder: NSObject {
         var isActive: Bool {
             switch self {
             case .recording, .paused: true
-            case .idle, .preparing, .saving, .saved, .unsaved, .interrupted, .failed: false
+            case .idle, .preparing, .saving, .checkingQueue, .saved, .unsaved, .interrupted, .failed: false
             }
         }
 
@@ -107,9 +112,9 @@ final class WatchRecorder: NSObject {
             // `HKWorkoutSession`, leak the first unended and reset the
             // accumulator under a recording that was already running.
             // `.saving` and `.unsaved` would reset it under a walk nothing
-            // else holds yet, and `.interrupted` would start a journal over
-            // the only copy of a walk the hiker has not answered for.
-            case .preparing, .recording, .paused, .saving, .unsaved, .interrupted: false
+            // else holds yet, and `.checkingQueue` and `.interrupted` would
+            // start a journal over what may be the only copy of a walk.
+            case .preparing, .recording, .paused, .saving, .checkingQueue, .unsaved, .interrupted: false
             }
         }
     }
@@ -182,17 +187,10 @@ final class WatchRecorder: NSObject {
         locations.allowsBackgroundLocationUpdates = true
         // From the file names, synchronously: the answer decides whether the
         // first frame offers the interrupted walk or a Start that would write
-        // over it.
+        // over it. A walk only named on the queue holds Start off until
+        // reading it says whether the journal can go.
         let queued = store.walks.listedSessionIDs()
-        switch WatchRecordingRecovery.resolve(journal.file.recover(), queued: queued) {
-        case .nothing:
-            break
-        case .alreadyQueued:
-            journal.close()
-        case .offer(let recovered):
-            phase = .interrupted(recovered)
-            recoverWorkoutSession()
-        }
+        recover(WatchRecordingRecovery.resolve(journal.file.recover(), queued: queued))
         // Whatever the last process was recording is not being recorded now,
         // so a complication still showing it is showing a walk that ended
         // with that process. Said now, rather than left to tick for the six
@@ -301,7 +299,7 @@ final class WatchRecorder: NSObject {
     func acknowledge() {
         switch phase {
         case .saved, .failed: phase = .idle
-        case .idle, .preparing, .recording, .paused, .saving, .unsaved, .interrupted: break
+        case .idle, .preparing, .recording, .paused, .saving, .checkingQueue, .unsaved, .interrupted: break
         }
     }
 
@@ -508,7 +506,7 @@ final class WatchRecorder: NSObject {
         let state: WatchGlance.State = switch phase {
         case .recording: .recording
         case .paused: .paused
-        case .idle, .preparing, .saving, .saved, .unsaved, .interrupted, .failed: .idle
+        case .idle, .preparing, .saving, .checkingQueue, .saved, .unsaved, .interrupted, .failed: .idle
         }
         glances.publish(
             WatchGlance(
@@ -608,6 +606,31 @@ extension WatchRecorder {
     }
 
     // MARK: An interrupted recording
+
+    private func recover(_ recovery: WatchRecordingRecovery) {
+        switch recovery {
+        case .nothing:
+            break
+        case .alreadyQueued:
+            journal.close()
+        case .offer(let recovered):
+            phase = .interrupted(recovered)
+            recoverWorkoutSession()
+        case .confirm(let recovered):
+            phase = .checkingQueue
+            Task { await self.confirmQueued(recovered) }
+        }
+    }
+
+    /// Reads the queued walk a launch found named beside its journal, off
+    /// the main actor, and lets the journal go only if it is there to send.
+    private func confirmQueued(_ recovered: WatchRecoveredRecording) async {
+        let recovery = await WatchRecordingRecovery.confirming(recovered, on: store.walks)
+        // Nothing else leaves `.checkingQueue`, but the check costs nothing.
+        guard phase == .checkingQueue else { return }
+        phase = .idle
+        recover(recovery)
+    }
 
     /// Carries on recording an interrupted walk, under a new workout session.
     ///

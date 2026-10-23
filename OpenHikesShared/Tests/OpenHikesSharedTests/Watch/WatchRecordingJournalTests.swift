@@ -97,13 +97,53 @@ struct WatchRecordingJournalTests {
         #expect(recovered.finishedWalk() == nil)
     }
 
-    @Test("A walk already on the queue is not offered a second time")
-    func queuedWalkIsNotOfferedAgain() throws {
+    @Test("A walk named on the queue is read before its journal goes")
+    func queuedWalkIsConfirmedByName() throws {
         let (_, entries) = Fixture.recording(steps: 3)
         let recovered = try #require(WatchRecoveredRecording.replaying(try Fixture.data(entries))).recording
         #expect(WatchRecordingRecovery.resolve(nil, queued: []) == .nothing)
-        #expect(WatchRecordingRecovery.resolve(recovered, queued: [recovered.sessionID]) == .alreadyQueued)
+        #expect(WatchRecordingRecovery.resolve(recovered, queued: [recovered.sessionID]) == .confirm(recovered))
         #expect(WatchRecordingRecovery.resolve(recovered, queued: [UUID()]) == .offer(recovered))
+    }
+
+    @Test("A walk already on the queue is not offered a second time")
+    func queuedWalkIsNotOfferedAgain() async throws {
+        let (_, entries) = Fixture.recording(steps: 3)
+        let recovered = try #require(WatchRecoveredRecording.replaying(try Fixture.data(entries))).recording
+        let walk = try #require(recovered.finishedWalk())
+        try await withQueue { queue in
+            #expect(await queue.enqueue(walk) != nil)
+            #expect(await WatchRecordingRecovery.confirming(recovered, on: queue) == .alreadyQueued)
+        }
+    }
+
+    @Test(
+        "A file named for the walk that is not one leaves the journal offered",
+        arguments: [false, true]
+    )
+    func undecodableQueuedWalkIsOffered(namedBeforeTheIndex: Bool) async throws {
+        let (_, entries) = Fixture.recording(steps: 3)
+        let recovered = try #require(WatchRecoveredRecording.replaying(try Fixture.data(entries))).recording
+        let walk = try #require(recovered.finishedWalk())
+        try await withQueue { queue in
+            let fileName = if namedBeforeTheIndex {
+                "\(walk.sessionID.uuidString).json"
+            } else {
+                "\(Int64(walk.endedAt.timeIntervalSince1970 * 1000))_\(walk.sessionID.uuidString).json"
+            }
+            try FileManager.default.createDirectory(at: queue.directory, withIntermediateDirectories: true)
+            try Data("{".utf8).write(to: queue.directory.appending(path: fileName))
+
+            let queued = queue.listedSessionIDs()
+            #expect(WatchRecordingRecovery.resolve(recovered, queued: queued) == .confirm(recovered))
+            #expect(await WatchRecordingRecovery.confirming(recovered, on: queue) == .offer(recovered))
+        }
+    }
+
+    private func withQueue(_ body: (WatchWalkQueue) async throws -> Void) async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "walk-queue-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try await body(WatchWalkQueue(directory: directory))
     }
 
     private enum Fixture {

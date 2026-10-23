@@ -137,6 +137,57 @@ struct WatchWalkQueueTests {
         }
     }
 
+    @Test("A fresh copy of a walk that would not decode replaces its file", arguments: [false, true])
+    func undecodableWalkIsReplaced(namedBeforeTheIndex: Bool) async throws {
+        try await withQueue { queue in
+            var walk = Fixture.walk(endingAfter: 100)
+            if namedBeforeTheIndex {
+                try FileManager.default.createDirectory(at: queue.directory, withIntermediateDirectories: true)
+                try Data("{".utf8).write(to: queue.directory.appending(path: "\(walk.sessionID.uuidString).json"))
+            } else {
+                _ = await queue.enqueue(walk)
+                let name = try #require(try fileNames(in: queue.directory).first)
+                try Data("{".utf8).write(to: queue.directory.appending(path: name))
+            }
+
+            let relaunched = WatchWalkQueue(directory: queue.directory)
+            #expect(await relaunched.walk(walk.sessionID) == nil)
+            #expect(await relaunched.pending().isEmpty)
+            // Recovered from its journal, so it ends at a different moment
+            // and is written under a different name.
+            walk.endedAt = walk.endedAt.addingTimeInterval(-30)
+            #expect(await relaunched.enqueue(walk)?.sessionIDs == [walk.sessionID])
+
+            #expect(try fileNames(in: queue.directory).count == 1)
+            #expect(await relaunched.walk(walk.sessionID) == walk)
+            #expect(await WatchWalkQueue(directory: queue.directory).walk(walk.sessionID) == walk)
+        }
+    }
+
+    @Test("A listing that fails is tried again rather than taken for an empty queue")
+    func failedListingIsRetried() async throws {
+        try await withQueue { queue in
+            let walk = Fixture.walk(endingAfter: 100)
+            _ = await queue.enqueue(walk)
+            let moved = queue.directory.appendingPathExtension("away")
+            try FileManager.default.moveItem(at: queue.directory, to: moved)
+            defer { try? FileManager.default.removeItem(at: moved) }
+            // A file where the directory should be: there, and not listable.
+            try Data().write(to: queue.directory)
+
+            let relaunched = WatchWalkQueue(directory: queue.directory)
+            let failed = await relaunched.pending()
+            #expect(failed.isEmpty)
+
+            try FileManager.default.removeItem(at: queue.directory)
+            try FileManager.default.moveItem(at: moved, to: queue.directory)
+            let listed = await relaunched.pending()
+            #expect(listed.sessionIDs == [walk.sessionID])
+            #expect(listed.isNewer(than: failed) && !failed.isNewer(than: listed))
+            #expect(await relaunched.walk(walk.sessionID) == walk)
+        }
+    }
+
     @Test("Nothing on disk is an empty queue, and stray files are not walks")
     func strayFilesAreIgnored() async throws {
         try await withQueue { queue in
