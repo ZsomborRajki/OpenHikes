@@ -94,6 +94,48 @@ private actor GatedOverpassTransport {
     }
 }
 
+/// How one caller's wait ended, observed without awaiting it.
+///
+/// A test awaiting the caller's task directly would, against a caller that
+/// never comes back, sit there until the time limit — and an uncancellable
+/// `Task.value` may not even let that limit end the test. Recording the
+/// outcome lets `waitFor` give up with a failure instead, and the transport is
+/// then released so a broken run still unwinds.
+private actor CallerOutcome {
+    private(set) var hasFinished = false
+    private(set) var wasCancelled = false
+
+    func record(_ work: @Sendable () async throws -> Void) async {
+        do {
+            try await work()
+        } catch is CancellationError {
+            wasCancelled = true
+        } catch {
+            // Any other failure is still a finish; `wasCancelled` tells them apart.
+        }
+        hasFinished = true
+    }
+}
+
+/// Stands in for the recorder's budget timer: it expires when the test says
+/// so rather than after a duration.
+private actor BudgetGate {
+    private var isExpired = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func waitForExpiry() async {
+        guard !isExpired else { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func expire() {
+        isExpired = true
+        let pending = waiters
+        waiters.removeAll()
+        for continuation in pending { continuation.resume() }
+    }
+}
+
 @Suite("Overpass trail graph cancellation")
 struct OverpassTrailGraphCancellationTests {
     private static let pollInterval = Duration.milliseconds(5)
@@ -164,20 +206,99 @@ struct OverpassTrailGraphCancellationTests {
         )
         let region = try #require(provider.region(containing: coordinate))
 
-        let abandoned = Task { try await provider.prefetch(around: coordinate) }
+        let abandonedOutcome = CallerOutcome()
+        let abandoned = Task {
+            await abandonedOutcome.record { try await provider.prefetch(around: coordinate) }
+        }
         let kept = Task { try await provider.prefetch(around: coordinate) }
         try await waitFor { await provider.waiterCount(for: region) == 2 }
 
         abandoned.cancel()
-        try await waitFor { await provider.waiterCount(for: region) == 1 }
+        // The abandoned caller has to come back while the download it shared
+        // is still held open. Waiting for it after the release would pass
+        // against a caller stuck until the other one's download finished,
+        // which is the bug: Stop's budget would then be somebody else's.
+        try await waitFor { await abandonedOutcome.hasFinished }
+        #expect(await abandonedOutcome.wasCancelled)
+        #expect(await transport.completedCount == 0)
+        #expect(await provider.waiterCount(for: region) == 1)
+
         await transport.release()
         try await kept.value
 
         #expect(await transport.startedCount == 1)
         #expect(await transport.cancelledCount == 0)
         #expect(await transport.completedCount == 1)
+        #expect(try cachedFileCount(in: directory) == 1)
         let graph = try await provider.cachedGraph(covering: [coordinate])
         #expect(graph?.edges.count == 1)
+    }
+
+    /// The shape of `HikeRecorder.downloadTrailGraph`: a prefetch raced
+    /// against Stop's budget in a task group, which cancels the loser and then
+    /// waits for it before the save can go on. Here the prefetch shares its
+    /// region with another caller that still wants it, so cancelling it must
+    /// not mean waiting for that caller's download.
+    @Test(
+        "Stop's budget race ends while another caller keeps the shared download",
+        .timeLimit(.minutes(1))
+    )
+    func budgetRaceDoesNotWaitForTheSharedDownload() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "trail-graph-budget-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let transport = GatedOverpassTransport(
+            payload: Data(OverpassGraphFixture.alpineRoute.utf8)
+        )
+        let provider = OverpassTrailGraphProvider(
+            directory: directory,
+            transport: { _ in try await transport.respond() }
+        )
+        let coordinate = CLLocationCoordinate2D(
+            latitude: 47.63,
+            longitude: 12.86
+        )
+        let region = try #require(provider.region(containing: coordinate))
+
+        let kept = Task { try await provider.prefetch(around: coordinate) }
+        try await waitFor { await provider.waiterCount(for: region) == 1 }
+
+        let budget = BudgetGate()
+        let stopOutcome = CallerOutcome()
+        let stop = Task {
+            await stopOutcome.record {
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask { await budget.waitForExpiry() }
+                    group.addTask { try? await provider.prefetch(around: coordinate) }
+                    await group.next()
+                    group.cancelAll()
+                }
+            }
+        }
+        try await waitFor { await provider.waiterCount(for: region) == 2 }
+
+        await budget.expire()
+        try await waitFor { await stopOutcome.hasFinished }
+        #expect(await transport.completedCount == 0)
+        #expect(await transport.cancelledCount == 0)
+        #expect(await provider.waiterCount(for: region) == 1)
+
+        await transport.release()
+        try await kept.value
+        await stop.value
+
+        #expect(await transport.startedCount == 1)
+        #expect(await transport.completedCount == 1)
+        #expect(try cachedFileCount(in: directory) == 1)
+    }
+
+    private func cachedFileCount(in directory: URL) throws -> Int {
+        try FileManager.default
+            .contentsOfDirectory(atPath: directory.path)
+            .count { $0.hasSuffix(".json") }
     }
 
     /// Polls `condition` against a wall-clock deadline rather than for a fixed
