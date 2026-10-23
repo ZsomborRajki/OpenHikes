@@ -112,7 +112,7 @@ struct WalkShareFlow: View {
                     .font(.headline)
                     .accessibilityAddTraits(.isHeader)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.thumbnailSide), spacing: 4)], spacing: 4) {
-                    ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
+                    ForEach(photos.enumerated(), id: \.element.id) { index, photo in
                         Button {
                             Task { await open(photo) }
                         } label: {
