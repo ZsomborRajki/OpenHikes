@@ -278,11 +278,11 @@ nonisolated enum CommunityPublisher {
 
     /// Which of a hike's photographs go, and in what order.
     ///
-    /// Anchored ones first, because a photograph with no place on the route is
-    /// the one least worth somebody else's download: the whole point of
-    /// carrying pictures with a shared trail is that they sit on the map where
-    /// they were taken. Within that, chronological — the order the walk
-    /// produced them in, which is the order the gallery pages through.
+    /// The strip's list — ``shareablePhotos(of:)``, which is where the order
+    /// is decided — less the ones struck off, cut at the cap. Read rather than
+    /// sorted a second time, so the tiles the form draws first are the ones
+    /// that fit by construction rather than by two functions agreeing (#1001).
+    ///
     /// Struck-off pictures are dropped *before* the cap, which is what makes
     /// the share form's strip a choice rather than a subtraction: a hiker with
     /// twenty photographs who strikes off the first can have the thirteenth,
@@ -292,15 +292,12 @@ nonisolated enum CommunityPublisher {
     /// and that exclusion is nearer a safety rail than a rule about order —
     /// see ``ownPhotos(of:)``.
     ///
-    /// Internal rather than private so the form can draw the same list in the
-    /// same order the upload will use. A screen that built its own order would
-    /// eventually disagree with this one about which twelve go.
+    /// Internal rather than private because both publishers send from it:
+    /// ``CommunityPhotoPublisher`` takes the same list a hike share does.
     @MainActor
     static func selectedPhotos(of hike: Hike, excluding excluded: Set<UUID> = []) -> [HikePhoto] {
-        let ordered = ownPhotos(of: hike).filter { !excluded.contains($0.id) }
-        let anchored = ordered.filter(\.isAnchored)
-        let unanchored = ordered.filter { !$0.isAnchored }
-        return Array((anchored + unanchored).prefix(maximumPhotos))
+        let offered = shareablePhotos(of: hike).filter { !excluded.contains($0.id) }
+        return Array(offered.prefix(maximumPhotos))
     }
 
     /// The pictures a form must open with struck off: the ones a copy of
@@ -357,6 +354,17 @@ nonisolated enum CommunityPublisher {
     /// Every photograph the form offers, in the order the upload would take
     /// them — including the ones struck off, which still have to be drawn so
     /// they can be put back.
+    ///
+    /// Anchored ones first, because a photograph with no place on the route is
+    /// the one least worth somebody else's download: the whole point of
+    /// carrying pictures with a shared trail is that they sit on the map where
+    /// they were taken. Within that, chronological — the order the walk
+    /// produced them in, which is the order the gallery pages through.
+    ///
+    /// The one place that order is written. ``selectedPhotos(of:excluding:)``
+    /// takes this list and only removes from it, so the strip and the upload
+    /// cannot come to disagree about which pictures fit under the cap. A
+    /// screen that built its own order would eventually disagree with both.
     @MainActor
     static func shareablePhotos(of hike: Hike) -> [HikePhoto] {
         let ordered = ownPhotos(of: hike)
