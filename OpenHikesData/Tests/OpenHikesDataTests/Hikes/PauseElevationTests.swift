@@ -154,9 +154,9 @@ struct PauseElevationTests {
 
     /// The chart's series is thinned to its drawing budget, and the bucket
     /// holding the resume keeps its lowest and highest points, neither of
-    /// which need be the resumed one — so downsampling carries the resume's
-    /// mark to the next sample it kept, and ``RouteProfile/climb(from:to:)``
-    /// still ends its run there.
+    /// which need be the resumed one. ``RouteProfile/climb(from:to:)`` reads
+    /// every height instead (#963), so the pause stays closed and the stretch
+    /// is the route's own figure to the metre.
     @Test("a pause stays closed when downsampling dropped the sample that resumed")
     func downsamplingKeepsThePauseClosed() throws {
         let resumedAt = 600
@@ -171,6 +171,6 @@ struct PauseElevationTests {
         #expect(profile.elevation.gainMeters == 1198)
 
         let climb = try #require(profile.climb(from: 0, to: profile.totalDistanceMeters))
-        #expect((1100.0...1300.0).contains(climb.gainMeters))
+        #expect(climb.gainMeters == 1198)
     }
 }

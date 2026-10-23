@@ -96,6 +96,10 @@ nonisolated public struct RouteProfile: Sendable {
     /// descent totals, which a downsampled series cannot produce: dropping
     /// points removes the little rises they spanned.
     public let elevation: RouteElevationSummary
+    /// Every height on the route with what the route had climbed and dropped
+    /// on reaching it — how a stretch's climb is answered at full resolution.
+    /// See ``climb(from:to:)``.
+    let climbMarks: [ClimbMark]
 
     private let sampleDistances: [Double]
     /// The segments a pause opened, by the index of the point they leave —
@@ -138,7 +142,8 @@ nonisolated public struct RouteProfile: Sendable {
         samples: [ElevationSample],
         pauseDistances: [Double],
         pausedSegments: Set<Int>,
-        elevation: RouteElevationSummary
+        elevation: RouteElevationSummary,
+        climbMarks: [ClimbMark]
     ) {
         self.coordinates = coordinates
         self.distances = distances
@@ -146,6 +151,7 @@ nonisolated public struct RouteProfile: Sendable {
         self.pauseDistances = pauseDistances
         self.pausedSegments = pausedSegments
         self.elevation = elevation
+        self.climbMarks = climbMarks
         sampleDistances = samples.map(\.distanceMeters)
     }
 
@@ -160,6 +166,7 @@ nonisolated public struct RouteProfile: Sendable {
         var routePauseDistances: [Double] = []
         var routePausedSegments: Set<Int> = []
         var elevations = ElevationAccumulator()
+        var routeClimbMarks: [ClimbMark] = []
         routeCoordinates.reserveCapacity(route.count)
         routeDistances.reserveCapacity(route.count)
 
@@ -205,6 +212,7 @@ nonisolated public struct RouteProfile: Sendable {
                     to: &routeSamples,
                     mergingRepeats: false
                 )
+                routeClimbMarks.append(ClimbMark(distanceMeters: cumulative, accumulated: elevations))
             }
             onPoint(point, segment)
         }
@@ -216,7 +224,8 @@ nonisolated public struct RouteProfile: Sendable {
             samples: plotted,
             pauseDistances: routePauseDistances,
             pausedSegments: routePausedSegments,
-            elevation: RouteElevationSummary(elevations)
+            elevation: RouteElevationSummary(elevations),
+            climbMarks: routeClimbMarks
         )
     }
 
