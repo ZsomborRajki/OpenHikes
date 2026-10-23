@@ -14,8 +14,8 @@ import MapKit
 import OpenHikesData
 
 nonisolated extension DirectionalPolylineRenderer {
-    /// Paints `piece` with its gradient, clipped to the piece stroked solid
-    /// at the line's width.
+    /// Paints `piece` with its gradient a span at a time, each clipped to
+    /// the span stroked solid at the line's width.
     ///
     /// The flat stretches either side are already down beneath. A solid
     /// line's piece covers them exactly and ends in the colour it started
@@ -40,41 +40,44 @@ nonisolated extension DirectionalPolylineRenderer {
     /// half with the flat colour beneath, and the change of colour half as
     /// gradual as on an opaque line.
     ///
-    /// The gradient runs straight from the piece's first point to its last,
-    /// not along the line. A piece between two long stretches is a few
-    /// hundred metres and bends, through switchbacks as often as not, so a
-    /// point's mix follows how far across the ground it is from the start
-    /// rather than how far along the line — the same fade, read off the map.
-    /// It never colours the line outside the two it joins: past either end
-    /// the gradient holds that end's colour.
+    /// Each span takes the gradient as ``RouteShadeBlend`` lays it along that
+    /// span, so the fade follows the line through its bends. The spans are
+    /// stroked with round caps whatever the pattern's: stroked one at a time,
+    /// flat ends would leave a notch on the outside of every bend two of them
+    /// meet at, and at the piece's own ends a cap paints only the colour of
+    /// the stretch already there. Past either end of the fade the gradient
+    /// holds that end's colour, so nothing is coloured outside the two a
+    /// piece joins.
     func drawBlend(_ piece: RouteShadeBlend.Piece, zoomScale: MKZoomScale, context: CGContext) {
-        guard let start = piece.points.first, let end = piece.points.last else { return }
         let width = lineWidth * contentScaleFactor / zoomScale
-        let path = CGMutablePath()
-        path.addLines(between: piece.points.map(point(for:)))
         context.saveGState()
         context.setLineJoin(.round)
+        context.setLineCap(.round)
         context.setLineDash(phase: 0, lengths: [])
         let gapped = !pattern.dashLengths(forWidth: Double(lineWidth)).isEmpty
         if !gapped {
             context.setLineWidth(width)
-            context.setLineCap(pattern.lineCap)
         } else {
             // A little wider than the line, so the dashes' anti-aliased
             // edges are recoloured with them — see ``holeOverreach``.
             context.setLineWidth(width + Self.holeOverreach / zoomScale)
-            context.setLineCap(.butt)
             context.setBlendMode(.sourceAtop)
         }
-        context.addPath(path)
-        context.replacePathWithStrokedPath()
-        context.clip()
-        context.drawLinearGradient(
-            gapped ? piece.opaqueGradient : piece.gradient,
-            start: point(for: start),
-            end: point(for: end),
-            options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
-        )
+        for span in piece.spans {
+            let path = CGMutablePath()
+            path.addLines(between: piece.points[span.range].map(point(for:)))
+            context.saveGState()
+            context.addPath(path)
+            context.replacePathWithStrokedPath()
+            context.clip()
+            context.drawLinearGradient(
+                gapped ? piece.opaqueGradient : piece.gradient,
+                start: point(for: span.gradientStart),
+                end: point(for: span.gradientEnd),
+                options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+            )
+            context.restoreGState()
+        }
         context.restoreGState()
     }
 }

@@ -4,8 +4,9 @@
 //
 //  Where the blend between two coloured stretches is drawn: over the place
 //  they meet, reaching the same share of the shorter stretch into each, so
-//  further between long stretches than between short ones, and nowhere two
-//  stretches do not actually meet or do not differ.
+//  further between long stretches than between short ones, in spans that keep
+//  its colours where their distance along a bending line puts them, and
+//  nowhere two stretches do not actually meet or do not differ.
 //  `DirectionalPolylineRendererTests+Shades` checks the drawing.
 //
 
@@ -38,8 +39,40 @@ struct RouteShadeBlendTests {
         return .init(polyline: MKPolyline(points: points, count: points.count), color: color)
     }
 
+    /// A stretch along straight legs through `corners`, in metres east and
+    /// north of ``origin``, a point every ten metres.
+    private static func stretch(
+        through corners: [(east: Double, north: Double)],
+        _ color: CGColor
+    ) -> DirectionalPolylineRenderer.Shade {
+        let point = { (east: Double, north: Double) in
+            MKMapPoint(x: origin.x + east * mapPointsPerMeter, y: origin.y - north * mapPointsPerMeter)
+        }
+        var points = corners.first.map { [point($0.east, $0.north)] } ?? []
+        for (from, to) in zip(corners, corners.dropFirst()) {
+            let steps = max(1, Int((hypot(to.east - from.east, to.north - from.north) / 10).rounded(.up)))
+            for step in 1...steps {
+                let along = Double(step) / Double(steps)
+                points.append(point(
+                    from.east + (to.east - from.east) * along,
+                    from.north + (to.north - from.north) * along
+                ))
+            }
+        }
+        return .init(polyline: MKPolyline(points: points, count: points.count), color: color)
+    }
+
     private static func meters(at point: MKMapPoint) -> Double {
         (point.x - origin.x) / mapPointsPerMeter
+    }
+
+    /// How far through a gradient laid from `start` to `end` it colours
+    /// `point`: where the point falls along the line between them, held at
+    /// either end as the drawing holds it.
+    private static func share(of point: MKMapPoint, from start: MKMapPoint, to end: MKMapPoint) -> Double {
+        let dx = end.x - start.x, dy = end.y - start.y
+        let across = ((point.x - start.x) * dx + (point.y - start.y) * dy) / (dx * dx + dy * dy)
+        return min(max(across, 0), 1)
     }
 
     @Test("two stretches that meet in different colours blend across the point they share")
@@ -90,6 +123,42 @@ struct RouteShadeBlendTests {
         let share = RouteShadeBlend.reachShare
         #expect((100 - Self.meters(at: shortStart)).isApproximatelyEqual(to: share * 100, absoluteTolerance: 0.01))
         #expect((1000 - Self.meters(at: longStart)).isApproximatelyEqual(to: share * 1000, absoluteTolerance: 0.01))
+    }
+
+    /// One gradient laid straight across a piece that bends colours a point
+    /// by where it lies across the ground, not along the line: through this
+    /// hairpin it put the half-and-half mix 139 m before the point the
+    /// stretches share. In spans, every point of the piece is drawn within
+    /// the tolerance of its place in the fade, and the shared point exactly
+    /// half and half.
+    @Test("a blend that bends is drawn in spans that follow the line")
+    func bentBlendFollowsTheLine() throws {
+        let pieces = RouteShadeBlend.pieces(between: [
+            Self.stretch(through: [(-1000, 0), (0, 0)], Self.red),
+            Self.stretch(through: [(0, 0), (80, 0), (80, 50), (-150, 50), (-150, 690)], Self.blue),
+        ])
+
+        let piece = try #require(pieces.count == 1 ? pieces[0] : nil)
+        let points = piece.points
+        let along = zip(points, points.dropFirst()).reduce(into: [0.0]) { along, pair in
+            along.append(along[along.count - 1] + hypot(pair.1.x - pair.0.x, pair.1.y - pair.0.y))
+        }
+        let length = try #require(along.last)
+        let meeting = try #require(points.firstIndex { $0.x == Self.origin.x && $0.y == Self.origin.y })
+        #expect(piece.spans.contains { $0.range.upperBound == meeting }, "a span should end where the stretches meet")
+        for span in piece.spans {
+            for index in span.range {
+                let drawn = Self.share(of: points[index], from: span.gradientStart, to: span.gradientEnd)
+                let fade = along[index] / length
+                #expect(
+                    drawn.isApproximatelyEqual(to: fade, absoluteTolerance: RouteShadeBlend.spanTolerance),
+                    "point \(index) is \(fade) of the way along the piece, and drawn \(drawn) of the way through"
+                )
+                if index == meeting {
+                    #expect(drawn.isApproximatelyEqual(to: 0.5, absoluteTolerance: 1e-9))
+                }
+            }
+        }
     }
 
     @Test("stretches that do not meet, or meet in one colour, do not blend")
