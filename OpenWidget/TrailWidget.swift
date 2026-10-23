@@ -28,16 +28,19 @@ struct TrailWidgetEntry: TimelineEntry {
     /// here; the image itself is read at render time by whichever view ends
     /// up needing it, so an entry never holds a decoded bitmap.
     var basemaps: TrailBasemapSet?
-    /// The temperature the app's weather badge was last showing, if there is
-    /// one and it is still worth drawing.
+    /// The temperature the app's weather badge was last showing, if it is
+    /// about what this entry draws and still worth drawing.
     ///
     /// Read here rather than in the view for the reason the basemaps are:
     /// building the entry is the moment the store is read, and a view that
     /// reached for the App Group would be doing it once per family per
-    /// appearance. Unlike the basemaps it is **not** tied to the trail — it
-    /// belongs to whatever the badge is pointed at — so it survives the
-    /// recording takeover below and is the one thing both states draw the
-    /// same way.
+    /// appearance. Unlike the basemaps it is **not** kept per trail — there
+    /// is one reading, about wherever the badge is pointed, and every placed
+    /// widget reads it — so each entry keeps it only beside what it
+    /// describes: the trail it was taken for, or the hiker once a recording
+    /// has taken the widget. A widget pinned to any other trail draws no
+    /// temperature rather than one from a place its corner has no room to
+    /// name. See ``SharedWeatherReading/Subject``.
     var weather: SharedWeatherReading?
 
     /// Pairs a stored snapshot with its basemaps, which are only ever valid
@@ -90,8 +93,13 @@ struct TrailWidgetEntry: TimelineEntry {
         }
         // Dropped here rather than at the draw, so the entry is the whole
         // truth about what this timeline shows and a test can ask it.
+        let drawnTrailID = self.snapshot?.hikeID
         weather = SharedStore.loadWeatherReading().flatMap { reading in
-            reading.isExpired(asOf: date) ? nil : reading
+            guard !reading.isExpired(asOf: date) else { return nil }
+            let isAboutWhatIsDrawn = recordingSnapshot == nil
+                ? drawnTrailID.map(reading.isAbout(trail:)) ?? false
+                : reading.isAboutHiker
+            return isAboutWhatIsDrawn ? reading : nil
         }
     }
 
@@ -291,9 +299,9 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
         entry(for: placeholderSnapshot, date: date)
     }
 
-    /// The same trail, part-walked: the one arrangement in which every element
-    /// is drawn at once — the chips, the temperature beside them, and the bar
-    /// along the bottom.
+    /// The same trail, part-walked: the one arrangement in which the chips and
+    /// the bar along the bottom are drawn at once. Neither placeholder draws a
+    /// temperature, since no reading is about a trail that does not exist.
     static func followedPlaceholderEntry(date: Date = .now) -> TrailWidgetEntry {
         entry(for: followedPlaceholderSnapshot, date: date)
     }

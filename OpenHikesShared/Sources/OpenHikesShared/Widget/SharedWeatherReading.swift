@@ -21,6 +21,14 @@
 //  missing the moment the trail is deselected, or a reading rewritten eighty
 //  times an hour to say the same thing.
 //
+//  **It says what it is about**, because a file of its own does not make it
+//  every widget's to draw. Two widgets pinned to two trails both read this one
+//  file, and a number from wherever the badge last pointed, drawn without a
+//  name beside a trail it is not about, is a forecast for the wrong mountain.
+//  The widget has no room for a place name in its corner, so it draws the
+//  number only beside what the number describes — see ``Subject`` — and
+//  nothing anywhere else.
+//
 //  **Celsius on the wire**, for the reason `WeatherReadingStore` gives for its
 //  own blob: what is written here is read back by a later build of the widget,
 //  and the bytes must not depend on which unit the provider used that day. The
@@ -79,6 +87,29 @@ public struct SharedWeatherReading: SharedPayload, Equatable {
     /// the app, not the moment this was written to the App Group.
     public var capturedAt: Date
 
+    /// What the badge was pointed at when it showed this reading.
+    public var subject: Subject
+
+    /// The place a reading is about, reduced to what the widget can match
+    /// against what it draws: the app's `WeatherSubject` without its
+    /// coordinate or its name.
+    ///
+    /// **Identity, not position.** A trail's subject follows the hiker along
+    /// it and the hiker's own moves with every significant change, so a
+    /// coordinate here would make every step a different subject — and a
+    /// redraw — while saying nothing the widget could use: it draws a trail
+    /// by its ID and a recording by its existence, and matches nothing by
+    /// distance. That is the app's job, and it stays there.
+    public enum Subject: Codable, Sendable, Equatable {
+        /// Wherever the hiker is — the subject a recording owns.
+        case hiker
+        /// A selected hike's route.
+        case trail(hikeID: UUID)
+        /// A searched place, which is never a trail and never the hiker,
+        /// however near either it is: the hiker asked about that place.
+        case place
+    }
+
     /// Fails rather than storing a non-finite temperature.
     ///
     /// `JSONEncoder` refuses a non-finite `Double` by default, so a reading
@@ -86,10 +117,11 @@ public struct SharedWeatherReading: SharedPayload, Equatable {
     /// no-op at the write site instead of a value refused at its source. The
     /// same argument ``UnitMercatorRect/isFinite`` makes, in a much smaller
     /// type.
-    public init?(temperatureCelsius: Double, capturedAt: Date) {
+    public init?(temperatureCelsius: Double, capturedAt: Date, subject: Subject) {
         guard temperatureCelsius.isFinite else { return nil }
         self.temperatureCelsius = temperatureCelsius
         self.capturedAt = capturedAt
+        self.subject = subject
         schemaVersion = Self.currentSchemaVersion
     }
 
@@ -107,6 +139,30 @@ public struct SharedWeatherReading: SharedPayload, Equatable {
 
     public func isExpired(asOf now: Date = .now) -> Bool {
         age(asOf: now) >= Self.maximumAge
+    }
+
+    /// Whether a widget drawing the trail `hikeID` may draw this reading
+    /// beside it: only when the reading was taken for that trail.
+    ///
+    /// Not a reading about the hiker, even one taken on that trail's
+    /// hillside. Whether the hiker is near a trail is a question about where
+    /// they are, the app is the one that knows, and it already answers it:
+    /// a selected trail's subject follows the hiker once they are out on it,
+    /// and keeps the trail's ID while it does.
+    public func isAbout(trail hikeID: UUID) -> Bool {
+        subject == .trail(hikeID: hikeID)
+    }
+
+    /// Whether a widget that a recording has taken over may draw this
+    /// reading: only when it is about the hiker, the subject a recording
+    /// owns for as long as it runs.
+    ///
+    /// Anything else in the file is a trail or a place browsed before the
+    /// recording began, left there while the first reading about the hiker
+    /// is on its way — the app does not empty the corner for a fetch in
+    /// flight.
+    public var isAboutHiker: Bool {
+        subject == .hiker
     }
 
     /// What the widget draws: the shortest spelling the locale accepts, which

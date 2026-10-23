@@ -4,15 +4,19 @@
 //
 //  The temperature in the widget's top-left corner is the one figure it draws
 //  that the app does not compute per trail: it belongs to whatever the weather
-//  badge is pointed at, arrives through a file of its own, and is the only
-//  thing both the trail and the recording states draw the same way.
+//  badge is pointed at, and arrives through a file of its own that every
+//  placed widget reads. So each widget draws it only beside what it is about —
+//  the trail the reading was taken for, or the hiker a recording is following
+//  — and a widget pinned to another trail draws none.
 //
-//  Two things about it can only be asked here rather than of the payload.
-//  Whether the entry drops a reading that has gone off — the entry is built
-//  for a date, and the drop has to be measured against *that* date rather than
-//  against whenever the store happened to be read. And whether the timeline
-//  wakes up to do the dropping, which is the difference between a corner that
-//  empties on time and one that carries a breakfast reading into the evening.
+//  Three things about it can only be asked here rather than of the payload.
+//  Whether the entry drops a reading about something it does not draw — two
+//  pinned trails read one file. Whether it drops a reading that has gone off —
+//  the entry is built for a date, and the drop has to be measured against
+//  *that* date rather than against whenever the store happened to be read. And
+//  whether the timeline wakes up to do the dropping, which is the difference
+//  between a corner that empties on time and one that carries a breakfast
+//  reading into the evening.
 //
 
 import Foundation
@@ -23,17 +27,33 @@ import WidgetKit
 extension TrailWidgetStoreSuites {
 @Suite("Trail widget weather", .serialized)
 struct TrailWidgetWeatherTests {
-    private static let now = Date(timeIntervalSince1970: 1_750_000_000)
+    static let now = Date(timeIntervalSince1970: 1_750_000_000)
 
     /// Optional because the initializer is — it refuses a non-finite
     /// temperature, which `12` is not. Unwrapped at each call site rather than
     /// forced here, so a change that made it refuse this too would fail one
     /// test with a name rather than crash the bundle.
-    private static func reading(ageMinutes: Double) -> SharedWeatherReading? {
+    static func reading(
+        ageMinutes: Double,
+        about subject: SharedWeatherReading.Subject,
+        celsius: Double = 12
+    ) -> SharedWeatherReading? {
         SharedWeatherReading(
-            temperatureCelsius: 12,
-            capturedAt: now.addingTimeInterval(-ageMinutes * 60)
+            temperatureCelsius: celsius,
+            capturedAt: now.addingTimeInterval(-ageMinutes * 60),
+            subject: subject
         )
+    }
+
+    /// The selected trail, with a reading taken for it — the arrangement the
+    /// tests about age and timing need, and the one the badge is in whenever
+    /// a hiker has just opened a trail.
+    @discardableResult private static func selectTrailWithReading(ageMinutes: Double) throws -> SharedWeatherReading {
+        let trail = TrailWidgetTests.snapshot()
+        SharedStore.save(trail)
+        let reading = try #require(Self.reading(ageMinutes: ageMinutes, about: .trail(hikeID: trail.hikeID)))
+        SharedStore.saveWeatherReading(reading)
+        return reading
     }
 
     init() {
@@ -46,8 +66,7 @@ struct TrailWidgetWeatherTests {
 
     @Test("a fresh reading reaches the entry")
     func freshReadingReachesTheEntry() throws {
-        SharedStore.save(TrailWidgetTests.snapshot())
-        SharedStore.saveWeatherReading(try #require(Self.reading(ageMinutes: 20)))
+        try Self.selectTrailWithReading(ageMinutes: 20)
 
         let entry = TrailWidgetProvider.currentEntry(date: Self.now)
 
@@ -58,8 +77,7 @@ struct TrailWidgetWeatherTests {
     /// than something stale — a temperature is safety information on a hike.
     @Test("a reading past its age is dropped rather than drawn")
     func staleReadingIsDropped() throws {
-        SharedStore.save(TrailWidgetTests.snapshot())
-        SharedStore.saveWeatherReading(try #require(Self.reading(ageMinutes: 3 * 60 + 1)))
+        try Self.selectTrailWithReading(ageMinutes: 3 * 60 + 1)
 
         #expect(TrailWidgetProvider.currentEntry(date: Self.now).weather == nil)
     }
@@ -68,8 +86,7 @@ struct TrailWidgetWeatherTests {
     /// an hour from now has to know what the corner will say then.
     @Test("the age is measured against the entry's date")
     func ageIsMeasuredAgainstTheEntryDate() throws {
-        SharedStore.save(TrailWidgetTests.snapshot())
-        SharedStore.saveWeatherReading(try #require(Self.reading(ageMinutes: 170)))
+        try Self.selectTrailWithReading(ageMinutes: 170)
 
         #expect(TrailWidgetProvider.currentEntry(date: Self.now).weather != nil)
         #expect(
@@ -79,13 +96,13 @@ struct TrailWidgetWeatherTests {
         )
     }
 
-    /// The reading belongs to the badge rather than to the trail, so the
-    /// recording taking the widget does not take the temperature with it —
-    /// unlike the trail snapshot and its basemaps, which it discards outright.
-    @Test("a recording keeps the temperature it does not own")
+    /// A reading about the hiker is the recording's own, so the recording
+    /// taking the widget keeps it — unlike the trail snapshot and its
+    /// basemaps, which it discards outright.
+    @Test("a recording keeps the temperature about the hiker")
     func recordingKeepsTheTemperature() throws {
         SharedStore.save(TrailWidgetTests.snapshot())
-        SharedStore.saveWeatherReading(try #require(Self.reading(ageMinutes: 5)))
+        SharedStore.saveWeatherReading(try #require(Self.reading(ageMinutes: 5, about: .hiker)))
         try SharedStore.saveRecording(
             SharedRecordingSnapshot(
                 sessionID: UUID(),
@@ -163,9 +180,7 @@ struct TrailWidgetWeatherTests {
     /// that lasts. The second entry needs no permission to be shown.
     @Test("the timeline carries the entry that draws no temperature")
     func timelineCarriesTheEmptiedEntry() throws {
-        SharedStore.save(TrailWidgetTests.snapshot())
-        let reading = try #require(Self.reading(ageMinutes: 20))
-        SharedStore.saveWeatherReading(reading)
+        let reading = try Self.selectTrailWithReading(ageMinutes: 20)
 
         let timeline = TrailWidgetProvider.currentTimeline(date: Self.now)
 
@@ -180,10 +195,7 @@ struct TrailWidgetWeatherTests {
     /// is nothing to schedule an emptying for.
     @Test("an expired reading adds no second entry")
     func expiredReadingAddsNoEntry() throws {
-        SharedStore.save(TrailWidgetTests.snapshot())
-        SharedStore.saveWeatherReading(
-            try #require(Self.reading(ageMinutes: SharedWeatherReading.maximumAge / 60 + 10))
-        )
+        try Self.selectTrailWithReading(ageMinutes: SharedWeatherReading.maximumAge / 60 + 10)
 
         let timeline = TrailWidgetProvider.currentTimeline(date: Self.now)
 
@@ -198,7 +210,7 @@ struct TrailWidgetWeatherTests {
     /// for a reader who cannot take the glance.
     @Test("the spoken value carries the status, the chips and the temperature")
     func spokenValueCarriesEverything() throws {
-        let reading = try #require(Self.reading(ageMinutes: 5))
+        let reading = try #require(Self.reading(ageMinutes: 5, about: .hiker))
         let spoken = TrailWidgetSpeech.value(
             status: "62% hiked · 1.4 km left",
             metrics: "Ascent 420 m, Length 2.6 km",

@@ -22,10 +22,10 @@
 //
 //  It is deliberately **not** gated by `requestUnlessRecording()`. That gate
 //  exists because a trail redraw during a recording produces a byte-identical
-//  timeline — the recording has taken the whole widget. The temperature is
-//  drawn in both states, so a reading that has changed changes the picture
-//  either way, and holding it back would leave a hiker mid-walk reading this
-//  morning's temperature.
+//  timeline — the recording has taken the whole widget. A temperature is
+//  drawn in both states — the recording's is the one about the hiker — so a
+//  reading that has changed changes the picture either way, and holding it
+//  back would leave a hiker mid-walk reading this morning's temperature.
 //
 
 import Foundation
@@ -89,8 +89,21 @@ nonisolated struct WeatherWidgetPublisher: Sendable {
         self.store = store
     }
 
-    /// What the widget would put on screen for `reading`, or `nil` for a
-    /// widget that would draw no temperature at all.
+    /// What the widgets would put on screen for one reading: the number, and
+    /// what it is about.
+    ///
+    /// The subject is part of the picture because each widget draws the
+    /// number only beside what it describes — see
+    /// `SharedWeatherReading.Subject`. The same 12° about a searched city
+    /// rather than the trail before it takes the number off that trail's
+    /// widget, and comparing the strings alone would call that no change.
+    struct Drawing: Equatable {
+        let temperature: String
+        let subject: SharedWeatherReading.Subject
+    }
+
+    /// What the widgets would draw for `reading`, or `nil` for widgets that
+    /// would draw no temperature at all.
     ///
     /// Compares the rendered *string* rather than the stored Celsius, because
     /// the string is what changes the picture: two readings a tenth of a
@@ -103,17 +116,17 @@ nonisolated struct WeatherWidgetPublisher: Sendable {
     /// that happens to agree with the expired one it replaces would be written
     /// and never drawn, and the widget would keep its blank corner until the
     /// six-hourly safety net came round.
-    static func drawnTemperature(
+    static func drawing(
         for reading: SharedWeatherReading?,
         asOf now: Date = .now,
         locale: Locale = .autoupdatingCurrent
-    ) -> String? {
+    ) -> Drawing? {
         guard let reading, !reading.isExpired(asOf: now) else { return nil }
-        return reading.formatted(locale: locale)
+        return Drawing(temperature: reading.formatted(locale: locale), subject: reading.subject)
     }
 
     /// Writes `reading` — or clears the stored one for a `nil` — and asks for
-    /// a redraw only if the widget's corner would read differently.
+    /// a redraw only if some widget's corner would read differently.
     ///
     /// `@concurrent` rather than a detached task, for the reason
     /// `GPXExport.writeTemporaryFile(for:)` is one: the caller is
@@ -145,8 +158,8 @@ nonisolated struct WeatherWidgetPublisher: Sendable {
         } else {
             store.clear()
         }
-        let before = Self.drawnTemperature(for: previous, asOf: now, locale: locale)
-        let after = Self.drawnTemperature(for: store.load(), asOf: now, locale: locale)
+        let before = Self.drawing(for: previous, asOf: now, locale: locale)
+        let after = Self.drawing(for: store.load(), asOf: now, locale: locale)
         guard before != after else { return false }
         reload()
         return true
@@ -184,12 +197,25 @@ extension WeatherBadgeState {
     /// temperature on the home screen. `loading` is never asked — see
     /// ``publishesToWidget``.
     var sharedReading: SharedWeatherReading? {
-        guard let snapshot else { return nil }
+        guard let snapshot, let subject else { return nil }
         return SharedWeatherReading(
             temperatureCelsius: snapshot.temperature
                 .converted(to: .celsius)
                 .value,
-            capturedAt: snapshot.capturedAt
+            capturedAt: snapshot.capturedAt,
+            subject: subject.sharedSubject
         )
+    }
+}
+
+extension WeatherSubject {
+    /// What the widget is told a reading is about — see
+    /// `SharedWeatherReading.Subject` for why that is the identity alone.
+    nonisolated var sharedSubject: SharedWeatherReading.Subject {
+        switch self {
+        case .me: .hiker
+        case .place: .place
+        case .trail(_, let hikeID, _): .trail(hikeID: hikeID)
+        }
     }
 }
