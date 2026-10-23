@@ -105,20 +105,16 @@ struct MapSidePanel<Content: View>: View {
 /// leave a strip of map down both sides of the picture, so the filled clip
 /// reaches beyond the bounds rather than being dropped — dropping it would be
 /// a branch, and a branch is a new navigation stack.
+///
+/// `@Animatable` animates both stored properties, so the corners and the
+/// outset ease together when the panel fills the window or gives it back.
+@Animatable
 nonisolated private struct PanelClip: Shape {
     /// Further than any iPhone's landscape safe-area inset.
     static let safeAreaReach: CGFloat = 200
 
     var cornerRadius: CGFloat
     var outset: CGFloat
-
-    var animatableData: AnimatablePair<CGFloat, CGFloat> {
-        get { AnimatablePair(cornerRadius, outset) }
-        set {
-            cornerRadius = newValue.first
-            outset = newValue.second
-        }
-    }
 
     func path(in rect: CGRect) -> Path {
         Path(

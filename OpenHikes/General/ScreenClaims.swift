@@ -15,8 +15,9 @@
 //  place's screen had claimed them, so the placeholder pin vanished and a
 //  photograph taken from the pill was filed under the hike instead of the
 //  place. So a claim carries how deep in the stack its screen is — see
-//  ``SheetDepthKey`` — and the deepest one is the one in force; between two
-//  at the same depth, the newer, which is the old rule where it still holds.
+//  ``EnvironmentValues/sheetDepth`` — and the deepest one is the one in
+//  force; between two at the same depth, the newer, which is the old rule
+//  where it still holds.
 //
 //  Every claim is kept until its own screen hands it back, rather than only
 //  the one in force, so a pop hands the map back to the screen beneath
@@ -63,17 +64,10 @@ struct ScreenClaims<Payload> {
     }
 }
 
-/// How deep in the sheet's navigation stack a screen is: 0 for the sheet's
-/// own root, 1 for the first screen pushed. Set on every pushed screen by
-/// ``MapSheet`` and read by the modifiers that claim a piece of the map — see
-/// ``ScreenClaims``.
-private struct SheetDepthKey: EnvironmentKey {
-    static let defaultValue = 0
-}
-
 extension EnvironmentValues {
-    var sheetDepth: Int {
-        get { self[SheetDepthKey.self] }
-        set { self[SheetDepthKey.self] = newValue }
-    }
+    /// How deep in the sheet's navigation stack a screen is: 0 for the sheet's
+    /// own root, 1 for the first screen pushed. Set on every pushed screen by
+    /// ``MapSheet`` and read by the modifiers that claim a piece of the map — see
+    /// ``ScreenClaims``.
+    @Entry var sheetDepth = 0
 }
