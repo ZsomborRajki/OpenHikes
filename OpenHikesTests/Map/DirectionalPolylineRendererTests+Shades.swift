@@ -118,6 +118,31 @@ extension DirectionalPolylineRendererTests {
         return .init(polyline: MKPolyline(points: points, count: points.count), color: color)
     }
 
+    /// Map points every ``meetingSpacing`` along straight legs through
+    /// `corners`, in metres east and north of the middle of the canvas
+    /// ``render(_:shades:stroke:)`` frames.
+    private static func legs(through corners: [(east: Double, north: Double)]) -> [MKMapPoint] {
+        let perMeter = MKMapPointsPerMeterAtLatitude(meetingLatitude)
+        let point = { (east: Double, north: Double) in
+            MKMapPoint(
+                x: meetingStart.x + (meetingLength / 2 + east) * perMeter,
+                y: meetingStart.y - north * perMeter
+            )
+        }
+        var points = corners.first.map { [point($0.east, $0.north)] } ?? []
+        for (from, to) in zip(corners, corners.dropFirst()) {
+            let steps = max(1, Int((hypot(to.east - from.east, to.north - from.north) / meetingSpacing).rounded(.up)))
+            for step in 1...steps {
+                let along = Double(step) / Double(steps)
+                points.append(point(
+                    from.east + (to.east - from.east) * along,
+                    from.north + (to.north - from.north) * along
+                ))
+            }
+        }
+        return points
+    }
+
     /// Draws `polyline` solid with `shades` over it, in the canvas
     /// ``renderMeeting(alpha:)`` frames.
     private static func render(
@@ -282,6 +307,44 @@ extension DirectionalPolylineRendererTests {
             let pixel = Self.pixel(in: canvas, x: column(meters), y: canvas.context.height / 2)
             #expect(pixel.red > Self.dim && pixel.blue > Self.dim, "\(meters) m along should mix red and blue")
         }
+    }
+
+    /// Two kilometre-long stretches, the second turning back on itself
+    /// within the quarter of it the blend reaches. One straight gradient
+    /// from the piece's first point to its last put the half-and-half mix
+    /// 139 m before the point the stretches share, which came out all blue.
+    @Test("a blend through a hairpin is half and half where its stretches meet")
+    func blendFollowsAHairpin() throws {
+        let before = Self.legs(through: [(-1000, 0), (0, 0)])
+        let after = Self.legs(through: [(0, 0), (80, 0), (80, 50), (-150, 50), (-150, 690)])
+        let whole = before + after.dropFirst()
+        let canvas = try Self.render(
+            MKPolyline(points: whole, count: whole.count),
+            shades: [
+                .init(
+                    polyline: MKPolyline(points: before, count: before.count),
+                    color: CGColor(red: 1, green: 0, blue: 0, alpha: 1)
+                ),
+                .init(
+                    polyline: MKPolyline(points: after, count: after.count),
+                    color: CGColor(red: 0, green: 0, blue: 1, alpha: 1)
+                ),
+            ],
+            stroke: .green
+        )
+
+        let shown = Self.meetingLength + Self.meetingMargin * 2
+        let column = { (east: Double) in
+            Int((Self.meetingMargin + Self.meetingLength / 2 + east) / shown * Double(canvas.context.width))
+        }
+        let row = canvas.context.height / 2
+        let meeting = Self.pixel(in: canvas, x: column(0), y: row)
+        let earlier = Self.pixel(in: canvas, x: column(-100), y: row)
+        #expect(
+            meeting.red > Self.dim && meeting.blue > Self.dim,
+            "where the stretches meet should be a mix of the two"
+        )
+        #expect(earlier.red > earlier.blue, "a hundred metres before they meet should still be more red than blue")
     }
 
     /// The blend is laid over the ends of the stretches it joins; drawn
