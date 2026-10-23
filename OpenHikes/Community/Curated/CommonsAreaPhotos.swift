@@ -28,6 +28,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated enum CommonsAreaPhotos {
     /// How many photographs one search shows at most: a four-by-four grid's
@@ -133,15 +134,15 @@ nonisolated enum CommonsAreaPhotos {
     /// Metres east and north of the area's middle, and the distance between.
     ///
     /// Flat, which is the right amount of geometry for a circle ten kilometres
-    /// across: the grid is a way of spreading pictures, not a survey.
+    /// across: the grid is a way of spreading pictures, not a survey. East is
+    /// measured the short way round, so a photograph a kilometre over the date
+    /// line is a kilometre away and not a lap of the planet.
     private static func offset(
         of candidate: CommonsPhotoCandidate,
         in area: CommunitySearchArea
     ) -> (east: Double, north: Double, distance: Double) {
-        let metersPerDegree = 111_320.0
-        let north = (candidate.latitude - area.latitude) * metersPerDegree
-        let east = (candidate.longitude - area.longitude) * metersPerDegree * cos(area.latitude * .pi / 180)
-        return (east, north, (east * east + north * north).squareRoot())
+        let offset = RouteGeometry.localOffset(from: area.coordinate, to: candidate.coordinate)
+        return (offset.x, offset.y, (offset.x * offset.x + offset.y * offset.y).squareRoot())
     }
 
     private static func cell(of candidate: CommonsPhotoCandidate, in area: CommunitySearchArea, side: Int) -> Cell {
