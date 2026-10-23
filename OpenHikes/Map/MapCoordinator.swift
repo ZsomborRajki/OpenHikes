@@ -367,7 +367,9 @@ extension MapView {
         var hasOpenCallout = false
         /// Whether the trail maker has the strip at the top of the map, which
         /// is the one exclusion in this feature that does not fall out of an
-        /// existing definition — see `withdrawAreaSearchForDrawing(_:)`.
+        /// existing definition — see `withdrawAreaSearchForDrawing(_:)`. The
+        /// *Community* tab's pins, photographs and lines are off the map while
+        /// it is set, too — see `withdrawCommunityForDrawing(_:on:)`.
         var isDrawingTrail = false
         /// The last preview the camera was moved for, so opening one hike
         /// fits its route once rather than on every later rebuild.
