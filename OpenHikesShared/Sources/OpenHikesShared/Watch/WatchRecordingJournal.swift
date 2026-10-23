@@ -190,12 +190,12 @@ public enum WatchRecordingRecovery: Sendable, Equatable {
     /// Settles a ``confirm(_:)`` by reading the queued walk, off the main
     /// actor.
     ///
-    /// A name says a write began, not that it left a walk: a file that will
-    /// not decode is never sent, and a journal let go beside it would be the
-    /// hike lost. So the journal is offered unless the queue hands its walk
-    /// back — one that cannot be read just now included, because offering a
-    /// walk that is already queued costs the hiker a question, and the other
-    /// mistake costs the walk.
+    /// A name says a walk was written, not that it can still be read back: a
+    /// file that will not decode is never sent, and a journal let go beside
+    /// it would be the hike lost. So the journal is offered unless the queue
+    /// hands its walk back — one that cannot be read just now included,
+    /// because offering a walk that is already queued costs the hiker a
+    /// question, and the other mistake costs the walk.
     public static func confirming(_ recording: WatchRecoveredRecording, on queue: WatchWalkQueue) async -> Self {
         await queue.walk(recording.sessionID) == nil ? .offer(recording) : .alreadyQueued
     }
