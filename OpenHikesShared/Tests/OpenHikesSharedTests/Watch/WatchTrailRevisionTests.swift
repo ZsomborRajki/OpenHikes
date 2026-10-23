@@ -87,7 +87,7 @@ struct WatchTrailRevisionTests {
         static let stamp = Date(timeIntervalSince1970: 1_700_000_000)
 
         enum Edit: CaseIterable, Sendable {
-            case movedPoint, addedPoint, droppedElevation, renamed, retinted, relengthened, regained
+            case movedPoint, addedPoint, droppedElevation, renamed, retinted, relengthened, regained, paused
         }
 
         static func package(_ edit: Edit? = nil, sentAt: Date = stamp) -> WatchTrailPackage {
@@ -113,6 +113,7 @@ struct WatchTrailRevisionTests {
             case .retinted: package.tintHex = "#1565C0"
             case .relengthened: package.totalDistanceMeters += 120
             case .regained: package.elevationGainMeters = nil
+            case .paused: package.pauseIndices = [1]
             case nil: break
             }
             return package

@@ -39,7 +39,6 @@
 //  log line that would explain a discrepancy.
 //
 
-import Algorithms
 import Foundation
 import OpenHikesData
 import OpenHikesShared
@@ -225,15 +224,11 @@ nonisolated enum WatchWalkImport {
     /// The walk's length, summed along the saved line.
     ///
     /// Recomputed rather than taken from the watch, for the reason in this
-    /// file's header — and skipping the legs a pause opened, which is the same
-    /// rule the recorder's own preparation keeps: a hiker who paused at a
-    /// saddle and resumed at the hut did not walk the straight line between
-    /// them.
+    /// file's header — and skipping the legs a pause opened, which is the rule
+    /// every sum along a stored route keeps (``[RouteCoordinate]/lengthMeters``):
+    /// a hiker who paused at a saddle and resumed at the hut did not walk the
+    /// straight line between them.
     private static func measuredDistance(of route: [RouteCoordinate]) -> Double {
-        var total = 0.0
-        for (previous, point) in route.adjacentPairs() where point.boundary != .paused {
-            total += RouteGeometry.distanceMeters(from: previous.clCoordinate, to: point.clCoordinate)
-        }
-        return total
+        route.lengthMeters
     }
 }

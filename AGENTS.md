@@ -430,6 +430,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - `OpenHikesView` owns selection, map presentation and navigation.
   - `Hike` is the persisted truth. `RouteProfile` is the distance and elevation
     index that scrubbing and GPS matching share.
+  - A pause, or a GPX `<trkseg>` break, is not distance and not trail
+    (`RouteBoundary`). Every sum along a route gives the paused leg no length,
+    and no matcher projects a fix onto it, the watch's included.
   - A recording that the matcher moved or found ambiguous stops in
     `.reviewing`, and only `saveReviewedRecording()` writes it.
 - **The map is imperative MapKit behind `MapView`.** `MapView.Coordinator`

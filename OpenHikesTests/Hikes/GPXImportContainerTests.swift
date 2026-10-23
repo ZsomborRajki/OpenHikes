@@ -22,6 +22,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("GPX import containers")
@@ -96,6 +97,26 @@ struct GPXImportContainerTests {
         #expect(
             RouteGeometry.distanceMeters(from: segment[0], to: segment[1]) > 900
         )
+    }
+
+    /// A segment break is not distance, by the rule a recording's own pause
+    /// follows (#962): the file says the recording stopped there, and the
+    /// ground between the two segments was not walked on this track. So the
+    /// hike's distance is the two segments alone, and it is the length the
+    /// profile's axis spans.
+    @Test("the gap between two segments is not part of the hike's distance")
+    func segmentGapIsNotDistance() throws {
+        let track = try GPXImport.load(from: try gpxFile(Self.pausedTrack))
+        let walked = RouteGeometry.distanceMeters(
+            from: CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86),
+            to: CLLocationCoordinate2D(latitude: 47.631, longitude: 12.86)
+        )
+
+        #expect(track.distanceMeters.isApproximatelyEqual(to: walked, absoluteTolerance: 0.01))
+        #expect(track.distanceMeters.isApproximatelyEqual(
+            to: RouteProfile(route: track.route).totalDistanceMeters,
+            absoluteTolerance: 0.001
+        ))
     }
 
     /// Nothing is marked when the file never split the track: an ordinary

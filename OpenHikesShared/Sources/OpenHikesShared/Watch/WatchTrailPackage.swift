@@ -61,7 +61,7 @@ public struct WatchTrailPoint: Codable, Sendable, Equatable {
 
 /// A trail the phone has sent to the watch.
 public struct WatchTrailPackage: SharedPayload, Equatable {
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     /// How many points of a route cross to the watch. See this file's header
     /// for why it is not the widget's 180 and not the whole route.
@@ -87,6 +87,17 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
     public var elevationGainMeters: Double?
     public var elevationLossMeters: Double?
     public var points: [WatchTrailPoint]
+    /// The indices into ``points`` of the points a recording resumed on, in
+    /// order: the leg *arriving* at each one crosses a pause, the convention
+    /// `RouteBoundary` keeps on the phone.
+    ///
+    /// That leg is a drive or a lift between two recorded pieces, so the watch
+    /// gives it no length and never matches a fix onto it — the rule the
+    /// phone's `RouteProfile` keeps, and what ``totalDistanceMeters`` already
+    /// leaves out (#962). The phone keeps both ends of every paused leg when
+    /// it decimates, so a pause is always exactly one leg of the line here.
+    /// Bounded by the number of pauses, not by the length of the walk.
+    public var pauseIndices: [Int]
     /// The request this answers. A newer request supersedes this answer even
     /// when the phone sends nothing because the watch already has its revision.
     public var requestID: UUID
@@ -101,6 +112,7 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
         tintHex: String,
         totalDistanceMeters: Double,
         points: [WatchTrailPoint],
+        pauseIndices: [Int] = [],
         elevationGainMeters: Double? = nil,
         elevationLossMeters: Double? = nil,
         sentAt: Date = .now,
@@ -111,6 +123,7 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
         self.tintHex = tintHex
         self.totalDistanceMeters = totalDistanceMeters
         self.points = points
+        self.pauseIndices = pauseIndices
         self.elevationGainMeters = elevationGainMeters
         self.elevationLossMeters = elevationLossMeters
         self.sentAt = sentAt
@@ -136,10 +149,10 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
     /// holds across the link because `JSONEncoder` writes a `Double` in the
     /// shortest form that reads back to the same bits.
     ///
-    /// Everything the watch uses is in it — the line, the heights, the name it
-    /// records under, the tint and the length it reports progress on — and
-    /// ``sentAt``, ``requestID`` and ``schemaVersion`` are not, since a trail
-    /// packaged twice is the same trail. See ``WatchTrailRequest/heldRevision``
+    /// Everything the watch uses is in it — the line, the heights, the pauses,
+    /// the name it records under, the tint and the length it reports progress
+    /// on — and ``sentAt``, ``requestID`` and ``schemaVersion`` are not,
+    /// since a trail packaged twice is the same trail. See ``WatchTrailRequest/heldRevision``
     /// for the one thing it is for.
     public var revision: String {
         var hasher = StableHasher()
@@ -159,6 +172,11 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
             hasher.combine(bytes: [point.elevationMeters == nil ? 0 : 1])
             if let elevation = point.elevationMeters { hasher.combine(elevation) }
         }
+        // A marker and a count, so the pauses cannot run together with the
+        // points before them. A `Double` holds any index exactly.
+        hasher.combine(bytes: [2])
+        hasher.combine(Double(pauseIndices.count))
+        for index in pauseIndices { hasher.combine(Double(index)) }
         return String(hasher.value, radix: 36)
     }
 }

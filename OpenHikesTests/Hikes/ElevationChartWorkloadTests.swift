@@ -194,9 +194,10 @@ struct ElevationChartWorkloadTests {
     // MARK: Identity
 
     /// `ForEach` diffs the plotted samples by `id`, and `ElevationSample.id`
-    /// is the sample's own `distanceMeters` — unique within a profile and
-    /// identical across rebuilds, so redrawing the same route diffs as a match
-    /// rather than a wholesale replacement. A per-instance `UUID` would give
+    /// is the sample's own `distanceMeters`, told apart from its twin at a
+    /// pause by whether it resumed — unique within a profile and identical
+    /// across rebuilds, so redrawing the same route diffs as a match rather
+    /// than a wholesale replacement. A per-instance `UUID` would give
     /// neither, and would be allocated per sample besides.
     @Test("a sample's identity is stable across rebuilds of the same route")
     func sampleIdentityIsStable() {

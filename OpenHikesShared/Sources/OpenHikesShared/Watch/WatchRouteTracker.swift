@@ -58,6 +58,15 @@
 //  Dropping points shortens a line, so the two differ, and a hiker must not be
 //  told a trail is shorter than the phone says it is.
 //
+//  ## Pauses
+//
+//  A leg the recording was paused across — ``WatchTrailPackage/pauseIndices``
+//  — has no length on the line and is never matched, the rule `RouteProfile`
+//  keeps on the phone (#962). It is a drive or a lift between two recorded
+//  pieces: counted, it would stretch the line the scale is taken from and
+//  squeeze every reading after it; matched, it would call a car park the
+//  trail.
+//
 
 import Foundation
 
@@ -150,8 +159,12 @@ public struct WatchRouteTracker: Sendable, Equatable {
     }
 
     private let points: [WatchTrailPoint]
-    /// Cumulative metres along the decimated line, aligned with `points`.
+    /// Cumulative metres along the decimated line, aligned with `points`. A
+    /// paused leg adds nothing — see this file's header.
     private let lineDistances: [Double]
+    /// The legs a pause opened, by the index of the point they leave. Never
+    /// matched against.
+    private let pausedSegments: Set<Int>
     /// Trail metres per line metre. See this file's header.
     private let scale: Double
     private let totalDistanceMeters: Double
@@ -162,12 +175,18 @@ public struct WatchRouteTracker: Sendable, Equatable {
 
     public init(_ package: WatchTrailPackage) {
         points = package.points
+        let paused = Set(
+            package.pauseIndices
+                .filter { $0 > 0 && $0 < package.points.count }
+                .map { $0 - 1 }
+        )
+        pausedSegments = paused
         var cumulative: [Double] = []
         cumulative.reserveCapacity(package.points.count)
         var running = 0.0
         var previous: WatchTrailPoint?
-        for point in package.points {
-            if let previous {
+        for (index, point) in package.points.enumerated() {
+            if let previous, !paused.contains(index - 1) {
                 running += WatchGeodesy.distanceMeters(
                     fromLatitude: previous.latitude,
                     longitude: previous.longitude,
@@ -298,7 +317,7 @@ public struct WatchRouteTracker: Sendable, Equatable {
         guard points.count > 1 else { return nil }
         var closest = Double.infinity
         var contenders: [Candidate] = []
-        for index in 0..<(points.count - 1) {
+        for index in 0..<(points.count - 1) where !pausedSegments.contains(index) {
             if let window,
                lineDistances[index + 1] < window.lowerBound
                    || lineDistances[index] > window.upperBound { continue }

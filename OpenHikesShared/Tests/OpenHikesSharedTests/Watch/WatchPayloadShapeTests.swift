@@ -38,6 +38,7 @@ struct WatchPayloadShapeTests {
                 "elevationGainMeters: number",
                 "elevationLossMeters: number",
                 "hikeID: string",
+                "pauseIndices[]: number",
                 "points[].elevationMeters: number",
                 "points[].latitude: number",
                 "points[].longitude: number",
@@ -246,6 +247,7 @@ struct WatchPayloadShapeTests {
                 WatchTrailPoint(latitude: 47.6961, longitude: 12.8543, elevationMeters: 610.5),
                 WatchTrailPoint(latitude: 47.6972, longitude: 12.8559, elevationMeters: 618.5),
             ],
+            pauseIndices: [1],
             elevationGainMeters: 512.5,
             elevationLossMeters: 498.5,
             sentAt: stamp

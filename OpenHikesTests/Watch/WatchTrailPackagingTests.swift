@@ -134,6 +134,34 @@ struct WatchTrailPackagingTests {
         #expect(package.points.allSatisfy { $0.elevationMeters == nil })
     }
 
+    /// The stride drops both ends of this pause, so the line the watch is
+    /// sent would join the walking either side of it with the drive between
+    /// them into one long leg — which the watch could neither count (#962) nor
+    /// refuse without refusing the walking too.
+    @Test("both ends of a pause cross, and the watch is told which leg it is")
+    func pauseEndsSurviveDecimation() async throws {
+        try #require(!decimatedIndices(count: Fixture.pausedRoute.count, maxPoints: WatchTrailPackage.pointBudget)
+            .contains(Fixture.pausedAt))
+        let package = try #require(await WatchTrailPackaging.package(from: Fixture.pausedInput))
+
+        #expect(package.pauseIndices.count == 1)
+        let resumed = try #require(package.pauseIndices.first)
+        #expect(package.points[resumed - 1].latitude == Fixture.pausedRoute[Fixture.pausedAt - 1].latitude)
+        #expect(package.points[resumed].latitude == Fixture.pausedRoute[Fixture.pausedAt].latitude)
+
+        // And the watch reads it as a pause: halfway across the drive is not
+        // on the trail.
+        var tracker = WatchRouteTracker(package)
+        let before = package.points[resumed - 1]
+        let after = package.points[resumed]
+        let reading = tracker.advance(
+            latitude: (before.latitude + after.latitude) / 2,
+            longitude: Fixture.longitude
+        )
+        let middle = try #require(reading)
+        #expect(!middle.isOnTrail)
+    }
+
     enum Fixture {
         static let baseLatitude = 47.55
         static let longitude = 12.90
@@ -153,6 +181,20 @@ struct WatchTrailPackagingTests {
                 longitude: longitude,
                 elevation: elevation(atLatitude: latitude)
             )
+        }
+
+        /// Where ``pausedRoute`` resumes: a point the stride does not keep,
+        /// after one it does not keep either.
+        static let pausedAt = 2501
+
+        /// ``longRoute`` with a pause in the middle and the rest of the walk
+        /// a kilometre further north, where the drive took it.
+        static let pausedRoute: [RouteCoordinate] = longRoute.enumerated().map { index, point in
+            guard index >= pausedAt else { return point }
+            var moved = point
+            moved.latitude += 0.01
+            moved.boundary = index == pausedAt ? .paused : nil
+            return moved
         }
 
         static let shortRoute: [RouteCoordinate] = (0..<10).map { step in
@@ -196,6 +238,7 @@ struct WatchTrailPackagingTests {
 
         @MainActor static var longInput: HikeRouteInput { input(route: longRoute) }
         @MainActor static var shortInput: HikeRouteInput { input(route: shortRoute) }
+        @MainActor static var pausedInput: HikeRouteInput { input(route: pausedRoute) }
         @MainActor static var sawtoothInput: HikeRouteInput { input(route: sawtoothRoute) }
         @MainActor static var jitterInput: HikeRouteInput { input(route: jitterRoute) }
         @MainActor static var flatlessInput: HikeRouteInput { input(route: flatlessRoute) }

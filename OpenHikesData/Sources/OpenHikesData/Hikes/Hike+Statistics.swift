@@ -376,20 +376,16 @@ nonisolated public struct HikeRouteStatistics: Sendable {
     ///
     /// The hike detail path goes through ``Builder`` instead, driven by the
     /// walk ``RouteProfile`` performs anyway; this is for callers with nothing
-    /// else to walk for.
+    /// else to walk for. Its legs are measured by the same rule —
+    /// ``RouteCoordinate/legMeters(from:)``, which gives a paused leg no
+    /// length — so the two paths agree.
     public init(distanceMeters: Double, route: [RouteCoordinate]) {
         var builder = Builder(distanceMeters: distanceMeters)
-        var previous: CLLocationCoordinate2D?
+        var previous: RouteCoordinate?
         for point in route {
-            let coordinate = point.clCoordinate
             let origin = previous
-            previous = coordinate
-            builder.consume(
-                point,
-                segmentMeters: origin.map { start in
-                    RouteGeometry.distanceMeters(from: start, to: coordinate)
-                } ?? 0
-            )
+            previous = point
+            builder.consume(point, segmentMeters: origin.map(point.legMeters(from:)) ?? 0)
         }
         self = builder.finish()
     }

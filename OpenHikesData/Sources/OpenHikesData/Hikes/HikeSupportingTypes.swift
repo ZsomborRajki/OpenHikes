@@ -74,17 +74,33 @@ nonisolated public struct OfflineDownloadFootprint: Codable, Hashable, Sendable 
 /// Identified by its own distance rather than a per-instance `UUID`: the chart's
 /// `ForEach` diffs the plotted samples by `id`, so a fresh identity per instance
 /// made every rebuild of the same route diff as a wholesale replacement. Distance
-/// along the route is unique within a profile (``RouteProfile`` keeps the plotted
-/// samples strictly ascending) and identical across rebuilds — and costs nothing
-/// to derive, where `UUID()` is allocated per sample.
+/// along the route is unique within a profile but for one case, and identical
+/// across rebuilds — and costs nothing to derive, where `UUID()` is allocated
+/// per sample.
+///
+/// The one case is a pause. A paused leg has no length (see ``RouteBoundary``),
+/// so the fix before it and the fix after it stand at the same distance, and the
+/// chart steps between their two heights there. ``resumesAfterPause`` is what
+/// tells that pair apart, and ``RouteProfile`` keeps at most that pair at any
+/// one distance.
 nonisolated public struct ElevationSample: Identifiable, Equatable, Sendable {
-    public var id: Double { distanceMeters }
+    public struct Identity: Hashable, Sendable {
+        public let distanceMeters: Double
+        public let resumesAfterPause: Bool
+    }
+
+    public var id: Identity { Identity(distanceMeters: distanceMeters, resumesAfterPause: resumesAfterPause) }
     public let distanceMeters: Double
     public let elevation: Double
+    /// Whether a pause falls between this sample and the one plotted before
+    /// it — so a climb counted along the samples ends its run here rather than
+    /// reading the lift or the drive as a rise.
+    public let resumesAfterPause: Bool
 
-    public init(distanceMeters: Double, elevation: Double) {
+    public init(distanceMeters: Double, elevation: Double, resumesAfterPause: Bool = false) {
         self.distanceMeters = distanceMeters
         self.elevation = elevation
+        self.resumesAfterPause = resumesAfterPause
     }
 }
 
@@ -144,6 +160,13 @@ nonisolated public enum RouteProvenance: String, Codable, Hashable, Sendable {
 /// that carries it — the pause ended when this fix arrived — which is what
 /// lets a boundary survive the join between two matched legs.
 ///
+/// A paused leg is not distance, and it is not trail (#962). It adds nothing
+/// to a route's length (``RouteCoordinate/legMeters(from:)``), so on
+/// ``RouteProfile``'s axis the two recorded pieces meet at one distance, and
+/// no fix is ever matched onto it: a hiker standing in the car park the
+/// recording drove through is not on the trail. A GPX `<trkseg>` break is read
+/// as one of these, and follows the same rule.
+///
 /// `nil` means the point continues the preceding segment.
 nonisolated public enum RouteBoundary: String, Codable, Hashable, Sendable {
     case paused = "paused"
@@ -200,6 +223,17 @@ nonisolated public struct RouteCoordinate: Codable, Hashable, Sendable {
     /// Whether the recording was paused over the stretch arriving at this
     /// point.
     public var isPauseBoundary: Bool { boundary == .paused }
+
+    /// The length of the leg arriving at this point from `previous`: the
+    /// great-circle distance between them, or nothing when a pause opened it.
+    ///
+    /// One rule for every sum along a stored route — ``RouteProfile``'s axis,
+    /// ``[RouteCoordinate]/lengthMeters``, ``HikeRouteStatistics`` — because a
+    /// paused leg is not distance (see ``RouteBoundary``), and a sum that
+    /// counted it would put a hike's figure and its chart a drive apart.
+    public func legMeters(from previous: Self) -> Double {
+        isPauseBoundary ? 0 : RouteGeometry.distanceMeters(from: previous.clCoordinate, to: clCoordinate)
+    }
 }
 
 nonisolated public extension [RouteCoordinate] {
@@ -224,14 +258,18 @@ nonisolated public extension [RouteCoordinate] {
     }
 
     /// The length of the line through these points, in metres — the sum
-    /// ``RouteGeometry/lengthMeters(of:)`` takes, over a stored route.
+    /// ``RouteGeometry/lengthMeters(of:)`` takes, over a stored route, less
+    /// every leg a pause opened.
     ///
-    /// A pause is walked through like any other leg: this is how long the
-    /// line is, which is what an imported file's or a downloaded route's
-    /// distance states, not how far a hiker covered along it.
+    /// A pause, or a GPX file's break between two `<trkseg>`s, is not
+    /// distance: the ground across it was crossed by car or by lift, or not
+    /// at all, and the recorder and the watch leave it out of a walk's
+    /// length. Summed by ``RouteCoordinate/legMeters(from:)``, the rule
+    /// ``RouteProfile`` measures its axis with, so an imported hike's distance
+    /// and its chart are one number.
     var lengthMeters: Double {
         adjacentPairs().reduce(0) { total, leg in
-            total + RouteGeometry.distanceMeters(from: leg.0.clCoordinate, to: leg.1.clCoordinate)
+            total + leg.1.legMeters(from: leg.0)
         }
     }
 }

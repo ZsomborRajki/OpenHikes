@@ -64,6 +64,12 @@ nonisolated public struct RouteProfile: Sendable {
     /// All route coordinates, in order.
     public let coordinates: [CLLocationCoordinate2D]
     /// Cumulative metres from the start, aligned with `coordinates`, ascending.
+    ///
+    /// Walked metres: a leg a pause opened adds nothing (see
+    /// ``RouteBoundary``), so the point a recording resumed on stands at the
+    /// same distance as the one before the pause, and the axis — progress,
+    /// what is left, the chart — measures the walk rather than the drive
+    /// between its pieces.
     public let distances: [Double]
     /// Points that carry elevation, for charting — downsampled to
     /// ``plottedSampleBudget`` on long routes. See ``downsampledForDrawing(_:)``
@@ -71,7 +77,10 @@ nonisolated public struct RouteProfile: Sendable {
     /// always survive, so ``elevationRange`` is exact however long the track is.
     public let samples: [ElevationSample]
     /// Where along the route the recording was paused, in metres from the
-    /// start — one entry per resume, in order.
+    /// start: where the two recorded pieces meet, since the leg between them
+    /// has no length. One entry per distinct distance, in order — two pauses
+    /// with a single fix between them meet at one place, and the chart draws
+    /// one rule there.
     ///
     /// Kept as distances rather than as indices because that is the axis the
     /// elevation chart is drawn against, and bounded by the number of times
@@ -89,6 +98,10 @@ nonisolated public struct RouteProfile: Sendable {
     public let elevation: RouteElevationSummary
 
     private let sampleDistances: [Double]
+    /// The segments a pause opened, by the index of the point they leave —
+    /// `coordinates[i]` to `coordinates[i + 1]`. Never matched against: see
+    /// ``RouteBoundary``. Bounded by the number of pauses.
+    let pausedSegments: Set<Int>
 
     public init(route: [RouteCoordinate]) {
         self = Self.build(
@@ -99,7 +112,8 @@ nonisolated public struct RouteProfile: Sendable {
     }
 
     /// - Parameter onPoint: called once per route point, in order, with the
-    ///   distance from the previous point (0 for the first). The walk below
+    ///   length of the leg arriving at it — 0 for the first point and for a
+    ///   point a pause ended, by ``RouteCoordinate/legMeters(from:)``. The walk below
     ///   computes those distances to build ``distances``, so a caller that
     ///   needs them for something else — ``HikeDetailPreparation`` building
     ///   ``HikeRouteStatistics`` — can take them from here rather than walking
@@ -123,12 +137,14 @@ nonisolated public struct RouteProfile: Sendable {
         distances: [Double],
         samples: [ElevationSample],
         pauseDistances: [Double],
+        pausedSegments: Set<Int>,
         elevation: RouteElevationSummary
     ) {
         self.coordinates = coordinates
         self.distances = distances
         self.samples = samples
         self.pauseDistances = pauseDistances
+        self.pausedSegments = pausedSegments
         self.elevation = elevation
         sampleDistances = samples.map(\.distanceMeters)
     }
@@ -142,28 +158,31 @@ nonisolated public struct RouteProfile: Sendable {
         var routeDistances: [Double] = []
         var routeSamples: [ElevationSample] = []
         var routePauseDistances: [Double] = []
+        var routePausedSegments: Set<Int> = []
         var elevations = ElevationAccumulator()
         routeCoordinates.reserveCapacity(route.count)
         routeDistances.reserveCapacity(route.count)
 
         var cumulative = 0.0
-        var previous: CLLocationCoordinate2D?
+        var previous: RouteCoordinate?
         for (index, point) in route.enumerated() {
             if index.isMultiple(of: 255), !shouldContinue() { break }
             let coordinate = point.clCoordinate
-            var segment = 0.0
-            if let previous {
-                segment = RouteGeometry.distanceMeters(from: previous, to: coordinate)
-                cumulative += segment
-            }
-            previous = coordinate
+            // A paused leg is no distance — see ``RouteBoundary``.
+            let segment = previous.map(point.legMeters(from:)) ?? 0
+            cumulative += segment
+            previous = point
             routeCoordinates.append(coordinate)
             routeDistances.append(cumulative)
             // `index > 0` for the reason ``[RouteCoordinate]/pausedSegments``
             // starts at 1: a boundary describes the leg arriving at a point,
             // and the first point of a route arrives from nowhere.
-            if index > 0, point.isPauseBoundary {
-                routePauseDistances.append(cumulative)
+            let resumes = index > 0 && point.isPauseBoundary
+            if resumes {
+                routePausedSegments.insert(index - 1)
+                if routePauseDistances.last != cumulative {
+                    routePauseDistances.append(cumulative)
+                }
             }
             elevations.record(point)
             // `isFinite`, and here rather than in each consumer: a height that
@@ -181,7 +200,11 @@ nonisolated public struct RouteProfile: Sendable {
             // same reason; `GPXImport` refuses it at the door, and this is
             // what covers hikes stored before it did.
             if let pointElevation = point.elevation, pointElevation.isFinite {
-                routeSamples.append(ElevationSample(distanceMeters: cumulative, elevation: pointElevation))
+                Self.append(
+                    ElevationSample(distanceMeters: cumulative, elevation: pointElevation, resumesAfterPause: resumes),
+                    to: &routeSamples,
+                    mergingRepeats: false
+                )
             }
             onPoint(point, segment)
         }
@@ -192,8 +215,42 @@ nonisolated public struct RouteProfile: Sendable {
             distances: routeDistances,
             samples: plotted,
             pauseDistances: routePauseDistances,
+            pausedSegments: routePausedSegments,
             elevation: RouteElevationSummary(elevations)
         )
+    }
+
+    /// Adds `sample` to a series in route order, keeping at most one pair of
+    /// samples at any distance: the step at a pause.
+    ///
+    /// The fix before a pause and the fix after it stand at the same distance
+    /// (the paused leg has no length), and both heights are kept, because the
+    /// chart's step between them is the pause. Any other sample at the
+    /// distance of a pause's resume folds into it — the run it starts is the
+    /// same, and a second resumed sample at one distance would share its
+    /// identity. `mergingRepeats` folds the remaining case too, two plain
+    /// samples at one distance, which only the downsampled series does; an
+    /// undownsampled route draws every point it has.
+    private static func append(
+        _ sample: ElevationSample,
+        to series: inout [ElevationSample],
+        mergingRepeats: Bool
+    ) {
+        guard let last = series.last, sample.distanceMeters <= last.distanceMeters else {
+            series.append(sample)
+            return
+        }
+        if sample.resumesAfterPause, !last.resumesAfterPause {
+            series.append(sample)
+        } else if last.resumesAfterPause || sample.resumesAfterPause || mergingRepeats {
+            series[series.count - 1] = ElevationSample(
+                distanceMeters: sample.distanceMeters,
+                elevation: sample.elevation,
+                resumesAfterPause: last.resumesAfterPause || sample.resumesAfterPause
+            )
+        } else {
+            series.append(sample)
+        }
     }
 
     /// Thins the elevation samples down to ``plottedSampleBudget`` for drawing,
@@ -252,16 +309,28 @@ nonisolated public struct RouteProfile: Sendable {
         // Distances are cumulative, so they never decrease — but a stationary
         // stretch can repeat one, and `Charts` plots (and `ElevationSample`
         // identifies) by distance. Keep the later point of any such pair so the
-        // series stays strictly ascending without losing the route's end.
+        // series stays ascending without losing the route's end; only a
+        // pause's step keeps two (see ``append(_:to:mergingRepeats:)``).
+        //
+        // A pause whose resumed sample was not picked still ends the climb's
+        // run: it is carried to the next sample that was, which is the first
+        // plotted one past the pause.
         var plotted: [ElevationSample] = []
         plotted.reserveCapacity(picked.count)
+        var previousIndex = -1
         for index in picked {
             let sample = samples[index]
-            if let previous = plotted.last, sample.distanceMeters <= previous.distanceMeters {
-                plotted[plotted.count - 1] = sample
-            } else {
-                plotted.append(sample)
-            }
+            let resumes = samples[(previousIndex + 1)...index].contains(where: \.resumesAfterPause)
+            previousIndex = index
+            append(
+                ElevationSample(
+                    distanceMeters: sample.distanceMeters,
+                    elevation: sample.elevation,
+                    resumesAfterPause: resumes
+                ),
+                to: &plotted,
+                mergingRepeats: true
+            )
         }
         return plotted
     }
@@ -347,6 +416,11 @@ nonisolated extension RouteProfile {
     /// that point is, in meters — callers use the latter to decide whether the
     /// fix is actually near the trail. O(n): fine at the at-most-one-a-second
     /// rate ``LocationManager/fixes`` publishes at.
+    ///
+    /// A leg a pause opened is never a candidate (see ``RouteBoundary``), so a
+    /// fix on the ground a recording drove across is as far off the route as
+    /// the nearest recorded piece — and a route with no other leg, which is
+    /// the only route that leaves nothing to project onto, answers `nil`.
     ///
     /// `referenceDistance`, when given (the previous match), breaks ties in
     /// favor of continuity. Loops, out-and-backs, and switchbacks can bring
@@ -602,16 +676,27 @@ nonisolated extension RouteProfile {
         candidates: inout [NearestCandidate],
         best: inout NearestCandidate?
     ) {
-        for index in range {
+        // A paused leg is not trail: the two pieces either side of it are
+        // matched, the drive between them never is. See ``RouteBoundary``.
+        for index in range where !pausedSegments.contains(index) {
             let projection = RouteGeometry.project(
                 coordinate,
                 onSegmentFrom: coordinates[index],
                 to: coordinates[index + 1]
             )
+            var along = distances[index]
+                + projection.fraction * (distances[index + 1] - distances[index])
+            // The join's own distance reads as the fix *before* the pause —
+            // ``coordinate(atDistance:)`` answers that point there — so a fix
+            // placed at the very start of a piece a pause began is put just
+            // past it, where the axis reads this piece. Otherwise a hiker a
+            // few metres short of where the recording resumed would be drawn
+            // a drive away, at the other end of the pause.
+            if along == distances[index], index > 0, pausedSegments.contains(index - 1) {
+                along = along.nextUp
+            }
             let candidate = NearestCandidate(
-                distanceAlongRoute: distances[index]
-                    + projection.fraction
-                        * (distances[index + 1] - distances[index]),
+                distanceAlongRoute: along,
                 offRouteMeters: projection.offRouteMeters,
                 dx: projection.dx,
                 dy: projection.dy

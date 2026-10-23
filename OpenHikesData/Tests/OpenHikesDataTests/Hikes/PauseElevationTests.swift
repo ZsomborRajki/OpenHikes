@@ -9,9 +9,11 @@
 //  read straight across it, so a recording paused at 110 m and resumed at
 //  1,110 m reported a 1,020 m climb for what was 20 m of walking (#910).
 //
-//  What these pin is the climb only. The distance axis stays continuous across
-//  a pause (#94), and the height a resume reports is still an observation —
-//  it is the new run's start, and it belongs in the hike's extremes.
+//  What these pin is the climb only. The paused leg has no length on the
+//  distance axis (#962, pinned in `RouteProfilePausedTransferTests`), so the
+//  fix before a pause and the fix after it stand at one distance, and the
+//  height a resume reports is still an observation — it is the new run's
+//  start, and it belongs in the hike's extremes.
 //
 
 import Foundation
@@ -121,8 +123,8 @@ struct PauseElevationTests {
         let reversed = try #require(profile.climb(from: total, to: 0))
         #expect(reversed.gainMeters == 20)
 
-        let before = try #require(profile.climb(from: 0, to: pause - 1))
-        #expect(before.gainMeters == 10)
+        let upToThePause = try #require(profile.climb(from: 0, to: pause))
+        #expect(upToThePause.gainMeters == 10)
 
         let after = try #require(profile.climb(from: pause, to: total))
         #expect(after.gainMeters == 10)
@@ -143,17 +145,18 @@ struct PauseElevationTests {
         let profile = RouteProfile(route: Self.route([100, 110, 1110, 1120], resumingAt: [2]))
         let pause = try #require(profile.pauseDistances.first)
 
-        let covered = try #require(profile.climb(over: [0...(pause - 1), pause...profile.totalDistanceMeters]))
+        let covered = try #require(profile.climb(over: [0...pause, pause...profile.totalDistanceMeters]))
         #expect(covered.gainMeters == 20)
 
         let oneStretch = try #require(profile.climb(over: [0...profile.totalDistanceMeters]))
         #expect(oneStretch.gainMeters == 20)
     }
 
-    /// The reason ``RouteProfile/climb(from:to:)`` reads where the pauses are
-    /// rather than looking for a marked sample: the chart's series is thinned
-    /// to its drawing budget, and the bucket holding the resume keeps its
-    /// lowest and highest points, neither of which need be the resumed one.
+    /// The chart's series is thinned to its drawing budget, and the bucket
+    /// holding the resume keeps its lowest and highest points, neither of
+    /// which need be the resumed one — so downsampling carries the resume's
+    /// mark to the next sample it kept, and ``RouteProfile/climb(from:to:)``
+    /// still ends its run there.
     @Test("a pause stays closed when downsampling dropped the sample that resumed")
     func downsamplingKeepsThePauseClosed() throws {
         let resumedAt = 600
@@ -163,7 +166,7 @@ struct PauseElevationTests {
         let pause = try #require(profile.pauseDistances.first)
 
         try #require(route.count > RouteProfile.plottedSampleBudget)
-        try #require(!profile.samples.contains { $0.distanceMeters == pause })
+        try #require(!profile.samples.contains { $0.distanceMeters == pause && $0.elevation >= 5000 })
 
         #expect(profile.elevation.gainMeters == 1198)
 

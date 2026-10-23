@@ -28,20 +28,15 @@ nonisolated public extension RouteProfile {
         let upper = max(start, end)
         var accumulator = ElevationAccumulator()
         let first = samples.partitioningIndex { $0.distanceMeters >= lower }
-        // A pause is spent by the first sample at or after it, by distance
-        // rather than by identity: the plotted samples may have dropped the
-        // very one the recording resumed on. The one case distance cannot
-        // tell apart is a pause with no length across it, which ends the run
-        // a sample early — and there the step it bridges is a few metres of
-        // sensor drift, not a lift.
-        let firstPause = pauseDistances.partitioningIndex { $0 > lower }
-        var pauses = pauseDistances[firstPause...]
+        // A pause is spent by the sample that resumed after it, by identity
+        // rather than by distance: a paused leg has no length, so the fix
+        // before a pause and the one after it stand at the same distance and
+        // only the mark tells them apart. The plotted samples may have dropped
+        // the very one the recording resumed on; downsampling carries its mark
+        // to the next sample it kept.
         for sample in samples[first...] {
             guard sample.distanceMeters <= upper else { break }
-            if let pause = pauses.first, pause <= sample.distanceMeters {
-                accumulator.endRun()
-                pauses = pauses.drop { $0 <= sample.distanceMeters }
-            }
+            if sample.resumesAfterPause { accumulator.endRun() }
             accumulator.record(sample.elevation)
         }
         guard accumulator.hasChange else { return nil }
