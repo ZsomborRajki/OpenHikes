@@ -525,3 +525,17 @@ custom_rules:
     excluded: '(^|/)(OpenHikesTests|OpenHikesUITests|OpenWidgetTests|Tests)/'
     message: "Spell user-visible text the American way: color, center, license, meter, gray (#847)."
     severity: error
+
+  # `ForEach` takes `photos.enumerated()` as it is: enumerating a random-access
+  # collection gives a random-access collection. Wrapped in `Array(…)` it is
+  # copied into a fresh array of pairs every time the body runs (#220). The
+  # wrapper came out of every view once (#229) and came back with the walk
+  # share gallery (#940), so this keeps it out.
+  foreach_enumerated_without_array:
+    name: "ForEach Without Array Around enumerated()"
+    regex: 'ForEach\(\s*Array\([^\n]*?\.enumerated\(\)\s*\)'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Pass `x.enumerated()` to ForEach as it is; Array(…) only copies it (#940)."
+    severity: error

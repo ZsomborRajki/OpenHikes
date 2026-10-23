@@ -62,10 +62,7 @@ struct CommunityReviewPhotoStrip<Subject: CommunityReviewSubject>: View {
                     // submission's ``CommunityPublisher/maximumPhotos`` at
                     // once, for a row that shows two.
                     LazyHStack(spacing: 12) {
-                        ForEach(
-                            Array(subject.photoFileURLs.enumerated()),
-                            id: \.offset
-                        ) { index, url in
+                        ForEach(subject.photoFileURLs.enumerated(), id: \.offset) { index, url in
                             tile(at: index, url: url, removable: subject.hasEveryPhoto)
                         }
                     }
