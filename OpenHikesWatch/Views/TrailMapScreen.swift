@@ -154,9 +154,11 @@ struct TrailMapScreen: View {
                 model.startFollowing()
             }
             .onDisappear {
-                // Only when nothing is recording. A recording owns the feed
-                // and outlives this screen — which is the whole point of it.
-                if !model.recorder.phase.isActive { model.stopFollowing() }
+                // Recording or not. A recording owns its own feed and
+                // outlives this screen, which is the whole point of it, but
+                // this screen's claim on the feed goes with the screen — see
+                // ``WatchModel/stopFollowing()``.
+                model.stopFollowing()
             }
     }
 
