@@ -51,9 +51,8 @@ nonisolated enum CommonsAreaPhotos {
         limit: Int
     ) -> [CommonsPhotoCandidate] {
         guard limit > 0 else { return [] }
-        var seen: Set<Int> = []
-        let inside = candidates.filter { candidate in
-            seen.insert(candidate.pageID).inserted && offset(of: candidate, in: area).distance <= area.radiusMeters
+        let inside = candidates.uniqued(on: \.pageID).filter { candidate in
+            offset(of: candidate, in: area).distance <= area.radiusMeters
         }
         let nearer = { (lhs: CommonsPhotoCandidate, rhs: CommonsPhotoCandidate) in
             nearerTheMiddle(lhs, rhs, of: area)

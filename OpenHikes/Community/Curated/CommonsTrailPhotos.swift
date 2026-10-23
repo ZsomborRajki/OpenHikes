@@ -122,10 +122,8 @@ nonisolated enum CommonsTrailPhotos {
     /// line, each pinned to the nearest point on it — once each, however many
     /// circles found it.
     static func placed(_ candidates: [CommonsPhotoCandidate], on profile: RouteProfile) -> [Placed] {
-        var seen: Set<Int> = []
-        return candidates.compactMap { candidate in
-            guard seen.insert(candidate.pageID).inserted,
-                  let nearest = profile.nearestPoint(to: candidate.coordinate),
+        candidates.uniqued(on: \.pageID).compactMap { candidate in
+            guard let nearest = profile.nearestPoint(to: candidate.coordinate),
                   nearest.offRouteMeters <= corridorMeters,
                   let pin = profile.coordinate(atDistance: nearest.distanceAlongRoute)
             else { return nil }
