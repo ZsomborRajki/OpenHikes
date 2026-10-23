@@ -37,9 +37,10 @@ final class PhotoCaptureController {
     /// said nothing readable or the photo came from the library picker. The
     /// recording screen needs it: the walk goes on while the camera's review
     /// screen is up, so where the hiker is at the hand-over is not where the
-    /// picture was taken (#970). A screen whose position is one the hiker
-    /// chose — a place's own screen, a point on the elevation graph — ignores
-    /// it, because that choice is what the photo is of.
+    /// picture was taken (#970). A place's own screen ignores it, because the
+    /// place is what the photo is of. So does a hike's screen, whose
+    /// elevation graph is either a point the hiker chose or a live match that
+    /// keeps no history to look the shutter up in.
     typealias Anchor = (_ shutter: Date?) -> CLLocationCoordinate2D?
 
     /// The screen a photo taken now would be filed under, and where on the
@@ -250,8 +251,9 @@ final class PhotoCaptureController {
     /// after the subject changed would pin a photo to a trail it isn't of.
     ///
     /// - Parameter shutter: When the camera says the picture was taken, handed
-    ///   to the screen's ``Anchor``. `nil` for a library pick, whose own
-    ///   timestamp is placed elsewhere — see ``PickedPhotoPlacement``.
+    ///   to the screen's ``Anchor``. `nil` for a library pick, whose own time
+    ///   and position are weighed by ``PickedPhotoPlacement``, with this
+    ///   anchor only as its fallback.
     func currentSubject(shutter: Date? = nil) -> Filing? {
         guard let subject else { return nil }
         return Filing(hike: subject.hike, coordinate: subject.anchor(shutter), placeID: subject.placeID)

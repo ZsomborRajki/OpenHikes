@@ -120,11 +120,17 @@ nonisolated enum PhotoTrailAnchor {
     /// nothing is interpolated across a pause, and a moment the walk cannot
     /// account for is `nil` rather than a plausible point.
     ///
+    /// A shutter further back than ``RecentRecordingFixes/retention`` is `nil`
+    /// as well. The fixes around it have been let go, and the oldest one kept
+    /// would read as the start of the walk, within the timeline's grace of a
+    /// moment the walk was in fact somewhere else.
+    ///
     /// Otherwise — no shutter time to go on, or nothing accepted since it —
     /// the answer is ``recordingCoordinate(_:)``'s: the newest evidence there
     /// is. That holds however old the fix is, because a hiker standing still
-    /// produces no new ones (the displacement gate refuses them), and is
-    /// `nil` straight after a resume, when the leg has no fix yet.
+    /// produces no new ones (Core Location's distance filter holds them back —
+    /// see ``RecordingEnergyPolicy``), and is `nil` straight after a resume,
+    /// when the leg has no fix yet.
     ///
     /// - Parameters:
     ///   - shutter: When the camera says the picture was taken — see
@@ -139,6 +145,9 @@ nonisolated enum PhotoTrailAnchor {
     ) -> CLLocationCoordinate2D? {
         guard let shutter, let newest = recent.last, newest.timestamp > shutter else {
             return recordingCoordinate(latest)
+        }
+        guard shutter >= newest.timestamp.addingTimeInterval(-RecentRecordingFixes.retention) else {
+            return nil
         }
         guard let timeline = HikePhotoTimeline(route: recent.map(\.routeCoordinate)),
               let position = timeline.position(at: shutter),

@@ -105,4 +105,46 @@ extension HikeRecorderTests {
         #expect(hikeRecorder.recentFixes.points.isEmpty)
         #expect(hikeRecorder.photoCoordinate(atShutter: shutter) == nil)
     }
+
+    /// A discarded recording is gone, and so is what it walked: a photo
+    /// handed over afterwards has nothing of it to be placed by.
+    @Test("a discarded recording forgets its fixes")
+    func discardForgetsTheFixes() async {
+        let hikeRecorder = makeRecorder()
+        await hikeRecorder.start()
+        let shutter = clock.now
+        source.deliver(fix(latitude: 47.63))
+        clock.advance(by: 10)
+        source.deliver(fix(latitude: 47.6302))
+
+        await hikeRecorder.discard()
+
+        #expect(hikeRecorder.phase == .idle)
+        #expect(hikeRecorder.recentFixes.points.isEmpty)
+        #expect(hikeRecorder.photoCoordinate(atShutter: shutter) == nil)
+    }
+
+    /// Relaunching rebuilds the recorder's live state from the journal, the
+    /// recent fixes included, so a shutter from before the relaunch is still
+    /// placed by the walk rather than at its newest fix.
+    @Test("a recovered recording places a shutter by the fixes it recovered")
+    func recoveredFixesPlaceAnEarlierShutter() async throws {
+        let shutter = clock.now
+        let journal = TrackJournal(directory: directory, clock: clock.read)
+        try await journal.start(sessionID: UUID(), startedAt: shutter)
+        for latitude in [47.63, 47.6302, 47.6304] {
+            try await journal.append(
+                RecordingPoint(latitude: latitude, longitude: 12.86, timestamp: clock.now, horizontalAccuracy: 8)
+            )
+            clock.advance(by: 10)
+        }
+        try await journal.close()
+
+        let hikeRecorder = makeRecorder()
+        await hikeRecorder.recoverOpenSession()
+
+        #expect(hikeRecorder.phase == .recording)
+        let pinned = try #require(hikeRecorder.photoCoordinate(atShutter: shutter))
+        #expect(pinned.latitude.isApproximatelyEqual(to: 47.63, absoluteTolerance: 1e-7))
+    }
 }

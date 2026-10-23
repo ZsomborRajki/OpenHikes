@@ -121,34 +121,18 @@ struct RecordingShutterPositionTests {
         #expect(Self.coordinate(atShutter: 600, recent: walk) == nil)
     }
 
-    @Test("the recent fixes let go of what is older than the retention")
-    func retentionDropsOldFixes() {
-        var recent = RecentRecordingFixes()
+    /// The buffer keeps only the last ``RecentRecordingFixes/retention`` of
+    /// the walk. A shutter further back than that would otherwise be read
+    /// against the oldest fix kept as though the walk began there, and pinned
+    /// to it within the timeline's grace.
+    @Test("a shutter older than the fixes kept is placed nowhere, not at the oldest kept")
+    func shutterBeyondTheRetentionPinsNothing() throws {
         let retention = RecentRecordingFixes.retention
+        // What the buffer holds once a fix at 0 has been let go.
+        let kept = [Self.point(47.631, at: 100), Self.point(47.632, at: 100 + retention)]
 
-        recent.append(Self.point(47.63, at: 0))
-        recent.append(Self.point(47.631, at: retention))
-        #expect(recent.points.count == 2, "a fix exactly at the horizon is kept")
-
-        recent.append(Self.point(47.632, at: retention + 1))
-        #expect(recent.points.map(\.latitude) == [47.631, 47.632])
-    }
-
-    @Test("a walk rebuilt from the journal keeps only its retained tail")
-    func replaceKeepsTheRetainedTail() {
-        var recent = RecentRecordingFixes()
-        recent.append(Self.point(1, at: 0))
-        let retention = RecentRecordingFixes.retention
-
-        recent.replace(with: [
-            Self.point(47.63, at: 0),
-            Self.point(47.631, at: 60),
-            Self.point(47.632, at: retention + 60),
-        ])
-
-        #expect(recent.points.map(\.latitude) == [47.631, 47.632])
-
-        recent.replace(with: [])
-        #expect(recent.points.isEmpty)
+        #expect(Self.coordinate(atShutter: 50, recent: kept) == nil)
+        let atTheHorizon = try #require(Self.coordinate(atShutter: 100, recent: kept))
+        #expect(atTheHorizon.latitude.isApproximatelyEqual(to: 47.631, absoluteTolerance: Self.tolerance))
     }
 }

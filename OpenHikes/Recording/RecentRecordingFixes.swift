@@ -16,14 +16,15 @@
 //
 //  Bounded by time rather than kept whole. The journal already holds the whole
 //  walk on disk; what is needed in memory is only as far back as a review
-//  screen is ever left up, and a shutter older than the oldest fix kept here
-//  is answered the way ``HikePhotoTimeline`` answers any moment outside a
-//  walk — at that end, within its grace, or not at all.
+//  screen is ever left up. A shutter further back than ``retention`` is not
+//  answered at all — see
+//  ``PhotoTrailAnchor/recordingCoordinate(atShutter:recent:latest:)`` — because
+//  the fixes either side of it have been let go, and the oldest one kept would
+//  otherwise pass for the start of the walk.
 //
 
 import DequeModule
 import Foundation
-import OpenHikesData
 
 nonisolated struct RecentRecordingFixes: Sendable {
     /// How far behind the newest fix the oldest one kept may be.
