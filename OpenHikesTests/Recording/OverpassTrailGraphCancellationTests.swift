@@ -117,25 +117,6 @@ private actor CallerOutcome {
     }
 }
 
-/// Stands in for the recorder's budget timer: it expires when the test says
-/// so rather than after a duration.
-private actor BudgetGate {
-    private var isExpired = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
-    func waitForExpiry() async {
-        guard !isExpired else { return }
-        await withCheckedContinuation { waiters.append($0) }
-    }
-
-    func expire() {
-        isExpired = true
-        let pending = waiters
-        waiters.removeAll()
-        for continuation in pending { continuation.resume() }
-    }
-}
-
 @Suite("Overpass trail graph cancellation")
 struct OverpassTrailGraphCancellationTests {
     private static let pollInterval = Duration.milliseconds(5)
@@ -218,7 +199,7 @@ struct OverpassTrailGraphCancellationTests {
         // is still held open. Waiting for it after the release would pass
         // against a caller stuck until the other one's download finished,
         // which is the bug: Stop's budget would then be somebody else's.
-        try await waitFor { await abandonedOutcome.hasFinished }
+        try await waitFor("the abandoned caller to finish") { await abandonedOutcome.hasFinished }
         #expect(await abandonedOutcome.wasCancelled)
         #expect(await transport.completedCount == 0)
         #expect(await provider.waiterCount(for: region) == 1)
@@ -236,9 +217,10 @@ struct OverpassTrailGraphCancellationTests {
 
     /// The shape of `HikeRecorder.downloadTrailGraph`: a prefetch raced
     /// against Stop's budget in a task group, which cancels the loser and then
-    /// waits for it before the save can go on. Here the prefetch shares its
-    /// region with another caller that still wants it, so cancelling it must
-    /// not mean waiting for that caller's download.
+    /// waits for it. Here the prefetch shares its region with another caller
+    /// that still wants it, so cancelling it must not mean waiting for that
+    /// caller's download. The budget timer is an `AsyncGate` the test opens,
+    /// not a duration.
     @Test(
         "Stop's budget race ends while another caller keeps the shared download",
         .timeLimit(.minutes(1))
@@ -266,22 +248,24 @@ struct OverpassTrailGraphCancellationTests {
         let kept = Task { try await provider.prefetch(around: coordinate) }
         try await waitFor { await provider.waiterCount(for: region) == 1 }
 
-        let budget = BudgetGate()
+        let budget = AsyncGate()
         let stopOutcome = CallerOutcome()
         let stop = Task {
             await stopOutcome.record {
                 await withTaskGroup(of: Void.self) { group in
-                    group.addTask { await budget.waitForExpiry() }
+                    group.addTask { await budget.wait() }
                     group.addTask { try? await provider.prefetch(around: coordinate) }
                     await group.next()
                     group.cancelAll()
                 }
             }
         }
-        try await waitFor { await provider.waiterCount(for: region) == 2 }
+        try await waitFor("Stop's prefetch to join the download") {
+            await provider.waiterCount(for: region) == 2
+        }
 
-        await budget.expire()
-        try await waitFor { await stopOutcome.hasFinished }
+        await budget.open()
+        try await waitFor("Stop's task group to exit") { await stopOutcome.hasFinished }
         #expect(await transport.completedCount == 0)
         #expect(await transport.cancelledCount == 0)
         #expect(await provider.waiterCount(for: region) == 1)
@@ -307,14 +291,15 @@ struct OverpassTrailGraphCancellationTests {
     /// a full-bundle run it expires early and reports a timeout as a fake
     /// assertion failure.
     private func waitFor(
-        _ condition: () async -> Bool,
-        sourceLocation: SourceLocation = #_sourceLocation
+        _ description: String = "a condition",
+        sourceLocation: SourceLocation = #_sourceLocation,
+        _ condition: () async -> Bool
     ) async throws {
         let deadline = ContinuousClock.now + Self.waitBudget
         while ContinuousClock.now < deadline {
             if await condition() { return }
             try await Task.sleep(for: Self.pollInterval)
         }
-        Issue.record("Timed out waiting for a condition.", sourceLocation: sourceLocation)
+        Issue.record("Timed out waiting for \(description).", sourceLocation: sourceLocation)
     }
 }
