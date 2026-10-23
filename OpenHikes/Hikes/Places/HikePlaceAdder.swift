@@ -381,9 +381,10 @@ private struct HikePlaceStagedPhotoArrival: View {
 /// The photographs *Add Place* is holding, each with a way to take it back.
 ///
 /// Its own view so the strip belongs to it rather than to the form, whose
-/// every keystroke would otherwise rebuild it — ``HikePlaceView``'s strip is
-/// split out for the same reason. It reads the photographs off the session
-/// itself, so one arriving redraws the strip and not the form.
+/// camera, picker, alerts and *Add* would otherwise rebuild it —
+/// ``HikePlaceView``'s strip is split out for the same reason. It reads the
+/// photographs off the session itself, so one arriving redraws the strip and
+/// not the form.
 private struct HikePlaceStagedPhotoStrip: View {
     /// The remove button's scrim, dark enough for its white cross to read
     /// over a bright sky.
