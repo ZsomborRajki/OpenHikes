@@ -14,6 +14,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Commons trail photos")
@@ -87,7 +88,7 @@ struct CommonsTrailPhotosTests {
         )
         #expect(kept.count == 1)
         let placed = try #require(kept.first)
-        #expect(abs(placed.distanceAlongRoute - 1000) < 15)
+        #expect(placed.distanceAlongRoute.isApproximatelyEqual(to: 1000, absoluteTolerance: 15))
 
         let offTheLineFirst = CommonsTrailPhotos.placed(
             [Self.candidate(8, kilometers: 4.5, east: Self.hundredFiftyMetersEast), Self.candidate(8, kilometers: 4.5)],

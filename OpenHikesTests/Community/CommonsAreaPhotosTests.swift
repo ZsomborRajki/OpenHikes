@@ -46,19 +46,17 @@ struct CommonsAreaPhotosTests {
         #expect(kept.map(\.pageID) == [1])
     }
 
-    /// Commons gives a file one primary coordinate, so two circles answer it
-    /// at the same spot; this pins that a file is judged once, by its first
+    /// Commons gives a file one primary coordinate, so its repeats agree on
+    /// where it is; this pins that a file is judged once, by its first
     /// answer, before anything is measured.
     @Test("a file's first answer is the one judged, wherever a later one puts it")
-    func theFirstAnswerIsJudged() throws {
+    func theFirstAnswerIsJudged() {
         let kept = CommonsAreaPhotos.spread(
             [Self.candidate(1, north: 500), Self.candidate(1, north: 1500)],
             in: Self.area,
             limit: 16
         )
-        #expect(kept.count == 1)
-        let shown = try #require(kept.first)
-        #expect(abs(shown.latitude - Self.candidate(1, north: 500).latitude) < 1e-9)
+        #expect(kept == [Self.candidate(1, north: 500)], "the file comes back as its first answer, untouched")
 
         let outsideFirst = CommonsAreaPhotos.spread(
             [Self.candidate(2, north: 2500), Self.candidate(2, north: 500)],
