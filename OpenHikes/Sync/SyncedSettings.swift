@@ -121,6 +121,10 @@ nonisolated enum SyncedSettingsMerge {
     /// that arrived first. It is sent instead of overwritten. Keys outside
     /// `keys` are left alone, so a pending edit to one setting survives a
     /// change to another.
+    ///
+    /// An edit made on the main thread is sent before its `set` returns, so
+    /// the one left unsent is a write made off it, whose notification is
+    /// still queued behind the incoming one.
     static func reconciling(
         keys: Set<String>,
         local: [String: SyncedSettingValue],
@@ -159,12 +163,19 @@ final class SyncedSettingsMirror {
     /// defaults notification pushed every local value that differed from
     /// iCloud's, so an unrelated write that ran before another device's
     /// change had been pulled sent the old choice back up over the new one.
-    /// It also replaces a "the mirror is writing" flag as the loop guard,
-    /// because the notifications are delivered on `.main`, a runloop turn
-    /// after any such flag would have come down: the mirror's own write
-    /// matches the baseline by the time its notification arrives, so it sends
-    /// nothing back.
     private var baseline: [String: SyncedSettingValue] = [:]
+    /// Raised while ``apply(_:to:)`` writes iCloud's values into `defaults`.
+    ///
+    /// `UserDefaults.didChangeNotification` is posted inside `set`, and an
+    /// observer on `.main` runs at once when the write is made on the main
+    /// thread, so ``defaultsDidChange()`` would run in the middle of every
+    /// pull, before ``baseline`` has caught up with it. Read there, the keys
+    /// not yet written look like edits made here: on a restored device, or
+    /// when the switch is turned back on, the stale local values would go up
+    /// to iCloud before iCloud's own came back down. The mirror's own writes
+    /// are never edits, so they are skipped, and each pull sets ``baseline``
+    /// itself once it has finished.
+    private var isApplying = false
 
     init(
         defaults: UserDefaults,
@@ -228,7 +239,11 @@ final class SyncedSettingsMirror {
     /// iCloud's store said something changed.
     ///
     /// A new account, or the first download after joining one, is the
-    /// restored-device case again and adopts remote-first. Anything else is
+    /// restored-device case again and adopts remote-first, as ``start()``
+    /// does. That is the one place an edit made here gives way to iCloud's
+    /// value: before the first download the store discards this device's
+    /// writes, so an edit made in that window is replaced wherever iCloud
+    /// holds a value, and sent only where it holds none. Anything else is
     /// confined to the keys the notification names, so that pulling one
     /// setting cannot overwrite a pending local edit to another.
     func cloudDidChange(_ change: SyncedSettingsCloudChange) {
@@ -254,6 +269,7 @@ final class SyncedSettingsMirror {
     /// Something in the defaults suite changed, synced or not: sends only the
     /// synced values that moved since the stores last agreed.
     func defaultsDidChange() {
+        guard !isApplying else { return }
         let local = localValues()
         write(SyncedSettingsMerge.pushing(local: local, baseline: baseline), to: store)
         baseline = local
@@ -297,14 +313,17 @@ final class SyncedSettingsMirror {
 
     /// Writes only what actually differs.
     ///
-    /// A write that changes nothing posts no notification, so the steady
-    /// state stays silent in both stores; ``baseline`` is what stops a write
-    /// that does change something from coming back.
+    /// `UserDefaults` posts its change notification for every `set`, equal
+    /// value or not, so this filter is what keeps the steady state silent;
+    /// ``isApplying`` and ``baseline`` are what stop a write that does change
+    /// something from being sent back.
     private func apply(
         _ values: [String: SyncedSettingValue],
         to defaults: UserDefaults
     ) {
         let current = localValues()
+        isApplying = true
+        defer { isApplying = false }
         for (key, value) in values where current[key] != value {
             switch value {
             case .boolean(let flag): defaults.set(flag, forKey: key)

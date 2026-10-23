@@ -212,19 +212,25 @@ struct SyncedSettingsMirrorOrderingTests {
     }
 
     /// The observer is wired to the injected center and reads the keys from
-    /// the notification, not from the store.
+    /// the notification, not from the store: iCloud also holds a change the
+    /// notification does not name, and that one stays where it is.
     @Test("The store's notification reaches the mirror with its changed keys")
     func notificationIsWired() async throws {
         let center = NotificationCenter()
         let name = "SyncedSettingsMirrorOrderingTests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.set(Constants.osm, forKey: SettingsKey.tileProviderID)
-        let store = InMemoryCloudSettingsStore([SettingsKey.tileProviderID: Constants.osm])
+        let agreed: [String: Any] = [
+            SettingsKey.tileProviderID: Constants.osm,
+            SettingsKey.savePhotosToLibrary: false,
+        ]
+        for (key, value) in agreed { defaults.set(value, forKey: key) }
+        let store = InMemoryCloudSettingsStore(agreed)
         let mirror = SyncedSettingsMirror(defaults: defaults, store: store, notificationCenter: center)
         mirror.start()
         defer { mirror.stop() }
 
         store.receive(Constants.stadia, forKey: SettingsKey.tileProviderID)
+        store.receive(true, forKey: SettingsKey.savePhotosToLibrary)
         center.post(
             name: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
             object: store,
@@ -238,5 +244,6 @@ struct SyncedSettingsMirrorOrderingTests {
             defaults.string(forKey: SettingsKey.tileProviderID) == Constants.stadia
         }
         #expect(defaults.string(forKey: SettingsKey.tileProviderID) == Constants.stadia)
+        #expect(!defaults.bool(forKey: SettingsKey.savePhotosToLibrary))
     }
 }

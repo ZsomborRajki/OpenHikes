@@ -30,7 +30,8 @@ nonisolated struct SyncedSettingsCloudChange: Equatable, Sendable {
     enum Reason: Equatable, Sendable {
         /// Another device wrote, and the server passed it on.
         case server
-        /// The first download since this device joined the account.
+        /// The first download since this device joined the account has
+        /// arrived, and any write made here before it was discarded.
         case initialSync
         /// This device's own writes went over the store's quota.
         case quotaViolation

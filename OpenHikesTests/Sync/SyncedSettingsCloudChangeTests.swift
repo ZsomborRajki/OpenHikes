@@ -32,8 +32,20 @@ struct SyncedSettingsCloudChangeTests {
         #expect(change.keys == [SettingsKey.tileProviderID])
     }
 
-    /// Unknown is reconciled key by key, never treated as permission for
-    /// iCloud to win everywhere.
+    /// A reason the store does not send today is reconciled key by key, over
+    /// the keys it names, never treated as permission for iCloud to win
+    /// everywhere.
+    @Test("An unknown reason reads as a server change to the keys it names")
+    func unknownReason() {
+        let change = SyncedSettingsCloudChange(Self.notification([
+            NSUbiquitousKeyValueStoreChangeReasonKey: 99,
+            NSUbiquitousKeyValueStoreChangedKeysKey: [SettingsKey.showsHikingRoutes],
+        ]))
+
+        #expect(change.reason == .server)
+        #expect(change.keys == [SettingsKey.showsHikingRoutes])
+    }
+
     /// A notification that does not say what moved is reconciled over every
     /// synced key, by the same key-by-key rule.
     @Test("A missing userInfo reads as a server change to every synced key")
