@@ -722,6 +722,9 @@ answer.
     is built once.
   - A screen's `@FocusState` re-runs that screen whenever the keyboard comes or
     goes.
+  - A view that stores one re-runs on every write through it too, even an
+    equatable view that never reads it. `ElevationChartPlot` is handed a plain
+    reference and a closure instead (`ElevationScrubSelection`).
 - **Any `DynamicProperty` invalidates the view that declares it**, even if
   nothing reads it. `@Environment(\.dismiss)` is the worst offender: its value
   is new on every presentation pass, and one backgrounding rebuilt a photo grid
