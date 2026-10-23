@@ -133,10 +133,11 @@ nonisolated enum CommonsAreaPhotos {
 
     /// Metres east and north of the area's middle, and the distance between.
     ///
-    /// Flat, which is the right amount of geometry for a circle ten kilometres
-    /// across: the grid is a way of spreading pictures, not a survey. East is
-    /// measured the short way round, so a photograph a kilometre over the date
-    /// line is a kilometre away and not a lap of the planet.
+    /// Flat, which is the right amount of geometry for a circle no more than
+    /// twenty kilometres across: the grid is a way of spreading pictures, not
+    /// a survey. East is measured the short way round, so a photograph a
+    /// kilometre over the date line is a kilometre away and not a lap of the
+    /// planet.
     private static func offset(
         of candidate: CommonsPhotoCandidate,
         in area: CommunitySearchArea
