@@ -25,6 +25,8 @@ import Testing
 
 @Suite("Hike intent queries")
 final class HikeIntentQueryTests {
+    private struct ReadFailure: Error {}
+
     private let container: ModelContainer
     private let context: ModelContext
     private let clock = TestClock()
@@ -168,6 +170,24 @@ final class HikeIntentQueryTests {
         }
     }
 
+    @Test("a library that cannot be read says so, not that nothing was walked")
+    func anUnreadableLibraryIsAFailure() async throws {
+        let trail = try insertHike(title: "Thumsee Loop", distanceMeters: 8000, clock: nil, date: daysAgo(90))
+        let walked = daysAgo(1)
+        try insertWalk(on: trail, from: walked, to: walked.addingTimeInterval(3600), coveredMeters: 3000)
+        // Only the walks fail, so no read that carried on could pass for
+        // this one: an empty library says there are no hikes, and the hikes
+        // without their walks that none of them was walked.
+        let reads = LibraryTotalsSweep.Reads(
+            hikes: LibraryTotalsSweep.Reads.store.hikes,
+            walks: { _ in throw ReadFailure() }
+        )
+
+        await #expect(throws: HikeIntentFailure.storage) {
+            try await coordinator(reading: reads).lastOuting()
+        }
+    }
+
     @Test("a custom name is what gets reported, not the recorded title")
     func aRenamedHikeReportsItsName() async throws {
         let walked = daysAgo(1)
@@ -189,7 +209,7 @@ final class HikeIntentQueryTests {
         now.addingTimeInterval(-days * 24 * 3600)
     }
 
-    private func coordinator() -> HikeIntentCoordinator {
+    private func coordinator(reading reads: LibraryTotalsSweep.Reads = .store) -> HikeIntentCoordinator {
         let instance = HikeRecorder(
             container: container,
             source: StubRecordingLocationSource(),
@@ -208,7 +228,8 @@ final class HikeIntentQueryTests {
             recorder: instance,
             container: container,
             calendar: calendar,
-            clock: { [now] in now }
+            clock: { [now] in now },
+            libraryReads: reads
         )
     }
 

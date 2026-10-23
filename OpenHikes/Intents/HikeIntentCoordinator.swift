@@ -32,6 +32,10 @@ final class HikeIntentCoordinator {
     /// The trail being walked, or `nil` — the walk session's answer, asked
     /// rather than kept for the reason the recorder is: one authority each.
     private let walkUnderWay: @MainActor () -> String?
+    /// How the library is read for what has been walked. The app only ever
+    /// reads the store; a suite hands in a failing read, because a
+    /// `ModelContext` cannot be made to throw on demand.
+    private let libraryReads: LibraryTotalsSweep.Reads
 
     /// Where a store failure's own words go. They are logged rather than
     /// spoken: the underlying text is a SwiftData message written for a
@@ -43,13 +47,15 @@ final class HikeIntentCoordinator {
         container: ModelContainer,
         calendar: Calendar = .autoupdatingCurrent,
         clock: @escaping @Sendable () -> Date = { Date() },
-        walkUnderWay: @escaping @MainActor () -> String? = { nil }
+        walkUnderWay: @escaping @MainActor () -> String? = { nil },
+        libraryReads: LibraryTotalsSweep.Reads = .store
     ) {
         self.recorder = recorder
         self.container = container
         self.calendar = calendar
         self.clock = clock
         self.walkUnderWay = walkUnderWay
+        self.libraryReads = libraryReads
     }
 }
 
@@ -351,7 +357,7 @@ extension HikeIntentCoordinator {
         hikes: [LibraryHikeFacts], walks: [LibraryWalkFacts]
     ) {
         do {
-            return try await LibraryTotalsSweep.read(from: container)
+            return try await LibraryTotalsSweep.read(from: container, using: libraryReads)
         } catch {
             // As in `fetch(_:)`: logged, not carried, because the failure is
             // read out loud.
@@ -444,8 +450,9 @@ extension HikeIntentCoordinator {
     /// statistic "from scratch, on the calling thread, on every read", and
     /// this coordinator is `@MainActor` — so a saved multi-hour hike, which is
     /// thousands of points, would run a full accumulator pass on the main
-    /// actor inside an intent that has a system execution budget. Both report
-    /// paths reach here, and one of them lands immediately after a save.
+    /// actor inside an intent that has a system execution budget. Stopping
+    /// reaches here immediately after a save, and every read of the whole
+    /// library once per saved hike.
     ///
     /// The answer is the same one: `HikeRouteStatistics` takes its duration
     /// between the first and last *stamped* points, which is what these two
