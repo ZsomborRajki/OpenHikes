@@ -14,7 +14,9 @@ nonisolated struct PreparedRecording: Sendable {
     let rawRoute: [RouteCoordinate]
     let distanceMeters: Double
     /// The saved line's own length: the plain sum along `route`, with none of
-    /// the stationary windows ``distanceMeters`` retracts.
+    /// the stationary windows ``distanceMeters`` retracts — and, like it and
+    /// like every sum along a stored route, none of the legs a pause opened
+    /// (see ``RouteBoundary``).
     ///
     /// Not a second opinion about how far the hiker went — `distanceMeters`
     /// is that, and is the figure the hike shows. This is the *axis* a walk's
@@ -177,7 +179,9 @@ nonisolated enum RecordingPreparation {
         var previousCoordinate: CLLocationCoordinate2D?
         for point in preparedPoints {
             accumulator.append(point)
-            if let previousCoordinate {
+            // `.resumed` is what the saved route carries as a pause boundary,
+            // and a paused leg is no distance on the profile either.
+            if let previousCoordinate, !point.flags.contains(.resumed) {
                 routeLength += RouteGeometry.distanceMeters(
                     from: previousCoordinate,
                     to: point.coordinate

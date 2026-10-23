@@ -16,6 +16,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Pause boundaries")
@@ -101,10 +102,13 @@ struct PauseBoundaryTests {
         #expect(prepared.route.containsPause)
     }
 
-    /// The profile keeps its x-axis continuous across a pause — no distance
-    /// went missing, only time — so what the chart needs is where along the
-    /// route to draw the rule.
-    @Test("the elevation profile records where the pause fell")
+    /// A pause is not distance (#962): the profile's axis leaves the paused
+    /// leg out, so the two recorded pieces meet at one distance and the chart
+    /// draws its rule there. The hike's saved distance, the walk's coverage
+    /// axis and the profile are then the same number — what the detail
+    /// screen states, what a followed walk measures against and what the
+    /// chart's x-axis spans — rather than three figures a drive apart.
+    @Test("the elevation profile leaves the pause out and marks where the pieces meet")
     func profileCarriesPauseDistance() throws {
         let prepared = try RecordingPreparation.prepare(
             points: pausedWalk(),
@@ -114,12 +118,15 @@ struct PauseBoundaryTests {
 
         #expect(profile.pauseDistances.count == 1)
         let distance = try #require(profile.pauseDistances.first)
-        let total = try #require(profile.distances.last)
-        // The pause opens after ~111 m of walking and spans ~1 km, so the rule
-        // belongs at the far end of that leg rather than at its start — and
-        // inside the route it annotates.
-        #expect(distance > 1000)
-        #expect(distance < total)
+        // ~111 m walked before the pause and ~111 m after it, with ~1 km
+        // driven between them that is on none of the three figures.
+        #expect(distance.isApproximatelyEqual(to: 111.2, absoluteTolerance: 0.5))
+        #expect(profile.totalDistanceMeters.isApproximatelyEqual(to: 222.4, absoluteTolerance: 1))
+        #expect(prepared.distanceMeters.isApproximatelyEqual(to: profile.totalDistanceMeters, absoluteTolerance: 1))
+        #expect(prepared.routeLengthMeters.isApproximatelyEqual(
+            to: profile.totalDistanceMeters,
+            absoluteTolerance: 0.01
+        ))
     }
 
     /// A boundary never lands on the first point of a route: it describes the

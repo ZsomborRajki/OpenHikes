@@ -279,9 +279,10 @@ struct ElevationChartView: View, Equatable {
 
     /// Where the hiker stopped recording, as a rule through the profile.
     ///
-    /// A rule rather than a break in the line: the pause took time out of the
-    /// walk but no distance out of it, so the x-axis runs on and the profile
-    /// stays continuous across it — see ``RouteBoundary``. Declared before the
+    /// A rule rather than a break in the line. The paused leg is no distance
+    /// (see ``RouteBoundary``), so the two recorded pieces meet at one point on
+    /// the x-axis and the line steps there from the height before the pause to
+    /// the height after it; the rule says why it steps. Declared before the
     /// tracker so a scrub landing on a pause draws over it rather than under.
     ///
     /// Bounded by the number of pauses, not by the length of the route.

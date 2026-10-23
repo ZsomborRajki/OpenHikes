@@ -6,7 +6,6 @@
 //  drag/scrub-frequency updates never re-render a SwiftUI view.
 //
 
-import Algorithms
 import Foundation
 import MapKit
 import OpenHikesData
@@ -82,10 +81,9 @@ final class WalkHighlight {
 }
 
 nonisolated extension WalkHighlight {
-    /// The covered `ranges` of a route as drawable stretches: every route
-    /// point inside each range, with the range's own ends interpolated onto
-    /// the route so a stretch starts and stops where the coverage did rather
-    /// than at the nearest track point.
+    /// The covered `ranges` of a route as drawable stretches — see
+    /// ``RouteProfile/stretches(covering:)``, which also splits a range at
+    /// every pause inside it, so the line never runs across a drive.
     ///
     /// `@concurrent` because a route is twenty thousand points on a long
     /// hike and this walks the part of it that was covered; the button that
@@ -95,20 +93,7 @@ nonisolated extension WalkHighlight {
         covering ranges: [ClosedRange<Double>],
         along profile: RouteProfile
     ) async -> [[CLLocationCoordinate2D]] {
-        ranges.compactMap { range in
-            guard range.upperBound > range.lowerBound,
-                  let start = profile.coordinate(atDistance: range.lowerBound),
-                  let end = profile.coordinate(atDistance: range.upperBound)
-            else { return nil }
-            let first = profile.distances.partitioningIndex { $0 > range.lowerBound }
-            let last = profile.distances.partitioningIndex { $0 >= range.upperBound }
-            var stretch: [CLLocationCoordinate2D] = [start]
-            if first < last {
-                stretch.append(contentsOf: profile.coordinates[first..<last])
-            }
-            stretch.append(end)
-            return stretch
-        }
+        ranges.flatMap(profile.stretches(covering:))
     }
 }
 

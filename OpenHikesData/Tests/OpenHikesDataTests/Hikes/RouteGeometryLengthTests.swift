@@ -37,17 +37,20 @@ struct RouteGeometryLengthTests {
         #expect([RouteCoordinate]().lengthMeters == 0)
     }
 
-    /// The stored route's spelling is the same sum, and a pause does not
-    /// shorten it: the line still runs from where the hiker stopped to where
-    /// they started again.
-    @Test("a stored route measures the same line, pauses and all")
+    /// The stored route's spelling is the same sum, less the legs a pause
+    /// opened: the ground between where the hiker stopped and where they
+    /// started again is not distance (#962) — see ``RouteBoundary``.
+    @Test("a stored route measures the same line, less its pauses")
     func storedRouteMatches() {
         let route = [
             RouteCoordinate(latitude: Self.start.latitude, longitude: Self.start.longitude),
             RouteCoordinate(latitude: Self.middle.latitude, longitude: Self.middle.longitude),
-            RouteCoordinate(latitude: Self.end.latitude, longitude: Self.end.longitude, boundary: .paused),
+            RouteCoordinate(latitude: Self.end.latitude, longitude: Self.end.longitude),
         ]
+        var paused = route
+        paused[2].boundary = .paused
 
         #expect(route.lengthMeters == RouteGeometry.lengthMeters(of: [Self.start, Self.middle, Self.end]))
+        #expect(paused.lengthMeters == RouteGeometry.lengthMeters(of: [Self.start, Self.middle]))
     }
 }

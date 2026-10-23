@@ -54,13 +54,8 @@ nonisolated enum WatchTrailPackaging {
     ) async -> WatchTrailPackage? {
         assertOffMainThread("Packaging a route for the watch must stay off the main thread")
         guard input.route.count > 1 else { return nil }
-        // The same stride the widget's polyline uses, taken as *indices* so a
-        // kept point's height is the height of that point rather than of one
-        // nearby — see ``decimatedIndices(count:maxPoints:)``.
-        let points = decimatedIndices(
-            count: input.route.count,
-            maxPoints: WatchTrailPackage.pointBudget
-        ).map { index in
+        let kept = keptIndices(of: input.route)
+        let points = kept.map { index in
             let coordinate = input.route[index]
             return WatchTrailPoint(
                 latitude: coordinate.latitude,
@@ -75,17 +70,45 @@ nonisolated enum WatchTrailPackaging {
             )
         }
         let climb = Self.climb(of: input.route)
+        // Both ends of every paused leg are kept, so the leg arriving at a
+        // kept resume is that pause and nothing else.
+        let pauseIndices = kept.indices.filter { position in
+            position > 0 && input.route[kept[position]].isPauseBoundary
+        }
         return WatchTrailPackage(
             hikeID: input.hikeID,
             title: input.title,
             tintHex: input.tintHex,
             totalDistanceMeters: input.totalDistanceMeters,
             points: points,
+            pauseIndices: pauseIndices,
             elevationGainMeters: climb.gainMeters,
             elevationLossMeters: climb.lossMeters,
             sentAt: readAt,
             requestID: requestID
         )
+    }
+
+    /// Which of the route's points cross: the same stride the widget's
+    /// polyline uses, taken as *indices* so a kept point's height is the
+    /// height of that point rather than of one nearby — see
+    /// ``decimatedIndices(count:maxPoints:)`` — plus both ends of every leg a
+    /// pause opened.
+    ///
+    /// The watch gives a paused leg no length and never matches onto it
+    /// (``WatchTrailPackage/pauseIndices``), which it can only do for a leg
+    /// that is the pause alone. A stride that dropped either end would fold
+    /// the drive into a longer leg with walking in it, and the watch would
+    /// have to either count the drive or refuse the walking. Two more points
+    /// a pause over the budget, which is bounded by how often a hiker reached
+    /// for the pause button.
+    static func keptIndices(of route: [RouteCoordinate]) -> [Int] {
+        let strided = decimatedIndices(count: route.count, maxPoints: WatchTrailPackage.pointBudget)
+        let pauseEnds = route.indices.dropFirst()
+            .filter { route[$0].isPauseBoundary }
+            .flatMap { [$0 - 1, $0] }
+        guard !pauseEnds.isEmpty else { return strided }
+        return Set(strided).union(pauseEnds).sorted()
     }
 
     /// Climb and descent over the *whole* route.

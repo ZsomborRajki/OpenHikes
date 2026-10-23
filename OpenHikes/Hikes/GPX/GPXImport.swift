@@ -93,10 +93,13 @@ nonisolated enum GPXImport {
         /// principle that inventing a claim about unrecorded ground is the
         /// worse of the two errors.
         ///
-        /// Its length still counts towards ``distanceMeters``, for the same
-        /// reason a recording's own pauses do: the hiker covered that ground
-        /// somehow, and a total that silently omitted it would be shorter than
-        /// the walk.
+        /// Its length does not count towards ``distanceMeters``, for the
+        /// reason a recording's own pauses do not (#962): whatever crossed
+        /// that ground, this track did not record walking it, and a total that
+        /// counted the drive between two segments would be a trail nobody
+        /// walked. ``[RouteCoordinate]/lengthMeters`` is that rule, and the
+        /// same one `RouteProfile` measures its axis with, so the detail
+        /// screen's distance and the chart agree.
         init(
             name: String?,
             trackDescription: String?,
