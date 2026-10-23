@@ -154,7 +154,11 @@ final class HikeRecorder: NSObject {
     /// cancelled — see ``observePowerState()``.
     @ObservationIgnored var powerStateObservation: Task<Void, Never>?
     @ObservationIgnored var startRequested = false
-    @ObservationIgnored var isActivating = false
+    /// The Start currently between asking for a session and having one — see
+    /// ``activateSessionIfPossible()``. Cleared by whatever means it is no
+    /// longer wanted, so an activation waking from a suspension can tell
+    /// whether it is still the one being waited for.
+    @ObservationIgnored var activationID: UUID?
     @ObservationIgnored var pendingResumeFlag = false
     /// Refuses live fixes taken before this recording, or its current leg,
     /// began — see ``RecordingFixWindow``. `nil` until a session is under way.
@@ -328,6 +332,9 @@ final class HikeRecorder: NSObject {
         workoutWriter: (any HikeWorkoutWriting)? = nil,
         weatherState: @escaping () -> WeatherBadgeState = { .idle },
         journalDirectory: URL? = nil,
+        openJournalHandle: @escaping @Sendable (URL) throws -> any TrackJournalHandle = { url in
+            try FileHandle(forWritingTo: url)
+        },
         clock: @escaping @Sendable () -> Date = { Date() },
         uptime: @escaping @Sendable () -> TimeInterval = {
             ProcessInfo.processInfo.systemUptime
@@ -359,7 +366,7 @@ final class HikeRecorder: NSObject {
         self.workoutWriter = workoutWriter
         self.weatherState = weatherState
         journal = resolvedDirectory.map { directory in
-            TrackJournal(directory: directory, clock: clock)
+            TrackJournal(directory: directory, clock: clock, openHandle: openJournalHandle)
         }
         self.clock = clock
         self.uptime = uptime
@@ -529,6 +536,10 @@ extension HikeRecorder {
     }
 
     func discard() async {
+        // First, and before any wait: a Start still waiting on the precision
+        // sheet or on its journal must find, when it wakes, that it is no
+        // longer wanted — even while this discard is itself still waiting.
+        activationID = nil
         cancelLiveMatching(clearWindow: true)
         cancelTrailGraphPrefetches()
         stopLocationSensors()

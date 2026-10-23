@@ -346,6 +346,17 @@ actor TrackJournal {
         }
     }
 
+    /// Discards the journal only while it still holds `sessionID`.
+    ///
+    /// For a Start abandoned while its ``start(sessionID:startedAt:title:)``
+    /// was in flight: by the time it can clean up, the Discard that abandoned
+    /// it may already have removed these files, and a newer Start may have
+    /// written its own. Only the abandoned session's files are its to remove.
+    func discard(ifSessionIs sessionID: UUID) throws {
+        guard metadata?.sessionID == sessionID else { return }
+        try discard()
+    }
+
     /// Closes the active handle without changing session metadata. Production
     /// process termination does this implicitly; recovery tests use it to
     /// model a fresh launch against the same open journal.
