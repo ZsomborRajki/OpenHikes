@@ -130,6 +130,10 @@ final class MapEntitlementStore {
     /// property anyway. `guard listenerTask == nil` is what keeps ``start()``
     /// from opening a second one.
     private var listenerTask: Task<Void, Never>?
+    /// How many reads ``refresh()`` has started, so each one knows its place.
+    @ObservationIgnored private var refreshesStarted = 0
+    /// The place of the newest read that has published — see ``refresh()``.
+    @ObservationIgnored private var newestPublishedRefresh = 0
     private static let logger = Logger(subsystem: "OpenHikes", category: "Purchases")
 
     /// Injectable so a suite can drive the store without StoreKit. The default
@@ -230,9 +234,30 @@ final class MapEntitlementStore {
         Task { await refresh() }
     }
 
-    /// Re-reads the entitlement and publishes it.
+    /// Re-reads the entitlement and publishes it, unless a read that started
+    /// later has already published.
+    ///
+    /// Reads are not serialized: launch, every foreground, the listener, a
+    /// restore and a purchase finishing each start one, and nothing orders
+    /// their answers. Publishing whichever answer arrived last let an older
+    /// read finish after a purchase's and lock Pro again, persisting the
+    /// refusal for the next launch too — or, the other way round, keep a lapsed
+    /// grant.
+    ///
+    /// The rule is "no older answer replaces a newer one", not "only the
+    /// newest read may publish". The second would leave the store on its
+    /// previous answer for as long as the newest read failed to come back;
+    /// under this one, a read that returns before any newer one is still the
+    /// best answer there is, and is published.
     func refresh() async {
+        refreshesStarted += 1
+        let ordinal = refreshesStarted
         let entitled = await currentEntitlements()
+        guard ordinal > newestPublishedRefresh else {
+            Self.logger.info("Dropped an entitlement read that a newer one had already answered")
+            return
+        }
+        newestPublishedRefresh = ordinal
         publish(entitled ? .entitled : .notEntitled)
     }
 
