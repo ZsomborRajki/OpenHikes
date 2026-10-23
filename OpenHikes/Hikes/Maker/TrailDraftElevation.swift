@@ -120,8 +120,8 @@ final class TrailDraftElevation {
     /// waiting for anything: a drawing whose heights have not landed is saved
     /// with a line and a length and no profile, which is what a free hiker's
     /// drawn trail is always saved as and what a curated route with no heights
-    /// already looks like. ``RouteHeightSamples/filling(_:)`` is what puts
-    /// them on the line, and what refuses to put them on a different one.
+    /// already looks like. ``RouteHeightSamples/interpolating(_:)`` is what
+    /// puts them on the line, and what refuses to put them on a different one.
     ///
     /// **Untracked**, deliberately, and it is the same split ``TrailDraft``
     /// makes between a drag and its revision: this is read in an action —

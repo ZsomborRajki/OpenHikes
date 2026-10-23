@@ -52,14 +52,23 @@
 //  already in flight, are drawn, and go with the screen. A hiker who imports
 //  the hike keeps them the way they keep every other route point.
 //
-//  ## The line that is drawn is the line that was asked about
+//  ## Read at two hundred points, written on all of them
 //
 //  A route is sampled down to ``CuratedElevationRequest/maximumShapePoints``
 //  evenly spaced points before the request, which is one height every hundred
 //  metres on a twenty-kilometre trail and finer on everything shorter. The
-//  heights land back on exactly those points, and ``RouteProfile`` plots the
-//  points that carry one — so the profile is a true reading of the trail at a
-//  coarser interval rather than an interpolation of a finer-looking one.
+//  heights land back on exactly those points, and every point between two of
+//  them takes the height its distance along the line puts it at — see
+//  ``RouteHeightSamples/interpolating(_:)``.
+//
+//  Written on the sampled points alone, the chart came out the same and the
+//  map did not: ``RouteSteepness`` closes its window at every point without a
+//  height. A route a little over the ceiling was coloured in scraps of two or
+//  three points, each a slope between two whole-metre readings and none of
+//  them blending into the next, and a route of twice the ceiling or more was
+//  not coloured at all. A straight run between two readings is no finer than
+//  the readings themselves, but it adds nothing to the climb, and the chart
+//  draws the same straight line between them that it drew before.
 //
 
 import Algorithms
@@ -329,9 +338,10 @@ nonisolated struct RouteHeightSamples: Equatable, Sendable {
     /// extremes.
     ///
     /// Read off the samples rather than off a filled route, and they are the
-    /// same numbers either way — ``RouteProfile`` walks the points that carry
-    /// a height and these are all of them. Computed on demand because it is
-    /// two hundred additions and the caller stores the answer.
+    /// same numbers either way: every point ``interpolating(_:)`` adds lies on
+    /// the straight run between two readings, which climbs and drops no more
+    /// than they do and reaches no higher or lower. Computed on demand
+    /// because it is two hundred additions and the caller stores the answer.
     var summary: RouteElevationSummary {
         var accumulator = ElevationAccumulator()
         for height in heights { accumulator.record(height) }
@@ -347,34 +357,20 @@ nonisolated struct RouteHeightSamples: Equatable, Sendable {
         }
     }
 
-    /// `route` with these heights on the points they were read at, or `route`
-    /// untouched when it is not the route they were read for.
-    ///
-    /// Non-finite heights are dropped rather than carried: a height that is
-    /// not a number is not a height, and the chart's downsampling compares
-    /// them.
-    func filling(_ route: [RouteCoordinate]) -> [RouteCoordinate] {
-        guard describes(route) else { return route }
-        var filled = route
-        for (index, height) in zip(indexes, heights) where height.isFinite {
-            filled[index].elevation = height
-        }
-        return filled
-    }
-
     /// `route` with a height on every point between the first and last that
     /// were read, the ones in between interpolated by distance along the
     /// line — or `route` untouched when it is not the route they were read
     /// for.
     ///
-    /// What steepness is measured from on a line drawn in the maker.
-    /// ``filling(_:)`` leaves every point between two samples without a
-    /// height, and ``RouteSteepness`` closes its window at a point with none,
-    /// so a snapped line — thousands of points and two hundred heights —
-    /// would measure as nothing at all. A straight run between two readings is
-    /// the grade those two readings give, which is as fine as the answer
-    /// gets. A non-finite reading is passed over, so the readings either side
-    /// of it are joined instead.
+    /// How every caller puts these heights on its line. Written on the
+    /// sampled points alone, they would leave every point between two samples
+    /// without a height, and ``RouteSteepness`` closes its window at a point
+    /// with none, so a snapped line — thousands of points and two hundred
+    /// heights — would measure as nothing at all. A straight run between two
+    /// readings is the grade those two readings give, which is as fine as the
+    /// answer gets. A non-finite reading is passed over — a height that is
+    /// not a number is not a height, and the chart's downsampling compares
+    /// them — so the readings either side of it are joined instead.
     func interpolating(_ route: [RouteCoordinate]) -> [RouteCoordinate] {
         guard describes(route) else { return route }
         var filled = route
@@ -447,15 +443,16 @@ nonisolated extension CuratedElevationSourcing {
         }
     }
 
-    /// `route` with heights on the points that were asked about, or `route`
-    /// exactly as it came when the service could not answer.
+    /// `route` with a height on every point — read at the points that were
+    /// asked about, interpolated between them — or `route` exactly as it came
+    /// when the service could not answer.
     ///
     /// The whole of what a curated hike wants from one of these: it opens
     /// once, draws, and has no reason to remember which points carried the
     /// answer. See ``RouteHeightSamples`` for the caller that does.
     func filled(_ route: [RouteCoordinate]) async -> [RouteCoordinate] {
         guard let samples = await samples(of: route) else { return route }
-        return samples.filling(route)
+        return samples.interpolating(route)
     }
 }
 

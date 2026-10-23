@@ -166,13 +166,18 @@ enum TrailDraftSave {
             // degraded leg contributes its two ends and is indistinguishable
             // from what Phase 1 wrote — see ``TrailDraft/routeCoordinates``.
             //
-            // With whatever heights were read for it, on the two hundred
-            // points they were read at. That is the whole of what makes a
-            // drawn trail open with a profile, a climb and a descent: nothing
-            // downstream of here knows where a height came from, so the
-            // detail screen, the stat grid, GPX export and a published
-            // listing all draw them without a line added to any of them.
-            route: heights?.filling(route) ?? route
+            // With whatever heights were read for it, on every point: read at
+            // two hundred and interpolated between them, the heights the maker
+            // coloured the line from while it was drawn — see
+            // ``RouteHeightSamples/interpolating(_:)``. A degraded leg keeps
+            // its heights too: the maker left it uncoloured so its dashes
+            // showed, and a saved line draws no dashes. That is the whole of
+            // what makes a drawn trail open with a profile, a climb, a descent
+            // and its colours by steepness: nothing downstream of here knows
+            // where a height came from, so the detail screen, the stat grid,
+            // the map, GPX export and a published listing all draw them
+            // without a line added to any of them.
+            route: heights?.interpolating(route) ?? route
         )
         // The stops it was drawn from, so *Edit Route* can reopen it — see
         // ``DrawnRoute``.
@@ -277,7 +282,7 @@ enum TrailDraftSave {
         // only the route to be recomputed from, and after this it would be
         // recomputed from the new one — tiles nobody fetched.
         hike.pinUnboxedDownloads()
-        hike.route = heights?.filling(route) ?? route
+        hike.route = heights?.interpolating(route) ?? route
         hike.distanceMeters = draft.distanceMeters
         hike.surfaceMetersByCategory = [:]
         hike.difficultyMetersByGrade = [:]
