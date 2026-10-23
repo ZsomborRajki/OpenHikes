@@ -120,12 +120,25 @@ extension HikeRecorder {
         publishSharedRecordingSnapshot(force: true)
     }
 
+    /// Turns a requested Start into a session: precise location, a journal, a
+    /// draft, then the sensors.
+    ///
+    /// Two of those steps wait — the precision sheet for as long as the hiker
+    /// leaves it up — and the recording controls are independent surfaces, so
+    /// a Discard, a Stop or a failure can land in either wait. Each wait is
+    /// therefore followed by asking whether this activation is still the one
+    /// wanted, and one that is not leaves nothing behind: no failure, no
+    /// draft, no sensors, and no journal of its own (#967).
     func activateSessionIfPossible() async {
-        guard startRequested, sessionID == nil, !isActivating else { return }
-        isActivating = true
-        defer { isActivating = false }
+        guard startRequested, sessionID == nil, activationID == nil else { return }
+        let activation = UUID()
+        activationID = activation
+        defer {
+            if activationID == activation { activationID = nil }
+        }
         if !source.hasFullAccuracy {
             await source.requestTemporaryFullAccuracy()
+            guard isActivationWanted(activation) else { return }
         }
         guard source.hasFullAccuracy else {
             fail(.preciseLocationRequired, endLocationUpdates: false)
@@ -149,24 +162,43 @@ extension HikeRecorder {
                 startedAt: startedAt
             )
         } catch {
+            guard isActivationWanted(activation) else { return }
             fail(.storage(error.localizedDescription), endLocationUpdates: false)
+            return
+        }
+        guard isActivationWanted(activation) else {
+            await discardActivationJournal(id, journal: journal)
             return
         }
         do {
             _ = try ensureRecordingHike(sessionID: id, startedAt: startedAt, title: nil)
         } catch {
-            let failure = error
-            do {
-                try await journal.discard()
-            } catch {
-                Self.logger.error(
-                    "Draft journal removal after failed recording: \(error.localizedDescription, privacy: .public)"
-                )
-            }
-            fail(failure, endLocationUpdates: false)
+            await discardActivationJournal(id, journal: journal)
+            guard isActivationWanted(activation) else { return }
+            fail(error, endLocationUpdates: false)
             return
         }
         initializeSessionState(id: id, startedAt: startedAt)
+    }
+
+    /// Whether the activation that began as `activation` is still the one a
+    /// Start is waiting for: nothing has cleared it, nothing has given up on
+    /// the Start, and no session has been made in the meantime.
+    private func isActivationWanted(_ activation: UUID) -> Bool {
+        activationID == activation && startRequested && sessionID == nil
+    }
+
+    /// Removes the journal an activation began, and only that one — a newer
+    /// Start may have written its own since. See
+    /// ``TrackJournal/discard(ifSessionIs:)``.
+    private func discardActivationJournal(_ id: UUID, journal: TrackJournal) async {
+        do {
+            try await journal.discard(ifSessionIs: id)
+        } catch {
+            Self.logger.error(
+                "Draft journal removal after an unfinished start: \(error.localizedDescription, privacy: .public)"
+            )
+        }
     }
 
     /// Consuming, because `pendingResumeFlag` is a one-shot: the flag belongs

@@ -314,4 +314,22 @@ struct TrackJournalTests {
         #expect(pause.startedAt == start.addingTimeInterval(60))
         #expect(pause.endedAt == start.addingTimeInterval(120))
     }
+
+    @Test("a session-scoped discard removes only that session's journal")
+    func sessionScopedDiscard() async throws {
+        let directory = try sandbox()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let journal = TrackJournal(directory: directory)
+        let abandoned = UUID()
+        let current = UUID()
+        try await journal.start(sessionID: abandoned, startedAt: start)
+        try await journal.start(sessionID: current, startedAt: start)
+
+        try await journal.discard(ifSessionIs: abandoned)
+        #expect(try await journal.loadSession()?.metadata.sessionID == current)
+
+        try await journal.discard(ifSessionIs: current)
+        #expect(try await journal.loadSession() == nil)
+        #expect(!FileManager.default.fileExists(atPath: journal.journalURL.path))
+    }
 }

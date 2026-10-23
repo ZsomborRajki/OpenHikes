@@ -538,7 +538,7 @@ extension HikeRecorder {
         elevationFilter.reset()
         latestMotionState = .unknown
         startRequested = false
-        isActivating = false
+        activationID = nil
         pendingResumeFlag = false
         acceptedFixRevision = 0
         liveMatchWindow = []

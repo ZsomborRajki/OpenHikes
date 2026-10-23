@@ -42,8 +42,29 @@ final class StubRecordingLocationSource: RecordingLocationSource {
         authorizationRequests += 1
     }
 
-    func requestTemporaryFullAccuracy() {
+    /// When set, a precision request stays unanswered until
+    /// ``answerFullAccuracyRequests(granted:)`` — the system sheet, left up
+    /// while the hiker does something else.
+    var holdsFullAccuracyRequests = false
+    private var heldFullAccuracyRequests: [CheckedContinuation<Void, Never>] = []
+
+    func requestTemporaryFullAccuracy() async {
         fullAccuracyRequests += 1
+        guard holdsFullAccuracyRequests else { return }
+        await withCheckedContinuation { continuation in
+            heldFullAccuracyRequests.append(continuation)
+        }
+    }
+
+    /// Answers every held precision request at once, as the one system sheet
+    /// does for every caller waiting on it.
+    func answerFullAccuracyRequests(granted: Bool) {
+        hasFullAccuracy = granted
+        let held = heldFullAccuracyRequests
+        heldFullAccuracyRequests = []
+        for continuation in held {
+            continuation.resume()
+        }
     }
 
     func startRecordingUpdates(profile: RecordingEnergyProfile) {
@@ -299,6 +320,9 @@ final class HikeRecorderTests {
             try context.save()
         },
         photoStore: HikePhotoStore = .shared,
+        openJournalHandle: @escaping @Sendable (URL) throws -> any TrackJournalHandle = { url in
+            try FileHandle(forWritingTo: url)
+        },
         configureDefaults: (UserDefaults) -> Void = { _ in /* no-op */ }
     ) -> HikeRecorder {
         let defaults = UserDefaults(
@@ -330,6 +354,7 @@ final class HikeRecorderTests {
             liveActivityController: liveActivityController,
             movementReminders: movementReminders,
             journalDirectory: directory,
+            openJournalHandle: openJournalHandle,
             clock: clock.read,
             journalFlushDelay: .zero,
             automaticallyRecovers: automaticallyRecovers
