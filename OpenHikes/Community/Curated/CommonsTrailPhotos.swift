@@ -37,6 +37,7 @@
 //  ``CommonsTrailPhotos/chosen(_:authors:limit:over:)``.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -149,9 +150,12 @@ nonisolated enum CommonsTrailPhotos {
         let byStretch = Dictionary(grouping: placed) { stretch(of: $0, limit: limit, over: length) }
         var picked = byStretch.values.compactMap { $0.min(by: closerToTheLine) }
         if picked.count < limit {
+            // `min(count:)` rather than a sort and a `prefix`: the rest can be
+            // most of what every circle along the route found, and only the
+            // room left is kept.
             let taken = Set(picked.map(\.pageID))
-            let rest = placed.filter { !taken.contains($0.pageID) }.sorted(by: closerToTheLine)
-            picked += rest.prefix(limit - picked.count)
+            let rest = placed.filter { !taken.contains($0.pageID) }
+            picked += rest.min(count: limit - picked.count, sortedBy: closerToTheLine)
         }
         return picked.sorted(by: walkingOrder)
     }
@@ -199,8 +203,8 @@ nonisolated enum CommonsTrailPhotos {
             .filter { !covered.contains($0.key) }
             .values
             .compactMap { $0.min(by: closerToTheLine) }
-            .sorted(by: closerToTheLine)
-        return (first + gaps.prefix(limit - first.count)).sorted(by: walkingOrder)
+            .min(count: limit - first.count, sortedBy: closerToTheLine)
+        return (first + gaps).sorted(by: walkingOrder)
     }
 
     /// Which of `limit` equal lengths of a route `length` metres long a
