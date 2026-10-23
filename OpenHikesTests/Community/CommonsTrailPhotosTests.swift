@@ -129,6 +129,20 @@ struct CommonsTrailPhotosTests {
         #expect(shown.map(\.pageID) == [0, 1, 2])
     }
 
+    /// What a route's shortlist is cut from: every file its circles found
+    /// near the line, so the places left over are a few out of many.
+    @Test("the places left over go to the crowd's nearest the line, ties to the lower page id")
+    func leftoverPlacesFromACrowd() {
+        // Sixty files on the first sixty meters, arriving last page first,
+        // closest to the line in the middle of the crowd and further off on
+        // either side of it.
+        let crowd = (0..<60).reversed().map { Self.placed($0, along: Double($0), off: Double(abs($0 - 30) + 1)) }
+
+        let shown = CommonsTrailPhotos.spread(crowd, limit: 4, over: 10_000)
+
+        #expect(shown.map(\.pageID) == [28, 29, 30, 31], "28 and 32 stand as far off the line; the lower page id wins")
+    }
+
     @Test("a limit of nothing shows nothing")
     func zeroLimit() {
         #expect(CommonsTrailPhotos.spread([Self.placed(1, along: 0, off: 0)], limit: 0, over: 1).isEmpty)
@@ -177,6 +191,21 @@ struct CommonsTrailPhotosTests {
         let shown = CommonsTrailPhotos.chosen(run + [anna], authors: authors, limit: 6, over: 6000)
 
         #expect(shown.map(\.pageID) == [1, 2, 3, 20], "the rest of the run stands where the walk is already shown")
+    }
+
+    @Test("when there are more gaps than places, the held-back pictures nearest the line fill them")
+    func gapsGoNearestTheLineFirst() {
+        let run = (1...3).map { Self.placed($0, along: Double($0 * 100), off: 1) }
+        let heldBack = [
+            Self.placed(4, along: 1500, off: 30),
+            Self.placed(5, along: 2500, off: 10),
+            Self.placed(6, along: 3500, off: 20),
+        ]
+        let authors = Dictionary(uniqueKeysWithValues: (run + heldBack).map { ($0.pageID, "Road") })
+
+        let shown = CommonsTrailPhotos.chosen(run + heldBack, authors: authors, limit: 4, over: 4000)
+
+        #expect(shown.map(\.pageID) == [1, 2, 3, 5], "three stretches stand empty and there is room for one")
     }
 
     @Test("a file whose page names nobody is nobody's, and is never held back")
