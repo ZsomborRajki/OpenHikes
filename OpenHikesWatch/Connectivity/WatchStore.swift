@@ -30,6 +30,10 @@
 //  mid-write from leaving a half-encoded walk that will never decode — the
 //  same reason `SharedStore` uses it for every write it makes.
 //
+//  The queue itself is ``WatchWalkQueue``, an actor in the shared package: a
+//  walk is a whole recording, so writing, reading and counting them happen
+//  off the main actor, and counting reads only file names.
+//
 
 import Foundation
 import OpenHikesShared
@@ -40,6 +44,8 @@ struct WatchStore: Sendable {
     nonisolated private static let logger = Logger(subsystem: "OpenHikesWatch", category: "Store")
 
     private let directory: URL
+    /// Finished walks waiting for the phone — see ``WatchWalkQueue``.
+    let walks: WatchWalkQueue
 
     /// - Parameter directory: where to keep everything. Injectable for the
     ///   same reason `SharedStore.containerOverride` is — a suite must never
@@ -47,7 +53,9 @@ struct WatchStore: Sendable {
     ///   target has no test bundle today. See the watch section of the
     ///   repository instructions for why it has none.
     init(directory: URL? = nil) {
-        self.directory = directory ?? Self.defaultDirectory()
+        let resolved = directory ?? Self.defaultDirectory()
+        self.directory = resolved
+        walks = WatchWalkQueue(directory: resolved.appendingPathComponent("outbound", isDirectory: true))
     }
 
     private static func defaultDirectory() -> URL {
@@ -60,9 +68,6 @@ struct WatchStore: Sendable {
 
     private var digestURL: URL { directory.appendingPathComponent("library.json") }
     private var trailURL: URL { directory.appendingPathComponent("trail.json") }
-    private var queueDirectory: URL {
-        directory.appendingPathComponent("outbound", isDirectory: true)
-    }
 
     // MARK: The library
 
@@ -105,45 +110,9 @@ struct WatchStore: Sendable {
     /// dies mid-walk leaves the walk behind — see ``WatchRecoveredRecording``.
     ///
     /// Beside the outbound queue rather than in it: a journal is not a walk
-    /// the phone may be sent, and ``queuedWalks()`` must never read one.
+    /// the phone may be sent, and ``walks`` must never read one.
     var recordingJournal: WatchRecordingJournalFile {
         WatchRecordingJournalFile(url: directory.appendingPathComponent("recording.jsonl"))
-    }
-
-    // MARK: Walks waiting for the phone
-
-    /// Every finished walk the phone has not confirmed, oldest first.
-    ///
-    /// Oldest first because that is the order they should be offered in: a
-    /// hiker who has been out of range for two walks wants yesterday's in
-    /// their library as much as today's, and a queue that sent the newest
-    /// first would leave the older one behind whenever the link closed again
-    /// mid-drain.
-    func queuedWalks() -> [WatchRecordedWalk] {
-        guard let names = try? FileManager.default.contentsOfDirectory(
-            at: queueDirectory,
-            includingPropertiesForKeys: nil
-        ) else { return [] }
-        return names
-            .compactMap { read(WatchRecordedWalk.self, from: $0) }
-            .sorted { $0.endedAt < $1.endedAt }
-    }
-
-    /// Puts a walk on the queue. Returns whether it is now on disk, because
-    /// the caller has a walk in hand and nothing else to do with it: a walk
-    /// that could not be written has to be said out loud rather than sent
-    /// hopefully and forgotten.
-    @discardableResult func enqueue(_ walk: WatchRecordedWalk) -> Bool {
-        write(walk, to: walkURL(for: walk.sessionID))
-    }
-
-    /// Takes a walk off the queue, which only a receipt from the phone does.
-    func removeWalk(_ sessionID: UUID) {
-        try? FileManager.default.removeItem(at: walkURL(for: sessionID))
-    }
-
-    private func walkURL(for sessionID: UUID) -> URL {
-        queueDirectory.appendingPathComponent("\(sessionID.uuidString).json")
     }
 
     // MARK: Files

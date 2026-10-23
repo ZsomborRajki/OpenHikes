@@ -95,6 +95,8 @@ struct WatchRecordingView: View {
                 idle
             case .preparing:
                 ProgressView("Starting…")
+            case .saving:
+                ProgressView("Saving…")
             case .recording, .paused:
                 RecordingFigures()
                 controls
@@ -155,7 +157,7 @@ struct WatchRecordingView: View {
                 .handGestureShortcut(.primaryAction)
             }
             Button {
-                model.stopRecording()
+                Task { await model.stopRecording() }
             } label: {
                 Label("Stop", systemImage: "stop.fill")
                     .labelStyle(.iconOnly)
@@ -214,7 +216,7 @@ struct WatchRecordingView: View {
             }
             .tint(.green)
             .disabled(model.isPhoneRecording)
-            Button("Save Hike") { model.saveInterruptedRecording() }
+            Button("Save Hike") { Task { await model.saveInterruptedRecording() } }
             Button("Discard", role: .destructive) { model.discardInterruptedRecording() }
         }
     }
@@ -255,7 +257,7 @@ private struct UnsavedWalkPanel: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button("Try Again") { model.retrySavingWalk() }
+            Button("Try Again") { Task { await model.retrySavingWalk() } }
             Button("Discard Hike", role: .destructive) { isConfirmingDiscard = true }
         }
         .confirmationDialog(
