@@ -220,12 +220,20 @@ final class TrailDraftElevation {
         // ``TrailDraftSave`` refuses to save it for the same reason.
         guard route.count > 1 else { return }
         isMeasuring = true
-        defer { isMeasuring = false }
         let measured = await source.samples(of: route)
         // After the await rather than before: the drawing may have moved while
         // the answer was in flight, and this task is the thing
         // ``drawingDidChange()`` cancels when it does.
-        guard !Task.isCancelled, let measured else { return }
+        //
+        // And it guards the spinner as well as the figure, so no `defer`. A
+        // cancelled source need not return before its successor starts, so by
+        // the time this one does the flag may be the next question's — and
+        // ``forget()`` already cleared it for this one. A task nobody has
+        // cancelled is the newest, because every replacement cancels the one
+        // before it.
+        guard !Task.isCancelled else { return }
+        isMeasuring = false
+        guard let measured else { return }
         samples = measured
         summary = measured.summary
         deliver?(measured)

@@ -92,7 +92,7 @@ struct TrailDraftElevationTests {
         }
     }
 
-    private enum Line {
+    enum Line {
         static let longitude: Double = 12.86
         static let first: Double = 47.6300
         static let second: Double = 47.6320
@@ -111,7 +111,7 @@ struct TrailDraftElevationTests {
     /// Every reversal here is far past ``ElevationAccumulator``'s three-metre
     /// deadband, so the figures are plain arithmetic: up a hundred, down
     /// fifty, up two hundred and fifty.
-    private enum Heights {
+    enum Heights {
         static let trailhead: Double = 600
         static let shoulder: Double = 700
         static let dip: Double = 650
@@ -129,7 +129,7 @@ struct TrailDraftElevationTests {
     /// prove a negative spend the whole budget and it costs microseconds.
     private static let yieldBudget = 500
 
-    private static func draft(_ latitudes: [Double] = Line.all) -> TrailDraft {
+    static func draft(_ latitudes: [Double] = Line.all) -> TrailDraft {
         let draft = TrailDraft()
         for latitude in latitudes { draft.append(Line.at(latitude)) }
         return draft
@@ -137,7 +137,7 @@ struct TrailDraftElevationTests {
 
     /// An elevation holder whose debounce is instant, so a case can drive it
     /// turn by turn.
-    private static func elevation(
+    static func elevation(
         of draft: TrailDraft,
         source: (any CuratedElevationSourcing)?
     ) -> TrailDraftElevation {
@@ -155,7 +155,7 @@ struct TrailDraftElevationTests {
 
     /// Spins the main actor until `condition` holds, which is what waiting on
     /// the effect looks like here — see the file header.
-    private static func settle(until condition: () -> Bool) async {
+    static func settle(until condition: () -> Bool) async {
         for _ in 0..<yieldBudget {
             if condition() { return }
             await Task.yield()
