@@ -311,8 +311,7 @@ nonisolated struct TrailDraftPhotoHandOff: Sendable {
     /// comes to once nothing is left to copy, or once the hiker lets the
     /// missing photographs go.
     func discard() {
-        let copied = directory
-        Task.detached(priority: .utility) { try? FileManager.default.removeItem(at: copied) }
+        StagedFiles.remove(directory)
     }
 
     /// Reads a downloaded file off the main actor — see

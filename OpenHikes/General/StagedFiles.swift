@@ -25,11 +25,15 @@
 //  the *Community* tab's (``CommunityCommonsPhotos``) — are staged the other
 //  way. Nothing either downloads can be wanted by the next launch, so instead
 //  of dating entries a launch sweeps everything under its parent but the
-//  directory it is already using, and while it runs each controller deletes a
-//  directory the moment it lets go of it. Those three calls were written out
+//  directory it is already using, and while the app is running each
+//  controller deletes a directory the moment it lets go of it. Those three calls were written out
 //  in both controllers, identically, and are here for the same reason the
 //  purge is. Which directory is current, which is kept beside it and for how
 //  long are each controller's own, and stay there.
+//
+//  The deletion is the one every owner of a staging directory ends in, not
+//  only those two: ``CommunityStaging/discard(_:)`` and a saved trail's
+//  ``TrailDraftPhotoHandOff/discard()`` call it too.
 //
 
 import Foundation
@@ -82,9 +86,14 @@ nonisolated enum StagedFiles {
     /// search may be writing there, and it can only spare what it knows the
     /// name of. Silent about every failure, for the reason ``purge(in:before:)``
     /// is.
-    static func sweep(_ parent: URL, keeping current: URL) {
+    ///
+    /// Answers the sweep, which every caller lets go and a suite waits out:
+    /// what it spares is only visible once it has finished, since a sweep
+    /// that deleted `current` last and one that never touched it look the
+    /// same while it is still running.
+    @discardableResult static func sweep(_ parent: URL, keeping current: URL) -> Task<Void, Never> {
         let kept = current.lastPathComponent
-        Task.detached(priority: .utility) {
+        return Task.detached(priority: .utility) {
             let manager = FileManager.default
             let left = (try? manager.contentsOfDirectory(at: parent, includingPropertiesForKeys: nil)) ?? []
             for url in left where url.lastPathComponent != kept {
@@ -96,8 +105,9 @@ nonisolated enum StagedFiles {
     /// Removes `url` and everything in it, off the main actor and
     /// fire-and-forget: a directory of photographs can be a few megabytes of
     /// thumbnails, and what a kill leaves behind is housekeeping the next
-    /// launch's sweep — or the system — does anyway.
-    static func remove(_ url: URL) {
+    /// launch's sweep — or the system — does anyway. Answers the deletion,
+    /// for a suite to wait out.
+    @discardableResult static func remove(_ url: URL) -> Task<Void, Never> {
         Task.detached(priority: .utility) {
             try? FileManager.default.removeItem(at: url)
         }
