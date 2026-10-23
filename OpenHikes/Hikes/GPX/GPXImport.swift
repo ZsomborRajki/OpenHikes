@@ -118,9 +118,21 @@ nonisolated enum GPXImport {
             self.photographs = photographs
             self.places = places
             points = Array(segments.joined())
+            route = Self.route(of: segments)
+            distanceMeters = route.lengthMeters
+        }
 
+        /// The one line through `segments`, with each leg that joins two of
+        /// them marked as a ``RouteBoundary/paused`` — see
+        /// ``init(name:trackDescription:author:keywords:startTime:segments:photographs:places:)``.
+        ///
+        /// Its own function because a multi-track file needs each track's line
+        /// before the track exists: ``GPXTrackSplit`` shares the file's
+        /// waypoints out along it, and the marks are what keep a waypoint on
+        /// the join between two segments off a track that never walked there.
+        static func route(of segments: [[Point]]) -> [RouteCoordinate] {
             var coordinates: [RouteCoordinate] = []
-            coordinates.reserveCapacity(points.count)
+            coordinates.reserveCapacity(segments.reduce(0) { $0 + $1.count })
             for (offset, segment) in segments.enumerated() {
                 for (index, point) in segment.enumerated() {
                     coordinates.append(
@@ -138,8 +150,7 @@ nonisolated enum GPXImport {
                     )
                 }
             }
-            route = coordinates
-            distanceMeters = coordinates.lengthMeters
+            return coordinates
         }
     }
 
@@ -315,16 +326,18 @@ nonisolated enum GPXImport {
     /// the file's and go with every one. The loose `<wpt>`s are shared out by
     /// ``GPXTrackSplit``: a place or a photograph belongs to the track it lies
     /// on, and one that lies on none of them is dropped rather than guessed.
+    ///
+    /// Each track is measured as the line its hike will store, segment breaks
+    /// and all (#991). Joined flat, the leg between two `<trkseg>`s would be
+    /// measured as trail: a waypoint on it, kilometres from either piece,
+    /// would be pinned to a day that never passed it — and win over the day
+    /// that did.
     private static func splitTracks(
         from document: ParsedDocument,
         words: ContainerWords,
         containers: [(container: Int, segments: [[Point]])]
     ) -> Contents {
-        let routes = containers.map { container in
-            container.segments.joined().map { point in
-                RouteCoordinate(latitude: point.coordinate.latitude, longitude: point.coordinate.longitude)
-            }
-        }
+        let routes = containers.map { Track.route(of: $0.segments) }
         let places = Array(document.waypoints.compactMap(place).prefix(maximumPlaces))
         let photographs = document.waypoints.compactMap(photograph)
         let placesByTrack = GPXTrackSplit.assign(places, at: \.clCoordinate, to: routes)

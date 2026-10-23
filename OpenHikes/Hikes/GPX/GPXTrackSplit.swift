@@ -12,6 +12,10 @@
 //  one that lies on none is dropped rather than pinned to a day it was never
 //  part of, and the confirmation says how many were.
 //
+//  "The route" is the ground the track walked. The leg joining two of its
+//  `<trkseg>`s is a pause, and a pause is not trail (``RouteBoundary``), so a
+//  waypoint lying only on that join lies on no track.
+//
 
 import Algorithms
 import CoreLocation
@@ -59,6 +63,10 @@ nonisolated enum GPXTrackSplit {
     /// eastward from the west edge, a turn at most, so one on either side of
     /// the antimeridian lands where it belongs. A route whose grown box reaches
     /// all the way round is always measured.
+    ///
+    /// The box spans a paused leg's ground as well, because the unwrapping
+    /// steps across it. That only lets a waypoint through to the measuring,
+    /// which then refuses it.
     private struct Reach {
         private var south = Double.infinity
         private var north = -Double.infinity
@@ -115,21 +123,27 @@ nonisolated enum GPXTrackSplit {
         private static let steepestLatitude = 89.0
     }
 
-    /// How far `coordinate` is from the nearest point of `route`, or `nil` for
-    /// a route with fewer than two points.
+    /// How far `coordinate` is from the nearest point of `route`'s walked
+    /// line, or `nil` for a route with no leg walked — fewer than two points,
+    /// or nothing but pauses between them.
+    ///
+    /// A leg a pause opened is never measured (#991). In a GPX file that is
+    /// the join between two `<trkseg>`s: ground the track did not record, and
+    /// not trail, so the saved hike's `RouteProfile` never matches onto it
+    /// (see ``RouteBoundary``). Measured, it would hand a waypoint on the join
+    /// to a walk that passed kilometres from it.
     static func offRouteMeters(
         of coordinate: CLLocationCoordinate2D,
         along route: [RouteCoordinate]
     ) -> Double? {
-        guard route.count > 1 else { return nil }
-        var nearest = Double.infinity
-        for (start, end) in route.adjacentPairs() {
+        var nearest: Double?
+        for (start, end) in route.adjacentPairs() where !end.isPauseBoundary {
             let projection = RouteGeometry.project(
                 coordinate,
                 onSegmentFrom: start.clCoordinate,
                 to: end.clCoordinate
             )
-            nearest = min(nearest, projection.offRouteMeters)
+            nearest = min(nearest ?? .infinity, projection.offRouteMeters)
         }
         return nearest
     }
