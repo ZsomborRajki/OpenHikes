@@ -129,6 +129,41 @@ nonisolated final class PlaceUITests: XCTestCase {
         )
     }
 
+    /// What the form is told reaches the place it adds. The name, the kind and
+    /// the note are each a view of their own making its own binding — see
+    /// `HikePlaceAdder` — so each is followed here from its field to the new
+    /// place: a name the title follows as it is typed, and which a kind picked
+    /// after it leaves alone, the kind, and a note.
+    @MainActor
+    func testTheFormsAnswersReachTheNewPlace() {
+        let app = launchApp(arguments: ["--ui-test-import-gpx=\(Self.fixture)"])
+        openPlaceAdder(in: app)
+        let name = app.textFields["hike-place-adder-name"]
+
+        XCTAssertTrue(replaceText(of: name, with: "Lookout"), "precondition: a name is typed")
+        let title = element("hike-place-adder-title", in: app)
+        XCTAssertTrue(waitUntil { title.label == "Lookout" }, "the title follows the name")
+        submitKeyboardEdit(in: app)
+
+        scrollToTap(element("trail-place-kind-picker", in: app), in: app)
+        tapWhenReady(app.buttons["Summit"].firstMatch)
+        XCTAssertEqual(name.value as? String, "Lookout", "a kind picked after a typed name leaves the name alone")
+
+        let note = element("hike-place-adder-note", in: app)
+        scrollToTap(note, in: app)
+        note.typeText("Best at dawn")
+        app.buttons["hike-place-adder-add"].tap()
+
+        let placeTitle = element("hike-place-title", in: app)
+        XCTAssertTrue(placeTitle.waitForExistence(timeout: UITestTimeout.navigation), "adding opens the new place")
+        XCTAssertEqual(placeTitle.label, "Lookout")
+        XCTAssertEqual(element("hike-place-note", in: app).label, "Best at dawn")
+        XCTAssertTrue(
+            app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Summit")).firstMatch.exists,
+            "the card names the kind under the name"
+        )
+    }
+
     /// The pin stays in the middle of the map and the map moves under it:
     /// wherever the map is left is where the place goes. See
     /// `MapPlacePlacement.swift`.

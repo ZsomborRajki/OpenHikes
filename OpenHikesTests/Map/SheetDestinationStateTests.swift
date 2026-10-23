@@ -129,7 +129,8 @@ struct SheetDestinationStateTests {
         presentation.path.removeLast()
         presentation.path.append(route)
         #expect(presentation.placeAdder(for: route) !== form, "Cancel leaves nothing for the next form")
-        #expect(presentation.placeAdder(for: route).draft == HikePlaceDraft())
+        let fresh = presentation.placeAdder(for: route).draft
+        #expect(fresh.name == HikePlaceDraft.defaultKind.label && fresh.symbol == HikePlaceDraft.defaultKind)
         #expect(!presentation.placeAdder(for: route).capture.showCamera)
 
         let added = presentation.placeAdder(for: route)
