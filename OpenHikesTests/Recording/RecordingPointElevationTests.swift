@@ -12,6 +12,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesShared
 import Testing
 
 @Suite("Recording point elevation")
@@ -36,7 +37,7 @@ struct RecordingPointElevationTests {
     @Test("a fix at the accuracy limit keeps its altitude")
     func altitudeAtTheLimitIsKept() {
         let point = RecordingPoint(
-            location: fix(verticalAccuracy: RecordingElevationFilter.maximumVerticalAccuracy)
+            location: fix(verticalAccuracy: AltitudePolicy.maximumVerticalAccuracy)
         )
         #expect(point.elevation == Self.altitude)
     }
@@ -44,7 +45,7 @@ struct RecordingPointElevationTests {
     @Test("a fix past the accuracy limit has no altitude")
     func altitudePastTheLimitIsDropped() {
         let point = RecordingPoint(
-            location: fix(verticalAccuracy: RecordingElevationFilter.maximumVerticalAccuracy.nextUp)
+            location: fix(verticalAccuracy: AltitudePolicy.maximumVerticalAccuracy.nextUp)
         )
         #expect(point.elevation == nil)
     }
@@ -73,9 +74,9 @@ struct RecordingPointElevationTests {
     func pointAndFilterAgree() {
         let accuracies: [CLLocationAccuracy] = [
             -10, -1, 0, 5,
-            RecordingElevationFilter.maximumVerticalAccuracy.nextDown,
-            RecordingElevationFilter.maximumVerticalAccuracy,
-            RecordingElevationFilter.maximumVerticalAccuracy.nextUp,
+            AltitudePolicy.maximumVerticalAccuracy.nextDown,
+            AltitudePolicy.maximumVerticalAccuracy,
+            AltitudePolicy.maximumVerticalAccuracy.nextUp,
             30, 100,
         ]
 

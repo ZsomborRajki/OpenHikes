@@ -9,6 +9,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesShared
 import os
 #if canImport(CoreMotion)
 import CoreMotion
@@ -171,7 +172,6 @@ final class SystemRecordingMotionSource: RecordingMotionSource {
 /// profile's shape; valid GPS altitude prevents weather drift from moving the
 /// whole recording indefinitely.
 nonisolated struct RecordingElevationFilter: Sendable {
-    static let maximumVerticalAccuracy: CLLocationAccuracy = 15
     static let gpsCorrectionWeight = 0.02
 
     /// The GPS altitude a fix may contribute, or `nil` when its vertical
@@ -183,12 +183,10 @@ nonisolated struct RecordingElevationFilter: Sendable {
     /// while that check was written out a second time the two shared a
     /// threshold by coincidence. Tightening one and not the other would have
     /// silently changed which recordings get elevation, with nothing to say so.
+    /// The rule itself is ``AltitudePolicy``'s, which the watch and the widget
+    /// apply too.
     static func trustedAltitude(of location: CLLocation) -> CLLocationDistance? {
-        guard location.verticalAccuracy >= 0,
-              location.verticalAccuracy <= maximumVerticalAccuracy,
-              location.altitude.isFinite
-        else { return nil }
-        return location.altitude
+        AltitudePolicy.trustedAltitude(location.altitude, verticalAccuracy: location.verticalAccuracy)
     }
 
     private var latestRelativeAltitude: Double?
