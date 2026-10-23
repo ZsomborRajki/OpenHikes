@@ -2,7 +2,8 @@
 //  StagedFiles.swift
 //  OpenHikes
 //
-//  The sweep that clears up a staging directory nobody came back for.
+//  The sweeps that clear up a staging directory nobody came back for, and the
+//  deletion they all end in.
 //
 //  Three features write files into `tmp` and mean to remove them afterwards —
 //  a GPX export, a hike archive, and Community's downloads and uploads — and
@@ -18,10 +19,22 @@
 //  the lifetime, and both of those are arguments. The policy the two owners
 //  keep is *which* directory and *how long*, and those stay where they are.
 //
+//  ## Directories that last a launch
+//
+//  The Wikimedia Commons photographs — the maker's (``TrailDraftPhotos``) and
+//  the *Community* tab's (``CommunityCommonsPhotos``) — are staged the other
+//  way. Nothing either downloads can be wanted by the next launch, so instead
+//  of dating entries a launch sweeps everything under its parent but the
+//  directory it is already using, and while it runs each controller deletes a
+//  directory the moment it lets go of it. Those three calls were written out
+//  in both controllers, identically, and are here for the same reason the
+//  purge is. Which directory is current, which is kept beside it and for how
+//  long are each controller's own, and stay there.
+//
 
 import Foundation
 
-/// Removes the entries of a staging directory that are older than a cutoff.
+/// Creates, sweeps and removes the app's staging directories in `tmp`.
 nonisolated enum StagedFiles {
     /// Removes everything in `parent` last written before `cutoff`.
     ///
@@ -53,6 +66,40 @@ nonisolated enum StagedFiles {
                 .contentModificationDate
             guard let modified, modified < cutoff else { continue }
             try? manager.removeItem(at: url)
+        }
+    }
+
+    /// A directory inside `parent` that nothing else will be handed, named
+    /// but not created — whatever writes into it first creates it.
+    static func freshDirectory(in parent: URL) -> URL {
+        parent.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+    }
+
+    /// Removes whatever an earlier launch left in `parent`, except `current`.
+    ///
+    /// `current` is the directory this launch has already handed out: the
+    /// sweep runs off the main actor, so by the time it lists `parent` a
+    /// search may be writing there, and it can only spare what it knows the
+    /// name of. Silent about every failure, for the reason ``purge(in:before:)``
+    /// is.
+    static func sweep(_ parent: URL, keeping current: URL) {
+        let kept = current.lastPathComponent
+        Task.detached(priority: .utility) {
+            let manager = FileManager.default
+            let left = (try? manager.contentsOfDirectory(at: parent, includingPropertiesForKeys: nil)) ?? []
+            for url in left where url.lastPathComponent != kept {
+                try? manager.removeItem(at: url)
+            }
+        }
+    }
+
+    /// Removes `url` and everything in it, off the main actor and
+    /// fire-and-forget: a directory of photographs can be a few megabytes of
+    /// thumbnails, and what a kill leaves behind is housekeeping the next
+    /// launch's sweep — or the system — does anyway.
+    static func remove(_ url: URL) {
+        Task.detached(priority: .utility) {
+            try? FileManager.default.removeItem(at: url)
         }
     }
 }
