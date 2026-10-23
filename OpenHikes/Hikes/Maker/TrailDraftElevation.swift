@@ -231,9 +231,9 @@ final class TrailDraftElevation {
         // ``drawingDidChange()`` cancels when it does.
         //
         // And it guards the spinner as well as the figure, so no `defer`. A
-        // cancelled source need not return before its successor starts, so by
-        // the time this one does the flag may be the next question's — and
-        // ``forget()`` already cleared it for this one. A task nobody has
+        // cancelled question need not return before its successor is asked,
+        // so by the time this one does the flag may be the next question's —
+        // and ``forget()`` already cleared it for this one. A task nobody has
         // cancelled is the newest, because every replacement cancels the one
         // before it.
         guard !Task.isCancelled else { return }
