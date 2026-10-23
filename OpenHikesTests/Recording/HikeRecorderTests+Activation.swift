@@ -13,6 +13,7 @@
 //  is an ordinary interleaving rather than a contrived one.
 //
 
+import CoreLocation
 import Dispatch
 import Foundation
 @testable import OpenHikes
@@ -130,6 +131,43 @@ extension HikeRecorderTests {
         }
         gate.letThrough()
         await starting.value
+        await discarding.value
+
+        #expect(hikeRecorder.phase == .idle)
+        #expect(hikeRecorder.sessionID == nil)
+        #expect(source.startCount == 0)
+        #expect(journalFiles.isEmpty)
+        #expect(try savedHikes().isEmpty)
+    }
+
+    @Test("the precision answer cannot begin a new Start while a Discard is still finishing")
+    func authorizationCallbackDuringDiscard() async throws {
+        source.hasFullAccuracy = false
+        source.holdsFullAccuracyRequests = true
+        let sharedStore = BlockingClearRecordingSharedStateStore()
+        let hikeRecorder = makeRecorder(sharedStateStore: sharedStore)
+        let abandoned = Task { await hikeRecorder.start() }
+        await settleDelegateHop(until: "Start to ask for precise location") {
+            self.source.fullAccuracyRequests == 1
+        }
+        // Held in its last wait, past the journal and before `resetSession()`.
+        let discarding = Task { await hikeRecorder.discard() }
+        await sharedStore.waitForClearToStart()
+
+        // One answer, two deliveries: the request returns, and Core Location
+        // reports the changed accuracy to the delegate.
+        source.answerFullAccuracyRequests(granted: true)
+        await abandoned.value
+        hikeRecorder.locationManagerDidChangeAuthorization(CLLocationManager())
+        // Barriers rather than a condition, because the effect being ruled
+        // out has no counterpart when the fix holds. The round trip runs the
+        // callback's hop; were it to begin an activation, that activation is
+        // then queued on the journal ahead of this read, and is back on the
+        // main actor — drafting and starting the GPS — before the read is.
+        await settleDelegateHop()
+        _ = try await hikeRecorder.journal?.loadSession()
+
+        await sharedStore.releaseClear()
         await discarding.value
 
         #expect(hikeRecorder.phase == .idle)

@@ -155,9 +155,10 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored var powerStateObservation: Task<Void, Never>?
     @ObservationIgnored var startRequested = false
     /// The Start currently between asking for a session and having one — see
-    /// ``activateSessionIfPossible()``. Cleared by whatever means it is no
-    /// longer wanted, so an activation waking from a suspension can tell
-    /// whether it is still the one being waited for.
+    /// ``activateSessionIfPossible()``. Cleared by a Discard and by
+    /// ``resetSession()``; a failure clears ``startRequested`` instead, which
+    /// the activation checks as well. Either way, an activation waking from a
+    /// suspension can tell whether it is still the one being waited for.
     @ObservationIgnored var activationID: UUID?
     @ObservationIgnored var pendingResumeFlag = false
     /// Refuses live fixes taken before this recording, or its current leg,
@@ -539,7 +540,13 @@ extension HikeRecorder {
         // First, and before any wait: a Start still waiting on the precision
         // sheet or on its journal must find, when it wakes, that it is no
         // longer wanted — even while this discard is itself still waiting.
+        // The request goes too, not only the activation: clearing the one
+        // without the other would let the authorization callback — which the
+        // precision answer itself fires — begin a fresh activation inside
+        // those waits, and one that finished before `resetSession()` would
+        // record on behind an idle recorder.
         activationID = nil
+        startRequested = false
         cancelLiveMatching(clearWindow: true)
         cancelTrailGraphPrefetches()
         stopLocationSensors()
