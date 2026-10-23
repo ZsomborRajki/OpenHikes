@@ -37,64 +37,34 @@ default, so a build with no keys works; the paid providers simply stay locked.
 
 ## Before you open a pull request
 
-Run these four. They are what CI runs, so a green run here is a green run
-there:
-
-```sh
-# Strict SwiftLint, the pinned version, the same script the CI `quality` job
-# runs. --fix applies what SwiftLint can correct on its own.
-Scripts/lint.sh
-
-# Boot the simulator first: against a cold one the test run below fails after
-# several minutes without a single test having reported.
-xcrun simctl boot "iPhone 18 Pro" || true
-xcrun simctl bootstatus "iPhone 18 Pro" -b
-
-# The app and widget unit suites. The -only-testing: scoping is what makes
-# this the run CI gates on: the scheme's test plan carries OpenHikesUITests
-# too, and without it this becomes most of an hour of UI automation.
-xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
-  -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
-
-# The standalone shared package
-swift test --package-path OpenHikesShared
-
-# The data package — the models, on the macOS host
-swift test --package-path OpenHikesData
-```
+Run what CI runs: strict SwiftLint (`Scripts/lint.sh`), the app and widget
+unit tests, and both local packages with warnings as errors. The commands are
+in *Build and test* in [`AGENTS.md`](AGENTS.md), written the way CI runs them,
+so a green run there is a green run in CI. Copy them from there rather than
+from memory: the unit tests take a simulator from `Scripts/sim-pool.sh` in the
+same shell and build into the checkout's own `DerivedData`, so a second
+checkout on the same machine never installs over your run or waits on your
+build. Give the simulator back with `Scripts/sim-pool.sh release` when you are
+done testing.
 
 `Scripts/install-git-hooks.sh` installs an opt-in pre-push hook that runs the
 linter for you.
 
-Changing something under `Scripts/` rather than the app? CI runs those too,
-and none of the commands above touches them:
-
-```sh
-# The shell scripts, run for real against stubbed xcrun/xcodebuild/swiftlint
-Scripts/run-script-tests.sh
-```
+Changing something under `Scripts/` rather than the app? CI runs the shell
+scripts' own tests too (`Scripts/run-script-tests.sh`, against stubbed
+`xcrun`, `xcodebuild` and `swiftlint`), and nothing above touches them.
 
 The functional UI automation stays out of CI because a shared runner makes real
-gestures and timing-sensitive waits slow and unreliable. Run it locally when
-you touch recording, the map, or anything on the render path:
-
-```sh
-# Spreads its classes across four simulator clones; --serial for one
-Scripts/run-ui-tests.sh --all
-```
+gestures and timing-sensitive waits slow and unreliable. Run
+`Scripts/run-ui-tests.sh --all` locally, on your pool device and derived data
+(*UI automation* in `AGENTS.md`), when you touch recording, the map, or
+anything on the render path.
 
 A change on the render path is measured rather than argued: run the tests that
-reach it under the render trace on `main` and on your branch, and compare. The
-report says which SwiftUI bodies each step of each test made the app evaluate,
-and which property made them; *Render isolation, in practice* in `AGENTS.md`
-says how to read it.
-
-```sh
-Scripts/render-trace.sh --suite PlaceUITests --all --output TestResults/render-trace/branch
-Scripts/render-trace.sh --report TestResults/render-trace/branch \
-  --baseline TestResults/render-trace/main/bodies.tsv
-```
+reach it under `Scripts/render-trace.sh` on `main` and on your branch, and
+compare with `--baseline`. The report says which SwiftUI bodies each step of
+each test made the app evaluate, and which property made them; *Render
+isolation, in practice* in `AGENTS.md` says how to run and read it.
 
 ## Writing code here
 

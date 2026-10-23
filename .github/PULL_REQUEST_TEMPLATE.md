@@ -1,7 +1,7 @@
 <!--
 Keep this short. The point is what changed and how you know it works — the
-conventions themselves live in AGENTS.md, and CONTRIBUTING.md
-says which commands to run.
+conventions and the commands themselves live in AGENTS.md (*Build and
+test*).
 -->
 
 ## What this changes
@@ -17,9 +17,9 @@ says which commands to run.
 <!-- Which commands you ran, and what you saw. Delete the lines that do not apply. -->
 
 - [ ] `Scripts/lint.sh` passes
-- [ ] `xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes -destination 'platform=iOS Simulator,name=iPhone 18 Pro' -only-testing:OpenHikesTests -only-testing:OpenWidgetTests` passes
-- [ ] `swift test --package-path OpenHikesShared` and `swift test --package-path OpenHikesData` pass
-- [ ] `Scripts/run-ui-tests.sh --all` — needed for a change to recording, the map or the sheet
+- [ ] The app and widget unit tests pass, run as *Build and test* in AGENTS.md shows (a `Scripts/sim-pool.sh acquire` device, `-derivedDataPath DerivedData`, `-only-testing:OpenHikesTests -only-testing:OpenWidgetTests`)
+- [ ] `swift test --package-path OpenHikesShared -Xswiftc -warnings-as-errors` and `swift test --package-path OpenHikesData -Xswiftc -warnings-as-errors` pass
+- [ ] `Scripts/run-ui-tests.sh --all --device "$udid" --derived-data DerivedData` — needed for a change to recording, the map or the sheet
 - [ ] `Scripts/render-trace.sh` on `main` and on this branch, compared with `--baseline` — for a change on the render path; the counts that moved are in the description
 - [ ] New behaviour has a test that fails without the change
 
