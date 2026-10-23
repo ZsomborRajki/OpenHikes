@@ -114,9 +114,12 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
     /// offline download's columns the same way, in degrees.
     ///
     /// Sorting costs an array the length of the route, which a min/max pass
-    /// does not. Affordable here and nowhere near the live-fix path: a box is
-    /// bounded when a trail's geometry changes, and the four network
-    /// round-trips that follow it dwarf the sort.
+    /// does not. Affordable wherever a box is bounded. The basemap renderer
+    /// bounds one when a trail's geometry changes, and the four network
+    /// round-trips that follow it dwarf the sort. ``TrailGlyphView`` bounds one
+    /// on every draw, a moved live fix included, but around a snapshot's
+    /// ``SharedTrailSnapshot/polyline``, which is already decimated to a
+    /// widget's worth of points.
     private static func cyclicSpan(ofUnitX unitXs: [Double]) -> (origin: Double, width: Double) {
         let sorted = unitXs.sorted()
         guard let west = sorted.first, let east = sorted.last else { return (origin: 0, width: 0) }
