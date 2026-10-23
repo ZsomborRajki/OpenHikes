@@ -69,7 +69,7 @@ actor TrackJournal {
     /// here, because a retry appended after a torn record would put every
     /// fixed-width record behind it at the wrong offset.
     private var committedByteCount: UInt64 = 0
-    /// A failed write whose cut back failed too. Nothing more is written
+    /// A failed write whose cut-back failed too. Nothing more is written
     /// until the cut succeeds.
     private var hasTornTail = false
     private var pending: [RecordingPoint] = []
@@ -374,8 +374,9 @@ private extension TrackJournal {
         }
     }
 
-    /// Writes whole records after the last complete one, or leaves the file
-    /// ending where it did.
+    /// Writes whole records after the last complete one. A write that fails
+    /// is cut back to where the file ended, and a cut that fails too is made
+    /// by the next call before it writes anything.
     ///
     /// The points stay pending until this returns, so a retry writes them
     /// again — and it must write them at `committedByteCount`, not after

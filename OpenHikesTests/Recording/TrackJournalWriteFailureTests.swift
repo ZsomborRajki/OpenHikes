@@ -2,7 +2,7 @@
 //  TrackJournalWriteFailureTests.swift
 //  OpenHikesTests
 //
-//  A flush that fails keeps its points and retries them. These suites make
+//  A flush that fails keeps its points and retries them. This suite makes
 //  sure the retry lands where the failed write started, not after whatever
 //  part of it reached the disk: the file is fixed-width, so one torn record
 //  ahead of a retried batch moves every record behind it to the wrong offset
