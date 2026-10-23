@@ -15,13 +15,18 @@
 //  Only the legs that were walked and measured, though. A leg arriving at a
 //  ``RouteBoundary/paused`` point is the straight line across a pause — the
 //  cable car, the lift to the next trailhead — which the hiker told the
-//  recording not to watch, and ``HikePhotoTimeline`` already refuses to place
-//  anything along it. A leg arriving at a ``RouteProvenance/inferred`` point is
-//  the app's own bridge across a gap in the signal: a guess, and a straight one
-//  where no trail was found. Neither may turn a picture taken somewhere along
-//  it into a picture of this walk. Their ends are real fixes, and still count
-//  as points on the route, exactly as they did before any leg was projected
-//  onto.
+//  recording not to watch. It is not trail: ``HikePhotoTimeline`` refuses to
+//  place anything along it, and ``RouteProfile``, which the walks and the
+//  picker project with, never matches onto it either. A leg arriving at a
+//  ``RouteProvenance/inferred`` point is the app's own bridge across a gap in
+//  the signal: a guess, and a straight one where no trail was found. Neither
+//  may turn a picture taken somewhere along it into a picture of this walk.
+//
+//  Their ends are real fixes, and still count as points on the route, exactly
+//  as they did before any leg was projected onto. That, and the bridge, are
+//  where this and ``RouteProfile`` part: a profile projects onto a bridge, and
+//  a route whose every leg is paused leaves it nothing to answer with, where
+//  this still measures to the fixes.
 //
 //  Built once per search, by ``HikePhotoSearchPlan``, and asked once per photo
 //  the clock could not place.

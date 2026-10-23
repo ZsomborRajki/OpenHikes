@@ -8,7 +8,8 @@
 //  real recording pauses in the middle, between two stretches that were
 //  walked, and an imported file can carry a single point, the same point
 //  twice, or points whose clocks run backwards. Each case is asked directly
-//  of the legs here, so that a wrong answer names the leg that gave it.
+//  of the legs here, so that a wrong answer names the leg that gave it, and a
+//  pause is asked of ``RouteProfile`` as well, which must read it the same way.
 //
 
 import CoreLocation
@@ -103,6 +104,32 @@ struct RecordedRouteLegsTests {
         for step in [0.5, 1, 2, 2.5] {
             let walked = try #require(legs.nearestPoint(to: Self.place(atStep: step)))
             #expect(walked.meters.isApproximatelyEqual(to: 0, absoluteTolerance: Self.toleranceMeters))
+        }
+    }
+
+    /// The walks and the picker place a camera with ``RouteProfile``, which
+    /// never matches onto a paused leg either. On a route that pauses between
+    /// walked legs the two must give one answer, or a photo would be on the
+    /// trail for one import and off it for another.
+    @Test("a pause between walked legs reads the same as it does to the route's profile")
+    func pauseAgreesWithTheProfile() throws {
+        let route = [Self.point(0), Self.point(1), Self.point(2, boundary: .paused), Self.point(3)]
+        let legs = RecordedRouteLegs(route: route)
+        let profile = RouteProfile(route: route)
+
+        for step in [0, 0.5, 1, 1.25, 1.5, 1.75, 2, 2.5, 3] {
+            for north in [0.0, 60, -150] {
+                let camera = Self.place(atStep: step, northByMeters: north)
+                let fromLegs = try #require(legs.nearestPoint(to: camera))
+                let fromProfile = try #require(profile.nearestPoint(to: camera))
+                #expect(
+                    fromLegs.meters.isApproximatelyEqual(
+                        to: fromProfile.offRouteMeters,
+                        absoluteTolerance: Self.toleranceMeters
+                    ),
+                    "step \(step), \(north) m north"
+                )
+            }
         }
     }
 
