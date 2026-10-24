@@ -489,7 +489,7 @@ final class WatchRecorder: NSObject {
         WatchWalkAccumulatorSnapshot(
             distanceMeters: accumulator.distanceMeters,
             activeSeconds: accumulator.activeSeconds,
-            elevationGainMeters: accumulator.elevationGainMeters,
+            elevationGainMeters: accumulator.reportedElevationGainMeters,
             averageSpeedMetersPerSecond: accumulator.averageSpeedMetersPerSecond,
             fixCount: accumulator.fixes.count
         )

@@ -93,6 +93,15 @@ public struct WatchWalkAccumulator: Sendable, Equatable {
     private var elevation = ElevationAccumulator()
     public var elevationGainMeters: Double { elevation.gainMeters }
     public var elevationLossMeters: Double { elevation.lossMeters }
+    /// The climb as the recording screen draws it: ``elevationGainMeters``,
+    /// or `nil` until two fixes have carried a trusted height — see
+    /// ``ElevationAccumulator/hasChange``. Before then a zero would be a claim
+    /// about the walk the data does not support, which is why the phone's
+    /// `RecordingDistanceAccumulator.elevationGainMeters` is `nil` in the same
+    /// case and its recording screen draws a dash.
+    public var reportedElevationGainMeters: Double? {
+        elevation.hasChange ? elevation.gainMeters : nil
+    }
     /// Seconds between consecutive kept fixes, which is the walk's clock with
     /// its pauses already out of it: a pause stops fixes arriving, and the
     /// first one after a resume opens a new leg rather than closing the old.

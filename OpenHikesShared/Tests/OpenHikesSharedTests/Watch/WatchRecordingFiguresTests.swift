@@ -22,12 +22,13 @@ struct WatchRecordingFiguresTests {
 
     private static func figures(
         in locale: Locale,
+        climb: Double? = 342,
         speed: Double? = hourlyFiveKilometers,
         heartRate: Double? = 112
     ) -> WatchRecordingFigures {
         WatchRecordingFigures(
             distanceMeters: 5000,
-            elevationGainMeters: 342,
+            elevationGainMeters: climb,
             averageSpeedMetersPerSecond: speed,
             heartRateBPM: heartRate,
             locale: locale
@@ -74,6 +75,21 @@ struct WatchRecordingFiguresTests {
         let figures = Self.figures(in: Self.metric, speed: nil, heartRate: nil)
         #expect(figures.averageSpeed.value == "—")
         #expect(figures.heartRate.value == "—")
+    }
+
+    /// #1026: the watch read "0 m" before a second trusted height, and all
+    /// through a walk whose heights the altitude policy refused, where the
+    /// phone draws a dash for the same climb.
+    @Test("a climb with no change measured yet is a dash")
+    func unmeasuredClimbIsADash() {
+        #expect(Self.figures(in: Self.metric, climb: nil).climb == .init(title: "Climb", value: "—"))
+    }
+
+    /// The other half: a level walk that has been measured did climb
+    /// nothing, and says so.
+    @Test("a measured level walk climbs 0 m", arguments: [(metric, "0 m"), (imperial, "0 ft")])
+    func measuredLevelWalkReadsZero(locale: Locale, expected: String) {
+        #expect(Self.figures(in: locale, climb: 0).climb.value == expected)
     }
 
     /// `Int(_:)` traps on these, and this screen is where a crash costs the
