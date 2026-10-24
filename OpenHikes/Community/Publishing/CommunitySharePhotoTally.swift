@@ -42,7 +42,8 @@
 //  Deliberately, and it is why ``includedCount`` is what comes in here rather
 //  than a raw total: striking a picture off should let the next one *in*
 //  rather than simply shorten the upload, which is the difference between
-//  choosing twelve and getting whichever eleven were left over. See
+//  choosing a full ``CommunityPublisher/maximumPhotos`` and getting one fewer
+//  than that. See
 //  ``CommunityPublisher/share(_:authorName:transport:excludingPhotos:store:save:)``,
 //  which applies it the same way on the other side.
 //

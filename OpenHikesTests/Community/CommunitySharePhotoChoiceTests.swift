@@ -111,9 +111,10 @@ struct CommunitySharePhotoChoiceTests {
 
     /// The claim the cap makes this suite necessary for.
     ///
-    /// Thirteen photographs and a cap of twelve: striking the first off must
-    /// let the thirteenth in, leaving a full twelve. An exclusion applied
-    /// after the cap would send eleven and never mention it.
+    /// One photograph more than the cap: striking the first off must let the
+    /// last in, leaving a full ``CommunityPublisher/maximumPhotos``. An
+    /// exclusion applied after the cap would send one fewer and never mention
+    /// it.
     @Test("striking one off lets the next one in, rather than sending one fewer")
     func exclusionIsAppliedBeforeTheCap() async throws {
         let context = try Fixture.modelContext()
@@ -190,7 +191,8 @@ struct CommunitySharePhotoChoiceTests {
 
     /// The strip draws every photograph, including the struck-off ones — they
     /// have to stay on screen to be put back — and in the order the upload
-    /// will take them, so the twelve that fit are the first twelve drawn.
+    /// will take them, so the ones that fit under the cap are the first ones
+    /// drawn.
     @Test("the strip offers every photograph, in the order the upload takes them")
     func theStripOffersEverythingInUploadOrder() async throws {
         let context = try Fixture.modelContext()

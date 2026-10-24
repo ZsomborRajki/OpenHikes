@@ -144,8 +144,8 @@ nonisolated enum CommunityPublisher {
     /// - Parameter excludingPhotos: The photographs the hiker struck off on
     ///   the share form, by id. Applied *before* the cap, deliberately: taking
     ///   a picture out should let the next one in rather than simply shorten
-    ///   the upload, which is the difference between choosing twelve and
-    ///   getting whichever eleven were left over.
+    ///   the upload, which is the difference between choosing a full
+    ///   ``maximumPhotos`` and getting one fewer than that.
     @MainActor
     static func share(
         _ hike: Hike,
@@ -285,8 +285,9 @@ nonisolated enum CommunityPublisher {
     ///
     /// Struck-off pictures are dropped *before* the cap, which is what makes
     /// the share form's strip a choice rather than a subtraction: a hiker with
-    /// twenty photographs who strikes off the first can have the thirteenth,
-    /// where filtering afterwards would simply have sent eleven.
+    /// more photographs than ``maximumPhotos`` who strikes off the first gets
+    /// the first one past the cap in its place, where filtering afterwards
+    /// would simply have sent one fewer.
     ///
     /// A photograph that came with somebody else's hike is not here at all,
     /// and that exclusion is nearer a safety rail than a rule about order —

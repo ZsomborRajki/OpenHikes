@@ -120,9 +120,10 @@ nonisolated public struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// to — see ``CommunityPublishingEligibility``. Without this field the
     /// *Add Photos* form opened pre-selected with the original author's
     /// pictures, one tap from being re-published onto their own trail under
-    /// the importer's credit. ``CommunityPublisher/shareablePhotos(of:)`` and
-    /// ``CommunityPublisher/selectedPhotos(of:excluding:)`` read it, and are
-    /// the only things that do.
+    /// the importer's credit. ``isOwn`` is what reads it, and every community
+    /// path asks ``isOwn`` through one gate,
+    /// ``CommunityPublisher/ownPhotos(of:)``, so what is offered, what is sent
+    /// and what is counted cannot disagree about it.
     ///
     /// Optional for the reason ``assetLocalIdentifier`` is, and one more: the
     /// rows written before this existed carry no key for it, and an optional
