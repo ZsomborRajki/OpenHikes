@@ -724,8 +724,8 @@ answer.
     goes.
   - A view that stores one re-runs on every write through it too, equatable or
     not, because a `Binding` is a `DynamicProperty` (next point).
-    `ElevationChartPlot` is handed a plain reference and a closure instead
-    (`ElevationScrubSelection`).
+    `ElevationChartPlot` holds none: the marks keep the selection
+    (`ElevationScrubSelection`) and the plot passes on closures.
 - **Any `DynamicProperty` invalidates the view that declares it**, even if
   nothing reads it. `@Environment(\.dismiss)` is the worst offender: its value
   is new on every presentation pass, and one backgrounding rebuilt a photo grid
