@@ -133,6 +133,7 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | `OpenHikes/Reminders/` | Noticing that a paused hike has started moving again, or that a running one has stopped, and saying so once. |
 | `OpenHikes/LiveActivity/` | When a Lock Screen activity starts, updates and ends, behind a seam that keeps ActivityKit out of the tests. |
 | `OpenHikes/Intents/` | App Intents for controlling and querying a recording, the Siri and Spotlight shortcuts they are offered through, and the seam they perform behind. |
+| `OpenHikes/Tips/` | The first-run tips: which are shown, in what order and to whom, and the cards the map draws them in. |
 | `OpenHikes/General/` | Cross-domain extensions and diagnostics. |
 | `OpenHikes/SimulatedLocations/` | The bundled GPX routes the simulated hike and the screenshot capture play back. |
 | `OpenHikes/Watch/` | The phone's half of the watch link: sending the hiker's trails and one trail's geometry, and keeping the walks the watch recorded. |

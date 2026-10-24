@@ -13,13 +13,13 @@ import Testing
 @Suite("Map tip placement")
 struct MapTipPlacementTests {
     @Test(
-        "the tips about making a hike go over the pill, for a library known to be empty",
+        "the tips about making a hike go over the pill, for a hiker they are for",
         arguments: [RecordHikeTip.tipID, MakeTrailTip.tipID]
     )
     func creationTipsGoOverThePill(tipID: String) {
         let placement = MapTipPlacement(
             tipID: tipID,
-            libraryIsKnownEmpty: true,
+            creationTipsAreWanted: true,
             pillIsOffered: true,
             areaSearchIsIdle: false
         )
@@ -28,12 +28,13 @@ struct MapTipPlacementTests {
 
     /// The owner's rule for an existing hiker: the two are about buttons they
     /// have already found. A list that has not loaded yet is not known to be
-    /// empty either, and is answered the same way — see ``AppTips/Library``.
-    @Test("a library not known to be empty is never told how to make a hike")
+    /// empty either, and is answered the same way — see
+    /// ``CreationTipsAudience``, whose suite walks who they are for.
+    @Test("a hiker the tips about making a hike are not for is never shown them")
     func creationTipsWaitForAnEmptyLibrary() {
         let placement = MapTipPlacement(
             tipID: RecordHikeTip.tipID,
-            libraryIsKnownEmpty: false,
+            creationTipsAreWanted: false,
             pillIsOffered: true,
             areaSearchIsIdle: true
         )
@@ -47,7 +48,7 @@ struct MapTipPlacementTests {
     func creationTipsNeedThePill() {
         let placement = MapTipPlacement(
             tipID: MakeTrailTip.tipID,
-            libraryIsKnownEmpty: true,
+            creationTipsAreWanted: true,
             pillIsOffered: false,
             areaSearchIsIdle: true
         )
@@ -63,7 +64,7 @@ struct MapTipPlacementTests {
     func searchTipGoesUnderThePill() {
         let idle = MapTipPlacement(
             tipID: SearchThisAreaTip.tipID,
-            libraryIsKnownEmpty: false,
+            creationTipsAreWanted: false,
             pillIsOffered: true,
             areaSearchIsIdle: true
         )
@@ -76,11 +77,26 @@ struct MapTipPlacementTests {
     func searchTipWaitsForTheAnswer() {
         let busy = MapTipPlacement(
             tipID: SearchThisAreaTip.tipID,
-            libraryIsKnownEmpty: false,
+            creationTipsAreWanted: false,
             pillIsOffered: true,
             areaSearchIsIdle: false
         )
         #expect(busy == nil)
+    }
+
+    /// The pill stays on the map with its tab whatever is pushed over the
+    /// sheet, but a pushed screen may show a tip of its own — the recording
+    /// screen's, after a Record tapped from the *Community* tab — and a
+    /// screen never shows two at once.
+    @Test("Search this area's tip leaves while a screen is pushed")
+    func searchTipWaitsWhileAScreenIsPushed() {
+        let pushed = MapTipPlacement(
+            tipID: SearchThisAreaTip.tipID,
+            creationTipsAreWanted: false,
+            pillIsOffered: false,
+            areaSearchIsIdle: true
+        )
+        #expect(pushed == nil)
     }
 
     /// The *Community* tab's tip is the sheet's to draw, the recording
@@ -93,7 +109,7 @@ struct MapTipPlacementTests {
     func otherTipsAreNotTheMaps(tipID: String?) {
         let placement = MapTipPlacement(
             tipID: tipID,
-            libraryIsKnownEmpty: true,
+            creationTipsAreWanted: true,
             pillIsOffered: true,
             areaSearchIsIdle: true
         )

@@ -42,11 +42,11 @@ struct MapSheetHikes: View, Equatable {
     /// Only ever used to reach the container a background sweep opens its own
     /// context on — see ``HikeListMetrics``. Nothing here writes through it.
     @Environment(\.modelContext) private var modelContext
-    /// The first-run tips, told whether ``hikes`` holds anything — the fact
-    /// the two about making a hike wait on — and the one about the
-    /// *Community* tab retired from the picker when the tab is chosen. See
-    /// ``AppTips``. Internal for the reason ``hikes`` is: the picker lives in
-    /// the community section's file.
+    /// The first-run tips, told whether ``hikes`` holds a hike — the fact the
+    /// two about making one wait on — and the one about the *Community* tab
+    /// retired from the picker when the tab is chosen. See ``AppTips``.
+    /// Internal for the reason ``hikes`` is: the picker lives in the community
+    /// section's file.
     @Environment(\.appTips) var tips
     /// Keeps the matching-hike ranking across body passes — see ``HikeSearch``.
     @State private var hikeSearch = HikeSearch()
@@ -222,12 +222,13 @@ struct MapSheetHikes: View, Equatable {
             // matched hike alive behind a search nobody is running.
             if !focused { hikeSearch.clear() }
         }
-        // Whether the library holds anything, for the first-run tips — on the
-        // first pass, so a hiker with hikes never sees the two about making
-        // one. A dependency this body already has: the query re-runs it on any
-        // write to any hike.
-        .onChange(of: hikes.isEmpty, initial: true) { _, isEmpty in
-            tips?.libraryDidLoad(isEmpty: isEmpty)
+        // Whether the library holds a hike, for the first-run tips — on the
+        // first pass, so an existing hiker never sees the two about making
+        // one, and with a recording in progress left out, as not one yet. See
+        // ``CreationTipsAudience``. A dependency this body already has: the
+        // query re-runs it on any write to any hike.
+        .onChange(of: CreationTipsAudience.holdsAHike(hikes), initial: true) { _, holdsAHike in
+            tips?.libraryDidLoad(holdsAHike: holdsAHike)
         }
         // One dialog for the whole list rather than one per `ForEach` row, and
         // out here rather than inside `hikesSection` so a detent change or a

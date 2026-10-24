@@ -5,7 +5,8 @@
 //  The first-run tips, in the order a first launch meets them: the two
 //  buttons on the map, the *Community* tab and its pill, then the recording
 //  screen's two places buttons — and the owner's rule for an existing hiker,
-//  who is never told how to make a hike.
+//  who is never told how to make a hike, beside the new hiker whose first
+//  hike, recorded from the tip, leaves the maker's tip its turn.
 //
 //  `--ui-test-tips` is what turns them on. Every other launch under automation
 //  has no tips at all — see `TipLaunch` — so this is the one class that ever
@@ -23,6 +24,9 @@ import XCTest
 nonisolated final class FirstRunTipsUITests: XCTestCase {
     /// Where TipKit draws a card's ✕, from the card's top trailing corner.
     private static let closeButtonInset: CGFloat = 27
+    private static let firstHikeName = "First Walk"
+    /// Saving writes the route and its widget payload, as in `RecordingUITests`.
+    private static let saveTimeout: TimeInterval = 20
 
     /// One at a time, each waiting for the one before it: the two about the
     /// map's buttons over the pill, the *Community* tab's under the picker,
@@ -83,6 +87,44 @@ nonisolated final class FirstRunTipsUITests: XCTestCase {
         )
         XCTAssertFalse(mapTip("Record a Hike", in: app).exists, "the record button needs no introduction")
         XCTAssertFalse(mapTip("Make a Trail", in: app).exists, "nor the maker's")
+    }
+
+    /// The hike *Record a Hike* asks for is a new hiker's first, not the
+    /// evidence of an existing one, so once it is saved the maker's button
+    /// still gets its tip. The recording's draft row, inserted the moment it
+    /// started, once retired *Make a Trail* before it was ever drawn — see
+    /// `CreationTipsAudience`.
+    ///
+    /// Named to run after the two *Community* scenarios, as the other
+    /// recording one is: a recording scenario resets the location permission,
+    /// which those still depend on (#1041).
+    @MainActor
+    func testTheRecordTipLeavesMakeATrailItsTurn() {
+        let app = makeApp(arguments: ["--ui-test-tips", "--ui-test-enable-location"])
+        app.resetAuthorizationStatus(for: .location)
+        addLocationPermissionMonitor()
+        setSimulatedLocation(UITestFixture.reviewableTrace[0])
+        defer { XCUIDevice.shared.location = nil }
+
+        launch(app)
+        let record = mapTip("Record a Hike", in: app)
+        awaitTip(record, in: app, "a first launch explains the record button", timeout: UITestTimeout.trace)
+        startRecording(in: app)
+        let points = element("recording-point-count", in: app)
+        XCTAssertTrue(
+            points.waitForExistence(timeout: UITestTimeout.existence),
+            "the walk needs fixes before it can be saved"
+        )
+        walkRecordedTrace(UITestFixture.reviewableTrace, countedBy: points)
+        stopRecording(named: Self.firstHikeName, in: app)
+        XCTAssertTrue(
+            app.navigationBars[Self.firstHikeName].waitForExistence(timeout: Self.saveTimeout),
+            "the first hike should be saved"
+        )
+        popScreen(in: app)
+
+        awaitTip(mapTip("Make a Trail", in: app), in: app, "the maker's button is still to be explained")
+        XCTAssertFalse(record.exists, "the record button's tip was used")
     }
 
     /// *Add Place* first, once the walk has a fix to put a place at, then

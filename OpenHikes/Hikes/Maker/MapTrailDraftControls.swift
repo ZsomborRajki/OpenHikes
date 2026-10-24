@@ -183,14 +183,16 @@ extension MapView {
         alignedTo guide: UILayoutGuide
     ) {
         // Each tap retires the first-run tip about its button: a hiker who has
-        // used one has no more need of being told about it.
+        // used one has no more need of being told about it. And on an empty
+        // list it is a new hiker's first hike, which leaves the other button's
+        // tip its turn — see ``CreationTipsAudience``.
         let controls = MapTrailDraftControlsView(
             onDraw: { [trailMaker, weak coordinator] in
-                coordinator?.controlUsed(retiring: MakeTrailTip())
+                coordinator?.pillUsed(retiring: MakeTrailTip())
                 trailMaker.requestOpen()
             },
             onRecord: { [recordingEntry, weak coordinator] in
-                coordinator?.controlUsed(retiring: RecordHikeTip())
+                coordinator?.pillUsed(retiring: RecordHikeTip())
                 recordingEntry.requestRecording()
             },
             onEndWalkAndRecord: { [recordingEntry] in recordingEntry.endWalkAndRecord() }

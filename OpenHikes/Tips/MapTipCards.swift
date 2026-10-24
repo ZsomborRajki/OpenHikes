@@ -17,7 +17,9 @@
 //  SwiftUI queues its own presentations behind each other, and knows nothing
 //  of a UIKit popover. A card is a view: it blocks nothing, takes no tap that
 //  is not aimed at it, and rides and fades with the control it explains for
-//  free, the way the camera pill rides the credit line.
+//  free, the way the camera pill rides the credit line. A tap that is aimed
+//  at it is its own, and not the line's drawn underneath — see
+//  ``MapView/Coordinator/isTapClaimed(at:in:)``.
 //
 //  `TipUIView` rather than a card of our own, so the words, the close button
 //  and the look are TipKit's, and closing one retires it the way every other
@@ -26,8 +28,8 @@
 //
 //  Which card, if any, is ``MapTipPlacement``'s decision. This file acts on it
 //  at the three moments it can change: the tips themselves (one closed, one
-//  used, the library loaded), the pill coming or going, and *Search this
-//  area* coming, going or answering.
+//  used, the library loaded, a new hiker found), the pill coming or going,
+//  and *Search this area* coming, going or answering.
 //
 
 import MapKit
@@ -48,8 +50,14 @@ struct MapTipCardState {
     var shown: MapTipPlacement?
 
     #if os(iOS)
-    /// The card itself, which the map holds while it is on it.
-    weak var card: MapTipCardView?
+    /// The card itself, which the map holds while it is on it, and which
+    /// claims the taps that land on it — see
+    /// ``MapView/Coordinator/isTapClaimed(at:in:)``.
+    ///
+    /// A ``MapTipCardView`` whenever the app puts one here, held as a plain
+    /// view so a suite can stand one in: the real card's content is TipKit's
+    /// own view, and a suite never reaches TipKit's store (``TipLaunch``).
+    weak var card: UIView?
     #endif
 }
 
@@ -147,7 +155,7 @@ extension MapView.Coordinator {
         syncMapTips(animated: animated)
         reobserving(self, tips) {
             _ = tips.main.currentTip
-            _ = tips.library
+            _ = tips.creationAudience
         } onChange: { coordinator, model in
             coordinator.trackTips(model, animated: true)
         }
@@ -161,7 +169,7 @@ extension MapView.Coordinator {
         let due = tips.main.currentTip
         let wanted = MapTipPlacement(
             tipID: due?.id,
-            libraryIsKnownEmpty: tips.library == .empty,
+            creationTipsAreWanted: tips.creationAudience.wantsTips,
             pillIsOffered: trailDraftController?.isAvailable == true,
             areaSearchIsIdle: isAreaSearchOffered && community?.isSearching != true
         )
@@ -177,6 +185,13 @@ extension MapView.Coordinator {
     /// about and so has no more need of it.
     func controlUsed(retiring tip: some Tip) {
         tipCards.tips?.used(tip)
+    }
+
+    /// ``controlUsed(retiring:)`` for the pill's two buttons, whose first tap
+    /// on an empty list also says this is a new hiker — see
+    /// ``CreationTipsAudience``.
+    func pillUsed(retiring tip: some Tip) {
+        tipCards.tips?.pillUsed(retiring: tip)
     }
 
     /// The pill's card takes the pill's own fade as the sheet rises past it —
