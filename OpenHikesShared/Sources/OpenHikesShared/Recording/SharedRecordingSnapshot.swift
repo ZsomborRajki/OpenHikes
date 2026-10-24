@@ -22,8 +22,8 @@ public struct SharedRecordingSnapshot: SharedPayload, Equatable {
     /// that carried a trusted altitude. `nil` until the recording has two of
     /// them — one fix is a height, not a change.
     public var elevationGainMeters: Double?
-    /// Distance over the time actually spent recording, so a lunch stop
-    /// doesn't drag down the pace of the walk either side of it.
+    /// Distance over the time actually spent recording, so a paused lunch
+    /// stop doesn't drag down the average speed of the walk either side of it.
     public var averageSpeedMetersPerSecond: Double?
     public var polyline: [SharedTrailSnapshot.CodableCoordinate]
     public var isCapturingFixes: Bool

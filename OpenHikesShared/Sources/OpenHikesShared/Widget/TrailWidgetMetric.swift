@@ -375,8 +375,8 @@ extension TrailWidgetMetric {
         return Self(kind: .timeLeft, value: WidgetFormat.timeLeft(seconds: seconds))
     }
 
-    /// Absent while standing still: a speed of zero is what every recording
-    /// reads before its second fix, and it is not a fact about the walk.
+    /// Absent until the walk has covered ground: an average of zero, or none
+    /// before the second fix, is not a fact about the walk.
     static func averageSpeed(metersPerSecond: Double?, locale: Locale) -> Self? {
         guard let metersPerSecond, metersPerSecond > 0 else { return nil }
         return Self(

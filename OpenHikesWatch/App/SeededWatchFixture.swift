@@ -225,7 +225,7 @@ struct SeededWatchFixture {
 
     /// Four kilometres and change, an hour and a half in, 342 m of climb: a
     /// walk far enough along that every figure on the screen has something in
-    /// it, and not so far that the pace reads as a run.
+    /// it, and not so far that the average speed reads as a run.
     private static let walkedMeters = 4180.0
     private static let walkedSeconds = 5460.0
     private static let climbedMeters = 342.0

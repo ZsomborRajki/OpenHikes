@@ -190,7 +190,7 @@ nonisolated public struct HikeRouteStatistics: Sendable {
         /// last stamped point — the only stretch ``duration`` is a clock for.
         ///
         /// A partly stamped GPX otherwise divides a whole route by part of a
-        /// walk: ten kilometres with a clock on the last two report the pace
+        /// walk: ten kilometres with a clock on the last two report the speed
         /// of a runner. Cutting the distance by this keeps the numerator and
         /// the denominator describing the same ground.
         ///

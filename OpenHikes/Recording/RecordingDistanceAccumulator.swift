@@ -22,8 +22,8 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
     private(set) var isStationary = false
     /// Time actually spent recording: the sum of the gaps between consecutive
     /// accepted points, minus the gap a pause opened. Averaging distance over
-    /// wall-clock instead would let a long lunch stop drag the pace down for a
-    /// walk the recorder wasn't even watching.
+    /// wall-clock instead would let a long lunch stop drag the average speed
+    /// down for a walk the recorder wasn't even watching.
     private(set) var recordedDuration = 0.0
 
     private var elevation = ElevationAccumulator()

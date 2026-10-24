@@ -64,7 +64,7 @@ struct WeatherConditionsFormatTests {
         #expect(german.contains("14"))
     }
 
-    /// Whole units, unlike the hiker's own pace.
+    /// Whole units, unlike the hiker's own speed.
     ///
     /// A tenth of a kilometre per hour separates one stroll from another and
     /// says nothing at all about wind, so the decimal that `HikeFormat.speed`

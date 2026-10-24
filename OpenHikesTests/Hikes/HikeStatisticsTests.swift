@@ -157,7 +157,7 @@ struct HikeStatisticsTests {
 
     /// A GPX whose stamps only start partway in used to divide the whole
     /// route by the part of the walk that carries a clock. Here three of the
-    /// four legs are untimed, so the naive number is four times the pace the
+    /// four legs are untimed, so the naive number is four times the speed the
     /// timed leg was actually walked at.
     @Test("leading untimed points don't inflate the average speed")
     func averageSpeedWithLeadingUntimedPoints() throws {

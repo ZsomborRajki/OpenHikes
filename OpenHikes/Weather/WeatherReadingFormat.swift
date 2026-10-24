@@ -104,7 +104,7 @@ nonisolated enum WeatherReadingFormat {
     /// reader in the world to the provider's metres per second. `.general`
     /// gives mph for `en_US` and km/h for `de_DE` from the same input.
     ///
-    /// Whole units, unlike the hiker's own pace, which carries one decimal.
+    /// Whole units, unlike the hiker's own speed, which carries one decimal.
     /// A tenth of a kilometre per hour separates one stroll from another and
     /// means nothing at all about wind.
     static func windSpeed(

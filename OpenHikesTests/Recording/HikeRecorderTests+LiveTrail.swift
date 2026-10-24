@@ -95,7 +95,7 @@ extension HikeRecorderTests {
     /// recording actually publishes them, since ``RecordingStats/update(from:)``
     /// is the only thing carrying either one out of the accumulator.
     @Test("a running recording publishes its moving time and live speed")
-    func liveRecordingPublishesPaceAndMovingTime() async {
+    func liveRecordingPublishesSpeedAndMovingTime() async {
         let recorder = makeRecorder()
         await recorder.start()
 

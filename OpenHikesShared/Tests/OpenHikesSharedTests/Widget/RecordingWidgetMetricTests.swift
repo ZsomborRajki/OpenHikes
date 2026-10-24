@@ -52,8 +52,12 @@ struct RecordingWidgetMetricTests {
         )
     }
 
-    /// A stationary recorder has a speed of zero, and "0.0 km/h" is not a
-    /// speed worth the width. The metres it has already walked stay.
+    /// The average is zero only while the walk has covered no ground, at a
+    /// standing start, and "0.0 km/h" is not a speed worth the width. A hiker
+    /// who stands still after walking keeps an average above zero, and with
+    /// it the chip. The fixture keeps a distance and a climb that a real
+    /// standing start would not have yet, so what the zero takes away is the
+    /// speed chip and nothing else.
     @Test("a standing start reports no speed")
     func standingStartHasNoSpeed() {
         #expect(
