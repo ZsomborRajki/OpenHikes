@@ -660,9 +660,7 @@ private extension HikeDetailView {
     /// Overpass outage, a flight-mode gap or a valley nobody has mapped leaves
     /// the screen exactly as it was; the next open tries again.
     private func loadTrailBreakdowns() async {
-        guard let trailGraphProvider,
-              hike.surfaceBreakdown == nil || hike.difficultyBreakdown == nil
-        else { return }
+        guard let trailGraphProvider, hike.needsTrailBreakdowns else { return }
         let breakdowns = await HikeTrailAnalysis.breakdowns(
             route: hike.route,
             provider: trailGraphProvider

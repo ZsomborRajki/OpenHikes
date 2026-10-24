@@ -12,11 +12,14 @@
 //  all that it needs — *where* those metres are is a second measurement, and
 //  keeping it would be a CloudKit column holding a copy of the route for
 //  something the trail graph answers again in milliseconds once it is cached.
-//  So grades are asked for every time the selection changes, from the same
-//  graph and the same walk the section's figures came from (see
-//  ``TrailBreakdownAnalyzer``), and a stretch drawn red on the map is the red
-//  share of the bar beneath it. Steepness is cheaper still: the route carries
-//  its own heights, and ``RouteSteepness`` reads them in one pass.
+//  So grades are asked for every time the selection changes, by the same walk
+//  the section's figures came from (see ``TrailBreakdownAnalyzer``): measured
+//  from one graph, a stretch drawn red on the map is the red share of the bar
+//  beneath it. Only the colours are measured each time, though. The bar's
+//  figures are stored once and kept (see `Hike.surfaceMetersByCategory`), so a
+//  change to the analyzer, or newer tagging once the cached graph refreshes,
+//  can set the two apart. Steepness is cheaper still: the route carries its
+//  own heights, and ``RouteSteepness`` reads them in one pass.
 //
 //  Held in a reference type the map observes directly, for the reason
 //  ``WalkHighlight`` is: the answer is a handful of polylines for MapKit, and

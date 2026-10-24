@@ -2,8 +2,8 @@
 //  Hike+TrailBreakdowns.swift
 //  OpenHikes
 //
-//  How a measured surface or difficulty breakdown is stored on a hike, and
-//  read back out of it.
+//  How a measured surface or difficulty breakdown is stored on a hike, how it
+//  is read back out of it, and when opening the hike measures one.
 //
 //  Both are kept as metres per category rather than as percentages, so a
 //  breakdown restored from the store recomputes its fractions the same way a
@@ -61,5 +61,15 @@ extension Hike {
             }
             difficultyMetersByGrade = stored
         }
+    }
+
+    /// Whether opening this hike should measure its surface and difficulty:
+    /// true while either breakdown reads as never analyzed, which includes a
+    /// store holding only categories this build doesn't recognize.
+    ///
+    /// Once both are stored they are kept, even if the analyzer that measured
+    /// them has changed since. ``Hike/surfaceMetersByCategory`` says why.
+    var needsTrailBreakdowns: Bool {
+        surfaceBreakdown == nil || difficultyBreakdown == nil
     }
 }

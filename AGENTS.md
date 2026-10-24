@@ -875,10 +875,12 @@ in its source header. Do not weaken one without a measurement.
   old records come back.
 - **Versioned payloads match exactly.** The shared snapshots (v1) and the
   journal header refuse any other version, with a diagnostic; that is
-  validation, not migration. Derived caches are regenerated when they fail to
-  decode. The trail graph's region cache also counts its format
-  (`OverpassTrailGraphProvider.cacheFormat`), and a region written under an
-  older one is fetched again.
+  validation, not migration. Derived caches carry no version and are
+  regenerated when they fail to decode. The trail graph's region cache is the
+  exception, because its older files still decode: it counts its format
+  (`OverpassTrailGraphProvider.cacheFormat`). A region in another format reads
+  as expired. It is fetched again when next asked for, and serves as a
+  fallback until a fetch succeeds.
 - **Revisit this policy only when installs must survive upgrades.** Then:
   - Freeze the actual model and every encoded type.
   - Write a real migration plan.
