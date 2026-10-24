@@ -93,8 +93,9 @@ public struct WatchWalkAccumulator: Sendable, Equatable {
     private var elevation = ElevationAccumulator()
     public var elevationGainMeters: Double { elevation.gainMeters }
     public var elevationLossMeters: Double { elevation.lossMeters }
-    /// The climb as the recording screen draws it: ``elevationGainMeters``,
-    /// or `nil` until two fixes have carried a trusted height — see
+    /// The climb as the recording screen draws it and the finished walk
+    /// carries it to the phone: ``elevationGainMeters``, or `nil` until two
+    /// fixes have carried a trusted height — see
     /// ``ElevationAccumulator/hasChange``. Before then a zero would be a claim
     /// about the walk the data does not support, which is why the phone's
     /// `RecordingDistanceAccumulator.elevationGainMeters` is `nil` in the same
@@ -201,8 +202,13 @@ public struct WatchWalkAccumulator: Sendable, Equatable {
             fixes: fixes,
             trailHikeID: trailHikeID,
             title: title,
-            elevationGainMeters: elevationGainMeters > 0 ? elevationGainMeters : nil,
-            elevationLossMeters: elevationLossMeters > 0 ? elevationLossMeters : nil
+            // The phone hands these to Health as they are, so they follow the
+            // rule its own recordings reach Health by: `nil` together, as
+            // `HikeWorkoutRequest` has its ascent and descent, and a measured
+            // level walk sends the 0 m it climbed, which is what the hike it
+            // becomes reads.
+            elevationGainMeters: reportedElevationGainMeters,
+            elevationLossMeters: elevation.hasChange ? elevationLossMeters : nil
         )
         return walk.isWorthKeeping ? walk : nil
     }
