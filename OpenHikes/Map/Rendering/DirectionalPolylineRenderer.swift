@@ -49,6 +49,7 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         didSet {
             invalidateBorderLine()
             invalidateShadeLines()
+            invalidateRunLines()
         }
     }
 
@@ -59,6 +60,7 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         didSet {
             invalidateBorderLine()
             invalidateShadeLines()
+            invalidateRunLines()
         }
     }
 
@@ -66,8 +68,43 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         didSet {
             invalidateBorderLine()
             invalidateShadeLines()
+            invalidateRunLines()
         }
     }
+
+    // The rest of the stroke, which a paused line's runs copy — see
+    // `DirectionalPolylineRenderer+Pauses.swift`.
+    #if canImport(UIKit)
+    override var strokeColor: UIColor? {
+        didSet { invalidateRunLines() }
+    }
+    #else
+    override var strokeColor: NSColor? {
+        didSet { invalidateRunLines() }
+    }
+    #endif
+
+    override var lineCap: CGLineCap {
+        didSet { invalidateRunLines() }
+    }
+
+    override var lineJoin: CGLineJoin {
+        didSet { invalidateRunLines() }
+    }
+
+    // MapKit's own type, optional and Objective-C.
+    // swiftlint:disable:next legacy_objc_type discouraged_optional_collection
+    override var lineDashPattern: [NSNumber]? {
+        didSet { invalidateRunLines() }
+    }
+
+    override var lineDashPhase: CGFloat {
+        didSet { invalidateRunLines() }
+    }
+
+    /// The walked runs a paused line is stroked as, behind a lock for the
+    /// reason ``shadeState`` is. See `DirectionalPolylineRenderer+Pauses.swift`.
+    let runState = OSAllocatedUnfairLock<RunState>(uncheckedState: RunState())
 
     /// One stretch of the line drawn in a colour of its own.
     struct Shade {
@@ -182,7 +219,7 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         // them; only `arrowheads`, which has no line at all, opts out.
         var tint = ChevronTint(color: arrowColor(on: strokeColor))
         if let layers {
-            super.draw(mapRect, zoomScale: zoomScale, in: context)
+            strokeLine(mapRect, zoomScale: zoomScale, in: context)
             drawShades(layers, in: mapRect, zoomScale: zoomScale, context: context, isolation: isolation)
             // Every stretch rather than the ones drawn in this rect: a
             // chevron reaches past the line's edge, into a tile its stretch
@@ -216,7 +253,9 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         context: CGContext
     ) {
         let scale = contentScaleFactor
-        if pattern.drawsLine {
+        // A paused line is outlined run by run instead, so no border runs
+        // along a pause — see `DirectionalPolylineRenderer+Pauses.swift`.
+        if pattern.drawsLine, !strokeRunBorders(mapRect, zoomScale: zoomScale, in: context) {
             borderLine(forScale: scale).draw(mapRect, zoomScale: zoomScale, in: context)
             // The line's own stroke, clearing what it covers. What is left is
             // a ring, so a translucent line shows the map through it rather
@@ -258,7 +297,7 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
     /// A copy of `polyline` drawn as the border round it, at `scale` — see
     /// ``borderLine``. Also what outlines each coloured stretch, which is why
     /// it takes the polyline rather than assuming this renderer's own.
-    private func makeBorderLine(for polyline: MKPolyline, scale: CGFloat) -> MKPolylineRenderer {
+    func makeBorderLine(for polyline: MKPolyline, scale: CGFloat) -> MKPolylineRenderer {
         let width = Double(lineWidth)
         return RouteBorderLine.make(
             for: polyline,
@@ -300,7 +339,10 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         context.setStrokeColor(tint.color)
 
         var pass = ChevronPass(plan: plan, mapRect: mapRect, tint: tint)
-        for i in 1..<count {
+        // No chevron along a pause: it states a direction of travel along
+        // trail, and a paused leg is neither.
+        let paused = pausedLegs
+        for i in 1..<count where !paused.contains(i - 1) {
             drawChevrons(from: points[i - 1], to: points[i], context: context, pass: &pass)
         }
     }
@@ -679,7 +721,7 @@ nonisolated extension DirectionalPolylineRenderer {
 
     /// Runs `draw` with the context moved from this line's corner to
     /// `polyline`'s, which is where a renderer of `polyline` measures from.
-    private func drawInPlace(of polyline: MKPolyline, context: CGContext, _ draw: () -> Void) {
+    func drawInPlace(of polyline: MKPolyline, context: CGContext, _ draw: () -> Void) {
         let origin = overlay.boundingMapRect.origin
         let own = polyline.boundingMapRect.origin
         context.saveGState()

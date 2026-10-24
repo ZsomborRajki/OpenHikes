@@ -10,6 +10,7 @@
 
 import CoreLocation
 import OpenHikesData
+import OpenHikesShared
 import SwiftUI
 
 struct DisplayedRoute: Equatable {
@@ -23,20 +24,32 @@ struct DisplayedRoute: Equatable {
     /// as their own overlays so a walk with a break in it doesn't read as one
     /// continuous line — see ``RouteBoundary``.
     let pausedSegments: [[CLLocationCoordinate2D]]
+    /// The indices into `coordinates` of the points a pause arrives at, which
+    /// is where the route line is cut: a paused leg is not trail (#962), so
+    /// the line is drawn walked run by walked run and only the dotted
+    /// stretch above crosses each pause (#1034). See ``TrailRuns``.
+    let pauseIndices: [Int]
 
-    /// Both segment lists are defaulted because most callers — every test and
-    /// every caller that draws a fully measured, uninterrupted route — have
-    /// nothing to declare here, and that is the ordinary case.
+    /// The segment lists and the pauses are defaulted because most callers —
+    /// every test and every caller that draws a fully measured, uninterrupted
+    /// route — have nothing to declare here, and that is the ordinary case.
     init(
         id: UUID,
         coordinates: [CLLocationCoordinate2D],
         inferredSegments: [[CLLocationCoordinate2D]] = [],
-        pausedSegments: [[CLLocationCoordinate2D]] = []
+        pausedSegments: [[CLLocationCoordinate2D]] = [],
+        pauseIndices: [Int] = []
     ) {
         self.id = id
         self.coordinates = coordinates
         self.inferredSegments = inferredSegments
         self.pausedSegments = pausedSegments
+        self.pauseIndices = pauseIndices
+    }
+
+    /// The line cut at its pauses.
+    var runs: TrailRuns {
+        TrailRuns(pointCount: coordinates.count, pauseIndices: pauseIndices)
     }
 
     /// Coordinates are intentionally excluded: they only ever change together
@@ -71,7 +84,8 @@ struct DisplayedRoute: Equatable {
             id: hike.id,
             coordinates: drawn.coordinates,
             inferredSegments: drawn.inferredSegments,
-            pausedSegments: drawn.pausedSegments
+            pausedSegments: drawn.pausedSegments,
+            pauseIndices: drawn.pauseIndices
         )
     }
 }
@@ -85,11 +99,13 @@ final class DisplayedRouteCoordinateCache {
         let coordinates: [CLLocationCoordinate2D]
         let inferredSegments: [[CLLocationCoordinate2D]]
         let pausedSegments: [[CLLocationCoordinate2D]]
+        let pauseIndices: [Int]
 
         static let empty = Self(
             coordinates: [],
             inferredSegments: [],
-            pausedSegments: []
+            pausedSegments: [],
+            pauseIndices: []
         )
     }
 
@@ -107,10 +123,12 @@ final class DisplayedRouteCoordinateCache {
     func drawnRoute(for hike: Hike) -> DrawnRoute {
         guard hike.id != hikeID else { return cached }
         hikeID = hike.id
+        let route = hike.route
         cached = DrawnRoute(
-            coordinates: hike.coordinates,
-            inferredSegments: hike.route.inferredSegments,
-            pausedSegments: hike.route.pausedSegments
+            coordinates: route.map(\.clCoordinate),
+            inferredSegments: route.inferredSegments,
+            pausedSegments: route.pausedSegments,
+            pauseIndices: route.indices.dropFirst().filter { route[$0].isPauseBoundary }
         )
         return cached
     }

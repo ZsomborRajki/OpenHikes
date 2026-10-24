@@ -555,6 +555,7 @@ struct MapView: MapViewRepresentable, Equatable {
             // With the line, because a tap hit-tests these points and a route
             // that is no longer drawn must not still be tappable.
             coordinator.routeCoordinates = []
+            coordinator.cutRoute(nil)
         }
         if !coordinator.inferredRouteOverlays.isEmpty {
             mapView.removeOverlays(coordinator.inferredRouteOverlays)
@@ -575,6 +576,9 @@ struct MapView: MapViewRepresentable, Equatable {
         // Kept alongside so a tap can be answered without reading them back
         // out of MapKit — see ``MapView/Coordinator/routeCoordinates``.
         coordinator.routeCoordinates = route.coordinates
+        // Before the overlay goes on, because MapKit asks for its renderer
+        // from that call on.
+        coordinator.cutRoute(route)
         if let ground = coordinator.groundOverlay {
             // Above the shared hikes' lines when any are drawn, rather than
             // above the tiles they are anchored on: both sit in this level,
@@ -624,15 +628,18 @@ struct MapView: MapViewRepresentable, Equatable {
         }
     }
 
-    /// Overlays the stretches the recording was paused across, on top of the
-    /// solid line they belong to.
+    /// Overlays the stretches the recording was paused across, in the gaps
+    /// the route line leaves for them.
     ///
-    /// Drawn over rather than instead of the route for the same reasons as the
-    /// inferred stretches: the geometry the map fits and the chart scrubs
-    /// against stays one continuous line, and the dots read as a qualification
-    /// of that line. A pause and a lost signal can both fall on the same walk,
-    /// and this goes on last so a stretch that is somehow both shows the pause
-    /// — the stronger statement, since it says why nothing was recorded.
+    /// The line is cut at each pause rather than drawn under the dots
+    /// (#1034): a paused leg is not trail (#962), and with the solid line
+    /// beneath, a drive between two walked pieces read as trail with faint
+    /// dots on it. The overlay itself is still the whole route, so the
+    /// geometry the map fits and the chart scrubs against stays one line —
+    /// only its stroke has gaps. See `DirectionalPolylineRenderer+Pauses.swift`.
+    /// A pause and a lost signal can both fall on the same walk, and this
+    /// goes on last so a stretch that is somehow both shows the pause — the
+    /// stronger statement, since it says why nothing was recorded.
     private func addPausedOverlays(
         _ route: DisplayedRoute,
         on mapView: MKMapView,
