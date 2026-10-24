@@ -112,15 +112,45 @@ extension TrailMakerUITests {
         XCTAssertTrue(waitUntil { pill.isEnabled }, "the map should be narrow enough to search")
         pill.tap()
 
-        let photo = element("trail-draft-photo-pin", in: app)
         XCTAssertTrue(
-            photo.waitForExistence(timeout: UITestTimeout.navigation),
+            element("trail-draft-photo-pin", in: app).waitForExistence(timeout: UITestTimeout.navigation),
             "the search should put the area's photographs on the map"
         )
-        photo.tap()
+        XCTAssertTrue(
+            element("trail-draft-place", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "and the same tap should put the area's places on the drawing"
+        )
+        reachablePhoto(in: app).tap()
         XCTAssertTrue(
             element("trail-place-photo", in: app).waitForExistence(timeout: UITestTimeout.navigation)
         )
         return map
+    }
+
+    /// The seeded photograph a finger reaches: the one furthest from every
+    /// place pin.
+    ///
+    /// The tap that finds the photographs also puts the area's places on the
+    /// drawing, and a place pin stands in front of a photograph, so MapKit
+    /// gives a tap on a photograph beside one to the place. The stand-in
+    /// stands its photographs around the middle of the map on screen, which
+    /// is where the camera framed the imported trail and so where its places
+    /// are. Which photograph stands clear of them depends on that framing,
+    /// which nothing here should pin.
+    @MainActor
+    private func reachablePhoto(in app: XCUIApplication) -> XCUIElement {
+        let places = app.descendants(matching: .any)
+            .matching(identifier: "trail-draft-place")
+            .allElementsBoundByIndex
+            .map(\.frame)
+        let photos = app.descendants(matching: .any)
+            .matching(identifier: "trail-draft-photo-pin")
+            .allElementsBoundByIndex
+            .map { photo in
+                let middle = CGPoint(x: photo.frame.midX, y: photo.frame.midY)
+                let clearance = places.map { hypot(middle.x - $0.midX, middle.y - $0.midY) }.min() ?? .infinity
+                return (photo: photo, clearance: clearance)
+            }
+        return photos.max { $0.clearance < $1.clearance }?.photo ?? element("trail-draft-photo-pin", in: app)
     }
 }

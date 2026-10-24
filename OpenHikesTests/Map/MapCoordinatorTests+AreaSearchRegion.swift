@@ -1,8 +1,10 @@
 //
-//  MapCoordinatorTests+CommunitySearchRegion.swift
+//  MapCoordinatorTests+AreaSearchRegion.swift
 //  OpenHikesTests
 //
-//  Which part of the map *Search this area* is about.
+//  Which part of the map *Search this area* is about, and the *Community*
+//  tab's half of handing it over. The place pills' half is in
+//  `MapCoordinatorTests+PlaceSearchRegion.swift`.
 //
 //  The community search used to be handed the map's whole region, which runs
 //  on under the sheet, and its rows were sorted outward from the middle of
@@ -42,7 +44,7 @@ extension MapCoordinatorTests {
         static let span = 0.1
     }
 
-    private static let searchedRegion = MKCoordinateRegion(
+    static let searchedRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: Searched.latitude, longitude: Searched.longitude),
         span: MKCoordinateSpan(latitudeDelta: Searched.span, longitudeDelta: Searched.span)
     )
@@ -61,8 +63,9 @@ extension MapCoordinatorTests {
     )
 
     /// A map showing ``searchedRegion`` unless told otherwise, laid out the
-    /// way the suite lays out every map.
-    private func searchedMap(
+    /// way the suite lays out every map. Shared with the place pills' file —
+    /// see `MapCoordinatorTests+PlaceSearchRegion.swift`.
+    func searchedMap(
         _ view: MapView,
         _ coordinator: MapView.Coordinator,
         showing region: MKCoordinateRegion = Self.searchedRegion
@@ -74,12 +77,12 @@ extension MapCoordinatorTests {
     }
 
     #if os(iOS)
-    /// *Search this area*, which sits inside the pill's glass rather than
-    /// among its own subviews.
-    private func communitySearchButton(in pill: UIView) -> UIControl? {
+    /// One pill's *Search this area*, which sits inside the pill's glass
+    /// rather than among its own subviews.
+    func areaSearchButton(in pill: UIView, _ identifiers: MapAreaSearchView.Identifiers) -> UIControl? {
         var pending: [UIView] = [pill]
         while let view = pending.popLast() {
-            if view.accessibilityIdentifier == MapAreaSearchView.Identifiers.community.button {
+            if view.accessibilityIdentifier == identifiers.button {
                 return view as? UIControl
             }
             pending.append(contentsOf: view.subviews)
@@ -156,7 +159,7 @@ extension MapCoordinatorTests {
         defer { detach(map) }
         #expect(sheetMetrics.middleRestY == nil, "precondition: nothing has watched a sheet")
 
-        let region = coordinator.communitySearchRegion(of: map, sheet: .atMiddleDetent)
+        let region = coordinator.areaSearchRegion(of: map, sheet: .atMiddleDetent)
 
         let share = Self.share(of: region, in: map)
         let visible = 1 - MapView.Coordinator.assumedMiddleDetentShare
@@ -179,7 +182,7 @@ extension MapCoordinatorTests {
         let middle = 0.45
         settle(sheetMetrics, at: map.bounds.height * middle)
 
-        let region = coordinator.communitySearchRegion(of: map, sheet: .atMiddleDetent)
+        let region = coordinator.areaSearchRegion(of: map, sheet: .atMiddleDetent)
 
         let height = Self.share(of: region, in: map).height
         #expect(height.isApproximatelyEqual(to: middle, absoluteTolerance: Self.shareTolerance))
@@ -199,8 +202,8 @@ extension MapCoordinatorTests {
         let lowered = map.bounds.height - 100
         sheetMetrics.report(topY: lowered, atMiddleDetent: false)
 
-        let atTap = Self.share(of: coordinator.communitySearchRegion(of: map, sheet: .whereItIs), in: map)
-        let atSettle = Self.share(of: coordinator.communitySearchRegion(of: map, sheet: .atMiddleDetent), in: map)
+        let atTap = Self.share(of: coordinator.areaSearchRegion(of: map, sheet: .whereItIs), in: map)
+        let atSettle = Self.share(of: coordinator.areaSearchRegion(of: map, sheet: .atMiddleDetent), in: map)
 
         let uncovered = Double(lowered / map.bounds.height)
         #expect(atTap.height.isApproximatelyEqual(to: uncovered, absoluteTolerance: Self.shareTolerance))
@@ -222,8 +225,8 @@ extension MapCoordinatorTests {
         settle(sheetMetrics, at: map.bounds.height * 0.45)
         sheetMetrics.report(topY: map.bounds.height * 0.1, atMiddleDetent: false)
 
-        let atTap = coordinator.communitySearchRegion(of: map, sheet: .whereItIs)
-        let atSettle = coordinator.communitySearchRegion(of: map, sheet: .atMiddleDetent)
+        let atTap = coordinator.areaSearchRegion(of: map, sheet: .whereItIs)
+        let atSettle = coordinator.areaSearchRegion(of: map, sheet: .atMiddleDetent)
 
         let same = 1e-9
         #expect(atTap.span.latitudeDelta.isApproximatelyEqual(to: atSettle.span.latitudeDelta, absoluteTolerance: same))
@@ -242,7 +245,7 @@ extension MapCoordinatorTests {
         let panel = coordinator.obstructionInsets(in: map).left
         #expect(panel >= MapSidePanelLayout.mapInset, "precondition: the panel is on the left")
 
-        let region = coordinator.communitySearchRegion(of: map, sheet: .whereItIs)
+        let region = coordinator.areaSearchRegion(of: map, sheet: .whereItIs)
 
         let share = Self.share(of: region, in: map)
         let expected = Double((map.bounds.width - panel) / map.bounds.width)
@@ -268,7 +271,7 @@ extension MapCoordinatorTests {
         await settle(until: "the search to be asked") { !transport.recording.nearbyRequests.isEmpty }
 
         let asked = try #require(transport.recording.nearbyRequests.last)
-        let expected = coordinator.communitySearchRegion(of: map, sheet: .atMiddleDetent)
+        let expected = coordinator.areaSearchRegion(of: map, sheet: .atMiddleDetent)
         let span = try #require(asked.visibleSpan)
         let same = 1e-9
         #expect(span.latitudeDelta.isApproximatelyEqual(to: expected.span.latitudeDelta, absoluteTolerance: same))
@@ -290,11 +293,12 @@ extension MapCoordinatorTests {
         defer { detach(map) }
         settle(sheetMetrics, at: map.bounds.height * 0.45)
         sheetMetrics.report(topY: map.bounds.height - 100, atMiddleDetent: false)
-        let lowered = coordinator.communitySearchRegion(of: map, sheet: .whereItIs)
-        let middle = coordinator.communitySearchRegion(of: map, sheet: .atMiddleDetent)
+        let lowered = coordinator.areaSearchRegion(of: map, sheet: .whereItIs)
+        let middle = coordinator.areaSearchRegion(of: map, sheet: .atMiddleDetent)
         Self.expectStraddlesTheCeiling(lowered: lowered, middle: middle)
 
-        Self.expectSameRegion(coordinator.communitySearchRegionForTap(of: map), as: middle)
+        let atTap = coordinator.areaSearchRegionForTap(of: map, within: CommunityQueryPolicy.isWithinCeiling)
+        Self.expectSameRegion(atTap, as: middle)
         #endif
     }
 
@@ -306,12 +310,13 @@ extension MapCoordinatorTests {
         defer { detach(map) }
         settle(sheetMetrics, at: map.bounds.height * 0.45)
         sheetMetrics.report(topY: map.bounds.height - 100, atMiddleDetent: false)
-        let lowered = coordinator.communitySearchRegion(of: map, sheet: .whereItIs)
-        let middle = coordinator.communitySearchRegion(of: map, sheet: .atMiddleDetent)
+        let lowered = coordinator.areaSearchRegion(of: map, sheet: .whereItIs)
+        let middle = coordinator.areaSearchRegion(of: map, sheet: .atMiddleDetent)
         #expect(CommunityQueryPolicy.isWithinCeiling(lowered), "precondition: the zoom is far from the ceiling")
         #expect(lowered.span.latitudeDelta > middle.span.latitudeDelta, "precondition: the lowered sheet shows more")
 
-        Self.expectSameRegion(coordinator.communitySearchRegionForTap(of: map), as: lowered)
+        let atTap = coordinator.areaSearchRegionForTap(of: map, within: CommunityQueryPolicy.isWithinCeiling)
+        Self.expectSameRegion(atTap, as: lowered)
         #endif
     }
 
@@ -330,7 +335,7 @@ extension MapCoordinatorTests {
         let map = searchedMap(mapView(community: browser), coordinator, showing: Self.nearTheCeiling)
         defer { detach(map) }
         let pill = try #require(coordinator.areaSearchControl)
-        let button = try #require(communitySearchButton(in: pill))
+        let button = try #require(areaSearchButton(in: pill, .community))
         settle(sheetMetrics, at: map.bounds.height * 0.45)
         coordinator.mapView(map, regionDidChangeAnimated: false)
         browser.startBrowsing()
@@ -340,8 +345,8 @@ extension MapCoordinatorTests {
         let asked = transport.recording.nearbyRequests.count
 
         sheetMetrics.report(topY: map.bounds.height - 100, atMiddleDetent: false)
-        let lowered = coordinator.communitySearchRegion(of: map, sheet: .whereItIs)
-        let middle = coordinator.communitySearchRegion(of: map, sheet: .atMiddleDetent)
+        let lowered = coordinator.areaSearchRegion(of: map, sheet: .whereItIs)
+        let middle = coordinator.areaSearchRegion(of: map, sheet: .atMiddleDetent)
         Self.expectStraddlesTheCeiling(lowered: lowered, middle: middle)
         button.sendActions(for: .primaryActionTriggered)
 

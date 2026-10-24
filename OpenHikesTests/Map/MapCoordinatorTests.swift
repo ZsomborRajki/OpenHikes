@@ -115,6 +115,10 @@ struct MapCoordinatorTests {
         // the *Search this area* pill has to build one that can answer — see
         // `MapCoordinatorTests+TrailPoints.swift`.
         trailMaker: TrailDraftController? = nil,
+        // And for the same reason: the suite's own *Places Around Trail* has
+        // no place source either, and its pill is only offered with one — see
+        // `MapCoordinatorTests+PlaceSearchRegion.swift`.
+        placePins: TrailPlacePinController? = nil,
         // And for the reason `trailMaker` is: the suite's own has no trail
         // graph to measure a route against.
         routeShading: RouteShading? = nil
@@ -135,7 +139,7 @@ struct MapCoordinatorTests {
             locationAccessPrompt: locationAccessPrompt,
             photoCapture: photoCapture,
             photoPins: photoPins,
-            placePins: placePins,
+            placePins: placePins ?? self.placePins,
             trailMaker: trailMaker ?? self.trailMaker,
             recordingEntry: recordingEntry,
             community: community,

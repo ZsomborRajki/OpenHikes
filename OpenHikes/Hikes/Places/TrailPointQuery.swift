@@ -93,7 +93,11 @@ nonisolated enum TrailPointQuery {
     /// header are its worst case.** A 10 km radius circumscribes a 20 × 20 km
     /// box, which is within a per cent of the 22 × 19 km box everything above
     /// was measured over — so a search at the ceiling, in the densest mapping
-    /// there is, is the 578 elements and 122 KB recorded there.
+    /// there is, is the 578 elements and 122 KB recorded there. A pill's
+    /// search asks about the map on screen rather than that square, and the
+    /// radius is half that map's longer side, so at the ceiling it is a
+    /// rectangle inside the same 20 × 20 km — see
+    /// ``TrailPointFinder/regionDidSettle(_:)``.
     ///
     /// Deliberately a quarter of ``CuratedTrailQuery/maximumRadiusMeters``.
     /// That one lists relations, whose count grows slowly with area; this
@@ -183,14 +187,17 @@ nonisolated enum TrailPointQuery {
     /// *caution*) is never offered as a switch that could change nothing.
     static let searchableSymbols = Array(kinds.map(\.symbol).uniqued())
 
-    /// The boxes a search of `area` asks about: one, two where the circle
-    /// crosses the antimeridian, or none at all.
+    /// The boxes a search of `area` asks about — the map on screen for an
+    /// area a pill handed over, the square around the circle for one that is
+    /// only a circle: one box, two where it crosses the antimeridian, or none
+    /// at all.
     ///
     /// ``CuratedTrailQuery/searchBoxes(for:)`` does the arithmetic, including
-    /// the date-line split, because a circumscribing box is the same geometry
-    /// problem whichever feature is asking. What is this type's own is the
-    /// ceiling in front of it: that one refuses at 40 km and this refuses at
-    /// 10, so the guard here is what makes the header's figures true.
+    /// the date-line split, because turning an area into boxes is the same
+    /// geometry problem whichever feature is asking. What is this type's own
+    /// is the ceiling in front of it: that one refuses at 40 km and this
+    /// refuses at 10, so the guard here is what makes the header's figures
+    /// true.
     ///
     /// `[]` rather than a throw for a search too wide to make, which is an
     /// answer and is drawn as one — the pill dims, exactly as it does above

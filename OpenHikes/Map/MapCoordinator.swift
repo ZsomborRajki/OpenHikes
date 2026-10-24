@@ -872,15 +872,18 @@ extension MapView.Coordinator {
         // ``CommunityQueryPolicy`` before anything reaches the network, and
         // costs a comparison while browsing is off. The part of the map the
         // hiker can see rather than the whole view, which runs on under the
-        // sheet — see `MapCommunitySearchRegion.swift`.
-        community?.regionDidSettle(communitySearchRegion(of: mapView, sheet: .atMiddleDetent))
-        // And the trail maker's own area search, which asks a different
-        // service about a smaller box and is otherwise the same offer. Nothing
-        // reaches the network here either: it is a comparison, and a tap is
-        // what spends a request. See ``TrailPointFinder/regionDidSettle(_:)``.
-        trailDraftController?.finder.regionDidSettle(mapView.region)
-        // And *Places Around Trail*'s, on the same terms.
-        placesAroundMap.around?.finder.regionDidSettle(mapView.region)
+        // sheet — see `MapCoordinator+AreaSearchRegion.swift`.
+        let searchable = areaSearchRegion(of: mapView, sheet: .atMiddleDetent)
+        community?.regionDidSettle(searchable)
+        // And the trail maker's own area search, which asks OpenStreetMap for
+        // places rather than routes, under a lower ceiling, and is otherwise
+        // the same offer about the same map. Nothing reaches the network here
+        // either: it is a comparison, and a tap is what spends a request. See
+        // ``TrailPointFinder/regionDidSettle(_:)``.
+        trailDraftController?.finder.regionDidSettle(searchable)
+        // And the one *Places Around Trail* and *Places Nearby* share, on the
+        // same terms.
+        placesAroundMap.around?.finder.regionDidSettle(searchable)
         // And place search, which asked the one location question in the app
         // that was never told where the hiker was.
         searchCompleter?.regionDidSettle(mapView.region)

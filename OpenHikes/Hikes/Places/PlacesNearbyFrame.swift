@@ -42,8 +42,17 @@ enum PlacesNearbyFrame {
         return framed
     }
 
-    /// The circle one search of `region` asks about — the one the map's own
-    /// *Search This Area* would ask about with `region` on screen.
+    /// The circle the first search asks about, before the camera has arrived
+    /// at `region`.
+    ///
+    /// A circle with no rectangle, so Overpass is asked about the square
+    /// around it. The camera fits `region` into the map above the sheet's
+    /// middle detent, which on a phone is about as tall as it is wide, so
+    /// that square is about the map the hiker sees once the camera arrives —
+    /// the map *Search This Area* asks about after that, see
+    /// ``TrailPointFinder/regionDidSettle(_:)``. A rectangle of the frame's
+    /// own would be the narrower question whenever the walk runs further one
+    /// way than the other, leaving the map either side of it unasked.
     static func area(of region: MKCoordinateRegion) -> CommunitySearchArea {
         CommunitySearchArea(
             coordinate: region.center,

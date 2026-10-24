@@ -1,46 +1,54 @@
 //
-//  MapCommunitySearchRegion.swift
+//  MapCoordinator+AreaSearchRegion.swift
 //  OpenHikes
 //
-//  Which part of the map *Search this area* is about.
+//  Which part of the map *Search this area* is about — every one of the
+//  pills: the *Community* tab's, the trail maker's, and the one *Places
+//  Around Trail* and *Places Nearby* share.
 //
 //  The map fills the window and the sheet covers the bottom of it, so the
 //  map's region and the map the hiker can see are two different places — and
-//  the community search used to be handed the first. Measured on 2026-10-21,
-//  the square that turned into at a five-kilometre view was seventeen times
-//  the map above a half-height sheet, and the rows nearest its middle — the
-//  screen's middle, just under the sheet's top edge — were trails the hiker
-//  could not see. ``focusArea(in:)`` answers the same question for the
-//  camera; this is its counterpart for a search, measured the same way.
+//  the searches used to be handed the first. Measured on 2026-10-21, the
+//  square the community search turned that into at a five-kilometre view was
+//  seventeen times the map above a half-height sheet, and the rows nearest its
+//  middle — the screen's middle, just under the sheet's top edge — were trails
+//  the hiker could not see. The place searches asked about the same square
+//  without the community's ten-kilometre floor: as wide as the screen is tall,
+//  so 4.8 times the map above a half-height sheet at every zoom, running on
+//  under the sheet and past both sides of the screen. ``focusArea(in:)``
+//  answers the same question for the camera; this is its counterpart for a
+//  search, measured the same way.
 //
 //  ## Where the sheet is taken to be
 //
-//  **At its middle detent, whenever the map settles.** That is where the list
-//  is read, and the two requests made from inside the sheet — opening the
-//  *Community* tab and *Try Again* — are made with it raised. So a region
-//  measured above the middle detent is the map those two describe, even when
-//  the map last settled while the sheet was down: measuring the sheet as it
-//  stood at the settle would hand them the map behind a sheet that has since
-//  come up, which is the very place this exists to stop searching.
+//  **At its middle detent, whenever the map settles.** That is where a list
+//  is read, and the requests made from inside the sheet — opening the
+//  *Community* tab, *Try Again* — are made with it raised. So a region
+//  measured above the middle detent is the map those describe, even when the
+//  map last settled while the sheet was down: measuring the sheet as it stood
+//  at the settle would hand them the map behind a sheet that has since come
+//  up, which is the very place this exists to stop searching.
 //
-//  **Where it actually is, at the pill's tap, when that is lower.** The pill
-//  stands at the top of the map in every detent, so a hiker can ask from a
+//  **Where it actually is, at a pill's tap, when that is lower.** The pills
+//  stand at the top of the map in every detent, so a hiker can ask from a
 //  lowered sheet while looking at nearly the whole map, and a region measured
 //  above the middle detent would leave the bottom half of what they see out.
-//  The tap hands the browser that region just before it asks — see
-//  ``MapView/addAreaSearchControl(to:_:alignedTo:)``. A sheet *above* the
-//  middle detent counts as the middle one: the map behind a full-height sheet
-//  is not on screen, and the one above the middle detent is what the hiker
-//  comes back to.
+//  Each tap hands its search that region just before it asks — see
+//  ``MapView/addAreaSearchControl(to:_:alignedTo:)`` and the two place pills
+//  in the same strip. A sheet *above* the middle detent counts as the middle
+//  one: the map behind a full-height sheet is not on screen, and the one above
+//  the middle detent is what the hiker comes back to.
 //
-//  **Unless that is past the zoom ceiling.** The settle that enabled the pill
+//  **Unless that is past the zoom ceiling.** The settle that enabled a pill
 //  measured the middle detent, and a lowered sheet shows a good deal more map
-//  than that, so a view the pill accepted can be one the browser refuses. The
-//  tap would then settle the browser on a region it will not search, dim the
+//  than that, so a view the pill accepted can be one its search refuses. The
+//  tap would then settle the search on a region it will not take, dim the
 //  pill and ask nothing, and the dimmed pill would outlast the sheet coming
 //  back up, because nothing settles again on a detent change. An enabled pill
 //  has to search something, so past the ceiling the tap uses the middle-detent
-//  reading that enabled it — see ``communitySearchRegionForTap(of:)``.
+//  reading that enabled it — see ``areaSearchRegionForTap(of:within:)``. The
+//  community's ceiling and the places' are not the same, so each tap says
+//  which it is held to.
 //
 //  In landscape there is no sheet, and the side panel takes the leading edge
 //  instead, through the same ``obstructionInsets(in:)`` the camera uses.
@@ -56,41 +64,51 @@ extension MapView.Coordinator {
         /// The sheet at its middle detent, wherever it is: what a settle uses.
         case atMiddleDetent
         /// The sheet where it is now, when that is lower than its middle
-        /// detent: what the pill's tap uses.
+        /// detent: what a pill's tap uses.
         case whereItIs
     }
 
-    /// The part of `mapView` the hiker can see, as a region: what the
-    /// community search asks about and sorts its rows outward from.
+    /// The part of `mapView` the hiker can see, as a region: what every
+    /// *Search this area* asks about, and what the community list sorts its
+    /// rows outward from.
     ///
     /// The whole map's region when MapKit cannot place a corner of it — a
     /// tilted camera can put the far edge past the horizon — which is what
     /// this handed over before, and never worse than it.
-    func communitySearchRegion(of mapView: MKMapView, sheet: SheetReading) -> MKCoordinateRegion {
+    func areaSearchRegion(of mapView: MKMapView, sheet: SheetReading) -> MKCoordinateRegion {
         Self.region(covering: searchRect(of: mapView, sheet: sheet), on: mapView) ?? mapView.region
     }
 
-    /// What the pill's tap hands the browser: the map above the sheet where it
-    /// is now, unless that is past the zoom ceiling.
+    /// What a pill's tap hands its search: the map above the sheet where it
+    /// is now, unless that is past the search's zoom ceiling.
     ///
     /// The pill is enabled by the region the last settle measured above the
     /// middle detent, and a sheet lowered since is looking at more map than
     /// that — enough more that a view the pill accepted can come out past the
-    /// ceiling. Settling the browser on it anyway refuses the question the
-    /// hiker has just been invited to ask: the browser dims the pill, asks
-    /// nothing, and keeps the refused region as the one a return to the tab
-    /// reads, so the pill stays dimmed after the sheet has come back up until
-    /// the map is moved. So the reading that enabled it is searched instead,
-    /// which is also the map that stays on screen when the sheet rises to show
-    /// the list.
+    /// ceiling. Settling the search on it anyway refuses the question the
+    /// hiker has just been invited to ask: the pill dims, nothing is asked,
+    /// and the pill stays dimmed after the sheet has come back up until the
+    /// map is moved — and the *Community* tab keeps the refused region as the
+    /// one a return to the tab reads. So the reading that enabled it is
+    /// searched instead, which is also the map that stays on screen when the
+    /// sheet rises to show the list.
+    ///
+    /// `isWithinCeiling` is the search's own test of a region —
+    /// ``CommunityQueryPolicy/isWithinCeiling(_:)`` for the *Community* tab,
+    /// ``TrailPointFinder/isWithinCeiling(_:)`` for places — because the two
+    /// ceilings differ, and a tap held to the wider one could still hand the
+    /// places a map they refuse.
     ///
     /// With both readings past the ceiling, a tap that lands in the middle of
     /// a zoom, nothing is searched, which is right: the gesture's own settle
     /// says where the map ended up.
-    func communitySearchRegionForTap(of mapView: MKMapView) -> MKCoordinateRegion {
-        let whereItIs = communitySearchRegion(of: mapView, sheet: .whereItIs)
-        if CommunityQueryPolicy.isWithinCeiling(whereItIs) { return whereItIs }
-        return communitySearchRegion(of: mapView, sheet: .atMiddleDetent)
+    func areaSearchRegionForTap(
+        of mapView: MKMapView,
+        within isWithinCeiling: (MKCoordinateRegion) -> Bool
+    ) -> MKCoordinateRegion {
+        let whereItIs = areaSearchRegion(of: mapView, sheet: .whereItIs)
+        if isWithinCeiling(whereItIs) { return whereItIs }
+        return areaSearchRegion(of: mapView, sheet: .atMiddleDetent)
     }
 }
 

@@ -66,29 +66,23 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
     /// The same three, across the area on screen rather than along a route —
     /// the trail maker's *Search this area* under
     /// `--ui-test-trail-points=seeded` and the *Community* tab's — and the two
-    /// beside the third. Where they stand depends on whose area it is. The
-    /// trail maker's is the whole map's and its lower half is under the
-    /// sheet, where a pin can be neither seen nor tapped, so the three go
-    /// north of the middle. The *Community* tab's carries the rectangle it
-    /// measured above the sheet, so all of it is visible and the three go
-    /// just south of the middle, clear of the pill along the top. A second
-    /// search over the same area finds the five already shown and adds
-    /// nothing, which is what the real source does too.
+    /// beside the third. Both pills hand over the rectangle they measured
+    /// above the sheet, so all of it is visible and the three go just south
+    /// of its middle, clear of the pill along the top. A second search over
+    /// the same area finds the five already shown and adds nothing, which is
+    /// what the real source does too.
     @concurrent
     func photos(
         in area: CommunitySearchArea,
         avoiding shown: Set<URL>,
         downloadingInto directory: URL
     ) async throws -> [CommonsPhoto] {
-        // An area carrying the rectangle on screen — the *Community* tab's —
-        // is all visible, so its three stand just south of its middle, clear
-        // of the pill along the top. One without — the trail maker's whole
-        // map — keeps them north of the middle, out from under the sheet.
+        // Shares of the rectangle on screen, or of the circle for an area
+        // that carries none, which no pill hands over.
         let halfHeight = area.visibleSpan.map { $0.latitudeDelta / 2 } ?? area.radiusMeters / Self.metersPerDegree
         let halfWidth = area.visibleSpan.map { $0.longitudeDelta / 2 }
             ?? area.radiusMeters / Self.metersPerDegree / cos(area.latitude * .pi / 180)
-        let norths = area.visibleSpan == nil ? Self.areaNorths : Self.visibleNorths
-        let spots: [CLLocationCoordinate2D] = zip(norths, Self.areaEasts).map { north, east in
+        let spots: [CLLocationCoordinate2D] = zip(Self.areaNorths, Self.areaEasts).map { north, east in
             CLLocationCoordinate2D(
                 latitude: area.latitude + north * halfHeight,
                 longitude: area.longitude + east * halfWidth
@@ -105,17 +99,13 @@ nonisolated struct SeededCommonsPhotoSource: CommonsPhotoSourcing {
             .filter { !shown.contains($0.credit.license.sourceURL) }
     }
 
-    /// Where an area's three stand, as shares of its radius north and east of
-    /// its middle: apart enough that no two thumbnails overlap.
-    private static let sideNorth = 0.45
-    private static let middleNorth = 0.55
+    /// Where an area's three stand, as shares of its half-height north and
+    /// its half-width east of its middle: a little south of the middle, below
+    /// the pill, and apart enough that no two thumbnails overlap.
+    private static let sideNorth = -0.2
+    private static let middleNorth = -0.1
     private static let sideEast = 0.3
     private static let areaNorths = [sideNorth, middleNorth, sideNorth]
-    /// The same pattern for an area that is all on screen, as shares of its
-    /// half-height: a little south of the middle, below the pill.
-    private static let visibleSideNorth = -0.2
-    private static let visibleMiddleNorth = -0.1
-    private static let visibleNorths = [visibleSideNorth, visibleMiddleNorth, visibleSideNorth]
     private static let areaEasts = [-sideEast, 0, sideEast]
     /// Where the two beside the third stand from it, in metres north and
     /// east: close enough that no zoom a test searches at draws them apart.

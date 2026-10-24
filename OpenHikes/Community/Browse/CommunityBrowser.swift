@@ -468,7 +468,7 @@ final class CommunityBrowser {
     /// about and what its rows are sorted outward from. The coordinator also
     /// calls this just before the pill's tap is handled, with the sheet where
     /// it is at that moment. See
-    /// ``MapView/Coordinator/communitySearchRegionForTap(of:)``.
+    /// ``MapView/Coordinator/areaSearchRegionForTap(of:within:)``.
     ///
     /// Cheap by contract: while browsing is off this stores a value and
     /// returns, which is what lets it sit on `regionDidChangeAnimated`
