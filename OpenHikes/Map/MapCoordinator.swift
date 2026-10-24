@@ -499,10 +499,12 @@ extension MapView {
             }
         }
 
-        /// Centers the map on the user's first fix, once. A route, once
-        /// present, owns the viewport — that fix is spent rather than saved,
-        /// so deselecting the route later doesn't let the next fix recentre a
-        /// map the user has since panned somewhere else.
+        /// Centers the map on the user's first fix, once — or on a UI-test
+        /// launch's start, which ``observeLocation(_:on:)`` hands in ahead of
+        /// any fix, so it is the start that spends the fix's one chance. A
+        /// route, once present, owns the viewport — that chance is spent
+        /// rather than saved, so deselecting the route later doesn't let the
+        /// next fix recentre a map the user has since panned somewhere else.
         ///
         /// **The one camera move that does not go through the focus area**, and
         /// the exception is the sheet rather than this. Every other move is

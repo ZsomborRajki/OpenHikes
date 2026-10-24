@@ -20,10 +20,12 @@
 //  photographs are real JPEGs through the real decode, and an import writes to
 //  the real store.
 //
-//  Every scenario puts a simulated fix on the fixture trailhead. The seeded
-//  hikes start there, so a nearby search from there answers with all three,
-//  and the map has a region to be asked about at all — a browse with no region
-//  sits on a spinner, which is a state worth nothing to assert against.
+//  Every scenario starts the map over the fixture trailhead with
+//  `--ui-test-map-start` — see `launchCommunity`. The seeded hikes start
+//  there, so a nearby search from there answers with all three, and the map
+//  has a region to be asked about whatever the location permission says — a
+//  browse with no region sits on a spinner, which is a state worth nothing to
+//  assert against.
 //
 
 import CoreLocation

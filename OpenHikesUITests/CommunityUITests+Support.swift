@@ -182,11 +182,11 @@ extension XCTestCase {
         // behind, the monitor below grants the prompt if one appears and
         // nothing asks for one if it does not.
         //
-        // Dropping it from the other three classes was tried against this
-        // run and put back: see the issue this change closes. None of them
-        // asserts on the prompt, but the recording scenarios do depend on
-        // the state the reset produces, and `startRecording`'s opening
-        // `app.tap()` depends on there being an alert for it to be spent on.
+        // Dropping it from the other three classes was tried and put back:
+        // see #362. None of them asserts on the prompt, but the recording
+        // scenarios do depend on the state the reset produces, and
+        // `startRecording`'s opening `app.tap()` depends on there being an
+        // alert for it to be spent on.
         addLocationPermissionMonitor()
         setSimulatedLocation(UITestFixture.trailheadCoordinate)
         addTeardownBlock { @MainActor in XCUIDevice.shared.location = nil }
