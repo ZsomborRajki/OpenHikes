@@ -76,8 +76,18 @@ static int post(NSString *source, NSString *type, id value) {
         @"value": value,
     };
     NSData *data = CFBridgingRelease(IOCFSerialize((__bridge CFTypeRef)payload, kSerializeBinary));
-    IOHIDEventRef event = IOHIDEventCreateVendorDefinedEvent(NULL, mach_absolute_time(), kVendorUsagePage,
-                                                             kVendorUsage, 0, data.bytes, (CFIndex)data.length, 0);
+    IOHIDEventRef event = data.length > 0
+        ? IOHIDEventCreateVendorDefinedEvent(NULL, mach_absolute_time(), kVendorUsagePage, kVendorUsage, 0,
+                                             data.bytes, (CFIndex)data.length, 0)
+        : NULL;
+    // Both calls are private, so a runtime that changes either may answer
+    // NULL. Say so and fail, rather than crash in CFRelease with no word of
+    // which half broke.
+    if (!event) {
+        fprintf(stderr, "duo-pose: could not make the %s event\n", source.UTF8String);
+        CFRelease(client);
+        return 1;
+    }
     IOHIDEventSystemClientDispatchEvent(client, event);
     CFRelease(event);
     // The event system delivers asynchronously, and a process that exits at

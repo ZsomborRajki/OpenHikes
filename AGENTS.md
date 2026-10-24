@@ -214,10 +214,11 @@ either: the second run waits silently on the first run's build lock.
 
 - **It needs the iOS 27.1 runtime, which as Xcode 27.1 installs it runs no
   other device.** CI's Xcode 27.0 has neither, so no gate runs on a Duo, and
-  the 27.1 SDK's Duo APIs
-  (`ArrangementView`, `reservedRegions`, `toolbarVerticalEdge`) do not exist
-  where CI compiles; *CI* above has the gate they need. Templates and the pool
-  pick the newest runtime that runs their device type, never just the newest.
+  the 27.1 SDK's Duo APIs (`toolbarVerticalBehavior`, the one the app uses,
+  and `ArrangementView`, `reservedRegions`, `toolbarVerticalEdge`) do not
+  exist where CI compiles; *CI* above has the gate they need. Templates and
+  the pool pick the newest runtime that runs their device type, never just
+  the newest.
 - **It boots closed**, on the cover display (466 × 678 points), and only
   Device Hub opens it by hand. `Scripts/duo-pose.sh open --device <udid>`
   unfolds it to the inner display (669 × 951, upright) and reads the display
