@@ -132,6 +132,12 @@ if [[ "${1:-}" == "xcstringstool" && "${2:-}" == "sync" && -n "${STUB_CATALOG_BE
     },
 ' "$3"
 fi
+# `devicectl device info displays` answers from STUB_DISPLAYS, the state of an
+# iPhone Duo's two displays; unset, it answers nothing, the way a device with
+# no display list does.
+if [[ "${1:-} ${2:-} ${3:-} ${4:-}" == "devicectl device info displays" && -n "${STUB_DISPLAYS:-}" ]]; then
+    cat "$STUB_DISPLAYS"
+fi
 [[ "${1:-}" == "simctl" ]] || exit 0
 shift
 case "${1:-}" in
@@ -1977,6 +1983,147 @@ if expect_status 0 \
     && expect_absent "$calls" "simctl erase" "the recorded calls"; then
     pass
 fi
+
+# Xcode 27.1 installs an iOS 27.1 runtime that runs the iPhone Duo and
+# nothing else, beside the 27.0 that runs the iPhone 18s. The newest runtime
+# is therefore the wrong one for the 6.9" device, and building its template on
+# it failed — and fell back to an erase. Each device type gets the newest
+# runtime that lists it.
+cat > "$work/runtimes-duo.json" <<'EOF'
+{"runtimes":[{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-27-0","supportedDeviceTypes":[{"name":"iPhone 18 Pro"},{"name":"iPhone 18 Pro Max"}]},{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-27-1","supportedDeviceTypes":[{"name":"iPhone Duo"}]},{"identifier":"com.apple.CoreSimulator.SimRuntime.watchOS-27-0","supportedDeviceTypes":[{"name":"Apple Watch Ultra 4 (49mm)"}]}]}
+EOF
+cat > "$work/devices-screens.txt" <<EOF
+== Devices ==
+-- iOS 27.0 --
+    OpenHikes Screenshots Test ($screens_old) (Shutdown)
+EOF
+rm -rf "$OPENHIKES_SIM_TEMPLATE_DIR"
+STUB_RUNTIMES="$work/runtimes-duo.json" STUB_DEVICES="$work/devices-screens.txt" \
+STUB_CREATED_UDID="$screens_template" STUB_CLONED_UDID="$screens_clone" \
+    run_script "screenshots builds its template on the newest runtime that runs the device" \
+    "$screenshots_light" --frame 1 --no-photos --device "OpenHikes Screenshots Test" \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 0 \
+    && expect_contains "$calls" \
+        "simctl create $template_name iPhone 18 Pro Max com.apple.CoreSimulator.SimRuntime.iOS-27-0" \
+        "the recorded calls" \
+    && expect_absent "$calls" "iOS-27-1" "the recorded calls"; then
+    pass
+fi
+
+cat > "$work/devices-screens.txt" <<EOF
+== Devices ==
+-- iOS 27.1 --
+    OpenHikes Screenshots Test ($screens_old) (Shutdown)
+EOF
+rm -rf "$OPENHIKES_SIM_TEMPLATE_DIR"
+STUB_RUNTIMES="$work/runtimes-duo.json" STUB_DEVICES="$work/devices-screens.txt" \
+STUB_CREATED_UDID="$screens_template" STUB_CLONED_UDID="$screens_clone" \
+    run_script "screenshots builds an iPhone Duo's template on the runtime that runs one" \
+    "$screenshots_light" --frame 1 --no-photos --device "OpenHikes Screenshots Test" \
+    --device-type "iPhone Duo" --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 0 \
+    && expect_contains "$calls" \
+        "simctl create OpenHikes Template (iPhone Duo, iOS 27.1) iPhone Duo com.apple.CoreSimulator.SimRuntime.iOS-27-1" \
+        "the recorded calls"; then
+    pass
+fi
+
+run_script "screenshots refuses a pose it does not know, before touching a device" \
+    "$screenshots_light" --pose ajar --device "$pro_udid"
+if expect_status 2 \
+    && expect_contains "$output" "Unknown pose: ajar" "the error" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls"; then
+    pass
+fi
+
+# The stubbed devicectl lists no displays unless a case gives it some, which is
+# what a phone looks like to Scripts/duo-pose.sh — and a pose that cannot be
+# taken must stop the run before a set is shot on the wrong display.
+run_script "screenshots stops before building when the device cannot take the pose" \
+    "$screenshots_light" --frame 7 --pose open --no-photos --device "$pro_udid" \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 1 \
+    && expect_contains "$output" "it is not an iPhone Duo" "the output" \
+    && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
+    pass
+fi
+
+echo
+echo "iPhone Duo pose"
+
+# Scripts/duo-pose.sh posts a private HID event from inside the simulator and
+# reads the display state back, and the second half is what these pin: a fold
+# that did not happen must be an error. A prebuilt "helper" path stands in for
+# the one it would compile, so nothing here builds or spawns anything real.
+duo_pose="$repository_root/Scripts/duo-pose.sh"
+export OPENHIKES_DUO_POSE_HELPER="$work/duo-pose-helper"
+export OPENHIKES_DUO_POSE_SETTLE_SECONDS=1
+export OPENHIKES_DUO_POSE_TURN_SECONDS=1
+export STUB_DEVICES="$work/devices-two-booted.txt"
+duo_displays() {
+    printf '{"result":{"displays":[%s,%s]}}\n' \
+        "{\"name\":\"LCD\",\"displayId\":1,\"primary\":true,\"active\":$1,\"currentOrientation\":\"$3\"}" \
+        "{\"name\":\"LCD-1\",\"displayId\":3,\"primary\":false,\"active\":$2,\"currentOrientation\":\"$3\"}"
+}
+
+run_script "duo-pose refuses to guess a device" "$duo_pose" open
+if expect_status 2 && expect_contains "$output" "--device is required" "the error"; then
+    pass
+fi
+
+run_script "duo-pose refuses an orientation it does not know" \
+    "$duo_pose" open --device "$pro_udid" --orientation sideways
+if expect_status 2 \
+    && expect_contains "$output" "Unknown orientation: sideways" "the error" \
+    && expect_absent "$calls" "simctl spawn" "the recorded calls"; then
+    pass
+fi
+
+run_script "duo-pose refuses a device with one display" "$duo_pose" open --device "$pro_udid"
+if expect_status 1 \
+    && expect_contains "$output" "it is not an iPhone Duo" "the error" \
+    && expect_absent "$calls" "simctl spawn" "the recorded calls"; then
+    pass
+fi
+
+duo_displays false true rot0 > "$work/displays-open.json"
+STUB_DISPLAYS="$work/displays-open.json" \
+    run_script "duo-pose opens the hinge to 180° and reads the inner display back" \
+    "$duo_pose" open --device "$pro_udid"
+if expect_status 0 \
+    && expect_contains "$calls" "simctl spawn $pro_udid $work/duo-pose-helper hinge 180" "the recorded calls" \
+    && expect_absent "$calls" "orientation" "the recorded calls" \
+    && expect_contains "$output" "open, the inner display showing, portrait" "the output"; then
+    pass
+fi
+
+duo_displays true false rot0 > "$work/displays-closed.json"
+STUB_DISPLAYS="$work/displays-closed.json" \
+    run_script "duo-pose fails when the inner display never becomes active" \
+    "$duo_pose" open --device "$pro_udid"
+if expect_status 1 \
+    && expect_contains "$output" "The inner display did not become active" "the error"; then
+    pass
+fi
+
+# Open, but on its side: every device orientation is tried, and the run fails
+# when none of them stands the interface upright, rather than reporting the
+# pose it asked for.
+duo_displays false true rot90 > "$work/displays-sideways.json"
+STUB_DISPLAYS="$work/displays-sideways.json" \
+    run_script "duo-pose fails when the display never turns the way it was asked" \
+    "$duo_pose" open --device "$pro_udid"
+turns="$(printf '%s\n' "$calls" | grep -c "duo-pose-helper orientation" || true)"
+if expect_status 1 \
+    && expect_contains "$output" "The inner display did not turn to portrait" "the error"; then
+    if [[ "$turns" == 4 ]]; then
+        pass
+    else
+        fail "expected every device orientation to be tried once — got $turns" "$calls"
+    fi
+fi
+unset OPENHIKES_DUO_POSE_HELPER OPENHIKES_DUO_POSE_SETTLE_SECONDS OPENHIKES_DUO_POSE_TURN_SECONDS
 
 echo
 echo "Simulator pool"

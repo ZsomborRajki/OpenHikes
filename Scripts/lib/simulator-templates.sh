@@ -66,14 +66,28 @@ template_idle_seconds="${OPENHIKES_SIM_TEMPLATE_IDLE_SECONDS:-60}"
 template_prefix="OpenHikes Template"
 
 # The newest runtime installed for a platform — `iOS` or `watchOS` — as its
-# identifier, or nothing when there is none.
+# identifier, or nothing when there is none. Given a device type as well, the
+# newest one that can run it.
+#
+# The device type is not a refinement. Xcode 27.1 installs an iOS 27.1 runtime
+# that runs exactly one device type, the iPhone Duo, beside an iOS 27.0 that
+# runs the iPhone 18s — so "the newest iOS" named a runtime that could not
+# create the 6.9" screenshot device or a pool device. Building their templates
+# on it failed with "Incompatible device", and what followed was an erase: the
+# 1.4 GB download templates exist to avoid. A runtime whose listing names no
+# device types at all is not ruled out, since nothing says it cannot.
 newest_simulator_runtime() {
-    xcrun simctl list runtimes --json 2>/dev/null \
-        | /usr/bin/plutil -extract runtimes json -o - -- - 2>/dev/null \
-        | /usr/bin/grep -o "\"identifier\":\"com.apple.CoreSimulator.SimRuntime.$1-[^\"]*\"" \
-        | sed 's/.*"\(com[^"]*\)"/\1/' \
-        | sort -V \
-        | tail -1
+    local platform="$1" device_type="${2:-}" json index=0 identifier types
+    json="$(xcrun simctl list runtimes --json 2>/dev/null)" || return 0
+    while identifier="$(/usr/bin/plutil -extract "runtimes.$index.identifier" raw -o - -- - <<< "$json" 2>/dev/null)"; do
+        types="$(/usr/bin/plutil -extract "runtimes.$index.supportedDeviceTypes" json -o - -- - <<< "$json" 2>/dev/null || true)"
+        index=$((index + 1))
+        [[ "$identifier" == "com.apple.CoreSimulator.SimRuntime.$platform-"* ]] || continue
+        if [[ -n "$device_type" && -n "$types" && "$types" != *"\"name\":\"$device_type\""* ]]; then
+            continue
+        fi
+        printf '%s\n' "$identifier"
+    done | sort -V | tail -1
 }
 
 # `OpenHikes Template (iPhone 18 Pro, iOS 27.0)` for an iPhone 18 Pro on

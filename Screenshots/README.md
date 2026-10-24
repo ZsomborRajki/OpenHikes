@@ -8,6 +8,7 @@ reasoning behind the parts that are not obvious.
 **One set, at 6.9".** Since App Store Connect's 2025 change an iPhone-only app
 uploads a single 6.9" set — 1320 × 2868 — and every smaller size is scaled from
 it. OpenHikes is `TARGETED_DEVICE_FAMILY = 1`, so there is no iPad set at all.
+The iPhone Duo has a slot of its own; see *The iPhone Duo set* below.
 
 **Between one and ten of them.** Not ten: only the first three appear in search
 results, and every frame past the first few is one more thing to re-shoot when
@@ -308,6 +309,55 @@ a gesture known to disturb the screen and correct afterwards.
   Pro paragraph has to name both, not only the maps and the offline download.
 - Frames 01, 02, 06, 09 and 10 import the stamped photographs and skip without
   them; see *Photographs* below.
+
+## The iPhone Duo set
+
+```sh
+# Closed: the cover display, 1398 × 2034
+Scripts/screenshots.sh --device "OpenHikes Screenshots Duo" --device-type "iPhone Duo" \
+    --pose closed --output Screenshots/Output/Duo-closed
+# Open: the inner display, upright, 2007 × 2853
+Scripts/screenshots.sh --device "OpenHikes Screenshots Duo" --device-type "iPhone Duo" \
+    --pose open --output Screenshots/Output/Duo-open
+```
+
+App Store Connect takes an iPhone Duo frame of either display, either way up:
+1398 × 2034 or 2034 × 1398 from the cover, 2007 × 2853 or 2853 × 2007 from the
+inner one. The same ten frames are shot on each, from the same test class, so a
+frame that breaks on the Duo is a frame that breaks — the Duo is the same app
+in a window of another shape, which is the point of shooting it. A separate
+`--output` keeps them out of the 6.9" set, whose file names they share.
+
+The device type needs the iOS 27.1 runtime — which, as Xcode 27.1 installs
+it, runs no other device — and its template, `OpenHikes Template (iPhone Duo,
+iOS 27.1)`, is built the first time like any other: one download of the
+system's models, then clones.
+
+**Opening it.** A simulator boots closed, and Xcode 27.1 opens a Duo only by
+hand, in Device Hub. `--pose open` runs `Scripts/duo-pose.sh` on the clean
+device, which posts the event Device Hub's hinge slider posts and reads the
+display state back: open, with the inner display upright, or the run stops.
+One unfold from cold is what that script can be relied on for; see its header
+for what folding back and forth did.
+
+**Three things XCTest does differently on a Duo**, each answered in the test
+class or the export rather than worked around in a frame:
+
+- `XCUIScreen.main` is the cover display, open or closed — so an open frame
+  shot from it is black. `capture(as:of:)` takes the screen whose size is the
+  app window's.
+- The inner display is captured a pixel short each way, 2006 × 2852, which App
+  Store Connect refuses. The export puts the pixel back by repeating the edge
+  row and column — `Scripts/lib/fit-screenshot.swift` — and leaves every frame
+  that is not that close to a size it takes as it was.
+- `app.frame` keeps the inner display's portrait size after it has turned to
+  landscape, so geometry here is measured upright — which the open pose is.
+
+**The cover display is 678 points tall**, against 956 on the 6.9" phone, and a
+swipe flings content further than that screen shows: *Find Photos* went from
+below the hike screen's fold to under its pinned header in one swipe. The
+shared `scrollIntoView` draws a target that has gone past back down with a
+drag that does not fling.
 
 ## The Apple Watch set
 
