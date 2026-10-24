@@ -173,7 +173,8 @@ nonisolated enum CommunityPhotoPublisher {
     ///
     /// `@concurrent` rather than a bare `nonisolated async` for the reason
     /// ``CommunityPublisher/prepare(_:photos:in:store:)`` is: the caller is
-    /// the main actor, and a dozen JPEG encodes belong anywhere else.
+    /// the main actor, and up to ``CommunityPublisher/maximumPhotos`` JPEG
+    /// encodes belong anywhere else.
     @concurrent
     private static func prepare(
         _ details: ContributedPhotoDetails,

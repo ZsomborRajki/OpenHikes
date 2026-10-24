@@ -8,12 +8,13 @@
 //  The shape is ``HikeImport``'s, run backwards, and for the same reason: the
 //  interesting part is not the happy path but what is left behind when it
 //  fails. An upload is the longest piece of work in this app that a hiker
-//  waits on — a route, a dozen re-encoded photographs, and a round trip — and
-//  it can fail in the middle of any of it. So the temporary directory holding
-//  everything the attempt writes to disk — the re-encoded copies and the JSON
-//  the transport hands CloudKit as assets — is created here, owned here, and
-//  deleted here on every exit, and the only durable trace a submission leaves
-//  on the device is written *after* CloudKit has accepted it.
+//  waits on — a route, up to ``maximumPhotos`` re-encoded photographs, and a
+//  round trip — and it can fail in the middle of any of it. So the temporary
+//  directory holding everything the attempt writes to disk — the re-encoded
+//  copies and the JSON the transport hands CloudKit as assets — is created
+//  here, owned here, and deleted here on every exit, and the only durable
+//  trace a submission leaves on the device is written *after* CloudKit has
+//  accepted it.
 //
 //  That ordering is the whole of the contract. ``Hike/communitySubmissionID``
 //  is what the share button reads to say a hike has already been sent, and
@@ -339,8 +340,8 @@ nonisolated enum CommunityPublisher {
         // Read out, stamped, and written back once. Mutating through
         // ``Hike/photos`` in place would send every element assignment
         // through the model's accessor and copy the whole array again for
-        // each one, which is a dozen rewrites of a blob to change a dozen
-        // dates in it.
+        // each one, which is up to ``maximumPhotos`` rewrites of a blob to
+        // change as many dates in it.
         var photos = hike.photos
         var stampedAny = false
         for index in photos.indices
@@ -410,9 +411,9 @@ nonisolated enum CommunityPublisher {
     ///
     /// `@concurrent` rather than a bare `nonisolated async`: with
     /// `SWIFT_APPROACHABLE_CONCURRENCY` the latter runs on its caller's
-    /// executor, and the caller here is the main actor — which would put a
-    /// dozen JPEG encodes on the thread drawing the progress view that is
-    /// reporting them.
+    /// executor, and the caller here is the main actor — which would put as
+    /// many as ``maximumPhotos`` JPEG encodes on the thread drawing the
+    /// progress view that is reporting them.
     @concurrent
     private static func prepare(
         _ details: SharedHikeDetails,

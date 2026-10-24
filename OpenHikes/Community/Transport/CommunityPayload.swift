@@ -232,11 +232,11 @@ nonisolated struct CommunityPlace: Codable, Hashable, Sendable {
 /// Everything about a hike that is offered for publication, ready to upload.
 ///
 /// The photographs are file URLs rather than `Data` deliberately. CloudKit
-/// takes an asset as a file and streams it from there, so holding a dozen
-/// re-encoded images in memory to hand them over would be paying twice for
-/// something the framework wants on disk anyway — and the re-encoded copies
-/// have to be written somewhere regardless, because the originals are the
-/// wrong size to publish.
+/// takes an asset as a file and streams it from there, so holding up to
+/// ``CommunityPublisher/maximumPhotos`` re-encoded images in memory to hand
+/// them over would be paying twice for something the framework wants on
+/// disk anyway — and the re-encoded copies have to be written somewhere
+/// regardless, because the originals are the wrong size to publish.
 nonisolated struct CommunitySubmissionDraft: Sendable {
     var hikeID: UUID
     var title: String

@@ -570,7 +570,7 @@ nonisolated enum CommunityImport {
     /// reaching here.
     ///
     /// **The hike is re-checked every picture.** It can be swiped away while a
-    /// dozen are being copied — the list is one tap behind this screen — and
+    /// set is being copied — the list is one tap behind this screen — and
     /// writing to a detached row persists nothing, leaving files nothing
     /// claims. That ends the copying rather than skipping one photograph: what
     /// is left is counted as missed without a file being read for it.
