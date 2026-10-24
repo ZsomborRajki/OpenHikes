@@ -89,7 +89,7 @@ struct CommunityPhotoShareSheet: View {
     /// the disk has been asked. Kept and written here rather than inside
     /// ``CommunitySharePhotoTally`` because it is the answer to a `.task`,
     /// which is this view's to own — see
-    /// ``SwiftUI/View/findsPhotosOnThisDevice(of:store:into:)``.
+    /// ``SwiftUI/View/findsPhotosOnThisDevice(among:store:into:)``.
     @State private var photoFiles: CommunityPhotoFiles = .unasked
 
     /// - Parameter hike: The walk the photographs came from, and the only
@@ -163,10 +163,11 @@ struct CommunityPhotoShareSheet: View {
 
     var body: some View {
         // Read once for the whole pass and handed down, because it is a sort
-        // that looks like a field: the gallery, the strip, the tally and the
-        // already-sent count all draw from this one array. Every helper below
-        // is inlined into this body, so each of them asking for its own copy
-        // was eight sorts a pass. See ``CommunitySharePhotoTally``.
+        // that looks like a field: the gallery, the strip, the tally, the
+        // already-sent count and the disk lookup all draw from this one array.
+        // Every helper below is inlined into this body, so each of them asking
+        // for its own copy was eight sorts a pass. See
+        // ``CommunitySharePhotoTally``.
         let offered = CommunityPublisher.shareablePhotos(of: hike)
         // What this send would actually carry, and what it would leave behind.
         //
@@ -195,7 +196,7 @@ struct CommunityPhotoShareSheet: View {
                     store: store,
                     isSending: phase.isSending
                 )
-                .findsPhotosOnThisDevice(of: hike, store: store, into: $photoFiles)
+                .findsPhotosOnThisDevice(among: offered, store: store, into: $photoFiles)
         }
     }
 

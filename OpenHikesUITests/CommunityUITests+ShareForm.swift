@@ -99,8 +99,9 @@ extension CommunityUITests {
     /// The count row is what the test watches rather than the tile's
     /// appearance: striking one off is drawn as a glyph and an opacity, and
     /// what actually matters is the number that will be uploaded — which is
-    /// re-asked of the disk each time, because the cap means taking one out
-    /// can let another in.
+    /// worked out again on every tap, because the cap means taking one out
+    /// can let another in. The disk is asked once for the photographs the
+    /// form offers, and again only when those change, never for a tap.
     @MainActor
     func testStrikingAPhotoOffTheShareFormLeavesItBehind() {
         let app = launchCommunity(
