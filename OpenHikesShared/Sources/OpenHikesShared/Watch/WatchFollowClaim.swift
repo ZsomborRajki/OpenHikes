@@ -169,11 +169,12 @@ public struct WatchFollowClaim: Equatable, Sendable {
     }
 
     /// A recording stopped and took the receiver down with it, whatever
-    /// stopped it: the hiker's Stop or a workout session that failed under
+    /// stopped it: the hiker's Stop and a workout session that failed under
     /// them (issue #1021) ask the same question. Put back only for a screen
-    /// still asking, or the dot on an open map freezes where the recording
+    /// still asking, or an open map's trail figures freeze where the recording
     /// ended — and only once the watch holds that screen's trail, and only
-    /// while the app is on screen.
+    /// while the app is on screen. A recording that ends off screen leaves the
+    /// feed to ``appReturned(holding:recording:)``.
     public func recordingStopped(holding held: UUID?) -> FeedChange {
         isClaimed && isAppOnScreen && held == claimedHikeID ? .start : .unchanged
     }
