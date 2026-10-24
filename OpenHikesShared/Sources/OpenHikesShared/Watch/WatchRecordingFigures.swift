@@ -24,8 +24,7 @@
 //  bundle, so which caption each figure takes, and the rounding, live in
 //  this package, where `swift test` reaches them, and the watch target
 //  only words the captions and lays them out. The caption is also what
-//  VoiceOver reads the figure by, so the
-//  two cannot part company either.
+//  VoiceOver reads the figure by, so the two cannot part company either.
 //
 //  ## A heart rate has an age
 //

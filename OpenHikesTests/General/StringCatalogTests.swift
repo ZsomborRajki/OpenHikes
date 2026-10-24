@@ -109,6 +109,24 @@ struct StringCatalogTests {
         #expect(offenders.isEmpty, "British spellings in \(folder): \(offenders.sorted())")
     }
 
+    /// The word `WatchRecordingFiguresTests` cannot reach (#1028). The watch
+    /// once drew its average speed under "Pace", a word for time per
+    /// distance. The shared package now picks only which caption a figure
+    /// takes; the words are the watch target's, in
+    /// `WatchRecordingFigures+Caption.swift`, and the watch has no test
+    /// bundle. A caption put back to "Pace" fails
+    /// `sync-string-catalogs.sh --check` only until the next sync, which adds
+    /// "Pace" and deletes "Avg Speed", or keeps it marked stale if it ever
+    /// carries a translated value. So this reads the catalog that sync leaves
+    /// behind, and fails either way.
+    @Test("the watch captions its average as a speed, as the phone does")
+    func watchCaptionsTheAverageAsASpeed() throws {
+        let strings = try Self.catalog(in: "OpenHikesWatch")
+        let speed = try #require(strings["Avg Speed"] as? [String: Any])
+        #expect(speed["extractionState"] as? String != "stale")
+        #expect(strings["Pace"] == nil)
+    }
+
     /// The checkout this file was compiled from, which the catalogs and the
     /// lint configuration are read out of.
     private static var sourceRoot: URL {
@@ -127,12 +145,18 @@ struct StringCatalogTests {
         return try Regex(String(quoted[1]))
     }
 
+    /// `folder`'s catalog as the source tree has it: every key, with its
+    /// entry.
+    private static func catalog(in folder: String) throws -> [String: Any] {
+        let data = try Data(contentsOf: sourceRoot.appending(path: "\(folder)/Localizable.xcstrings"))
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        return try #require(json["strings"] as? [String: Any])
+    }
+
     /// Every key of `folder`'s catalog, and every English value under it —
     /// plural and device variations included — read from the source tree.
     private static func englishStrings(in folder: String) throws -> [String] {
-        let data = try Data(contentsOf: sourceRoot.appending(path: "\(folder)/Localizable.xcstrings"))
-        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let strings = try #require(json["strings"] as? [String: Any])
+        let strings = try catalog(in: folder)
 
         func values(in node: Any) -> [String] {
             guard let dictionary = node as? [String: Any] else { return [] }

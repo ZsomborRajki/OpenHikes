@@ -2,11 +2,14 @@
 //  WatchRecordingFiguresTests.swift
 //  OpenHikesSharedTests
 //
-//  What the watch's recording screen calls each live figure, and how it
-//  formats it. Every locale is pinned: `swift test` runs in whatever region
-//  the host is set to, which may be en_US on a CI runner and metric on a
-//  developer's Mac, and a caption is only proven to agree with its unit in
-//  both.
+//  Which caption the watch's recording screen gives each live figure, and
+//  how it formats the figure. The words a caption is drawn with are the
+//  watch target's, in `WatchRecordingFigures+Caption.swift`, which no suite
+//  in this package can reach; the app's `StringCatalogTests` holds the one
+//  this suite was written for. Every locale is pinned: `swift test` runs in
+//  whatever region the host is set to, which may be en_US on a CI runner and
+//  metric on a developer's Mac, and a caption is only proven to agree with
+//  its unit in both.
 //
 
 import Foundation
@@ -51,9 +54,10 @@ struct WatchRecordingFiguresTests {
 
     /// The bug this suite was written for: the watch drew "5.0 km/h" under
     /// "Pace". The phone's recording screen captions the same average
-    /// "Avg Speed", and the value is the one formatter both devices use. The
-    /// word itself is the watch target's, where its String Catalog lists it
-    /// — see ``WatchRecordingFigures/Caption``.
+    /// "Avg Speed", and the value is the one formatter both devices use.
+    /// This holds which caption the average takes, not the word: the word is
+    /// the watch target's, out of `swift test`'s reach, so the app's
+    /// `StringCatalogTests` reads it out of the watch's String Catalog.
     @Test("the average is captioned as a speed, as the phone captions it", arguments: [metric, imperial])
     func averageIsCaptionedAsASpeed(locale: Locale) {
         let speed = Self.figures(in: locale).averageSpeed
