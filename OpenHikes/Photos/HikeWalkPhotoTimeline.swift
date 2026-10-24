@@ -26,13 +26,16 @@
 //  Two honest limits are worth stating outright, because both bound what the
 //  placement below is worth.
 //
-//  The union is in route order, not a path in walking order. Coverage keeps
-//  which way each stretch was walked, for the climb, but never the order the
-//  stretches came in, and this reads only the union: an out-and-back covers
-//  its outward half twice and the union holds it once; a walk taken from the
-//  far end runs against the stored direction. Progress through the union is
-//  therefore the order the *route* is written in, which is the order it was
-//  walked for the ordinary one-way case and is not for the others.
+//  The union is a stretch, not a path in walking order. Coverage keeps which
+//  way each stretch was walked, but never the order the stretches came in.
+//  A walk that went one way throughout is placed the way it went: up through
+//  the union when it walked towards the route's stored end, and down through
+//  it from the top when it set out from the stored end, which a route planned
+//  by someone else is as likely to be walked from (#1040). A walk with
+//  stretches both ways — an out-and-back covers its outward half twice, and
+//  the union holds it once — has no order this can read, so it is placed in
+//  the order the route is written in: the way the usual out-and-back sets
+//  out, and a guess whichever way it went.
 //
 //  And the fraction is of wall-clock time, not of ``HikeWalk/activeSeconds``.
 //  A walk records how long it was actually moving but not *when* it was
@@ -71,6 +74,14 @@ nonisolated struct HikeWalkPhotoTimeline: Equatable, Sendable {
     /// The union's total length, which is the distance ``distanceAlongRoute(at:)``
     /// spreads the walk's clock over.
     let coveredMeters: Double
+    /// Whether every stretch of the walk went back towards the route's stored
+    /// start, so progress runs down through ``ranges`` from the top — see the
+    /// limits in this file's header. Read from
+    /// ``TrailWalkCoverage/walkedTowardsEnd`` and
+    /// ``TrailWalkCoverage/walkedTowardsStart``, which already leave out a
+    /// match that landed a step behind the one before it, so the odd
+    /// backwards step of a forward walk does not make it a walk both ways.
+    let walkedTowardsStart: Bool
 
     /// `nil` for a walk that covered nothing, or whose stored clock runs
     /// backwards — neither can place anything, and a window opened on either
@@ -82,6 +93,7 @@ nonisolated struct HikeWalkPhotoTimeline: Equatable, Sendable {
         self.endedAt = endedAt
         ranges = walked
         coveredMeters = walked.reduce(0) { $0 + ($1.upperBound - $1.lowerBound) }
+        walkedTowardsStart = coverage.walkedTowardsEnd.isEmpty && !coverage.walkedTowardsStart.isEmpty
     }
 
     /// Every moment a photograph of this walk could carry, with the same grace
@@ -94,10 +106,11 @@ nonisolated struct HikeWalkPhotoTimeline: Equatable, Sendable {
     }
 
     /// How far along the route the walk had got at `date`, by even progress
-    /// through the covered union — see the limits in this file's header.
+    /// through the covered union in the direction it was walked — see the
+    /// limits in this file's header.
     ///
     /// `nil` only for a date outside ``searchWindow``. Inside the grace at
-    /// either end the answer is that end, for the same reason
+    /// either end the answer is the walk's end nearest it, for the same reason
     /// ``HikePhotoTimeline/position(at:)`` gives one there.
     func distanceAlongRoute(at date: Date) -> Double? {
         guard searchWindow.contains(date) else { return nil }
@@ -105,16 +118,19 @@ nonisolated struct HikeWalkPhotoTimeline: Equatable, Sendable {
         // A walk stored with one instant for both ends covered its union in no
         // time at all; there is no fraction to take, and its start is the only
         // position it can honestly offer.
-        guard span > 0 else { return ranges[0].lowerBound }
-        let elapsed = min(max(0, date.timeIntervalSince(startedAt)), span)
-        var remaining = coveredMeters * (elapsed / span)
+        let fraction = span > 0 ? min(max(0, date.timeIntervalSince(startedAt)), span) / span : 0
+        let walkedMeters = coveredMeters * fraction
+        // Walked down from the top, a distance into the walk is the same
+        // distance short of the union's top, which is the rest of the union
+        // counted up from the bottom: the measure is the same either way.
+        var remaining = walkedTowardsStart ? coveredMeters - walkedMeters : walkedMeters
         for range in ranges {
             let length = range.upperBound - range.lowerBound
             if remaining <= length { return range.lowerBound + remaining }
             remaining -= length
         }
         // Only reachable through floating-point drift across the sum above,
-        // and the end of the union is what the fraction was asking for.
+        // and the top of the union is what the distance was asking for.
         return ranges[ranges.count - 1].upperBound
     }
 
