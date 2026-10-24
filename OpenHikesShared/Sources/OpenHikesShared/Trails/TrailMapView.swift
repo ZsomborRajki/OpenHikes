@@ -28,6 +28,10 @@ import AppKit
 
 public struct TrailMapView: View {
     private let polyline: [SharedTrailSnapshot.CodableCoordinate]
+    /// ``SharedTrailSnapshot/pauseIndices``, into `polyline`: the legs drawn
+    /// as a pause rather than as trail. Empty for a line with no pauses, and
+    /// for the recording widget's trace, which carries none.
+    private let pauseIndices: [Int]
     private let liveFix: SharedTrailSnapshot.CodableCoordinate?
     private let basemaps: TrailBasemapSet?
     private let tint: Color
@@ -44,11 +48,13 @@ public struct TrailMapView: View {
         polyline: [SharedTrailSnapshot.CodableCoordinate],
         basemaps: TrailBasemapSet?,
         tint: Color,
+        pauseIndices: [Int] = [],
         liveFix: SharedTrailSnapshot.CodableCoordinate? = nil,
         lineWidth: CGFloat = 3,
         imageData: @escaping (String) -> Data? = SharedStore.basemapImageData(named:)
     ) {
         self.polyline = polyline
+        self.pauseIndices = pauseIndices
         self.liveFix = liveFix
         self.basemaps = basemaps
         self.tint = tint
@@ -81,7 +87,7 @@ public struct TrailMapView: View {
                     }
 
                     TrailStroke.draw(
-                        points: polyline.map(place),
+                        TrailStroke.Pieces(points: polyline.map(place), pauseIndices: pauseIndices),
                         liveFixPoint: liveFix.map(place),
                         tint: tint,
                         lineWidth: lineWidth,
@@ -95,7 +101,13 @@ public struct TrailMapView: View {
                 // over this view. The fit-to-bounds glyph has no such margin
                 // and would otherwise run to the edges — and under the text —
                 // now that this fills its whole container.
-                TrailGlyphView(polyline: polyline, tint: tint, liveFix: liveFix, lineWidth: lineWidth)
+                TrailGlyphView(
+                    polyline: polyline,
+                    tint: tint,
+                    pauseIndices: pauseIndices,
+                    liveFix: liveFix,
+                    lineWidth: lineWidth
+                )
                     .padding(lineWidth * 4)
             }
         }

@@ -47,6 +47,7 @@ enum PayloadShapeFixture {
             SharedTrailSnapshot.CodableCoordinate(latitude: 47.6961, longitude: 12.8543),
             SharedTrailSnapshot.CodableCoordinate(latitude: 47.6972, longitude: 12.8559),
         ],
+        pauseIndices: [1],
         elevationLowMeters: 610.5,
         elevationHighMeters: 1122.5,
         elevationGainMeters: 512.5,

@@ -181,14 +181,18 @@ extension BackgroundTrailTracker {
         liveFix: SharedTrailSnapshot.LiveFix?
     ) -> SharedTrailSnapshot? {
         guard !Task.isCancelled else { return nil }
+        // Decimated with both ends of its pauses kept, so the widget can draw
+        // a drive between two walked pieces as a pause rather than as trail.
+        let line = SharedTrailSnapshot.line(of: input.route) { coordinate in
+            SharedTrailSnapshot.CodableCoordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        } isPauseBoundary: { $0.isPauseBoundary }
         return SharedTrailSnapshot(
             hikeID: input.hikeID,
             title: input.title,
             tintHex: input.tintHex,
             totalDistanceMeters: input.totalDistanceMeters,
-            polyline: decimate(input.route) { coordinate in
-                SharedTrailSnapshot.CodableCoordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
-            },
+            polyline: line.polyline,
+            pauseIndices: line.pauseIndices,
             elevationLowMeters: elevation.lowMeters,
             elevationHighMeters: elevation.highMeters,
             elevationGainMeters: elevation.gainMeters,

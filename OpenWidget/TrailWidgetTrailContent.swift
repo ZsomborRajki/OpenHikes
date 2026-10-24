@@ -117,6 +117,7 @@ struct TrailWidgetContent: View {
                 polyline: snapshot.polyline,
                 basemaps: basemaps,
                 tint: tint,
+                pauseIndices: snapshot.pauseIndices,
                 liveFix: snapshot.liveFix?.coordinate,
                 lineWidth: layout.routeLineWidth,
                 imageData: TrailWidgetBasemapImages.data(named:)
