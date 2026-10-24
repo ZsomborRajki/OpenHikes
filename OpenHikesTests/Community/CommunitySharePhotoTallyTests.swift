@@ -85,7 +85,8 @@ struct CommunitySharePhotoTallyTests {
     }
 
     /// The cap is applied *after* the exclusions, which is the difference
-    /// between choosing twelve and getting whichever eleven were left over.
+    /// between choosing a full ``CommunityPublisher/maximumPhotos`` and
+    /// getting one fewer than that.
     @Test("the cap is applied after the exclusions, so striking one off lets another in")
     func theCapComesAfterTheExclusions() throws {
         let context = try Fixture.modelContext()

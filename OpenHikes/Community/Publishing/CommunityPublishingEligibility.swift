@@ -422,9 +422,9 @@ enum CommunityPublishingCheck {
 
     /// The first already-shared hike this route retraces.
     ///
-    /// `@concurrent` for the reason ``CommunityPublisher/sendablePhotoCount(of:store:)``
-    /// is: this runs because a sheet is opening, and a pass over several
-    /// routes is not work the main actor should be doing while it draws.
+    /// `@concurrent` because this runs while a sheet is opening, and a pass
+    /// over several routes is not work the main actor should be doing while
+    /// it draws.
     @concurrent
     static func firstRetread(
         of route: [RouteCoordinate],
