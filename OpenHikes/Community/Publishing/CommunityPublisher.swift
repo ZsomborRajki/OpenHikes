@@ -270,10 +270,11 @@ nonisolated enum CommunityPublisher {
 
     /// Which of `photos` this device holds the pixels of, by id.
     ///
-    /// What a send form asks once when it opens, and what
-    /// ``sendablePhotos(of:excluding:store:)`` asks again on the way out. The
-    /// answer is about files, not about the choice, so striking a picture off
-    /// does not change it and the form does not ask again.
+    /// What a send form asks when it opens and again whenever the photographs
+    /// it offers change, and what ``sendablePhotos(of:excluding:store:)`` asks
+    /// again on the way out. The answer is about files, not about the choice,
+    /// so striking a picture off does not change it and the form does not ask
+    /// again for that.
     ///
     /// `@concurrent` for the reason ``prepare(_:photos:in:store:)`` is, and
     /// for one more: ``HikePhotoStore/hasImage(for:)`` asserts it is off the

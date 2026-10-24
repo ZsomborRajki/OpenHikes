@@ -21,26 +21,34 @@ import SwiftData
 import SwiftUI
 
 extension View {
-    /// Asks the disk which of `hike`'s own photographs this device holds the
-    /// files of, and keeps the answer in `files`.
+    /// Asks the disk which of `offered` this device holds the files of, and
+    /// keeps the answer in `files`.
     ///
-    /// Asked once, when the form appears, and not again as the hiker strikes
-    /// pictures off: the answer is about *files*, which a tap on the strip
+    /// Keyed on which photographs are offered and on nothing about which of
+    /// them are ticked. The answer is about *files*, which a tap on the strip
     /// does not change, and the count, the cap and the tiles the cap holds
     /// back are all worked out from it as the choice moves — see
-    /// ``CommunitySharePhotoTally`` and ``CommunitySharePhotoChoices``.
-    /// Nothing else can change it while the form is the screen on top, and
-    /// the send asks again on its way out regardless.
+    /// ``CommunitySharePhotoTally`` and ``CommunitySharePhotoChoices``. So the
+    /// disk is asked when the form appears, and again whenever the list
+    /// changes under it. A library import still running when the form opened
+    /// changes it: each picture is written to disk before its row is added,
+    /// so a new row is the moment to ask. The send asks again on its way out
+    /// regardless.
+    ///
+    /// - Parameter offered: The strip's list, as the form's `body` read it for
+    ///   this pass. The same array the strip and the tally are handed, so the
+    ///   key costs a pass over the ids rather than another sort.
     func findsPhotosOnThisDevice(
-        of hike: Hike,
+        among offered: [HikePhoto],
         store: HikePhotoStore,
         into files: Binding<CommunityPhotoFiles>
     ) -> some View {
-        task(id: hike.id) {
-            let here = await CommunityPublisher.photosOnThisDevice(
-                among: CommunityPublisher.ownPhotos(of: hike),
-                store: store
-            )
+        task(id: offered.map(\.id)) {
+            let here = await CommunityPublisher.photosOnThisDevice(among: offered, store: store)
+            // A newer list replaced this one while the disk was being asked.
+            // Its own lookup is the answer to keep, and this one landing after
+            // it would drop the pictures that list added.
+            guard !Task.isCancelled else { return }
             files.wrappedValue = .answered(here)
         }
     }

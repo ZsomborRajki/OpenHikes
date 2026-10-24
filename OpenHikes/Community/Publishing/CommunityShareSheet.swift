@@ -98,7 +98,7 @@ struct CommunityShareSheet: View {
     /// the disk has been asked. Kept and written here rather than inside
     /// ``CommunitySharePhotoTally`` because it is the answer to a `.task`,
     /// which is this view's to own — see
-    /// ``SwiftUI/View/findsPhotosOnThisDevice(of:store:into:)``.
+    /// ``SwiftUI/View/findsPhotosOnThisDevice(among:store:into:)``.
     @State private var photoFiles: CommunityPhotoFiles = .unasked
     /// Whether this hike may be published at all, once the library has been
     /// asked. `nil` until then, and the Share button waits for it: offering a
@@ -230,11 +230,11 @@ struct CommunityShareSheet: View {
 
     var body: some View {
         // Read once for the whole pass and handed down, because it is a sort
-        // that looks like a field: the gallery, the strip and the tally under
-        // it all draw from this one array. Every helper below is inlined into
-        // this body, so each of them asking for its own copy was five sorts a
-        // pass, and the notes field makes a pass of every keystroke. See
-        // ``CommunitySharePhotoTally``.
+        // that looks like a field: the gallery, the strip, the tally under it
+        // and the disk lookup all draw from this one array. Every helper below
+        // is inlined into this body, so each of them asking for its own copy
+        // was five sorts a pass, and the notes field makes a pass of every
+        // keystroke. See ``CommunitySharePhotoTally``.
         let offered = CommunityPublisher.shareablePhotos(of: hike)
         NavigationStack {
             form(offered: offered)
@@ -266,7 +266,7 @@ struct CommunityShareSheet: View {
                     store: store
                 )
             }
-            .findsPhotosOnThisDevice(of: hike, store: store, into: $photoFiles)
+            .findsPhotosOnThisDevice(among: offered, store: store, into: $photoFiles)
             // Asked here as well as on the hike's own screen, and not merely
             // trusted from there: the button is drawn from the two cheap rules
             // alone, and the retread check needs a fetch and a pass over every
