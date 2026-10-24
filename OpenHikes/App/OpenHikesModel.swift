@@ -97,6 +97,10 @@ final class OpenHikesModel {
         walkSession: walkSession,
         openRequests: hikeOpenRequests
     )
+    /// The first-run tips, or `nil` for a launch that shows none. Loaded by
+    /// ``startTips()`` rather than in `init`, which is at its length limit and
+    /// runs for suites that build their own model — see ``AppTips``.
+    @ObservationIgnored private(set) var tips: AppTips?
 
     /// The open hike's marked places, observed directly by the map. Owned
     /// here rather than as a `@State` of the root view because it keeps the
@@ -356,5 +360,16 @@ final class OpenHikesModel {
             predicate: #Predicate { $0.id == id }
         )
         return try? modelContext.fetch(descriptor).first
+    }
+}
+
+// In this file because ``tips`` is set nowhere else.
+extension OpenHikesModel {
+    /// Loads the first-run tips for this launch, once, before any view exists:
+    /// TipKit has to be configured before a tip is drawn, and only once. A
+    /// launch whose store failed to open gets none — see ``TipLaunch``.
+    func startTips() {
+        guard tips == nil else { return }
+        tips = AppTips.forThisLaunch(startupIssue: startupIssue)
     }
 }

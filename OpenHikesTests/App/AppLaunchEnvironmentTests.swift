@@ -270,6 +270,21 @@ struct AppLaunchEnvironmentTests {
         #expect(configuration.routeHue == 0.68)
     }
 
+    /// The first-run tips are something a UI scenario asks for by name, so
+    /// every other one — and every App Store screenshot — runs without them.
+    @Test("the first-run tips are shown to automation only when asked for")
+    func tipsAreOptIn() {
+        let asked = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-testing", "--ui-test-tips"]
+        )
+        let quiet = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-testing"]
+        )
+
+        #expect(asked.showsTips)
+        #expect(!quiet.showsTips)
+    }
+
     /// A hue is a place on the wheel, so anything that is not one is refused
     /// outright rather than wrapped: a typo asking for 68 would otherwise
     /// come out as some colour nobody chose.
@@ -301,6 +316,7 @@ struct AppLaunchEnvironmentTests {
                 "--ui-test-live-maker",
                 "--ui-test-seed-recording=KoenigsseeRinnkendlsteig",
                 "--ui-test-route-hue=0.68",
+                "--ui-test-tips",
             ]
         )
 
@@ -314,5 +330,6 @@ struct AppLaunchEnvironmentTests {
         #expect(!configuration.asksLiveMakerServices)
         #expect(configuration.seededRecordingFixtureName == nil)
         #expect(configuration.routeHue == nil)
+        #expect(!configuration.showsTips)
     }
 }

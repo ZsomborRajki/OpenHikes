@@ -261,6 +261,9 @@ extension MapView {
         /// *Places Around Trail*'s half of the map: its pale pins and its
         /// pill. See `TrailPlacesAround.swift`.
         var placesAroundMap = PlacesAroundMapState()
+        /// The first-run tips' half: the card a tip about one of this map's
+        /// own buttons is drawn in. See `MapTipCards.swift`.
+        var tipCards = MapTipCardState()
 
         #if canImport(UIKit)
         /// The maker's own *Search this area*. A second instance of the

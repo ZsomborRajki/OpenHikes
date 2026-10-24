@@ -244,6 +244,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
   argument goes there. One does the reverse: `--ui-test-live-maker` lets the
   trail maker ask Apple Maps and the billed Stadia elevation for real, and
   belongs to the App Store frame of a drawn trail alone.
+- **No UI launch shows a first-run tip unless it passes `--ui-test-tips`**,
+  which starts them from an empty store of their own (`TipLaunch`). Only
+  `FirstRunTipsUITests` does, so no other suite and no screenshot meets one.
 - **Reuse the shared helpers.** `OpenHikesUITests/UITestSupport.swift` has the
   fixtures, launch helpers and gestures, and `AccessibilityAuditSupport.swift`
   has the audit support. A file named `Suite+Something.swift` extends `Suite`;
@@ -372,7 +375,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
   Backyard Birds samples. `App/` is the composition root. `Hikes/`,
   `Recording/`, `Map/`, `Tiles/`, `Photos/`, `Weather/`, `Purchases/`, `Sync/`,
   `Settings/`, `Health/`, `Reminders/`, `LiveActivity/`, `Intents/`, `Watch/`,
-  `Community/` and `General/` each own their models, services and views.
+  `Community/`, `Tips/` and `General/` each own their models, services and
+  views.
   - A folder that outgrows one level nests by job (for example
     `Hikes/Maker/`), never into `Models/`, `Views/` or `Services/`.
   - A folder's root holds what all of its subfolders use.
@@ -503,6 +507,31 @@ a change to recording, the map, the sheet or the render path; the PR template,
   session, so it can see both. The thresholds live only in
   `MovementReminderPolicy`.
 
+### First-run tips
+
+- **TipKit, in two ordered queues** (`AppTips`). The main screen's are
+  *Record a Hike*, *Make a Trail*, the *Community* tab and *Search this
+  area*; the recording screen's are *Add Place* and *Places Nearby*. A screen
+  never shows two at once, and a tip goes for good once it is closed or its
+  control is used.
+- **The two about making a hike are for an empty library.** They are
+  retired the first time the list loads with anything in it, so an existing
+  hiker never sees them and the queue moves on to the *Community* tab's.
+- **Every tip is inline, never a popover.** A popover over the map would be
+  presented by the permanent sheet, and while it was up the sheet could
+  present nothing else (see *Present modals from inside the sheet's
+  contents*). And a `.popoverTip` on a toolbar button never presented at all,
+  measured on iOS 27. The map's tips are cards beside their controls
+  (`MapTipCards.swift`), the *Community* tab's sits under the picker, and the
+  recording screen's sit under its bar.
+- **A card on the map speaks for itself.** MapKit builds the map's
+  accessibility from its UIKit elements and walks straight past TipKit's
+  SwiftUI, so `MapTipCardView` is one element carrying the title, the message
+  and *Close* as an action.
+- **Configured once, in `OpenHikesApp.init()`, and never for a hosted
+  suite** (`TipLaunch`). The store is TipKit's default, in the app's own
+  container rather than the App Group.
+
 ### The widget and the Live Activity
 
 - **The app computes and the widget draws.** The app writes a compact
@@ -584,6 +613,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - the deep-link format
   - `MovementReminderKind` raw values (they double as notification categories)
   - the Live Activity attributes type name
+  - the first-run tips' ids, which their closed and used state is stored
+    against (`FirstRunTipsTests`)
 
 ## Conventions
 
@@ -741,6 +772,10 @@ answer.
 - **A pushed screen with closure inputs is rebuilt by every push over it.**
   Compare what it draws from, by identity, and leave the closures out
   (`HikeDetailView+Equatable.swift`, `MapSheet`, `MapSheetHikes`).
+- **A `.safeAreaInset` on a screen pushed into the sheet costs the whole
+  sheet.** Each re-run of the body that applied it re-evaluated `MapSheet`
+  and everything under it a second time. Put such content in the screen's
+  own layout, as `RecordingPlaceTips` is.
 - **A computed property that sorts looks like a field access.** Read
   `Hike.orderedPhotos` once per pass.
 - **`@Observable` filters same-value writes only for `Equatable` properties, and

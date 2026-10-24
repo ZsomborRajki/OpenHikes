@@ -64,6 +64,9 @@ struct RecordingView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
+                // The first-run tips about the bar's two places buttons, right
+                // under the bar — see ``RecordingPlaceTips``.
+                RecordingPlaceTips(recorder: recorder)
                 RecordingCard(
                     recorder: recorder,
                     onSaved: onSaved,

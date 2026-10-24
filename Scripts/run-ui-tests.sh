@@ -34,6 +34,7 @@ suites=(
   CommunityPhotoPinUITests
   CommunityPublishedPhotosUITests
   CommunityReviewUITests
+  FirstRunTipsUITests
   AccessibilityUITests
   AccessibilityLabelUITests
 )

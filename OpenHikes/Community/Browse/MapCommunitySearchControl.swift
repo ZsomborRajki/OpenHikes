@@ -166,6 +166,10 @@ final class MapAreaSearchView: UIView {
         )
     }
 
+    /// The pill's glyph: the map, asked again. `nonisolated` because the
+    /// first-run tip about the *Community* tab's pill draws it too — see
+    /// ``SearchThisAreaTip`` — and a tip is not main-actor isolated.
+    nonisolated static let symbolName = "arrow.trianglehead.clockwise"
     private static let symbolPointSize: CGFloat = 15
     private static let horizontalPadding: CGFloat = 14
     /// Matches the other floating controls, so the pill reads as one of the
@@ -412,15 +416,20 @@ final class MapAreaSearchView: UIView {
     /// The size class rather than the panel's own flag: this is UIKit's copy of
     /// the input `SheetLayoutReader` reads, not a second opinion about it.
     private func applyNoticeClearance() {
-        noticeClearanceConstraint?.constant = traitCollection.verticalSizeClass == .compact
-            ? 0
-            : Self.noticeBadgeClearance
+        noticeClearanceConstraint?.constant = Self.badgeClearance(in: traitCollection)
+    }
+
+    /// How far down the map anything hung under this pill has to start to
+    /// clear the weather badge, given the traits it is drawn in — the caption,
+    /// and the first-run tip about the pill (see `MapTipCards.swift`).
+    static func badgeClearance(in traits: UITraitCollection) -> CGFloat {
+        traits.verticalSizeClass == .compact ? 0 : noticeBadgeClearance
     }
 
     private func buildHierarchy() {
         var configuration = UIButton.Configuration.plain()
         configuration.image = UIImage(
-            systemName: "arrow.trianglehead.clockwise",
+            systemName: Self.symbolName,
             withConfiguration: UIImage.SymbolConfiguration(
                 pointSize: Self.symbolPointSize,
                 weight: .semibold
@@ -707,21 +716,31 @@ extension MapView.Coordinator {
         applyAreaSearchVisibility(animated: true)
     }
 
+    /// Whether the *Community* tab's pill belongs on the map, whatever it is
+    /// doing there.
+    ///
+    /// The tab decides, not the offer. The pill is the *Community* list's one
+    /// verb, so it is on screen for as long as that list is and gone the
+    /// moment the hiker switches back to their own hikes — where a control
+    /// offering to search for published trails would be offering to fill a
+    /// list that is not there.
+    /// ...and not while a callout is standing where it draws — see
+    /// ``withdrawAreaSearchForCallout(open:)``.
+    /// ...and not while the trail maker has the same strip — see
+    /// ``withdrawAreaSearchForDrawing(_:)``.
+    /// ...or *Places Around Trail* — see ``withdrawAreaSearchForPlacesAround(_:)``.
+    ///
+    /// Internal because the first-run tip about the pill is shown only where
+    /// the pill is — see `MapTipCards.swift`.
+    var isAreaSearchOffered: Bool {
+        community?.isBrowsing == true && !hasOpenCallout && !isDrawingTrail
+            && !placesAroundMap.isBrowsing
+    }
+
     private func applyAreaSearchVisibility(animated: Bool) {
         #if os(iOS)
         guard let areaSearchControl else { return }
-        // The tab decides, not the offer. The pill is the *Community* list's
-        // one verb, so it is on screen for as long as that list is and gone
-        // the moment the hiker switches back to their own hikes — where a
-        // control offering to search for published trails would be offering
-        // to fill a list that is not there.
-        // ...and not while a callout is standing where it draws — see
-        // ``withdrawAreaSearchForCallout(open:)``.
-        // ...and not while the trail maker has the same strip — see
-        // ``withdrawAreaSearchForDrawing(_:)``.
-        // ...or *Places Around Trail* — see ``withdrawAreaSearchForPlacesAround(_:)``.
-        let visible = community?.isBrowsing == true && !hasOpenCallout && !isDrawingTrail
-            && !placesAroundMap.isBrowsing
+        let visible = isAreaSearchOffered
         // Above the ceiling it stays put and stops answering. `zoomIn` has
         // something to say and nothing to do; the list's footer says it, and
         // a pill that disappeared at a zoom level would be reporting policy by
@@ -744,6 +763,9 @@ extension MapView.Coordinator {
             guard let self else { return false }
             return community?.isBrowsing != true
         }
+        // The first-run tip about the pill comes and goes with it, and waits
+        // for the first answer rather than sitting over the spinner.
+        syncMapTips(animated: animated)
         #endif
     }
 }
@@ -789,6 +811,8 @@ extension MapView {
                         coordinator.areaSearchRegionForTap(of: mapView, within: CommunityQueryPolicy.isWithinCeiling)
                     )
                 }
+                // The first-run tip about this pill has made its point.
+                coordinator?.controlUsed(retiring: SearchThisAreaTip())
                 community.searchVisibleArea()
             },
             onDismissNotice: { [community] in community.dismissCuratedNotice() }

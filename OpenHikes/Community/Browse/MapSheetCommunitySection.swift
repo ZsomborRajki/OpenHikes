@@ -79,6 +79,8 @@ extension MapSheetHikes {
                     // asks at most once a launch behind it. See
                     // ``CommunityReviewQueue``.
                     review.startBrowsing()
+                    // And the first-run tip about this tab has made its point.
+                    tips?.used(CommunityTabTip())
                 case .mine:
                     community.stopBrowsing()
                     review.stopBrowsing()
