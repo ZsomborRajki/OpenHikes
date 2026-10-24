@@ -34,7 +34,9 @@
 //  JSON with an elevation, so a full ``pointBudget`` trail is around 55 KB.
 //  That is inside what `WCSession.transferUserInfo` will queue happily and is
 //  why the budget is 800 rather than the whole route — a recorded walk can
-//  carry tens of thousands of points, and none of them would be drawn.
+//  carry tens of thousands of points, and none of them would be drawn. The
+//  ends of the pauses that cross come out of the same 800, never on top of it
+//  (`WatchTrailPackage+Budget.swift`).
 //
 
 import Foundation
@@ -96,9 +98,9 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
     /// phone's `RouteProfile` keeps, and what ``totalDistanceMeters`` already
     /// leaves out (#962) — and its map does not draw it as trail (#997). The
     /// tracker and the map both read it through ``pausedLegs``. The phone
-    /// keeps both ends of every paused leg when it decimates, so a pause is
-    /// always exactly one leg of the line here. Bounded by the number of
-    /// pauses, not by the length of the walk.
+    /// keeps both ends of every paused leg it sends, so a pause is always
+    /// exactly one leg of the line here. At most ``pauseBudget`` of them,
+    /// whatever the route holds: see ``keptPoints(count:pauses:pointBudget:pauseBudget:)``.
     public var pauseIndices: [Int]
     /// The request this answers. A newer request supersedes this answer even
     /// when the phone sends nothing because the watch already has its revision.

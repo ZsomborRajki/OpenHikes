@@ -54,8 +54,8 @@ nonisolated enum WatchTrailPackaging {
     ) async -> WatchTrailPackage? {
         assertOffMainThread("Packaging a route for the watch must stay off the main thread")
         guard input.route.count > 1 else { return nil }
-        let kept = keptIndices(of: input.route)
-        let points = kept.map { index in
+        let kept = keptPoints(of: input.route)
+        let points = kept.routeIndices.map { index in
             let coordinate = input.route[index]
             return WatchTrailPoint(
                 latitude: coordinate.latitude,
@@ -70,18 +70,13 @@ nonisolated enum WatchTrailPackaging {
             )
         }
         let climb = Self.climb(of: input.route)
-        // Both ends of every paused leg are kept, so the leg arriving at a
-        // kept resume is that pause and nothing else.
-        let pauseIndices = kept.indices.filter { position in
-            position > 0 && input.route[kept[position]].isPauseBoundary
-        }
         return WatchTrailPackage(
             hikeID: input.hikeID,
             title: input.title,
             tintHex: input.tintHex,
             totalDistanceMeters: input.totalDistanceMeters,
             points: points,
-            pauseIndices: pauseIndices,
+            pauseIndices: kept.pauseIndices,
             elevationGainMeters: climb.gainMeters,
             elevationLossMeters: climb.lossMeters,
             sentAt: readAt,
@@ -89,26 +84,31 @@ nonisolated enum WatchTrailPackaging {
         )
     }
 
-    /// Which of the route's points cross: the same stride the widget's
-    /// polyline uses, taken as *indices* so a kept point's height is the
-    /// height of that point rather than of one nearby — see
-    /// ``decimatedIndices(count:maxPoints:)`` — plus both ends of every leg a
-    /// pause opened.
+    /// Which of the route's points cross, and which of them a pause arrives
+    /// at — ``WatchTrailPackage/keptPoints(count:pauses:pointBudget:pauseBudget:)``,
+    /// handed each pause and the length of its break.
     ///
-    /// The watch gives a paused leg no length and never matches onto it
-    /// (``WatchTrailPackage/pauseIndices``), which it can only do for a leg
-    /// that is the pause alone. A stride that dropped either end would fold
-    /// the drive into a longer leg with walking in it, and the watch would
-    /// have to either count the drive or refuse the walking. Two more points
-    /// a pause over the budget, which is bounded by how often a hiker reached
-    /// for the pause button.
-    static func keptIndices(of route: [RouteCoordinate]) -> [Int] {
-        let strided = decimatedIndices(count: route.count, maxPoints: WatchTrailPackage.pointBudget)
-        let pauseEnds = route.indices.dropFirst()
+    /// Taken as *indices*, so a kept point's height is the height of that
+    /// point rather than of one nearby — see
+    /// ``decimatedIndices(count:maxPoints:)``. Both ends of every pause that
+    /// crosses are kept: the watch gives a paused leg no length and never
+    /// matches onto it (``WatchTrailPackage/pauseIndices``), which it can only
+    /// do for a leg that is the pause alone. A GPX file can hold more pauses
+    /// than the budget has points, so past ``WatchTrailPackage/pauseBudget``
+    /// the shortest breaks are folded into the line (#1023).
+    static func keptPoints(of route: [RouteCoordinate]) -> WatchTrailPackage.KeptPoints {
+        let pauses = route.indices.dropFirst()
             .filter { route[$0].isPauseBoundary }
-            .flatMap { [$0 - 1, $0] }
-        guard !pauseEnds.isEmpty else { return strided }
-        return Set(strided).union(pauseEnds).sorted()
+            .map { index in
+                WatchTrailPackage.RoutePause(
+                    resumedAt: index,
+                    gapMeters: RouteGeometry.distanceMeters(
+                        from: route[index - 1].clCoordinate,
+                        to: route[index].clCoordinate
+                    )
+                )
+            }
+        return WatchTrailPackage.keptPoints(count: route.count, pauses: pauses)
     }
 
     /// Climb and descent over the *whole* route.
