@@ -4,7 +4,8 @@
 //
 //  A map asking for one trail while the watch holds another — issue #1022.
 //  The waiting view draws nothing a fix could move, so the feed must not run
-//  under it until its own trail lands.
+//  under it until its own trail lands. A trail of one point is held too, but
+//  draws the same waiting view, so it is no trail to follow.
 //
 
 import Foundation
@@ -77,5 +78,38 @@ struct WatchFollowClaimTrailTests {
 
         #expect(claim.claimedHikeID == nil)
         #expect(claim.trailArrived(holding: asked, recording: false) == .unchanged)
+    }
+
+    @Test("A trail of one point is held, but is not one a map can follow")
+    func onePointTrailIsNotFollowable() {
+        let place = Self.trail(asked, longitudes: [Self.trailhead])
+        let line = Self.trail(asked, longitudes: [Self.trailhead, Self.end])
+        #expect(place.followableHikeID == nil)
+        #expect(line.followableHikeID == asked)
+
+        // Its map draws the waiting view and its tracker has nothing to
+        // match, so a feed started for it would run under a screen that
+        // shows none of it.
+        var claim = WatchFollowClaim()
+        #expect(claim.screenAppeared(map, asking: asked, holding: place.followableHikeID, recording: false) == .stop)
+        #expect(claim.recordingStopped(holding: place.followableHikeID) == .unchanged)
+        // The same trail as a line is what the map is waiting for.
+        #expect(claim.trailArrived(holding: line.followableHikeID, recording: false) == .start)
+    }
+
+    // MARK: Fixture
+
+    private static let latitude = 47.55
+    private static let trailhead = 12.90
+    private static let end = 12.94
+
+    private static func trail(_ hikeID: UUID, longitudes: [Double]) -> WatchTrailPackage {
+        WatchTrailPackage(
+            hikeID: hikeID,
+            title: "Asked for",
+            tintHex: "#1B7F3B",
+            totalDistanceMeters: 0,
+            points: longitudes.map { WatchTrailPoint(latitude: latitude, longitude: $0) }
+        )
     }
 }

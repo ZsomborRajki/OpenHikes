@@ -137,6 +137,12 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
     /// not a line, and every consumer of this type wants a line.
     public var isDrawable: Bool { points.count > 1 }
 
+    /// The trail a map can show a live position on: this one, once it is a
+    /// line. What ``WatchFollowClaim`` is told the watch holds, so a package
+    /// of one point, whose map draws the waiting view and whose tracker has
+    /// nothing to match, starts no feed (issue #1022).
+    public var followableHikeID: UUID? { isDrawable ? hikeID : nil }
+
     /// The line, in the coordinate type the shared drawing code takes.
     public var polyline: [SharedTrailSnapshot.CodableCoordinate] {
         points.map(\.coordinate)

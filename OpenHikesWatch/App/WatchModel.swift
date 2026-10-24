@@ -192,7 +192,7 @@ final class WatchModel {
     func startFollowing(_ hikeID: UUID, for screen: UUID) {
         let recording = recorder.phase.isActive
         applyToReceiver(
-            followClaim.screenAppeared(screen, asking: hikeID, holding: followableHikeID, recording: recording)
+            followClaim.screenAppeared(screen, asking: hikeID, holding: trail?.followableHikeID, recording: recording)
         )
     }
 
@@ -209,17 +209,9 @@ final class WatchModel {
         let recording = recorder.phase.isActive
         applyToReceiver(
             onScreen
-                ? followClaim.appReturned(holding: followableHikeID, recording: recording)
+                ? followClaim.appReturned(holding: trail?.followableHikeID, recording: recording)
                 : followClaim.appLeftScreen(recording: recording)
         )
-    }
-
-    /// The trail a map can show a position on: the one held, once it has a
-    /// line to match against. The same test ``TrailMapScreen`` draws by, so
-    /// the claim never starts the feed under its waiting view.
-    private var followableHikeID: UUID? {
-        guard let trail, trail.isDrawable else { return nil }
-        return trail.hikeID
     }
 
     private func applyToReceiver(_ change: WatchFollowClaim.FeedChange) {
@@ -229,14 +221,28 @@ final class WatchModel {
         // the receiver for a follow would hand ``advanceFollow(with:)``
         // whatever the simulator happens to be standing on and overwrite it,
         // which is a screenshot of a hiker a continent off their trail. Here
-        // rather than in ``startFollowing(_:for:)`` alone, so a Stop or a trail
-        // landing on a seeded screen cannot start it either.
+        // rather than in ``startFollowing(_:for:)`` alone, so a Stop, a trail
+        // landing or a return to the screen cannot start it on a seeded
+        // screen either, and a return cannot clear the seeded position.
         if WatchLaunchEnvironment.configuration.isUITesting { return }
         #endif
         switch change {
-        case .start: recorder.startFollowingFeed()
-        case .stop: recorder.stopFollowingFeed()
-        case .unchanged: break
+        case .start:
+            recorder.startFollowingFeed()
+        case .restart:
+            // The gap ``resumeRecording()`` lets go of for a pause, here for
+            // the app's time off screen. Kept, the anchor would hold the
+            // first fix to the ground around where the app left, which on an
+            // out-and-back is the outbound leg for the whole way home, and
+            // the figures would go on showing the last reading as current
+            // until a new fix replaced it.
+            tracker?.forgetPosition()
+            follow.clear()
+            recorder.startFollowingFeed()
+        case .stop:
+            recorder.stopFollowingFeed()
+        case .unchanged:
+            break
         }
     }
 
@@ -325,7 +331,7 @@ final class WatchModel {
         // recording owned it and stopping took it down, and a trail screen
         // left open behind it would freeze the hiker's dot where they
         // pressed Stop. A screen already gone asks for nothing.
-        applyToReceiver(followClaim.recordingStopped(holding: followableHikeID))
+        applyToReceiver(followClaim.recordingStopped(holding: trail?.followableHikeID))
     }
 
     /// Tries again to write a walk that Stop could not. A success goes
@@ -406,7 +412,9 @@ final class WatchModel {
             // nothing to match against, which is every first launch: its
             // ``startFollowing(_:for:)`` had no trail of its own to start a
             // feed for. This is that moment arriving, if this is its trail.
-            applyToReceiver(followClaim.trailArrived(holding: followableHikeID, recording: recorder.phase.isActive))
+            applyToReceiver(
+                followClaim.trailArrived(holding: trail?.followableHikeID, recording: recorder.phase.isActive)
+            )
         case .walkKept(let sessionID):
             Task { [weak self, store] in
                 let queued = await store.walks.remove(sessionID)
