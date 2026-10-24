@@ -137,8 +137,9 @@ struct CommunityPlaceSharingTests {
         #expect(CommunityRoutePayload.places([]).isEmpty)
     }
 
-    /// The first place *kept* wins its id, not the first one listed: a place
-    /// dropped for being off the map must not take a later, usable one with it.
+    /// The first place on the map wins its id, not the first one listed: a
+    /// place dropped for being off the map must not take a later, usable one
+    /// with it.
     @Test("a place off the map does not claim its id from a later one")
     func droppedPlaceClaimsNoID() {
         var offMap = CommunityPlace(Self.hut)
@@ -173,6 +174,18 @@ struct CommunityPlaceSharingTests {
         let repeats = Array(repeating: CommunityPlace(Self.hut), count: GPXImport.maximumPlaces)
         let kept = CommunityRoutePayload.places(repeats + [Self.named("Past the cap")])
         #expect(kept.map(\.name) == ["Kärlingerhaus"])
+    }
+
+    /// Places off the map count against the cap too, as a route's unusable
+    /// points count against its budget: the list is not brought under the
+    /// cap by what is dropped from it.
+    @Test("the cap counts places off the map, so a place past it is never read")
+    func capCountsOffMapPlaces() {
+        var offMap = Self.named("Nowhere")
+        offMap.latitude = .nan
+        let padding = Array(repeating: offMap, count: GPXImport.maximumPlaces)
+        let kept = CommunityRoutePayload.places(padding + [Self.named("Past the cap")])
+        #expect(kept.isEmpty)
     }
 
     @Test("a symbol or element type this build does not know costs that field only")
