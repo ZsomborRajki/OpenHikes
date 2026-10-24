@@ -41,6 +41,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesShared
 
 /// What kind of place this is, from the small curated set the picker offers.
 ///
@@ -389,13 +390,15 @@ nonisolated public enum TrailPlaceOrder {
         best.reserveCapacity(places.count)
         var traveled: Double = 0
         // A paused leg is neither distance nor trail (see ``RouteBoundary``),
-        // so nothing is measured against it and it adds nothing: a place
+        // so only the walked legs are measured against and add up: a place
         // beside the drive between two recorded pieces is not on the hike,
         // and one past it is as far along as the walking that reached it,
-        // the figure ``RouteProfile``'s axis and the hike's distance use.
-        for index in route.indices.dropFirst() where !route[index].isPauseBoundary {
-            let start = coordinates[index - 1]
-            let end = coordinates[index]
+        // the figure ``RouteProfile``'s axis and the hike's distance use. A
+        // lone fix has no walked leg, so a place on one anchors to the
+        // nearest leg that was walked.
+        for leg in route.trailRuns.walkedLegs {
+            let start = coordinates[leg]
+            let end = coordinates[leg + 1]
             let length = RouteGeometry.distanceMeters(from: start, to: end)
             for target in targets {
                 let projection = RouteGeometry.project(

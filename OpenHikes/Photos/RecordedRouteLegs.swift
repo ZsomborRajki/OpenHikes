@@ -26,29 +26,32 @@
 //  as they did before any leg was projected onto. That, and the bridge, are
 //  where this and ``RouteProfile`` part: a profile projects onto a bridge, and
 //  a route whose every leg is paused leaves it nothing to answer with, where
-//  this still measures to the fixes.
+//  this still measures to the fixes. Both read the legs through ``TrailRuns``,
+//  this one cut at the bridges as well as the pauses, and a fix with nothing
+//  measured beside it is one of its ``TrailRuns/loneFixes``.
 //
 //  Built once per search, by ``HikePhotoSearchPlan``, and asked once per photo
 //  the clock could not place.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 
 nonisolated struct RecordedRouteLegs: Sendable {
     /// The route's points, in route order — untimestamped ones included, since
     /// a leg runs between neighbours whatever their clocks say.
     private let coordinates: [CLLocationCoordinate2D]
-    /// Whether the leg from `coordinates[i]` to `coordinates[i + 1]` was
-    /// walked and measured; one shorter than ``coordinates``.
-    private let measured: [Bool]
+    /// The route cut at every leg that was not both walked and measured: its
+    /// runs are the measured legs, and a piece of one point is a fix with
+    /// nothing measured beside it.
+    private let runs: TrailRuns
 
     init(route: [RouteCoordinate]) {
         coordinates = route.map(\.clCoordinate)
-        // A boundary or a provenance describes the leg *arriving* at the point
-        // that carries it, so leg `i` is judged by point `i + 1`.
-        measured = route.dropFirst().map { !$0.isPauseBoundary && !$0.isInferred }
+        runs = route.trailRuns(cutAt: { $0.isPauseBoundary || $0.isInferred })
     }
 
     /// The closest point to `coordinate` on a measured leg, or at any of the
@@ -57,10 +60,22 @@ nonisolated struct RecordedRouteLegs: Sendable {
         to coordinate: CLLocationCoordinate2D
     ) -> (coordinate: CLLocationCoordinate2D, meters: Double)? {
         var best: (coordinate: CLLocationCoordinate2D, meters: Double)?
-        for index in coordinates.indices {
-            if index < measured.count, measured[index] {
-                let start = coordinates[index]
-                let end = coordinates[index + 1]
+        // Piece by piece, so the candidates come in route order and a tie
+        // goes to the earlier one.
+        for piece in runs.pieces {
+            // A point with a measured leg on either side is already one of
+            // that leg's candidates, at a fraction of 0 or 1. The rest — the
+            // ends of a paused or bridged leg with nothing measured beside
+            // them, or a route of one point — are tested as points.
+            guard piece.count > 1 else {
+                let point = coordinates[piece.lowerBound]
+                let meters = RouteGeometry.distanceMeters(from: coordinate, to: point)
+                if meters < (best?.meters ?? .infinity) {
+                    best = (point, meters)
+                }
+                continue
+            }
+            for (start, end) in coordinates[piece].adjacentPairs() {
                 let projection = RouteGeometry.project(coordinate, onSegmentFrom: start, to: end)
                 if projection.offRouteMeters < (best?.meters ?? .infinity) {
                     best = (
@@ -68,18 +83,6 @@ nonisolated struct RecordedRouteLegs: Sendable {
                         projection.offRouteMeters
                     )
                 }
-            }
-            // A point with a measured leg on either side is already one of
-            // that leg's candidates, at a fraction of 0 or 1. The rest — the
-            // ends of a paused or bridged leg with nothing measured beside
-            // them, or a route of one point — are tested as points.
-            let followsMeasuredLeg = index > 0 && measured[index - 1]
-            let leadsMeasuredLeg = index < measured.count && measured[index]
-            guard !followsMeasuredLeg, !leadsMeasuredLeg else { continue }
-            let point = coordinates[index]
-            let meters = RouteGeometry.distanceMeters(from: coordinate, to: point)
-            if meters < (best?.meters ?? .infinity) {
-                best = (point, meters)
             }
         }
         return best

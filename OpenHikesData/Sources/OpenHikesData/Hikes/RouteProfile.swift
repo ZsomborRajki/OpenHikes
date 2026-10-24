@@ -103,7 +103,8 @@ nonisolated public struct RouteProfile: Sendable {
 
     private let sampleDistances: [Double]
     /// The segments a pause opened, by the index of the point they leave —
-    /// `coordinates[i]` to `coordinates[i + 1]`. Never matched against: see
+    /// `coordinates[i]` to `coordinates[i + 1]` — read off
+    /// ``TrailRuns/pausedLegs``. Never matched against: see
     /// ``RouteBoundary``. Bounded by the number of pauses.
     let pausedSegments: Set<Int>
 
@@ -164,7 +165,8 @@ nonisolated public struct RouteProfile: Sendable {
         var routeDistances: [Double] = []
         var routeSamples: [ElevationSample] = []
         var routePauseDistances: [Double] = []
-        var routePausedSegments: Set<Int> = []
+        // The route's own reading of its pauses, the one every reader takes.
+        let routePausedSegments = Set(route.trailRuns.pausedLegs)
         var elevations = ElevationAccumulator()
         var routeClimbMarks: [ClimbMark] = []
         routeCoordinates.reserveCapacity(route.count)
@@ -181,15 +183,12 @@ nonisolated public struct RouteProfile: Sendable {
             previous = point
             routeCoordinates.append(coordinate)
             routeDistances.append(cumulative)
-            // `index > 0` for the reason ``[RouteCoordinate]/pausedSegments``
-            // starts at 1: a boundary describes the leg arriving at a point,
-            // and the first point of a route arrives from nowhere.
-            let resumes = index > 0 && point.isPauseBoundary
-            if resumes {
-                routePausedSegments.insert(index - 1)
-                if routePauseDistances.last != cumulative {
-                    routePauseDistances.append(cumulative)
-                }
+            // A boundary describes the leg arriving at a point, leg
+            // `index - 1`; the first point arrives from nowhere, so a pause
+            // named on it opens nothing.
+            let resumes = routePausedSegments.contains(index - 1)
+            if resumes, routePauseDistances.last != cumulative {
+                routePauseDistances.append(cumulative)
             }
             elevations.record(point)
             // `isFinite`, and here rather than in each consumer: a height that

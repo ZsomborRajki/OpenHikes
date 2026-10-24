@@ -39,6 +39,7 @@ import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 
 nonisolated struct HikePhotoTimeline: Sendable {
     /// How far outside a fix a photograph can be taken and still be placed at
@@ -113,19 +114,20 @@ nonisolated struct HikePhotoTimeline: Sendable {
         var stamped: [Fix] = []
         stamped.reserveCapacity(route.count)
         // Number segments before dropping untimestamped points: a pause on
-        // one still separates the timestamped fixes either side of it.
-        var segment = 0
-        for point in route {
-            if point.isPauseBoundary { segment += 1 }
-            guard let timestamp = point.timestamp else { continue }
-            stamped.append(
-                Fix(
-                    timestamp: timestamp,
-                    latitude: point.latitude,
-                    longitude: point.longitude,
-                    segment: segment
+        // one still separates the timestamped fixes either side of it. Each
+        // of the route's pieces is a segment, a lone fix included.
+        for (segment, piece) in route.trailRuns.pieces.enumerated() {
+            for point in route[piece] {
+                guard let timestamp = point.timestamp else { continue }
+                stamped.append(
+                    Fix(
+                        timestamp: timestamp,
+                        latitude: point.latitude,
+                        longitude: point.longitude,
+                        segment: segment
+                    )
                 )
-            )
+            }
         }
         guard !stamped.isEmpty else { return nil }
         // Sorted by timestamp, and only the first of any duplicate kept: two

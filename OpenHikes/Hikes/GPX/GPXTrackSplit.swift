@@ -24,6 +24,7 @@ import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 
 nonisolated enum GPXTrackSplit {
     /// `items`, shared out among `routes`: one list per route, in the order
@@ -154,10 +155,12 @@ nonisolated enum GPXTrackSplit {
         }
 
         private let route: [RouteCoordinate]
-        /// Each piece, by the index of the point it ends at, under every cell
-        /// its box covers.
+        /// What is filed: ``GPXTrackSplit/pieces(of:)``, read once.
+        private var pieces: [Piece] = []
+        /// Each piece, by its place in ``pieces``, under every cell its box
+        /// covers.
         private var cells: [Cell: [Int]] = [:]
-        /// The pieces too long to file.
+        /// The pieces too long to file, by their place in ``pieces``.
         private var unfiled: [Int] = []
         /// The first fix's longitude, which the route is unwrapped from.
         private var origin = 0.0
@@ -185,8 +188,8 @@ nonisolated enum GPXTrackSplit {
             }
             latitudeStep = GPXTrackSplit.cellMeters / GPXTrackSplit.metersPerDegree
             longitudeStep = latitudeStep / GPXTrackSplit.cosine(of: (south + north) / 2)
-            for index in route.indices {
-                guard let piece = GPXTrackSplit.piece(endingAt: index, of: route) else { continue }
+            pieces = GPXTrackSplit.pieces(of: route)
+            for (position, piece) in pieces.enumerated() {
                 let latitudes = (route[piece.start].latitude, route[piece.end].latitude)
                 let rows = Self.cellRange(
                     from: min(latitudes.0, latitudes.1),
@@ -199,12 +202,12 @@ nonisolated enum GPXTrackSplit {
                     step: longitudeStep
                 )
                 guard let rows, let columns, rows.count * columns.count <= Self.mostCellsPerPiece else {
-                    unfiled.append(index)
+                    unfiled.append(position)
                     continue
                 }
                 for row in rows {
                     for column in columns {
-                        cells[Cell(row: row, column: column), default: []].append(index)
+                        cells[Cell(row: row, column: column), default: []].append(position)
                     }
                 }
             }
@@ -224,13 +227,13 @@ nonisolated enum GPXTrackSplit {
                 return GPXTrackSplit.offRouteMeters(of: coordinate, along: route)
             }
             var nearest = Double.infinity
-            for index in unfiled {
-                nearest = min(nearest, meters(from: coordinate, toPieceEndingAt: index))
+            for position in unfiled {
+                nearest = min(nearest, meters(from: coordinate, to: pieces[position]))
             }
             for row in box.rows {
                 for column in box.columns {
-                    for index in cells[Cell(row: row, column: column)] ?? [] {
-                        nearest = min(nearest, meters(from: coordinate, toPieceEndingAt: index))
+                    for position in cells[Cell(row: row, column: column)] ?? [] {
+                        nearest = min(nearest, meters(from: coordinate, to: pieces[position]))
                     }
                 }
             }
@@ -258,8 +261,8 @@ nonisolated enum GPXTrackSplit {
             return (rows, columns)
         }
 
-        private func meters(from coordinate: CLLocationCoordinate2D, toPieceEndingAt index: Int) -> Double {
-            GPXTrackSplit.meters(from: coordinate, toPieceEndingAt: index, of: route)
+        private func meters(from coordinate: CLLocationCoordinate2D, to piece: Piece) -> Double {
+            GPXTrackSplit.meters(from: coordinate, to: piece, of: route)
         }
 
         /// The cells from the one holding `lower` to the one holding `upper`,
@@ -317,9 +320,9 @@ nonisolated enum GPXTrackSplit {
     ///
     /// Its ends are still fixes the track recorded. One beside a walked leg is
     /// measured as that leg's end; one with a pause on both sides, a
-    /// `<trkseg>` of a single point, is measured as a point, so a waypoint
-    /// sitting on it still lies on the track. That is the rule
-    /// ``RecordedRouteLegs`` holds a photograph to.
+    /// `<trkseg>` of a single point, is one of the ``TrailRuns/loneFixes`` and
+    /// is measured as a point, so a waypoint sitting on it still lies on the
+    /// track. That is the rule ``RecordedRouteLegs`` holds a photograph to.
     ///
     /// A single point is no route at all: the import leaves a one-point track
     /// out after this split, and a waypoint handed to it would go with it,
@@ -330,31 +333,36 @@ nonisolated enum GPXTrackSplit {
     ) -> Double? {
         guard route.count > 1 else { return nil }
         var nearest = Double.infinity
-        for index in route.indices {
-            nearest = min(nearest, meters(from: coordinate, toPieceEndingAt: index, of: route))
+        for piece in pieces(of: route) {
+            nearest = min(nearest, meters(from: coordinate, to: piece, of: route))
         }
         return nearest
     }
 
-    /// The piece of `route` that ends at `index`, as the points it runs
-    /// between: the walked leg arriving there, or the fix alone when no walked
-    /// leg touches it. `nil` when only the leg leaving it is walked, because
-    /// that piece ends at the next point.
-    private static func piece(endingAt index: Int, of route: [RouteCoordinate]) -> (start: Int, end: Int)? {
-        // A boundary describes the leg arriving at the point that carries it.
-        if index > 0, !route[index].isPauseBoundary { return (index - 1, index) }
-        let leavesWalked = index + 1 < route.count && !route[index + 1].isPauseBoundary
-        return leavesWalked ? nil : (index, index)
+    /// A stretch of the ground a route walked, as the points it runs between:
+    /// a walked leg, or a lone fix alone, whose `start` is its `end`.
+    private struct Piece {
+        let start: Int
+        let end: Int
     }
 
-    /// How far `coordinate` is from the piece ending at `index`, or infinitely
-    /// far when no piece ends there — see ``piece(endingAt:of:)``.
+    /// The pieces of `route` that ``offRouteMeters(of:along:)`` measures, read
+    /// off the route's ``TrailRuns``: each of its ``TrailRuns/walkedLegs``,
+    /// and each of its ``TrailRuns/loneFixes`` alone. A fix beside a walked
+    /// leg is that leg's end, so it is measured with the leg.
+    private static func pieces(of route: [RouteCoordinate]) -> [Piece] {
+        let runs = route.trailRuns
+        return runs.walkedLegs.map { Piece(start: $0, end: $0 + 1) }
+            + runs.loneFixes.map { Piece(start: $0, end: $0) }
+    }
+
+    /// How far `coordinate` is from `piece` of `route`: from the leg, or from
+    /// the fix when the piece is one.
     private static func meters(
         from coordinate: CLLocationCoordinate2D,
-        toPieceEndingAt index: Int,
+        to piece: Piece,
         of route: [RouteCoordinate]
     ) -> Double {
-        guard let piece = piece(endingAt: index, of: route) else { return .infinity }
         let end = route[piece.end].clCoordinate
         guard piece.start != piece.end else { return RouteGeometry.distanceMeters(from: coordinate, to: end) }
         return RouteGeometry.project(coordinate, onSegmentFrom: route[piece.start].clCoordinate, to: end).offRouteMeters

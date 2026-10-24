@@ -22,6 +22,7 @@ import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 
 /// A category a stretch of route can be attributed to by reading one OSM tag.
 ///
@@ -231,12 +232,13 @@ nonisolated enum TrailBreakdownAnalyzer {
     /// order, with the category the way beneath it puts it in. Visits nothing
     /// for a route or graph with nothing to measure.
     ///
-    /// A leg a pause opened is never sampled. It is not trail (see
-    /// ``RouteBoundary``): the ground across it was crossed by car or by
-    /// lift, or not at all, and measured, a drive between two walks was most
-    /// of a breakdown, unmapped distance the hike never covered (#992). The
-    /// first sample after one says so, so a run ends at the pause even where
-    /// the same category carries on beyond it.
+    /// A leg a pause opened is never sampled: only the route's
+    /// ``TrailRuns/walkedLegs`` are. It is not trail (see ``RouteBoundary``):
+    /// the ground across it was crossed by car or by lift, or not at all, and
+    /// measured, a drive between two walks was most of a breakdown, unmapped
+    /// distance the hike never covered (#992). The first sample after one
+    /// says so, so a run ends at the pause even where the same category
+    /// carries on beyond it. A lone fix has no leg, so it is part of none.
     private static func walk<Category: TrailCategory>(
         _: Category.Type,
         route: [RouteCoordinate],
@@ -252,14 +254,14 @@ nonisolated enum TrailBreakdownAnalyzer {
         var samplesTaken = 0
         // Whether a pause has opened a leg since the last sample.
         var resumesAfterPause = false
+        let runs = route.trailRuns
+        let pausedLegs = Set(runs.pausedLegs)
 
-        for (start, end) in route.adjacentPairs() {
-            guard !end.isPauseBoundary else {
-                resumesAfterPause = true
-                continue
-            }
-            let from = start.clCoordinate
-            let to = end.clCoordinate
+        for leg in runs.walkedLegs {
+            // The leg before this one was a pause.
+            if pausedLegs.contains(leg - 1) { resumesAfterPause = true }
+            let from = route[leg].clCoordinate
+            let to = route[leg + 1].clCoordinate
             let segmentMeters = RouteGeometry.distanceMeters(from: from, to: to)
             guard segmentMeters.isFinite, segmentMeters > 0 else { continue }
 
