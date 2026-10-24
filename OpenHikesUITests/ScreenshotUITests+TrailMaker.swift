@@ -69,7 +69,7 @@ extension ScreenshotUITests {
             )
         }
         waitForTheWalkedRoute(in: app)
-        capture(as: .trailMaker)
+        capture(as: .trailMaker, of: app)
     }
 
     // MARK: - Support

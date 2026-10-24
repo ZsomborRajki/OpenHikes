@@ -434,25 +434,6 @@ extension XCTestCase {
         target.tap()
     }
 
-    /// Swipes the screen's scrolling container until the target is reachable.
-    ///
-    /// A row below the fold is not merely off-screen: SwiftUI builds `List`
-    /// and `Form` rows lazily, so it may be absent from the element tree
-    /// altogether, which is why this waits on `exists` rather than assuming it.
-    @MainActor
-    @discardableResult func scrollIntoView(
-        _ target: XCUIElement,
-        in app: XCUIApplication,
-        attempts: Int = 8
-    ) -> Bool {
-        let container = scrollContainer(in: app)
-        for _ in 0..<attempts {
-            if isReachable(target, in: app) { return true }
-            container.swipeUp()
-        }
-        return isReachable(target, in: app)
-    }
-
     /// Whether `target` can actually be aimed at, rather than merely touched.
     ///
     /// `isHittable` alone is not that question. XCUITest clamps an element's

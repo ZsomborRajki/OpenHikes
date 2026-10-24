@@ -101,7 +101,18 @@ extension ScreenshotUITests {
         let title = element("hike-place-title", in: app)
         XCTAssertTrue(title.waitForExistence(timeout: UITestTimeout.navigation), "adding should open the new place")
         XCTAssertEqual(title.label, Self.placeName)
-        let thumbnails = element("hike-place-photos", in: app).images
+        // Brought into view before it is counted. The strip is a lazy stack,
+        // which builds no thumbnails while it is off screen — and on a screen
+        // shorter than the 6.9" one, the closed iPhone Duo's 678 points, it
+        // starts below the fold. Where it is already in view this moves
+        // nothing.
+        let strip = element("hike-place-photos", in: app)
+        XCTAssertTrue(
+            strip.waitForExistence(timeout: UITestTimeout.trace),
+            "the place should file the photographs it was given"
+        )
+        scrollIntoView(strip, in: app)
+        let thumbnails = strip.images
         let bothFiled = NSPredicate { _, _ in thumbnails.count == Self.placePhotoIndexes.count }
         XCTAssertEqual(
             XCTWaiter.wait(
@@ -111,7 +122,7 @@ extension ScreenshotUITests {
             .completed,
             "both photographs should be filed under the place"
         )
-        capture(as: .place)
+        capture(as: .place, of: app)
     }
 
     /// Picks `indexes` of the library's photographs in the system picker the
