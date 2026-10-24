@@ -107,7 +107,7 @@ struct HikeActivityPresentationTests {
             for: Self.runningRecording,
             locale: Self.locale
         )
-        #expect(presentation.metrics.map(\.kind) == [.ascent, .pace, .points])
+        #expect(presentation.metrics.map(\.kind) == [.ascent, .averageSpeed, .points])
     }
 
     /// Same truncation rule as the widget: drop the least useful, never
@@ -122,7 +122,7 @@ struct HikeActivityPresentationTests {
         #expect(presentation.metrics.map(\.kind) == [.ascent])
     }
 
-    /// A recording that has just started has no pace and no points, and shows
+    /// A recording that has just started has no speed and no points, and shows
     /// fewer chips rather than a row of zeroes.
     @Test("a recording with nothing to report omits chips rather than faking them")
     func emptyRecordingOmitsChips() {

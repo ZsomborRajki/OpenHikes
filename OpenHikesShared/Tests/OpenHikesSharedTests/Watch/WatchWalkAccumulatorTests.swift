@@ -81,8 +81,8 @@ struct WatchWalkAccumulatorTests {
         // Four legs of about 11 m each.
         #expect(walk.distanceMeters > 40 && walk.distanceMeters < 50)
         #expect(walk.activeSeconds == 4 * Fixture.stepSeconds)
-        let pace = walk.averageSpeedMetersPerSecond
-        #expect(pace != nil)
+        let speed = walk.averageSpeedMetersPerSecond
+        #expect(speed != nil)
     }
 
     @Test("The ground crossed during a pause is neither walked nor climbed")

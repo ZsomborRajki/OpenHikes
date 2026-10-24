@@ -85,14 +85,14 @@ struct WidgetFormatTests {
         let locale = Self.imperialSystemMetricRoads
         #expect(locale.measurementSystem != .metric)
 
-        let pace = WidgetFormat.speed(metersPerSecond: 1.2, locale: locale)
-        #expect(pace.contains("km/h"))
-        #expect(!pace.contains("mph"))
+        let speed = WidgetFormat.speed(metersPerSecond: 1.2, locale: locale)
+        #expect(speed.contains("km/h"))
+        #expect(!speed.contains("mph"))
     }
 
     /// One decimal survives the usage change, which is the precision the
     /// explicit number style is there to hold.
-    @Test("pace keeps one decimal", arguments: ["de_DE", "en_US", "en_LR"])
+    @Test("a speed keeps one decimal", arguments: ["de_DE", "en_US", "en_LR"])
     func speedKeepsOneDecimal(identifier: String) throws {
         let locale = Locale(identifier: identifier)
         let text = WidgetFormat.speed(metersPerSecond: 1.3888888, locale: locale)

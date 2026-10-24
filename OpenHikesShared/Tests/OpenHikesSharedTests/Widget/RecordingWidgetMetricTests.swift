@@ -38,7 +38,7 @@ struct RecordingWidgetMetricTests {
     func recordingChips() {
         #expect(
             Self.snapshot().metrics(limit: 4, locale: Self.locale).map(\.kind)
-                == [.ascent, .distance, .pace]
+                == [.ascent, .distance, .averageSpeed]
         )
     }
 
@@ -53,9 +53,9 @@ struct RecordingWidgetMetricTests {
     }
 
     /// A stationary recorder has a speed of zero, and "0.0 km/h" is not a
-    /// pace worth the width. The metres it has already walked stay.
-    @Test("a standing start reports no pace")
-    func standingStartHasNoPace() {
+    /// speed worth the width. The metres it has already walked stay.
+    @Test("a standing start reports no speed")
+    func standingStartHasNoSpeed() {
         #expect(
             Self.snapshot(speed: 0).metrics(limit: 4, locale: Self.locale).map(\.kind)
                 == [.ascent, .distance]

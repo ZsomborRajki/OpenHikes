@@ -17,7 +17,7 @@ extension ScreenshotUITests {
     private static let sharePhotoIndex = 5
 
     /// The walk the summary leads with, over one of its own photographs: the
-    /// distance, the climb, the time and the pace in one box, the line walked
+    /// distance, the climb, the time and the average speed in one box, the line walked
     /// in another, and OpenHikes signed along the bottom.
     ///
     /// The card editor as it opens, with no box selected, because that is the
