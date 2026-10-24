@@ -150,10 +150,13 @@ enum HikeImport {
     /// several.
     ///
     /// - Parameter choosing: asked only when the file holds more than one
-    ///   track, with the tracks and the file's waypoints that none of them
-    ///   takes; answers the indices to import, empty for none. See
+    ///   track, with the tracks and how many of the file's waypoints lie on
+    ///   none of them; answers the indices to import, empty for none. See
     ///   ``GPXTrackChoice``. Never asked for a one-track file, which imports
     ///   exactly as it always has.
+    ///
+    /// The chosen tracks share the one import's ``GPXImport/maximumPlaces``,
+    /// spent here on their places alone — see ``GPXImport/placesKept(of:)``.
     ///
     /// All of the chosen tracks are committed together or none of them are:
     /// a refused save that kept three days of a five-day trip would leave the
@@ -161,7 +164,7 @@ enum HikeImport {
     static func hikes(
         from url: URL,
         into modelContext: ModelContext,
-        choosing: ([GPXImport.Track], GPXImport.LeftOut) async -> [Int],
+        choosing: ([GPXImport.Track], Int) async -> [Int],
         save: @Sendable (ModelContext) throws -> Void = { try $0.save() }
     ) async throws(HikeImportFailure) -> [Hike] {
         let scoped = url.startAccessingSecurityScopedResource()
@@ -176,15 +179,18 @@ enum HikeImport {
         if contents.tracks.count == 1, let only = contents.tracks.first {
             chosen = [(1, only)]
         } else {
-            let picks = await choosing(contents.tracks, contents.leftOut)
+            let picks = await choosing(contents.tracks, contents.unplacedWaypoints)
             guard !picks.isEmpty else { throw .file(.multipleTracks) }
             chosen = Set(picks).sorted()
                 .filter { contents.tracks.indices.contains($0) }
                 .map { ($0 + 1, contents.tracks[$0]) }
         }
-        let rows = chosen.map { number, track in
-            PendingRow(
+        let placesKept = GPXImport.placesKept(of: chosen.map(\.track))
+        let rows = zip(chosen, placesKept).map { pick, kept in
+            let (number, track) = pick
+            return PendingRow(
                 track: track,
+                places: Array(track.places.prefix(kept)),
                 // Both settled here, on the actor that owns the UI types they
                 // reach: the title is bounded rather than absorbed downstream,
                 // because this name came out of a file the hiker may never
@@ -202,10 +208,13 @@ enum HikeImport {
         return hikes
     }
 
-    /// One row to write: a track, and the two things settled for it on the
-    /// main actor.
+    /// One row to write: a track, the places it keeps, and the two things
+    /// settled for it on the main actor.
     struct PendingRow: Sendable {
         let track: GPXImport.Track
+        /// The start of the track's own places, as far as the import's cap
+        /// reaches — see ``GPXImport/placesKept(of:)``.
+        let places: [TrailPlace]
         let title: String
         let tintHex: String
     }
@@ -253,7 +262,7 @@ enum HikeImport {
             // relationship assigned to a hike that is not in a context yet
             // has nowhere to put it — the same order ``TrailDraftSave``
             // takes, and for the same reason.
-            hike.replacePlaces(with: track.places, in: context)
+            hike.replacePlaces(with: row.places, in: context)
             ids.append(hike.id)
         }
         do {

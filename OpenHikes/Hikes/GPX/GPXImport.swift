@@ -71,6 +71,13 @@ nonisolated enum GPXImport {
         /// same trade the track's own `<desc>` and `<author>` already make —
         /// what the sender put in the file is what the hiker asked to import.
         let places: [TrailPlace]
+        /// Where each of ``places`` stands among the file's places, rising.
+        ///
+        /// What one import keeps of a file's places is the file's first
+        /// ``GPXImport/maximumPlaces`` among the tracks the hiker chose, and
+        /// only these say which those are once the places are shared out
+        /// among several — see ``GPXImport/placesKept(of:)``.
+        let placeOffsets: [Int]
 
         /// Built from `<trkseg>`-shaped runs rather than one flat list, so the
         /// file's own boundaries survive into the route.
@@ -108,7 +115,7 @@ nonisolated enum GPXImport {
             startTime: Date?,
             segments: [[Point]],
             photographs: [Photograph] = [],
-            places: [TrailPlace] = []
+            places: [(offset: Int, element: TrailPlace)] = []
         ) {
             self.name = name
             self.trackDescription = trackDescription
@@ -116,7 +123,8 @@ nonisolated enum GPXImport {
             self.keywords = keywords
             self.startTime = startTime
             self.photographs = photographs
-            self.places = places
+            self.places = places.map(\.element)
+            placeOffsets = places.map(\.offset)
             points = Array(segments.joined())
             route = Self.route(of: segments)
             distanceMeters = route.lengthMeters
@@ -305,7 +313,7 @@ nonisolated enum GPXImport {
             // its geometry has just had them read as the line, and reading them
             // again as places would mark every vertex of the track it drew.
             places: hasGeometryOfItsOwn
-                ? Array(document.waypoints.compactMap(place).prefix(maximumPlaces))
+                ? Array(document.waypoints.compactMap(place).prefix(maximumPlaces).enumerated())
                 : []
         )
     }
@@ -331,15 +339,15 @@ nonisolated enum GPXImport {
         containers: [(container: Int, segments: [[Point]])]
     ) -> Contents {
         let routes = containers.map { Track.route(of: $0.segments) }
-        // Every place is shared out before the cap is applied, so only the
-        // ones a track takes compete for it (#1037).
+        // Every place is shared out uncapped, numbered by where it stands in
+        // the file: the cap is the import's to spend, on the tracks the hiker
+        // chooses, so a place on a track they leave unticked never costs one
+        // on a ticked track its slot (#1037).
         let places = document.waypoints.compactMap(place)
         let photographs = document.waypoints.compactMap(photograph)
-        let (placesByTrack, pastPlaceLimit) = GPXTrackSplit.assign(
-            places, at: \.clCoordinate, to: routes, keepingAtMost: maximumPlaces
-        )
+        let placesByTrack = GPXTrackSplit.assign(Array(places.enumerated()), at: \.element.clCoordinate, to: routes)
         let photographsByTrack = GPXTrackSplit.assign(photographs, at: \.coordinate, to: routes)
-        let onATrack = placesByTrack.joined().count + pastPlaceLimit + photographsByTrack.joined().count
+        let placed = placesByTrack.joined().count + photographsByTrack.joined().count
         let tracks = containers.enumerated().map { offset, container in
             let own = words.of(container.container)
             return Track(
@@ -356,20 +364,19 @@ nonisolated enum GPXImport {
                 places: placesByTrack[offset]
             )
         }
-        return Contents(
-            tracks: tracks,
-            leftOut: LeftOut(offTrack: places.count + photographs.count - onATrack, pastPlaceLimit: pastPlaceLimit)
-        )
+        return Contents(tracks: tracks, unplacedWaypoints: places.count + photographs.count - placed)
     }
 
-    /// How many `<wpt>`s of a file may become places.
+    /// How many `<wpt>`s of a file may become places in one import.
     ///
-    /// Per file rather than per track: a multi-track file is one import of
+    /// Per import rather than per track: a multi-track file is one import of
     /// up to ``Limits/maximumTrackCount`` hikes, and a cap per hike would let
-    /// it write the ten thousand records argued against below. Spent only on
-    /// the places a track takes, in the file's order, and what it cuts is
-    /// counted for the confirmation — see
-    /// ``GPXTrackSplit/assign(_:at:to:keepingAtMost:)``.
+    /// it write the ten thousand records argued against below. Spent once the
+    /// hiker has chosen, on the places of the tracks they chose, in the
+    /// file's order — see ``placesKept(of:)`` — so neither a waypoint on no
+    /// track nor a place on a track left unticked takes the slot of one on a
+    /// ticked track, and the confirmation counts what it would cut from the
+    /// ticked ones.
     ///
     /// A cap rather than a refusal, and rather than none. Unlike the
     /// photographs — which are values in one column on the hike — every place

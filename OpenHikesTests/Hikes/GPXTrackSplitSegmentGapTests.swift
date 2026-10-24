@@ -84,7 +84,7 @@ struct GPXTrackSplitSegmentGapTests {
         #expect(contents.tracks[0].places.map(\.name) == ["On the second piece"])
         #expect(contents.tracks[0].photographs.isEmpty)
         #expect(contents.tracks[1].places.isEmpty)
-        #expect(contents.leftOut == .init(offTrack: 2))
+        #expect(contents.unplacedWaypoints == 2)
     }
 
     /// Another track crosses the gap about 22 m from a waypoint lying exactly
@@ -109,7 +109,7 @@ struct GPXTrackSplitSegmentGapTests {
         try #require(contents.tracks.count == 2)
         #expect(contents.tracks[0].places.isEmpty)
         #expect(contents.tracks[1].places.map(\.name) == ["Bridge"])
-        #expect(contents.leftOut == .init())
+        #expect(contents.unplacedWaypoints == 0)
     }
 
     /// A `<trkseg>` of one fix has no walked leg on either side, and is still
@@ -144,7 +144,7 @@ struct GPXTrackSplitSegmentGapTests {
         #expect(contents.tracks[0].places.map(\.name) == ["Hut"])
         #expect(contents.tracks[0].photographs.count == 1)
         #expect(contents.tracks[1].places.map(\.name) == ["Spring"])
-        #expect(contents.leftOut == .init())
+        #expect(contents.unplacedWaypoints == 0)
     }
 
     /// The rule on its own: a route's paused legs are not measured, their
