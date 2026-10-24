@@ -52,7 +52,7 @@ struct LibraryTotalsTests {
         of hikeID: UUID,
         on date: Date,
         covered: Double,
-        of route: Double,
+        climb: Double = 0,
         lasting: TimeInterval = 1800,
         recordingsOwn: Bool = false,
         trailChanged: Bool = false
@@ -62,8 +62,8 @@ struct LibraryTotalsTests {
             startedAt: date,
             endedAt: date.addingTimeInterval(lasting),
             coveredMeters: covered,
-            routeDistanceMeters: route,
             activeSeconds: lasting,
+            climbMeters: climb,
             isRecordingsOwn: recordingsOwn,
             trailHasChanged: trailChanged
         )
@@ -101,14 +101,14 @@ struct LibraryTotalsTests {
         let trail = UUID()
         let hikes = [Self.hike(on: Self.date(2025, 1), meters: 8000, id: trail, climb: 400, clock: false)]
         let walks = (1...6).map { month in
-            Self.walk(of: trail, on: Self.date(2026, month), covered: 4000, of: 8000)
+            Self.walk(of: trail, on: Self.date(2026, month), covered: 4000, climb: 200)
         }
         let totals = Self.totals(hikes, walks)
 
         #expect(totals.thisYear.distanceMeters == 24_000)
         #expect(totals.thisYear.outings == 6)
         #expect(totals.thisYear.trails == 1)
-        #expect(totals.thisYear.climbMeters == 1200, "half the trail's climb, six times")
+        #expect(totals.thisYear.climbMeters == 1200, "each walk's own climb, six times")
     }
 
     /// A recording writes a walk of itself; counting both would count the
@@ -118,7 +118,7 @@ struct LibraryTotalsTests {
         let recorded = UUID()
         let totals = Self.totals(
             [Self.hike(on: Self.date(2026, 3), meters: 9000, id: recorded)],
-            [Self.walk(of: recorded, on: Self.date(2026, 3), covered: 9000, of: 9000, recordingsOwn: true)]
+            [Self.walk(of: recorded, on: Self.date(2026, 3), covered: 9000, recordingsOwn: true)]
         )
         #expect(totals.allTime.distanceMeters == 9000)
         #expect(totals.allTime.outings == 1)
@@ -136,8 +136,8 @@ struct LibraryTotalsTests {
                 Self.hike(on: afternoon, meters: 11_000),
             ],
             [
-                Self.walk(of: trail, on: afternoon.addingTimeInterval(1200), covered: 6000, of: 8000),
-                Self.walk(of: trail, on: afternoon.addingTimeInterval(-86_400), covered: 8000, of: 8000),
+                Self.walk(of: trail, on: afternoon.addingTimeInterval(1200), covered: 6000),
+                Self.walk(of: trail, on: afternoon.addingTimeInterval(-86_400), covered: 8000),
             ]
         )
         #expect(totals.allTime.distanceMeters == 19_000, "the recording, and the walk of the day before")
@@ -160,7 +160,7 @@ struct LibraryTotalsTests {
                 hike(on: date(2025, 1), meters: 10_000, id: trail, climb: 800, clock: false),
                 hike(on: start.addingTimeInterval(offset), meters: meters, clockLasting: lasting),
             ],
-            [walk(of: trail, on: start, covered: 10_000, of: 10_000, lasting: 4 * 3600)]
+            [walk(of: trail, on: start, covered: 10_000, climb: 800, lasting: 4 * 3600)]
         )
     }
 
@@ -212,7 +212,7 @@ struct LibraryTotalsTests {
                 Self.hike(on: start, meters: 0, clockLasting: 3600),
                 Self.hike(on: start.addingTimeInterval(1800), meters: 0, clockLasting: 3600),
             ],
-            [Self.walk(of: trail, on: start, covered: 10_000, of: 10_000, lasting: 4 * 3600)]
+            [Self.walk(of: trail, on: start, covered: 10_000, lasting: 4 * 3600)]
         )
         #expect(totals.allTime.distanceMeters.isApproximatelyEqual(to: 10_000 * 2.5 / 4, absoluteTolerance: 1e-6))
     }
@@ -222,7 +222,7 @@ struct LibraryTotalsTests {
         let saved = UUID()
         let totals = Self.totals(
             [Self.hike(on: Self.date(2024, 1), meters: 5000, id: saved, community: true)],
-            [Self.walk(of: saved, on: Self.date(2026, 8), covered: 5000, of: 5000)]
+            [Self.walk(of: saved, on: Self.date(2026, 8), covered: 5000)]
         )
         #expect(totals.thisYear.distanceMeters == 5000)
     }
@@ -269,7 +269,7 @@ struct LibraryTotalsTests {
         let trail = UUID()
         let totals = Self.totals(
             [Self.redrawnTrail(trail)],
-            [Self.walk(of: trail, on: Self.date(2026, 5), covered: 8000, of: 8000, trailChanged: true)]
+            [Self.walk(of: trail, on: Self.date(2026, 5), covered: 8000, trailChanged: true)]
         )
 
         #expect(totals.allTime.outings == 1)
@@ -290,14 +290,14 @@ struct LibraryTotalsTests {
         let totals = Self.totals(
             [Self.redrawnTrail(trail)],
             [
-                Self.walk(of: trail, on: Self.date(2026, 5), covered: 8000, of: 8000, trailChanged: true),
-                Self.walk(of: trail, on: Self.date(2026, 6), covered: 4000, of: 8000),
+                Self.walk(of: trail, on: Self.date(2026, 5), covered: 8000, trailChanged: true),
+                Self.walk(of: trail, on: Self.date(2026, 6), covered: 4000, climb: 500),
             ]
         )
 
         #expect(totals.allTime.outings == 2)
         #expect(totals.allTime.distanceMeters == 12_000)
-        #expect(totals.allTime.climbMeters == 500, "half the new line's climb, once")
+        #expect(totals.allTime.climbMeters == 500, "what the walk along the new line climbed, once")
         #expect(totals.allTime.outingsWithoutClimb == 1)
         #expect(totals.longest?.distanceMeters == 8000)
         #expect(totals.highest?.distanceMeters == 4000)
@@ -332,7 +332,7 @@ struct LibraryTotalsTests {
                 Self.hike(on: Self.date(2025, 1), meters: 30_000, id: trail, title: "Trail", clock: false),
                 Self.hike(on: Self.date(2026, 2), meters: 10_000, title: "Recorded"),
             ],
-            [Self.walk(of: trail, on: Self.date(2026, 3), covered: 2000, of: 30_000)]
+            [Self.walk(of: trail, on: Self.date(2026, 3), covered: 2000)]
         )
         #expect(totals.longest?.title == "Recorded")
         #expect(totals.longest?.distanceMeters == 10_000)

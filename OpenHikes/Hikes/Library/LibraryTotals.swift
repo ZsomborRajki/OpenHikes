@@ -25,9 +25,13 @@
 //    clockless hike's `date` is — never places anything in a year, because a
 //    clockless hike never counts.
 //
-//  A followed walk's climb is the trail's climb in proportion to what was
-//  covered. Nothing measured the climb of the stretches themselves, and the
-//  proportion is closer than counting the whole trail or none of it.
+//  A followed walk's climb is its own: each stretch it covered, climbed the
+//  way it was walked — ``RouteProfile/climb(walking:)``, the share card's
+//  figure. The trail's climb in proportion to what was covered gave a walk
+//  down a trail the trail's ascent, and a walk over its flat half half of
+//  it, and made an all-downhill walk the library's steepest (#1039). A
+//  stretch walked there and back climbs both ways, as on the card, while
+//  its distance is the ground covered, once.
 //
 //  Following a trail and recording are independent — starting a recording
 //  leaves a walk under way alone — so one afternoon can leave both a
@@ -46,12 +50,13 @@
 //  two-kilometre record. Only the highest is the trail's, because coverage
 //  says how far a walk went and not whether it reached the top.
 //
-//  Both figures a walk borrows from its trail — the climb and the highest
-//  point — describe the line the trail draws now. *Edit Route* keeps the
-//  walks along a drawn trail as history and redraws the line under them,
-//  here or on the other device, and nothing kept the climb or the height of
-//  the line they were walked along: that would be two more mirrored columns
-//  on ``HikeWalk`` for a climb that is only an estimate to begin with. So a
+//  Both figures a walk takes from its trail — the climb along its stretches
+//  and the highest point — are read off the line the trail draws now, and
+//  the stretches are metres along the line the walk was walked on. *Edit
+//  Route* keeps the walks along a drawn trail as history and redraws the
+//  line under them, here or on the other device, and nothing kept the
+//  heights of the line they were walked along: that would be more mirrored
+//  columns on ``HikeWalk`` for a figure only that walk asks for. So a
 //  walk whose ``HikeWalk/routeRevision`` is not the route's, or that names
 //  no line at all, still counts as an outing, with the distance and the time
 //  it measured itself, but adds no climb and is never the highest or the
@@ -119,8 +124,12 @@ nonisolated struct LibraryWalkFacts: Equatable, Sendable {
     let startedAt: Date
     let endedAt: Date
     let coveredMeters: Double
-    let routeDistanceMeters: Double
     let activeSeconds: TimeInterval
+    /// What the walk itself climbed: each stretch it covered, the way it was
+    /// walked, along the line the trail draws now. 0 when that line has no
+    /// heights, and not read when ``trailHasChanged``, since the stretches
+    /// are metres along another line.
+    let climbMeters: Double
     let isRecordingsOwn: Bool
     /// The trail has been redrawn since this walk: the route's revision is not
     /// the one the walk was measured along, or the walk names none — the test
@@ -174,7 +183,8 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
     let steepest: LibraryRecordCandidate?
 
     /// How long a hike has to be before its gradient is a record rather than
-    /// a steep few hundred metres of a driveway.
+    /// a steep few hundred metres of a driveway. An outing that climbed
+    /// nothing is never the steepest, however long.
     static let steepestMinimumMeters = 1000.0
 
     init(
@@ -210,13 +220,12 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
         highest = candidates.filter { $0.highestMeters != nil }
             .max { ($0.highestMeters ?? 0) < ($1.highestMeters ?? 0) }
         steepest = candidates
-            .filter { $0.distanceMeters >= Self.steepestMinimumMeters && $0.climbMeters != nil }
+            .filter { $0.distanceMeters >= Self.steepestMinimumMeters && ($0.climbMeters ?? 0) > 0 }
             .max { Self.gradient($0) < Self.gradient($1) }
     }
 
     /// Every outing in the library, by the rules the file header gives.
     static func outings(hikes: [LibraryHikeFacts], walks: [LibraryWalkFacts]) -> [LibraryOuting] {
-        let byID = byID(hikes)
         let counted = hikes.filter { $0.hasClock && !$0.isFromCommunity }
         let clocks = counted.compactMap(\.clock)
         let clocked = counted.map { hike in
@@ -233,16 +242,11 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
             guard !walk.isRecordingsOwn else { return nil }
             let share = unrecordedShare(of: walk, clocks: clocks)
             guard share > 0 else { return nil }
-            let covered = walk.routeDistanceMeters > 0
-                ? min(1, max(0, walk.coveredMeters / walk.routeDistanceMeters))
-                : 0
             return LibraryOuting(
                 hikeID: walk.hikeID,
                 date: walk.startedAt,
                 distanceMeters: walk.coveredMeters * share,
-                climbMeters: walk.trailHasChanged
-                    ? nil
-                    : (byID[walk.hikeID]?.climbMeters ?? 0) * covered * share,
+                climbMeters: walk.trailHasChanged ? nil : walk.climbMeters * share,
                 movingSeconds: walk.activeSeconds * share,
                 isWalk: true
             )
@@ -329,16 +333,19 @@ nonisolated enum LibraryTotalsSweep {
         let hikes = try reads.hikes(context)
         let walks = try reads.walks(context)
         // The line each walked trail draws now, to tell a walk along it from
-        // one along a line the trail has been redrawn from since. Hashed from
-        // the route its figures are measured from, so a route is read once.
+        // one along a line the trail has been redrawn from since, and to
+        // climb the walks along it. Hashed from the route its figures are
+        // measured from, so a route is read once.
         let walkedIDs = Set(walks.map(\.hikeID))
         var revisions: [UUID: String] = [:]
+        var routes: [UUID: [RouteCoordinate]] = [:]
         let hikeFacts = hikes.compactMap { hike -> LibraryHikeFacts? in
             // A recording still being drawn is not a walk yet.
             guard !hike.isRecording else { return nil }
             let route = hike.route
             if walkedIDs.contains(hike.id), revisions[hike.id] == nil {
                 revisions[hike.id] = TrailWalkRecord.routeRevision(of: route)
+                routes[hike.id] = route
             }
             let statistics = HikeRouteStatistics(distanceMeters: hike.distanceMeters, route: route)
             return LibraryHikeFacts(
@@ -355,18 +362,41 @@ nonisolated enum LibraryTotalsSweep {
                 isFromCommunity: hike.importedFromListingID != nil
             )
         }
-        let walkFacts = walks.map { walk in
-            LibraryWalkFacts(
+        return (hikeFacts, walkFacts(walks, revisions: revisions, routes: routes))
+    }
+
+    /// `walks` as values, each climbed along the line its trail draws now
+    /// when that is the line it was walked on — see the file header.
+    ///
+    /// A trail's profile is built once, on its first walk that needs it, and
+    /// never for a recording's own walk, which the totals leave out: most
+    /// hikes have one, and few have been followed.
+    private static func walkFacts(
+        _ walks: [HikeWalk],
+        revisions: [UUID: String],
+        routes: [UUID: [RouteCoordinate]]
+    ) -> [LibraryWalkFacts] {
+        var profiles: [UUID: RouteProfile] = [:]
+        return walks.map { walk in
+            let coverage = walk.coverage
+            let isRecordingsOwn = walk.endReason == .recorded
+            let trailHasChanged = revisions[walk.hikeID].map { !walk.isAlong(revision: $0) } ?? false
+            var climb = 0.0
+            if !isRecordingsOwn, !trailHasChanged, let route = routes[walk.hikeID] {
+                let profile = profiles[walk.hikeID] ?? RouteProfile(route: route)
+                profiles[walk.hikeID] = profile
+                climb = profile.climb(walking: coverage)?.gainMeters ?? 0
+            }
+            return LibraryWalkFacts(
                 hikeID: walk.hikeID,
                 startedAt: walk.startedAt,
                 endedAt: walk.endedAt,
-                coveredMeters: walk.coverage.coveredMeters,
-                routeDistanceMeters: walk.routeDistanceMeters,
+                coveredMeters: coverage.coveredMeters,
                 activeSeconds: walk.activeSeconds,
-                isRecordingsOwn: walk.endReason == .recorded,
-                trailHasChanged: revisions[walk.hikeID].map { !walk.isAlong(revision: $0) } ?? false
+                climbMeters: climb,
+                isRecordingsOwn: isRecordingsOwn,
+                trailHasChanged: trailHasChanged
             )
         }
-        return (hikeFacts, walkFacts)
     }
 }
