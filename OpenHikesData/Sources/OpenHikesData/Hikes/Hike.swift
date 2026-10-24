@@ -245,14 +245,15 @@ public final class Hike {
     /// repeated requests against a volunteer-run API.
     ///
     /// Empty means "never analyzed", which is what opening the hike triggers —
-    /// see ``HikeDetailView``'s `loadTrailBreakdowns()`.
+    /// see the app's `Hike.needsTrailBreakdowns`, which ``HikeDetailView``'s
+    /// `loadTrailBreakdowns()` asks.
     ///
-    /// Measured once and then kept. A change to the analyzer does not
-    /// recompute a breakdown already stored, so a hike analyzed by an older
-    /// build keeps the older rule's figures until the trail maker edits its
-    /// route or its data is reset. That follows AGENTS.md *Schema and
-    /// migration policy*: existing data is resettable, and nothing converts
-    /// it on upgrade.
+    /// Kept while both breakdowns are stored, so a hike analyzed by an older
+    /// build, or against an older trail graph, keeps those figures until the
+    /// trail maker edits its route or its data is reset. Nothing converts them
+    /// on upgrade, which is AGENTS.md *Schema and migration policy*: existing
+    /// data is resettable. If either breakdown reads as never analyzed, both
+    /// are measured again.
     public var surfaceMetersByCategory: [String: Double] = [:]
 
     /// Metres of this route attributed to each ``TrailDifficulty``, keyed by
@@ -260,8 +261,8 @@ public final class Hike {
     ///
     /// Persisted for the same reason as ``surfaceMetersByCategory``: producing
     /// it requires the OSM graph for every region the route crosses. Empty
-    /// means "never analyzed", and, like that one, a stored breakdown is
-    /// never recomputed.
+    /// means "never analyzed", and the two are kept, or measured again,
+    /// together: see that one.
     public var difficultyMetersByGrade: [String: Double] = [:]
 
     /// The stops a trail drawn in the maker was drawn from, as JSON, or `nil`

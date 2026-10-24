@@ -71,10 +71,14 @@ nonisolated enum HikeTrailAnalysis {
     ///
     /// The same graph, fetched the same way, as ``breakdowns(route:provider:)``,
     /// so the colours on the line and the percentages under the Difficulty
-    /// heading are one measurement. The provider shares an in-flight fetch,
-    /// so the detail screen asking for its breakdown at the same moment costs
-    /// one round of Overpass requests, not two. Quiet on failure for the same
-    /// reason that is: an empty answer draws the line as it always was.
+    /// heading are one measurement when both are taken from one graph. Only
+    /// the colours are taken on every selection, though: the section's
+    /// figures are stored once and kept (see ``Hike/surfaceMetersByCategory``),
+    /// so a change to the analyzer, or newer tagging once the cached graph
+    /// refreshes, can set the two apart. The provider shares an in-flight
+    /// fetch, so the detail screen asking for its breakdown at the same moment
+    /// costs one round of Overpass requests, not two. Quiet on failure for the
+    /// same reason that is: an empty answer draws the line as it always was.
     ///
     /// `downloading: false` measures against whatever the cache holds, and
     /// never asks Overpass. The trail maker asks that way, after every leg
