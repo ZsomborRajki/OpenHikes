@@ -319,6 +319,9 @@ Scripts/screenshots.sh --device "OpenHikes Screenshots Duo" --device-type "iPhon
 # Open: the inner display, upright, 2007 × 2853
 Scripts/screenshots.sh --device "OpenHikes Screenshots Duo" --device-type "iPhone Duo" \
     --pose open --output Screenshots/Output/Duo-open
+# Open the way it unfolds: the inner display in landscape, 2853 × 2007
+Scripts/screenshots.sh --device "OpenHikes Screenshots Duo" --device-type "iPhone Duo" \
+    --pose open --orientation landscape --output Screenshots/Output/Duo-open-landscape
 ```
 
 App Store Connect takes an iPhone Duo frame of either display, either way up:
@@ -336,9 +339,17 @@ system's models, then clones.
 **Opening it.** A simulator boots closed, and Xcode 27.1 opens a Duo only by
 hand, in Device Hub. `--pose open` runs `Scripts/duo-pose.sh` on the clean
 device, which posts the event Device Hub's hinge slider posts and reads the
-display state back: open, with the inner display upright, or the run stops.
-One unfold from cold is what that script can be relied on for; see its header
-for what folding back and forth did.
+display state back: open, with the inner display upright — or on its side
+with `--orientation landscape`, the way it unfolds — or the run stops. One
+unfold from cold is what that script can be relied on for; see its header for
+the one that did not take, and what folding back and forth did.
+
+**Landscape is the side panel.** The inner display on its side is a window
+wider than tall, so the map screen draws the sheet's contents as a panel
+beside the map rather than a sheet over it, and the frames come out in that
+shape: *Zoom* fits the route beside the panel, the sheet is never collapsed
+and the route never expanded, and the nearby frame centres its pins in the map
+the panel leaves open.
 
 **Three things XCTest does differently on a Duo**, each answered in the test
 class or the export rather than worked around in a frame:
@@ -347,11 +358,16 @@ class or the export rather than worked around in a frame:
   shot from it is black. `capture(as:of:)` takes the screen whose size is the
   app window's.
 - The inner display is captured a pixel short each way, 2006 × 2852, which App
-  Store Connect refuses. The export puts the pixel back by repeating the edge
-  row and column — `Scripts/lib/fit-screenshot.swift` — and leaves every frame
-  that is not that close to a size it takes as it was.
+  Store Connect refuses — and in landscape stored on its side, as the
+  display's portrait pixels with an EXIF orientation. The export turns a frame
+  upright in its pixels and puts the pixel back by repeating the edge row and
+  column — `Scripts/lib/fit-screenshot.swift` — and leaves every frame that is
+  neither as it was.
 - `app.frame` keeps the inner display's portrait size after it has turned to
-  landscape, so geometry here is measured upright — which the open pose is.
+  landscape, and there `isHittable` answers no for everything in the side
+  panel. The shared helpers measure the window instead, and take a centre in
+  it as reachable where the hit test is wrong — see
+  `OpenHikesUITests/WindowSupport.swift`.
 
 **The cover display is 678 points tall**, against 956 on the 6.9" phone, and a
 swipe flings content further than that screen shows: *Find Photos* went from

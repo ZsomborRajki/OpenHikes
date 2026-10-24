@@ -189,7 +189,9 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// screen as map for the pins to stand in. The frame is not dragged any
     /// lower deliberately — the list is most of what this screenshot is of,
     /// and ``revealCommunityPins(in:atLeast:)`` pans the pins into the band
-    /// above the sheet rather than making the band bigger.
+    /// above the sheet rather than making the band bigger. Beside the side
+    /// panel, in a window wider than tall, the same pan aims at the map the
+    /// panel leaves open.
     ///
     /// The `showcase` database rather than the seeded one the suites use:
     /// theirs draws straight steps and squares a test can predict, which on a
@@ -426,7 +428,7 @@ extension ScreenshotUITests {
     }
 
     /// Pulls the map back until at least `atLeast` community pins are standing
-    /// in the part of it the sheet is not over.
+    /// in the open map — see ``openMapArea(in:)``.
     ///
     /// A loop, because one pan does not settle it: each pass moves the map,
     /// which changes which annotations MapKit has views for, which changes the
@@ -456,7 +458,7 @@ extension ScreenshotUITests {
             .matching(identifier: "community-hike-pin")
             .allElementsBoundByIndex
         XCTFail(
-            "the map never showed \(minimum) community pins clear of the sheet"
+            "the map never showed \(minimum) community pins clear of the sheet or the panel"
                 + " — \(visibleCommunityPins(in: app).count) of"
                 + " \(total.count) pin(s) were in the picture"
         )
@@ -475,8 +477,8 @@ extension ScreenshotUITests {
     static let nearbyWalkTitles = ["Kührointalm and Back", "Malerwinkel Loop"]
 
     /// Zooms the map out around a community pin, with MapKit's own two-finger
-    /// tap, and pans the published walks' pins into the middle of the band
-    /// above the sheet, with their lines running south from them.
+    /// tap, and pans the published walks' pins into the middle of the open
+    /// map, with their lines running south from them.
     ///
     /// On a pin rather than on the map, because the map element spans the
     /// window and its centre is under the sheet — the reason the pinch was
@@ -506,72 +508,93 @@ extension ScreenshotUITests {
     }
 
     /// Pans the map so the community pins — or the ones with `titles`, when it
-    /// is given — sit in the middle of the band the sheet is not over.
+    /// is given — sit in the middle of the open map: see ``openMapArea(in:)``.
     ///
     /// They are not there on their own. The sheet rests at its middle detent
     /// here and the pins landed six points *under* its top edge — on the map,
     /// in the tree, and not in the picture. The same measured pan the hero
-    /// frame uses on the photo pins, aimed at the middle of the visible band
+    /// frame uses on the photo pins, aimed at the middle of the open map
     /// rather than at the middle of the screen, because half the screen is
-    /// sheet.
+    /// sheet — or, in a window wider than tall, a third of it is panel.
     @MainActor
     private func centerCommunityPins(in app: XCUIApplication, titled titles: [String] = []) {
         let map = mapElement(in: app)
-        let screen = app.frame
-        let sheet = element("map-sheet", in: app)
-        let bandBottom = sheet.exists && sheet.frame.height > 0
-            ? sheet.frame.minY
-            : screen.maxY
+        let window = windowFrame(of: app)
+        let area = openMapArea(in: app)
         let pins = app.descendants(matching: .any)
             .matching(identifier: "community-hike-pin")
             .allElementsBoundByIndex
             .filter { pin in titles.isEmpty || titles.contains { pin.label.hasSuffix($0) } }
-        guard let bounds = Self.bounds(of: pins), screen.height > 0, bandBottom > 0 else { return }
+        guard let bounds = Self.bounds(of: pins), window.height > 0, area.height > 0 else { return }
 
-        let dx = 0.5 - bounds.midX / screen.width
-        let dy = (bandBottom / 2) / screen.height - bounds.midY / screen.height
+        let dx = (area.midX - bounds.midX) / window.width
+        let dy = (area.midY - bounds.midY) / window.height
         guard abs(dx) > Self.centeringTolerance || abs(dy) > Self.centeringTolerance else { return }
 
-        // The anchor has to be inside the band too: a drag that starts on the
+        // The anchor has to be in the open map too: a drag that starts on the
         // sheet drags the sheet.
-        let anchor = CGVector(dx: 0.75, dy: (bandBottom * 0.6) / screen.height)
-        map.coordinate(withNormalizedOffset: anchor)
-            .press(
-                forDuration: Self.dragPressDuration,
-                thenDragTo: map.coordinate(
-                    withNormalizedOffset: CGVector(
-                        dx: min(max(anchor.dx + dx, 0.05), 0.95),
-                        dy: min(max(anchor.dy + dy, 0.05), bandBottom / screen.height - 0.02)
-                    )
-                )
-            )
+        let anchor = CGPoint(x: area.minX + area.width * 0.75, y: area.minY + area.height * 0.6)
+        let margin = CGSize(width: window.width * 0.05, height: window.height * 0.05)
+        let landing = CGPoint(
+            x: min(max(anchor.x + dx * window.width, area.minX + margin.width), area.maxX - margin.width),
+            y: min(max(anchor.y + dy * window.height, area.minY + margin.height), area.maxY - window.height * 0.02)
+        )
+        coordinate(at: anchor, on: map)
+            .press(forDuration: Self.dragPressDuration, thenDragTo: coordinate(at: landing, on: map))
     }
 
-    /// The community pins that are actually on screen and clear of the sheet.
+    /// The community pins that are actually on screen, in the open map.
     ///
     /// `exists` is not the question: an annotation the map has scrolled off,
     /// or one behind the sheet, is in the tree and is not in the picture.
     @MainActor
     private func visibleCommunityPins(in app: XCUIApplication) -> [XCUIElement] {
-        let screen = app.frame
-        // A sheet that cannot be found must not silently mean "the map is a
-        // zero-height strip at the top", which is what reading `.frame` off a
-        // missing element gives — and which filters out every pin on screen
-        // while looking exactly like a map that has none.
-        let sheet = element("map-sheet", in: app)
-        let sheetTop = sheet.exists && sheet.frame.height > 0
-            ? sheet.frame.minY
-            : screen.maxY
+        let area = openMapArea(in: app)
         return app.descendants(matching: .any)
             .matching(identifier: "community-hike-pin")
             .allElementsBoundByIndex
             .filter { pin in
                 let frame = pin.frame
-                return frame.maxY < sheetTop
-                    && frame.minY > screen.minY
-                    && frame.minX > screen.minX
-                    && frame.maxX < screen.maxX
+                return frame.minX > area.minX && frame.maxX < area.maxX
+                    && frame.minY > area.minY && frame.maxY < area.maxY
             }
+    }
+
+    /// The part of the window where the map shows with nothing over it:
+    /// beside the side panel, which is what a window wider than tall draws the
+    /// sheet's contents as, and above the sheet otherwise.
+    ///
+    /// A sheet that cannot be found must not silently mean "the map is a
+    /// zero-height strip at the top", which is what reading `.frame` off a
+    /// missing element gives — and which filters out every pin on screen
+    /// while looking exactly like a map that has none.
+    @MainActor
+    private func openMapArea(in app: XCUIApplication) -> CGRect {
+        let window = windowFrame(of: app)
+        let panel = element("map-side-panel", in: app)
+        if panel.exists, panel.frame.width > 0 {
+            let panelEdge = panel.frame.maxX
+            return CGRect(x: panelEdge, y: window.minY, width: window.maxX - panelEdge, height: window.height)
+        }
+        let sheet = element("map-sheet", in: app)
+        let sheetTop = sheet.exists && sheet.frame.height > 0 ? sheet.frame.minY : window.maxY
+        return CGRect(x: window.minX, y: window.minY, width: window.width, height: sheetTop - window.minY)
+    }
+
+    /// Whether the sheet's contents stand beside the map, as a panel at the
+    /// window's full height, rather than over it as a sheet with detents.
+    @MainActor
+    private func isPanelBesideTheMap(in app: XCUIApplication) -> Bool {
+        element("map-side-panel", in: app).exists
+    }
+
+    /// `point`, in the window, as a coordinate of `element`: absolute, where a
+    /// normalized offset is a share of whatever size `element` is.
+    @MainActor
+    private func coordinate(at point: CGPoint, on element: XCUIElement) -> XCUICoordinate {
+        let frame = element.frame
+        return element.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: point.x - frame.minX, dy: point.y - frame.minY))
     }
 
     /// The box `pins` occupy, ignoring the ones that are not really anywhere.
@@ -639,8 +662,15 @@ extension ScreenshotUITests {
     /// first drives the line off the top edge. The route's middle is panned
     /// to where the frame wants it, the map zoomed one step beside it, and
     /// the doubled offset that leaves is panned back out.
+    ///
+    /// Beside the map there is nothing to expand into. A window wider than
+    /// tall draws the sheet's contents as a panel at its full height, which
+    /// *Zoom* already fits the route beside — the panel is the one thing the
+    /// focus area measures there — so the route has the whole open map, and
+    /// one more step would push its ends off it.
     @MainActor
     func expandRouteIntoTheFreedSpace(in app: XCUIApplication) {
+        if isPanelBesideTheMap(in: app) { return }
         centerPhotoPins(in: app)
         zoomMapInOneStep(in: app)
         // Up to twice, because a drag lands short of the vector it is given,
@@ -675,7 +705,7 @@ extension ScreenshotUITests {
     private func centerPhotoPins(in app: XCUIApplication) {
         let map = mapElement(in: app)
         guard let bounds = Self.bounds(of: photoPins(in: app)) else { return }
-        let screen = app.frame
+        let screen = windowFrame(of: app)
         guard screen.width > 0, screen.height > 0 else { return }
 
         let dx = Self.heroRouteCenterX - bounds.midX / screen.width
@@ -718,12 +748,17 @@ extension ScreenshotUITests {
             )
     }
 
+    /// Collapses the sheet — and does nothing beside the map, where the
+    /// sheet's contents are a panel with no detents and no grabber, standing
+    /// at the window's full height beside a map that is already all open.
     @MainActor
     func collapseSheet(in app: XCUIApplication) {
+        if isPanelBesideTheMap(in: app) { return }
         dragSheet(in: app, to: Self.dragTarget)
         let sheet = element("map-sheet", in: app)
+        let window = windowFrame(of: app)
         let collapsed = NSPredicate { _, _ in
-            sheet.frame.minY > app.frame.height * Self.collapsedSheetFraction
+            sheet.frame.minY > window.height * Self.collapsedSheetFraction
         }
         let settled = expectation(for: collapsed, evaluatedWith: sheet)
         XCTAssertEqual(

@@ -26,7 +26,9 @@
 # not filled in parses, resolves to nothing, and reads exactly like a working
 # file. They run against fixtures written here rather than against a stub.
 # So does Scripts/lib/sort-string-catalogs.swift, which rewrites every String
-# Catalog in the repository on each sync and must only ever reorder one.
+# Catalog in the repository on each sync and must only ever reorder one, and
+# Scripts/lib/fit-screenshot.swift, which rewrites every App Store frame and
+# must never write one back on its side.
 # Scripts/sim-pool.sh is here because what it decides — which device a session
 # lands on, and whether that device is erased first — is invisible until two
 # sessions' tests collide on one simulator or somebody's device is wiped.
@@ -2037,6 +2039,14 @@ if expect_status 2 \
     pass
 fi
 
+run_script "screenshots refuses an orientation for any pose but open, before touching a device" \
+    "$screenshots_light" --pose closed --orientation landscape --device "$pro_udid"
+if expect_status 2 \
+    && expect_contains "$output" "--orientation needs --pose open" "the error" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls"; then
+    pass
+fi
+
 # The stubbed devicectl lists no displays unless a case gives it some, which is
 # what a phone looks like to Scripts/duo-pose.sh — and a pose that cannot be
 # taken must stop the run before a set is shot on the wrong display.
@@ -2098,13 +2108,20 @@ if expect_status 0 \
     pass
 fi
 
+# A post that does not take is tried again by way of half-open, which is a
+# change from any angle; only when that does not take either is it an error.
 duo_displays true false rot0 > "$work/displays-closed.json"
 STUB_DISPLAYS="$work/displays-closed.json" \
-    run_script "duo-pose fails when the inner display never becomes active" \
+    run_script "duo-pose tries half-open, then fails when the inner display never becomes active" \
     "$duo_pose" open --device "$pro_udid"
+unfolds="$(printf '%s\n' "$calls" | grep -c "duo-pose-helper hinge 180" || true)"
 if expect_status 1 \
     && expect_contains "$output" "The inner display did not become active" "the error"; then
-    pass
+    if [[ "$unfolds" == 2 && "$(call_line "hinge 90")" -gt "$(call_line "hinge 180")" ]]; then
+        pass
+    else
+        fail "expected 180°, then 90°, then 180° again" "$calls"
+    fi
 fi
 
 # Open, but on its side: every device orientation is tried, and the run fails
@@ -2123,7 +2140,137 @@ if expect_status 1 \
         fail "expected every device orientation to be tried once — got $turns" "$calls"
     fi
 fi
+
+# The same state is the pose asked for when landscape is: the inner display
+# opens on its side, so nothing is turned.
+STUB_DISPLAYS="$work/displays-sideways.json" \
+    run_script "duo-pose takes the inner display in landscape the way it opens" \
+    "$duo_pose" open --device "$pro_udid" --orientation landscape
+if expect_status 0 \
+    && expect_absent "$calls" "duo-pose-helper orientation" "the recorded calls" \
+    && expect_contains "$output" "open, the inner display showing, landscape" "the output"; then
+    pass
+fi
+
+# Open and upright, where the run asked for landscape: the orientation has to
+# reach Scripts/duo-pose.sh, whose read-back then stops the run before it
+# builds, rather than a landscape set coming out upright.
+STUB_DISPLAYS="$work/displays-open.json" \
+    run_script "screenshots asks for the orientation it was given, and stops when it is not taken" \
+    "$screenshots_light" --frame 7 --pose open --orientation landscape --no-photos --device "$pro_udid" \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 1 \
+    && expect_contains "$output" "The inner display did not turn to landscape" "the output" \
+    && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
+    pass
+fi
 unset OPENHIKES_DUO_POSE_HELPER OPENHIKES_DUO_POSE_SETTLE_SECONDS OPENHIKES_DUO_POSE_TURN_SECONDS
+
+echo
+echo "App Store frame fitting"
+
+# Scripts/lib/fit-screenshot.swift rewrites every frame the screenshot scripts
+# export. A landscape capture is stored as its display's portrait pixels with
+# an EXIF orientation, and a frame written back without turning it would lie
+# on its side wherever the tag is not read. The fixtures are white with their
+# first stored pixel red, so where that pixel ends up says which way a frame
+# was turned; the probe reads stored pixels and never applies a tag.
+frame_fitter="$repository_root/Scripts/lib/fit-screenshot.swift"
+fit_work="$work/fit"
+mkdir -p "$fit_work"
+cat > "$fit_work/make.swift" <<'SWIFT'
+import AppKit
+import ImageIO
+import UniformTypeIdentifiers
+
+// `<name>:<width>x<height>:<EXIF orientation>`, written into the first argument.
+let directory = URL(fileURLWithPath: CommandLine.arguments[1])
+let space = CGColorSpace(name: CGColorSpace.sRGB)!
+for spec in CommandLine.arguments.dropFirst(2) {
+    let parts = spec.split(separator: ":")
+    let size = parts[1].split(separator: "x").compactMap { Int($0) }
+    let orientation = Int(parts[2])!
+    let context = CGContext(
+        data: nil, width: size[0], height: size[1], bitsPerComponent: 8, bytesPerRow: 0,
+        space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+    )!
+    context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+    context.fill(CGRect(x: 0, y: 0, width: size[0], height: size[1]))
+    context.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+    context.fill(CGRect(x: 0, y: size[1] - 1, width: 1, height: 1))
+    let url = directory.appendingPathComponent("\(parts[0]).png")
+    let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)!
+    let properties: [String: Any] = orientation == 1 ? [:] : [kCGImagePropertyOrientation as String: orientation]
+    CGImageDestinationAddImage(destination, context.makeImage()!, properties as CFDictionary)
+    guard CGImageDestinationFinalize(destination) else { fatalError("cannot write \(url.path)") }
+}
+SWIFT
+cat > "$fit_work/probe.swift" <<'SWIFT'
+import AppKit
+import ImageIO
+
+// `<file> <width>x<height> <orientation or none> <corners>`: the stored pixels,
+// each corner R where it is red, clockwise from the top left.
+for path in CommandLine.arguments.dropFirst() {
+    let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil)!
+    let image = CGImageSourceCreateImageAtIndex(source, 0, nil)!
+    let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] ?? [:]
+    let orientation = (properties[kCGImagePropertyOrientation as String] as? Int).map(String.init) ?? "none"
+    let width = image.width
+    let height = image.height
+    let context = CGContext(
+        data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+        space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+    )!
+    context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+    let pixels = context.data!.assumingMemoryBound(to: UInt8.self)
+    let corners = [(0, 0), (width - 1, 0), (width - 1, height - 1), (0, height - 1)].map { x, y in
+        let offset = (y * width + x) * 4
+        return pixels[offset] > 200 && pixels[offset + 1] < 60 ? "R" : "W"
+    }
+    print("\((path as NSString).lastPathComponent) \(width)x\(height) \(orientation) \(corners.joined())")
+}
+SWIFT
+swift "$fit_work/make.swift" "$fit_work" right:3x5:6 left:3x5:8 \
+    inner-landscape:2006x2852:6 inner-portrait:2006x2852:1 phone:1206x2622:1
+for frame in right left inner-landscape inner-portrait phone; do
+    cp "$fit_work/$frame.png" "$fit_work/$frame-before.png"
+done
+run_script "fit-screenshot turns a frame stored on its side upright, either way round, and drops the tag" \
+    swift "$frame_fitter" 2007x2853 2853x2007 -- "$fit_work/right.png" "$fit_work/left.png" \
+    "$fit_work/inner-landscape.png" "$fit_work/inner-portrait.png" "$fit_work/phone.png"
+fit_status="$status"
+fit_output="$output"
+probe="$(swift "$fit_work/probe.swift" "$fit_work"/*.png)"
+if expect_status 0 \
+    && expect_contains "$probe" "right-before.png 3x5 6 RWWW" "the fixtures" \
+    && expect_contains "$probe" "left-before.png 3x5 8 RWWW" "the fixtures" \
+    && expect_contains "$probe" "right.png 5x3 none WRWW" "the fitted frames" \
+    && expect_contains "$probe" "left.png 5x3 none WWWR" "the fitted frames"; then
+    pass
+fi
+
+current="fit-screenshot turns a landscape capture of the open iPhone Duo upright, then fills the pixel it is short"
+status="$fit_status"
+if expect_status 0 \
+    && expect_contains "$probe" "inner-landscape.png 2853x2007 none WRWW" "the fitted frames" \
+    && expect_contains "$fit_output" "inner-landscape.png: 2006 × 2852 → 2853 × 2007, turned upright" "the output"; then
+    pass
+fi
+
+current="fit-screenshot puts back the pixel a capture of the inner display is short"
+if expect_contains "$probe" "inner-portrait.png 2007x2853 none RWWW" "the fitted frames"; then
+    pass
+fi
+
+current="fit-screenshot leaves an upright frame of any other size as it was"
+if expect_absent "$fit_output" "phone.png" "the output"; then
+    if cmp -s "$fit_work/phone.png" "$fit_work/phone-before.png"; then
+        pass
+    else
+        fail "phone.png was rewritten"
+    fi
+fi
 
 echo
 echo "Simulator pool"
