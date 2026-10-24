@@ -16,10 +16,10 @@
 //  4,648 points against the 800 the transfer is sized for, and its map drew
 //  about 6,000 polylines, three for every walked run and paused stretch (#1023).
 //
-//  So at most ``WatchTrailPackage/pauseBudget`` pauses cross, and the stride
-//  takes what their ends leave of ``WatchTrailPackage/pointBudget``: the
-//  package never exceeds its budget, and the map never draws more than three
-//  lines a kept pause plus two.
+//  So at most ``WatchTrailPackage/pauseBudget`` pauses cross, and their ends
+//  come out of ``WatchTrailPackage/pointBudget`` rather than on top of it: a
+//  route that fits crosses whole, a longer one crosses as exactly the budget,
+//  and the map never draws more than three lines a kept pause plus two.
 //
 //  ## Which pauses are kept
 //
@@ -66,7 +66,9 @@ public extension WatchTrailPackage {
     /// The points of a route that cross, and which of them a recording
     /// resumed on.
     struct KeptPoints: Sendable, Equatable {
-        /// Indices into the route, ascending, never more than ``pointBudget``.
+        /// Indices into the route, ascending: all of them for a route that
+        /// fits in ``pointBudget``, and exactly ``pointBudget`` for a longer
+        /// one.
         public var routeIndices: [Int]
         /// Indices into ``routeIndices`` of the points a kept pause resumed
         /// on: what ``WatchTrailPackage/pauseIndices`` carries. The point
@@ -81,7 +83,9 @@ public extension WatchTrailPackage {
     /// going to the earlier one so that the same route always packages the
     /// same way. Both ends of each are kept. The rest of ``pointBudget`` is
     /// the same stride the widget uses, ``decimatedIndices(count:maxPoints:)``,
-    /// which always keeps the first and last points.
+    /// taken over the points that are not one of those ends. A route that
+    /// fits therefore crosses whole, and a longer one as exactly
+    /// ``pointBudget`` points, its first and last among them.
     ///
     /// A pause the route cannot hold — at `0`, with nothing before it, or past
     /// the end — is ignored, and one named twice counts once.
@@ -108,8 +112,15 @@ public extension WatchTrailPackage {
         )
         let resumes = Set(kept.map(\.resumedAt))
         let ends = Set(resumes.flatMap { [$0 - 1, $0] })
-        let strided = decimatedIndices(count: count, maxPoints: max(2, pointBudget - ends.count))
-        let routeIndices = ends.union(strided).sorted()
+        // The stride never lands on an end, so none of its points is spent on
+        // one that is kept anyway. Taken over the whole route, it lost a point
+        // to every end it happened to keep: a route of 800 points with a pause
+        // every 16 crossed as 714, and a 900-point file of 100 segments as
+        // 700. The route's first and last points are kept either way, as the
+        // stride's own or as an end.
+        let others = (0..<max(0, count)).filter { !ends.contains($0) }
+        let strided = decimatedIndices(count: others.count, maxPoints: max(2, pointBudget - ends.count))
+        let routeIndices = ends.union(strided.map { others[$0] }).sorted()
         let pauseIndices = routeIndices.indices.filter { resumes.contains(routeIndices[$0]) }
         return KeptPoints(routeIndices: routeIndices, pauseIndices: pauseIndices)
     }
