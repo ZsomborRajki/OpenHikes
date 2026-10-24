@@ -106,8 +106,10 @@ struct MapSidePanel<Content: View>: View {
 /// reaches beyond the bounds rather than being dropped — dropping it would be
 /// a branch, and a branch is a new navigation stack.
 ///
-/// `@Animatable` animates both stored properties, so the corners and the
-/// outset ease together when the panel fills the window or gives it back.
+/// `@Animatable` animates every stored property, so the corners and the
+/// outset ease together when the panel fills the window or gives it back. A
+/// stored property added later animates too, unless it is
+/// `@AnimatableIgnored`.
 @Animatable
 nonisolated private struct PanelClip: Shape {
     /// Further than any iPhone's landscape safe-area inset.
