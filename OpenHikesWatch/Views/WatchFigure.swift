@@ -27,7 +27,11 @@ struct WatchFigure: View {
     /// free to wrap rather than shrink at the largest sizes.
     @ScaledMetric(relativeTo: .caption2) private var captionSize = 10.0
 
-    let title: String
+    /// A key rather than a `String`, so that a caption written as a literal
+    /// at the call site is extracted into the String Catalog. A `String`
+    /// reached the verbatim `Text` and `accessibilityLabel` overloads, which
+    /// draw it and list it nowhere (#1028).
+    let title: LocalizedStringKey
     let value: String
 
     var body: some View {
@@ -51,6 +55,6 @@ extension WatchFigure {
     /// A figure whose caption and value were decided together, in the shared
     /// package — see ``WatchRecordingFigures``.
     init(_ figure: WatchRecordingFigures.Figure) {
-        self.init(title: figure.title, value: figure.value)
+        self.init(title: figure.caption.label, value: figure.value)
     }
 }

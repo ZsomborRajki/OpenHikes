@@ -65,7 +65,7 @@ private struct FollowFigures: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            Text(WidgetFormat.length(meters: trail.totalDistanceMeters) + " in all")
+            Text("\(WidgetFormat.length(meters: trail.totalDistanceMeters)) in all")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             climb
@@ -106,7 +106,9 @@ private struct FollowFigures: View {
     /// most: a hiker who has walked off a trail is better served by "180 m"
     /// than by a screen that quietly stops saying anything.
     private func offTrailText(_ position: WatchRouteTracker.Position) -> String {
-        position.isOnTrail ? "On" : WidgetFormat.length(meters: position.offRouteMeters)
+        position.isOnTrail
+            ? String(localized: "On", comment: "The Off figure for a hiker who is on the trail")
+            : WidgetFormat.length(meters: position.offRouteMeters)
     }
 }
 

@@ -93,6 +93,9 @@ final class WatchRecorder: NSObject {
         /// A recording the last process never finished, found in its journal
         /// at launch and waiting for the hiker to say what becomes of it.
         case interrupted(WatchRecoveredRecording)
+        /// Said to the hiker as it is, so each site words it with
+        /// `String(localized:)`: a bare literal here was drawn but never
+        /// reached the String Catalog (#1028).
         case failed(String)
 
         var isActive: Bool {
@@ -330,14 +333,16 @@ final class WatchRecorder: NSObject {
             // location feed nothing was ever delivered to, "Finding your
             // position…" for as long as the hiker left it, and "that walk was
             // too short to keep" at the end of it.
-            phase = .failed("OpenHikes needs location access to record a hike.")
+            phase = .failed(String(localized: "OpenHikes needs location access to record a hike."))
             return false
         @unknown default:
             break
         }
 
         guard HKHealthStore.isHealthDataAvailable() else {
-            phase = .failed("This watch can’t start a workout, so a recording couldn’t stay running.")
+            phase = .failed(String(
+                localized: "This watch can’t start a workout, so a recording couldn’t stay running."
+            ))
             return false
         }
         do {
@@ -350,7 +355,10 @@ final class WatchRecorder: NSObject {
             return true
         } catch {
             Self.logger.error("Health authorization failed: \(error.localizedDescription, privacy: .public)")
-            phase = .failed("OpenHikes needs permission to start a workout, which is what keeps a recording running.")
+            phase = .failed(String(localized: """
+                OpenHikes needs permission to start a workout, \
+                which is what keeps a recording running.
+                """))
             return false
         }
     }
@@ -417,7 +425,10 @@ final class WatchRecorder: NSObject {
             return true
         } catch {
             Self.logger.error("Workout session failed to start: \(error.localizedDescription, privacy: .public)")
-            phase = .failed("A workout couldn’t be started, so a recording wouldn’t survive the screen going dark.")
+            phase = .failed(String(localized: """
+                A workout couldn’t be started, \
+                so a recording wouldn’t survive the screen going dark.
+                """))
             return false
         }
     }
@@ -600,7 +611,7 @@ extension WatchRecorder {
         switch stopped {
         case .tooShort:
             journal.close()
-            phase = .failed("That hike was too short to keep.")
+            phase = .failed(String(localized: "That hike was too short to keep."))
             return nil
         case .unsaved(let walk):
             // The journal stays, with everything still waiting written out:

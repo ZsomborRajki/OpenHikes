@@ -11,6 +11,9 @@
         }
       }
     },
+    "%@ in all" : {
+
+    },
     "%@ of climb, %@ of descent" : {
       "localizations" : {
         "en" : {
@@ -49,10 +52,19 @@
     "A hike was interrupted — see Record" : {
 
     },
+    "A workout couldn’t be started, so a recording wouldn’t survive the screen going dark." : {
+
+    },
     "Asking your iPhone for your trails…" : {
 
     },
+    "Avg Speed" : {
+
+    },
     "Bring your iPhone nearby, with OpenHikes installed, to send your trails over." : {
+
+    },
+    "Climb" : {
 
     },
     "Continue" : {
@@ -67,6 +79,12 @@
     "Discard this hike?" : {
 
     },
+    "Distance" : {
+
+    },
+    "Done" : {
+
+    },
     "Fetching this trail from your iPhone…" : {
 
     },
@@ -74,6 +92,15 @@
 
     },
     "Finding your position…" : {
+
+    },
+    "Finish" : {
+
+    },
+    "Follow your location" : {
+
+    },
+    "Heart" : {
 
     },
     "Hike Interrupted" : {
@@ -97,6 +124,12 @@
     "Last hike not saved" : {
 
     },
+    "Last on %@" : {
+
+    },
+    "Left" : {
+
+    },
     "Location is off, so your position isn’t shown." : {
 
     },
@@ -112,13 +145,28 @@
     "Not Recording" : {
 
     },
+    "Off" : {
+
+    },
+    "On" : {
+      "comment" : "The Off figure for a hiker who is on the trail"
+    },
     "On Your iPhone" : {
+
+    },
+    "OpenHikes needs location access to record a hike." : {
+
+    },
+    "OpenHikes needs permission to start a workout, which is what keeps a recording running." : {
 
     },
     "Pause" : {
 
     },
     "Pause recording" : {
+
+    },
+    "Pause recording on your iPhone" : {
 
     },
     "Paused. The ground you cover now isn’t part of the hike." : {
@@ -148,6 +196,9 @@
     "Resume recording" : {
 
     },
+    "Resume recording on your iPhone" : {
+
+    },
     "Save Hike" : {
 
     },
@@ -155,6 +206,9 @@
 
     },
     "Sent to your iPhone." : {
+
+    },
+    "Start" : {
 
     },
     "Start Hike" : {
@@ -166,7 +220,22 @@
     "Stop" : {
 
     },
+    "Stop following your location" : {
+
+    },
     "Stop recording" : {
+
+    },
+    "Stop recording on your iPhone" : {
+
+    },
+    "That didn’t reach your iPhone." : {
+
+    },
+    "That hike was too short to keep." : {
+
+    },
+    "This watch can’t start a workout, so a recording couldn’t stay running." : {
 
     },
     "This watch is out of storage. Free up some space, then try again." : {
@@ -178,10 +247,16 @@
     "Trail" : {
 
     },
+    "Trail figures" : {
+
+    },
     "Trails" : {
 
     },
     "Try Again" : {
+
+    },
+    "Turn the map as you hike" : {
 
     },
     "Waiting for Your iPhone" : {
@@ -191,6 +266,12 @@
 
     },
     "Waiting for your iPhone. It’ll go across on its own." : {
+
+    },
+    "Your iPhone couldn’t answer that." : {
+
+    },
+    "Your iPhone is out of range." : {
 
     },
     "Your iPhone is recording" : {
