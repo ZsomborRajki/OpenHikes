@@ -94,10 +94,15 @@ extension DirectionalPolylineRendererTests {
         for column in Self.pausedColumns {
             #expect(canvas.inkedRows(inColumn: column) == 0, "\(pattern.rawValue) inked the pause at \(column)")
         }
-        #expect(
-            Self.walkedColumns.contains { canvas.inkedRows(inColumn: $0) > 0 },
-            "\(pattern.rawValue) drew nothing of the walked runs"
-        )
+        // Every walked column where the pattern strokes a solid line, so a
+        // run that is missing or drawn in the wrong place shows; a dash or a
+        // chevron may fall either side of one column.
+        let inked = Self.walkedColumns.filter { canvas.inkedRows(inColumn: $0) > 0 }
+        if pattern.drawsLine, dashes.isEmpty {
+            #expect(inked == Self.walkedColumns, "\(pattern.rawValue) left a walked run undrawn")
+        } else {
+            #expect(!inked.isEmpty, "\(pattern.rawValue) drew nothing of the walked runs")
+        }
     }
 
     /// A restyle after the first draw reaches the runs' copies too, which are
@@ -108,10 +113,12 @@ extension DirectionalPolylineRendererTests {
         let line = Self.polyline(coordinates)
         let renderer = Self.renderer(.solid, on: line)
         Self.cut(renderer, coordinates)
-        #expect(try Self.drawCentered(renderer, of: line).inkedRows(inColumn: 40) > 0)
+        let drawn = try Self.drawCentered(renderer, of: line)
+        #expect(Self.walkedColumns.allSatisfy { drawn.inkedRows(inColumn: $0) > 0 })
 
         renderer.strokeColor = .clear
-        #expect(try Self.drawCentered(renderer, of: line).inkedRows(inColumn: 40) == 0)
+        let restyled = try Self.drawCentered(renderer, of: line)
+        #expect(Self.walkedColumns.allSatisfy { restyled.inkedRows(inColumn: $0) == 0 })
     }
 
     // MARK: Runs over each other

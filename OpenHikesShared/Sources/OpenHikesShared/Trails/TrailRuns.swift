@@ -13,7 +13,8 @@
 //
 //  - the watch's map, through ``WatchTrailPackage``'s forwarding properties
 //    (#997), whose tracker reads the same ``pausedLegs``
-//  - the trail widget, through ``SharedTrailSnapshot/runs`` (#1034)
+//  - the trail widget, through ``TrailStroke``'s pieces, from
+//    ``SharedTrailSnapshot/pauseIndices`` (#1034)
 //  - the phone's map, which cuts its route line at the walked runs (#1034)
 //
 //  Moved here from `WatchTrailPackage+Runs.swift` when the widget and the

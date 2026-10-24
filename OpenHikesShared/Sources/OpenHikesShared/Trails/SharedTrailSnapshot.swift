@@ -41,10 +41,11 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
     ///
     /// The leg arriving at each one is a drive, a lift or the jump between two
     /// GPX `<trkseg>`s, and is not trail (#962), so the widget draws it faded
-    /// and dotted rather than as the line (#1034). Read it through ``runs``.
-    /// Only a leg that is the pause alone is named here: the decimation keeps
-    /// both ends of a pause it names, and one it could not afford is not named
-    /// at all rather than folded into a leg with walking in it.
+    /// and dotted rather than as the line (#1034), cut there by
+    /// ``TrailStroke``'s pieces. Only a leg that is the pause alone is named
+    /// here: the decimation keeps both ends of a pause it names, and one it
+    /// could not afford is not named at all rather than folded into a leg
+    /// with walking in it.
     public var pauseIndices: [Int]
     public var liveFix: LiveFix?
     /// The walk under way along this trail, if there is one — see ``Walk``.
