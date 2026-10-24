@@ -3,8 +3,8 @@
 //  OpenHikesShared
 //
 //  Which of a trail's points are trail, and which legs between them are a
-//  pause: the one reading of ``WatchTrailPackage/pauseIndices`` that the
-//  watch's tracker and its map both take.
+//  pause: ``TrailRuns`` over ``WatchTrailPackage/pauseIndices``, the one
+//  reading that the watch's tracker and its map both take.
 //
 //  ## Why the map needs it
 //
@@ -24,66 +24,22 @@
 //  ``WatchTrailPackage/pausedLegs``, and the tracker reads the same property,
 //  so the leg the map draws as a pause is exactly the leg the tracker refuses
 //  — two readings of the same indices could not drift apart, because there
-//  is only one.
+//  is only one. ``TrailRuns`` holds it, because the trail widget and the
+//  phone's map break their lines by the same rule (#1034).
 //
 
-import Foundation
-
 public extension WatchTrailPackage {
-    /// The legs a pause opened, in order, each by the index of the point it
-    /// leaves: leg `i` runs from `points[i]` to `points[i + 1]`.
-    ///
-    /// ``pauseIndices`` names the point a recording resumed on, and the leg
-    /// *arriving* there is the pause, so each one is shifted back by one. An
-    /// index the line cannot hold is dropped rather than trusted — `0` has
-    /// nothing before it to have been paused across, and an index past the
-    /// last point names a leg that is not there — and one named twice is the
-    /// same leg.
-    var pausedLegs: [Int] {
-        Set(pauseIndices.filter { $0 > 0 && $0 < points.count })
-            .map { $0 - 1 }
-            .sorted()
+    /// The line cut at its pauses — see ``TrailRuns``.
+    var runs: TrailRuns {
+        TrailRuns(pointCount: points.count, pauseIndices: pauseIndices)
     }
 
-    /// The stretches that were walked, in order, as ranges of indices into
-    /// ``points``: the line cut at every paused leg.
-    ///
-    /// Each holds two points or more. A run of one — the point between two
-    /// adjacent pauses, or the lone point a trail starts or ends on when its
-    /// first or last leg was paused — is a place, not a line, which is
-    /// ``isDrawable``'s rule for the whole trail; it stays on the map inside
-    /// the paused stretch that passes through it.
-    ///
-    /// Together with ``pausedStretches`` this covers every leg exactly once,
-    /// so nothing the phone sent is left undrawn and nothing is drawn twice.
-    var walkedRuns: [Range<Int>] {
-        var runs: [Range<Int>] = []
-        var start = 0
-        for leg in pausedLegs + [points.count - 1] {
-            let end = leg + 1
-            if end - start > 1 { runs.append(start..<end) }
-            start = end
-        }
-        return runs
-    }
+    /// The legs a pause opened — ``TrailRuns/pausedLegs``.
+    var pausedLegs: [Int] { runs.pausedLegs }
 
-    /// The stretches nobody walked, in order, as ranges of indices into
-    /// ``points``: each run of adjacent ``pausedLegs``, from the point the
-    /// first leaves to the point the last arrives at.
-    ///
-    /// Adjacent legs are one stretch rather than one each because each is a
-    /// line the watch's map has to draw: a GPX file whose segments hold a
-    /// point apiece is paused on every leg, and drawn leg by leg it would be
-    /// as many lines as it has points. Joined, it is one.
-    var pausedStretches: [Range<Int>] {
-        var stretches: [Range<Int>] = []
-        for leg in pausedLegs {
-            if let last = stretches.last, last.upperBound == leg + 1 {
-                stretches[stretches.count - 1] = last.lowerBound..<(leg + 2)
-            } else {
-                stretches.append(leg..<(leg + 2))
-            }
-        }
-        return stretches
-    }
+    /// The stretches that were walked — ``TrailRuns/walkedRuns``.
+    var walkedRuns: [Range<Int>] { runs.walkedRuns }
+
+    /// The stretches nobody walked — ``TrailRuns/pausedStretches``.
+    var pausedStretches: [Range<Int>] { runs.pausedStretches }
 }
