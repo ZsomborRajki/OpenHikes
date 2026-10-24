@@ -59,7 +59,9 @@
 //  metres on a twenty-kilometre trail and finer on everything shorter. The
 //  heights land back on exactly those points, and every point between two of
 //  them takes the height its distance along the line puts it at — see
-//  ``RouteHeightSamples/interpolating(_:)``.
+//  ``RouteHeightSamples/interpolating(_:)``. Never across a pause, though: a
+//  library hike's route can carry them, a paused leg is not trail, and both
+//  of its ends are read so each walked stretch has heights of its own.
 //
 //  Written on the sampled points alone, the chart came out the same and the
 //  map did not: ``RouteSteepness`` closes its window at every point without a
@@ -137,6 +139,26 @@ nonisolated enum CuratedElevationRequest {
         return (0..<limit).map { step in
             Int((Double(step) * Double(last) / Double(limit - 1)).rounded())
         }
+    }
+
+    /// ``sampleIndexes(count:limit:)`` for `route`, plus both ends of every
+    /// leg a pause opened.
+    ///
+    /// A paused leg is not trail (see ``RouteBoundary``), so no height is
+    /// interpolated across one — see ``RouteHeightSamples/interpolating(_:)``.
+    /// Reading the last walked point before a pause and the first after it
+    /// gives each walked stretch a height at its own ends, the way
+    /// ``WatchTrailPackaging/keptIndices(of:)`` keeps them for the watch. Two
+    /// more points a pause over the limit, which is bounded by how often a
+    /// hiker reached for the pause button. Curated routes and drawn trails
+    /// carry no pauses, and are asked exactly what they were before.
+    static func sampleIndexes(of route: [RouteCoordinate], limit: Int = maximumShapePoints) -> [Int] {
+        let spread = sampleIndexes(count: route.count, limit: limit)
+        let pauseEnds = route.indices.dropFirst()
+            .filter { route[$0].isPauseBoundary }
+            .flatMap { [$0 - 1, $0] }
+        guard !pauseEnds.isEmpty, spread.count < route.count else { return spread }
+        return Set(spread).union(pauseEnds).sorted()
     }
 
     /// The POST Stadia expects, with the key in the query and nowhere else.
@@ -322,8 +344,9 @@ nonisolated struct StadiaElevationSource: CuratedElevationSourcing {
 nonisolated struct RouteHeightSamples: Equatable, Sendable {
     /// How many points the route had when these were read.
     ///
-    /// Which indexes were asked about is a function of this alone — see
-    /// ``CuratedElevationRequest/sampleIndexes(count:limit:)`` — so a route of
+    /// Which indexes were asked about follows from this and from where the
+    /// route was paused — see
+    /// ``CuratedElevationRequest/sampleIndexes(of:limit:)`` — so a route of
     /// a different length is a different question, and the indexes below are
     /// not necessarily even in bounds for it.
     let routePointCount: Int
@@ -339,12 +362,22 @@ nonisolated struct RouteHeightSamples: Equatable, Sendable {
     ///
     /// Read off the samples rather than off a filled route, and they are the
     /// same numbers either way: every point ``interpolating(_:)`` adds lies on
-    /// the straight run between two readings, which climbs and drops no more
-    /// than they do and reaches no higher or lower. Computed on demand
-    /// because it is two hundred additions and the caller stores the answer.
+    /// the straight run between two readings, or holds one of them, which
+    /// climbs and drops no more than they do and reaches no higher or lower.
+    /// Computed on demand because it is two hundred additions and the caller
+    /// stores the answer.
+    ///
+    /// A pause ends the run, as it does on the route itself — see
+    /// ``ElevationAccumulator/record(_:)``. Both ends of every paused leg are
+    /// among the points asked about, so the sampled point a pause ended at is
+    /// the one that carries the mark.
     var summary: RouteElevationSummary {
         var accumulator = ElevationAccumulator()
-        for height in heights { accumulator.record(height) }
+        for (coordinate, height) in zip(coordinates, heights) {
+            var reading = coordinate
+            reading.elevation = height
+            accumulator.record(reading)
+        }
         return RouteElevationSummary(accumulator)
     }
 
@@ -371,6 +404,17 @@ nonisolated struct RouteHeightSamples: Equatable, Sendable {
     /// answer gets. A non-finite reading is passed over — a height that is
     /// not a number is not a height, and the chart's downsampling compares
     /// them — so the readings either side of it are joined instead.
+    ///
+    /// **Never across a pause** (#1032). A paused leg is not trail (see
+    /// ``RouteBoundary``): a cable car rising a kilometre, joined straight to
+    /// the readings either side of it, put its grade on the level ground
+    /// beside it, and so into the climb, the chart and the *Elevation*
+    /// colours of a hike whose every walked metre was flat. Both ends of a
+    /// pause are normally read themselves —
+    /// ``CuratedElevationRequest/sampleIndexes(of:limit:)`` — so this only
+    /// bites when one of them was not a number. Then a walked stretch holds
+    /// the reading nearest it on its own side, which adds no climb, and a
+    /// stretch with no reading of its own is given no height at all.
     func interpolating(_ route: [RouteCoordinate]) -> [RouteCoordinate] {
         guard describes(route) else { return route }
         var filled = route
@@ -379,10 +423,17 @@ nonisolated struct RouteHeightSamples: Equatable, Sendable {
             filled[reading.0].elevation = reading.1
         }
         for (start, end) in readings.adjacentPairs() where end.0 - start.0 > 1 {
+            let between = (start.0 + 1)...end.0
+            if let firstPause = between.first(where: { route[$0].isPauseBoundary }) {
+                let lastPause = between.last { route[$0].isPauseBoundary } ?? firstPause
+                for index in (start.0 + 1)..<firstPause { filled[index].elevation = start.1 }
+                for index in lastPause..<end.0 { filled[index].elevation = end.1 }
+                continue
+            }
             // How far along the line each point between the two is, from the
             // first: `along[k]` is the distance to `route[start.0 + k]`.
             let along = route[start.0...end.0].adjacentPairs().reductions(0) { total, pair in
-                total + RouteGeometry.distanceMeters(from: pair.0.clCoordinate, to: pair.1.clCoordinate)
+                total + pair.1.legMeters(from: pair.0)
             }
             let total = along[along.count - 1]
             let steps = Double(end.0 - start.0)
@@ -419,7 +470,7 @@ nonisolated extension CuratedElevationSourcing {
     /// be the loudest thing in the log for an ordinary launch by an ordinary
     /// hiker, and the refusals worth reading would be buried under them.
     func samples(of route: [RouteCoordinate]) async -> RouteHeightSamples? {
-        let indexes = CuratedElevationRequest.sampleIndexes(count: route.count)
+        let indexes = CuratedElevationRequest.sampleIndexes(of: route)
         guard indexes.count > 1 else { return nil }
         let coordinates = indexes.map { route[$0] }
         do {
