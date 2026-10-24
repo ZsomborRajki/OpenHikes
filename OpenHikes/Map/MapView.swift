@@ -605,57 +605,6 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.fitToCurrentRoute(mapView, animated: true)
     }
 
-    /// Overlays the stretches that were inferred rather than measured, on top
-    /// of the solid line they belong to.
-    ///
-    /// Drawn over rather than instead of the route: the solid line stays
-    /// continuous underneath, so the dashes read as a qualification of the
-    /// route rather than as a hole in it, and nothing has to be spliced out of
-    /// the geometry the rest of the map is fitted and scrubbed against.
-    private func addInferredOverlays(
-        _ route: DisplayedRoute,
-        on mapView: MKMapView,
-        _ coordinator: Coordinator,
-        above base: MKPolyline
-    ) {
-        guard !route.inferredSegments.isEmpty else { return }
-        let overlays = route.inferredSegments.map { segment in
-            MKPolyline(coordinates: segment, count: segment.count)
-        }
-        coordinator.inferredRouteOverlays = overlays
-        for overlay in overlays {
-            mapView.insertOverlay(overlay, above: base)
-        }
-    }
-
-    /// Overlays the stretches the recording was paused across, in the gaps
-    /// the route line leaves for them.
-    ///
-    /// The line is cut at each pause rather than drawn under the dots
-    /// (#1034): a paused leg is not trail (#962), and with the solid line
-    /// beneath, a drive between two walked pieces read as trail with faint
-    /// dots on it. The overlay itself is still the whole route, so the
-    /// geometry the map fits and the chart scrubs against stays one line —
-    /// only its stroke has gaps. See `DirectionalPolylineRenderer+Pauses.swift`.
-    /// A pause and a lost signal can both fall on the same walk, and this
-    /// goes on last so a stretch that is somehow both shows the pause — the
-    /// stronger statement, since it says why nothing was recorded.
-    private func addPausedOverlays(
-        _ route: DisplayedRoute,
-        on mapView: MKMapView,
-        _ coordinator: Coordinator,
-        above base: MKPolyline
-    ) {
-        guard !route.pausedSegments.isEmpty else { return }
-        let overlays = route.pausedSegments.map { segment in
-            MKPolyline(coordinates: segment, count: segment.count)
-        }
-        coordinator.pausedRouteOverlays = overlays
-        for overlay in overlays {
-            mapView.insertOverlay(overlay, above: base)
-        }
-    }
-
     /// Keeps the map's own controls clear of ``MapSidePanel``.
     ///
     /// The guide the controls hang off is pulled in from the leading edge by
@@ -786,6 +735,64 @@ extension MapView {
     /// ``TileAttribution/drawn(base:layer:)``.
     private var drawnAttribution: TileAttribution? {
         TileAttribution.drawn(base: base.tileSource?.attribution, layer: tileLayer?.attribution)
+    }
+}
+
+// MARK: - The route's qualified stretches
+
+// Moved out of the struct for the reason the hiking-route layer is: its
+// body is at `type_body_length`'s limit. A same-file extension, so
+// `updateRoute` still reaches these as private.
+extension MapView {
+    /// Overlays the stretches that were inferred rather than measured, on top
+    /// of the solid line they belong to.
+    ///
+    /// Drawn over rather than instead of the route: the solid line stays
+    /// continuous underneath, so the dashes read as a qualification of the
+    /// route rather than as a hole in it, and nothing has to be spliced out of
+    /// the geometry the rest of the map is fitted and scrubbed against.
+    private func addInferredOverlays(
+        _ route: DisplayedRoute,
+        on mapView: MKMapView,
+        _ coordinator: Coordinator,
+        above base: MKPolyline
+    ) {
+        guard !route.inferredSegments.isEmpty else { return }
+        let overlays = route.inferredSegments.map { segment in
+            MKPolyline(coordinates: segment, count: segment.count)
+        }
+        coordinator.inferredRouteOverlays = overlays
+        for overlay in overlays {
+            mapView.insertOverlay(overlay, above: base)
+        }
+    }
+
+    /// Overlays the stretches the recording was paused across, in the gaps
+    /// the route line leaves for them.
+    ///
+    /// The line is cut at each pause rather than drawn under the dots
+    /// (#1034): a paused leg is not trail (#962), and with the solid line
+    /// beneath, a drive between two walked pieces read as trail with faint
+    /// dots on it. The overlay itself is still the whole route, so the
+    /// geometry the map fits and the chart scrubs against stays one line —
+    /// only its stroke has gaps. See `DirectionalPolylineRenderer+Pauses.swift`.
+    /// A pause and a lost signal can both fall on the same walk, and this
+    /// goes on last so a stretch that is somehow both shows the pause — the
+    /// stronger statement, since it says why nothing was recorded.
+    private func addPausedOverlays(
+        _ route: DisplayedRoute,
+        on mapView: MKMapView,
+        _ coordinator: Coordinator,
+        above base: MKPolyline
+    ) {
+        guard !route.pausedSegments.isEmpty else { return }
+        let overlays = route.pausedSegments.map { segment in
+            MKPolyline(coordinates: segment, count: segment.count)
+        }
+        coordinator.pausedRouteOverlays = overlays
+        for overlay in overlays {
+            mapView.insertOverlay(overlay, above: base)
+        }
     }
 }
 
