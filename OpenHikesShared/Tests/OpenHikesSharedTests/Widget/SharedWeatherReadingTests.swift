@@ -51,11 +51,15 @@ struct SharedWeatherReadingTests {
         )
     }
 
-    /// With the trail it is about: the one subject with a value of its own,
-    /// and the one a widget matches against.
-    @Test("a reading survives the App Group round trip")
-    func codableRoundTrip() throws {
-        let reading = try #require(Self.reading(about: .trail(hikeID: UUID())))
+    /// With each subject it can be about, because each case's spelling is
+    /// part of what a later build of the widget reads back: a recording
+    /// writes the hiker, a search a place, and a selection a trail by its ID.
+    @Test(
+        "a reading survives the App Group round trip",
+        arguments: [SharedWeatherReading.Subject.hiker, .trail(hikeID: UUID()), .place]
+    )
+    func codableRoundTrip(subject: SharedWeatherReading.Subject) throws {
+        let reading = try #require(Self.reading(about: subject))
         let decoded = try JSONDecoder().decode(
             SharedWeatherReading.self,
             from: JSONEncoder().encode(reading)

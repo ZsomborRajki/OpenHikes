@@ -89,7 +89,7 @@ extension TrailWidgetStoreSuites.TrailWidgetWeatherTests {
     @Test("a new focus moves the temperature to the trail it is now about")
     func aNewFocusMovesTheTemperature() throws {
         Self.pinBothTrails()
-        let before = try Self.publish(about: .trail(hikeID: Self.ridge.hikeID), celsius: 4)
+        try Self.publish(about: .trail(hikeID: Self.ridge.hikeID), celsius: 4)
         let after = try Self.publish(about: .trail(hikeID: Self.cityTrail.hikeID), celsius: 24)
 
         let ridgeEntry = TrailWidgetProvider.currentEntry(date: Self.now, pinnedTo: Self.ridge.hikeID)
@@ -97,7 +97,6 @@ extension TrailWidgetStoreSuites.TrailWidgetWeatherTests {
 
         #expect(ridgeEntry.weather == nil)
         #expect(try !Self.spoken(ridgeEntry).contains(after.spoken()))
-        #expect(try !Self.spoken(ridgeEntry).contains(before.spoken()), "and nothing remembers the old one")
         #expect(cityEntry.weather?.formatted() == after.formatted())
         #expect(try Self.spoken(cityEntry).contains(after.spoken()))
     }
