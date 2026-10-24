@@ -74,16 +74,13 @@ struct OpenHikesApp: App {
             AppDependencyManager.shared.add(dependency: coordinator)
             let recordingControl: any HikeRecordingControlHandling = coordinator
             AppDependencyManager.shared.add(dependency: recordingControl)
-            // Spotlight, which is the half of ``HikeEntity`` a hiker gets
-            // without having to say anything. Here beside the registration
-            // because it wants the same coordinator, and off the main actor
-            // because it is a whole-library fetch, and a decode of every
-            // route, that nothing on screen waits for — the read itself
-            // leaves the main actor, see `HikeIntentCoordinator.finishedHikes()`.
-            HikeSpotlightIndex.donate(from: coordinator)
-            // The App Group's copy of the library, and a trail snapshot for
-            // every hike a placed widget is pinned to. Beside the Spotlight
-            // sweep because it is the same sweep argument — see
+            // The App Group's copy of the library, a trail snapshot for every
+            // hike a placed widget is pinned to, and Spotlight, which is the
+            // half of ``HikeEntity`` a hiker gets without having to say
+            // anything. Here beside the registration because it wants the
+            // same coordinator, and off the main actor because it is a
+            // whole-library fetch, and a decode of every route, that nothing
+            // on screen waits for. One read feeds all of them — see
             // ``SharedHikeCatalogPublisher``.
             SharedHikeCatalogPublisher.publish(
                 from: coordinator,
