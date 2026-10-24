@@ -267,10 +267,12 @@ struct CommunityQueryPolicy {
 
     /// Half the longer edge of the visible region, unclamped.
     ///
-    /// The longer edge rather than the shorter so the corners of the screen
-    /// are inside the circle: a hiker can see a trailhead in the corner of
-    /// the map, and a radius that excluded it would be showing a hike and
-    /// refusing to list it.
+    /// The longer edge rather than the shorter so the circle reaches every
+    /// edge of the screen: a hiker can see a trailhead at the edge of the
+    /// map, and a radius that excluded it would be showing a hike and
+    /// refusing to list it. It still falls short of the corners, which only
+    /// half the diagonal reaches. That is the circle Commons is asked about,
+    /// because its answer is kept to the screen — see ``CommonsAreaPhotos``.
     ///
     /// Returned raw so ``isWithinCeiling(_:)`` can tell "zoomed out past the
     /// ceiling" from "at the ceiling", which are different answers.

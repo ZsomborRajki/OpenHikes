@@ -166,6 +166,10 @@ final class TrailPointFinder {
     /// sheet and past both sides of the screen. The middle is the middle of
     /// what is visible too, which is what a search with no line to rank
     /// against keeps the nearest places to — see ``TrailPointRanking``.
+    ///
+    /// The maker's photograph search is handed the same area. Commons takes
+    /// only a circle, so it is asked about the one through the rectangle's
+    /// corners, which this circle falls short of — see ``CommonsAreaPhotos``.
     func regionDidSettle(_ region: MKCoordinateRegion) {
         guard Self.isWithinCeiling(region) else {
             guard searchableArea != nil else { return }

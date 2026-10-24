@@ -50,7 +50,9 @@ nonisolated struct CommunitySearchArea: Equatable, Sendable {
     /// What OpenStreetMap is asked about — see this file's header and
     /// ``CuratedTrailQuery/searchBoxes(for:)`` — by the *Community* tab and
     /// by every place search a *Search this area* pill makes, which
-    /// ``TrailPointFinder`` builds from the same measurement of the map.
+    /// ``TrailPointFinder`` builds from the same measurement of the map. The
+    /// photographs Wikimedia Commons answers with for either are kept inside
+    /// it too — see ``CommonsAreaPhotos``.
     /// `nil` for every area the map did not hand over — a stretch of a route,
     /// the reach around a fix, *Places Nearby*'s first question — and those
     /// keep the square around the circle.
