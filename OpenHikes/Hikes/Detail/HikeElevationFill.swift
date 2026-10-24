@@ -26,8 +26,13 @@
 //  A recording with pauses, or a GPX of several `<trkseg>`s, is the one
 //  caller whose line has paused legs, and none of them is filled across: the
 //  cable car's kilometre of rise stays off the level ground either side of
-//  it (#1032). Both ends of each pause are read, so the walked stretches keep
-//  heights of their own.
+//  it (#1032). Both ends of each pause are among the two hundred readings, so
+//  the walked stretches keep heights of their own, as long as those ends are
+//  no more than half of them. A file split into more segments than that is
+//  read evenly along its line instead — see
+//  ``CuratedElevationRequest/sampleIndexes(of:limit:)`` — and a stretch no
+//  reading lands on is left without heights rather than given some from
+//  across a pause.
 //
 //  ## Only a hike with no heights at all
 //
