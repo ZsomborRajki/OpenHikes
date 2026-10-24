@@ -58,6 +58,11 @@ struct MapTipCardState {
     /// view so a suite can stand one in: the real card's content is TipKit's
     /// own view, and a suite never reaches TipKit's store (``TipLaunch``).
     weak var card: UIView?
+    /// What holds a card under *Search this area* clear of the weather badge,
+    /// while there is one. Held because the badge moves beside ``MapSidePanel``
+    /// when the panel comes up, and the map moves this with it — see
+    /// ``MapView/Coordinator/placeAreaSearch(besidePanel:)``.
+    weak var badgeClearance: NSLayoutConstraint?
     #endif
 }
 
@@ -264,21 +269,21 @@ private extension MapView.Coordinator {
     /// Below the badge and the compass, nothing holds the card to that strip's
     /// width, so it takes the width every control on the map is laid out in:
     /// the guide whose leading edge ``MapView/Coordinator/controlsLeadingConstraint``
-    /// pulls in past the landscape panel, which keeps the card out from behind it.
+    /// pulls in past the side panel, which keeps the card out from behind it.
     func place(_ card: UIView, under control: UIView, on mapView: MKMapView) {
         let guide = controlsLeadingConstraint?.firstItem as? UILayoutGuide ?? mapView.safeAreaLayoutGuide
         let fill = card.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: MapView.controlInset)
         fill.priority = .defaultHigh
         let snug = card.topAnchor.constraint(equalTo: control.bottomAnchor, constant: Self.tipCardSpacing)
         snug.priority = .defaultLow
+        // The badge is over the top of the map only while no panel is beside
+        // it, so this follows the panel rather than the size class: an
+        // unfolded iPhone Duo has the panel at a regular height.
         let badge = card.topAnchor.constraint(
             greaterThanOrEqualTo: mapView.topAnchor,
-            constant: MapAreaSearchView.badgeClearance(in: card.traitCollection)
+            constant: MapAreaSearchView.badgeClearance(besidePanel: sidePanelInset > 0)
         )
-        // The badge is only over the top of the map in portrait.
-        card.registerForTraitChanges([UITraitVerticalSizeClass.self]) { (card: UIView, _) in
-            badge.constant = MapAreaSearchView.badgeClearance(in: card.traitCollection)
-        }
+        tipCards.badgeClearance = badge
         NSLayoutConstraint.activate([
             card.centerXAnchor.constraint(equalTo: control.centerXAnchor),
             card.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: MapView.controlInset),
@@ -294,6 +299,7 @@ private extension MapView.Coordinator {
         let card = tipCards.card
         tipCards.card = nil
         tipCards.shown = nil
+        tipCards.badgeClearance = nil
         guard let card else { return }
         // Interaction goes at once, as a fading map control's does — see
         // `MapControlFade.swift`.

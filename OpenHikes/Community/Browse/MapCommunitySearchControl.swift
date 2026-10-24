@@ -425,14 +425,15 @@ final class MapAreaSearchView: UIView {
     /// and the size class then held the sheet's room under a badge that had
     /// moved.
     private func applyNoticeClearance() {
-        noticeClearanceConstraint?.constant = isBesidePanel ? 0 : Self.noticeBadgeClearance
+        noticeClearanceConstraint?.constant = Self.badgeClearance(besidePanel: isBesidePanel)
     }
 
     /// How far down the map anything hung under this pill has to start to
-    /// clear the weather badge, given the traits it is drawn in — the caption,
-    /// and the first-run tip about the pill (see `MapTipCards.swift`).
-    static func badgeClearance(in traits: UITraitCollection) -> CGFloat {
-        traits.verticalSizeClass == .compact ? 0 : noticeBadgeClearance
+    /// clear the weather badge — the caption, and the first-run tip about the
+    /// pill (see `MapTipCards.swift`) — with ``MapSidePanel`` up beside the map
+    /// or not: none beside it, for the reason ``applyNoticeClearance()`` gives.
+    static func badgeClearance(besidePanel: Bool) -> CGFloat {
+        besidePanel ? 0 : noticeBadgeClearance
     }
 
     private func buildHierarchy() {
@@ -883,12 +884,21 @@ extension MapView.Coordinator {
     /// Tells the three *Search this area* pills whether ``MapSidePanel`` is up
     /// beside the map: the weather badge moves beside it, and their captions
     /// stop keeping clear of a badge that is no longer over them — see
-    /// ``MapAreaSearchView/isBesidePanel``. Each pill ignores a repeat, so this
-    /// can run on every update pass the panel's width is applied on.
+    /// ``MapAreaSearchView/isBesidePanel`` — and so does a first-run tip card
+    /// hung under the pill (``MapTipCardState/badgeClearance``). Each pill
+    /// ignores a repeat and the card's constraint is written only when it
+    /// moves, so this can run on every update pass the panel's width is
+    /// applied on.
     func placeAreaSearch(besidePanel: Bool) {
         for control in [areaSearchControl, trailPointSearchControl, placesAroundMap.searchControl] {
             control?.isBesidePanel = besidePanel
         }
+        #if os(iOS)
+        let clearance = MapAreaSearchView.badgeClearance(besidePanel: besidePanel)
+        if let badge = tipCards.badgeClearance, badge.constant != clearance {
+            badge.constant = clearance
+        }
+        #endif
     }
 }
 #endif
