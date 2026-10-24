@@ -210,6 +210,25 @@ either: the second run waits silently on the first run's build lock.
   and hands it to `simctl location`, which accepts a UDID or `booted` but not a
   name.
 
+### The iPhone Duo
+
+- **It needs the iOS 27.1 runtime, which as Xcode 27.1 installs it runs no
+  other device.** CI's Xcode 27.0 has neither, so no gate runs on a Duo, and
+  the 27.1 SDK's Duo APIs
+  (`ArrangementView`, `reservedRegions`, `toolbarVerticalEdge`) do not exist
+  where CI compiles; *CI* above has the gate they need. Templates and the pool
+  pick the newest runtime that runs their device type, never just the newest.
+- **It boots closed**, on the cover display (466 × 678 points), and only
+  Device Hub opens it by hand. `Scripts/duo-pose.sh open --device <udid>`
+  unfolds it to the inner display (669 × 951, upright) and reads the display
+  state back; one unfold from cold is the move to rely on.
+- **XCTest sees it through the cover.** `XCUIScreen.main` is the cover display
+  open or closed (the inner one is the other `XCUIScreen.screens` entry), and
+  on the inner display turned sideways `app.frame` stays portrait while
+  `app.windows.firstMatch.frame` turns.
+- The screenshot set shoots on it with `--device-type "iPhone Duo"` and
+  `--pose`; see `Screenshots/README.md`.
+
 ### UI automation
 
 `Scripts/run-ui-tests.sh` runs one test (`--test`), one class

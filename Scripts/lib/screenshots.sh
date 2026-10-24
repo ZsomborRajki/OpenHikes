@@ -10,6 +10,17 @@
 # captured on a narrower device is a set App Store Connect will not take for
 # the 6.9" slot.
 #
+# ## The iPhone Duo
+#
+# The Duo has a slot of its own, and takes a frame of either display:
+# 1398 × 2034 from the cover, 2007 × 2853 from the inner one, either way up.
+# `--device-type "iPhone Duo"` shoots the set on one, and `--pose open` opens
+# it first, through Scripts/duo-pose.sh — a simulator boots closed, and only
+# Device Hub can open it by hand. XCTest captures the inner display a pixel
+# short each way, so every exported frame goes through
+# Scripts/lib/fit-screenshot.swift, which puts the pixel back on a frame that
+# is that close to a size App Store Connect takes and leaves the rest alone.
+#
 # ## One appearance per script, and one device per appearance
 #
 # The light and dark passes used to be one script run twice over one device.
@@ -120,6 +131,16 @@ readonly screenshot_library_frames=" 01 02 06 09 10 "
 # into a retry.
 readonly addmedia_timeout_seconds=180
 
+# The sizes App Store Connect takes for an iPhone frame, each way up: the 6.9"
+# slot, then the iPhone Duo's cover and inner displays. Handed to
+# Scripts/lib/fit-screenshot.swift, which only ever adds the pixel a capture
+# came out short of one of them.
+readonly screenshot_store_sizes=(
+    1320x2868 2868x1320
+    1398x2034 2034x1398
+    2007x2853 2853x2007
+)
+
 # How long one frame may run before XCTest kills it and moves on. The slowest,
 # the routed walk, waits on Apple and Stadia and takes under a minute; a frame
 # still going after five minutes is stuck rather than slow, and an allowance is
@@ -145,6 +166,9 @@ Options:
   --device <name>    Simulator name to create and reuse
                      (default: "$screenshot_default_device")
   --device-type <t>  Simulator device type (default: iPhone 18 Pro Max)
+  --pose <p>         For an iPhone Duo: closed (its inner display folded away,
+                     as it boots) or open (unfolded, upright). See
+                     Scripts/duo-pose.sh.
   --derived-data <p> Build directory (default: DerivedData/Screenshots-$screenshot_appearance)
   --locale <id>      Locale to pin the simulator to (default: en_IE). This is
                      what decides "2.4 km" against "2,4 km" and "6.6 mi", so
@@ -185,12 +209,13 @@ run_with_deadline() {
 
 # Makes `udid` a clean device named `device_name`: a fresh clone of the
 # template for its type, in place of the one there was, on the newest iOS
-# runtime installed so the frames show the current system chrome. A device
-# named by UDID is erased in place instead, and so is any device when no
-# template can be settled; with no device at all, one is created.
+# runtime that can run that type, so the frames show the current system
+# chrome. A device named by UDID is erased in place instead, and so is any
+# device when no template can be settled; with no device at all, one is
+# created.
 reset_screenshot_device() {
     local runtime template clone=""
-    runtime="$(newest_simulator_runtime iOS)"
+    runtime="$(newest_simulator_runtime iOS "$device_type")"
     if [[ "$device_pinned" == false && -n "$runtime" ]] \
         && template="$(simulator_template "$device_type" "$runtime")"; then
         if [[ -n "$udid" ]]; then
@@ -362,6 +387,7 @@ export_screenshot_frames() {
             frame="${readable%%_*}"
             if [[ -f "$staging/$exported" && "$frame" =~ ^[0-9][0-9]- ]]; then
                 mv -f "$staging/$exported" "$output_dir/$frame$screenshot_suffix.png"
+                fit_screenshot_frame "$output_dir/$frame$screenshot_suffix.png"
                 printf '%s\n' "${frame%%-*}"
             fi
             attachment_index=$((attachment_index + 1))
@@ -369,6 +395,14 @@ export_screenshot_frames() {
         test_index=$((test_index + 1))
     done
     rm -rf "$staging"
+}
+
+# Puts back the pixel XCTest leaves off a frame of the iPhone Duo's inner
+# display — see Scripts/lib/fit-screenshot.swift — and leaves every other
+# frame as it was. Says what it changed on stderr, since stdout is the list
+# of frames shot.
+fit_screenshot_frame() {
+    swift "$screenshots_lib_dir/fit-screenshot.swift" "${screenshot_store_sizes[@]}" -- "$1" >&2
 }
 
 # One xcodebuild run over `frames`, exported. Prints the frames it shot.
@@ -385,6 +419,10 @@ run_screenshot_group() {
     rm -rf "$result_bundle"
 
     echo "[$screenshot_appearance] $attempt: frames ${frames[*]}" >&2
+    # No diagnostics, as Scripts/run-ui-tests.sh collects none: a group with a
+    # failed frame otherwise ends in Xcode 27's `simctl diagnose`, which held
+    # the result bundle — the frames that did come out with it — for ten
+    # minutes before the retry could start.
     set +e
     xcodebuild test-without-building \
         -project "$screenshot_project" \
@@ -392,6 +430,7 @@ run_screenshot_group() {
         -destination "platform=iOS Simulator,id=$udid" \
         -derivedDataPath "$derived_data" \
         -resultBundlePath "$result_bundle" \
+        -collect-test-diagnostics never \
         -test-timeouts-enabled YES \
         -default-test-execution-time-allowance "$frame_time_allowance_seconds" \
         -maximum-test-execution-time-allowance "$frame_time_allowance_seconds" \
@@ -444,6 +483,7 @@ screenshots_main() {
     # is the point: one listing, one set of conventions. `--locale en_US` is
     # the right call for a US listing and will print miles.
     locale_id="${OPENHIKES_SCREENSHOT_LOCALE:-en_IE}"
+    pose=""
     local requested=()
 
     while [[ $# -gt 0 ]]; do
@@ -453,6 +493,14 @@ screenshots_main() {
             --photos) photo_dir="${2:?--photos needs a directory}"; shift 2 ;;
             --device) device_name="${2:?--device needs a name}"; shift 2 ;;
             --device-type) device_type="${2:?--device-type needs a type}"; shift 2 ;;
+            --pose)
+                pose="${2:?--pose needs open or closed}"
+                if [[ "$pose" != open && "$pose" != closed ]]; then
+                    echo "Unknown pose: $pose (open or closed)" >&2
+                    exit 2
+                fi
+                shift 2
+                ;;
             --derived-data) derived_data="${2:?--derived-data needs a path}"; shift 2 ;;
             --locale) locale_id="${2:?--locale needs an identifier}"; shift 2 ;;
             --no-photos) skip_photos=true; shift ;;
@@ -488,8 +536,15 @@ screenshots_main() {
         echo "Starting over from a clean device." >&2
         prepare_screenshot_device || { echo "The photo library could not be filled." >&2; exit 1; }
     fi
+    # On the clean device, which has just booted closed: an iPhone Duo is
+    # opened once, from cold, which is the fold Scripts/duo-pose.sh can be
+    # relied on for — and a pose that did not happen stops the run rather
+    # than shooting a set on the wrong display.
+    if [[ -n "$pose" ]]; then
+        "$repository_root/Scripts/duo-pose.sh" "$pose" --device "$udid"
+    fi
     # After the device is clean, since a clean device is a new UDID.
-    echo "Simulator: $device_name ($udid), $screenshot_appearance"
+    echo "Simulator: $device_name ($udid), $screenshot_appearance${pose:+, $pose}"
 
     # Without the stamped library the three frames that import it would only
     # skip, so they are not run — nor retried as though they had failed.

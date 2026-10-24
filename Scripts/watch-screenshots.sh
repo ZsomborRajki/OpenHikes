@@ -249,7 +249,7 @@ fi
 if [[ -z "$udid" ]]; then
     # The newest watchOS runtime installed, so the frames show the current
     # system chrome rather than whatever old runtime is installed beside it.
-    runtime="$(newest_simulator_runtime watchOS)"
+    runtime="$(newest_simulator_runtime watchOS "$device_type")"
     [[ -n "$runtime" ]] || { echo "No watchOS simulator runtime installed." >&2; exit 1; }
     echo "Creating '$device_name' ($device_type on ${runtime##*.})"
     udid="$(xcrun simctl create "$device_name" "$device_type" "$runtime")"
@@ -309,7 +309,7 @@ fi
 if [[ "$skip_pair" == false ]]; then
     companion_udid="$(resolve_simulator_udid "$companion_name" 2>/dev/null || true)"
     if [[ -z "$companion_udid" ]]; then
-        phone_runtime="$(newest_simulator_runtime iOS)"
+        phone_runtime="$(newest_simulator_runtime iOS "$companion_type")"
         if [[ -z "$phone_runtime" ]]; then
             echo "No iOS simulator runtime installed; continuing unpaired." >&2
             skip_pair=true

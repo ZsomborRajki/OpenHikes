@@ -359,7 +359,7 @@ release_pool_lock() {
 # it first if it needs it.
 pool_template() {
     local runtime
-    runtime="$(newest_simulator_runtime iOS)"
+    runtime="$(newest_simulator_runtime iOS "$device_type")"
     if [[ -z "$runtime" ]]; then
         echo "No iOS simulator runtime installed to build a template on." >&2
         return 1
