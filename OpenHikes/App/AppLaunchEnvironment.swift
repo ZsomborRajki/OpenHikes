@@ -7,6 +7,7 @@
 //  drift and only one of them gets fixed.
 //
 
+import CoreLocation
 import Foundation
 
 nonisolated enum AppLaunchEnvironment {
@@ -45,6 +46,9 @@ nonisolated enum AppLaunchEnvironment {
         /// `nil` unless a launch asked for one route colour — see
         /// ``AppLaunchEnvironment/routeHue``.
         let routeHue: Double?
+        /// `nil` unless a launch named where the map starts — see
+        /// ``AppLaunchEnvironment/mapStart``.
+        let mapStart: MapStart?
         let failsFirstSave: Bool
         let refusesTrailPhotoCopy: Bool
         let refusesPublicationReset: Bool
@@ -60,6 +64,13 @@ nonisolated enum AppLaunchEnvironment {
         /// Whether UI automation asked for the first-run tips — see
         /// ``AppLaunchEnvironment/showsTips``.
         let showsTips: Bool
+
+        /// A coordinate, as plain numbers so the configuration stays
+        /// `Equatable`, which `CLLocationCoordinate2D` is not.
+        struct MapStart: Equatable, Sendable {
+            let latitude: Double
+            let longitude: Double
+        }
 
         // periphery:ignore - read only from the `#else` branch below, which
         // a Debug-configuration scan never compiles.
@@ -87,6 +98,7 @@ nonisolated enum AppLaunchEnvironment {
             seededWalkFixtureName = nil
             seededRecordingFixtureName = nil
             routeHue = nil
+            mapStart = nil
             failsFirstSave = false
             refusesTrailPhotoCopy = false
             refusesPublicationReset = false
@@ -112,6 +124,7 @@ nonisolated enum AppLaunchEnvironment {
         private static let seedWalksPrefix = "--ui-test-seed-walks="
         private static let seedRecordingPrefix = "--ui-test-seed-recording="
         private static let routeHuePrefix = "--ui-test-route-hue="
+        private static let mapStartPrefix = "--ui-test-map-start="
         private static let failFirstSaveArgument = "--ui-test-fail-first-save"
         private static let refuseTrailPhotoCopyArgument = "--ui-test-refuse-trail-photo-copy"
         private static let refusePublicationResetArgument = "--ui-test-refuse-publication-reset"
@@ -187,6 +200,7 @@ nonisolated enum AppLaunchEnvironment {
                 in: arguments, prefix: Self.seedRecordingPrefix, isUITesting: isUITesting
             )
             routeHue = Self.hue(in: arguments, isUITesting: isUITesting)
+            mapStart = Self.mapStart(in: arguments, isUITesting: isUITesting)
             failsFirstSave = isUITesting
                 && arguments.contains(Self.failFirstSaveArgument)
             refusesTrailPhotoCopy = isUITesting
@@ -238,6 +252,23 @@ nonisolated enum AppLaunchEnvironment {
             fixtureName(in: arguments, prefix: Self.routeHuePrefix, isUITesting: isUITesting)
                 .flatMap(Double.init)
                 .flatMap { hue in (0...1).contains(hue) ? hue : nil }
+        }
+
+        /// A coordinate read out of `--ui-test-map-start=<latitude>,<longitude>`.
+        /// Refused rather than clamped when it is not one, for the reason
+        /// ``hue(in:isUITesting:)`` gives: a scenario that asked for a place
+        /// off the globe meant something, and it was not the nearest pole.
+        private static func mapStart(in arguments: [String], isUITesting: Bool) -> MapStart? {
+            guard let value = fixtureName(
+                in: arguments, prefix: Self.mapStartPrefix, isUITesting: isUITesting
+            ) else { return nil }
+            let parts = value.split(separator: ",", omittingEmptySubsequences: false)
+            guard parts.count == 2,
+                  let latitude = Double(parts[0]),
+                  let longitude = Double(parts[1]),
+                  (-90...90).contains(latitude),
+                  (-180...180).contains(longitude) else { return nil }
+            return MapStart(latitude: latitude, longitude: longitude)
         }
 
         /// A bounded count read out of a `--flag=N` argument. Clamped rather
@@ -407,6 +438,24 @@ nonisolated enum AppLaunchEnvironment {
     /// route's own steepness colours. Still a colour from the palette, so the
     /// frames show one a hiker could have been given.
     static let routeHue = configuration.routeHue
+
+    /// Where the map should start, in place of the hiker's first fix, or `nil`
+    /// to wait for the fix as every shipping launch does.
+    ///
+    /// For the community scenarios, which ask about the area the map is
+    /// looking at and have nothing to ask until it is looking at the seeded
+    /// one. Reaching it through a simulated fix made them depend on the
+    /// location permission, which is the one piece of state a launch cannot
+    /// set and whatever ran before it on the simulator left behind: on a
+    /// device holding a refusal the map never moved, the browse said *Zoom in
+    /// to look here*, and the seeded answers were never asked for (#1041).
+    /// The map frames this coordinate exactly as it would that first fix, and
+    /// the fix, if one comes, is spent — so a launch looks at the same place
+    /// whether location is granted, undecided or refused. See
+    /// ``MapView/Coordinator/launchMapStart``.
+    static let mapStart: CLLocationCoordinate2D? = configuration.mapStart.map { start in
+        CLLocationCoordinate2D(latitude: start.latitude, longitude: start.longitude)
+    }
 
     /// Whether the first attempt to save a recording should fail.
     ///
