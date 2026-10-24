@@ -122,25 +122,29 @@ struct HikeWalkPhotoDirectionTests {
     }
 
     /// A match that lands a step behind the one before it is not a turn, so it
-    /// cannot make a one-way walk into a walk both ways, in either direction.
+    /// cannot make a one-way walk into a walk both ways. Only a walk from the
+    /// stored end has a direction such a step could change — a forward walk is
+    /// placed in route order either way — so both sides of the threshold are
+    /// pinned on one: a step back of half ``TrailWalkPolicy/minimumTurnMeters``
+    /// leaves it one way, and a stretch back of twice that is a turn.
     @Test("a step too short to be a turn does not change the direction")
     func shortStepBackIsNotATurn() throws {
         let step = TrailWalkPolicy.minimumTurnMeters / 2
-        let forward = try Self.timeline([
-            (from: 0, to: 2000), (from: 2000 - step, to: 4000),
-        ])
         let back = try Self.timeline([
             (from: 4000, to: 2000), (from: 2000 + step, to: 0),
         ])
+        let turned = try Self.timeline([
+            (from: 4000, to: 2000), (from: 2000 + 4 * step, to: 0),
+        ])
 
-        #expect(!forward.walkedTowardsStart)
         #expect(back.walkedTowardsStart)
+        #expect(!turned.walkedTowardsStart)
     }
 
-    /// A walk both ways has no order the row can say, so it keeps the route's
-    /// — the right answer for the usual out-and-back from the stored start.
-    /// Out to 3 km and back to 1 km covers 0…3000, and a quarter of the way
-    /// through is 750 m out.
+    /// A walk both ways has no order the row can say, so it keeps the route's,
+    /// as it did before #1040: a guess pending the owner's call, not where the
+    /// hiker was. Out to 3 km and back to 1 km covers 0…3000, and a quarter of
+    /// the clock is 750 m along it, though the hiker had walked 1,250 m out.
     @Test("a walk both ways is placed in route order")
     func walkBothWaysKeepsRouteOrder() throws {
         let timeline = try Self.timeline([(from: 0, to: 3000), (from: 3000, to: 1000)])
