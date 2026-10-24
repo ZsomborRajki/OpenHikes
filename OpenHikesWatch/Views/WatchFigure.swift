@@ -21,9 +21,10 @@ struct WatchFigure: View {
     /// stop being legible at arm's length.
     private static let minimumScale = 0.6
     /// The caption, in points at the default text size. Below `.caption2` on
-    /// purpose: these labels are one word each and are read once, while the
-    /// values beside them are read on every glance. Scaled with `.caption2`, so
-    /// it still grows when the value above it does.
+    /// purpose: these labels are a word or two each and are read once, while
+    /// the values beside them are read on every glance. Scaled with
+    /// `.caption2`, so it still grows when the value above it does, and left
+    /// free to wrap rather than shrink at the largest sizes.
     @ScaledMetric(relativeTo: .caption2) private var captionSize = 10.0
 
     let title: String

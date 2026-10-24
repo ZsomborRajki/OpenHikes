@@ -291,7 +291,10 @@ private struct RecordingFigures: View {
             Text(WidgetFormat.duration(seconds: stats.activeSeconds))
                 .font(.title2.monospacedDigit())
                 .accessibilityLabel("Time hiking")
-            Grid(horizontalSpacing: 8, verticalSpacing: 4) {
+            // Top-aligned, so that a caption wrapping at a large text size
+            // ("Avg Speed" is two words in a narrow column) lengthens its own
+            // tile downwards rather than lowering the value beside it.
+            Grid(alignment: .top, horizontalSpacing: 8, verticalSpacing: 4) {
                 GridRow {
                     WatchFigure(figures.distance)
                     WatchFigure(figures.climb)

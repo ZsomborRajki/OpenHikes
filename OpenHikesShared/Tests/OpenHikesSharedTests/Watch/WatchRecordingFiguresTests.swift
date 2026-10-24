@@ -44,10 +44,13 @@ struct WatchRecordingFiguresTests {
         #expect(speed.value == WidgetFormat.speed(metersPerSecond: Self.hourlyFiveKilometers, locale: locale))
     }
 
-    @Test("the speed is in the unit the region measures road speed in")
+    /// Pinned whole rather than compared with the formatter, which is what
+    /// the test above does: a value that turned into a pace, or lost its
+    /// decimal, would still equal the formatter it was built with.
+    @Test("the speed reads in the region's road unit, to one decimal")
     func speedFollowsTheLocale() {
-        #expect(Self.figures(in: Self.metric).averageSpeed.value.contains("km/h"))
-        #expect(Self.figures(in: Self.imperial).averageSpeed.value.contains("mph"))
+        #expect(Self.figures(in: Self.metric).averageSpeed.value == "5,0 km/h")
+        #expect(Self.figures(in: Self.imperial).averageSpeed.value == "3.1 mph")
     }
 
     @Test("distance and climb are formatted as everywhere else")
@@ -63,13 +66,21 @@ struct WatchRecordingFiguresTests {
         ))
     }
 
-    /// Before the second fix there is no average, and a covered sensor has no
-    /// heart rate; a zero for either would be a claim about the walk.
+    /// Before the second fix there is no average, and before HealthKit's
+    /// first sample there is no heart rate; a zero for either would be a
+    /// claim about the walk.
     @Test("nothing to say is a dash, never a zero")
     func missingFiguresAreDashes() {
         let figures = Self.figures(in: Self.metric, speed: nil, heartRate: nil)
         #expect(figures.averageSpeed.value == "—")
         #expect(figures.heartRate.value == "—")
+    }
+
+    /// `Int(_:)` traps on these, and this screen is where a crash costs the
+    /// walk.
+    @Test("a heart rate that is not a number is no reading", arguments: [Double.nan, .infinity, -.infinity])
+    func nonFiniteHeartRateIsADash(beats: Double) {
+        #expect(Self.figures(in: Self.metric, heartRate: beats).heartRate.value == "—")
     }
 
     @Test("a heart rate is whole beats")
