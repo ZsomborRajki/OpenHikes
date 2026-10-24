@@ -165,8 +165,8 @@ public struct WatchRouteTracker: Sendable, Equatable {
     /// The legs a pause opened, by the index of the point they leave. Never
     /// matched against.
     ///
-    /// ``WatchTrailPackage/pausedLegs``, which is also what the map draws as
-    /// a pause, so the leg the map breaks is exactly the leg refused here.
+    /// ``WatchTrailPackage/pausedLegs``, which the map's dotted stretches are
+    /// made of, so the leg the map breaks is exactly the leg refused here.
     private let pausedSegments: Set<Int>
     /// Trail metres per line metre. See this file's header.
     private let scale: Double
