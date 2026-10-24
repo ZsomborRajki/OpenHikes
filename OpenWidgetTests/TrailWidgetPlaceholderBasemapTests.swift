@@ -124,6 +124,6 @@ struct TrailWidgetPlaceholderBasemapTests {
         #expect(entry.snapshot?.polyline == Self.polyline)
         let followed = TrailWidgetProvider.followedPlaceholderEntry()
         #expect(followed.basemaps == Self.set)
-        #expect(followed.snapshot?.liveFix != nil, "the followed preview draws every element")
+        #expect(followed.snapshot?.liveFix != nil, "the followed preview draws its progress bar")
     }
 }

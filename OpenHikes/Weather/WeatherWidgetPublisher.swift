@@ -197,7 +197,7 @@ extension WeatherBadgeState {
     /// temperature on the home screen. `loading` is never asked — see
     /// ``publishesToWidget``.
     var sharedReading: SharedWeatherReading? {
-        guard let snapshot, let subject else { return nil }
+        guard case let .reading(snapshot, subject) = self else { return nil }
         return SharedWeatherReading(
             temperatureCelsius: snapshot.temperature
                 .converted(to: .celsius)
@@ -208,10 +208,10 @@ extension WeatherBadgeState {
     }
 }
 
-extension WeatherSubject {
+nonisolated extension WeatherSubject {
     /// What the widget is told a reading is about — see
     /// `SharedWeatherReading.Subject` for why that is the identity alone.
-    nonisolated var sharedSubject: SharedWeatherReading.Subject {
+    var sharedSubject: SharedWeatherReading.Subject {
         switch self {
         case .me: .hiker
         case .place: .place
