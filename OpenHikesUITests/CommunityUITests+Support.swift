@@ -145,14 +145,23 @@ nonisolated enum SeededCommons {
 private let communityListSweepScreens = 4
 
 extension XCTestCase {
-    /// A launch with a stand-in public database, a fix on the fixture
-    /// trailhead, and the sheet already open.
+    /// A launch with a stand-in public database, the map starting over the
+    /// fixture trailhead, and the sheet already open.
     ///
-    /// The location is not optional decoration. ``CommunityBrowser`` asks its
-    /// question about a *region*, and a launch with no fix leaves the map
-    /// wherever it starts — so the browse either sits on a spinner or reports
-    /// that the hiker is zoomed too far out, and neither is the screen these
-    /// scenarios are about.
+    /// Where the map starts is not optional decoration. ``CommunityBrowser``
+    /// asks its question about a *region*, and a map left wherever it starts
+    /// either sits on a spinner or reports that the hiker is zoomed too far
+    /// out, and neither is the screen these scenarios are about.
+    ///
+    /// The start is named by `--ui-test-map-start` rather than reached
+    /// through the simulated fix, because the fix only arrives with the
+    /// location permission, and that is whatever the last scenario on this
+    /// simulator left behind. On a device holding a refusal the map never
+    /// moved, and the Commons scenarios failed waiting for a pin the browse
+    /// was never asked for (#1041). The app frames the start as it would a
+    /// first fix and spends the fix, so the scenario sees the same map
+    /// granted, undecided or refused. The fix is still set at the same spot,
+    /// for anything that wants the hiker's own dot.
     @MainActor
     @discardableResult func launchCommunity(
         scenario: SeededCommunityScenario,
@@ -163,11 +172,12 @@ extension XCTestCase {
                 "--ui-test-expanded-sheet",
                 "--ui-test-enable-location",
                 "--ui-test-community=\(scenario.rawValue)",
+                "--ui-test-map-start=\(UITestFixture.trailheadLatitude),\(UITestFixture.trailheadLongitude)",
             ] + extraArguments
         )
-        // Deliberately no `resetAuthorizationStatus(for: .location)`. These
-        // scenarios only need the app to know roughly where it is, and the
-        // reset is the call the release review caught hanging for thirty
+        // Deliberately no `resetAuthorizationStatus(for: .location)`. The map
+        // start above is what puts these scenarios in the seeded area, and
+        // the reset is the call the release review caught hanging for thirty
         // seconds on a contended runner. Whatever a clone's last scenario left
         // behind, the monitor below grants the prompt if one appears and
         // nothing asks for one if it does not.
@@ -217,12 +227,12 @@ extension XCTestCase {
     /// to.
     ///
     /// Not a workaround for the test's benefit — it is the gesture the feature
-    /// is built around. The sheet opens before the simulated fix arrives, the
-    /// map then moves to it, and a new region is a new question the hiker did
-    /// not ask: ``CommunityQueryPolicy`` puts up *Search this area* rather
-    /// than spending a query on a map that is still moving. A scenario that
-    /// skipped this would be asserting against the region the map happened to
-    /// start in, which is not where the seeded hikes are.
+    /// is built around. The map can move after the sheet has opened — the
+    /// launch's start is framed with an animation, and a scenario that pans
+    /// moves it again — and a new region is a new question the hiker did not
+    /// ask: ``CommunityQueryPolicy`` puts up *Search this area* rather than
+    /// spending a query on a map that is still moving. A scenario that skipped
+    /// this would be asserting against a region nobody searched.
     ///
     /// **This is the wait that was mis-set, and it failed silently.** It was a
     /// ten-second `waitForExistence` followed by `guard … else { return }`, so
@@ -270,8 +280,8 @@ extension XCTestCase {
     /// Waits for `target` while re-offering *Search this area*.
     ///
     /// The wait every community scenario needs and only one of them used to
-    /// have. The map can settle **twice** — the sheet opens before the
-    /// simulated fix arrives — so the pill can come back after
+    /// have. The map can settle **twice** — the sheet can open before the
+    /// map has finished moving to its start — so the pill can come back after
     /// ``selectCommunityTab(in:)`` already dealt with one, and anything waited
     /// for through that is waited for in vain: the browser is not going to
     /// answer a question nobody asked. A bare `waitForExistence` therefore

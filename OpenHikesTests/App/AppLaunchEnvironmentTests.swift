@@ -298,6 +298,24 @@ struct AppLaunchEnvironmentTests {
         }
     }
 
+    /// Where the map starts is read as a coordinate or not at all: anything
+    /// off the globe, or not two numbers, is refused rather than clamped onto
+    /// it.
+    @Test("a map start is read as a coordinate, and anything else is refused")
+    func mapStart() {
+        let named = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-testing", "--ui-test-map-start=47.71842,12.831774"]
+        )
+        #expect(named.mapStart == .init(latitude: 47.71842, longitude: 12.831774))
+
+        for value in ["", "47.7", "47.7,12.8,3", "91,12.8", "47.7,181", "nan,12.8", "north,east", "47.7,"] {
+            let configuration = AppLaunchEnvironment.Configuration(
+                arguments: ["OpenHikes", "--ui-testing", "--ui-test-map-start=\(value)"]
+            )
+            #expect(configuration.mapStart == nil, "\(value) is not a coordinate")
+        }
+    }
+
     /// Every test-only option is inert without `--ui-testing`, which is what
     /// stops a stray argument on a shipping launch from seeding a hiker's
     /// library or faking their weather.
@@ -317,6 +335,7 @@ struct AppLaunchEnvironmentTests {
                 "--ui-test-seed-recording=KoenigsseeRinnkendlsteig",
                 "--ui-test-route-hue=0.68",
                 "--ui-test-tips",
+                "--ui-test-map-start=47.71842,12.831774",
             ]
         )
 
@@ -331,5 +350,6 @@ struct AppLaunchEnvironmentTests {
         #expect(configuration.seededRecordingFixtureName == nil)
         #expect(configuration.routeHue == nil)
         #expect(!configuration.showsTips)
+        #expect(configuration.mapStart == nil)
     }
 }

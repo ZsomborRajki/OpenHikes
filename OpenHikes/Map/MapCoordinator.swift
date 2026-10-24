@@ -22,6 +22,11 @@ extension MapView {
         /// a selected route. Recorded either way, so a later deselection
         /// doesn't hand the next fix a recentre the user never asked for.
         var hasHandledFirstFix = false
+        /// Where a UI-test launch asked the map to start, which is handled as
+        /// the first fix — see ``AppLaunchEnvironment/mapStart``. A property
+        /// rather than a read of the launch so a suite can hand one to a
+        /// coordinator of its own; every other launch leaves it `nil`.
+        var launchMapStart = AppLaunchEnvironment.mapStart
         /// Guards `observeLocation` so `update(_:_:)` — called on every
         /// SwiftUI-driven pass — only starts the location-tracking loop once.
         private var isObservingLocation = false
@@ -479,6 +484,9 @@ extension MapView {
         func observeLocation(_ locationManager: LocationManager, on mapView: MKMapView) {
             guard !isObservingLocation else { return }
             isObservingLocation = true
+            // Ahead of the feed, so a launch that named its start is framed
+            // there and the real first fix finds its chance already spent.
+            centerOnUser(launchMapStart, on: mapView)
             trackLocation(locationManager, on: mapView)
         }
 

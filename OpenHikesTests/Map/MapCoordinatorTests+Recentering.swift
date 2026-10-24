@@ -60,6 +60,38 @@ extension MapCoordinatorTests {
         #expect(map.region.center.latitude == centered, "a later fix must not drag the map back")
     }
 
+    /// A launch that names where the map starts is framed there before any
+    /// fix, and the fix that follows finds its one chance spent — which is
+    /// what makes a community scenario look at the same place whatever the
+    /// location permission on the simulator says (#1041).
+    @Test("a launch's map start frames the map, and spends the first fix")
+    func launchMapStartStandsInForTheFirstFix() async {
+        let coordinator = MapView.Coordinator()
+        coordinator.launchMapStart = CLLocationCoordinate2D(latitude: 47.6300, longitude: 12.8600)
+        let view = mapView()
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        view.update(map, coordinator)
+
+        #expect(coordinator.hasHandledFirstFix, "the start is handled as the first fix, before any fix arrives")
+        await settleDelegateHop(until: "the start to frame the map") {
+            map.region.center.latitude.isApproximatelyEqual(to: 47.6300, absoluteTolerance: Self.centerTolerance)
+        }
+        let started = map.region.center.latitude
+
+        locationManager.locationManager(
+            CLLocationManager(),
+            didUpdateLocations: [CLLocation(latitude: 47.6400, longitude: 12.8600)]
+        )
+        await settleDelegateHop(until: "the fix to be published") {
+            locationManager.coordinate?.latitude == 47.6400
+        }
+        await settle()
+
+        #expect(locationManager.coordinate?.latitude == 47.6400, "precondition: the fix was published")
+        #expect(map.region.center.latitude == started, "a fix after the start must not move the map")
+    }
+
     /// A selected route owns the viewport. Centring on the user as well would
     /// yank the map off the trail the moment a fix arrives.
     @Test("a fix doesn't recentre while a route is selected")
