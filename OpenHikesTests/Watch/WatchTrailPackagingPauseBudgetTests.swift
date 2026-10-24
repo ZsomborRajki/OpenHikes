@@ -17,12 +17,12 @@ import Testing
 
 @Suite("Packaging a heavily segmented trail for the watch")
 struct WatchTrailPackagingPauseBudgetTests {
-    @Test("a route with more pauses than the budget still crosses within it")
-    func pointsStayWithinTheBudget() async throws {
+    @Test("a route with more pauses than the budget crosses as exactly the budget")
+    func pointsComeToTheBudget() async throws {
         let package = try #require(await WatchTrailPackaging.package(from: Fixture.segmentedInput))
 
-        #expect(package.points.count <= WatchTrailPackage.pointBudget)
-        #expect(package.pauseIndices.count <= WatchTrailPackage.pauseBudget)
+        #expect(package.points.count == WatchTrailPackage.pointBudget)
+        #expect(package.pauseIndices.count == WatchTrailPackage.pauseBudget)
         // What the watch's map draws: a casing and a line per walked run, and
         // one line per paused stretch.
         let polylines = 2 * package.walkedRuns.count + package.pausedStretches.count

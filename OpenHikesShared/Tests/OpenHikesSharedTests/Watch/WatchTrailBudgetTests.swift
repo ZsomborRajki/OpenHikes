@@ -40,27 +40,71 @@ struct WatchTrailBudgetTests {
         #expect(kept.pauseIndices == [3, 6, 9])
     }
 
+    /// A stride over the whole route spent a point on each end it happened
+    /// to keep, so this crossed as 714 points though all 800 fit (#1053).
+    @Test("a route that fits crosses whole, pauses and all")
+    func aRouteThatFitsCrossesWhole() {
+        let kept = WatchTrailPackage.keptPoints(count: 800, pauses: Self.pauses(count: 800, every: 16))
+
+        #expect(kept.routeIndices == Array(0..<800))
+        #expect(kept.pauseIndices == Array(stride(from: 16, to: 800, by: 16)))
+    }
+
+    /// What a lost point costs on the watch: the stride over the whole route
+    /// dropped this bend, and a hiker standing on it read about 200 m off the
+    /// trail (#1053).
+    @Test("a hiker on a bend of a route that fits is on the trail")
+    func aRouteThatFitsKeepsItsBends() throws {
+        let bend = 7
+        let route = (0..<750).map { index in
+            WatchTrailPoint(latitude: 47.55 + Double(index) * 0.0001, longitude: index == bend ? 12.9025 : 12.90)
+        }
+        let kept = WatchTrailPackage.keptPoints(count: route.count, pauses: Self.pauses(count: 501, every: 10))
+        var tracker = WatchRouteTracker(WatchTrailPackage(
+            hikeID: UUID(),
+            title: "Bend",
+            tintHex: "#1B7F3B",
+            totalDistanceMeters: 8000,
+            points: kept.routeIndices.map { route[$0] },
+            pauseIndices: kept.pauseIndices
+        ))
+
+        let reading = tracker.advance(latitude: route[bend].latitude, longitude: route[bend].longitude)
+        let onTheBend = try #require(reading)
+        #expect(onTheBend.isOnTrail)
+    }
+
+    /// A GPX file of 100 nine-point segments: 99 pauses, 50 of which cross.
+    /// A stride over the whole route crossed it as 700 points (#1053).
+    @Test("a file past the budget crosses as exactly the budget")
+    func aSegmentedFileFillsTheBudget() {
+        let kept = WatchTrailPackage.keptPoints(count: 900, pauses: Self.pauses(count: 900, every: 9))
+
+        #expect(kept.routeIndices.count == WatchTrailPackage.pointBudget)
+        #expect(kept.pauseIndices.count == WatchTrailPackage.pauseBudget)
+    }
+
     /// The issue's own figures: 2,000 segments of ten points kept 4,648.
-    @Test("a route with thousands of pauses stays within the point budget")
+    @Test("a route with thousands of pauses crosses as exactly the point budget")
     func manyPausesStayWithinBudget() {
         let kept = WatchTrailPackage.keptPoints(count: 20_000, pauses: Self.pauses(count: 20_000, every: 10))
 
-        #expect(kept.routeIndices.count <= WatchTrailPackage.pointBudget)
+        #expect(kept.routeIndices.count == WatchTrailPackage.pointBudget)
         #expect(kept.pauseIndices.count == WatchTrailPackage.pauseBudget)
         #expect(kept.routeIndices.first == 0)
         #expect(kept.routeIndices.last == 19_999)
     }
 
     @Test(
-        "the kept count never passes the budget, however many pauses there are",
+        "a route past the budget crosses as exactly the budget, however many pauses it has",
         arguments: [0, 1, 10, 49, 50, 51, 399, 400, 401, 799, 5000]
     )
-    func neverPastTheBudget(pauseCount: Int) {
+    func exactlyTheBudget(pauseCount: Int) {
         let count = 6000
         let pauses = (0..<pauseCount).map { Pause(resumedAt: 1 + $0, gapMeters: Double($0)) }
         let kept = WatchTrailPackage.keptPoints(count: count, pauses: pauses)
 
-        #expect(kept.routeIndices.count <= WatchTrailPackage.pointBudget)
+        #expect(kept.routeIndices.count == WatchTrailPackage.pointBudget)
         #expect(kept.pauseIndices.count == min(pauseCount, WatchTrailPackage.pauseBudget))
         #expect(kept.routeIndices == kept.routeIndices.sorted())
         #expect(Set(kept.routeIndices).count == kept.routeIndices.count)

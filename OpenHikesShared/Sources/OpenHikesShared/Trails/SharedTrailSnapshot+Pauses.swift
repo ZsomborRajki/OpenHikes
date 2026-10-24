@@ -7,8 +7,8 @@
 //  A plain stride (``decimatedIndices(count:maxPoints:)``) drops points by
 //  index, so it can drop either end of a paused leg, and then the leg it
 //  draws is a drive folded into a stretch with walking in it: neither a pause
-//  nor trail. The watch's packager keeps both ends of every pause for that
-//  reason, with no cap, and a heavily segmented GPX file pays for that (#1023).
+//  nor trail. The watch's packager keeps both ends of the pauses it sends for
+//  that reason, as many as ``WatchTrailPackage/pauseBudget`` (#1023).
 //  This keeps both ends of as many pauses as ``SharedTrailSnapshot/pauseEndBudget``
 //  allows, longest first, and spends the rest of the widget's points on the
 //  stride, so the line never grows past `maxPoints`.
