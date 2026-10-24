@@ -273,6 +273,44 @@ struct WatchWalkAccumulatorTests {
         #expect(sent.title == "Rinnkendlsteig")
     }
 
+    /// What the phone hands Health for a watch walk. Each figure was `nil`
+    /// whenever it was zero, which wrote a measured level walk no ascent at
+    /// all and gave a walk that only climbed a `nil` descent beside a real
+    /// ascent. Both are `nil` until two trusted heights, as on the phone, and
+    /// counted, zeros included, from then on.
+    @Test(
+        "The walk sent to the phone climbs and descends by the phone's rule",
+        arguments: [
+            ([nil, nil, nil], nil, nil),
+            ([600, nil, nil], nil, nil),
+            ([600, 600, 600], 0, 0),
+            ([600, 650, 700], 100, 0),
+            ([700, 650, 600], 0, 100),
+        ] as [([Double?], Double?, Double?)]
+    )
+    func theSentClimbFollowsThePhonesRule(heights: [Double?], gain: Double?, loss: Double?) throws {
+        var walk = WatchWalkAccumulator()
+        for (step, height) in heights.enumerated() {
+            walk.accept(
+                latitude: Fixture.latitude + Double(step) * 0.0001,
+                longitude: Fixture.longitude,
+                timestamp: Fixture.start.addingTimeInterval(Double(step) * Fixture.stepSeconds),
+                horizontalAccuracy: 5,
+                elevationMeters: height
+            )
+        }
+        let sent = try #require(
+            walk.recordedWalk(
+                sessionID: Fixture.sessionID,
+                startedAt: Fixture.start,
+                endedAt: Fixture.start.addingTimeInterval(Double(heights.count - 1) * Fixture.stepSeconds)
+            )
+        )
+        #expect(sent.fixes.count == heights.count)
+        #expect(sent.elevationGainMeters == gain)
+        #expect(sent.elevationLossMeters == loss)
+    }
+
     private enum Fixture {
         static let latitude = 47.55
         static let longitude = 12.90
