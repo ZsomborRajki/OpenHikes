@@ -94,6 +94,56 @@ extension MapCoordinatorTests {
         #expect(map.region.center.latitude == started, "a fix after the start must not move the map")
     }
 
+    /// The start is framed in the coordinator's first `update`, which can
+    /// come before SwiftUI has given the map a size, and every other map in
+    /// this suite is sized first. MapKit holds a region asked for on a map
+    /// with no size and applies it once the map has one, so the start comes
+    /// out framed as it is on a map sized first: the span a fix gets.
+    @Test("a start asked for before the map has a size is framed as on a sized map")
+    func launchMapStartBeforeTheMapHasASize() async {
+        let start = CLLocationCoordinate2D(latitude: 47.6300, longitude: 12.8600)
+        let sizedCoordinator = MapView.Coordinator()
+        sizedCoordinator.launchMapStart = start
+        let sizedView = mapView()
+        let sized = makeMap(sizedView, sizedCoordinator)
+        defer { detach(sized) }
+        sizedView.update(sized, sizedCoordinator)
+
+        let coordinator = MapView.Coordinator()
+        coordinator.launchMapStart = start
+        let view = mapView()
+        let map = view.makeMapView(coordinator)
+        defer { detach(map) }
+        #expect(map.bounds.isEmpty, "precondition: the map has no size at its first update")
+        view.update(map, coordinator)
+        map.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        map.layoutIfNeeded()
+
+        await settleDelegateHop(until: "both maps to frame the start alike") {
+            map.region.center.latitude.isApproximatelyEqual(to: start.latitude, absoluteTolerance: Self.centerTolerance)
+                && Self.framesAlike(map.region, sized.region)
+        }
+        #expect(
+            Self.framesAlike(map.region, sized.region),
+            "a start asked for before the map had a size must land at the span a sized map gives it"
+        )
+    }
+
+    /// Whether two regions show the same piece of map: centres within the
+    /// suite's tolerance, and spans within about a metre.
+    private static func framesAlike(_ region: MKCoordinateRegion, _ other: MKCoordinateRegion) -> Bool {
+        let spanTolerance = 0.00001
+        return region.center.latitude.isApproximatelyEqual(
+            to: other.center.latitude, absoluteTolerance: centerTolerance
+        ) && region.center.longitude.isApproximatelyEqual(
+            to: other.center.longitude, absoluteTolerance: centerTolerance
+        ) && region.span.latitudeDelta.isApproximatelyEqual(
+            to: other.span.latitudeDelta, absoluteTolerance: spanTolerance
+        ) && region.span.longitudeDelta.isApproximatelyEqual(
+            to: other.span.longitudeDelta, absoluteTolerance: spanTolerance
+        )
+    }
+
     /// A selected route owns the viewport. Centring on the user as well would
     /// yank the map off the trail the moment a fix arrives.
     @Test("a fix doesn't recentre while a route is selected")
