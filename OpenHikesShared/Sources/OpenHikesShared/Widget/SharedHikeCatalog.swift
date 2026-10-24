@@ -109,6 +109,12 @@ public extension SharedHikeCatalog {
     /// it, so what this does is deliberately the weaker, obvious thing. A
     /// picker offering one row too many is recoverable; a clever ranking that
     /// disagrees with the app's search is two answers to one question.
+    ///
+    /// So it differs from the sheet's search field in three ways, on purpose:
+    /// width is not folded (a full-width "ＲＩＤＧＥ" does not answer "ridge"),
+    /// matches keep the catalogue's newest-first order rather than putting a
+    /// prefix first, and a blank query is every hike, because that is the
+    /// picker before anything has been typed.
     func hikes(matching text: String) -> [SharedHikeSummary] {
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return hikes }

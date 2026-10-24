@@ -136,9 +136,22 @@ nonisolated enum SharedHikeCatalogPublisher {
         _ reports: [FinishedHikeReport],
         watch: WatchSessionCoordinator?
     ) async {
-        let catalog = SharedHikeCatalog(hikes: reports.map(HikeEntity.summary(of:)))
+        let catalog = Self.catalog(from: reports)
         SharedStore.saveHikeCatalog(catalog)
         if let watch { await watch.publish(catalog) }
+    }
+
+    /// The catalogue the App Group and the watch are handed for `reports`,
+    /// built without writing it.
+    ///
+    /// Its own function so that a suite names hikes against exactly the rows
+    /// Siri, the shortcut picker and the widget's configuration picker read
+    /// through ``HikeEntityQuery`` and ``SharedHikeCatalog/hikes(matching:)``,
+    /// rather than against a matcher of its own (#1029). It reads nothing:
+    /// `reports` is the reading the sweep already made, which at launch
+    /// ``publishLibrary(from:to:)`` hands to Spotlight too.
+    static func catalog(from reports: [FinishedHikeReport]) -> SharedHikeCatalog {
+        SharedHikeCatalog(hikes: reports.map(HikeEntity.summary(of:)))
     }
 
     /// A trail snapshot for each hike a placed widget is pinned to, and

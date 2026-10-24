@@ -9,10 +9,17 @@
 //
 //  `AppEntity` conformance itself is the system's to exercise; what is
 //  asserted here is everything under it, which is where the behaviour lives:
-//  what a name matches, what happens to an entity whose hike is gone, and that
-//  Siri and the search field fold names by the same rule. That last one is the
-//  point of ``HikeNameMatch`` existing — a trail findable by typing that is
-//  not findable by saying it reads as Siri being broken.
+//  which name a hike answers to, and what happens to an entity whose hike is
+//  gone.
+//
+//  A name is matched the way Siri and the pickers match it: against the
+//  catalogue the app publishes to the App Group, through
+//  ``SharedHikeCatalog/hikes(matching:)``. That is the only name match
+//  ``HikeEntityQuery`` makes, so a test of any other matcher would pass
+//  whatever Siri did (#1029). How the match folds and orders is pinned beside
+//  it, in `SharedHikeCatalogTests`; what is pinned here is what only the app
+//  can get wrong — which name each hike is published under, and which hikes
+//  are published at all.
 //
 
 import Foundation
@@ -36,34 +43,6 @@ final class HikeEntityQueryTests {
 
     // MARK: - Naming a hike
 
-    @Test("a hike is found by a word from the middle of its name")
-    func aNameMatchesWithoutBeingAnchored() async throws {
-        try insert(title: "North Ridge Trail")
-        try insert(title: "Thumsee Loop")
-
-        let found = try await coordinator().finishedHikes(matchingName: "ridge")
-        #expect(found.map(\.title) == ["North Ridge Trail"])
-    }
-
-    /// The whole reason the rule is shared: a name dictated to Siri and one
-    /// typed on a German keyboard differ in exactly these ways.
-    @Test("case and diacritics are folded away, as they are in the search field")
-    func nameMatchingFoldsTheSameWayTheSearchFieldDoes() async throws {
-        try insert(title: "Zugspitze über den Stopselzieher")
-
-        #expect(try await coordinator().finishedHikes(matchingName: "ZUGSPITZE").count == 1)
-        #expect(try await coordinator().finishedHikes(matchingName: "uber").count == 1)
-    }
-
-    @Test("a name that starts with the query is ranked above one that merely contains it")
-    func prefixMatchesComeFirst() async throws {
-        try insert(title: "Old Ridge Path")
-        try insert(title: "Ridge Direct")
-
-        let found = try await coordinator().finishedHikes(matchingName: "ridge")
-        #expect(found.map(\.title) == ["Ridge Direct", "Old Ridge Path"])
-    }
-
     /// `HikeSearch` argues this at length for the sheet, and Siri has exactly
     /// the same problem: a renamed hike keeps its imported `title`, and the
     /// new name is the only one the hiker has ever seen.
@@ -72,29 +51,28 @@ final class HikeEntityQueryTests {
         try insert(title: "2026-07-04 14:12") { hike in
             hike.customName = "Kalvarienberg"
         }
+        let catalog = try await publishedCatalog()
 
-        #expect(try await coordinator().finishedHikes(matchingName: "Kalvarienberg").count == 1)
+        #expect(catalog.hikes(matching: "Kalvarienberg").map(\.name) == ["Kalvarienberg"])
         #expect(
-            try await coordinator().finishedHikes(matchingName: "2026-07-04").isEmpty,
+            catalog.hikes(matching: "2026-07-04").isEmpty,
             "the imported title is not a name anybody has seen"
         )
     }
 
-    @Test("an empty query matches nothing rather than everything")
-    func anEmptyQueryIsNotAWildcard() async throws {
-        try insert(title: "Thumsee Loop")
-
-        #expect(try await coordinator().finishedHikes(matchingName: "").isEmpty)
-        #expect(try await coordinator().finishedHikes(matchingName: "   ").isEmpty)
-    }
-
+    /// Asked of a blank query as well as of a word from its name, because a
+    /// blank query is every published hike: the draft has to be missing from
+    /// the catalogue, not merely fail to match.
     @Test("a recording in progress cannot be named")
     func aDraftIsNotNameable() async throws {
         try insert(title: "Being walked now") { hike in
             hike.isRecording = true
         }
+        try insert(title: "Thumsee Loop")
+        let catalog = try await publishedCatalog()
 
-        #expect(try await coordinator().finishedHikes(matchingName: "walked").isEmpty)
+        #expect(catalog.hikes(matching: "walked").isEmpty)
+        #expect(catalog.hikes(matching: "").map(\.name) == ["Thumsee Loop"])
     }
 
     // MARK: - Resolving an identifier
@@ -154,6 +132,14 @@ final class HikeEntityQueryTests {
     // MARK: - Harness
 
     private lazy var now = Date(timeIntervalSince1970: 1_757_000_000)
+
+    /// What the app writes to the App Group for ``HikeEntityQuery`` to read:
+    /// the library the publisher's sweep reads, built into a catalogue by the
+    /// publisher's own function but kept in memory, so no suite writes the
+    /// container that a running widget reads.
+    private func publishedCatalog() async throws -> SharedHikeCatalog {
+        SharedHikeCatalogPublisher.catalog(from: try await coordinator().finishedHikes())
+    }
 
     private func coordinator() -> HikeIntentCoordinator {
         let instance = HikeRecorder(

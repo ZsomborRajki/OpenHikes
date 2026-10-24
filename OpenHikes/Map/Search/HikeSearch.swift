@@ -89,9 +89,10 @@ final class HikeSearch {
     /// The ranking itself, over indices into the caller's array so the cached
     /// key and the cached result are built from one pass over the names.
     private static func rank(_ inputs: [(id: UUID, displayTitle: String)], matching query: String) -> [Int] {
-        // The rule itself lives in ``HikeNameMatch``, because Siri and
-        // Spotlight ask the same question of the same names through
-        // ``HikeEntityQuery`` and the two must not drift.
+        // The rule itself lives in ``HikeNameMatch``. Siri and the pickers do
+        // not share it: ``HikeEntityQuery`` matches the App Group catalogue's
+        // copy of these names with a weaker rule of its own, as
+        // ``HikeNameMatch``'s header explains.
         HikeNameMatch.rankedIndices(of: inputs.map(\.displayTitle), matching: query)
     }
 }
