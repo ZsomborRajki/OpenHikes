@@ -154,6 +154,17 @@ final class WatchRecorder: NSObject {
     /// kept walk already includes it.
     var onWalkQueued: (@MainActor (WatchRecordedWalk, WatchQueuedWalks) -> Void)?
 
+    /// Called once whenever a recording ends and has taken the location
+    /// receiver down with it, whatever ended it.
+    ///
+    /// For the reason ``onWalkQueued`` is a callback: ``stop()`` is not always
+    /// the hiker's. A trail map still open under the recording was drawing
+    /// from this receiver, and only the model knows whether one is still
+    /// asking. Told from here, a failed workout session gives that map its
+    /// feed back the way a Stop does; told only after the hiker's Stop, the
+    /// map's figures froze where the session failed (issue #1021).
+    var onRecordingEnded: (@MainActor () -> Void)?
+
     @ObservationIgnored private let store: WatchStore
     /// The complication's copy of this recording — see ``WatchGlance``.
     @ObservationIgnored private let glances = WatchGlancePublisher()
@@ -260,6 +271,10 @@ final class WatchRecorder: NSObject {
         endWorkoutSession()
         // Whatever happens to the walk below, nothing is being recorded now.
         glances.publish(.idle(at: .now))
+        // Now rather than once the walk is written: the phase is no longer
+        // active, so a trail screen still asking can have the receiver back
+        // at once instead of after a disk write.
+        onRecordingEnded?()
 
         let walk = accumulator.recordedWalk(
             sessionID: sessionID,
@@ -812,7 +827,9 @@ nonisolated extension WatchRecorder: HKWorkoutSessionDelegate {
             // The session is what keeps this app running, so losing it is not
             // a detail — but the walk so far is on the accumulator and stop()
             // will keep it. Stopping is therefore better than carrying on
-            // into a suspension nobody would be told about.
+            // into a suspension nobody would be told about. The walk reaches
+            // the phone through ``onWalkQueued``, and an open trail map gets
+            // its feed back through ``onRecordingEnded``, as for a Stop.
             Task { await self.stop() }
         }
     }

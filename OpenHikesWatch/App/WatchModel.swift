@@ -95,6 +95,7 @@ final class WatchModel {
         if let trail { tracker = WatchRouteTracker(trail) }
         recorder.onFix = { [weak self] location in self?.advanceFollow(with: location) }
         recorder.onWalkQueued = { [weak self] walk, queued in self?.walkQueued(walk, queued: queued) }
+        recorder.onRecordingEnded = { [weak self] in self?.recordingEnded() }
     }
 
     #if DEBUG
@@ -323,14 +324,25 @@ final class WatchModel {
     }
 
     /// Stops. The walk, if there was one, goes through
-    /// ``walkQueued(_:queued:)``.
+    /// ``walkQueued(_:queued:)``, and the receiver through
+    /// ``recordingEnded()``.
     func stopRecording() async {
         await recorder.stop()
+    }
+
+    /// A recording ended and took the receiver down with it, whether the
+    /// hiker pressed Stop or a workout session failed under them.
+    ///
+    /// The hook rather than the tail of ``stopRecording()``, for the reason
+    /// ``walkQueued(_:queued:)`` is one: a failed session stops the recorder
+    /// without passing through here, and a trail map open behind it went on
+    /// showing the reading from the moment it failed (issue #1021).
+    private func recordingEnded() {
         // A walk along a trail leaves the hiker where they finished it, which
         // is where they are. Nothing is cleared — but the receiver is: the
         // recording owned it and stopping took it down, and a trail screen
-        // left open behind it would freeze the hiker's dot where they
-        // pressed Stop. A screen already gone asks for nothing.
+        // left open behind it would freeze the hiker's dot where the
+        // recording ended. A screen already gone asks for nothing.
         applyToReceiver(followClaim.recordingStopped(holding: trail?.followableHikeID))
     }
 
