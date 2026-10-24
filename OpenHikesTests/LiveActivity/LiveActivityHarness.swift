@@ -105,9 +105,9 @@ enum LiveActivityHarness {
         )
     }
 
-    /// - Parameter session: which recording this is. Every suite but one
-    ///   means the same recording throughout; the one that does not is
-    ///   asking whether something outlives it into the next.
+    /// - Parameter session: which recording this is. Left at its default, every
+    ///   request is the one recording ``sessionID`` names; pass another to
+    ///   start a second recording and ask what outlives the first.
     static func recordingRequest(
         distanceMeters: Double = 1000,
         runState: HikeActivityAttributes.ContentState.RunState = .running,
