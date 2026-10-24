@@ -60,7 +60,9 @@ extension ScreenshotUITests {
         chooseWalking(in: app)
 
         for (index, stop) in Self.searchedStops.enumerated() {
-            element(stop.row, in: app).tap()
+            // Scrolled to rather than tapped where it stands: on the closed
+            // iPhone Duo, two stops push *Add Stop* below the middle detent.
+            scrollToTap(element(stop.row, in: app), in: app)
             pickSearchResult(stop, in: app)
             XCTAssertTrue(
                 element("trail-draft-point-\(index + 1)", in: app)
