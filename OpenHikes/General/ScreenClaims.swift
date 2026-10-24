@@ -64,7 +64,11 @@ struct ScreenClaims<Payload> {
     }
 }
 
-extension EnvironmentValues {
+// `nonisolated` because `@Entry` writes its key as a type nested in this
+// extension. Unannotated, the key and the value would be main-actor isolated,
+// and a nested type in an unannotated extension is what CodeQL's older Swift
+// has refused before. See *Concurrency* in `AGENTS.md`.
+nonisolated extension EnvironmentValues {
     /// How deep in the sheet's navigation stack a screen is: 0 for the sheet's
     /// own root, 1 for the first screen pushed. Set on every pushed screen by
     /// ``MapSheet`` and read by the modifiers that claim a piece of the map — see
