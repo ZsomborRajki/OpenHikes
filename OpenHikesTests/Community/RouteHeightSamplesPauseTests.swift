@@ -64,18 +64,18 @@ struct RouteHeightSamplesPauseTests {
         }
     }
 
-    @Test("both ends of a paused leg are asked about, on top of the even spread")
+    /// The ends come out of the two hundred rather than on top of them, as
+    /// the privacy policy's figure needs. `CuratedElevationPauseBudgetTests`
+    /// holds the limit for routes with more pauses.
+    @Test("both ends of a paused leg are asked about, within the request's two hundred")
     func pauseEndsAreSampled() {
         let indexes = CuratedElevationRequest.sampleIndexes(of: Self.route)
 
         #expect(Self.route.count > CuratedElevationRequest.maximumShapePoints, "precondition: the route is sampled")
         #expect(indexes.contains(396) && indexes.contains(397), "the last walked point and the pause's end")
+        #expect(indexes.count == CuratedElevationRequest.maximumShapePoints, "the limit, and no more")
         #expect(indexes == indexes.sorted() && Set(indexes).count == indexes.count, "ascending, once each")
         #expect(indexes.first == 0 && indexes.last == Self.route.count - 1, "both ends of the route")
-        #expect(
-            Set(CuratedElevationRequest.sampleIndexes(count: Self.route.count)).isSubset(of: indexes),
-            "the even spread is still all there"
-        )
     }
 
     @Test("level ground either side of a cable car stays level")
