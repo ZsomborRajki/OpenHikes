@@ -14,26 +14,37 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import Synchronization
 import Testing
 
 @Suite("Wikimedia Commons area search")
 struct WikimediaCommonsAreaTests {
     nonisolated private enum Answers {
+        typealias Camera = (id: Int, latitude: Double, longitude: Double)
+
         static let middle = (latitude: 47.6, longitude: 13.0)
         /// Three cameras a few hundred metres from the middle, none of them on
         /// any line.
-        static let cameras = [
+        static let cameras: [Camera] = [
             (id: 1, latitude: 47.602, longitude: 13.001),
             (id: 2, latitude: 47.598, longitude: 13.003),
             (id: 3, latitude: 47.601, longitude: 12.996),
+        ]
+        /// For ``WikimediaCommonsAreaTests/tallMap``: one camera near its
+        /// middle, one in its north-east corner, past the circle a pill hands
+        /// over, and one off its east side, inside that circle.
+        static let tallMapCameras: [Camera] = [
+            (id: 1, latitude: 47.601, longitude: 13.001),
+            (id: 2, latitude: 47.6125, longitude: 13.009),
+            (id: 3, latitude: 47.6, longitude: 13.016),
         ]
 
         static func page(_ id: Int) -> String {
             "https://commons.wikimedia.org/wiki/File:\(id).jpg"
         }
 
-        static let geosearch: Data = {
+        static func geosearch(_ cameras: [Camera]) -> Data {
             let hits = cameras.map { camera in
                 """
                 {"pageid":\(camera.id),"ns":6,"title":"File:\(camera.id).jpg",\
@@ -41,9 +52,9 @@ struct WikimediaCommonsAreaTests {
                 """
             }
             return Data(#"{"batchcomplete":true,"query":{"geosearch":[\#(hits.joined(separator: ","))]}}"#.utf8)
-        }()
+        }
 
-        static let imageInfo: Data = {
+        static func imageInfo(_ cameras: [Camera]) -> Data {
             let pages = cameras.map { camera in
                 """
                 {"pageid":\(camera.id),"ns":6,"title":"File:\(camera.id).jpg","imageinfo":[{\
@@ -54,12 +65,17 @@ struct WikimediaCommonsAreaTests {
                 """
             }
             return Data(#"{"batchcomplete":true,"query":{"pages":[\#(pages.joined(separator: ","))]}}"#.utf8)
-        }()
+        }
     }
 
     /// Commons, answering from memory and writing down what it was asked.
     nonisolated private final class StubCommons: Sendable {
         private let asked = Mutex<[URL]>([])
+        private let cameras: [Answers.Camera]
+
+        init(cameras: [Answers.Camera] = Answers.cameras) {
+            self.cameras = cameras
+        }
 
         var requests: [URL] { asked.withLock { $0 } }
 
@@ -68,8 +84,8 @@ struct WikimediaCommonsAreaTests {
                 let url = request.url ?? URL(filePath: "/")
                 asked.withLock { $0.append(url) }
                 let text = url.absoluteString
-                if text.contains("list=geosearch") { return (Answers.geosearch, 200) }
-                if text.contains("prop=imageinfo") { return (Answers.imageInfo, 200) }
+                if text.contains("list=geosearch") { return (Answers.geosearch(cameras), 200) }
+                if text.contains("prop=imageinfo") { return (Answers.imageInfo(cameras), 200) }
                 return (PhotoDiscoveryFixture.sampleImageData(), 200)
             }
         }
@@ -85,6 +101,15 @@ struct WikimediaCommonsAreaTests {
     private static let area = CommunitySearchArea(
         coordinate: CLLocationCoordinate2D(latitude: Answers.middle.latitude, longitude: Answers.middle.longitude),
         radiusMeters: 1500
+    )
+
+    /// The map above a lowered sheet, as a pill hands it over: a kilometre
+    /// and a half across and three from top to bottom, with a circle half its
+    /// longer side.
+    private static let tallMap = CommunitySearchArea(
+        coordinate: area.coordinate,
+        radiusMeters: 1500,
+        visibleSpan: CommunitySearchArea.Span(latitudeDelta: 0.027, longitudeDelta: 0.02)
     )
 
     private static func source(_ commons: StubCommons) -> WikimediaCommonsSource {
@@ -104,6 +129,30 @@ struct WikimediaCommonsAreaTests {
         let items = try #require(URLComponents(url: search, resolvingAgainstBaseURL: false)).queryItems ?? []
         #expect(items.first { $0.name == "gscoord" }?.value == "47.6|13.0")
         #expect(items.first { $0.name == "gsradius" }?.value == "1500")
+    }
+
+    /// The circle a pill hands over is half the map's longer side. Asked as
+    /// it was, the geosearch missed the corners of the screen, and what came
+    /// back off its sides took the photographs' places.
+    @Test("a map on screen is asked about through its corners, and answered with what is on it")
+    func theMapOnScreenIsAsked() async throws {
+        let commons = StubCommons(cameras: Answers.tallMapCameras)
+        let downloads = Downloads()
+
+        let photos = try await Self.source(commons)
+            .photos(in: Self.tallMap, avoiding: [], downloadingInto: downloads.directory)
+
+        let search = try #require(commons.requests.first { $0.absoluteString.contains("list=geosearch") })
+        let items = try #require(URLComponents(url: search, resolvingAgainstBaseURL: false)).queryItems ?? []
+        #expect(items.first { $0.name == "gscoord" }?.value == "47.6|13.0")
+        let radius = try #require(items.first { $0.name == "gsradius" }?.value.flatMap { Double($0) })
+        let northEast = CLLocationCoordinate2D(
+            latitude: Answers.middle.latitude + 0.0135,
+            longitude: Answers.middle.longitude + 0.01
+        )
+        let toTheCorner = RouteGeometry.distanceMeters(from: Self.tallMap.coordinate, to: northEast)
+        #expect(radius.isApproximatelyEqual(to: toTheCorner, absoluteTolerance: 2))
+        #expect(Set(photos.map(\.credit.author)) == ["Hiker 1", "Hiker 2"])
     }
 
     /// No line to snap onto, and the spot is what *Add Stop* is offered on.

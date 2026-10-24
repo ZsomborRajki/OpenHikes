@@ -61,9 +61,11 @@ extension CommunityBrowser {
     ) -> CommunitySearchArea {
         guard let region else { return area }
         let visible = CommunityQueryPolicy.visibleRadiusMeters(for: region)
-        // The rectangle travels with it, so a stand-in can stand its
-        // photographs inside the map on screen rather than inside the circle,
-        // which runs past it — see ``SeededCommonsPhotoSource``.
+        // The rectangle travels with it, because it is what the photographs
+        // are kept inside. Commons is asked about the circle through its
+        // corners, which reaches further than this one — see
+        // ``CommonsAreaPhotos`` — and a stand-in stands its own inside it —
+        // see ``SeededCommonsPhotoSource``.
         return CommunitySearchArea(
             coordinate: area.coordinate,
             radiusMeters: min(area.radiusMeters, visible),

@@ -210,10 +210,11 @@ nonisolated struct WikimediaCommonsSource: CommonsPhotoSourcing {
     }
 
     /// One geosearch over the area rather than one per stretch, because the
-    /// area *is* one circle — the one the maker's pill was tapped over, and
+    /// area *is* one piece of map — the one a pill was tapped over, asked
+    /// about as the circle through the corners of the map on screen, and
     /// never wider than ``CommonsTrailPhotos/maximumRadiusMeters``. Then the
-    /// same two steps the route takes, spread over a grid rather than along a
-    /// line — see ``CommonsAreaPhotos``.
+    /// same two steps the route takes, kept to the map on screen and spread
+    /// over a grid rather than along a line — see ``CommonsAreaPhotos``.
     @concurrent
     func photos(
         in area: CommunitySearchArea,

@@ -3,17 +3,32 @@
 //  OpenHikes
 //
 //  Which Wikimedia Commons photographs to show for an area of the map rather
-//  than along a route — the trail maker's *Search this area*.
+//  than along a route — the trail maker's *Search this area*, and the
+//  *Community* tab's.
 //
 //  ``CommonsTrailPhotos`` spreads a route's photographs along its length,
 //  because a line has one dimension and *one per stretch* is what keeps a
 //  dozen pictures from being twelve of the car park. An area has two, and the
-//  same argument becomes a grid: the circle's square is cut into cells, each
+//  same argument becomes a grid: the map on screen is cut into cells, each
 //  cell offers the photograph nearest its own middle, and only once every cell
 //  has had its turn do the rest fill in from the middle of the area outwards.
 //  A geosearch answers nearest its centre first and stops at five hundred, so
 //  without the grid a valley's whole allowance went to the village at the
 //  middle of the screen.
+//
+//  ## The map on screen, asked about as a circle
+//
+//  Both pills hand over the rectangle of map above the sheet — see
+//  ``CommunitySearchArea/visibleSpan`` — with a circle half as wide as its
+//  longer side. A geosearch takes only a circle, and that one misses the
+//  corners of the screen. So the circle asked about is the one through the
+//  corners. What comes back is kept inside the rectangle, and the grid is cut
+//  over it. With the sheet lowered the map is taller than it is wide, and a
+//  grid over the circle's square spent half its cells off both sides of the
+//  screen. A geosearch reaches no further than
+//  ``CommonsTrailPhotos/maximumRadiusMeters``, so a rectangle wider than that
+//  circle is kept and gridded only as far as the circle reaches. An area that
+//  carries no rectangle is only a circle, and its square is the grid.
 //
 //  The per-photographer rule is the route's and for its reason: one uploader's
 //  run of forty pictures of the same road is the commonest shape of a Commons
@@ -36,23 +51,36 @@ nonisolated enum CommonsAreaPhotos {
     /// one is a thumbnail downloaded for a screen that may be glanced at.
     static let photoLimit = 16
 
-    /// `area`, no wider than a geosearch may ask about.
+    /// `area` as one geosearch asks about it: through the corners of its
+    /// rectangle when it carries one, and no wider than a geosearch may ask
+    /// about. The rectangle stays on it, because it is what the answer is
+    /// kept inside — see this file's header.
     static func asked(_ area: CommunitySearchArea) -> CommunitySearchArea {
-        guard area.radiusMeters > CommonsTrailPhotos.maximumRadiusMeters else { return area }
-        return CommunitySearchArea(coordinate: area.coordinate, radiusMeters: CommonsTrailPhotos.maximumRadiusMeters)
+        var asked = area
+        if let corner = corner(of: area) {
+            asked.radiusMeters = (corner.east * corner.east + corner.north * corner.north).squareRoot()
+        }
+        guard asked.radiusMeters > CommonsTrailPhotos.maximumRadiusMeters else { return asked }
+        asked.radiusMeters = CommonsTrailPhotos.maximumRadiusMeters
+        return asked
     }
 
     /// At most `limit` of `candidates`, one per cell of a grid over `area`
     /// first, nearest the middle of the area first after that — returned
-    /// nearest the middle first.
+    /// nearest the middle first. Only what stands inside the area's rectangle
+    /// and within its radius is kept.
     static func spread(
         _ candidates: [CommonsPhotoCandidate],
         in area: CommunitySearchArea,
         limit: Int
     ) -> [CommonsPhotoCandidate] {
         guard limit > 0 else { return [] }
+        let reach = reach(of: area)
         let inside = candidates.uniqued(on: \.pageID).filter { candidate in
-            offset(of: candidate, in: area).distance <= area.radiusMeters
+            let offset = offset(of: candidate, in: area)
+            return offset.distance <= area.radiusMeters
+                && abs(offset.east) <= reach.east
+                && abs(offset.north) <= reach.north
         }
         let nearer = { (lhs: CommonsPhotoCandidate, rhs: CommonsPhotoCandidate) in
             nearerTheMiddle(lhs, rhs, of: area)
@@ -145,13 +173,38 @@ nonisolated enum CommonsAreaPhotos {
         return (offset.x, offset.y, (offset.x * offset.x + offset.y * offset.y).squareRoot())
     }
 
+    /// Metres east and north from the middle of `area` to the north-east
+    /// corner of its rectangle, measured as ``offset(of:in:)`` measures a
+    /// camera — or `nil` for an area that is only a circle.
+    private static func corner(of area: CommunitySearchArea) -> (east: Double, north: Double)? {
+        guard let span = area.visibleSpan else { return nil }
+        let corner = RouteGeometry.localOffset(
+            from: area.coordinate,
+            to: CLLocationCoordinate2D(
+                latitude: area.latitude + span.latitudeDelta / 2,
+                longitude: area.longitude + span.longitudeDelta / 2
+            )
+        )
+        return (corner.x, corner.y)
+    }
+
+    /// Metres east and north from the middle of `area` to the edges of what
+    /// is kept and gridded: its rectangle, as far as its radius reaches, or
+    /// the square around its circle when it carries no rectangle.
+    private static func reach(of area: CommunitySearchArea) -> (east: Double, north: Double) {
+        let radius = area.radiusMeters
+        guard let corner = corner(of: area) else { return (radius, radius) }
+        return (min(corner.east, radius), min(corner.north, radius))
+    }
+
     private static func cell(of candidate: CommonsPhotoCandidate, in area: CommunitySearchArea, side: Int) -> Cell {
         let offset = offset(of: candidate, in: area)
-        let width = 2 * max(area.radiusMeters, 1) / Double(side)
-        func index(_ meters: Double) -> Int {
-            min(max(Int(((meters + area.radiusMeters) / width).rounded(.down)), 0), side - 1)
+        let reach = reach(of: area)
+        func index(_ meters: Double, within half: Double) -> Int {
+            let width = 2 * max(half, 1) / Double(side)
+            return min(max(Int(((meters + half) / width).rounded(.down)), 0), side - 1)
         }
-        return Cell(column: index(offset.east), row: index(offset.north))
+        return Cell(column: index(offset.east, within: reach.east), row: index(offset.north, within: reach.north))
     }
 
     private static func nearerTheMiddle(
@@ -171,10 +224,11 @@ nonisolated enum CommonsAreaPhotos {
         in area: CommunitySearchArea,
         side: Int
     ) -> Bool {
-        let width = 2 * max(area.radiusMeters, 1) / Double(side)
+        let reach = reach(of: area)
+        let width = (east: 2 * max(reach.east, 1) / Double(side), north: 2 * max(reach.north, 1) / Double(side))
         let middle = (
-            east: -area.radiusMeters + (Double(cell.column) + 0.5) * width,
-            north: -area.radiusMeters + (Double(cell.row) + 0.5) * width
+            east: -reach.east + (Double(cell.column) + 0.5) * width.east,
+            north: -reach.north + (Double(cell.row) + 0.5) * width.north
         )
         func distance(_ candidate: CommonsPhotoCandidate) -> Double {
             let offset = offset(of: candidate, in: area)
