@@ -8,6 +8,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 @MainActor
@@ -26,6 +27,31 @@ struct GPXTrackChoiceTests {
         }
     }
 
+    /// Tracks with `counts` places on each, numbered through the file in the
+    /// tracks' order.
+    private static func tracks(placeCounts counts: [Int]) -> [GPXImport.Track] {
+        var tracks: [GPXImport.Track] = []
+        var offset = 0
+        for (index, count) in counts.enumerated() {
+            let places = (offset..<(offset + count)).map { place in
+                (offset: place, element: TrailPlace(latitude: 47 + Double(index), longitude: 12))
+            }
+            offset += count
+            tracks.append(
+                GPXImport.Track(
+                    name: "Day \(index + 1)",
+                    trackDescription: nil,
+                    author: nil,
+                    keywords: nil,
+                    startTime: nil,
+                    segments: [Self.points(from: 47 + Double(index))],
+                    places: places
+                )
+            )
+        }
+        return tracks
+    }
+
     private static func points(from latitude: Double) -> [GPXImport.Point] {
         [latitude, latitude + 0.001].map { lat in
             GPXImport.Point(coordinate: .init(latitude: lat, longitude: 12), elevation: nil, time: nil)
@@ -41,12 +67,12 @@ struct GPXTrackChoiceTests {
     func importAnswersTheTicked() async {
         let choice = GPXTrackChoice()
         let tracks = Self.tracks(["Mon", nil, "Wed"])
-        async let answer = choice.ask(fileName: "week.gpx", tracks: tracks, leftOut: .init(offTrack: 2))
+        async let answer = choice.ask(fileName: "week.gpx", tracks: tracks, unplacedWaypoints: 2)
         await asked(choice)
 
         #expect(choice.question?.options.map(\.title) == ["Mon", "Track 2", "Wed"])
         #expect(choice.question?.chosenCount == 3)
-        #expect(choice.question?.leftOut == .init(offTrack: 2))
+        #expect(choice.question?.unplacedWaypoints == 2)
         choice.toggle(1)
         choice.confirm()
 
@@ -57,7 +83,7 @@ struct GPXTrackChoiceTests {
     @Test("Cancel answers with none")
     func cancelAnswersNone() async {
         let choice = GPXTrackChoice()
-        async let answer = choice.ask(fileName: "week.gpx", tracks: Self.tracks(["Mon", "Tue"]), leftOut: .init())
+        async let answer = choice.ask(fileName: "week.gpx", tracks: Self.tracks(["Mon", "Tue"]), unplacedWaypoints: 0)
         await asked(choice)
         choice.cancel()
 
@@ -69,13 +95,13 @@ struct GPXTrackChoiceTests {
     @Test("a second question waits for the first to be answered")
     func aSecondQuestionWaits() async {
         let choice = GPXTrackChoice()
-        async let first = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A", "B"]), leftOut: .init())
+        async let first = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A", "B"]), unplacedWaypoints: 0)
         await asked(choice)
-        async let second = choice.ask(fileName: "b.gpx", tracks: Self.tracks(["C", "D"]), leftOut: .init())
+        async let second = choice.ask(fileName: "b.gpx", tracks: Self.tracks(["C", "D"]), unplacedWaypoints: 0)
         // A third, so the turn is seen to be handed down a queue rather than
         // to whoever asked last. The two start concurrently, so which of them
         // is second is not the test's to fix — only that each gets its turn.
-        async let third = choice.ask(fileName: "c.gpx", tracks: Self.tracks(["E"]), leftOut: .init())
+        async let third = choice.ask(fileName: "c.gpx", tracks: Self.tracks(["E"]), unplacedWaypoints: 0)
 
         await settleDelegateHop(until: "both to queue behind the first") { choice.waitingCount == 2 }
 
@@ -105,11 +131,11 @@ struct GPXTrackChoiceTests {
     @Test("a drained queue hands the turn back free")
     func aDrainedQueueFreesTheTurn() async {
         let choice = GPXTrackChoice()
-        async let first = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A"]), leftOut: .init())
+        async let first = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A"]), unplacedWaypoints: 0)
         await asked(choice)
-        async let second = choice.ask(fileName: "b.gpx", tracks: Self.tracks(["B"]), leftOut: .init())
-        async let third = choice.ask(fileName: "c.gpx", tracks: Self.tracks(["C"]), leftOut: .init())
-        async let fourth = choice.ask(fileName: "d.gpx", tracks: Self.tracks(["D"]), leftOut: .init())
+        async let second = choice.ask(fileName: "b.gpx", tracks: Self.tracks(["B"]), unplacedWaypoints: 0)
+        async let third = choice.ask(fileName: "c.gpx", tracks: Self.tracks(["C"]), unplacedWaypoints: 0)
+        async let fourth = choice.ask(fileName: "d.gpx", tracks: Self.tracks(["D"]), unplacedWaypoints: 0)
         await settleDelegateHop(until: "three to queue behind the first") { choice.waitingCount == 3 }
 
         var answered: [String] = []
@@ -127,7 +153,7 @@ struct GPXTrackChoiceTests {
 
         choice.cancel()
         choice.confirm()
-        async let next = choice.ask(fileName: "e.gpx", tracks: Self.tracks(["E"]), leftOut: .init())
+        async let next = choice.ask(fileName: "e.gpx", tracks: Self.tracks(["E"]), unplacedWaypoints: 0)
         await asked(choice)
         #expect(choice.waitingCount == 0)
         #expect(choice.question?.fileName == "e.gpx")
@@ -141,7 +167,7 @@ struct GPXTrackChoiceTests {
     func aStrayCancelAnswersNothing() async {
         let choice = GPXTrackChoice()
         choice.cancel()
-        async let answer = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A", "B"]), leftOut: .init())
+        async let answer = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A", "B"]), unplacedWaypoints: 0)
         await asked(choice)
         choice.confirm()
         #expect(await answer == [0, 1])
@@ -159,18 +185,44 @@ struct GPXTrackChoiceTests {
     /// the sentence about waypoints on none (#1037).
     @Test("the footer gives each reason a waypoint is left out its own sentence")
     func footerSaysEachReason() {
+        #expect(GPXTrackChoiceSheet.leftOutNote(offTrack: 0, pastPlaceLimit: 0).isEmpty)
         #expect(
-            GPXTrackChoiceSheet.leftOutNote(.init(offTrack: 1))
+            GPXTrackChoiceSheet.leftOutNote(offTrack: 1, pastPlaceLimit: 0)
                 == "1 waypoint lies on none of these tracks and won’t be imported."
         )
         #expect(
-            GPXTrackChoiceSheet.leftOutNote(.init(pastPlaceLimit: 1))
+            GPXTrackChoiceSheet.leftOutNote(offTrack: 0, pastPlaceLimit: 1)
                 == "1 more place lies on these tracks but won’t be imported, because one file can bring only so many."
         )
         #expect(
-            GPXTrackChoiceSheet.leftOutNote(.init(offTrack: 3, pastPlaceLimit: 50))
+            GPXTrackChoiceSheet.leftOutNote(offTrack: 3, pastPlaceLimit: 50)
                 == "3 waypoints lie on none of these tracks and won’t be imported. "
                 + "50 more places lie on these tracks but won’t be imported, because one file can bring only so many."
         )
+    }
+
+    /// The import spends the cap on the tracks chosen and nothing else, so
+    /// the count of what it cuts follows the ticks (#1037). The review's file:
+    /// 200 places on Day 1 come first, then 50 on Day 2.
+    @Test("the places past the cap are counted from the ticked tracks only")
+    func cutFollowsTheTicks() async {
+        let choice = GPXTrackChoice()
+        let limit = GPXImport.maximumPlaces
+        async let answer = choice.ask(
+            fileName: "trip.gpx",
+            tracks: Self.tracks(placeCounts: [limit, 50]),
+            unplacedWaypoints: 0
+        )
+        await asked(choice)
+
+        #expect(choice.question?.options.map(\.placeCount) == [limit, 50])
+        #expect(choice.question?.placesPastLimit == 50)
+        choice.toggle(0)
+        #expect(choice.question?.placesPastLimit == 0, "unticking Day 1 leaves Day 2 all of its places")
+        choice.toggle(0)
+        choice.toggle(1)
+        #expect(choice.question?.placesPastLimit == 0)
+        choice.confirm()
+        #expect(await answer == [0])
     }
 }

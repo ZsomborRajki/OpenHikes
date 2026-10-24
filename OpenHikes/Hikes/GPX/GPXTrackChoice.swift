@@ -12,7 +12,7 @@
 //  their library, and because the hiker can see from the list what the file
 //  actually holds before any of it lands.
 //
-//  The import awaits the answer: ``ask(fileName:tracks:leftOut:)``
+//  The import awaits the answer: ``ask(fileName:tracks:unplacedWaypoints:)``
 //  suspends until the sheet's Import or Cancel resumes it, so the import path
 //  reads top to bottom rather than being split across a callback. A second
 //  question arriving while one is up waits its turn rather than replacing
@@ -35,6 +35,8 @@ struct GPXTrackOption: Identifiable, Equatable {
     let title: String
     let distanceMeters: Double
     let date: Date?
+    /// How many places lie on the track — see ``GPXTrackSplit``.
+    let placeCount: Int
     var isChosen = true
 }
 
@@ -46,11 +48,21 @@ final class GPXTrackChoice {
         let id = UUID()
         let fileName: String
         var options: [GPXTrackOption]
-        /// The file's waypoints that will not come with any of its tracks,
-        /// and why — see ``GPXTrackSplit``.
-        let leftOut: GPXImport.LeftOut
+        /// How many of the file's waypoints lie on none of its tracks and
+        /// will not come with any of them — see ``GPXTrackSplit``.
+        let unplacedWaypoints: Int
 
         var chosenCount: Int { options.count(where: \.isChosen) }
+
+        /// How many places on the ticked tracks the import will leave out,
+        /// because one import keeps only ``GPXImport/maximumPlaces`` of them.
+        ///
+        /// From the ticks, as the import spends the cap on the tracks chosen
+        /// and nothing else (``GPXImport/placesKept(of:)``): unticking a day
+        /// gives its slots back to the others.
+        var placesPastLimit: Int {
+            max(0, options.filter(\.isChosen).map(\.placeCount).reduce(0, +) - GPXImport.maximumPlaces)
+        }
     }
 
     private(set) var question: Question?
@@ -76,7 +88,7 @@ final class GPXTrackChoice {
     /// Puts the tracks up and waits for the hiker: the indices to import, or
     /// empty for none. Behind any question already up, which keeps the turn
     /// until it is answered.
-    func ask(fileName: String, tracks: [GPXImport.Track], leftOut: GPXImport.LeftOut) async -> [Int] {
+    func ask(fileName: String, tracks: [GPXImport.Track], unplacedWaypoints: Int) async -> [Int] {
         if isAsking {
             // Resumed by ``answer(with:)`` with the turn already handed over.
             await withCheckedContinuation { waiting.append($0) }
@@ -88,12 +100,13 @@ final class GPXTrackChoice {
                 id: index,
                 title: HikeTitle.bounded(track.name) ?? "Track \(index + 1)",
                 distanceMeters: track.distanceMeters,
-                date: track.startTime
+                date: track.startTime,
+                placeCount: track.places.count
             )
         }
         return await withCheckedContinuation { continuation in
             answer = continuation
-            question = Question(fileName: fileName, options: options, leftOut: leftOut)
+            question = Question(fileName: fileName, options: options, unplacedWaypoints: unplacedWaypoints)
         }
     }
 
@@ -169,8 +182,12 @@ struct GPXTrackChoiceSheet: View {
                     } header: {
                         Text("Each track becomes a hike of its own.")
                     } footer: {
-                        if !question.leftOut.isEmpty {
-                            Text(Self.leftOutNote(question.leftOut))
+                        let note = Self.leftOutNote(
+                            offTrack: question.unplacedWaypoints,
+                            pastPlaceLimit: question.placesPastLimit
+                        )
+                        if !note.isEmpty {
+                            Text(note)
                         }
                     }
                 }
@@ -197,26 +214,28 @@ struct GPXTrackChoiceSheet: View {
         String(localized: "Import \(count) Hikes")
     }
 
-    /// What the footer says of the waypoints no track takes: a sentence for
-    /// each reason that applies, the ones on no track first.
+    /// What the footer says of the waypoints that won’t be imported: a
+    /// sentence for each reason that applies, the ones on no track first, or
+    /// nothing when there are none.
     ///
     /// Two reasons, because they are different news. A waypoint on no track
-    /// has nowhere to go; a place past the cap lies on one of these tracks and
-    /// is left out only because the file brought too many (#1037), so saying
-    /// it "lies on none of these tracks" would be false. Whole sentences, each
-    /// a plural variation in the catalog, so a translator can move the count.
-    static func leftOutNote(_ leftOut: GPXImport.LeftOut) -> String {
+    /// has nowhere to go; a place past the cap lies on one of the ticked
+    /// tracks and is left out only because the file brought too many
+    /// (#1037), so saying it "lies on none of these tracks" would be false.
+    /// Whole sentences, each a plural variation in the catalog, so a
+    /// translator can move the count.
+    static func leftOutNote(offTrack: Int, pastPlaceLimit: Int) -> String {
         var sentences: [String] = []
-        if leftOut.offTrack > 0 {
+        if offTrack > 0 {
             sentences.append(
-                String(localized: "\(leftOut.offTrack) waypoints lie on none of these tracks and won’t be imported.")
+                String(localized: "\(offTrack) waypoints lie on none of these tracks and won’t be imported.")
             )
         }
-        if leftOut.pastPlaceLimit > 0 {
+        if pastPlaceLimit > 0 {
             sentences.append(
                 String(
                     localized: """
-                        \(leftOut.pastPlaceLimit) more places lie on these tracks but won’t be imported, \
+                        \(pastPlaceLimit) more places lie on these tracks but won’t be imported, \
                         because one file can bring only so many.
                         """
                 )
