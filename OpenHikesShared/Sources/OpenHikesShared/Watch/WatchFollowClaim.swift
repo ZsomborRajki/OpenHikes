@@ -30,6 +30,32 @@
 //  or, under a recording, never put back for it at Stop. Each screen names
 //  itself, and a screen that is no longer the claimant leaves nothing behind.
 //
+//  ## Which trail it is asking for
+//
+//  A screen asks for its own trail, not for any. A map opened for one trail
+//  while the watch still holds another draws a waiting view, and a feed
+//  started for it would advance the held trail's tracker under a screen that
+//  never shows it, at best accuracy, for as long as the phone stays away
+//  (issue #1022). So the claim remembers the trail its screen named, and every
+//  moment that could start the feed is told which trail the watch holds:
+//  nothing starts until the two are the same.
+//
+//  ## Only while the app is on screen
+//
+//  Following without a recording has no workout session behind it, and is
+//  meant to show a live position while the app is on screen and nothing
+//  behind it (*The watch app* in the repository instructions). A map left in
+//  the navigation stack when the app goes to the background gets no
+//  `onDisappear`, and the receiver is configured to keep delivering in the
+//  background for the recorder's sake, so the claim also hears the app leave
+//  and come back. Leaving stops the feed and keeps the claim; coming back
+//  starts it again for a map still asking whose trail is held.
+//
+//  "On screen" is the scene not being in the background. A lowered wrist with
+//  Always On is `.inactive` and still draws the map, dimmed, so it keeps its
+//  feed until watchOS returns to the clock and the scene reaches the
+//  background.
+//
 //  ## Why it is here
 //
 //  *The watch app* in the repository instructions: there is no watch test
@@ -46,7 +72,7 @@ public struct WatchFollowClaim: Equatable, Sendable {
     public enum FeedChange: Equatable, Sendable {
         /// Start it for the screen that is asking.
         case start
-        /// Stop it: nothing is asking any longer.
+        /// Stop it: nothing that can show it is asking any longer.
         case stop
         /// Leave it as it is, which under a recording means leaving it to the
         /// recording.
@@ -62,25 +88,48 @@ public struct WatchFollowClaim: Equatable, Sendable {
     /// has taken the feed that map was drawing from.
     public private(set) var claimant: UUID?
 
+    /// The trail ``claimant`` asked for, which is the only one whose fixes it
+    /// can show.
+    public private(set) var claimedHikeID: UUID?
+
+    /// Whether the app is on screen. A claim kept while it is not starts
+    /// nothing until it is again.
+    public private(set) var isAppOnScreen: Bool
+
     /// Whether a trail screen is asking for live position right now.
     public var isClaimed: Bool { claimant != nil }
 
     public init() {
         claimant = nil
+        claimedHikeID = nil
+        isAppOnScreen = true
     }
 
     /// A trail screen came on screen. It holds the claim from now on, whoever
     /// held it before.
     ///
+    /// A feed already running for the screen it replaced is stopped when the
+    /// trail it shows is not this screen's: the two screens' callbacks come
+    /// in no promised order, and the one leaving may have started it.
+    ///
     /// - Parameters:
     ///   - screen: the screen, the same for its whole time on screen.
-    ///   - holdingTrail: whether the watch has a trail to match fixes against.
-    ///     Without one the claim waits for ``trailArrived(recording:)``.
+    ///   - hikeID: the trail the screen shows.
+    ///   - held: the trail the watch holds and can match fixes against, if
+    ///     any. Until it is `hikeID`, the claim waits for
+    ///     ``trailArrived(holding:recording:)``.
     ///   - recording: whether a recording owns the receiver, in which case it
     ///     is already running and is the recording's to stop.
-    public mutating func screenAppeared(_ screen: UUID, holdingTrail: Bool, recording: Bool) -> FeedChange {
+    public mutating func screenAppeared(
+        _ screen: UUID,
+        asking hikeID: UUID,
+        holding held: UUID?,
+        recording: Bool
+    ) -> FeedChange {
         claimant = screen
-        return holdingTrail && !recording ? .start : .unchanged
+        claimedHikeID = hikeID
+        guard !recording, isAppOnScreen else { return .unchanged }
+        return held == hikeID ? .start : .stop
     }
 
     /// A trail screen left.
@@ -91,19 +140,41 @@ public struct WatchFollowClaim: Equatable, Sendable {
     public mutating func screenLeft(_ screen: UUID, recording: Bool) -> FeedChange {
         guard claimant == screen else { return .unchanged }
         claimant = nil
+        claimedHikeID = nil
         return recording ? .unchanged : .stop
     }
 
-    /// A trail landed, which a screen that opened without one is waiting for.
-    public func trailArrived(recording: Bool) -> FeedChange {
-        isClaimed && !recording ? .start : .unchanged
+    /// The trail the watch holds changed, which a screen that opened without
+    /// its own is waiting for. Starts the feed when the trail now held is the
+    /// one the screen asked for, and stops it when it is not.
+    public func trailArrived(holding held: UUID?, recording: Bool) -> FeedChange {
+        guard isClaimed, !recording, isAppOnScreen else { return .unchanged }
+        return held == claimedHikeID ? .start : .stop
     }
 
     /// A recording stopped and took the receiver down with it. Put back only
     /// for a screen still asking, or the dot on an open map freezes where the
-    /// hiker pressed Stop — and only once there is a trail to match against,
-    /// as ``screenAppeared(_:holdingTrail:recording:)`` would have it.
-    public func recordingStopped(holdingTrail: Bool) -> FeedChange {
-        isClaimed && holdingTrail ? .start : .unchanged
+    /// hiker pressed Stop — and only once the watch holds that screen's trail,
+    /// and only while the app is on screen.
+    public func recordingStopped(holding held: UUID?) -> FeedChange {
+        isClaimed && isAppOnScreen && held == claimedHikeID ? .start : .unchanged
+    }
+
+    /// The app left the screen: the scene went to the background, with a map
+    /// perhaps still pushed. The feed stops unless a recording owns it; the
+    /// claim stays, for the map to have back when the app does.
+    public mutating func appLeftScreen(recording: Bool) -> FeedChange {
+        guard isAppOnScreen else { return .unchanged }
+        isAppOnScreen = false
+        return recording ? .unchanged : .stop
+    }
+
+    /// The app came back on screen. A map still asking gets its feed back,
+    /// on the terms ``screenAppeared(_:asking:holding:recording:)`` would give
+    /// it. Leaving stopped the feed, so there is nothing here to stop.
+    public mutating func appReturned(holding held: UUID?, recording: Bool) -> FeedChange {
+        guard !isAppOnScreen else { return .unchanged }
+        isAppOnScreen = true
+        return isClaimed && !recording && held == claimedHikeID ? .start : .unchanged
     }
 }

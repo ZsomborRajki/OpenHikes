@@ -202,7 +202,7 @@ struct TrailMapScreen: View {
                 // feed — started now, or put back at the next Stop.
                 guard !Task.isCancelled else { return }
                 model.selectTrail(hikeID)
-                model.startFollowing(for: followClaimID)
+                model.startFollowing(hikeID, for: followClaimID)
             }
             .onDisappear {
                 // Recording or not. A recording owns its own feed and
