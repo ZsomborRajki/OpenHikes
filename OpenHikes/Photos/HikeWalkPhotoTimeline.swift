@@ -79,8 +79,8 @@ nonisolated struct HikeWalkPhotoTimeline: Equatable, Sendable {
     /// limits in this file's header. Read from
     /// ``TrailWalkCoverage/walkedTowardsEnd`` and
     /// ``TrailWalkCoverage/walkedTowardsStart``, which already leave out a
-    /// match that landed a step behind the one before it, so the odd
-    /// backwards step of a forward walk does not make it a walk both ways.
+    /// match that landed a step behind the one before it, so the odd step
+    /// back in a walk from the stored end does not make it a walk both ways.
     let walkedTowardsStart: Bool
 
     /// `nil` for a walk that covered nothing, or whose stored clock runs
