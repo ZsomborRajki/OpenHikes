@@ -173,4 +173,15 @@ struct WalkShareFiguresTests {
         #expect(card.completion.isApproximatelyEqual(to: 0.5, absoluteTolerance: 1e-9))
         #expect(card.walkedMeters.isApproximatelyEqual(to: Self.hill.distances[25], absoluteTolerance: 1e-9))
     }
+
+    /// Two matchers feed a walk and neither is smoothed, so a walk straight up
+    /// the trail still has the odd match land behind the one before it. The
+    /// card must not print that step as a descent.
+    @Test("a match behind the one before it puts no descent on a walk up")
+    func stepBackDescendsNothing() {
+        let card = card(walking: Array(0...30) + [27] + Array(33...50))
+
+        expectClimb(card, ascent: 100, descent: 0)
+        #expect(card.completion.isApproximatelyEqual(to: 1, absoluteTolerance: 1e-9))
+    }
 }
