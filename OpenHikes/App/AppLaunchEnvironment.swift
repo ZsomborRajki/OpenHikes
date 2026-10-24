@@ -192,9 +192,7 @@ nonisolated enum AppLaunchEnvironment {
                 limit: Self.maximumSeededLibraryHikes
             )
             seededWalkFixtureName = Self.fixtureName(
-                in: arguments,
-                prefix: Self.seedWalksPrefix,
-                isUITesting: isUITesting
+                in: arguments, prefix: Self.seedWalksPrefix, isUITesting: isUITesting
             )
             seededRecordingFixtureName = Self.fixtureName(
                 in: arguments, prefix: Self.seedRecordingPrefix, isUITesting: isUITesting
