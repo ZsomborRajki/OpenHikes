@@ -446,11 +446,18 @@ extension XCTestCase {
     /// on its first iteration without swiping at all, and the trailing-edge
     /// tap went nowhere. Requiring the centre to be on screen is what makes
     /// the two agree.
+    ///
+    /// On screen means in the window — see ``windowFrame(of:)`` — and where
+    /// `isHittable` cannot be believed, on the iPhone Duo's inner display
+    /// turned to landscape, the centre in the window is the whole test: see
+    /// ``hitTestIsUnreliable(in:window:)``.
     @MainActor
     func isReachable(_ target: XCUIElement, in app: XCUIApplication) -> Bool {
-        guard target.exists, target.isHittable else { return false }
+        guard target.exists else { return false }
         let frame = target.frame
-        return app.frame.contains(CGPoint(x: frame.midX, y: frame.midY))
+        let window = windowFrame(of: app)
+        guard window.contains(CGPoint(x: frame.midX, y: frame.midY)) else { return false }
+        return hitTestIsUnreliable(in: app, window: window) || target.isHittable
     }
 
     /// The screen's scrolling container, whichever kind SwiftUI built it from.

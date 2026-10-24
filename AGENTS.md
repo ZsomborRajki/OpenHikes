@@ -222,10 +222,14 @@ either: the second run waits silently on the first run's build lock.
   Device Hub opens it by hand. `Scripts/duo-pose.sh open --device <udid>`
   unfolds it to the inner display (669 × 951, upright) and reads the display
   state back; one unfold from cold is the move to rely on.
+  `--orientation landscape` leaves it the way it unfolds, 951 × 669: a window
+  wider than tall, so the map screen draws its side panel.
 - **XCTest sees it through the cover.** `XCUIScreen.main` is the cover display
   open or closed (the inner one is the other `XCUIScreen.screens` entry), and
   on the inner display turned sideways `app.frame` stays portrait while
-  `app.windows.firstMatch.frame` turns.
+  `app.windows.firstMatch.frame` turns. There `isHittable` also answers no for
+  everything in the side panel, so the shared helpers measure the window and
+  skip it (`OpenHikesUITests/WindowSupport.swift`).
 - The screenshot set shoots on it with `--device-type "iPhone Duo"` and
   `--pose`; see `Screenshots/README.md`.
 

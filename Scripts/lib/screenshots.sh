@@ -16,10 +16,13 @@
 # 1398 × 2034 from the cover, 2007 × 2853 from the inner one, either way up.
 # `--device-type "iPhone Duo"` shoots the set on one, and `--pose open` opens
 # it first, through Scripts/duo-pose.sh — a simulator boots closed, and only
-# Device Hub can open it by hand. XCTest captures the inner display a pixel
-# short each way, so every exported frame goes through
-# Scripts/lib/fit-screenshot.swift, which puts the pixel back on a frame that
-# is that close to a size App Store Connect takes and leaves the rest alone.
+# Device Hub can open it by hand. The open Duo is turned upright unless
+# `--orientation landscape` keeps it the way it opens, which is where the map
+# screen puts its panel beside the map. XCTest captures the inner display a
+# pixel short each way, and a landscape frame stored on its side, so every
+# exported frame goes through Scripts/lib/fit-screenshot.swift. That turns a
+# frame upright in its pixels and puts the pixel back on one that is that
+# close to a size App Store Connect takes, and leaves the rest alone.
 #
 # ## One appearance per script, and one device per appearance
 #
@@ -167,8 +170,12 @@ Options:
                      (default: "$screenshot_default_device")
   --device-type <t>  Simulator device type (default: iPhone 18 Pro Max)
   --pose <p>         For an iPhone Duo: closed (its inner display folded away,
-                     as it boots) or open (unfolded, upright). See
-                     Scripts/duo-pose.sh.
+                     as it boots) or open (unfolded). See Scripts/duo-pose.sh.
+  --orientation <o>  With --pose open: portrait (default, the inner display
+                     turned upright, 2007 x 2853) or landscape (the way it
+                     opens, 2853 x 2007). A closed Duo is shot upright: the
+                     cover's home screen does not turn, so its pose cannot be
+                     read back on its side before the app is up.
   --derived-data <p> Build directory (default: DerivedData/Screenshots-$screenshot_appearance)
   --locale <id>      Locale to pin the simulator to (default: en_IE). This is
                      what decides "2.4 km" against "2,4 km" and "6.6 mi", so
@@ -397,10 +404,10 @@ export_screenshot_frames() {
     rm -rf "$staging"
 }
 
-# Puts back the pixel XCTest leaves off a frame of the iPhone Duo's inner
-# display — see Scripts/lib/fit-screenshot.swift — and leaves every other
-# frame as it was. Says what it changed on stderr, since stdout is the list
-# of frames shot.
+# Turns a frame captured on its side upright in its pixels, and puts back the
+# pixel XCTest leaves off a frame of the iPhone Duo's inner display — see
+# Scripts/lib/fit-screenshot.swift — and leaves every other frame as it was.
+# Says what it changed on stderr, since stdout is the list of frames shot.
 fit_screenshot_frame() {
     swift "$screenshots_lib_dir/fit-screenshot.swift" "${screenshot_store_sizes[@]}" -- "$1" >&2
 }
@@ -484,6 +491,7 @@ screenshots_main() {
     # the right call for a US listing and will print miles.
     locale_id="${OPENHIKES_SCREENSHOT_LOCALE:-en_IE}"
     pose=""
+    orientation=""
     local requested=()
 
     while [[ $# -gt 0 ]]; do
@@ -501,6 +509,14 @@ screenshots_main() {
                 fi
                 shift 2
                 ;;
+            --orientation)
+                orientation="${2:?--orientation needs portrait or landscape}"
+                if [[ "$orientation" != portrait && "$orientation" != landscape ]]; then
+                    echo "Unknown orientation: $orientation (portrait or landscape)" >&2
+                    exit 2
+                fi
+                shift 2
+                ;;
             --derived-data) derived_data="${2:?--derived-data needs a path}"; shift 2 ;;
             --locale) locale_id="${2:?--locale needs an identifier}"; shift 2 ;;
             --no-photos) skip_photos=true; shift ;;
@@ -510,6 +526,11 @@ screenshots_main() {
             *) echo "Unknown option: $1" >&2; screenshots_usage >&2; exit 2 ;;
         esac
     done
+
+    if [[ -n "$orientation" && "$pose" != open ]]; then
+        echo "--orientation needs --pose open: a closed Duo is shot upright." >&2
+        exit 2
+    fi
 
     local frames=() frame entry
     if [[ ${#requested[@]} -eq 0 ]]; then
@@ -541,10 +562,11 @@ screenshots_main() {
     # relied on for — and a pose that did not happen stops the run rather
     # than shooting a set on the wrong display.
     if [[ -n "$pose" ]]; then
-        "$repository_root/Scripts/duo-pose.sh" "$pose" --device "$udid"
+        "$repository_root/Scripts/duo-pose.sh" "$pose" --device "$udid" \
+            ${orientation:+--orientation "$orientation"}
     fi
     # After the device is clean, since a clean device is a new UDID.
-    echo "Simulator: $device_name ($udid), $screenshot_appearance${pose:+, $pose}"
+    echo "Simulator: $device_name ($udid), $screenshot_appearance${pose:+, $pose}${orientation:+, $orientation}"
 
     # Without the stamped library the three frames that import it would only
     # skip, so they are not run — nor retried as though they had failed.

@@ -18,11 +18,14 @@
 #
 # **One fold from a fresh boot is the move to rely on.** A simulator boots
 # closed, and a screenshot run starts from a fresh clone, so `--pose open` is
-# a single unfold from cold — which worked every time it was tried. Folding
-# back and forth is less dependable: after a few folds the simulator's
-# locationd took a close and SpringBoard never swapped the displays, swept or
-# not. The read-back reports it; `xcrun simctl shutdown` and `boot` bring the
-# device back closed.
+# a single unfold from cold. That took on every clone but one, where the
+# displays never swapped and posting 180° again changed nothing, minutes
+# later as straight away; moving the hinge to 90° first did. So a post that
+# does not take is tried once more by way of half-open, which is a change from
+# any angle this posts. Folding back and forth is less dependable: after a few
+# folds the simulator's locationd took a close and SpringBoard never swapped
+# the displays, swept or not. The read-back reports it; `xcrun simctl
+# shutdown` and `boot` bring the device back closed.
 #
 # The helper is built once per Xcode, with Xcode's own clang, and kept in
 # ~/Library/Caches/OpenHikes/duo-pose.
@@ -176,10 +179,18 @@ wait_for_display() {
 }
 
 if [[ "$pose" == open ]]; then screen="inner"; degrees=180; else screen="cover"; degrees=0; fi
+# Half-open, which shows the inner display: the way round a post that did not
+# take (see the header).
+half_open_degrees=90
 xcrun simctl spawn "$udid" "$helper" hinge "$degrees"
 if ! wait_for_display "$settle_seconds" "$screen" any; then
-    echo "The $screen display did not become active after setting the hinge to ${degrees}°." >&2
-    exit 1
+    xcrun simctl spawn "$udid" "$helper" hinge "$half_open_degrees"
+    wait_for_display "$settle_seconds" inner any || true
+    xcrun simctl spawn "$udid" "$helper" hinge "$degrees"
+    if ! wait_for_display "$settle_seconds" "$screen" any; then
+        echo "The $screen display did not become active after setting the hinge to ${degrees}°." >&2
+        exit 1
+    fi
 fi
 
 # The device orientation that turns a display's interface a given way differs
