@@ -106,15 +106,15 @@ nonisolated enum WalkTimeLeft {
     /// ``calibrationSeconds``.
     ///
     /// Against each stretch the way it was walked, over the stretches' own
-    /// lengths — see the file header. A stretch walked there and back is
-    /// walked twice, as the time spent on it was.
+    /// lengths, ``TrailWalkCoverage/walkedMeters`` — see the file header. A
+    /// stretch walked there and back is walked twice, as the time spent on it
+    /// was.
     static func paceFactor(
         profile: RouteProfile,
         coverage: TrailWalkCoverage,
         activeSeconds: TimeInterval
     ) -> Double? {
-        let walkedMeters = (coverage.walkedTowardsEnd + coverage.walkedTowardsStart)
-            .reduce(0) { $0 + ($1.upperBound - $1.lowerBound) }
+        let walkedMeters = coverage.walkedMeters
         guard walkedMeters >= calibrationMeters,
               activeSeconds >= calibrationSeconds else { return nil }
         let walked = profile.climb(walking: coverage)

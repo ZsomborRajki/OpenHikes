@@ -295,6 +295,18 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
         }
     }
 
+    /// The length walked: ``walkedTowardsEnd`` and ``walkedTowardsStart``
+    /// added up, so a stretch walked there and back counts twice where
+    /// ``coveredMeters`` counts its ground once, and a step too short to be a
+    /// turn adds nothing. The length `RouteProfile.climb(walking:)` climbs,
+    /// and so what a pace or a gradient measured against that climb divides
+    /// by.
+    public var walkedMeters: Double {
+        (walkedTowardsEnd + walkedTowardsStart).reduce(0) { total, stretch in
+            total + (stretch.upperBound - stretch.lowerBound)
+        }
+    }
+
     /// Covered length over the route's, clamped to 0…1 with the same
     /// arithmetic `RouteProfile.fractionComplete(atDistance:)` and
     /// `SharedTrailSnapshot.fractionComplete` share. `nil` for a route with
