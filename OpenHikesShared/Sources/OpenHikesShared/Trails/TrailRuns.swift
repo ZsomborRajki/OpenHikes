@@ -13,7 +13,7 @@
 //
 //  - the watch's map, through ``WatchTrailPackage``'s forwarding properties
 //    (#997), whose tracker reads the same ``pausedLegs``
-//  - the trail widget, through ``TrailStroke``'s pieces, from
+//  - the trail widget, through ``TrailStroke/Pieces``, from
 //    ``SharedTrailSnapshot/pauseIndices`` (#1034)
 //  - the phone's map, which cuts its route line at the walked runs (#1034)
 //
@@ -22,10 +22,10 @@
 //  breaks. Plain indices and the standard library only, because this package
 //  has no dependencies (see *Layout and targets* in AGENTS.md).
 //
-//  ## Every reader of a stored route, too
+//  ## Readers of a stored route, too
 //
-//  The phone's own readers of a route take it through
-//  `[RouteCoordinate].trailRuns` in `OpenHikesData` (#1035): the profile's
+//  The readers of a route that #1035 moved take it through
+//  `[RouteCoordinate].trailRuns` in `OpenHikesData`: the profile's
 //  matching, a place's anchor, a waypoint's track, a photograph's place,
 //  the steepness colours, the surface breakdown, the photo timeline, the
 //  height-spike filter and the map's paused lines. Each used to walk the legs
