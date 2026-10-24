@@ -142,7 +142,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
                 .waitForExistence(timeout: UITestTimeout.existence),
             "selecting a photo pin should open a callout previewing the photo"
         )
-        capture(as: .route)
+        capture(as: .route, of: app)
     }
 
     /// The photographs, pinned where they were taken.
@@ -176,7 +176,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         chart.coordinate(withNormalizedOffset: CGVector(dx: Self.summitChartPosition, dy: 0.5)).tap()
         XCTAssertTrue(waitUntilValueChanges(from: atStart, on: chart), "a tap should move the tracker")
         scrollIntoView(element("hike-photo-strip", in: app), in: app)
-        capture(as: .photos)
+        capture(as: .photos, of: app)
     }
 
     /// The nearby list: published hikes and waymarked OpenStreetMap routes in
@@ -217,7 +217,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         )
         frameCommunityPins(in: app)
         revealCommunityPins(in: app, atLeast: Self.minimumVisiblePins)
-        capture(as: .nearby)
+        capture(as: .nearby, of: app)
     }
 
     /// A finished walk in the trail's History.
@@ -257,7 +257,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
                 .waitForExistence(timeout: UITestTimeout.existence),
             "the summary should lead with how much of the trail was covered"
         )
-        capture(as: .walkHistory)
+        capture(as: .walkHistory, of: app)
     }
 }
 
@@ -484,9 +484,18 @@ extension ScreenshotUITests {
     /// the map's own recognizer through it; a two-finger tap selects nothing.
     /// A tap rather than a pinch for the reason the hero frame gives: it
     /// zooms and does not turn the map.
+    ///
+    /// Not on an open iPhone Duo, where the app is on a screen that is not
+    /// `XCUIScreen.main`. XCUITest measures a two-finger gesture against the
+    /// main screen's windows as well, and there that is the folded-away cover
+    /// display: a window of its size over the inner display's top-leading
+    /// corner, which left the pins there too little unoccluded room for two
+    /// fingers, and the gesture failed every time. The inner display shows
+    /// half as much map again as the 6.9" phone without the step.
     @MainActor
     func frameCommunityPins(in app: XCUIApplication) {
-        for _ in 0..<Self.nearbyZoomOutSteps {
+        let zoomOutSteps = Self.screen(showing: app) == XCUIScreen.main ? Self.nearbyZoomOutSteps : 0
+        for _ in 0..<zoomOutSteps {
             guard let pin = visibleCommunityPins(in: app).first else { return }
             pin.twoFingerTap()
         }
@@ -724,19 +733,37 @@ extension ScreenshotUITests {
         )
     }
 
-    /// Attaches the current screen to the result bundle under `frame`'s name.
+    /// Attaches the screen `app` is showing on to the result bundle under
+    /// `frame`'s name.
     ///
-    /// Takes no application, which is the whole of why it is worth saying:
-    /// `XCUIScreen.main` rather than `app.screenshot()`, because the app's own
+    /// A screen rather than `app.screenshot()`, because the app's own
     /// screenshot is clipped to the app's frame and loses the status bar —
     /// and that is a part of the picture App Store Connect expects to be
-    /// there. The parameter this used to take was the app it then never
-    /// asked.
+    /// there. The app is asked only which screen that is.
     @MainActor
-    func capture(as frame: Frame) {
-        let shot = XCUIScreen.main.screenshot()
+    func capture(as frame: Frame, of app: XCUIApplication) {
+        let shot = Self.screen(showing: app).screenshot()
         let attachment = XCTAttachment(screenshot: shot)
         attachment.name = frame.rawValue
         attachment.lifetime = .keepAlways
         add(attachment)
-    }}
+    }
+
+    /// The screen whose size is the app's window's.
+    ///
+    /// `XCUIScreen.main` on every iPhone but one. An iPhone Duo has two
+    /// screens, and `main` is its cover display whether the device is closed
+    /// or open — so a frame shot from it with the device open is black. The
+    /// window is measured rather than `app.frame`, which on the Duo's inner
+    /// display keeps that display's portrait size after it has turned.
+    @MainActor
+    static func screen(showing app: XCUIApplication) -> XCUIScreen {
+        let window = app.windows.firstMatch
+        guard window.exists else { return .main }
+        let size = window.frame.size
+        return XCUIScreen.screens.first { screen in
+            let shown = screen.screenshot().image.size
+            return abs(shown.width - size.width) <= 1 && abs(shown.height - size.height) <= 1
+        } ?? .main
+    }
+}

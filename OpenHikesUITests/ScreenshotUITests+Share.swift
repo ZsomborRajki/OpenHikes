@@ -59,6 +59,6 @@ extension ScreenshotUITests {
             "the editor should open on the photograph"
         )
         XCTAssertTrue(walkShareBox(.route, in: app).exists, "and the line walked beside the figures")
-        capture(as: .share)
+        capture(as: .share, of: app)
     }
 }

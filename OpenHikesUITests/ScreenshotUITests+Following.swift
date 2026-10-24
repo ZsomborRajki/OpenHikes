@@ -58,6 +58,6 @@ extension ScreenshotUITests {
             scrollIntoView(element("elevation-chart", in: app), in: app),
             "the hike should draw its elevation chart"
         )
-        capture(as: .following)
+        capture(as: .following, of: app)
     }
 }

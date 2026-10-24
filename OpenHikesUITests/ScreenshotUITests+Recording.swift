@@ -96,7 +96,7 @@ extension ScreenshotUITests {
         notice.tap()
         XCTAssertTrue(notice.waitForNonExistence(timeout: UITestTimeout.existence), "and closes when asked")
         liftRecordedLineClearOfTheSheet(in: app)
-        capture(as: .recording)
+        capture(as: .recording, of: app)
     }
 
     /// Drags the map up so the walker and the line behind them sit in the

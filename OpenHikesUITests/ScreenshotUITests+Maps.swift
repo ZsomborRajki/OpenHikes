@@ -55,6 +55,6 @@ extension ScreenshotUITests {
             "the photographs should stand on the map where they were taken"
         )
         expandRouteIntoTheFreedSpace(in: app)
-        capture(as: .maps)
+        capture(as: .maps, of: app)
     }
 }
