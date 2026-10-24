@@ -34,8 +34,18 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
     /// Cumulative descent, the companion to ``elevationGainMeters``.
     public var elevationLossMeters: Double?
     /// Decimated route, in order — enough points to draw the trail's shape,
-    /// not the full track. See ``decimate(_:maxPoints:)``.
+    /// not the full track. See ``line(of:maxPoints:pauseEndBudget:coordinate:isPauseBoundary:)``.
     public var polyline: [CodableCoordinate]
+    /// The indices into ``polyline`` of the points a pause arrives at, in
+    /// order — the convention ``WatchTrailPackage/pauseIndices`` keeps.
+    ///
+    /// The leg arriving at each one is a drive, a lift or the jump between two
+    /// GPX `<trkseg>`s, and is not trail (#962), so the widget draws it faded
+    /// and dotted rather than as the line (#1034). Read it through ``runs``.
+    /// Only a leg that is the pause alone is named here: the decimation keeps
+    /// both ends of a pause it names, and one it could not afford is not named
+    /// at all rather than folded into a leg with walking in it.
+    public var pauseIndices: [Int]
     public var liveFix: LiveFix?
     /// The walk under way along this trail, if there is one — see ``Walk``.
     ///
@@ -50,6 +60,7 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
         tintHex: String,
         totalDistanceMeters: Double,
         polyline: [CodableCoordinate],
+        pauseIndices: [Int] = [],
         elevationLowMeters: Double? = nil,
         elevationHighMeters: Double? = nil,
         elevationGainMeters: Double? = nil,
@@ -67,6 +78,7 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
         self.elevationGainMeters = elevationGainMeters
         self.elevationLossMeters = elevationLossMeters
         self.polyline = polyline
+        self.pauseIndices = pauseIndices
         self.liveFix = liveFix
         self.walk = walk
         self.updatedAt = updatedAt

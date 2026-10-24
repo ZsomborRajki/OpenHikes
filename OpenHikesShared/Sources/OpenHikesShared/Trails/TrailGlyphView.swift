@@ -32,6 +32,8 @@ import SwiftUI
 /// after a render failed.
 struct TrailGlyphView: View {
     private let polyline: [SharedTrailSnapshot.CodableCoordinate]
+    /// ``SharedTrailSnapshot/pauseIndices``, into `polyline`.
+    private let pauseIndices: [Int]
     private let liveFix: SharedTrailSnapshot.CodableCoordinate?
     private let tint: Color
     private let lineWidth: CGFloat
@@ -40,11 +42,13 @@ struct TrailGlyphView: View {
     init(
         polyline: [SharedTrailSnapshot.CodableCoordinate],
         tint: Color,
+        pauseIndices: [Int] = [],
         liveFix: SharedTrailSnapshot.CodableCoordinate? = nil,
         lineWidth: CGFloat = 3,
         showsFixDot: Bool = true
     ) {
         self.polyline = polyline
+        self.pauseIndices = pauseIndices
         self.liveFix = liveFix
         self.tint = tint
         self.lineWidth = lineWidth
@@ -58,7 +62,7 @@ struct TrailGlyphView: View {
             else { return }
 
             TrailStroke.draw(
-                points: projected.points,
+                TrailStroke.Pieces(points: projected.points, pauseIndices: pauseIndices),
                 liveFixPoint: showsFixDot ? projected.liveFixPoint : nil,
                 tint: tint,
                 lineWidth: lineWidth,
@@ -157,37 +161,78 @@ struct TrailGlyphView: View {
 /// basemap) and ``TrailMapView`` (Mercator, registered to a rendered map) so
 /// the trail reads identically on every surface regardless of what's under it.
 enum TrailStroke {
-    /// - Parameter casing: draws a light halo beneath the line. Off over a
-    ///   flat background where it would only add fuzz; on over map imagery,
-    ///   where a bare stroke loses contrast the moment it crosses a road or a
-    ///   patch of scrub.
+    /// How faint a paused stretch is: the phone's and the watch's paused
+    /// alpha, so the three surfaces say "not trail" alike.
+    static let pausedOpacity: Double = 0.4
+
+    /// The lines to stroke: each walked run as trail, and each paused stretch
+    /// between them as a pause — see ``TrailRuns``. A line with no pause is
+    /// one walked run of every point, which is what was drawn before pauses
+    /// were (#1034).
+    struct Pieces: Equatable {
+        let walked: [[CGPoint]]
+        let paused: [[CGPoint]]
+
+        /// - Parameter pauseIndices: the indices into `points` of the points
+        ///   a pause arrives at — ``SharedTrailSnapshot/pauseIndices``.
+        init(points: [CGPoint], pauseIndices: [Int]) {
+            let runs = TrailRuns(pointCount: points.count, pauseIndices: pauseIndices)
+            walked = runs.walkedRuns.map { Array(points[$0]) }
+            paused = runs.pausedStretches.map { Array(points[$0]) }
+        }
+    }
+
+    /// - Parameters:
+    ///   - pieces: the line, cut at its pauses. The paused stretches are
+    ///     drawn faded and dotted, under the trail and without its casing,
+    ///     because a drive between two walked pieces is not trail (#962) and
+    ///     must not look like it.
+    ///   - casing: draws a light halo beneath the line. Off over a
+    ///     flat background where it would only add fuzz; on over map imagery,
+    ///     where a bare stroke loses contrast the moment it crosses a road or a
+    ///     patch of scrub.
     static func draw(
-        points: [CGPoint],
+        _ pieces: Pieces,
         liveFixPoint: CGPoint?,
         tint: Color,
         lineWidth: CGFloat,
         casing: Bool,
         in context: inout GraphicsContext
     ) {
-        guard points.count > 1 else { return }
+        guard !pieces.walked.isEmpty || !pieces.paused.isEmpty else { return }
 
-        var path = Path()
-        path.addLines(points)
+        func path(_ line: [CGPoint]) -> Path {
+            var drawn = Path()
+            drawn.addLines(line)
+            return drawn
+        }
 
+        // Dots a line's width across and two apart: a dash shorter than its
+        // round caps is drawn as a dot.
+        let dotted = StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round, dash: [0.5, lineWidth * 2])
+        for stretch in pieces.paused {
+            context.stroke(path(stretch), with: .color(tint.opacity(pausedOpacity)), style: dotted)
+        }
+        // Every run's casing before any run's line, so where two runs cross
+        // a later casing does not cut through an earlier line.
         if casing {
             let casingOpacity: Double = 0.85
             let casingWidthBonus: CGFloat = 2.5
+            for run in pieces.walked {
+                context.stroke(
+                    path(run),
+                    with: .color(.white.opacity(casingOpacity)),
+                    style: StrokeStyle(lineWidth: lineWidth + casingWidthBonus, lineCap: .round, lineJoin: .round)
+                )
+            }
+        }
+        for run in pieces.walked {
             context.stroke(
-                path,
-                with: .color(.white.opacity(casingOpacity)),
-                style: StrokeStyle(lineWidth: lineWidth + casingWidthBonus, lineCap: .round, lineJoin: .round)
+                path(run),
+                with: .color(tint),
+                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
             )
         }
-        context.stroke(
-            path,
-            with: .color(tint),
-            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
-        )
 
         guard let dot = liveFixPoint else { return }
         let ringDiameterMultiplier: CGFloat = 2.6

@@ -73,6 +73,7 @@ struct SharedPayloadShapeTests {
                 "liveFix.elevationMeters: number",
                 "liveFix.offRouteMeters: number",
                 "liveFix.timestamp: number",
+                "pauseIndices[]: number",
                 "polyline[].latitude: number",
                 "polyline[].longitude: number",
                 "schemaVersion: number",
