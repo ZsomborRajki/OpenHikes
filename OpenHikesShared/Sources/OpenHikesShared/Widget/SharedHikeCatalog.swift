@@ -113,8 +113,8 @@ public extension SharedHikeCatalog {
     /// So it differs from the sheet's search field in three ways, on purpose:
     /// width is not folded (a full-width "ＲＩＤＧＥ" does not answer "ridge"),
     /// matches keep the catalogue's newest-first order rather than putting a
-    /// prefix first, and a blank query is every hike, because that is the
-    /// picker before anything has been typed.
+    /// prefix first, and a blank query is every hike rather than none. The
+    /// picker's first page is ``suggestions(limit:)``, not this.
     func hikes(matching text: String) -> [SharedHikeSummary] {
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return hikes }
