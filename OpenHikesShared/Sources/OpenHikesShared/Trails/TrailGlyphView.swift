@@ -201,38 +201,38 @@ enum TrailStroke {
     ) {
         guard !pieces.walked.isEmpty || !pieces.paused.isEmpty else { return }
 
-        func path(_ line: [CGPoint]) -> Path {
+        // One path a pass, holding every piece as a subpath of its own
+        // (`addLines` starts one), stroked once: one stroke paints where its
+        // pieces overlap once, as the single line did. Stroked piece by
+        // piece, an out-and-back paused at the top, two runs along the same
+        // trail, came out darker there than the tint the hiker chose.
+        func path(_ lines: [[CGPoint]]) -> Path {
             var drawn = Path()
-            drawn.addLines(line)
+            for line in lines { drawn.addLines(line) }
             return drawn
         }
+        let walked = path(pieces.walked)
 
         // Dots a line's width across and two apart: a dash shorter than its
         // round caps is drawn as a dot.
         let dotted = StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round, dash: [0.5, lineWidth * 2])
-        for stretch in pieces.paused {
-            context.stroke(path(stretch), with: .color(tint.opacity(pausedOpacity)), style: dotted)
-        }
-        // Every run's casing before any run's line, so where two runs cross
-        // a later casing does not cut through an earlier line.
+        context.stroke(path(pieces.paused), with: .color(tint.opacity(pausedOpacity)), style: dotted)
+        // The casing under every run's line, so where two runs cross the
+        // casing does not cut through either line.
         if casing {
             let casingOpacity: Double = 0.85
             let casingWidthBonus: CGFloat = 2.5
-            for run in pieces.walked {
-                context.stroke(
-                    path(run),
-                    with: .color(.white.opacity(casingOpacity)),
-                    style: StrokeStyle(lineWidth: lineWidth + casingWidthBonus, lineCap: .round, lineJoin: .round)
-                )
-            }
-        }
-        for run in pieces.walked {
             context.stroke(
-                path(run),
-                with: .color(tint),
-                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+                walked,
+                with: .color(.white.opacity(casingOpacity)),
+                style: StrokeStyle(lineWidth: lineWidth + casingWidthBonus, lineCap: .round, lineJoin: .round)
             )
         }
+        context.stroke(
+            walked,
+            with: .color(tint),
+            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+        )
 
         guard let dot = liveFixPoint else { return }
         let ringDiameterMultiplier: CGFloat = 2.6
