@@ -173,6 +173,24 @@ struct TrailCategoryRunTests {
         #expect(drawn.isApproximatelyEqual(to: walked.lengthMeters, absoluteTolerance: 0.5))
     }
 
+    /// A repeated fix straight after a pause is a leg of no length, which the
+    /// walk skips without a sample. The pause has to outlast that leg, or the
+    /// first sample after it would carry the run straight across the drive.
+    @Test("a repeated fix where the walk resumes still ends the run at the pause")
+    func aRepeatedFixAfterAPauseStillEndsTheRun() async throws {
+        var walked = Self.route([Self.south, 47.6302, 47.6304, 47.6306, 47.6306, 47.6308])
+        walked[3].boundary = .paused
+
+        let runs = try await TrailBreakdownAnalyzer.runs(
+            of: TrailDifficulty.self,
+            route: walked,
+            graph: Self.splitGraph()
+        )
+
+        #expect(runs.map(\.category) == [.hiking, .hiking])
+        #expect(runs.first?.coordinates.last?.latitude == walked[2].latitude)
+    }
+
     @Test("a route of one point has no runs")
     func aDegenerateRouteHasNoRuns() async throws {
         let runs = try await TrailBreakdownAnalyzer.runs(
