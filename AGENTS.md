@@ -514,9 +514,14 @@ a change to recording, the map, the sheet or the render path; the PR template,
   area*; the recording screen's are *Add Place* and *Places Nearby*. A screen
   never shows two at once, and a tip goes for good once it is closed or its
   control is used.
-- **The two about making a hike are for an empty library.** They are
-  retired the first time the list loads with anything in it, so an existing
-  hiker never sees them and the queue moves on to the *Community* tab's.
+- **The two about making a hike are for a new hiker** (`CreationTipsAudience`).
+  They are retired the first time the list holds a hike, so an existing hiker
+  never sees them and the queue moves on to the *Community* tab's. A
+  recording in progress is not a hike yet. A hiker who taps the pill on an
+  empty list is new, which is kept in TipKit's store, and from then on each
+  of the two goes only when it is closed or used. The list is the only
+  witness: on a new phone it is empty until iCloud's first import, so an
+  existing hiker sees *Record a Hike* until then.
 - **Every tip is inline, never a popover.** A popover over the map would be
   presented by the permanent sheet, and while it was up the sheet could
   present nothing else (see *Present modals from inside the sheet's
@@ -614,7 +619,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - `MovementReminderKind` raw values (they double as notification categories)
   - the Live Activity attributes type name
   - the first-run tips' ids, which their closed and used state is stored
-    against (`FirstRunTipsTests`)
+    against (`FirstRunTipsTests`), and the name of `AppTips.isNewHiker`,
+    the TipKit parameter that keeps a new hiker
 
 ## Conventions
 

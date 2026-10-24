@@ -5,8 +5,10 @@
 //  Where on the map the main screen's tip belongs at this moment, if anywhere.
 //
 //  Decided from what the map can see rather than from TipKit, so a suite can
-//  ask every case without a tip store. The card itself — what it is made of,
-//  and why it is a card and not a popover — is `MapTipCards.swift`'s.
+//  ask every case without a tip store. Which hikers the two tips about making
+//  a hike are for is ``CreationTipsAudience``'s decision, handed in. The card
+//  itself — what it is made of, and why it is a card and not a popover — is
+//  `MapTipCards.swift`'s.
 //
 
 /// Where the main screen's due tip is drawn on the map, if anywhere.
@@ -19,24 +21,28 @@ nonisolated enum MapTipPlacement: Equatable {
 
     /// - Parameters:
     ///   - tipID: The main group's due tip, or `nil` when none is.
-    ///   - libraryIsKnownEmpty: Whether the hiker's list has loaded and holds
-    ///     nothing — see ``AppTips/Library``.
+    ///   - creationTipsAreWanted: Whether the two about making a hike are for
+    ///     this hiker — see ``CreationTipsAudience/wantsTips``.
     ///   - pillIsOffered: Whether the leading pill is on the map, which it is
-    ///     while nothing is pushed.
+    ///     while nothing is pushed, and so whether the map is the screen the
+    ///     hiker is looking at.
     ///   - areaSearchIsIdle: Whether *Search this area* is on the map and not
     ///     in the middle of a search.
-    init?(tipID: String?, libraryIsKnownEmpty: Bool, pillIsOffered: Bool, areaSearchIsIdle: Bool) {
+    init?(tipID: String?, creationTipsAreWanted: Bool, pillIsOffered: Bool, areaSearchIsIdle: Bool) {
         switch tipID {
         case let id? where id == RecordHikeTip.tipID || id == MakeTrailTip.tipID:
-            // Known to be empty, not merely not known to hold anything: a
-            // hiker with hikes is never shown these, not even for the moment
-            // before the list has loaded.
-            guard libraryIsKnownEmpty, pillIsOffered else { return nil }
+            // Wanted, not merely not ruled out: a list that has not loaded yet
+            // could be an existing hiker's, and an existing hiker is never
+            // shown these, not even for that moment.
+            guard creationTipsAreWanted, pillIsOffered else { return nil }
             self = .abovePill(tipID: id)
         case let id? where id == SearchThisAreaTip.tipID:
             // Idle, so the tip arrives with the first answer rather than over
-            // the spinner that is still fetching it.
-            guard areaSearchIsIdle else { return nil }
+            // the spinner that is still fetching it — and only while nothing
+            // is pushed. The pill stays with its tab whatever is pushed, but a
+            // pushed screen may show a tip of its own, as the recording
+            // screen does, and a screen never shows two at once.
+            guard areaSearchIsIdle, pillIsOffered else { return nil }
             self = .underAreaSearch
         default:
             // The *Community* tab's tip is drawn by the sheet, under the

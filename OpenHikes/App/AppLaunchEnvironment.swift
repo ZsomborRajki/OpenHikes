@@ -205,8 +205,7 @@ nonisolated enum AppLaunchEnvironment {
                 in: arguments,
                 isUITesting: isUITesting
             )
-            showsTips = isUITesting
-                && arguments.contains(Self.tipsArgument)
+            showsTips = isUITesting && arguments.contains(Self.tipsArgument)
         }
 
         /// How many photos to put in the stand-in library, or `nil` to read

@@ -13,14 +13,16 @@
 //  and a later tip waits until the one before it has been closed or used.
 //
 //  Everybody sees each tip once, with one exception. The two about making a
-//  hike appear only while the library is empty. TipKit cannot tell a first
-//  install from an update, but the library can: a hiker who has a hike has
-//  found those buttons. They are retired the first time the list loads with
-//  anything in it, rather than merely not drawn, because an ordered group
-//  keeps offering the first tip nobody has retired: left alone, it would
-//  offer *Record a Hike* to a map that never draws it and never reach the
-//  *Community* tab's. That tip, its pill's and the recording screen's are for
-//  anybody who has not used those features yet, existing hikers included.
+//  hike are for a new hiker. TipKit cannot tell a first install from an
+//  update, but the library can: a hiker who has a hike has found those
+//  buttons. Who is new is ``CreationTipsAudience``'s decision, made once and
+//  kept in TipKit's store beside the tips (``isNewHiker``). For an existing
+//  hiker the two are retired, rather than merely not drawn, because an
+//  ordered group keeps offering the first tip nobody has retired: left alone,
+//  it would offer *Record a Hike* to a map that never draws it and never
+//  reach the *Community* tab's. That tip, its pill's and the recording
+//  screen's are for anybody who has not used those features yet, existing
+//  hikers included.
 //
 //  Three kinds of launch get no TipKit at all — see ``TipLaunch``.
 //
@@ -39,17 +41,16 @@ import TipKit
 
 @Observable
 final class AppTips {
-    /// What the hiker's list was last seen to hold.
-    enum Library: Equatable {
-        case empty
-        case hasHikes
-        /// Not yet reported, which the two tips about making a hike treat as
-        /// *not empty*: an existing hiker never sees them, not even for the
-        /// moment before the list has loaded.
-        case notLoaded
-    }
-
     private static let logger = Logger(subsystem: "OpenHikes", category: "Tips")
+
+    /// Whether this hiker began their first hike from the map's pill — see
+    /// ``CreationTipsAudience``. A TipKit parameter, so it is kept in the
+    /// store the tips are: a launch from an empty store, as every
+    /// `--ui-test-tips` one is, starts undecided too.
+    ///
+    /// Spelled out as `@Parameter` would write it, because the macro cannot
+    /// be used in a class: its initializer names `Self`.
+    private static var isNewHiker = Tips.Parameter(AppTips.self, "+isNewHiker", false)
 
     /// The main screen's: *Record a Hike*, *Make a Trail*, the *Community*
     /// tab, then its *Search this area* pill — see ``MapTipPlacement`` and
@@ -57,9 +58,10 @@ final class AppTips {
     let main: TipGroup
     /// The recording screen's: *Add Place*, then *Places Nearby* beside it.
     let recording: TipGroup
-    /// What the hiker's list holds, which the two tips about making a hike
-    /// wait on — see ``libraryDidLoad(isEmpty:)``.
-    private(set) var library = Library.notLoaded
+    /// Who the two tips about making a hike are for, which the map's cards
+    /// wait on — see ``libraryDidLoad(holdsAHike:)`` and
+    /// ``pillUsed(retiring:)``.
+    private(set) var creationAudience: CreationTipsAudience
 
     /// Built only after TipKit is configured — see ``forThisLaunch(startupIssue:)``.
     private init() {
@@ -73,6 +75,7 @@ final class AppTips {
             AddPlaceTip()
             PlacesNearbyTip()
         }
+        creationAudience = CreationTipsAudience(isNewHiker: Self.isNewHiker.wrappedValue)
     }
 
     /// Loads TipKit for this launch, or returns `nil` for a launch that shows
@@ -105,15 +108,31 @@ final class AppTips {
         return AppTips()
     }
 
-    /// Hears what the hiker's list holds, and retires the two tips about
-    /// making a hike for good the first time it holds anything.
-    func libraryDidLoad(isEmpty: Bool) {
-        let reported = isEmpty ? Library.empty : .hasHikes
-        guard library != reported else { return }
-        library = reported
-        guard !isEmpty else { return }
+    /// Hears whether the hiker's list holds a hike, and retires the two tips
+    /// about making one for good when that says this is an existing hiker —
+    /// see ``CreationTipsAudience/libraryDidLoad(holdsAHike:)``.
+    func libraryDidLoad(holdsAHike: Bool) {
+        var audience = creationAudience
+        let retires = audience.libraryDidLoad(holdsAHike: holdsAHike)
+        // Assigned whole, so a report that changes nothing is a write the map
+        // never hears.
+        creationAudience = audience
+        guard retires else { return }
         used(RecordHikeTip())
         used(MakeTrailTip())
+    }
+
+    /// Retires `tip`, one of the two about the pill's buttons, because its
+    /// button has just been tapped — and on a list with nothing in it keeps,
+    /// for good, that this is a new hiker, so the hike they are making
+    /// retires neither. See ``CreationTipsAudience/pillUsed()``.
+    func pillUsed(retiring tip: some Tip) {
+        var audience = creationAudience
+        if audience.pillUsed() {
+            Self.isNewHiker.wrappedValue = true
+        }
+        creationAudience = audience
+        used(tip)
     }
 
     /// Retires `tip` for good, because the hiker has done what it is about.

@@ -287,9 +287,49 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// A first-run tip's card sits over the lines like the button above, and
+    /// none of what a tap on it lands on is a `UIControl`: TipKit draws the
+    /// words and the ✕ in SwiftUI. So a thumb closing the tip would have
+    /// opened the hike drawn under it as well.
+    ///
+    /// The card is a stand-in held where the map holds its card. The real one
+    /// is TipKit's view inside ``MapTipCardView``, and a suite never reaches
+    /// TipKit's store — see ``TipLaunch``. The view inside it is where TipKit
+    /// draws, so the claim has to be found on the way up from it.
+    @Test("a tap on a first-run tip's card is not a tap on a line")
+    func aTapOnATipCardIsNotATapOnALine() {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = mapShowingTheRidge(coordinator)
+        defer { detach(map) }
+        let onTheLine = pointOnTheRidge(in: map)
+        #expect(
+            coordinator.routeTapTarget(at: onTheLine, in: map) == .drawnRoute,
+            "the line is where the card is about to be"
+        )
+
+        // As wide as the map, as the pill's cards are, and across the line.
+        let card = UIView(
+            frame: CGRect(
+                x: 0,
+                y: onTheLine.y - Self.tipCardHeight / 2,
+                width: map.bounds.width,
+                height: Self.tipCardHeight
+            )
+        )
+        card.addSubview(UIView(frame: card.bounds))
+        map.addSubview(card)
+        coordinator.tipCards.card = card
+
+        #expect(coordinator.routeTapTarget(at: onTheLine, in: map) == nil)
+        #endif
+    }
+
     /// Half a minimum tap target, which is the size the button is given here
     /// so that it covers the point being tapped.
     private static let buttonRadius: CGFloat = 22
+    /// About a tip card's height with a two-line message.
+    private static let tipCardHeight: CGFloat = 90
 
     /// A browser holding one published hike whose line runs along the ridge,
     /// without anything having to happen on a network.

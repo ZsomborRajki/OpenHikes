@@ -361,11 +361,11 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
     /// Whether something on top of the map has a better claim to this tap.
     ///
     /// A marker, a callout, the tracking button, the camera pill, the maker's
-    /// pill, *Search this area*, the credit line — all of them are views, all
-    /// of them sit over the lines, and a tap that opens a hike *as well as*
-    /// pressing a button is a tap that did two things. A recognizer on the map
-    /// view sees those touches whatever the view under them does with them, so
-    /// this is the whole of what stops it.
+    /// pill, *Search this area*, the credit line, a first-run tip's card — all
+    /// of them are views, all of them sit over the lines, and a tap that opens
+    /// a hike *as well as* pressing a button is a tap that did two things. A
+    /// recognizer on the map view sees those touches whatever the view under
+    /// them does with them, so this is the whole of what stops it.
     ///
     /// The walk up the hierarchy rather than a test of the hit view alone is
     /// because every one of these is a tree: what a tap actually lands on is a
@@ -406,6 +406,10 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         if view === photoControls || view === attributionView { return true }
         if view === trailDraftControls { return true }
         if view === trailPointSearchControl || view === placesAroundMap.searchControl { return true }
+        // TipKit draws the card's words and its ✕ in SwiftUI, none of it a
+        // `UIControl`, so the card is the claim: a tap that closed a tip must
+        // not open the route under it as well.
+        if view === tipCards.card { return true }
         #endif
         return false
     }
