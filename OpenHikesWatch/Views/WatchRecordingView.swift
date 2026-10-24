@@ -276,8 +276,9 @@ private struct UnsavedWalkPanel: View {
 }
 
 /// The live figures. It and the ``HeartRateFigure`` inside it are the only
-/// views that read them. What each is called and how it reads is
-/// ``WatchRecordingFigures``'s; this lays them out.
+/// views that read them. Which caption each figure takes, and how its value
+/// reads, is ``WatchRecordingFigures``'s, and the caption's words are
+/// `WatchRecordingFigures+Caption.swift`'s; this lays them out.
 private struct RecordingFigures: View {
     @Environment(WatchModel.self) private var model
 
