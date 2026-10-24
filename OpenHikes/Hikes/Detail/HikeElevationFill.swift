@@ -23,6 +23,12 @@
 //  The climb comes out the same either way, because a straight run between
 //  two readings adds nothing to it.
 //
+//  A recording with pauses, or a GPX of several `<trkseg>`s, is the one
+//  caller whose line has paused legs, and none of them is filled across: the
+//  cable car's kilometre of rise stays off the level ground either side of
+//  it (#1032). Both ends of each pause are read, so the walked stretches keep
+//  heights of their own.
+//
 //  ## Only a hike with no heights at all
 //
 //  A recording whose barometer dropped out for a while has heights, and a gap
