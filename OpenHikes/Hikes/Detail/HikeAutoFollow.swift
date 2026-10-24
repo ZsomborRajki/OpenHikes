@@ -15,9 +15,10 @@ import OpenHikesData
 /// `HikeDetailView` (header, stats grid, buttons) — the same technique
 /// `RouteHighlight`/`SheetMetrics` use for the map. `HikeDetailView` passes
 /// this object down and only touches its properties from event handlers,
-/// never from `body`, so mutating them invalidates `ElevationChartView` and
-/// `TrailProgressView` — which do read them in their bodies — and nothing
-/// above them.
+/// never from `body`, so mutating them invalidates the views that do read
+/// them in their bodies — the graph's moving marks (`ElevationChartMarks`),
+/// `ElevationChartView` for the position it speaks, and `TrailProgressView` —
+/// and nothing above them.
 @Observable
 final class TrackerState {
     /// Persistent tracker position along the route (metres from start). Starts

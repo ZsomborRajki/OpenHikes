@@ -64,13 +64,13 @@ struct ElevationChartLayersTests {
     /// redrawn when the graph it shows changes.
     @Test("the plot's equality leaves out what moves, and catches what it draws from")
     func plotEqualityLeavesOutWhatMoves() {
-        let tracker = TrackerState()
         let profile = RouteProfile(route: Fixture.ridgeRoute)
         let domain = 0.0...1000.0
         func plot(
             _ profile: RouteProfile,
             domain: ClosedRange<Double>,
             tint: Color = .green,
+            tracker: TrackerState = TrackerState(),
             scrub: ElevationScrubSelection = ElevationScrubSelection()
         ) -> ElevationChartPlot {
             ElevationChartPlot(
@@ -83,11 +83,18 @@ struct ElevationChartLayersTests {
         }
         let base = plot(profile, domain: domain)
 
+        // A tracker and a selection of their own, standing somewhere else: an
+        // equality that read either one would tell these two plots apart,
+        // which reading a single shared tracker on both sides never could.
+        let tracker = TrackerState()
         tracker.trackerDistance = 500
         tracker.liveTrackerDistance = 250
         let scrub = ElevationScrubSelection()
         scrub.distance = 300
-        #expect(base == plot(profile, domain: domain, scrub: scrub), "what moves is not what the plot draws")
+        #expect(
+            base == plot(profile, domain: domain, tracker: tracker, scrub: scrub),
+            "what moves is not what the plot draws"
+        )
 
         #expect(base != plot(profile, domain: domain, tint: .red))
         #expect(base != plot(profile, domain: 0...1200))
