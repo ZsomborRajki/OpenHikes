@@ -35,10 +35,14 @@ struct OpenHikesWatchApp: App {
                 // follow feed is stopped from here and started again on the
                 // way back — see ``WatchModel/sceneMoved(onScreen:)``. From
                 // the first phase, because a launch into the background
-                // reports no change. `.inactive` is still on screen: a
-                // lowered wrist with Always On draws the map, dimmed.
+                // reports no change. `.inactive` moves nothing, whichever
+                // side it is reached from: see `WatchFollowClaim`'s header.
                 .onChange(of: scenePhase, initial: true) { _, phase in
-                    model.sceneMoved(onScreen: phase != .background)
+                    if phase == .active {
+                        model.sceneMoved(onScreen: true)
+                    } else if phase == .background {
+                        model.sceneMoved(onScreen: false)
+                    }
                 }
         }
     }

@@ -51,10 +51,22 @@
 //  and come back. Leaving stops the feed and keeps the claim; coming back
 //  starts it again for a map still asking whose trail is held.
 //
-//  "On screen" is the scene not being in the background. A lowered wrist with
-//  Always On is `.inactive` and still draws the map, dimmed, so it keeps its
-//  feed until watchOS returns to the clock and the scene reaches the
-//  background.
+//  Coming back is a ``FeedChange/restart``, not a plain start. The hiker
+//  walked on while the feed was down, and nothing matched where they went,
+//  so the last fix says nothing about where they are now. On a trail that
+//  comes back along itself, the stretch around that fix can hold the very
+//  ground they have since reached on the way home, and it would win the
+//  next fix for the wrong leg. So the model lets go of that position first,
+//  as it does when a paused recording resumes.
+//
+//  The app leaves the screen when the scene reaches the background, and comes
+//  back when it is active again. `.inactive` lies between the two and moves
+//  nothing. Out of `.active` it is a lowered wrist: the app stays frontmost,
+//  its map dimmed with Always On and dark without, and the feed runs until
+//  watchOS returns to the clock and the scene reaches the background. Out of
+//  the background it is the way back in, which watchOS can report before the
+//  app has left the background, so the feed waits for `.active`: in use
+//  beyond doubt, when a When In Use authorization lets it start.
 //
 //  ## Why it is here
 //
@@ -72,6 +84,10 @@ public struct WatchFollowClaim: Equatable, Sendable {
     public enum FeedChange: Equatable, Sendable {
         /// Start it for the screen that is asking.
         case start
+        /// Start it again for a screen that went on asking while the app was
+        /// off screen. Where the last fix put the hiker is let go first: they
+        /// walked on with the feed down, as across a recording's pause.
+        case restart
         /// Stop it: nothing that can show it is asking any longer.
         case stop
         /// Leave it as it is, which under a recording means leaving it to the
@@ -171,10 +187,12 @@ public struct WatchFollowClaim: Equatable, Sendable {
 
     /// The app came back on screen. A map still asking gets its feed back,
     /// on the terms ``screenAppeared(_:asking:holding:recording:)`` would give
-    /// it. Leaving stopped the feed, so there is nothing here to stop.
+    /// it, as a ``FeedChange/restart``: nothing was matched while the app was
+    /// away. Leaving stopped the feed, or a recording that ended meanwhile
+    /// took it down, so there is nothing here to stop.
     public mutating func appReturned(holding held: UUID?, recording: Bool) -> FeedChange {
         guard !isAppOnScreen else { return .unchanged }
         isAppOnScreen = true
-        return isClaimed && !recording && held == claimedHikeID ? .start : .unchanged
+        return isClaimed && !recording && held == claimedHikeID ? .restart : .unchanged
     }
 }
