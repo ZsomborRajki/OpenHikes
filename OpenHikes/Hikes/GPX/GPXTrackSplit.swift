@@ -36,11 +36,12 @@ nonisolated enum GPXTrackSplit {
         var assigned = Array(repeating: [Item](), count: routes.count)
         guard !items.isEmpty else { return assigned }
         let reaches = routes.map(Reach.init)
+        let grids = routes.map(Grid.init)
         for item in items {
             let target = coordinate(item)
             let nearest = routes.indices
                 .filter { reaches[$0].mayHold(target) }
-                .compactMap { index in offRouteMeters(of: target, along: routes[index]).map { (index, $0) } }
+                .compactMap { index in grids[index].offRouteMeters(of: target).map { (index, $0) } }
                 .min { $0.1 < $1.1 }
             guard let nearest, nearest.1 <= TrailPlaceAnchor.touchedOffRouteMeters else { continue }
             assigned[nearest.0].append(item)
@@ -55,7 +56,8 @@ nonisolated enum GPXTrackSplit {
     /// waypoint pays it for every track — a region's download of forty walks
     /// with a few dozen huts marked is tens of millions of projections for
     /// answers that are almost all "a valley away". Checked against the box
-    /// first, each waypoint measures only the one or two walks it could be on.
+    /// first, each waypoint measures only the one or two walks it could be on,
+    /// and ``Grid`` then measures only the part of each it could be on.
     ///
     /// Longitude is held unwrapped: each step along the route is taken the
     /// short way, as ``RouteGeometry/project(_:onSegmentFrom:to:)`` takes it,
@@ -96,15 +98,9 @@ nonisolated enum GPXTrackSplit {
                 west = min(west, longitude)
                 east = max(east, longitude)
             }
-            let margin = TrailPlaceAnchor.touchedOffRouteMeters
-            let latitudeMargin = margin / Self.metersPerDegree
-            // Widest where the box is nearest a pole; the importer refuses
-            // anything past Web Mercator's ~85°, so the cosine never reaches 0.
-            let widest = max(abs(south), abs(north)) + latitudeMargin
-            let longitudeMargin = margin
-                / (Self.metersPerDegree * cos(min(widest, Self.steepestLatitude) * .pi / 180))
-            south -= latitudeMargin
-            north += latitudeMargin
+            let longitudeMargin = GPXTrackSplit.longitudeMargin(near: max(abs(south), abs(north)))
+            south -= GPXTrackSplit.latitudeMargin
+            north += GPXTrackSplit.latitudeMargin
             west -= longitudeMargin
             span = east - west + longitudeMargin
             wraps = span >= 360
@@ -118,13 +114,197 @@ nonisolated enum GPXTrackSplit {
             if eastward < 0 { eastward += 360 }
             return eastward <= span
         }
-
-        /// A little under a degree of latitude's length anywhere, so the
-        /// margin it yields is a little over the distance, never under it.
-        private static let metersPerDegree = 110_000.0
-        /// Where the cosine is held, short of the pole it would reach zero at.
-        private static let steepestLatitude = 89.0
     }
+
+    /// The pieces of a route that ``offRouteMeters(of:along:)`` measures —
+    /// each walked leg, and each fix with a pause on both sides — filed under
+    /// the cells of a grid that their boxes cover, so that a waypoint is
+    /// measured against the pieces near it rather than against all of them.
+    ///
+    /// ``Reach`` turns away the routes a waypoint is nowhere near, and nothing
+    /// more: a waypoint that does lie on a track was measured against every
+    /// leg of it. A day of 1 Hz fixes is some twenty thousand legs, so ten
+    /// thousand waypoints along one were two hundred million projections, and
+    /// seconds before the confirmation could appear. Through the grid each
+    /// waypoint measures the legs within a cell or two of it.
+    ///
+    /// The cells are degrees of latitude and of unwrapped longitude, never
+    /// metres from an origin: a plane laid at one end of a long route
+    /// stretches the other, and a margin measured in it falls short there. A
+    /// waypoint is looked up in the cells under its own box, grown by the
+    /// touching distance as ``Reach`` grows a route's, but at the waypoint's
+    /// latitude. A piece that comes within that distance of it has a point
+    /// inside that box, so it is filed under one of those cells. The nearest
+    /// piece is therefore measured whenever it is near enough to count, and
+    /// the answer is the one measuring every piece gives: the nearer route
+    /// wins, and a waypoint goes to one route or to none.
+    ///
+    /// Measured whole instead, as before:
+    /// - a route whose grown box spans half a turn or more, where the short
+    ///   way between two of its fixes and the short way to a waypoint need not
+    ///   agree, so unwrapped longitude is no frame to file in;
+    /// - a piece whose box covers more than ``mostCellsPerPiece`` cells, a leg
+    ///   of more than a few hundred metres, which every waypoint the route's
+    ///   box admits measures. A recorded track has few, and a route of sparse
+    ///   turn points has few pieces of any kind.
+    private struct Grid {
+        private struct Cell: Hashable {
+            let row: Int
+            let column: Int
+        }
+
+        private let route: [RouteCoordinate]
+        /// Each piece, by the index of the point it ends at, under every cell
+        /// its box covers.
+        private var cells: [Cell: [Int]] = [:]
+        /// The pieces too long to file.
+        private var unfiled: [Int] = []
+        /// The first fix's longitude, which the route is unwrapped from.
+        private var origin = 0.0
+        private var latitudeStep = 0.0
+        private var longitudeStep = 0.0
+        private var isFiled = false
+
+        init(_ route: [RouteCoordinate]) {
+            self.route = route
+            guard route.count > 1, let first = route.first else { return }
+            origin = first.longitude
+            // Unwrapped as ``Reach`` unwraps, a step at a time the short way.
+            var longitude = origin
+            var longitudes = [longitude]
+            longitudes.reserveCapacity(route.count)
+            for (start, end) in route.adjacentPairs() {
+                longitude += RouteGeometry.normalizedLongitudeDelta(end.longitude - start.longitude)
+                longitudes.append(longitude)
+            }
+            guard let south = route.lazy.map(\.latitude).min(), let north = route.lazy.map(\.latitude).max(),
+                  let west = longitudes.min(), let east = longitudes.max() else { return }
+            let widest = max(abs(south), abs(north))
+            guard east - west + 2 * GPXTrackSplit.longitudeMargin(near: widest) < GPXTrackSplit.halfTurn else {
+                return
+            }
+            latitudeStep = GPXTrackSplit.cellMeters / GPXTrackSplit.metersPerDegree
+            longitudeStep = latitudeStep / GPXTrackSplit.cosine(of: (south + north) / 2)
+            for index in route.indices {
+                guard let piece = GPXTrackSplit.piece(endingAt: index, of: route) else { continue }
+                let latitudes = (route[piece.start].latitude, route[piece.end].latitude)
+                let rows = Self.cellRange(
+                    from: min(latitudes.0, latitudes.1),
+                    to: max(latitudes.0, latitudes.1),
+                    step: latitudeStep
+                )
+                let columns = Self.cellRange(
+                    from: min(longitudes[piece.start], longitudes[piece.end]),
+                    to: max(longitudes[piece.start], longitudes[piece.end]),
+                    step: longitudeStep
+                )
+                guard let rows, let columns, rows.count * columns.count <= Self.mostCellsPerPiece else {
+                    unfiled.append(index)
+                    continue
+                }
+                for row in rows {
+                    for column in columns {
+                        cells[Cell(row: row, column: column), default: []].append(index)
+                    }
+                }
+            }
+            isFiled = true
+        }
+
+        /// How far `coordinate` is from the nearest piece measured for it —
+        /// exactly ``offRouteMeters(of:along:)``'s answer whenever that is
+        /// within the touching distance, and otherwise a distance beyond it,
+        /// or `nil`.
+        ///
+        /// For a coordinate the route's ``Reach`` may hold: that is what puts
+        /// its longitude within half a turn of the route's own, the frame it is
+        /// unwrapped into here.
+        func offRouteMeters(of coordinate: CLLocationCoordinate2D) -> Double? {
+            guard isFiled, let box = box(around: coordinate) else {
+                return GPXTrackSplit.offRouteMeters(of: coordinate, along: route)
+            }
+            var nearest = Double.infinity
+            for index in unfiled {
+                nearest = min(nearest, meters(from: coordinate, toPieceEndingAt: index))
+            }
+            for row in box.rows {
+                for column in box.columns {
+                    for index in cells[Cell(row: row, column: column)] ?? [] {
+                        nearest = min(nearest, meters(from: coordinate, toPieceEndingAt: index))
+                    }
+                }
+            }
+            return nearest.isFinite ? nearest : nil
+        }
+
+        /// The cells under `coordinate`'s box grown by the touching distance.
+        private func box(
+            around coordinate: CLLocationCoordinate2D
+        ) -> (rows: ClosedRange<Int>, columns: ClosedRange<Int>)? {
+            let margin = (
+                latitude: GPXTrackSplit.latitudeMargin,
+                longitude: GPXTrackSplit.longitudeMargin(near: coordinate.latitude)
+            )
+            let longitude = origin + RouteGeometry.normalizedLongitudeDelta(coordinate.longitude - origin)
+            guard let rows = Self.cellRange(
+                from: coordinate.latitude - margin.latitude,
+                to: coordinate.latitude + margin.latitude,
+                step: latitudeStep
+            ), let columns = Self.cellRange(
+                from: longitude - margin.longitude,
+                to: longitude + margin.longitude,
+                step: longitudeStep
+            ) else { return nil }
+            return (rows, columns)
+        }
+
+        private func meters(from coordinate: CLLocationCoordinate2D, toPieceEndingAt index: Int) -> Double {
+            GPXTrackSplit.meters(from: coordinate, toPieceEndingAt: index, of: route)
+        }
+
+        /// The cells from the one holding `lower` to the one holding `upper`,
+        /// or `nil` for a value no cell can hold.
+        private static func cellRange(from lower: Double, to upper: Double, step: Double) -> ClosedRange<Int>? {
+            let first = (lower / step).rounded(.down)
+            let last = (upper / step).rounded(.down)
+            guard first.isFinite, last.isFinite, first <= last,
+                  first.magnitude < Double(Int32.max), last.magnitude < Double(Int32.max) else { return nil }
+            return Int(first)...Int(last)
+        }
+
+        /// Four cells by four: a leg up to a few hundred metres long. A longer
+        /// one would be filed under a square of cells growing with its length,
+        /// most of them nowhere near it.
+        private static let mostCellsPerPiece = 16
+    }
+
+    /// The touching distance in degrees of latitude, a little over it anywhere.
+    private static let latitudeMargin = TrailPlaceAnchor.touchedOffRouteMeters / metersPerDegree
+
+    /// The touching distance in degrees of longitude, a little over it at
+    /// every latitude within the touching distance of `latitude` — the widest
+    /// of them is the one nearest a pole, and its degree is the shortest.
+    private static func longitudeMargin(near latitude: Double) -> Double {
+        TrailPlaceAnchor.touchedOffRouteMeters
+            / (metersPerDegree * cosine(of: abs(latitude) + latitudeMargin))
+    }
+
+    /// The cosine of `latitude`, held short of the pole; the importer refuses
+    /// anything past Web Mercator's ~85°, so it never gets that far.
+    private static func cosine(of latitude: Double) -> Double {
+        cos(min(abs(latitude), steepestLatitude) * .pi / 180)
+    }
+
+    /// A little under a degree of latitude's length anywhere, so the
+    /// margin it yields is a little over the distance, never under it.
+    private static let metersPerDegree = 110_000.0
+    /// Where the cosine is held, short of the pole it would reach zero at.
+    private static let steepestLatitude = 89.0
+    private static let halfTurn = 180.0
+    /// A grid cell's side, about twice the touching distance: a waypoint's
+    /// grown box covers two or three of them a side, and a 1 Hz track crosses
+    /// one in a hundred legs or so.
+    private static let cellMeters = 2 * TrailPlaceAnchor.touchedOffRouteMeters
 
     /// How far `coordinate` is from the nearest of the ground `route` walked,
     /// or `nil` for a route of fewer than two points.
@@ -151,18 +331,32 @@ nonisolated enum GPXTrackSplit {
         guard route.count > 1 else { return nil }
         var nearest = Double.infinity
         for index in route.indices {
-            let point = route[index].clCoordinate
-            // A boundary describes the leg arriving at the point that carries it.
-            let arrivesWalked = index > 0 && !route[index].isPauseBoundary
-            let leavesWalked = index + 1 < route.count && !route[index + 1].isPauseBoundary
-            if arrivesWalked {
-                let start = route[index - 1].clCoordinate
-                let projection = RouteGeometry.project(coordinate, onSegmentFrom: start, to: point)
-                nearest = min(nearest, projection.offRouteMeters)
-            } else if !leavesWalked {
-                nearest = min(nearest, RouteGeometry.distanceMeters(from: coordinate, to: point))
-            }
+            nearest = min(nearest, meters(from: coordinate, toPieceEndingAt: index, of: route))
         }
         return nearest
+    }
+
+    /// The piece of `route` that ends at `index`, as the points it runs
+    /// between: the walked leg arriving there, or the fix alone when no walked
+    /// leg touches it. `nil` when only the leg leaving it is walked, because
+    /// that piece ends at the next point.
+    private static func piece(endingAt index: Int, of route: [RouteCoordinate]) -> (start: Int, end: Int)? {
+        // A boundary describes the leg arriving at the point that carries it.
+        if index > 0, !route[index].isPauseBoundary { return (index - 1, index) }
+        let leavesWalked = index + 1 < route.count && !route[index + 1].isPauseBoundary
+        return leavesWalked ? nil : (index, index)
+    }
+
+    /// How far `coordinate` is from the piece ending at `index`, or infinitely
+    /// far when no piece ends there — see ``piece(endingAt:of:)``.
+    private static func meters(
+        from coordinate: CLLocationCoordinate2D,
+        toPieceEndingAt index: Int,
+        of route: [RouteCoordinate]
+    ) -> Double {
+        guard let piece = piece(endingAt: index, of: route) else { return .infinity }
+        let end = route[piece.end].clCoordinate
+        guard piece.start != piece.end else { return RouteGeometry.distanceMeters(from: coordinate, to: end) }
+        return RouteGeometry.project(coordinate, onSegmentFrom: route[piece.start].clCoordinate, to: end).offRouteMeters
     }
 }
