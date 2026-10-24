@@ -6,8 +6,8 @@
 //  that does not.
 //
 //  This is the render-isolation rule the repository instructions set, on the
-//  device where it matters most. A GPS fix arrives about once a second and a
-//  heart-rate sample more often than that; if the screen's root body read
+//  device where it matters most. A GPS fix arrives about once a second, and
+//  every heart-rate sample is another change; if the screen's root body read
 //  these, every one of them would re-run the whole hierarchy — on a watch,
 //  with a battery that has to last the walk these figures are describing.
 //

@@ -26,18 +26,26 @@ struct WatchRecordingFiguresTests {
     private static func figures(
         in locale: Locale,
         climb: Double? = 342,
-        speed: Double? = hourlyFiveKilometers,
-        heartRate: Double? = 112,
-        heartRateAge: TimeInterval? = 5
+        speed: Double? = hourlyFiveKilometers
     ) -> WatchRecordingFigures {
         WatchRecordingFigures(
             distanceMeters: 5000,
             elevationGainMeters: climb,
             averageSpeedMetersPerSecond: speed,
-            heartRateBPM: heartRate,
-            heartRateSampledAt: heartRateAge.map { now.addingTimeInterval(-$0) },
-            now: now,
             locale: locale
+        )
+    }
+
+    /// The heart figure as the screen judges it at ``now``, for a reading
+    /// sampled `age` seconds before.
+    private static func heartRate(
+        _ beats: Double? = 112,
+        age: TimeInterval? = 5
+    ) -> WatchRecordingFigures.Figure {
+        WatchRecordingFigures.heartRate(
+            bpm: beats,
+            sampledAt: age.map { now.addingTimeInterval(-$0) },
+            now: now
         )
     }
 
@@ -78,9 +86,8 @@ struct WatchRecordingFiguresTests {
     /// claim about the walk.
     @Test("nothing to say is a dash, never a zero")
     func missingFiguresAreDashes() {
-        let figures = Self.figures(in: Self.metric, speed: nil, heartRate: nil)
-        #expect(figures.averageSpeed.value == "—")
-        #expect(figures.heartRate.value == "—")
+        #expect(Self.figures(in: Self.metric, speed: nil).averageSpeed.value == "—")
+        #expect(Self.heartRate(nil).value == "—")
     }
 
     /// #1026: the watch read "0 m" before a second trusted height, and all
@@ -102,12 +109,12 @@ struct WatchRecordingFiguresTests {
     /// walk.
     @Test("a heart rate that is not a number is no reading", arguments: [Double.nan, .infinity, -.infinity])
     func nonFiniteHeartRateIsADash(beats: Double) {
-        #expect(Self.figures(in: Self.metric, heartRate: beats).heartRate.value == "—")
+        #expect(Self.heartRate(beats).value == "—")
     }
 
     @Test("a heart rate is whole beats")
     func heartRateIsWholeBeats() {
-        #expect(Self.figures(in: Self.metric, heartRate: 111.6).heartRate == .init(title: "Heart", value: "112"))
+        #expect(Self.heartRate(111.6) == .init(title: "Heart", value: "112"))
     }
 
     /// #1024: the builder's most recent sample never goes back to nothing, so
@@ -118,7 +125,7 @@ struct WatchRecordingFiguresTests {
         600,
     ])
     func staleHeartRateIsADash(age: TimeInterval) {
-        #expect(Self.figures(in: Self.metric, heartRateAge: age).heartRate.value == "—")
+        #expect(Self.heartRate(age: age).value == "—")
     }
 
     @Test("a reading inside the window shows its beats", arguments: [
@@ -126,13 +133,13 @@ struct WatchRecordingFiguresTests {
         WatchRecordingFigures.heartRateFreshness - 1,
     ])
     func freshHeartRateShowsItsBeats(age: TimeInterval) {
-        #expect(Self.figures(in: Self.metric, heartRateAge: age).heartRate.value == "112")
+        #expect(Self.heartRate(age: age).value == "112")
     }
 
     /// Nothing says how old it is, so nothing says it is current.
     @Test("a reading with no sample time is no reading")
     func undatedHeartRateIsADash() {
-        #expect(Self.figures(in: Self.metric, heartRateAge: nil).heartRate.value == "—")
+        #expect(Self.heartRate(age: nil).value == "—")
     }
 
     /// The screen is drawn again at the expiry, which no new sample would
@@ -144,16 +151,8 @@ struct WatchRecordingFiguresTests {
         #expect(redraws.first == sampledAt)
         let expiry = try #require(redraws.last)
         #expect(expiry == sampledAt.addingTimeInterval(WatchRecordingFigures.heartRateFreshness))
-        let atExpiry = WatchRecordingFigures(
-            distanceMeters: 0,
-            elevationGainMeters: 0,
-            averageSpeedMetersPerSecond: nil,
-            heartRateBPM: 112,
-            heartRateSampledAt: sampledAt,
-            now: expiry,
-            locale: Self.metric
-        )
-        #expect(atExpiry.heartRate.value == "—")
+        let atExpiry = WatchRecordingFigures.heartRate(bpm: 112, sampledAt: sampledAt, now: expiry)
+        #expect(atExpiry.value == "—")
         #expect(WatchRecordingFigures.heartRateRedraws(sampledAt: nil).isEmpty)
     }
 }

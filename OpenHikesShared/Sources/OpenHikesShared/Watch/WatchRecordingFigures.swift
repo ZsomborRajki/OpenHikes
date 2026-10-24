@@ -39,6 +39,11 @@
 //  ``heartRateRedraws(sampledAt:)`` names the moments the screen has to be
 //  drawn again without one.
 //
+//  So it is the one figure that can change with no fix or sample behind the
+//  change, and ``heartRate(bpm:sampledAt:now:)`` builds it apart from the
+//  other three: the screen draws it in a view of its own, where a sample or
+//  the expiry redraws that figure and not the panel.
+//
 
 import Foundation
 
@@ -59,15 +64,11 @@ public struct WatchRecordingFigures: Equatable, Sendable {
     public let distance: Figure
     public let climb: Figure
     public let averageSpeed: Figure
-    public let heartRate: Figure
 
     public init(
         distanceMeters: Double,
         elevationGainMeters: Double?,
         averageSpeedMetersPerSecond: Double?,
-        heartRateBPM: Double?,
-        heartRateSampledAt: Date?,
-        now: Date,
         locale: Locale = .current
     ) {
         distance = Figure(
@@ -81,10 +82,6 @@ public struct WatchRecordingFigures: Equatable, Sendable {
         averageSpeed = Figure(
             title: "Avg Speed",
             value: Self.speedText(averageSpeedMetersPerSecond, locale: locale)
-        )
-        heartRate = Figure(
-            title: "Heart",
-            value: Self.heartRateText(heartRateBPM, sampledAt: heartRateSampledAt, now: now)
         )
     }
 
@@ -118,6 +115,12 @@ public struct WatchRecordingFigures: Equatable, Sendable {
     public static func heartRateRedraws(sampledAt: Date?) -> [Date] {
         guard let sampledAt else { return [] }
         return [sampledAt, sampledAt.addingTimeInterval(heartRateFreshness)]
+    }
+
+    /// The heart figure as it reads at `now`, for the last reading and the
+    /// time it was sampled.
+    public static func heartRate(bpm: Double?, sampledAt: Date?, now: Date) -> Figure {
+        Figure(title: "Heart", value: heartRateText(bpm, sampledAt: sampledAt, now: now))
     }
 
     /// A dash rather than a zero while there is no reading: before HealthKit
