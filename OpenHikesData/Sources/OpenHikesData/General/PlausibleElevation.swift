@@ -21,8 +21,8 @@
 //  breaking its run.
 //
 
-import Algorithms
 import CoreLocation
+import OpenHikesShared
 
 nonisolated public enum PlausibleElevation {
     /// Every height a walk can be at, with margin: the Dead Sea shore is at
@@ -82,13 +82,14 @@ nonisolated public enum PlausibleElevation {
     }
 
     /// `route` with the height of every one of its ``spikes(in:)`` emptied.
-    /// Each pause starts a fresh set of neighbours, as a GPX segment does.
-    /// Positions, times and boundaries are untouched.
+    /// Each pause starts a fresh set of neighbours, as a GPX segment does:
+    /// the heights are judged one of the route's ``TrailRuns/pieces`` at a
+    /// time. Positions, times and boundaries are untouched.
     public static func despiked(_ route: [RouteCoordinate]) -> [RouteCoordinate] {
         var despiked = route
-        for segment in route.chunked(by: { !$1.isPauseBoundary }) {
-            let spikes = spikes(in: segment.map { ($0.clCoordinate, $0.elevation) })
-            for offset in spikes { despiked[segment.startIndex + offset].elevation = nil }
+        for piece in route.trailRuns.pieces {
+            let spikes = spikes(in: route[piece].map { ($0.clCoordinate, $0.elevation) })
+            for offset in spikes { despiked[piece.lowerBound + offset].elevation = nil }
         }
         return despiked
     }

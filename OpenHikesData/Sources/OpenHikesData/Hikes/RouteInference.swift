@@ -19,6 +19,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesShared
 
 nonisolated public extension [RouteCoordinate] {
     /// The stretches drawn across ground the recording never observed, as runs
@@ -69,21 +70,19 @@ nonisolated public extension [RouteCoordinate] {
     /// The stretches the recording was paused across, as runs of coordinates
     /// ready to hand to `MKPolyline`.
     ///
-    /// One per boundary rather than per run: ``RouteBoundary`` marks the leg
-    /// arriving at a point, and a resume produces exactly one such leg — the
-    /// straight line from the last fix before the pause to the first fix
-    /// after it. The predecessor is included for the same reason
-    /// ``inferredSegments`` includes it, so the drawn stretch meets the rest
-    /// of the line rather than floating beside it.
+    /// One per paused leg (``TrailRuns/pausedLegs``) rather than per run of
+    /// them: ``RouteBoundary`` marks the leg arriving at a point, and a resume
+    /// produces exactly one such leg — the straight line from the last fix
+    /// before the pause to the first fix after it. The predecessor is
+    /// included for the same reason ``inferredSegments`` includes it, so the
+    /// drawn stretch meets the rest of the line rather than floating beside
+    /// it.
     ///
     /// Deliberately separate from ``inferredSegments``: the two say different
     /// things — "nobody watched this" against "nobody was asked to" — and a
     /// route can carry both. See ``RouteBoundary``.
     var pausedSegments: [[CLLocationCoordinate2D]] {
-        adjacentPairs().compactMap { previous, point in
-            guard point.isPauseBoundary else { return nil }
-            return [previous.clCoordinate, point.clCoordinate]
-        }
+        trailRuns.pausedLegs.map { leg in [self[leg].clCoordinate, self[leg + 1].clCoordinate] }
     }
 
     /// Whether the recording was ever paused mid-walk. The first point is

@@ -25,6 +25,7 @@ import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 
 nonisolated enum RouteSteepness {
     /// How much route one grade is measured across — see the file header.
@@ -83,43 +84,42 @@ nonisolated enum RouteSteepness {
     /// metres is the noise the window exists to average away.
     ///
     /// A pause closes the window too, and the next starts on the fix the
-    /// pause ended at. The leg between is not trail (see ``RouteBoundary``):
-    /// the height across it was carried by car or by lift, and measured as a
-    /// slope, a drive up to a second level walk was the steepest ground on
-    /// the scale (#992). The stretches either side never join, whatever their
-    /// shades.
+    /// pause ended at: the windows are laid one of the route's
+    /// ``TrailRuns/pieces`` at a time. The leg between is not trail (see
+    /// ``RouteBoundary``): the height across it was carried by car or by
+    /// lift, and measured as a slope, a drive up to a second level walk was
+    /// the steepest ground on the scale (#992). The stretches either side
+    /// never join, whatever their shades, and a lone fix has no slope.
     static func runs(route: [RouteCoordinate]) -> [Run] {
         let heights = smoothedHeights(of: route)
         var builder = Builder(route: route, heights: heights)
-        var windowStart: Int?
-        var windowLength = 0.0
-        for index in route.indices {
-            guard heights[index] != nil else {
-                if let start = windowStart { builder.closeTail(from: start, to: index - 1, length: windowLength) }
-                windowStart = nil
-                continue
-            }
-            guard let start = windowStart else {
+        for piece in route.trailRuns.pieces {
+            var windowStart: Int?
+            var windowLength = 0.0
+            for index in piece {
+                guard heights[index] != nil else {
+                    if let start = windowStart { builder.closeTail(from: start, to: index - 1, length: windowLength) }
+                    windowStart = nil
+                    continue
+                }
+                guard let start = windowStart else {
+                    windowStart = index
+                    windowLength = 0
+                    continue
+                }
+                windowLength += RouteGeometry.distanceMeters(
+                    from: route[index - 1].clCoordinate,
+                    to: route[index].clCoordinate
+                )
+                guard windowLength >= windowMeters else { continue }
+                builder.add(from: start, to: index, length: windowLength)
                 windowStart = index
                 windowLength = 0
-                continue
             }
-            guard !route[index].isPauseBoundary else {
-                builder.closeTail(from: start, to: index - 1, length: windowLength)
-                windowStart = index
-                windowLength = 0
-                continue
+            if let start = windowStart {
+                builder.closeTail(from: start, to: piece.upperBound - 1, length: windowLength)
             }
-            windowLength += RouteGeometry.distanceMeters(
-                from: route[index - 1].clCoordinate,
-                to: route[index].clCoordinate
-            )
-            guard windowLength >= windowMeters else { continue }
-            builder.add(from: start, to: index, length: windowLength)
-            windowStart = index
-            windowLength = 0
         }
-        if let start = windowStart { builder.closeTail(from: start, to: route.count - 1, length: windowLength) }
         return builder.runs
     }
 
@@ -131,23 +131,26 @@ nonisolated enum RouteSteepness {
     /// bunch up on every hairpin and a timed track's on every stop, and
     /// counting them would pull a point on a steady climb towards the height
     /// of the nearest bend. It never reaches across a gap in the heights or a
-    /// pause, and near the end of a stretch it narrows to the same distance
-    /// either side, so a steady climb keeps its grade right to its last point
-    /// rather than being flattened by an average that can only look back.
+    /// pause, taking the route one of its ``TrailRuns/pieces`` at a time, and
+    /// near the end of a stretch it narrows to the same distance either side,
+    /// so a steady climb keeps its grade right to its last point rather than
+    /// being flattened by an average that can only look back.
     static func smoothedHeights(of route: [RouteCoordinate]) -> [Double?] {
         var smoothed = [Double?](repeating: nil, count: route.count)
-        var index = route.startIndex
-        while index < route.endIndex {
-            guard route[index].elevation?.isFinite == true else {
-                index += 1
-                continue
+        for piece in route.trailRuns.pieces {
+            var index = piece.lowerBound
+            while index < piece.upperBound {
+                guard route[index].elevation?.isFinite == true else {
+                    index += 1
+                    continue
+                }
+                // Up to the next point with no height, or the end of the
+                // piece: a pause starts a stretch of its own.
+                let end = route[(index + 1)..<piece.upperBound].firstIndex { $0.elevation?.isFinite != true }
+                let stretch = index..<(end ?? piece.upperBound)
+                smoothStretch(route[stretch], into: &smoothed)
+                index = stretch.upperBound
             }
-            // Up to the next point with no height, or the next one a pause
-            // ended at, which starts a stretch of its own.
-            let end = route[(index + 1)...].firstIndex { $0.elevation?.isFinite != true || $0.isPauseBoundary }
-            let stretch = index..<(end ?? route.endIndex)
-            smoothStretch(route[stretch], into: &smoothed)
-            index = stretch.upperBound
         }
         return smoothed
     }
