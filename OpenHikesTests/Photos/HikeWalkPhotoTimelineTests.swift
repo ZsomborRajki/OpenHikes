@@ -6,9 +6,10 @@
 //
 //  Values only: this type is a window and a covered stretch, and neither needs
 //  a route, a store or a library to be exercised. What the tests below pin is
-//  the shape of the guess — even progress through the union, in route order,
-//  with the same five-minute grace a recorded route is given — and, just as
-//  much, the cases the type refuses outright.
+//  the shape of the guess — even progress through the union, here in route
+//  order, with the same five-minute grace a recorded route is given — and,
+//  just as much, the cases the type refuses outright. Which way progress runs
+//  is ``HikeWalkPhotoDirectionTests``'.
 //
 
 import Foundation
