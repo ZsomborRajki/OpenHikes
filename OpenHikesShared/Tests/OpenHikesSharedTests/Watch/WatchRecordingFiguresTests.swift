@@ -3,9 +3,10 @@
 //  OpenHikesSharedTests
 //
 //  What the watch's recording screen calls each live figure, and how it
-//  formats it. Every locale is pinned: CI's simulator is en_US and a
-//  developer's Mac may well be metric, and a caption is only proven to agree
-//  with its unit in both.
+//  formats it. Every locale is pinned: `swift test` runs in whatever region
+//  the host is set to, which may be en_US on a CI runner and metric on a
+//  developer's Mac, and a caption is only proven to agree with its unit in
+//  both.
 //
 
 import Foundation
