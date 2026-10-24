@@ -36,6 +36,7 @@ struct WatchTrailRunsTests {
 
         #expect(trail.walkedRuns == [0..<4])
         #expect(trail.pausedLegs.isEmpty)
+        #expect(trail.pausedStretches.isEmpty)
     }
 
     @Test("a pause cuts the line in two, and the leg across it is drawn as the pause")
@@ -44,6 +45,7 @@ struct WatchTrailRunsTests {
 
         #expect(trail.walkedRuns == [0..<2, 2..<4])
         #expect(trail.pausedLegs == [1])
+        #expect(trail.pausedStretches == [1..<3])
     }
 
     @Test("every pause cuts the line again")
@@ -52,14 +54,16 @@ struct WatchTrailRunsTests {
 
         #expect(trail.walkedRuns == [0..<2, 2..<5, 5..<8])
         #expect(trail.pausedLegs == [1, 4])
+        #expect(trail.pausedStretches == [1..<3, 4..<6])
     }
 
-    @Test("a point between two adjacent pauses is not a run, and both legs are paused")
+    @Test("a point between two adjacent pauses is not a run, and both legs are one paused stretch")
     func adjacentPausesLeaveNoSinglePointRun() {
         let trail = Self.trail(count: 6, pauses: [2, 3])
 
         #expect(trail.walkedRuns == [0..<2, 3..<6])
         #expect(trail.pausedLegs == [1, 2])
+        #expect(trail.pausedStretches == [1..<4])
     }
 
     @Test("a pause on the first or last leg leaves no single point at either end")
@@ -68,14 +72,18 @@ struct WatchTrailRunsTests {
 
         #expect(trail.walkedRuns == [1..<4])
         #expect(trail.pausedLegs == [0, 3])
+        #expect(trail.pausedStretches == [0..<2, 3..<5])
     }
 
-    @Test("a trail paused on every leg has nothing walked to draw")
+    /// A GPX file whose segments hold a point apiece: one dotted line on the
+    /// watch, not one per point.
+    @Test("a trail paused on every leg has nothing walked to draw, and one paused stretch")
     func everyLegPausedHasNoRun() {
-        let trail = Self.trail(count: 3, pauses: [1, 2])
+        let trail = Self.trail(count: 6, pauses: [1, 2, 3, 4, 5])
 
         #expect(trail.walkedRuns.isEmpty)
-        #expect(trail.pausedLegs == [0, 1])
+        #expect(trail.pausedLegs == [0, 1, 2, 3, 4])
+        #expect(trail.pausedStretches == [0..<6])
     }
 
     @Test("an index the line cannot hold is ignored, and a repeat counts once")
@@ -84,20 +92,24 @@ struct WatchTrailRunsTests {
 
         #expect(trail.walkedRuns == [0..<3, 3..<5])
         #expect(trail.pausedLegs == [2])
+        #expect(trail.pausedStretches == [2..<4])
     }
 
     @Test(
         "every leg is drawn exactly once, as trail or as a pause",
-        arguments: [[], [2], [2, 5], [2, 3], [1, 7], [1, 2, 3], [4, 4, 6]]
+        arguments: [[], [2], [2, 5], [2, 3], [1, 7], [1, 2, 3], [4, 4, 6], [1, 2, 3, 4, 5, 6, 7]]
     )
     func everyLegIsDrawnOnce(pauses: [Int]) {
         let trail = Self.trail(count: 8, pauses: pauses)
 
         let walked = trail.walkedRuns.flatMap { $0.dropLast() }
-        let drawn = (walked + trail.pausedLegs).sorted()
+        let paused = trail.pausedStretches.flatMap { $0.dropLast() }
+        let drawn = (walked + paused).sorted()
 
         #expect(drawn == Array(0..<7))
+        #expect(paused == trail.pausedLegs)
         #expect(trail.walkedRuns.allSatisfy { $0.count > 1 })
+        #expect(trail.pausedStretches.allSatisfy { $0.count > 1 })
     }
 
     @Test("the tracker refuses exactly the legs the map draws as a pause")
@@ -115,7 +127,7 @@ struct WatchTrailRunsTests {
         )
         var tracker = WatchRouteTracker(trail)
 
-        for leg in trail.pausedLegs {
+        for leg in trail.pausedStretches.flatMap({ $0.dropLast() }) {
             let middle = (trail.points[leg].longitude + trail.points[leg + 1].longitude) / 2
             let reading = tracker.advance(latitude: 0, longitude: middle)
             let paused = try #require(reading)

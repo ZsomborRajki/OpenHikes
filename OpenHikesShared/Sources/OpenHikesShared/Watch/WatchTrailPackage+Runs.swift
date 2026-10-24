@@ -20,10 +20,11 @@
 //
 //  The watch has no test bundle, so the decision is made here, under
 //  `swift test`, and `TrailMapScreen` only turns these indices into
-//  coordinates. The tracker reads ``WatchTrailPackage/pausedLegs`` too, so
-//  the leg the map draws as a pause is exactly the leg the tracker refuses —
-//  two readings of the same indices could not drift apart, because there is
-//  only one.
+//  coordinates. The map's runs and stretches are cut at
+//  ``WatchTrailPackage/pausedLegs``, and the tracker reads the same property,
+//  so the leg the map draws as a pause is exactly the leg the tracker refuses
+//  — two readings of the same indices could not drift apart, because there
+//  is only one.
 //
 
 import Foundation
@@ -50,11 +51,11 @@ public extension WatchTrailPackage {
     /// Each holds two points or more. A run of one — the point between two
     /// adjacent pauses, or the lone point a trail starts or ends on when its
     /// first or last leg was paused — is a place, not a line, which is
-    /// ``isDrawable``'s rule for the whole trail; it stays on the map as the
-    /// end of the paused legs either side of it.
+    /// ``isDrawable``'s rule for the whole trail; it stays on the map inside
+    /// the paused stretch that passes through it.
     ///
-    /// Together with ``pausedLegs`` this covers every leg exactly once, so
-    /// nothing the phone sent is left undrawn and nothing is drawn twice.
+    /// Together with ``pausedStretches`` this covers every leg exactly once,
+    /// so nothing the phone sent is left undrawn and nothing is drawn twice.
     var walkedRuns: [Range<Int>] {
         var runs: [Range<Int>] = []
         var start = 0
@@ -64,5 +65,25 @@ public extension WatchTrailPackage {
             start = end
         }
         return runs
+    }
+
+    /// The stretches nobody walked, in order, as ranges of indices into
+    /// ``points``: each run of adjacent ``pausedLegs``, from the point the
+    /// first leaves to the point the last arrives at.
+    ///
+    /// Adjacent legs are one stretch rather than one each because each is a
+    /// line the watch's map has to draw: a GPX file whose segments hold a
+    /// point apiece is paused on every leg, and drawn leg by leg it would be
+    /// as many lines as it has points. Joined, it is one.
+    var pausedStretches: [Range<Int>] {
+        var stretches: [Range<Int>] = []
+        for leg in pausedLegs {
+            if let last = stretches.last, last.upperBound == leg + 1 {
+                stretches[stretches.count - 1] = last.lowerBound..<(leg + 2)
+            } else {
+                stretches.append(leg..<(leg + 2))
+            }
+        }
+        return stretches
     }
 }

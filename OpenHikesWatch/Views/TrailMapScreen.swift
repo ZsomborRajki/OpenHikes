@@ -59,15 +59,15 @@ import SwiftUI
 /// they are is still said exactly, in the figures.
 ///
 /// The line is drawn run by run rather than as one array (#997): the walked
-/// runs solid and cased, the paused legs between them dotted. `walkedRuns`
-/// and `pausedLegs` are ``WatchTrailPackage/walkedRuns`` and
-/// ``WatchTrailPackage/pausedLegs`` — indices into `coordinates`, read from
-/// the pauses exactly as ``WatchRouteTracker`` reads them.
+/// runs solid and cased, the paused stretches between them dotted.
+/// `walkedRuns` and `pausedStretches` are ``WatchTrailPackage/walkedRuns``
+/// and ``WatchTrailPackage/pausedStretches`` — indices into `coordinates`,
+/// cut at the legs ``WatchRouteTracker`` refuses.
 @MapContentBuilder
 func trailMapContent(
     coordinates: [CLLocationCoordinate2D],
     walkedRuns: [Range<Int>],
-    pausedLegs: [Int],
+    pausedStretches: [Range<Int>],
     tint: Color
 ) -> some MapContent {
     // A pause, or the jump between two GPX track segments: ground nobody
@@ -75,11 +75,11 @@ func trailMapContent(
     // Drawn so the two pieces still read as one outing, but in the phone's
     // paused style — the tint faded and dotted — with no casing and under
     // everything else, so it never reads as a line to follow.
-    ForEach(pausedLegs, id: \.self) { leg in
-        MapPolyline(coordinates: [coordinates[leg], coordinates[leg + 1]])
+    ForEach(pausedStretches, id: \.self) { stretch in
+        MapPolyline(coordinates: Array(coordinates[stretch]))
             .stroke(
                 tint.opacity(pausedOpacity),
-                style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: pausedDash)
+                style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round, dash: pausedDash)
             )
     }
     // A dark casing under the coloured line, drawn first so the line sits on
@@ -345,7 +345,7 @@ private struct TrailMapFull: View {
             trailMapContent(
                 coordinates: trail.mapCoordinates,
                 walkedRuns: trail.walkedRuns,
-                pausedLegs: trail.pausedLegs,
+                pausedStretches: trail.pausedStretches,
                 tint: trail.mapTint
             )
         }
