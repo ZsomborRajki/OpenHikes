@@ -48,6 +48,8 @@ struct LibraryTotalsTests {
         )
     }
 
+    /// One walk's facts, which walked what it covered: it never turned back.
+    /// `LibraryTotalsWalkDirectionTests` has the walks that did.
     private static func walk(
         of hikeID: UUID,
         on date: Date,
@@ -62,6 +64,7 @@ struct LibraryTotalsTests {
             startedAt: date,
             endedAt: date.addingTimeInterval(lasting),
             coveredMeters: covered,
+            walkedMeters: covered,
             activeSeconds: lasting,
             climbMeters: climb,
             isRecordingsOwn: recordingsOwn,

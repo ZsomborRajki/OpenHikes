@@ -31,7 +31,12 @@
 //  down a trail the trail's ascent, and a walk over its flat half half of
 //  it, and made an all-downhill walk the library's steepest (#1039). A
 //  stretch walked there and back climbs both ways, as on the card, while
-//  its distance is the ground covered, once.
+//  its distance is the ground covered, once. So *Steepest* spreads a walk's
+//  climb over the length it walked, each stretch once per way it went —
+//  ``TrailWalkCoverage/walkedMeters``, which is what a recording's distance
+//  already is — and not over that distance, over which up a hill and back
+//  down it would read twice as steep as it was, and could take the record
+//  from a steeper recording.
 //
 //  Following a trail and recording are independent — starting a recording
 //  leaves a walk under way alone — so one afternoon can leave both a
@@ -82,7 +87,14 @@ import SwiftData
 nonisolated struct LibraryOuting: Equatable, Sendable {
     let hikeID: UUID
     let date: Date
+    /// How far the outing went, which the distance totals add up and
+    /// *Longest* is chosen by: a clocked hike's distance, and the ground a
+    /// walk covered, where a stretch walked there and back counts once.
     let distanceMeters: Double
+    /// The length walked, which *Steepest* spreads ``climbMeters`` over: a
+    /// clocked hike's distance again, and a walk's stretches once per way it
+    /// walked them, since its climb counts both ways — see the file header.
+    let walkedMeters: Double
     /// `nil` for a walk along a line its trail has been redrawn from since,
     /// whose climb nothing kept.
     let climbMeters: Double?
@@ -98,8 +110,18 @@ nonisolated struct LibraryRecordCandidate: Equatable, Sendable {
     let hikeID: UUID
     let title: String
     let distanceMeters: Double
+    /// The outing's ``LibraryOuting/walkedMeters``.
+    let walkedMeters: Double
     let climbMeters: Double?
     let highestMeters: Double?
+
+    /// What *Steepest* is chosen by: the climb over the length walked, not
+    /// over ``distanceMeters``, where a walk counts a stretch walked there
+    /// and back once.
+    var gradient: Double {
+        guard walkedMeters > 0 else { return 0 }
+        return (climbMeters ?? 0) / walkedMeters
+    }
 }
 
 /// One hike as the sweep read it — everything the counting rules ask of it.
@@ -124,6 +146,9 @@ nonisolated struct LibraryWalkFacts: Equatable, Sendable {
     let startedAt: Date
     let endedAt: Date
     let coveredMeters: Double
+    /// Each stretch once per way it was walked —
+    /// ``TrailWalkCoverage/walkedMeters``, the length ``climbMeters`` climbs.
+    let walkedMeters: Double
     let activeSeconds: TimeInterval
     /// What the walk itself climbed: each stretch it covered, the way it was
     /// walked, along the line the trail draws now. 0 when that line has no
@@ -212,6 +237,7 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
                 hikeID: hike.hikeID,
                 title: hike.title,
                 distanceMeters: outing.distanceMeters,
+                walkedMeters: outing.walkedMeters,
                 climbMeters: hike.climbMeters == nil ? nil : outing.climbMeters,
                 highestMeters: outing.climbMeters == nil ? nil : hike.highestMeters
             )
@@ -221,7 +247,7 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
             .max { ($0.highestMeters ?? 0) < ($1.highestMeters ?? 0) }
         steepest = candidates
             .filter { $0.distanceMeters >= Self.steepestMinimumMeters && ($0.climbMeters ?? 0) > 0 }
-            .max { Self.gradient($0) < Self.gradient($1) }
+            .max { $0.gradient < $1.gradient }
     }
 
     /// Every outing in the library, by the rules the file header gives.
@@ -233,6 +259,7 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
                 hikeID: hike.hikeID,
                 date: hike.date,
                 distanceMeters: hike.distanceMeters,
+                walkedMeters: hike.distanceMeters,
                 climbMeters: hike.climbMeters ?? 0,
                 movingSeconds: hike.movingSeconds ?? 0,
                 isWalk: false
@@ -246,6 +273,7 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
                 hikeID: walk.hikeID,
                 date: walk.startedAt,
                 distanceMeters: walk.coveredMeters * share,
+                walkedMeters: walk.walkedMeters * share,
                 climbMeters: walk.trailHasChanged ? nil : walk.climbMeters * share,
                 movingSeconds: walk.activeSeconds * share,
                 isWalk: true
@@ -288,11 +316,6 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
         }
         return months
     }
-
-    private static func gradient(_ candidate: LibraryRecordCandidate) -> Double {
-        guard candidate.distanceMeters > 0 else { return 0 }
-        return (candidate.climbMeters ?? 0) / candidate.distanceMeters
-    }
 }
 
 // MARK: - Reading the library
@@ -333,10 +356,14 @@ nonisolated enum LibraryTotalsSweep {
         let hikes = try reads.hikes(context)
         let walks = try reads.walks(context)
         // The line each walked trail draws now, to tell a walk along it from
-        // one along a line the trail has been redrawn from since, and to
-        // climb the walks along it. Hashed from the route its figures are
-        // measured from, so a route is read once.
+        // one along a line the trail has been redrawn from since. Hashed from
+        // the route its figures are measured from, so a route is read once.
         let walkedIDs = Set(walks.map(\.hikeID))
+        // The route itself only of a followed trail, since a followed walk is
+        // the only one ``walkFacts(_:revisions:routes:)`` climbs. Every saved
+        // recording has a walk of its own, so keeping the route of every
+        // walked trail kept every recording's at once.
+        let followedIDs = Set(walks.filter { $0.endReason != .recorded }.map(\.hikeID))
         var revisions: [UUID: String] = [:]
         var routes: [UUID: [RouteCoordinate]] = [:]
         let hikeFacts = hikes.compactMap { hike -> LibraryHikeFacts? in
@@ -345,7 +372,7 @@ nonisolated enum LibraryTotalsSweep {
             let route = hike.route
             if walkedIDs.contains(hike.id), revisions[hike.id] == nil {
                 revisions[hike.id] = TrailWalkRecord.routeRevision(of: route)
-                routes[hike.id] = route
+                if followedIDs.contains(hike.id) { routes[hike.id] = route }
             }
             let statistics = HikeRouteStatistics(distanceMeters: hike.distanceMeters, route: route)
             return LibraryHikeFacts(
@@ -392,6 +419,7 @@ nonisolated enum LibraryTotalsSweep {
                 startedAt: walk.startedAt,
                 endedAt: walk.endedAt,
                 coveredMeters: coverage.coveredMeters,
+                walkedMeters: coverage.walkedMeters,
                 activeSeconds: walk.activeSeconds,
                 climbMeters: climb,
                 isRecordingsOwn: isRecordingsOwn,

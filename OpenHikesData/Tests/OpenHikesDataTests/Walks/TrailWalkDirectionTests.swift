@@ -66,6 +66,7 @@ struct TrailWalkDirectionTests {
         #expect(coverage.walkedTowardsStart == [200...400])
         #expect(coverage.ranges == [0...400])
         #expect(coverage.coveredMeters.isApproximatelyEqual(to: 400, absoluteTolerance: 1e-9))
+        #expect(coverage.walkedMeters.isApproximatelyEqual(to: 600, absoluteTolerance: 1e-9))
     }
 
     /// Each way is a union of its own, so walking back over ground walked
@@ -145,6 +146,7 @@ struct TrailWalkDirectionTests {
         let up = walk(Array(0...30) + [27] + Array(33...50))
         #expect(up.walkedTowardsStart.isEmpty)
         #expect(up.ranges == [0...Self.hill.distances[50]])
+        #expect(up.walkedMeters.isApproximatelyEqual(to: up.coveredMeters, absoluteTolerance: 1e-9))
         let climb = try #require(Self.hill.climb(walking: up))
         #expect(climb.gainMeters.isApproximatelyEqual(to: 100, absoluteTolerance: 0.001))
         #expect(climb.lossMeters.isApproximatelyEqual(to: 0, absoluteTolerance: 0.001))
@@ -165,6 +167,7 @@ struct TrailWalkDirectionTests {
         #expect(stretch.upperBound < TrailWalkPolicy.minimumTurnMeters)
         #expect(coverage.walkedTowardsEnd == [stretch])
         #expect(coverage.walkedTowardsStart == [stretch])
+        #expect(coverage.walkedMeters.isApproximatelyEqual(to: 2 * stretch.upperBound, absoluteTolerance: 1e-9))
         let climb = try #require(Self.hill.climb(walking: coverage))
         #expect(climb.gainMeters.isApproximatelyEqual(to: 6, absoluteTolerance: 0.001))
         #expect(climb.lossMeters.isApproximatelyEqual(to: 6, absoluteTolerance: 0.001))
