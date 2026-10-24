@@ -120,15 +120,23 @@ extension WatchTrailPackage {
 /// One trail, opened: the map, and the way to its figures.
 ///
 /// Owns the whole trail's lifetime on screen — asking the phone for the
-/// geometry, starting the position feed, and stopping it on the way out. The
-/// figures are a *sheet* rather than a push for that reason: a push takes this
-/// view off screen, `onDisappear` would stop the feed the figures are made of,
-/// and the two would fight over it every time the button was pressed.
+/// geometry, claiming the position feed, and giving the claim up on the way
+/// out, which stops the feed unless a recording is running it. The figures
+/// are a *sheet* rather than a push for that reason: a push takes this view
+/// off screen, `onDisappear` would stop the feed the figures are made of, and
+/// the two would fight over it every time the button was pressed.
 struct TrailMapScreen: View {
     let hikeID: UUID
     let name: String
 
     @Environment(WatchModel.self) private var model
+
+    /// Which screen holds the follow claim, so this one's leaving drops its
+    /// own claim and never the claim of a map that opened before it went —
+    /// see ``WatchFollowClaim``. `@State` so it is the same value from
+    /// appearing to leaving however often the body is rebuilt; it is never
+    /// written, so it never redraws anything.
+    @State private var followClaimID = UUID()
 
     // periphery:ignore - read through its projected value, which the index
     // does not record as a use: `$isShowingFigures` is handed to `TrailMapFull`
@@ -150,15 +158,20 @@ struct TrailMapScreen: View {
             .navigationTitle(name)
             .navigationBarTitleDisplayMode(.inline)
             .task {
+                // Started on appearing but run later, so it can run after this
+                // screen has already left; cancelled is how it says so. A
+                // claim taken then would outlive the screen, and with it the
+                // feed — started now, or put back at the next Stop.
+                guard !Task.isCancelled else { return }
                 model.selectTrail(hikeID)
-                model.startFollowing()
+                model.startFollowing(for: followClaimID)
             }
             .onDisappear {
                 // Recording or not. A recording owns its own feed and
                 // outlives this screen, which is the whole point of it, but
                 // this screen's claim on the feed goes with the screen — see
-                // ``WatchModel/stopFollowing()``.
-                model.stopFollowing()
+                // ``WatchModel/stopFollowing(for:)``.
+                model.stopFollowing(for: followClaimID)
             }
     }
 
