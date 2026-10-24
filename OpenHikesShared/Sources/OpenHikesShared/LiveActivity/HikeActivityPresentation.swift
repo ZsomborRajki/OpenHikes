@@ -128,7 +128,7 @@ public extension HikeActivityAttributes {
                     meters: state.elevationGainMeters,
                     locale: locale
                 ),
-                TrailWidgetMetric.pace(
+                TrailWidgetMetric.averageSpeed(
                     metersPerSecond: state.averageSpeedMetersPerSecond,
                     locale: locale
                 ),

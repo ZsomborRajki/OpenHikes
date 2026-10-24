@@ -37,8 +37,8 @@ struct TrailWidgetLayout: Equatable {
         // the climb and the length are what the top-right corner exists to
         // say, and a 155 pt square that gave up the length would be a widget
         // showing a trail without saying how long it is. The third — the
-        // hiker's own height, or a recording's pace — is the one that has
-        // somewhere else to be read.
+        // hiker's own height, or a recording's average speed — is the one
+        // that has somewhere else to be read.
         metricLimit = isSmall ? 2 : 3
     }
 }

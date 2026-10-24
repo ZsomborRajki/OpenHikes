@@ -100,9 +100,9 @@ public enum WidgetFormat {
         )
     }
 
-    /// Walking-pace style, to one decimal — "4.3 km/h", "2.7 mph". The app's
+    /// A walking speed, to one decimal — "4.3 km/h", "2.7 mph". The app's
     /// `HikeFormat.speed` is this, so the stats grid and the Lock Screen
-    /// cannot round one pace two ways again.
+    /// cannot round one speed two ways again.
     ///
     /// `usage: .general`, and no explicit conversion before it, which is what
     /// `HikeFormat.speed` was fixed to and this copy, when it was one, was not. Asking the
@@ -256,10 +256,10 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
     /// least useful one.
     public enum Kind: String, Sendable, CaseIterable {
         case ascent = "ascent"
+        case averageSpeed = "averageSpeed"
         case currentElevation = "currentElevation"
         case distance = "distance"
         case length = "length"
-        case pace = "pace"
         case points = "points"
         case remaining = "remaining"
         case timeLeft = "timeLeft"
@@ -282,10 +282,10 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
     public var symbolName: String {
         switch kind {
         case .ascent: "arrow.up.forward"
+        case .averageSpeed: "speedometer"
         case .currentElevation: "figure.hiking"
         case .distance: "figure.walk"
         case .length: "point.topleft.down.to.point.bottomright.curvepath"
-        case .pace: "speedometer"
         case .points: "point.3.connected.trianglepath.dotted"
         case .remaining: "flag.pattern.checkered"
         case .timeLeft: "clock"
@@ -296,10 +296,10 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
     public var spokenLabel: String {
         switch kind {
         case .ascent: "Ascent"
+        case .averageSpeed: "Average speed"
         case .currentElevation: "Elevation"
         case .distance: "Hiked"
         case .length: "Length"
-        case .pace: "Average speed"
         case .points: "Track points"
         case .remaining: "Remaining"
         case .timeLeft: "Time left"
@@ -375,12 +375,12 @@ extension TrailWidgetMetric {
         return Self(kind: .timeLeft, value: WidgetFormat.timeLeft(seconds: seconds))
     }
 
-    /// Absent while standing still: a pace of zero is what every recording
+    /// Absent while standing still: a speed of zero is what every recording
     /// reads before its second fix, and it is not a fact about the walk.
-    static func pace(metersPerSecond: Double?, locale: Locale) -> Self? {
+    static func averageSpeed(metersPerSecond: Double?, locale: Locale) -> Self? {
         guard let metersPerSecond, metersPerSecond > 0 else { return nil }
         return Self(
-            kind: .pace,
+            kind: .averageSpeed,
             value: WidgetFormat.speed(
                 metersPerSecond: metersPerSecond,
                 locale: locale
@@ -431,11 +431,11 @@ extension SharedRecordingSnapshot: TrailWidgetMetricSource {}
 ///
 /// Two snapshots answer this and they answer it differently — a trail's
 /// chips are ascent and where the hiker is, a recording's are ascent and
-/// pace. What they do not differ about is turning whichever chips came back
-/// into the one phrase a widget speaks, so that lives here: a widget is a
-/// single accessibility element, the glyphs say nothing to VoiceOver, and a
-/// second spelling of the joining would be a widget that reads differently
-/// depending on what it happens to be showing.
+/// average speed. What they do not differ about is turning whichever chips
+/// came back into the one phrase a widget speaks, so that lives here: a
+/// widget is a single accessibility element, the glyphs say nothing to
+/// VoiceOver, and a second spelling of the joining would be a widget that
+/// reads differently depending on what it happens to be showing.
 public protocol TrailWidgetMetricSource {
     /// This snapshot's chips, most useful first, truncated to whatever the
     /// widget family has width for.
@@ -512,8 +512,8 @@ public extension SharedRecordingSnapshot {
     /// the trail they were following.
     ///
     /// Distance is here because the status line that used to carry it is no
-    /// longer drawn; pace is the one a narrow family gives up, which is the
-    /// trail band's rule applied to the same widths.
+    /// longer drawn; average speed is the one a narrow family gives up, which
+    /// is the trail band's rule applied to the same widths.
     func metrics(limit: Int, locale: Locale = .current) -> [TrailWidgetMetric] {
         TrailWidgetMetric.band(
             [
@@ -525,7 +525,7 @@ public extension SharedRecordingSnapshot {
                     meters: distanceMeters,
                     locale: locale
                 ),
-                TrailWidgetMetric.pace(
+                TrailWidgetMetric.averageSpeed(
                     metersPerSecond: averageSpeedMetersPerSecond,
                     locale: locale
                 ),

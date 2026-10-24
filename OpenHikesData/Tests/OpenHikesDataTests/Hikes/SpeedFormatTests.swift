@@ -119,7 +119,7 @@ struct SpeedFormatTests {
     /// The four agreeing locales could never have failed it. `en_LR` and
     /// `my_MM` are the two cheapest that can.
     @Test(
-        "the app and the widget agree about the same pace",
+        "the app and the widget agree about the same speed",
         arguments: ["en_US", "en_GB", "de_DE", "ja_JP", "en_LR", "my_MM"]
     )
     func agreesWithTheWidget(identifier: String) {

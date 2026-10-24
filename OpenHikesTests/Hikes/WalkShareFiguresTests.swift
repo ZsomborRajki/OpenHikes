@@ -35,16 +35,16 @@ struct WalkShareFiguresTests {
         )
     }
 
-    @Test("the pace is the covered distance over the active clock")
-    func paceIsCoveredOverActive() throws {
-        let pace = try #require(figures(walkedMeters: 5000, activeSeconds: 3600).averageMetersPerSecond)
+    @Test("the speed is the covered distance over the active clock")
+    func speedIsCoveredOverActive() throws {
+        let speed = try #require(figures(walkedMeters: 5000, activeSeconds: 3600).averageMetersPerSecond)
 
-        #expect(pace.isApproximatelyEqual(to: 5000.0 / 3600, absoluteTolerance: 1e-9))
+        #expect(speed.isApproximatelyEqual(to: 5000.0 / 3600, absoluteTolerance: 1e-9))
         #expect(figures().value(of: .speed, locale: Self.metric) == "5,0 km/h")
     }
 
-    @Test("a walk with no distance or no clock has no pace to print")
-    func noPaceWithoutDistanceOrTime() {
+    @Test("a walk with no distance or no clock has no speed to print")
+    func noSpeedWithoutDistanceOrTime() {
         #expect(figures(walkedMeters: 0).value(of: .speed) == nil)
         #expect(figures(activeSeconds: 0).value(of: .speed) == nil)
         #expect(figures(activeSeconds: 0).value(of: .time) == nil)

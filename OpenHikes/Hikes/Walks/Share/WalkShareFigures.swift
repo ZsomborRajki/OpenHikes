@@ -10,7 +10,7 @@
 //  were walked, and the speed is that distance over the active clock — so a
 //  walk abandoned halfway does not advertise the whole trail's ascent, a walk
 //  down from the trail's stored end does not advertise its climb, and breaks
-//  do not drag the pace down. The summary screen beside it shows the trail's
+//  do not drag the speed down. The summary screen beside it shows the trail's
 //  figures for context; a card sent to somebody else has no such context to
 //  lean on.
 //
@@ -84,7 +84,7 @@ nonisolated struct WalkShareFigures: Equatable, Sendable {
     let startedAt: Date
 
     /// The covered distance over the active clock, or `nil` for a walk too
-    /// short to have a pace.
+    /// short to have a speed.
     var averageMetersPerSecond: Double? {
         guard activeSeconds > 0, walkedMeters > 0 else { return nil }
         return walkedMeters / activeSeconds
