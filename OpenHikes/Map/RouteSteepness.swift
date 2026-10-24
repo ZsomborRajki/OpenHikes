@@ -190,7 +190,7 @@ nonisolated enum RouteSteepness {
         var end: Int
         var length: Double
         /// Whether it begins where the piece before it ends, rather than
-        /// after a gap in the heights.
+        /// after a gap in the heights or a pause.
         var joinsPrevious: Bool
     }
 
@@ -246,8 +246,8 @@ nonisolated enum RouteSteepness {
     /// climb whose windows fall either side of a threshold is two short
     /// pieces a step apart, and handing each to the level ground around it
     /// would draw the climb as no climb at all. A piece with nothing beside
-    /// it — a stretch between two gaps in the heights — keeps its own colour
-    /// however short it is.
+    /// it — a stretch between two gaps in the heights, or two pauses — keeps
+    /// its own colour however short it is.
     private static func absorbingShort(_ pieces: [Piece]) -> [Piece] {
         var pieces = pieces
         func neighbors(of index: Int) -> [Int] {
