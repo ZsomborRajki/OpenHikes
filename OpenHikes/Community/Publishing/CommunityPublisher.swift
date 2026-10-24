@@ -251,8 +251,8 @@ nonisolated enum CommunityPublisher {
     /// correctly, which is why the form has to ask the same question rather
     /// than count the rows.
     ///
-    /// Counted over ``selectedPhotos(of:)`` so the cap and the ordering are
-    /// the upload's, not a second opinion about them.
+    /// Counted over ``selectedPhotos(of:excluding:)`` so the cap and the
+    /// ordering are the upload's, not a second opinion about them.
     @MainActor
     static func sendablePhotoCount(
         of hike: Hike,
@@ -280,7 +280,7 @@ nonisolated enum CommunityPublisher {
     ///
     /// The strip's list — ``shareablePhotos(of:)``, which is where the order
     /// is decided — less the ones struck off, cut at the cap. Read rather than
-    /// sorted a second time, so the tiles the form draws first are the ones
+    /// ordered a second time, so the tiles the form draws first are the ones
     /// that fit by construction rather than by two functions agreeing (#1001).
     ///
     /// Struck-off pictures are dropped *before* the cap, which is what makes
@@ -365,6 +365,12 @@ nonisolated enum CommunityPublisher {
     /// takes this list and only removes from it, so the strip and the upload
     /// cannot come to disagree about which pictures fit under the cap. A
     /// screen that built its own order would eventually disagree with both.
+    ///
+    /// That makes this list the upload's too, and so a statement of what may
+    /// be published, not only of what is drawn. It draws from
+    /// ``ownPhotos(of:)`` and from nothing wider: a strip that also drew
+    /// somebody else's pictures, if only to say they are not the hiker's,
+    /// would hand them to both senders.
     @MainActor
     static func shareablePhotos(of hike: Hike) -> [HikePhoto] {
         let ordered = ownPhotos(of: hike)

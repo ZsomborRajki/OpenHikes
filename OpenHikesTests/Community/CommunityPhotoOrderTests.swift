@@ -229,7 +229,7 @@ struct CommunityPhotoOrderTests {
         )
         let transport = StubCommunityTransport()
 
-        _ = await CommunityPhotoPublisher.contribute(
+        let outcome = await CommunityPhotoPublisher.contribute(
             hike,
             to: Self.target,
             authorName: "Bern",
@@ -237,6 +237,7 @@ struct CommunityPhotoOrderTests {
             store: sandbox.store
         )
 
+        #expect(outcome == .submitted)
         let draft = try #require(transport.recording.photoDrafts.first)
         #expect(draft.photoPins.map(\.capturedAt) == [1, 3, 0, 2].map(Self.capturedAt))
     }
