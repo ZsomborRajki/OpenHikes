@@ -54,6 +54,11 @@ extension MapView {
         /// styled differently from them because they say a different thing —
         /// see ``RouteBoundary``.
         var pausedRouteOverlays: [MKPolyline] = []
+        /// The drawn route cut at its pauses, which its renderer strokes in
+        /// place of the whole line — see `DirectionalPolylineRenderer+Pauses.swift`.
+        /// Empty, with no paused legs, for a route that was never paused.
+        var routeRuns: [MKPolyline] = []
+        var routePausedLegs: Set<Int> = []
         /// The stretches of the drawn route a finished walk covered, drawn
         /// twice — a casing and a line — so they stand out from the route
         /// they sit on. See `MapCoordinator+WalkHighlight.swift`.
@@ -959,6 +964,7 @@ extension MapView.Coordinator {
             }
             let renderer = DirectionalPolylineRenderer(polyline: polyline)
             applyStyle(to: renderer)
+            renderer.setRuns(routeRuns, pausedLegs: routePausedLegs)
             routeRenderer = renderer
             applyRouteShades()
             return renderer

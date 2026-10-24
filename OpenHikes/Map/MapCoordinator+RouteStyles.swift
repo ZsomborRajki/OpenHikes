@@ -2,9 +2,10 @@
 //  MapCoordinator+RouteStyles.swift
 //  OpenHikes
 //
-//  How a route is drawn: the line itself, and the qualified stretches over
-//  it — the inferred ones and the paused ones, both derived from the route's
-//  own tint and width so they cannot drift from the line they sit on.
+//  How a route is drawn: the line itself, and the qualified stretches — the
+//  inferred ones over it, and the paused ones in the gaps it leaves at each
+//  pause — both derived from the route's own tint and width so they cannot
+//  drift from the line they belong to.
 //
 //  Split out of `MapCoordinator.swift` for the reason the highlight dot and
 //  the walk's stretches were: that file is the observation plumbing, and it
@@ -14,6 +15,7 @@
 
 import MapKit
 import OpenHikesData
+import OpenHikesShared
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -44,6 +46,24 @@ extension MapView.Coordinator {
         #else
         UIColor(RouteStyle.defaultBorder).cgColor
         #endif
+    }
+
+    /// Cuts the route line at its pauses, or forgets the cut with `nil`.
+    ///
+    /// A paused leg is not trail (#962), so the line is stroked run by run and
+    /// only the dotted stretch crosses a pause (#1034). The overlay stays the
+    /// whole route — see `DirectionalPolylineRenderer+Pauses.swift` — so this
+    /// keeps only what its renderer is handed.
+    func cutRoute(_ route: DisplayedRoute?) {
+        let runs = route?.runs
+        routePausedLegs = Set(runs?.pausedLegs ?? [])
+        guard let route, let runs, runs.isPaused else {
+            routeRuns = []
+            return
+        }
+        routeRuns = runs.walkedRuns.map { run in
+            MKPolyline(coordinates: Array(route.coordinates[run]), count: run.count)
+        }
     }
 
     /// Applies the current tint (with its alpha), width, line pattern and
