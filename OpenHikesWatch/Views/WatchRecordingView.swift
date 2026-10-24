@@ -39,11 +39,12 @@
 //
 //  `model.recorder.phase`, which changes when the hiker presses something.
 //  The distance, the clock, the climb and the heart rate are all in
-//  ``RecordingFigures``, the only view that reads ``WatchRecordingStats`` —
-//  so a fix arriving redraws a handful of labels rather than this screen and
-//  its buttons. That is the render-isolation rule from the repository
-//  instructions, on the device where its cost is measured in battery rather
-//  than in frames.
+//  ``RecordingFigures`` — it and the ``HeartRateFigure`` inside it are the
+//  only views that read ``WatchRecordingStats`` — so a fix arriving redraws a
+//  handful of labels rather than this screen and its buttons, and a
+//  heart-rate sample redraws one. That is the render-isolation rule from the
+//  repository instructions, on the device where its cost is measured in
+//  battery rather than in frames.
 //
 
 import OpenHikesShared
@@ -274,51 +275,66 @@ private struct UnsavedWalkPanel: View {
     }
 }
 
-/// The live figures, and the only view that reads them. What each is called
-/// and how it reads is ``WatchRecordingFigures``'s; this lays them out.
+/// The live figures. It and the ``HeartRateFigure`` inside it are the only
+/// views that read them. What each is called and how it reads is
+/// ``WatchRecordingFigures``'s; this lays them out.
 private struct RecordingFigures: View {
     @Environment(WatchModel.self) private var model
 
     var body: some View {
         let stats = model.recorder.stats
-        // Drawn again when the heart rate goes stale, as well as on every
-        // fix and sample: a sensor that has stopped reading sends nothing to
-        // redraw on, and fixes stop too when the hiker stands still or the
-        // sky is lost. Two dates per sample, so this costs one extra pass
-        // rather than a ticking clock.
-        let redraws = WatchRecordingFigures.heartRateRedraws(sampledAt: stats.heartRateSampledAt)
-        TimelineView(.explicit(redraws)) { context in
-            let figures = WatchRecordingFigures(
-                distanceMeters: stats.distanceMeters,
-                elevationGainMeters: stats.elevationGainMeters,
-                averageSpeedMetersPerSecond: stats.averageSpeedMetersPerSecond,
-                heartRateBPM: stats.heartRateBPM,
-                heartRateSampledAt: stats.heartRateSampledAt,
-                now: context.date
-            )
-            VStack(spacing: 4) {
-                Text(WidgetFormat.duration(seconds: stats.activeSeconds))
-                    .font(.title2.monospacedDigit())
-                    .accessibilityLabel("Time hiking")
-                // Top-aligned, so that a caption wrapping at a large text size
-                // ("Avg Speed" is two words in a narrow column) lengthens its own
-                // tile downwards rather than lowering the value beside it.
-                Grid(alignment: .top, horizontalSpacing: 8, verticalSpacing: 4) {
-                    GridRow {
-                        WatchFigure(figures.distance)
-                        WatchFigure(figures.climb)
-                    }
-                    GridRow {
-                        WatchFigure(figures.averageSpeed)
-                        WatchFigure(figures.heartRate)
-                    }
+        let figures = WatchRecordingFigures(
+            distanceMeters: stats.distanceMeters,
+            elevationGainMeters: stats.elevationGainMeters,
+            averageSpeedMetersPerSecond: stats.averageSpeedMetersPerSecond
+        )
+        return VStack(spacing: 4) {
+            Text(WidgetFormat.duration(seconds: stats.activeSeconds))
+                .font(.title2.monospacedDigit())
+                .accessibilityLabel("Time hiking")
+            // Top-aligned, so that a caption wrapping at a large text size
+            // ("Avg Speed" is two words in a narrow column) lengthens its own
+            // tile downwards rather than lowering the value beside it.
+            Grid(alignment: .top, horizontalSpacing: 8, verticalSpacing: 4) {
+                GridRow {
+                    WatchFigure(figures.distance)
+                    WatchFigure(figures.climb)
                 }
-                if stats.fixCount == 0 {
-                    Text("Finding your position…")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                GridRow {
+                    WatchFigure(figures.averageSpeed)
+                    HeartRateFigure(stats: stats)
                 }
             }
+            if stats.fixCount == 0 {
+                Text("Finding your position…")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// The heart rate: the one figure that goes stale with nothing to announce
+/// it, so the one drawn on a timeline.
+///
+/// Its own view so that a sample, or the moment a reading expires, redraws
+/// this figure and not the panel, and so that the per-fix redraw of
+/// ``RecordingFigures`` finds an unchanged stats reference here and skips it.
+private struct HeartRateFigure: View {
+    let stats: WatchRecordingStats
+
+    var body: some View {
+        // Read here, in the body that observes them, and handed to the
+        // timeline as values. Its closure reads nothing observable, so no
+        // figure depends on SwiftUI noticing a read made inside one.
+        let beats = stats.heartRateBPM
+        let sampledAt = stats.heartRateSampledAt
+        // Drawn again the moment the reading goes stale, which nothing
+        // announces: a sensor that has stopped reading sends no sample. One
+        // extra pass per sample, rather than a ticking clock.
+        let redraws = WatchRecordingFigures.heartRateRedraws(sampledAt: sampledAt)
+        return TimelineView(.explicit(redraws)) { context in
+            WatchFigure(WatchRecordingFigures.heartRate(bpm: beats, sampledAt: sampledAt, now: context.date))
         }
     }
 }
