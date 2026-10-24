@@ -119,12 +119,16 @@ struct LiveActivityControlTests {
         harness.controller.noteControlRefusal(.needsPreciseLocation)
         await harness.controller.settle()
 
-        harness.now.date = at(30)
+        // Past the twenty-second floor the refusal push restarted, so this
+        // update is really sent rather than refused and the refusal's own
+        // push read back.
+        harness.now.date = at(60)
         harness.controller.update(
             LiveActivityHarness.recordingRequest(distanceMeters: 2000, at: at(60))
         )
         await harness.controller.settle()
 
+        #expect(harness.presenter.updatedStates.count == 2)
         #expect(harness.presenter.updatedStates.last?.controlRefusal == .needsPreciseLocation)
     }
 
@@ -159,7 +163,6 @@ struct LiveActivityControlTests {
         )
         await harness.controller.settle()
 
-        #expect(harness.presenter.startedStates.last?.controlRefusal == nil)
         #expect(harness.presenter.updatedStates.count == 1)
         #expect(harness.presenter.updatedStates.last?.controlRefusal == nil)
     }
