@@ -432,8 +432,8 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
         let pins = Self.decodePins(in: record)
         let assets = record[CommunitySchema.Submission.photos] as? [CKAsset] ?? []
         // Again before the photographs, which are the expensive half and the
-        // half that leaves files: a dozen copies started after the screen has
-        // gone are a dozen files nobody will collect.
+        // half that leaves files: every copy started after the screen has
+        // gone is a file nobody will collect.
         try Task.checkCancellation()
         let downloaded = Self.copyPhotos(assets, into: directory)
         if downloaded.count != assets.count {
