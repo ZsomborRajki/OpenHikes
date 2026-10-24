@@ -1,5 +1,5 @@
 //
-//  RecordingPaceTests.swift
+//  RecordingSpeedTests.swift
 //  OpenHikesTests
 //
 //  The two figures a live recording gained beside its distance: how long the
@@ -18,8 +18,8 @@ import Foundation
 import RealModule
 import Testing
 
-@Suite("Recording pace and moving time")
-struct RecordingPaceTests {
+@Suite("Recording speed and moving time")
+struct RecordingSpeedTests {
     private let start = Date(timeIntervalSince1970: 1_750_000_000)
 
     /// Metres north of a fixed origin, which keeps every fixture below a

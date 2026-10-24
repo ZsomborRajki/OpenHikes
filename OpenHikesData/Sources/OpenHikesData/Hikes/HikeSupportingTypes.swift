@@ -115,7 +115,7 @@ nonisolated public struct ElevationSample: Identifiable, Equatable, Sendable {
 ///
 /// That is deliberate rather than an oversight. The intended use is flagging
 /// or excluding vehicle-assisted segments (a chairlift, a shuttle bus, the
-/// drive to a second trailhead), which distorts distance, pace and ascent
+/// drive to a second trailhead), which distorts distance, speed and ascent
 /// figures for anyone whose walk included one. Recording it now means the
 /// feature can be built against hikes people have *already* recorded, where
 /// dropping the field would make every existing route permanently unusable

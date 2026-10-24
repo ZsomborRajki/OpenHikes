@@ -5,7 +5,7 @@
 //  What "moving" means, and what the two average-speed rows promise.
 //
 //  The elapsed average divides a walk's distance by the whole clock, lunch
-//  included, which is why a leisurely day out reports a pace nobody walked.
+//  included, which is why a leisurely day out reports a speed nobody walked.
 //  The moving average divides it by the part of that clock the hiker was
 //  actually going somewhere. Everything here is about where the boundary
 //  between the two sits, so the fixtures are built in metres per second and
@@ -92,7 +92,7 @@ struct MovingTimeTests {
 
     /// The case the second row exists for: ten minutes out, half an hour
     /// sitting down, ten minutes back. The elapsed average is dragged to a
-    /// third of the pace actually walked.
+    /// third of the speed actually walked.
     @Test("a long stop is left out of the moving clock")
     func aLunchStopIsNotWalking() throws {
         let stats = Self.statistics(
