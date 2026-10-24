@@ -5,10 +5,23 @@
 //  The interactive elevation graph, split out so it only re-renders when its own
 //  inputs change — not when unrelated parent state (line width, download progress)
 //  moves. `Equatable` (via `.equatable()`) covers `tint`/`profile` changes;
-//  `tracker`'s positions are read directly — by this view's `body` for what it
-//  speaks, and by ``ElevationChartMarks`` for what it draws — so `Observation`
-//  invalidates those two (and only those two) whenever they change, without
-//  needing an equality check.
+//  `tracker`'s positions are read directly — by ``ElevationChartSpokenPosition``
+//  for what the graph speaks, and by ``ElevationChartMarks`` for what it draws
+//  — so `Observation` invalidates those two (and only those two) whenever they
+//  change, without needing an equality check.
+//
+//  ## Nothing on a scrub's path runs this body
+//
+//  A drag event reaches three things: the selection, the tracker it moves, and
+//  what the graph speaks for the tracker. None of them is read here. The
+//  selection is the marks' own, handed on by ``ElevationScrubRelay``, because
+//  a modifier's arguments are evaluated in the body that applies it, so the
+//  `onChange(of:)` that used to sit here made the selection an input of this
+//  view. The spoken value is read in a modifier of its own, which Observation
+//  invalidates in this body's place. Traced with `Scripts/render-trace.sh`
+//  over the drag in `AccessibilityLabelUITests`, this body ran twice per
+//  selection change while it held both — once for each — and not at all once
+//  it held neither.
 //
 //  ## What moves is drawn apart from what does not
 //
@@ -49,12 +62,6 @@ struct ElevationChartView: View, Equatable {
     /// updates to `tracker.trackerDistance` while a finger is on the chart.
     var onScrubbingChanged: (Bool) -> Void = { _ in /* no-op default */ }
 
-    /// Live chart selection under the finger (transient); owned here so scrubbing
-    /// doesn't touch the parent until it resolves a distance.
-    @State private var selectedDistance: Double?
-    /// The copy of the selection the touch chart's binding reads back — see
-    /// ``ElevationScrubSelection``. Never reassigned, so it never invalidates.
-    @State private var scrub = ElevationScrubSelection()
     /// Measured plot width, used to keep vertical exaggeration consistent
     /// regardless of screen size. `0` until the first layout pass reports it.
     @State private var plotWidth: CGFloat = 0
@@ -102,20 +109,17 @@ struct ElevationChartView: View, Equatable {
     }
 
     var body: some View {
-        // Live follow is *meant* to invalidate this body (and the progress
-        // row) once per published fix, and only while the hiker is moving.
-        // Any other body re-running at that rate is following location it was
-        // supposed to be insulated from — the plot below included, which is
-        // handed equal inputs on every one of those passes and skipped.
-        let domain = elevationDomain(profile, plotWidth: plotWidth)
-        let trackerSample = profile.sample(atDistance: tracker.trackerDistance)
-        return ElevationChartPlot(
+        // Neither a scrub step nor a published fix reaches this body: the
+        // marks, the spoken value and the progress row are what follow the
+        // tracker. This runs when the graph itself changes — its profile, its
+        // tint, its measured width.
+        ElevationChartPlot(
             profile: profile,
             tint: tint,
-            domain: domain,
+            domain: elevationDomain(profile, plotWidth: plotWidth),
             tracker: tracker,
-            scrub: scrub,
-            select: { selectedDistance = $0 }
+            onScrub: onScrub,
+            onScrubbingChanged: onScrubbingChanged
         )
         .equatable()
         .frame(height: Self.chartHeight)
@@ -131,7 +135,9 @@ struct ElevationChartView: View, Equatable {
         // area by coordinate, and there is no leaf inside to hang this on.
         .accessibilityIdentifier("elevation-chart")
         .accessibilityLabel("Elevation profile")
-        .accessibilityValue(Self.description(of: trackerSample, in: profile))
+        .modifier(ElevationChartSpokenPosition(profile: profile, tracker: tracker))
+        // Reads the tracker inside the action, when a swipe arrives, and not
+        // in this body.
         .accessibilityAdjustableAction { direction in
             guard let distance = adjustedDistance(direction) else { return }
             onScrub(distance)
@@ -139,12 +145,6 @@ struct ElevationChartView: View, Equatable {
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { plotWidth = $0 }
-        .onChange(of: selectedDistance) { _, distance in
-            // While scrubbing, move the persistent tracker; keep it put on release.
-            onScrubbingChanged(distance != nil)
-            guard let distance else { return }
-            onScrub(distance)
-        }
     }
 
     // MARK: Accessibility
@@ -166,28 +166,6 @@ struct ElevationChartView: View, Equatable {
         }
         let clamped = min(max(next, 0), total)
         return clamped == current ? nil : clamped
-    }
-
-    /// What the tracker is standing on, as the callout says it visually:
-    /// elevation first, then how far along the trail it is. Spelled out in
-    /// wide units — "535 meters", not "535 m" — because this is spoken.
-    private static func description(
-        of sample: ElevationSample?,
-        in profile: RouteProfile
-    ) -> String {
-        guard let sample else { return "No elevation data" }
-        let elevation = HikeFormat.spokenElevation(
-            Measurement(value: sample.elevation, unit: UnitLength.meters)
-        )
-        let distance = Measurement(
-            value: sample.distanceMeters,
-            unit: UnitLength.meters
-        ).formatted(.measurement(width: .wide, usage: .road))
-        guard let fraction = profile.fractionComplete(atDistance: sample.distanceMeters) else {
-            return "\(elevation) at \(distance)"
-        }
-        let percent = fraction.formatted(.percent.precision(.fractionLength(0)))
-        return "\(elevation) at \(distance), \(percent) along the trail"
     }
 
     /// A y-range that keeps the rendered slope proportional to the real one
@@ -228,22 +206,65 @@ struct ElevationChartView: View, Equatable {
     }
 }
 
+// MARK: - What it speaks
+
+/// What VoiceOver reads off the graph: the point under the tracker.
+///
+/// A modifier of its own, because it is the one thing on the graph's own
+/// element that reads the tracker. Applied after `.accessibilityElement()`, so
+/// the value lands on the element that call creates. A `ViewModifier` is a
+/// boundary for the reads in its `body(content:)`, so a tracker write — once
+/// per scrub step, once per fix while following — re-runs this and leaves
+/// ``ElevationChartView`` alone.
+private struct ElevationChartSpokenPosition: ViewModifier {
+    let profile: RouteProfile
+    /// Tracker/live-follow positions — see ``TrackerState``.
+    let tracker: TrackerState
+
+    func body(content: Content) -> some View {
+        content.accessibilityValue(
+            Self.description(of: profile.sample(atDistance: tracker.trackerDistance), in: profile)
+        )
+    }
+
+    /// What the tracker is standing on, as the callout says it visually:
+    /// elevation first, then how far along the trail it is. Spelled out in
+    /// wide units — "535 meters", not "535 m" — because this is spoken.
+    private static func description(
+        of sample: ElevationSample?,
+        in profile: RouteProfile
+    ) -> String {
+        guard let sample else { return "No elevation data" }
+        let elevation = HikeFormat.spokenElevation(
+            Measurement(value: sample.elevation, unit: UnitLength.meters)
+        )
+        let distance = Measurement(
+            value: sample.distanceMeters,
+            unit: UnitLength.meters
+        ).formatted(.measurement(width: .wide, usage: .road))
+        guard let fraction = profile.fractionComplete(atDistance: sample.distanceMeters) else {
+            return "\(elevation) at \(distance)"
+        }
+        let percent = fraction.formatted(.percent.precision(.fractionLength(0)))
+        return "\(elevation) at \(distance), \(percent) along the trail"
+    }
+}
+
 // MARK: - What stays put
 
 /// What stays put on the graph: the area, the line, the pause rules and the
 /// axes.
 ///
 /// Evaluated when what it draws changes, and not otherwise — not on a scrub
-/// step, and not on a fix. ``ElevationChartView`` re-runs on both and hands
-/// this view equal inputs each time; the tracker, the selection's copy and the
-/// closure that writes it are only passed through to ``ElevationChartMarks``.
+/// step, and not on a fix. The tracker and the two scrub callbacks are only
+/// passed through to ``ElevationChartMarks``.
 ///
 /// **Nothing here may be tied to the selection.** Swift Charts lays a chart
 /// out again whenever the selection it carries changes, so `chartXSelection`
 /// and the gesture driving it live on the marks' own touch chart, never here.
 /// And a `Binding` held as a property makes its holder a reader of the state
-/// behind it, so this view is handed a plain reference and a closure instead —
-/// see ``ElevationScrubSelection``.
+/// behind it, so the selection is the marks' own, and this view never holds
+/// it — see ``ElevationScrubSelection``.
 struct ElevationChartPlot: View, Equatable {
     let profile: RouteProfile
     let tint: Color
@@ -252,10 +273,10 @@ struct ElevationChartPlot: View, Equatable {
     let domain: ClosedRange<Double>
     /// Passed through to ``ElevationChartMarks``, and never read here.
     let tracker: TrackerState
-    /// What the finger last selected — passed through, and never read here.
-    let scrub: ElevationScrubSelection
-    /// Hands a new selection to ``ElevationChartView``, which owns it.
-    let select: (Double?) -> Void
+    /// Passed through to ``ElevationChartMarks``, and never called here.
+    let onScrub: (Double) -> Void
+    /// Passed through to ``ElevationChartMarks``, and never called here.
+    let onScrubbingChanged: (Bool) -> Void
 
     /// Opacity for the area-fill gradient: top (opaque-ish) and bottom (faint).
     ///
@@ -286,7 +307,9 @@ struct ElevationChartPlot: View, Equatable {
     // ``ElevationChartView/==(_:_:)`` compares them — the samples in full, and
     // the pauses beside them. What moves on the graph is left out: the tracker
     // reaches ``ElevationChartMarks`` through Observation, and the selection
-    // never reaches this view at all.
+    // never reaches this view at all. So are the callbacks, as
+    // ``ElevationChartView`` leaves its own out: a skipped pass keeps the ones
+    // the last pass that ran was handed, which call the same parent.
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.tint == rhs.tint
             && lhs.domain == rhs.domain
@@ -348,8 +371,8 @@ struct ElevationChartPlot: View, Equatable {
                 tint: tint,
                 domain: domain,
                 tracker: tracker,
-                scrub: scrub,
-                select: select
+                onScrub: onScrub,
+                onScrubbingChanged: onScrubbingChanged
             )
         }
     }
@@ -421,20 +444,76 @@ struct ElevationChartPlot: View, Equatable {
     }
 }
 
-/// The copy of the finger's selection that the touch chart's binding reads
-/// back.
+/// The finger's selection, held where no view above the marks can come to
+/// depend on it, and handed on to the parent from inside a SwiftUI update.
 ///
-/// A plain reference — not `@Observable`, not `@State` storage — because the
-/// one thing it must never do is make a view depend on it. A binding to
-/// ``ElevationChartView``'s own state would carry the same value, but
-/// ``ElevationChartPlot`` would have to hold it to pass it on, and a `Binding`
-/// held as a property re-runs its holder on every write through it — one per
-/// drag event — equatable, equal and unread as the holder is
-/// (`ElevationChartLayersTests`). The selection itself still lives in that
-/// view's `@State`, where `onChange` hands it on; this is only what the
-/// binding's getter answers.
+/// Each place the selection lived before re-ran a view on every drag event:
+///
+/// - A binding to ``ElevationChartView``'s own state would have to be held by
+///   ``ElevationChartPlot`` to pass it on, and a `Binding` held as a property
+///   re-runs its holder on every write through it, equatable, equal and unread
+///   as the holder is (`ElevationChartLayersTests`).
+/// - A `Double?` in ``ElevationChartView``'s `@State`, handed on by an
+///   `onChange(of:)` there, made the selection an input of that view's body,
+///   because a modifier's arguments are evaluated in the body that applies it.
+///
+/// So ``ElevationChartMarks`` keeps it in a `@State` that is never
+/// reassigned, and it has two halves:
+///
+/// - ``distance`` is what the touch chart's binding answers. It is ignored by
+///   Observation, because Swift Charts reads it through the binding while it
+///   updates its own display, where a tracked read would tie the display to
+///   every write.
+/// - ``handedOn`` is the same value, tracked, and read by
+///   ``ElevationScrubRelay`` alone, whose `onChange(of:)` moves the tracker.
+///
+/// The second half is what an `onChange` buys and a binding's setter does not.
+/// Moving the tracker straight from the setter — during the gesture, outside
+/// any update — doubled Swift Charts' display passes, from about two per
+/// selection change to about four, measured with `Scripts/render-trace.sh`.
+/// Moved from an `onChange`, it lands in the update the selection already
+/// causes, and the count is back to two.
+@Observable
 final class ElevationScrubSelection {
-    var distance: Double?
+    /// What the touch chart's binding reads back.
+    @ObservationIgnored private(set) var distance: Double?
+    /// What ``ElevationScrubRelay`` hands on to the parent.
+    private(set) var handedOn: Double?
+
+    /// Takes a write through the touch chart's binding. `@Observable` drops a
+    /// write of the value already there, so a selection written twice reaches
+    /// the relay once, as an `onChange(of:)` would have heard it.
+    func select(_ distance: Double?) {
+        self.distance = distance
+        handedOn = distance
+    }
+}
+
+/// Hands the selection on to the parent: while a finger is down, the tracker
+/// follows it, and the parent hears the scrub start and end.
+///
+/// A view of its own, under the marks, because an `onChange(of:)` makes what
+/// it watches an input of the view that applies it. On the marks that would
+/// cost them a second pass per drag event — one for the selection, one for the
+/// tracker it moves, measured at both, with Swift Charts' display passes
+/// tripled — and on ``ElevationChartView`` it was the pass #1038 took out.
+/// Here it costs a view that draws nothing.
+private struct ElevationScrubRelay: View {
+    let scrub: ElevationScrubSelection
+    let onScrub: (Double) -> Void
+    let onScrubbingChanged: (Bool) -> Void
+
+    var body: some View {
+        Color.clear
+            .allowsHitTesting(false)
+            .onChange(of: scrub.handedOn) { _, distance in
+                // While scrubbing, move the persistent tracker; keep it put on
+                // release.
+                onScrubbingChanged(distance != nil)
+                guard let distance else { return }
+                onScrub(distance)
+            }
+    }
 }
 
 // MARK: - What moves
@@ -442,9 +521,10 @@ final class ElevationScrubSelection {
 /// What moves on the graph — the scrub rule, the tracker's point and its
 /// callout, the live position — and the finger that moves it, as two charts
 /// laid over ``ElevationChartPlot``. The one layer of the graph that reads the
-/// tracker (``ElevationChartView`` reads it too, but only for what it speaks):
-/// re-evaluated on every scrub step and every fix, and cheap, because neither
-/// of its charts has a series to lay out.
+/// tracker (``ElevationChartSpokenPosition`` reads it too, for what it speaks)
+/// and the one that owns the selection, which ``ElevationScrubRelay`` hands
+/// on: re-evaluated on every scrub step and every fix, and cheap, because
+/// neither of its charts has a series to lay out.
 ///
 /// **The drawn chart** covers the plot's whole frame, axes included, and its
 /// scales are padded onto the plot area beneath it. That keeps the callout
@@ -468,8 +548,12 @@ private struct ElevationChartMarks: View {
     let tint: Color
     let domain: ClosedRange<Double>
     let tracker: TrackerState
-    let scrub: ElevationScrubSelection
-    let select: (Double?) -> Void
+    let onScrub: (Double) -> Void
+    let onScrubbingChanged: (Bool) -> Void
+
+    /// The selection under the finger — see ``ElevationScrubSelection``.
+    /// Never reassigned, so it never invalidates.
+    @State private var scrub = ElevationScrubSelection()
 
     /// Whether a finger is currently on the plot area.
     ///
@@ -496,10 +580,7 @@ private struct ElevationChartMarks: View {
         let liveSample = tracker.liveTrackerDistance.flatMap { profile.sample(atDistance: $0) }
         let selection = Binding(
             get: { scrub.distance },
-            set: { distance in
-                scrub.distance = distance
-                select(distance)
-            }
+            set: { scrub.select($0) }
         )
         GeometryReader { geometry in
             if let plotFrame = proxy.plotFrame {
@@ -515,6 +596,9 @@ private struct ElevationChartMarks: View {
         .onChange(of: isTouchingChart) { _, touching in
             guard !touching else { return }
             selection.wrappedValue = nil
+        }
+        .background {
+            ElevationScrubRelay(scrub: scrub, onScrub: onScrub, onScrubbingChanged: onScrubbingChanged)
         }
     }
 
@@ -568,8 +652,8 @@ private struct ElevationChartMarks: View {
                 .onChanged { chart.selectXValue(at: $0.location.x) }
                 // The ordinary release. A cancelled one never arrives here and
                 // is caught by `isTouchingChart` instead; both clear, and
-                // clearing twice costs nothing because `onChange(of:)` only
-                // fires on a real change.
+                // clearing twice costs nothing because the relay hears only a
+                // real change.
                 .onEnded { _ in selection.wrappedValue = nil }
         }
         .chartXScale(domain: ElevationChartPlot.distanceDomain(of: profile))

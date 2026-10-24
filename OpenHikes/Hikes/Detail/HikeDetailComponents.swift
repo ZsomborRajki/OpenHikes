@@ -60,12 +60,12 @@ nonisolated enum ActionTileMetrics {
 /// How far along the trail the tracked position is, as a percentage and a
 /// bar.
 ///
-/// Isolated for the same reason `ElevationChartView` is: it reads
-/// `TrackerState` directly, so an auto-follow tick invalidates this row alone
-/// rather than `HikeDetailView.body`. It also makes a bad route match legible
-/// — "97%" while standing at the trailhead is the symptom that a fix was
-/// matched to the wrong leg of an out-and-back, which a marker on a graph
-/// hides far better than a number does.
+/// Isolated for the same reason the graph's moving marks are (see
+/// `ElevationChartView`): it reads `TrackerState` directly, so an auto-follow
+/// tick invalidates this row alone rather than `HikeDetailView.body`. It also
+/// makes a bad route match legible — "97%" while standing at the trailhead is
+/// the symptom that a fix was matched to the wrong leg of an out-and-back,
+/// which a marker on a graph hides far better than a number does.
 struct TrailProgressView: View {
     let profile: RouteProfile
     let tint: Color
@@ -257,8 +257,8 @@ struct HikeHeaderSymbol: View {
 }
 
 /// Keeps route-tint changes inside the chart wrapper while tracker updates
-/// continue to invalidate only `ElevationChartView` and the marks it draws
-/// over its plot.
+/// continue to invalidate only what reads them inside `ElevationChartView`:
+/// the marks it draws over its plot, and the value it speaks.
 struct HikeElevationChart: View {
     let hike: Hike
     let profile: RouteProfile
