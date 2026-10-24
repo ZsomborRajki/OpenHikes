@@ -2,13 +2,14 @@
 //  HikeIntentLibrarySweepTests.swift
 //  OpenHikesTests
 //
-//  The read under the two launch sweeps: every finished hike, as the reports
+//  The read under the launch sweep: every finished hike, as the reports
 //  Spotlight indexes and the App Group's catalogue lists. Each report reads
 //  its route for the clock, and a route is external storage decoded whole, so
-//  *where* the read runs is the property worth pinning (#999). Both sweeps
-//  were started off the main actor and hopped straight back onto it for the
-//  read, which put a library's worth of decoding on the main thread at every
-//  launch, twice.
+//  *where* the read runs is the property worth pinning (#999). The two sweeps
+//  that used to make it were started off the main actor and hopped straight
+//  back onto it for the read, which put a library's worth of decoding on the
+//  main thread at every launch, twice. Since #1025 the launch makes it once,
+//  which `LaunchLibraryPublishTests` pins.
 //
 //  Asserted through the coordinator's read seam rather than a stopwatch, as
 //  `CloudSyncCoordinatorTests` asserts its own hop: the fetch records the

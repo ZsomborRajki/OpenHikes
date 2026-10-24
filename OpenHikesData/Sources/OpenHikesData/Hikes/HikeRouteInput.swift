@@ -30,9 +30,10 @@ nonisolated public struct HikeRouteInput: Sendable {
     public let route: [RouteCoordinate]
 
     /// Read wherever the hike's context lives: on the main actor for the
-    /// catalogue and the watch, and off it for the widget's background match,
-    /// which fetches the hike into a context of its own there. So nothing here
-    /// is isolated — each field is a column of the model, read on the thread
+    /// selected trail's widget feed and the watch, and off it for the widget's
+    /// background match and the pinned trails' snapshots, each of which
+    /// fetches the hike into a context of its own there. So nothing here is
+    /// isolated — each field is a column of the model, read on the thread
     /// that owns it.
     public init(hike: Hike) {
         hikeID = hike.id

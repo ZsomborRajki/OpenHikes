@@ -80,8 +80,9 @@ struct OpenHikesApp: App {
             // anything. Here beside the registration because it wants the
             // same coordinator, and off the main actor because it is a
             // whole-library fetch, and a decode of every route, that nothing
-            // on screen waits for. One read feeds all of them — see
-            // ``SharedHikeCatalogPublisher``.
+            // on screen waits for. One read of the library feeds the
+            // catalogue, the watch and Spotlight, and each pinned trail is
+            // read on its own — see ``SharedHikeCatalogPublisher``.
             SharedHikeCatalogPublisher.publish(
                 from: coordinator,
                 container: appModel.container,

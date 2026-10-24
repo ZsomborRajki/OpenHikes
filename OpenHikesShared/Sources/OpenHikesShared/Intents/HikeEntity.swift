@@ -30,7 +30,9 @@
 //  bigger win than the Siri phrasing: it costs a conformance and a donation,
 //  and it means a hiker who searches their phone for a trail name finds the
 //  walk they did on it. The donation is a launch sweep — see
-//  `HikeSpotlightIndex.donate(from:)`, run from the app's `init()`.
+//  `HikeSpotlightIndex.replaceEntries(with:)`, handed the library by
+//  `SharedHikeCatalogPublisher.publish(from:container:watch:)`, which the
+//  app's `init()` calls.
 //
 //  ## Why neither type says `nonisolated`
 //
