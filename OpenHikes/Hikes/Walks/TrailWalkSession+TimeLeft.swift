@@ -27,7 +27,7 @@ extension TrailWalkSession {
             profile: walkedProfile,
             position: position,
             remainingMeters: max(0, record.routeDistanceMeters - record.coverage.coveredMeters),
-            covered: record.coverage.ranges,
+            coverage: record.coverage,
             activeSeconds: record.activeSeconds(at: now)
         )
     }

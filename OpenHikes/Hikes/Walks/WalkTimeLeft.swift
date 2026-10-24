@@ -35,8 +35,16 @@
 //  ``TrailWalkRecord/reachesEnd(atMatch:)`` finishes either way — and a loop
 //  is walked backwards as often as not. Then what is ahead is the stretch from
 //  the start to the hiker, and its climbs are descents: DIN 33466 times the
-//  two differently, so both have to turn round. The direction is read off the
-//  coverage, which lies behind the hiker whichever way they walk.
+//  two differently, so both have to turn round. Which way is ahead is read
+//  off the coverage, which lies behind the hiker whichever way they walk.
+//
+//  What is behind needs no guess. The coverage keeps which way each stretch
+//  was walked (#1012), so the calibration measures the signposts' time for
+//  each one the way the hiker climbed it — ``RouteProfile/climb(walking:)``,
+//  the share card's figure — over the length of those directed stretches.
+//  Turning the whole union round by the way ahead timed a walk that turned
+//  back against a climb it never made, and a stretch walked there and back
+//  counted once against twice the time (#1039).
 //
 
 import Foundation
@@ -62,21 +70,26 @@ nonisolated enum WalkTimeLeft {
     ///     route. The climb still to come is measured from here to the end.
     ///   - remainingMeters: the distance left, as the readout beside this
     ///     figure states it — coverage rather than position, for a walk.
-    ///   - covered: the stretches this walk has actually spanned.
+    ///   - coverage: the stretches this walk has actually spanned, each the
+    ///     way it was walked.
     ///   - activeSeconds: the walk's clock with its pauses taken out.
     static func seconds(
         profile: RouteProfile,
         position: Double,
         remainingMeters: Double,
-        covered: [ClosedRange<Double>],
+        coverage: TrailWalkCoverage,
         activeSeconds: TimeInterval
     ) -> TimeInterval? {
         guard remainingMeters.isFinite, remainingMeters > 0 else { return nil }
-        let reversed = isReversed(position: position, covered: covered, routeMeters: profile.totalDistanceMeters)
+        let reversed = isReversed(
+            position: position,
+            covered: coverage.ranges,
+            routeMeters: profile.totalDistanceMeters
+        )
         let ahead = reversed
             ? climb(profile, from: 0, to: position, reversed: true)
             : climb(profile, from: position, to: profile.totalDistanceMeters, reversed: false)
-        let pace = paceFactor(profile: profile, covered: covered, activeSeconds: activeSeconds, reversed: reversed)
+        let pace = paceFactor(profile: profile, coverage: coverage, activeSeconds: activeSeconds)
         // Neither heights nor a calibrated pace: a flat figure is the error
         // this exists to correct.
         guard ahead != nil || pace != nil else { return nil }
@@ -89,21 +102,24 @@ nonisolated enum WalkTimeLeft {
     }
 
     /// How this walk compares with the signposts so far, as a factor on their
-    /// time, or `nil` until it has covered ``calibrationMeters`` in
-    /// ``calibrationSeconds``. `reversed` is a walk from the stored end
-    /// towards the start, whose covered stretches were climbed the other way.
+    /// time, or `nil` until it has walked ``calibrationMeters`` in
+    /// ``calibrationSeconds``.
+    ///
+    /// Against each stretch the way it was walked, over the stretches' own
+    /// lengths — see the file header. A stretch walked there and back is
+    /// walked twice, as the time spent on it was.
     static func paceFactor(
         profile: RouteProfile,
-        covered: [ClosedRange<Double>],
-        activeSeconds: TimeInterval,
-        reversed: Bool = false
+        coverage: TrailWalkCoverage,
+        activeSeconds: TimeInterval
     ) -> Double? {
-        let coveredMeters = covered.reduce(0) { $0 + ($1.upperBound - $1.lowerBound) }
-        guard coveredMeters >= calibrationMeters,
+        let walkedMeters = (coverage.walkedTowardsEnd + coverage.walkedTowardsStart)
+            .reduce(0) { $0 + ($1.upperBound - $1.lowerBound) }
+        guard walkedMeters >= calibrationMeters,
               activeSeconds >= calibrationSeconds else { return nil }
-        let walked = profile.climb(over: covered).map { turned($0, reversed: reversed) }
+        let walked = profile.climb(walking: coverage)
         let expected = WalkingTimeEstimate.seconds(
-            distanceMeters: coveredMeters,
+            distanceMeters: walkedMeters,
             ascentMeters: walked?.gainMeters ?? 0,
             descentMeters: walked?.lossMeters ?? 0
         )
