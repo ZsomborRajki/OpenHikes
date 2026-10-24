@@ -49,8 +49,9 @@
 //  happen and an import without them still gets covered.
 //
 //  Every route starts within a few hundred metres of ``UITestFixture``'s
-//  trailhead, which is where the scenarios put the simulated fix, so a nearby
-//  search from there answers with all three.
+//  trailhead, which is where the scenarios start the map
+//  (`--ui-test-map-start`), so a nearby search from there answers with all
+//  three.
 //
 
 import CoreLocation

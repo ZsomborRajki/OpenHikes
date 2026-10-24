@@ -4,13 +4,15 @@
 //
 //  Who owns the viewport, and for how long.
 //
-//  Two things ask to decide what the map is looking at: the user's first
-//  location fix, and a selected route. The rule is that the fix gets one
+//  Three things ask to decide what the map is looking at: the user's first
+//  location fix, a selected route, and a UI-test launch that names where the
+//  map starts (`--ui-test-map-start`). The rule is that the fix gets one
 //  chance and a route outranks it — and the part worth pinning is that the
 //  chance is spent by the fix *arriving*, not by the map moving. A first fix
 //  that a route quietly swallowed used to stay owed, so closing the trail
 //  handed the next fix a recentre nobody asked for, seconds later and
-//  seemingly out of nowhere.
+//  seemingly out of nowhere. A launch's start stands in for the fix: it takes
+//  that one chance ahead of any fix, on the same terms.
 //
 
 import CoreLocation
