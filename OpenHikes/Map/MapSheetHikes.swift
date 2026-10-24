@@ -42,6 +42,12 @@ struct MapSheetHikes: View, Equatable {
     /// Only ever used to reach the container a background sweep opens its own
     /// context on — see ``HikeListMetrics``. Nothing here writes through it.
     @Environment(\.modelContext) private var modelContext
+    /// The first-run tips, told whether ``hikes`` holds anything — the fact
+    /// the two about making a hike wait on — and the one about the
+    /// *Community* tab retired from the picker when the tab is chosen. See
+    /// ``AppTips``. Internal for the reason ``hikes`` is: the picker lives in
+    /// the community section's file.
+    @Environment(\.appTips) var tips
     /// Keeps the matching-hike ranking across body passes — see ``HikeSearch``.
     @State private var hikeSearch = HikeSearch()
     /// The hike a swipe has asked to delete, while the dialog is up.
@@ -216,6 +222,13 @@ struct MapSheetHikes: View, Equatable {
             // matched hike alive behind a search nobody is running.
             if !focused { hikeSearch.clear() }
         }
+        // Whether the library holds anything, for the first-run tips — on the
+        // first pass, so a hiker with hikes never sees the two about making
+        // one. A dependency this body already has: the query re-runs it on any
+        // write to any hike.
+        .onChange(of: hikes.isEmpty, initial: true) { _, isEmpty in
+            tips?.libraryDidLoad(isEmpty: isEmpty)
+        }
         // One dialog for the whole list rather than one per `ForEach` row, and
         // out here rather than inside `hikesSection` so a detent change or a
         // search focus arriving mid-swipe cannot take it off screen with the
@@ -254,6 +267,12 @@ private extension MapSheetHikes {
                 hikeActions
             }
             .padding(.horizontal)
+
+            // The *Community* tab's first-run tip, under the picker it is
+            // about — and only where there is a picker.
+            if community.hasTransport {
+                CommunityTabTipView()
+            }
 
             // Under the heading rather than beside it. The circle up there is
             // something a hiker *does* — import a file — and an order is a way

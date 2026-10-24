@@ -26,6 +26,15 @@ import CoreLocation
 import OpenHikesData
 import SwiftData
 import SwiftUI
+import TipKit
+
+/// The glyphs of the two places buttons in the recording screen's bar, named
+/// once because the first-run tips about them draw them too — see
+/// ``AddPlaceTip`` and ``PlacesNearbyTip``.
+nonisolated enum RecordingPlaceSymbols {
+    static let addPlace = "mappin.and.ellipse"
+    static let placesNearby = "binoculars"
+}
 
 struct RecordingPlaceSheet: View {
     let hike: Hike
@@ -192,6 +201,37 @@ extension View {
     }
 }
 
+/// The first-run tips about the two places buttons in the recording screen's
+/// bar — see ``AppTips`` — at the top of the screen, right under that bar,
+/// each carrying its button's glyph.
+///
+/// Inline rather than as popovers on the buttons: a popover tip on a toolbar
+/// button never presented here — measured on iOS 27, and reported against 26.1
+/// as FB20756013. And in the screen's own content rather than in a
+/// `safeAreaInset` under the bar, which is the measured cost of the obvious
+/// spelling: an inset on the pushed screen made every change of the
+/// recording's phase evaluate the whole sheet twice — *Pause* went from 19
+/// bodies to 40, the screen and the hikes list under it included.
+///
+/// Only once the walk has a fix, because *Add Place* marks where the hiker
+/// stands and has nothing to mark before then. A view of its own, so the
+/// phase and the group are read here and not in `RecordingView`'s body.
+struct RecordingPlaceTips: View {
+    let recorder: HikeRecorder
+
+    @Environment(\.appTips) private var tips
+
+    var body: some View {
+        if recorder.phase == .recording, let tip = tips?.recording.currentTip {
+            TipView(tip)
+                // The glyph in its button's colour, as on the map's cards —
+                // see ``MapTipCardView``.
+                .tipImageStyle(Color.primary)
+                .padding([.horizontal, .top])
+        }
+    }
+}
+
 /// The buttons, the sheet and the one refusal, as a modifier so the recording
 /// screen's own body gains a line rather than a feature.
 private struct RecordingAddPlace: ViewModifier {
@@ -208,6 +248,9 @@ private struct RecordingAddPlace: ViewModifier {
     let onAddOwn: (Hike, CLLocationCoordinate2D) -> Void
     let onFindNearby: ((Hike) -> Void)?
 
+    /// Retired from here, when either button is used — the tips themselves
+    /// are ``RecordingPlaceTips``.
+    @Environment(\.appTips) private var tips
     @State private var spot: Spot?
     @State private var isMissingLocation = false
 
@@ -219,10 +262,13 @@ private struct RecordingAddPlace: ViewModifier {
                         // Looking before marking: what is around, then the
                         // spot underfoot.
                         if let onFindNearby {
-                            Button("Places Nearby", systemImage: "binoculars") { onFindNearby(hike) }
-                                .accessibilityIdentifier("recording-places-nearby")
+                            Button("Places Nearby", systemImage: RecordingPlaceSymbols.placesNearby) {
+                                tips?.used(PlacesNearbyTip())
+                                onFindNearby(hike)
+                            }
+                            .accessibilityIdentifier("recording-places-nearby")
                         }
-                        Button("Add Place", systemImage: "mappin.and.ellipse") { addPlace() }
+                        Button("Add Place", systemImage: RecordingPlaceSymbols.addPlace) { addPlace() }
                             .accessibilityIdentifier("recording-add-place")
                     }
                 }
@@ -246,6 +292,7 @@ private struct RecordingAddPlace: ViewModifier {
     /// Marks the spot at the tap, read off the recorder's last accepted fix —
     /// the one a photograph taken now would be pinned to.
     private func addPlace() {
+        tips?.used(AddPlaceTip())
         guard let hike = recorder.currentHike,
               let coordinate = PhotoTrailAnchor.recordingCoordinate(recorder.lastAcceptedPoint)
         else {

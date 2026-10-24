@@ -57,6 +57,9 @@ nonisolated enum AppLaunchEnvironment {
         /// `nil` when the real photo library should be read — see
         /// ``AppLaunchEnvironment/stubbedLibraryPhotoCount``.
         let stubbedLibraryPhotoCount: Int?
+        /// Whether UI automation asked for the first-run tips — see
+        /// ``AppLaunchEnvironment/showsTips``.
+        let showsTips: Bool
 
         // periphery:ignore - read only from the `#else` branch below, which
         // a Debug-configuration scan never compiles.
@@ -92,6 +95,7 @@ nonisolated enum AppLaunchEnvironment {
             grantsPaidMaps = false
             asksLiveMakerServices = false
             stubbedLibraryPhotoCount = nil
+            showsTips = false
         }
 
         #if DEBUG
@@ -117,6 +121,7 @@ nonisolated enum AppLaunchEnvironment {
         private static let entitledArgument = "--ui-test-entitled"
         private static let liveMakerArgument = "--ui-test-live-maker"
         private static let photoLibraryPrefix = "--ui-test-photo-library="
+        private static let tipsArgument = "--ui-test-tips"
         /// Enough to fill the review grid and force it to scroll.
         private static let maximumStubbedLibraryPhotos = 24
         /// Enough to fill the strip and force it to scroll, and few enough
@@ -200,6 +205,8 @@ nonisolated enum AppLaunchEnvironment {
                 in: arguments,
                 isUITesting: isUITesting
             )
+            showsTips = isUITesting
+                && arguments.contains(Self.tipsArgument)
         }
 
         /// How many photos to put in the stand-in library, or `nil` to read
@@ -498,6 +505,15 @@ nonisolated enum AppLaunchEnvironment {
     /// to draw.
     static let stubbedLibraryPhotoCount = configuration.stubbedLibraryPhotoCount
 
+    /// Whether this UI-testing launch should show the first-run tips.
+    ///
+    /// Every other UI-testing launch gets none, and gets no TipKit at all, so
+    /// a tip is never what a suite about something else finds in its way —
+    /// and never in an App Store screenshot. With this set the tips start from
+    /// an empty store of their own (see ``tipDatastoreDirectory()``), so the
+    /// scenario sees what a first launch does. See ``TipLaunch``.
+    static let showsTips = configuration.showsTips
+
     /// A per-launch, empty pair of tile directories for the offline scenario.
     ///
     /// Without this the scenario is decided by history rather than by the
@@ -531,6 +547,27 @@ nonisolated enum AppLaunchEnvironment {
         }
         defaults.removePersistentDomain(forName: uiTestingDefaultsSuite)
         return defaults
+    }
+
+    /// A per-launch, empty directory for the tips' store, for a launch that
+    /// asked for them.
+    ///
+    /// Per launch rather than per simulator, so every scenario starts from a
+    /// first launch whatever the one before it closed, and the simulator app's
+    /// own tips — kept in TipKit's default store — are never what a scenario
+    /// reads or writes.
+    static func tipDatastoreDirectory() -> URL? {
+        guard isUITesting else { return nil }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "OpenHikesTips-\(ProcessInfo.processInfo.processIdentifier)",
+                isDirectory: true
+            )
+        try? FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        return directory
     }
 
     /// Recording UI tests use the real Core Location source but keep their

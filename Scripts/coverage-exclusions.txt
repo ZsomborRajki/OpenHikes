@@ -177,6 +177,12 @@
 # suites reach them: `OpenSettingsLink`, and the UIKit `MapGlassPill` and
 # `MapControlFade` the map's pills are built and faded with.
 #
+# `CommunityTabTipView` arrived with the first-run tips on 2026-10-24: the
+# *Community* tab's tip under the sheet's picker, entirely body code. Which tip
+# is due is TipKit's, and what the app decides around it stays measured:
+# whether a launch has tips at all is `TipLaunch` (`TipLaunchTests`), and where
+# the map draws its own is `MapTipPlacement` (`MapTipPlacementTests`).
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -271,3 +277,4 @@ OpenHikes/Hikes/Places/TrailPlaceCardParts.swift
 OpenHikes/Recording/RecordingPlaceSheet.swift
 OpenHikes/Map/MapSheet+Places.swift
 OpenHikes/Community/Publishing/CommunityFinishSendingSection.swift
+OpenHikes/Tips/CommunityTabTipView.swift

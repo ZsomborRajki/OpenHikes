@@ -39,10 +39,14 @@ import UIKit
 final class MapTrailDraftControlsView: UIView {
     /// The glyph a route is drawn with everywhere this app has one to draw:
     /// two points and the line between them.
-    static let symbolName = "point.topleft.down.to.point.bottomright.curvepath"
+    ///
+    /// `nonisolated`, as the record glyph's is, because the first-run tips
+    /// about these two buttons draw the same glyphs — see ``MakeTrailTip`` —
+    /// and a tip is not main-actor isolated.
+    nonisolated static let symbolName = "point.topleft.down.to.point.bottomright.curvepath"
     /// The record button's glyph at rest, and while a recording is under way —
     /// the two the sheet's button drew before it moved here.
-    static let recordSymbolName = "record.circle"
+    nonisolated static let recordSymbolName = "record.circle"
     static let recordingSymbolName = "stop.circle.fill"
 
     private let onDraw: () -> Void
@@ -178,9 +182,17 @@ extension MapView {
         _ coordinator: Coordinator,
         alignedTo guide: UILayoutGuide
     ) {
+        // Each tap retires the first-run tip about its button: a hiker who has
+        // used one has no more need of being told about it.
         let controls = MapTrailDraftControlsView(
-            onDraw: { [trailMaker] in trailMaker.requestOpen() },
-            onRecord: { [recordingEntry] in recordingEntry.requestRecording() },
+            onDraw: { [trailMaker, weak coordinator] in
+                coordinator?.controlUsed(retiring: MakeTrailTip())
+                trailMaker.requestOpen()
+            },
+            onRecord: { [recordingEntry, weak coordinator] in
+                coordinator?.controlUsed(retiring: RecordHikeTip())
+                recordingEntry.requestRecording()
+            },
             onEndWalkAndRecord: { [recordingEntry] in recordingEntry.endWalkAndRecord() }
         )
         // Starts out of the way, for the reason the camera pill does:
@@ -247,6 +259,9 @@ extension MapView.Coordinator {
             guard let self else { return false }
             return trailDraftController?.isAvailable != true
         }
+        // A tip about one of these buttons goes and comes back with them —
+        // see `MapTipCards.swift`.
+        syncMapTips(animated: animated)
         #endif
     }
 
@@ -261,6 +276,8 @@ extension MapView.Coordinator {
     /// two share a slot and therefore share a row.
     func applyTrailDraftControlsAlpha(_ alpha: CGFloat) {
         #if os(iOS)
+        // And the card of a tip about them, which rides the same fade.
+        applyTipCardAlpha(alpha)
         guard let trailDraftControls,
               trailDraftController?.isAvailable == true,
               trailDraftControls.alpha != alpha else { return }

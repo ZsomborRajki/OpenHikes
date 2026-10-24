@@ -733,6 +733,9 @@
     "Community hikes are ones worth someone else’s day out — a whole route, hiked by you, that isn’t already on the list." : {
 
     },
+    "Community shows hikes other people shared, and OpenStreetMap trails, for the area on the map." : {
+
+    },
     "Completed" : {
 
     },
@@ -1007,6 +1010,9 @@
 
     },
     "Find Photos of This Hike" : {
+
+    },
+    "Find Trails" : {
 
     },
     "Finding a path…" : {
@@ -1312,6 +1318,9 @@
     "Make a trail" : {
 
     },
+    "Make a Trail" : {
+
+    },
     "Map Tiles" : {
 
     },
@@ -1322,6 +1331,9 @@
 
     },
     "Maps marked “Needs API key” aren’t available in this build." : {
+
+    },
+    "Mark a Place" : {
 
     },
     "Marked trails from Waymarked Trails, drawn over any map when zoomed in." : {
@@ -1358,6 +1370,9 @@
 
     },
     "Move the map to put the pin where the place is." : {
+
+    },
+    "Move the map, then tap here to find trails in the new area." : {
 
     },
     "Move Up" : {
@@ -1906,6 +1921,9 @@
     "Places Nearby" : {
 
     },
+    "Plan a route before you go. Pick a start and a destination, and it follows the paths between them." : {
+
+    },
     "Plan a Trail Here" : {
 
     },
@@ -1992,6 +2010,9 @@
 
     },
     "Record a hike" : {
+
+    },
+    "Record a Hike" : {
 
     },
     "Record Along a Trail" : {
@@ -2138,6 +2159,9 @@
     "Save Reviewed Hike" : {
 
     },
+    "Save the viewpoint, shelter or water you’re standing at, and add photos to it." : {
+
+    },
     "Saved" : {
 
     },
@@ -2159,6 +2183,9 @@
     "Search Maps for “%@”" : {
 
     },
+    "Search Somewhere Else" : {
+
+    },
     "Search this area" : {
 
     },
@@ -2169,6 +2196,9 @@
 
     },
     "Section" : {
+
+    },
+    "See the viewpoints, shelters and water OpenStreetMap has mapped nearby, and add them to this hike." : {
 
     },
     "Select All" : {
@@ -2562,6 +2592,9 @@
     "Totals" : {
 
     },
+    "Track your hike with GPS. It keeps recording while your phone is locked." : {
+
+    },
     "Trail" : {
 
     },
@@ -2686,6 +2719,9 @@
 
     },
     "What you’re reporting" : {
+
+    },
+    "What’s Around You" : {
 
     },
     "What’s wrong" : {

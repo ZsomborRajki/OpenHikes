@@ -45,6 +45,11 @@ struct OpenHikesApp: App {
         // to.
         let appModel = OpenHikesModel()
         _model = State(initialValue: appModel)
+        // Here rather than in a view's `.task`, because TipKit has to be
+        // configured before the first tip is drawn, and the first screen draws
+        // one. Unguarded: whether this launch gets tips at all is decided
+        // inside — see ``TipLaunch``.
+        appModel.startTips()
 
         // The system may launch this process purely to run an App Intent, in
         // which case no view is ever built and nothing else registers the
@@ -148,5 +153,7 @@ private struct AppRoot: View {
         OpenHikesView()
             .environment(model)
             .defaultAppStorage(model.defaults)
+            // Set once, here, and never written again — see ``AppTips``.
+            .environment(\.appTips, model.tips)
     }
 }

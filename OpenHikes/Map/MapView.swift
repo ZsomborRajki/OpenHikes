@@ -747,7 +747,9 @@ struct MapView: MapViewRepresentable, Equatable {
     func makeNSView(context: Context) -> MKMapView { makeMapView(context.coordinator) }
     func updateNSView(_ mapView: MKMapView, context: Context) { update(mapView, context.coordinator) }
     #else
-    func makeUIView(context: Context) -> MKMapView { makeMapView(context.coordinator) }
+    func makeUIView(context: Context) -> MKMapView {
+        makeMapView(context.coordinator, drawingTips: context.environment.appTips)
+    }
     func updateUIView(_ mapView: MKMapView, context: Context) { update(mapView, context.coordinator) }
     #endif
 
