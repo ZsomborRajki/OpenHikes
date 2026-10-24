@@ -20,6 +20,14 @@
 //  coordinator's own (#999). The cost of being wrong the other way is small
 //  and self-correcting: a hike saved this session is searchable next launch.
 //
+//  ## Why it is handed the library rather than reading it
+//
+//  The App Group's catalogue wants the same list at the same moment, and two
+//  sweeps reading it each for themselves read every route twice, at once, in
+//  two contexts that each hold the whole library decoded until their read
+//  returns (#1025). So ``SharedHikeCatalogPublisher`` reads it once and hands
+//  the reports to both — the argument it already makes for the watch.
+//
 //  ## Why it is behind the test guard
 //
 //  `CSSearchableIndex` is a real system index on a real device, shared with
@@ -37,28 +45,28 @@ import os
 nonisolated enum HikeSpotlightIndex {
     private static let logger = Logger(subsystem: "OpenHikes", category: "Spotlight")
 
-    /// Replaces the app's Spotlight entries with the current library.
+    /// Replaces the app's Spotlight entries with `reports`, the library the
+    /// launch sweep read.
     ///
-    /// Fire-and-forget, and silent on failure by design: nothing a hiker does
-    /// depends on this having worked, and Spotlight being unavailable is not
-    /// something to interrupt a launch over. The log is where the difference
-    /// can be read.
-    static func donate(from coordinator: HikeIntentCoordinator) {
-        Task.detached(priority: .utility) {
-            do {
-                let entities = try await coordinator.finishedHikes().map(HikeEntity.init)
-                let index = CSSearchableIndex.default()
-                // Deleted before indexed, which is what makes this a replace
-                // rather than an accumulation: a hike deleted last session has
-                // no other way out of the index.
-                try await index.deleteAllSearchableItems()
-                guard !entities.isEmpty else { return }
-                try await index.indexAppEntities(entities)
-            } catch {
-                Self.logger.debug(
-                    "Spotlight indexing failed: \(error.localizedDescription, privacy: .public)"
-                )
-            }
+    /// Silent on failure by design: nothing a hiker does depends on this
+    /// having worked, and Spotlight being unavailable is not something to
+    /// interrupt a launch over. The log is where the difference can be read.
+    /// A library that could not be read never reaches here, so a failed read
+    /// leaves the index as it was rather than emptying it.
+    static func replaceEntries(with reports: [FinishedHikeReport]) async {
+        let entities = reports.map(HikeEntity.init)
+        let index = CSSearchableIndex.default()
+        do {
+            // Deleted before indexed, which is what makes this a replace
+            // rather than an accumulation: a hike deleted last session has no
+            // other way out of the index.
+            try await index.deleteAllSearchableItems()
+            guard !entities.isEmpty else { return }
+            try await index.indexAppEntities(entities)
+        } catch {
+            Self.logger.debug(
+                "Spotlight indexing failed: \(error.localizedDescription, privacy: .public)"
+            )
         }
     }
 }

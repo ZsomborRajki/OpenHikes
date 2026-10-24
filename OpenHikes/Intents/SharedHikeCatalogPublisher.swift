@@ -7,8 +7,9 @@
 //
 //  ## Why a sweep rather than a write per change
 //
-//  The same argument ``HikeSpotlightIndex`` makes, and this runs beside it for
-//  that reason. Three things change what should be published — a hike saved, a
+//  The same argument ``HikeSpotlightIndex`` makes, and this sweep feeds it for
+//  that reason: one reading of the library, handed to the catalogue, the watch
+//  and Spotlight alike. Three things change what should be published — a hike saved, a
 //  hike renamed, a hike deleted — and only the first has an obvious hook; a
 //  rename happens in the detail view, a delete in two places, and an import
 //  writes rows through a path that knows nothing about widgets. Four sites
@@ -57,44 +58,83 @@ nonisolated enum PinnedTrails: Sendable {
 nonisolated enum SharedHikeCatalogPublisher {
     private static let logger = Logger(subsystem: "OpenHikes", category: "WidgetCatalog")
 
-    /// Republishes the catalogue and the pinned trails' snapshots.
+    /// Republishes the catalogue, the Spotlight index and the pinned trails'
+    /// snapshots.
     ///
-    /// Fire-and-forget and silent on failure, for the reason the Spotlight
-    /// sweep beside it is: nothing a hiker does depends on this having worked
-    /// this second, and the next sweep puts it right.
+    /// Fire-and-forget and silent on failure: nothing a hiker does depends on
+    /// this having worked this second, and the next sweep puts it right.
     ///
     /// - Parameter watch: the watch link, which is handed the *same* list
     ///   rather than being given a sweep of its own. Two independent readings
     ///   of one library is how the two come to disagree, and the disagreement
     ///   would be visible: a hiker's watch offering a trail their widget's
-    ///   picker does not. One sweep, one list, two consumers — which is the
-    ///   argument this type's header already makes about writing per change.
+    ///   picker does not. One sweep, one list, every consumer — which is the
+    ///   argument this type's header already makes about writing per change,
+    ///   and the reason Spotlight is fed from here too (see
+    ///   ``publishLibrary(from:to:)``).
     static func publish(
         from coordinator: HikeIntentCoordinator,
         container: ModelContainer,
         watch: WatchSessionCoordinator? = nil
     ) {
         Task.detached(priority: .utility) {
-            await publishCatalog(from: coordinator, watch: watch)
+            await publishLibrary(from: coordinator, to: .live(watch: watch))
             await publishPinnedTrails(.live(container: container))
         }
     }
 
-    /// The list the pickers read.
+    /// Reads the finished hikes once and hands the one list to every
+    /// consumer.
+    ///
+    /// Once, because each read fetches the library into a context of its own
+    /// and decodes every route for its clock, and the context keeps those
+    /// routes until the read returns. Spotlight and the catalogue each used to
+    /// make that read for themselves, from two detached tasks at once, so a
+    /// launch held the library's routes twice and spent two cores decoding
+    /// the same rows (#1025).
+    ///
+    /// A failed read reaches no consumer. A library that could not be read is
+    /// not an empty one, and handing either an empty list would delete every
+    /// entry it holds.
+    static func publishLibrary(
+        from coordinator: HikeIntentCoordinator,
+        to consumers: LibraryConsumers
+    ) async {
+        let reports: [FinishedHikeReport]
+        do {
+            reports = try await coordinator.finishedHikes()
+        } catch {
+            Self.logger.debug(
+                "Hike library publish failed: \(error.localizedDescription, privacy: .public)"
+            )
+            return
+        }
+        await consumers.catalog(reports)
+        await consumers.spotlight(reports)
+    }
+
+    /// The list the pickers read, on its own: the watch link's republish after
+    /// a walk arrives, which has no reason to rebuild the Spotlight index.
     static func publishCatalog(
         from coordinator: HikeIntentCoordinator,
         watch: WatchSessionCoordinator? = nil
     ) async {
         do {
-            let summaries = try await coordinator.finishedHikes().map(HikeEntity.summary(of:))
-            let catalog = SharedHikeCatalog(hikes: summaries)
-            SharedStore.saveHikeCatalog(catalog)
-            if let watch { await watch.publish(catalog) }
+            await saveCatalog(try await coordinator.finishedHikes(), watch: watch)
         } catch {
             Self.logger.debug(
                 "Hike catalog publish failed: \(error.localizedDescription, privacy: .public)"
             )
         }
+    }
+
+    private static func saveCatalog(
+        _ reports: [FinishedHikeReport],
+        watch: WatchSessionCoordinator?
+    ) async {
+        let catalog = SharedHikeCatalog(hikes: reports.map(HikeEntity.summary(of:)))
+        SharedStore.saveHikeCatalog(catalog)
+        if let watch { await watch.publish(catalog) }
     }
 
     /// A trail snapshot for each hike a placed widget is pinned to, and
@@ -132,16 +172,7 @@ nonisolated enum SharedHikeCatalogPublisher {
     /// One hike's snapshot, built the same way the tracker builds the selected
     /// one so the two cannot describe the same trail differently.
     private static func publishTrail(_ hikeID: UUID, container: ModelContainer) async {
-        let input = await MainActor.run { () -> HikeRouteInput? in
-            let context = ModelContext(container)
-            let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
-            // A hike deleted since the widget was configured. Nothing to draw
-            // and nothing to report: the prune below takes its file, and the
-            // widget shows its empty state.
-            guard let hike = try? context.fetch(descriptor).first else { return nil }
-            return HikeRouteInput(hike: hike)
-        }
-        guard let input,
+        guard let input = await routeInput(for: hikeID, in: container),
               let snapshot = await BackgroundTrailTracker.buildSnapshotOffMain(
                   from: input,
                   liveFix: nil
@@ -159,6 +190,44 @@ nonisolated enum SharedHikeCatalogPublisher {
             hikeID: hikeID,
             polyline: snapshot.polyline
         )
+    }
+
+    /// One pinned hike read into values, in a context of its own off the main
+    /// actor.
+    ///
+    /// `HikeRouteInput` reads `route`, which is external storage decoded
+    /// whole, and a long recording is the likeliest thing to pin. Read inside
+    /// `MainActor.run`, that decode was a main-thread stall at every launch,
+    /// one per pinned widget, while the map was coming up (#1025). Here the
+    /// context and the `Hike` it vends are made, read and dropped inside this
+    /// call, and only the `Sendable` input leaves — the shape
+    /// `BackgroundTrailTracker.match` already reads the tracked hike in.
+    ///
+    /// `@concurrent`, because a `nonisolated async` function runs on its
+    /// caller's executor. `nil` for a hike deleted since the widget was
+    /// configured, or one that cannot be read: nothing to draw and nothing to
+    /// report, since the prune after the sweep takes its file and the widget
+    /// shows its empty state.
+    ///
+    /// - Parameter fetch: the store's fetch of one hike, a seam so a suite can
+    ///   see which thread it ran on.
+    @concurrent
+    nonisolated static func routeInput(
+        for hikeID: UUID,
+        in container: ModelContainer,
+        fetch: @Sendable (ModelContext, UUID) throws -> Hike? = fetchHike
+    ) async -> HikeRouteInput? {
+        assertOffMainThread("Reading a pinned trail's route must stay off the main thread")
+        guard let hike = try? fetch(ModelContext(container), hikeID) else { return nil }
+        return HikeRouteInput(hike: hike)
+    }
+
+    /// The store's own answer for ``routeInput(for:in:fetch:)``: the one hike,
+    /// if it still exists.
+    nonisolated static func fetchHike(_ context: ModelContext, _ hikeID: UUID) throws -> Hike? {
+        var descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
     }
 
     /// The hikes the placed widgets are pinned to, or that WidgetKit cannot
@@ -192,6 +261,25 @@ nonisolated enum SharedHikeCatalogPublisher {
             forKey: SettingsKey.lastSelectedHikeID
         ), let id = UUID(uuidString: stored) else { return [] }
         return [id]
+    }
+
+    /// Where the launch's one reading of the library goes, so a suite can see
+    /// how many reads feed it and what each consumer was handed. ``live(watch:)``
+    /// is the app's: the App Group, the watch link and the system's Spotlight
+    /// index, none of which a suite may touch.
+    nonisolated struct LibraryConsumers: Sendable {
+        /// The App Group's catalogue the widget's picker reads, and the
+        /// watch's copy of it.
+        let catalog: @Sendable ([FinishedHikeReport]) async -> Void
+        /// The app's Spotlight entries.
+        let spotlight: @Sendable ([FinishedHikeReport]) async -> Void
+
+        static func live(watch: WatchSessionCoordinator?) -> Self {
+            Self(
+                catalog: { await SharedHikeCatalogPublisher.saveCatalog($0, watch: watch) },
+                spotlight: { await HikeSpotlightIndex.replaceEntries(with: $0) }
+            )
+        }
     }
 
     /// Everything the pinned-trail sweep reads and writes, so a suite can hand
