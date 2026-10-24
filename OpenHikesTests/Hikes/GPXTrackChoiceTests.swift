@@ -41,12 +41,12 @@ struct GPXTrackChoiceTests {
     func importAnswersTheTicked() async {
         let choice = GPXTrackChoice()
         let tracks = Self.tracks(["Mon", nil, "Wed"])
-        async let answer = choice.ask(fileName: "week.gpx", tracks: tracks, unplacedWaypoints: 2)
+        async let answer = choice.ask(fileName: "week.gpx", tracks: tracks, leftOut: .init(offTrack: 2))
         await asked(choice)
 
         #expect(choice.question?.options.map(\.title) == ["Mon", "Track 2", "Wed"])
         #expect(choice.question?.chosenCount == 3)
-        #expect(choice.question?.unplacedWaypoints == 2)
+        #expect(choice.question?.leftOut == .init(offTrack: 2))
         choice.toggle(1)
         choice.confirm()
 
@@ -57,7 +57,7 @@ struct GPXTrackChoiceTests {
     @Test("Cancel answers with none")
     func cancelAnswersNone() async {
         let choice = GPXTrackChoice()
-        async let answer = choice.ask(fileName: "week.gpx", tracks: Self.tracks(["Mon", "Tue"]), unplacedWaypoints: 0)
+        async let answer = choice.ask(fileName: "week.gpx", tracks: Self.tracks(["Mon", "Tue"]), leftOut: .init())
         await asked(choice)
         choice.cancel()
 
@@ -69,13 +69,13 @@ struct GPXTrackChoiceTests {
     @Test("a second question waits for the first to be answered")
     func aSecondQuestionWaits() async {
         let choice = GPXTrackChoice()
-        async let first = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A", "B"]), unplacedWaypoints: 0)
+        async let first = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A", "B"]), leftOut: .init())
         await asked(choice)
-        async let second = choice.ask(fileName: "b.gpx", tracks: Self.tracks(["C", "D"]), unplacedWaypoints: 0)
+        async let second = choice.ask(fileName: "b.gpx", tracks: Self.tracks(["C", "D"]), leftOut: .init())
         // A third, so the turn is seen to be handed down a queue rather than
         // to whoever asked last. The two start concurrently, so which of them
         // is second is not the test's to fix — only that each gets its turn.
-        async let third = choice.ask(fileName: "c.gpx", tracks: Self.tracks(["E"]), unplacedWaypoints: 0)
+        async let third = choice.ask(fileName: "c.gpx", tracks: Self.tracks(["E"]), leftOut: .init())
 
         await settleDelegateHop(until: "both to queue behind the first") { choice.waitingCount == 2 }
 
@@ -105,11 +105,11 @@ struct GPXTrackChoiceTests {
     @Test("a drained queue hands the turn back free")
     func aDrainedQueueFreesTheTurn() async {
         let choice = GPXTrackChoice()
-        async let first = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A"]), unplacedWaypoints: 0)
+        async let first = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A"]), leftOut: .init())
         await asked(choice)
-        async let second = choice.ask(fileName: "b.gpx", tracks: Self.tracks(["B"]), unplacedWaypoints: 0)
-        async let third = choice.ask(fileName: "c.gpx", tracks: Self.tracks(["C"]), unplacedWaypoints: 0)
-        async let fourth = choice.ask(fileName: "d.gpx", tracks: Self.tracks(["D"]), unplacedWaypoints: 0)
+        async let second = choice.ask(fileName: "b.gpx", tracks: Self.tracks(["B"]), leftOut: .init())
+        async let third = choice.ask(fileName: "c.gpx", tracks: Self.tracks(["C"]), leftOut: .init())
+        async let fourth = choice.ask(fileName: "d.gpx", tracks: Self.tracks(["D"]), leftOut: .init())
         await settleDelegateHop(until: "three to queue behind the first") { choice.waitingCount == 3 }
 
         var answered: [String] = []
@@ -127,7 +127,7 @@ struct GPXTrackChoiceTests {
 
         choice.cancel()
         choice.confirm()
-        async let next = choice.ask(fileName: "e.gpx", tracks: Self.tracks(["E"]), unplacedWaypoints: 0)
+        async let next = choice.ask(fileName: "e.gpx", tracks: Self.tracks(["E"]), leftOut: .init())
         await asked(choice)
         #expect(choice.waitingCount == 0)
         #expect(choice.question?.fileName == "e.gpx")
@@ -141,9 +141,36 @@ struct GPXTrackChoiceTests {
     func aStrayCancelAnswersNothing() async {
         let choice = GPXTrackChoice()
         choice.cancel()
-        async let answer = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A", "B"]), unplacedWaypoints: 0)
+        async let answer = choice.ask(fileName: "a.gpx", tracks: Self.tracks(["A", "B"]), leftOut: .init())
         await asked(choice)
         choice.confirm()
         #expect(await answer == [0, 1])
+    }
+
+    // MARK: The words
+
+    @Test("the import button counts the hikes, one of them singular")
+    func importTitleCounts() {
+        #expect(GPXTrackChoiceSheet.importTitle(1) == "Import 1 Hike")
+        #expect(GPXTrackChoiceSheet.importTitle(3) == "Import 3 Hikes")
+    }
+
+    /// A place past the cap does lie on a track, so it is never folded into
+    /// the sentence about waypoints on none (#1037).
+    @Test("the footer gives each reason a waypoint is left out its own sentence")
+    func footerSaysEachReason() {
+        #expect(
+            GPXTrackChoiceSheet.leftOutNote(.init(offTrack: 1))
+                == "1 waypoint lies on none of these tracks and won’t be imported."
+        )
+        #expect(
+            GPXTrackChoiceSheet.leftOutNote(.init(pastPlaceLimit: 1))
+                == "1 more place lies on these tracks but won’t be imported, because one file can bring only so many."
+        )
+        #expect(
+            GPXTrackChoiceSheet.leftOutNote(.init(offTrack: 3, pastPlaceLimit: 50))
+                == "3 waypoints lie on none of these tracks and won’t be imported. "
+                + "50 more places lie on these tracks but won’t be imported, because one file can bring only so many."
+        )
     }
 }

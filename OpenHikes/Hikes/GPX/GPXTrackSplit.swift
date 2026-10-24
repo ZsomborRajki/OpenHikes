@@ -10,7 +10,8 @@
 //  already uses for its places — within ``TrailPlaceAnchor/touchedOffRouteMeters``
 //  of the route (``TrailPlaceOrder``). One that lies on two goes to the nearer;
 //  one that lies on none is dropped rather than pinned to a day it was never
-//  part of, and the confirmation says how many were.
+//  part of, and the confirmation says how many were. The places' cap is spent
+//  only on the ones that lie on a track, and what it cuts is counted too.
 //
 //  "The route" is the ground the track walked: its walked legs and the fixes
 //  it recorded. The leg joining two of its `<trkseg>`s is a pause, and a pause
@@ -44,6 +45,38 @@ nonisolated enum GPXTrackSplit {
             assigned[nearest.0].append(item)
         }
         return assigned
+    }
+
+    /// `items` shared out as ``assign(_:at:to:)`` shares them, then cut to the
+    /// first `limit` that lie on a track, in the order the items were given —
+    /// with how many lay on a track and were cut.
+    ///
+    /// Cut after the sharing out, never before (#1037). An item that lies on
+    /// no track is dropped whatever the cap says, so letting it take a slot
+    /// only takes one from an item that does lie on one: a region's huts at
+    /// the top of the file would leave a later day with none of its own. The
+    /// count is what lets the confirmation say so, because an item past the
+    /// cap is not one that "lies on none of these tracks".
+    ///
+    /// The order is the file's rather than a fair share per route, because
+    /// the cap bounds what one import writes (see ``GPXImport/maximumPlaces``)
+    /// and the file's order is the only one its author chose.
+    static func assign<Item>(
+        _ items: [Item],
+        at coordinate: (Item) -> CLLocationCoordinate2D,
+        to routes: [[RouteCoordinate]],
+        keepingAtMost limit: Int
+    ) -> (assigned: [[Item]], pastLimit: Int) {
+        let numbered = assign(Array(items.enumerated()), at: { coordinate($0.element) }, to: routes)
+        let onATrack = numbered.joined().map(\.offset)
+        guard onATrack.count > limit else {
+            return (numbered.map { $0.map(\.element) }, 0)
+        }
+        let kept = Set(onATrack.sorted().prefix(limit))
+        let assigned = numbered.map { route in
+            route.filter { kept.contains($0.offset) }.map(\.element)
+        }
+        return (assigned, onATrack.count - kept.count)
     }
 
     /// A route's bounding box grown by the touching distance: a waypoint

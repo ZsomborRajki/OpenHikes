@@ -12,7 +12,7 @@
 //  their library, and because the hiker can see from the list what the file
 //  actually holds before any of it lands.
 //
-//  The import awaits the answer: ``ask(fileName:tracks:unplacedWaypoints:)``
+//  The import awaits the answer: ``ask(fileName:tracks:leftOut:)``
 //  suspends until the sheet's Import or Cancel resumes it, so the import path
 //  reads top to bottom rather than being split across a callback. A second
 //  question arriving while one is up waits its turn rather than replacing
@@ -46,9 +46,9 @@ final class GPXTrackChoice {
         let id = UUID()
         let fileName: String
         var options: [GPXTrackOption]
-        /// How many of the file's waypoints lie on none of its tracks and
-        /// will not come with any of them — see ``GPXTrackSplit``.
-        let unplacedWaypoints: Int
+        /// The file's waypoints that will not come with any of its tracks,
+        /// and why — see ``GPXTrackSplit``.
+        let leftOut: GPXImport.LeftOut
 
         var chosenCount: Int { options.count(where: \.isChosen) }
     }
@@ -76,7 +76,7 @@ final class GPXTrackChoice {
     /// Puts the tracks up and waits for the hiker: the indices to import, or
     /// empty for none. Behind any question already up, which keeps the turn
     /// until it is answered.
-    func ask(fileName: String, tracks: [GPXImport.Track], unplacedWaypoints: Int) async -> [Int] {
+    func ask(fileName: String, tracks: [GPXImport.Track], leftOut: GPXImport.LeftOut) async -> [Int] {
         if isAsking {
             // Resumed by ``answer(with:)`` with the turn already handed over.
             await withCheckedContinuation { waiting.append($0) }
@@ -93,7 +93,7 @@ final class GPXTrackChoice {
         }
         return await withCheckedContinuation { continuation in
             answer = continuation
-            question = Question(fileName: fileName, options: options, unplacedWaypoints: unplacedWaypoints)
+            question = Question(fileName: fileName, options: options, leftOut: leftOut)
         }
     }
 
@@ -169,8 +169,8 @@ struct GPXTrackChoiceSheet: View {
                     } header: {
                         Text("Each track becomes a hike of its own.")
                     } footer: {
-                        if question.unplacedWaypoints > 0 {
-                            Text(Self.unplacedNote(question.unplacedWaypoints))
+                        if !question.leftOut.isEmpty {
+                            Text(Self.leftOutNote(question.leftOut))
                         }
                     }
                 }
@@ -192,14 +192,37 @@ struct GPXTrackChoiceSheet: View {
         .presentationDetents([.medium, .large])
     }
 
-    private static func importTitle(_ count: Int) -> String {
-        count == 1 ? "Import 1 Hike" : "Import \(count) Hikes"
+    /// A plural variation in the catalog, which says "Import 1 Hike".
+    static func importTitle(_ count: Int) -> String {
+        String(localized: "Import \(count) Hikes")
     }
 
-    private static func unplacedNote(_ count: Int) -> String {
-        count == 1
-            ? "1 waypoint lies on none of these tracks and won’t be imported."
-            : "\(count) waypoints lie on none of these tracks and won’t be imported."
+    /// What the footer says of the waypoints no track takes: a sentence for
+    /// each reason that applies, the ones on no track first.
+    ///
+    /// Two reasons, because they are different news. A waypoint on no track
+    /// has nowhere to go; a place past the cap lies on one of these tracks and
+    /// is left out only because the file brought too many (#1037), so saying
+    /// it "lies on none of these tracks" would be false. Whole sentences, each
+    /// a plural variation in the catalog, so a translator can move the count.
+    static func leftOutNote(_ leftOut: GPXImport.LeftOut) -> String {
+        var sentences: [String] = []
+        if leftOut.offTrack > 0 {
+            sentences.append(
+                String(localized: "\(leftOut.offTrack) waypoints lie on none of these tracks and won’t be imported.")
+            )
+        }
+        if leftOut.pastPlaceLimit > 0 {
+            sentences.append(
+                String(
+                    localized: """
+                        \(leftOut.pastPlaceLimit) more places lie on these tracks but won’t be imported, \
+                        because one file can bring only so many.
+                        """
+                )
+            )
+        }
+        return sentences.joined(separator: " ")
     }
 }
 

@@ -85,8 +85,8 @@ extension OpenHikesView {
         // start swallowing something this screen has no message for.
         do throws(HikeImportFailure) {
             let choice = gpxTrackChoice
-            let hikes = try await HikeImport.hikes(from: url, into: modelContext) { tracks, unplaced in
-                await choice.ask(fileName: url.lastPathComponent, tracks: tracks, unplacedWaypoints: unplaced)
+            let hikes = try await HikeImport.hikes(from: url, into: modelContext) { tracks, leftOut in
+                await choice.ask(fileName: url.lastPathComponent, tracks: tracks, leftOut: leftOut)
             }
             // `hikes` is never empty on success — a file that became nothing
             // throws — so this is the first of what the hiker chose.

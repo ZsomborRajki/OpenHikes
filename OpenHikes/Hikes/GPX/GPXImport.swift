@@ -208,13 +208,6 @@ nonisolated enum GPXImport {
         try contents(of: try document(at: url, limits: limits), limits: limits)
     }
 
-    /// What a file becomes: its tracks, and how many of its loose waypoints
-    /// lay on none of them and were left out — see ``GPXTrackSplit``.
-    struct Contents: Sendable {
-        var tracks: [Track]
-        var unplacedWaypoints = 0
-    }
-
     private static func contents(of document: ParsedDocument, limits: Limits) throws(ImportFailure) -> Contents {
         // Chosen on what the file *contains*, not on what survives validation,
         // which is what keeps a file full of unprojectable `<trkpt>` reporting
@@ -338,11 +331,15 @@ nonisolated enum GPXImport {
         containers: [(container: Int, segments: [[Point]])]
     ) -> Contents {
         let routes = containers.map { Track.route(of: $0.segments) }
-        let places = Array(document.waypoints.compactMap(place).prefix(maximumPlaces))
+        // Every place is shared out before the cap is applied, so only the
+        // ones a track takes compete for it (#1037).
+        let places = document.waypoints.compactMap(place)
         let photographs = document.waypoints.compactMap(photograph)
-        let placesByTrack = GPXTrackSplit.assign(places, at: \.clCoordinate, to: routes)
+        let (placesByTrack, pastPlaceLimit) = GPXTrackSplit.assign(
+            places, at: \.clCoordinate, to: routes, keepingAtMost: maximumPlaces
+        )
         let photographsByTrack = GPXTrackSplit.assign(photographs, at: \.coordinate, to: routes)
-        let placed = placesByTrack.joined().count + photographsByTrack.joined().count
+        let onATrack = placesByTrack.joined().count + pastPlaceLimit + photographsByTrack.joined().count
         let tracks = containers.enumerated().map { offset, container in
             let own = words.of(container.container)
             return Track(
@@ -359,10 +356,20 @@ nonisolated enum GPXImport {
                 places: placesByTrack[offset]
             )
         }
-        return Contents(tracks: tracks, unplacedWaypoints: places.count + photographs.count - placed)
+        return Contents(
+            tracks: tracks,
+            leftOut: LeftOut(offTrack: places.count + photographs.count - onATrack, pastPlaceLimit: pastPlaceLimit)
+        )
     }
 
     /// How many `<wpt>`s of a file may become places.
+    ///
+    /// Per file rather than per track: a multi-track file is one import of
+    /// up to ``Limits/maximumTrackCount`` hikes, and a cap per hike would let
+    /// it write the ten thousand records argued against below. Spent only on
+    /// the places a track takes, in the file's order, and what it cuts is
+    /// counted for the confirmation — see
+    /// ``GPXTrackSplit/assign(_:at:to:keepingAtMost:)``.
     ///
     /// A cap rather than a refusal, and rather than none. Unlike the
     /// photographs — which are values in one column on the hike — every place
