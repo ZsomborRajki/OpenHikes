@@ -12,9 +12,10 @@
 //  one that lies on none is dropped rather than pinned to a day it was never
 //  part of, and the confirmation says how many were.
 //
-//  "The route" is the ground the track walked. The leg joining two of its
-//  `<trkseg>`s is a pause, and a pause is not trail (``RouteBoundary``), so a
-//  waypoint lying only on that join lies on no track.
+//  "The route" is the ground the track walked: its walked legs and the fixes
+//  it recorded. The leg joining two of its `<trkseg>`s is a pause, and a pause
+//  is not trail (``RouteBoundary``), so a waypoint lying only on that join
+//  lies on no track.
 //
 
 import Algorithms
@@ -123,27 +124,42 @@ nonisolated enum GPXTrackSplit {
         private static let steepestLatitude = 89.0
     }
 
-    /// How far `coordinate` is from the nearest point of `route`'s walked
-    /// line, or `nil` for a route with no leg walked — fewer than two points,
-    /// or nothing but pauses between them.
+    /// How far `coordinate` is from the nearest of the ground `route` walked,
+    /// or `nil` for a route of fewer than two points.
     ///
     /// A leg a pause opened is never measured (#991). In a GPX file that is
     /// the join between two `<trkseg>`s: ground the track did not record, and
     /// not trail, so the saved hike's `RouteProfile` never matches onto it
     /// (see ``RouteBoundary``). Measured, it would hand a waypoint on the join
     /// to a walk that passed kilometres from it.
+    ///
+    /// Its ends are still fixes the track recorded. One beside a walked leg is
+    /// measured as that leg's end; one with a pause on both sides, a
+    /// `<trkseg>` of a single point, is measured as a point, so a waypoint
+    /// sitting on it still lies on the track. That is the rule
+    /// ``RecordedRouteLegs`` holds a photograph to.
+    ///
+    /// A single point is no route at all: the import leaves a one-point track
+    /// out after this split, and a waypoint handed to it would go with it,
+    /// uncounted.
     static func offRouteMeters(
         of coordinate: CLLocationCoordinate2D,
         along route: [RouteCoordinate]
     ) -> Double? {
-        var nearest: Double?
-        for (start, end) in route.adjacentPairs() where !end.isPauseBoundary {
-            let projection = RouteGeometry.project(
-                coordinate,
-                onSegmentFrom: start.clCoordinate,
-                to: end.clCoordinate
-            )
-            nearest = min(nearest ?? .infinity, projection.offRouteMeters)
+        guard route.count > 1 else { return nil }
+        var nearest = Double.infinity
+        for index in route.indices {
+            let point = route[index].clCoordinate
+            // A boundary describes the leg arriving at the point that carries it.
+            let arrivesWalked = index > 0 && !route[index].isPauseBoundary
+            let leavesWalked = index + 1 < route.count && !route[index + 1].isPauseBoundary
+            if arrivesWalked {
+                let start = route[index - 1].clCoordinate
+                let projection = RouteGeometry.project(coordinate, onSegmentFrom: start, to: point)
+                nearest = min(nearest, projection.offRouteMeters)
+            } else if !leavesWalked {
+                nearest = min(nearest, RouteGeometry.distanceMeters(from: coordinate, to: point))
+            }
         }
         return nearest
     }
