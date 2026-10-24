@@ -86,7 +86,7 @@ struct GPXMultiTrackTests {
         #expect(contents.tracks[0].places.map(\.name) == ["Hut"])
         #expect(contents.tracks[1].places.isEmpty)
         #expect(contents.tracks[2].places.map(\.name) == ["Spring"])
-        #expect(contents.unplacedWaypoints == 1)
+        #expect(contents.leftOut == .init(offTrack: 1))
     }
 
     /// A route's number counts `<rte>`s, so its words are read from them —
@@ -203,7 +203,7 @@ struct GPXMultiTrackTests {
         #expect(contents.tracks.count == 1)
         #expect(contents.tracks.first?.name == "From the metadata")
         #expect(contents.tracks.first?.places.count == 1, "a lone track keeps every place, near it or not")
-        #expect(contents.unplacedWaypoints == 0)
+        #expect(contents.leftOut == .init())
     }
 
     @Test("past the track cap, the file is refused as too large")
@@ -225,7 +225,7 @@ struct GPXMultiTrackTests {
         var asked: (count: Int, unplaced: Int)?
 
         let hikes = try await HikeImport.hikes(from: url, into: context) { tracks, unplaced in
-            asked = (tracks.count, unplaced)
+            asked = (tracks.count, unplaced.offTrack)
             return [2, 1]
         }
 

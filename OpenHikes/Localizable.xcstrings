@@ -195,6 +195,28 @@
         }
       }
     },
+    "%lld more places lie on these tracks but won’t be imported, because one file can bring only so many." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld more place lies on these tracks but won’t be imported, because one file can bring only so many."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld more places lie on these tracks but won’t be imported, because one file can bring only so many."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld of %lld" : {
       "localizations" : {
         "en" : {
@@ -439,6 +461,28 @@
     },
     "%lld pt" : {
 
+    },
+    "%lld waypoints lie on none of these tracks and won’t be imported." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld waypoint lies on none of these tracks and won’t be imported."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld waypoints lie on none of these tracks and won’t be imported."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld%%" : {
 
@@ -1189,6 +1233,28 @@
     },
     "If no message opened — no mail account set up, or you closed the draft — copy this and send it yourself." : {
 
+    },
+    "Import %lld Hikes" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Import %lld Hike"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Import %lld Hikes"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "Import GPX file" : {
 

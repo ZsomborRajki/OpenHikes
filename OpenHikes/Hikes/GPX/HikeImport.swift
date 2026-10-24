@@ -150,8 +150,8 @@ enum HikeImport {
     /// several.
     ///
     /// - Parameter choosing: asked only when the file holds more than one
-    ///   track, with the tracks and how many of the file's waypoints lie on
-    ///   none of them; answers the indices to import, empty for none. See
+    ///   track, with the tracks and the file's waypoints that none of them
+    ///   takes; answers the indices to import, empty for none. See
     ///   ``GPXTrackChoice``. Never asked for a one-track file, which imports
     ///   exactly as it always has.
     ///
@@ -161,7 +161,7 @@ enum HikeImport {
     static func hikes(
         from url: URL,
         into modelContext: ModelContext,
-        choosing: ([GPXImport.Track], Int) async -> [Int],
+        choosing: ([GPXImport.Track], GPXImport.LeftOut) async -> [Int],
         save: @Sendable (ModelContext) throws -> Void = { try $0.save() }
     ) async throws(HikeImportFailure) -> [Hike] {
         let scoped = url.startAccessingSecurityScopedResource()
@@ -176,7 +176,7 @@ enum HikeImport {
         if contents.tracks.count == 1, let only = contents.tracks.first {
             chosen = [(1, only)]
         } else {
-            let picks = await choosing(contents.tracks, contents.unplacedWaypoints)
+            let picks = await choosing(contents.tracks, contents.leftOut)
             guard !picks.isEmpty else { throw .file(.multipleTracks) }
             chosen = Set(picks).sorted()
                 .filter { contents.tracks.indices.contains($0) }
