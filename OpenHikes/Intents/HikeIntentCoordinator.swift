@@ -33,7 +33,7 @@ final class HikeIntentCoordinator {
     /// rather than kept for the reason the recorder is: one authority each.
     private let walkUnderWay: @MainActor () -> String?
     /// How the library is read, for what has been walked and for the finished
-    /// hikes the launch sweeps publish. The app only ever reads the store; a
+    /// hikes the launch sweep publishes. The app only ever reads the store; a
     /// suite hands in a failing read, because a `ModelContext` cannot be made
     /// to throw on demand, or one that notes which thread it ran on.
     private let libraryReads: LibraryTotalsSweep.Reads
@@ -396,8 +396,8 @@ extension HikeIntentCoordinator {
     /// seam as ``readLibrary()``. Every report reads its route for the clock,
     /// and a route is external storage decoded whole: a library of long
     /// recordings is a few hundred milliseconds of decoding, which the two
-    /// launch sweeps that read this each did on the main actor while the map
-    /// was coming up (#999).
+    /// launch sweeps that used to read this each did on the main actor while
+    /// the map was coming up (#999).
     func finishedHikes() async throws(HikeIntentFailure) -> [FinishedHikeReport] {
         do {
             return try await Self.readFinishedHikes(from: container, using: libraryReads)
@@ -412,11 +412,11 @@ extension HikeIntentCoordinator {
     /// The finished ones of every hike `reads` returns, newest first.
     ///
     /// `@concurrent`, because a `nonisolated async` function runs on its
-    /// caller's executor and both launch sweeps reach here through the main
-    /// actor. Filtered and sorted here rather than by a predicate, because the
-    /// rows come through ``LibraryTotalsSweep/Reads``, which is how a suite
-    /// sees where the read ran. Only what leaves is `Sendable`: the context
-    /// and its hikes are made, read and dropped inside this call.
+    /// caller's executor, and its one caller, ``finishedHikes()``, is on the
+    /// main actor. Filtered and sorted here rather than by a predicate,
+    /// because the rows come through ``LibraryTotalsSweep/Reads``, which is
+    /// how a suite sees where the read ran. Only what leaves is `Sendable`:
+    /// the context and its hikes are made, read and dropped inside this call.
     @concurrent
     nonisolated private static func readFinishedHikes(
         from container: ModelContainer,

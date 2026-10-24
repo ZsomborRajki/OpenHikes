@@ -113,8 +113,12 @@ nonisolated enum SharedHikeCatalogPublisher {
         await consumers.spotlight(reports)
     }
 
-    /// The list the pickers read, on its own: the watch link's republish after
-    /// a walk arrives, which has no reason to rebuild the Spotlight index.
+    /// The list the pickers read, on its own: the watch link's republish.
+    /// `WatchSessionCoordinator.republishLibrary()` runs it at three moments —
+    /// once a walk from the watch is in the library, when the watch app comes
+    /// to the front, and when the watch asks for its list. None of them
+    /// rebuilds the Spotlight index, which is a launch sweep: a hike saved this
+    /// session is searchable next launch (see ``HikeSpotlightIndex``).
     static func publishCatalog(
         from coordinator: HikeIntentCoordinator,
         watch: WatchSessionCoordinator? = nil
