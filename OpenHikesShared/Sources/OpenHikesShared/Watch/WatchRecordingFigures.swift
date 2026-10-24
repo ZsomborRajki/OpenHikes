@@ -77,11 +77,13 @@ public struct WatchRecordingFigures: Equatable, Sendable {
         return WidgetFormat.speed(metersPerSecond: metersPerSecond, locale: locale)
     }
 
-    /// A dash rather than a zero when the sensor has nothing to say — a
-    /// sleeve over a watch reads as no heart rate, and drawing that as 0 bpm
-    /// is the one number on this screen that would be alarming.
+    /// A dash rather than a zero while there is no reading: before HealthKit
+    /// delivers a first sample, which without permission to read heart rate
+    /// it never does. Drawn as 0 bpm, that would be the one number on this
+    /// screen that alarms. A value that is not a finite number is no reading
+    /// either, and `Int(_:)` would trap on it in the middle of a walk.
     private static func heartRateText(_ beats: Double?) -> String {
-        guard let beats else { return missing }
+        guard let beats, beats.isFinite else { return missing }
         return "\(Int(beats.rounded()))"
     }
 }
