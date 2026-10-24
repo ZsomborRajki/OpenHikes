@@ -126,20 +126,6 @@ struct CommunityPhotoShareSheet: View {
         )
     }
 
-    /// What this send would actually carry, and what it would leave behind.
-    ///
-    /// ``CommunitySharePhotoTally``, which ``CommunityShareSheet`` asks too:
-    /// the two forms are deliberately different screens — see this file's
-    /// header — but this number is about the same files on the same disk and
-    /// the two must not be able to disagree about it.
-    private var photos: CommunitySharePhotoTally {
-        CommunitySharePhotoTally(
-            hike: hike,
-            excluding: excludedPhotoIDs,
-            sendableCount: sendablePhotoCount
-        )
-    }
-
     /// Whether the trail these are joining is *this* hike's own listing.
     ///
     /// Narrower than ``CommunityPhotoTarget/isYours``, and the difference is
@@ -161,9 +147,12 @@ struct CommunityPhotoShareSheet: View {
     /// the last one back: it explains a state of the form, and a form that
     /// went on explaining a state it is no longer in would be describing a
     /// decision the hiker has already reversed.
-    private var alreadySentPhotoCount: Int {
-        CommunityPublisher.ownPhotos(of: hike)
-            .count { $0.hasBeenSentToCommunity && excludedPhotoIDs.contains($0.id) }
+    ///
+    /// Counted over the strip's list as `body` read it, which is
+    /// ``CommunityPublisher/ownPhotos(of:)`` in the strip's order: the count
+    /// is the same, and asking for the list again would be another sort.
+    private func alreadySentPhotoCount(of offered: [HikePhoto]) -> Int {
+        offered.count { $0.hasBeenSentToCommunity && excludedPhotoIDs.contains($0.id) }
     }
 
     /// The name this contribution is credited to, bounded the way every other
@@ -172,28 +161,35 @@ struct CommunityPhotoShareSheet: View {
         BoundedText.boundedOrEmpty(authorName, to: .credit)
     }
 
-    /// Whether there is anything to send at all.
-    ///
-    /// Asked of the *files* once the disk has answered, and of the rows before
-    /// then — see ``CommunitySharePhotoTally/hasSomethingToSend``. A hike
-    /// somebody saved and has not photographed yet reaches this screen
-    /// perfectly legitimately — it is the ordinary state of a trail waiting to
-    /// be walked — so the empty case is a sentence rather than a failure. See
-    /// ``CommunityFailure/noPhotosToShare``.
-    private var hasSomethingToSend: Bool { photos.hasSomethingToSend }
-
     var body: some View {
+        // Read once for the whole pass and handed down, because it is a sort
+        // that looks like a field: the gallery, the strip, the tally and the
+        // already-sent count all draw from this one array. Every helper below
+        // is inlined into this body, so each of them asking for its own copy
+        // was eight sorts a pass. See ``CommunitySharePhotoTally``.
+        let offered = CommunityPublisher.shareablePhotos(of: hike)
+        // What this send would actually carry, and what it would leave behind.
+        //
+        // ``CommunitySharePhotoTally``, which ``CommunityShareSheet`` asks too:
+        // the two forms are deliberately different screens — see this file's
+        // header — but this number is about the same files on the same disk
+        // and the two must not be able to disagree about it.
+        let photos = CommunitySharePhotoTally(
+            offered: offered,
+            excluding: excludedPhotoIDs,
+            sendableCount: sendablePhotoCount
+        )
         NavigationStack {
-            Form { formContent }
+            Form { formContent(offered: offered, photos: photos) }
                 .navigationTitle("Add Photos")
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
                 #endif
-                .toolbar { toolbarContent }
+                .toolbar { toolbarContent(photos: photos) }
                 .interactiveDismissDisabled(phase.isSending)
                 .communitySharePhotoGallery(
                     $viewedPhotoID,
-                    photos: CommunityPublisher.shareablePhotos(of: hike),
+                    photos: offered,
                     excluded: $excludedPhotoIDs,
                     store: store,
                     isSending: phase.isSending
@@ -207,7 +203,11 @@ struct CommunityPhotoShareSheet: View {
         }
     }
 
-    @ViewBuilder private var formContent: some View {
+    @ViewBuilder
+    private func formContent(
+        offered: [HikePhoto],
+        photos: CommunitySharePhotoTally
+    ) -> some View {
         switch phase {
         case .sent:
             sentSection
@@ -215,7 +215,7 @@ struct CommunityPhotoShareSheet: View {
             finishSection
         default:
             targetSection
-            contentsSection
+            contentsSection(offered: offered, photos: photos)
             if contribution.wouldDuplicate {
                 duplicateSection
             }
@@ -268,21 +268,22 @@ private extension CommunityPhotoShareSheet {
     }
 
     /// What is going, and what is not.
-    var contentsSection: some View {
-        Section {
+    func contentsSection(offered: [HikePhoto], photos: CommunitySharePhotoTally) -> some View {
+        let alreadySent = alreadySentPhotoCount(of: offered)
+        return Section {
             CommunitySendPhotoCountRow(
                 count: photos.count,
                 identifier: "community-photos-count"
             )
             CommunitySharePhotoStrip(
-                photos: CommunityPublisher.shareablePhotos(of: hike),
+                photos: offered,
                 excluded: $excludedPhotoIDs,
                 store: store,
                 isSending: phase.isSending,
                 onView: { viewedPhotoID = $0 }
             )
-            if alreadySentPhotoCount > 0 {
-                Text(Self.alreadySent(count: alreadySentPhotoCount))
+            if alreadySent > 0 {
+                Text(Self.alreadySent(count: alreadySent))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("community-photos-already-sent")
@@ -403,7 +404,7 @@ private extension CommunityPhotoShareSheet {
         )
     }
 
-    var toolbarContent: some ToolbarContent {
+    func toolbarContent(photos: CommunitySharePhotoTally) -> some ToolbarContent {
         CommunitySendToolbar(
             phase: phase,
             confirmIdentifier: "community-photos-confirm",
@@ -412,7 +413,14 @@ private extension CommunityPhotoShareSheet {
             // that was always going to come back as a failure. Held while the
             // disk has not answered, which is the one window a tap could start
             // a send the next line of this screen is about to forbid.
-            canConfirm: hasSomethingToSend && photos.hasCounted,
+            //
+            // Asked of the *files* once the disk has answered, and of the rows
+            // before then — see ``CommunitySharePhotoTally/hasSomethingToSend``.
+            // A hike somebody saved and has not photographed yet reaches this
+            // screen perfectly legitimately — it is the ordinary state of a
+            // trail waiting to be walked — so the empty case is a sentence
+            // rather than a failure. See ``CommunityFailure/noPhotosToShare``.
+            canConfirm: photos.hasSomethingToSend && photos.hasCounted,
             offersConfirmation: true,
             beforeCancel: nil,
             confirm: { send() }
