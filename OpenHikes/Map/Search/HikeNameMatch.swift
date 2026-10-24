@@ -36,7 +36,7 @@
 
 import Foundation
 
-/// The folding and ordering both name searches share.
+/// The folding and ordering the sheet's hike search ranks by.
 nonisolated enum HikeNameMatch {
     static let foldingOptions: String.CompareOptions = [
         .caseInsensitive, .diacriticInsensitive, .widthInsensitive
@@ -62,8 +62,8 @@ nonisolated enum HikeNameMatch {
 
     /// The indices of `names` that answer `query`, best first.
     ///
-    /// Over indices rather than over the names themselves so a caller can
-    /// carry whatever it was ranking — a `Hike`, an entity, a row — without
+    /// Over indices rather than over the names themselves so the caller can
+    /// carry what it was ranking — ``HikeSearch``'s `Hike`s — without
     /// this knowing what that is.
     static func rankedIndices(of names: [String], matching query: String) -> [Int] {
         let locale = Locale.current

@@ -79,8 +79,27 @@ struct SharedHikeCatalogTests {
         #expect(catalog.hikes(matching: "thumsee").count == 1)
     }
 
-    /// An empty query is the picker before anything has been typed, which is
-    /// every hike rather than none.
+    /// This match is the only one Siri and the pickers make, so each way it
+    /// could change has to fail here (#1029): a word from the middle of a
+    /// name finds it, accents fold, width does not, and the matches keep the
+    /// catalogue's newest-first order. The last two are where the sheet's
+    /// search field differs, so the names are chosen to catch its habits:
+    /// only width folding finds "ＲＩＤＧＥ", and "Ridge Direct" is the older
+    /// ridge name, which putting a prefix first would move ahead.
+    @Test("a word from anywhere in a name finds it, accents folded and width not, in the catalogue's order")
+    func findsByAnyWordInTheCatalogsOrder() {
+        let newest = Date(timeIntervalSince1970: 1_700_000_000)
+        let names = ["Old Ridge Path", "ＲＩＤＧＥ", "Ridge Direct", "Zugspitze über den Stopselzieher"]
+        let catalog = SharedHikeCatalog(hikes: names.enumerated().map { daysAgo, name in
+            Self.summary(name: name, date: newest.addingTimeInterval(-Double(daysAgo) * 24 * 3600))
+        })
+
+        #expect(catalog.hikes(matching: "ridge").map(\.name) == ["Old Ridge Path", "Ridge Direct"])
+        #expect(catalog.hikes(matching: "uber").map(\.name) == ["Zugspitze über den Stopselzieher"])
+    }
+
+    /// A blank query is every hike rather than none. What a picker offers
+    /// before anything has been typed is `suggestions(limit:)`, not this.
     @Test("an empty query matches everything")
     func anEmptyQueryMatchesEverything() {
         let catalog = SharedHikeCatalog(hikes: [Self.summary(), Self.summary()])

@@ -16,10 +16,12 @@
 //  catalogue the app publishes to the App Group, through
 //  ``SharedHikeCatalog/hikes(matching:)``. That is the only name match
 //  ``HikeEntityQuery`` makes, so a test of any other matcher would pass
-//  whatever Siri did (#1029). How the match folds and orders is pinned beside
-//  it, in `SharedHikeCatalogTests`; what is pinned here is what only the app
-//  can get wrong — which name each hike is published under, and which hikes
-//  are published at all.
+//  whatever Siri did (#1029). The match itself is pinned beside it, in
+//  `SharedHikeCatalogTests`: a word from anywhere in a name finds it, case
+//  and accents fold but width does not, the matches come in the catalogue's
+//  order rather than prefix first, and a blank query is every hike. What is
+//  pinned here is what only the app can get wrong — which name each hike is
+//  published under, and which hikes are published at all.
 //
 
 import Foundation
