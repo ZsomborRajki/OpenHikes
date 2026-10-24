@@ -901,9 +901,9 @@ private extension HikeDetailView {
         let moved = tracker.liveTrackerDistance != distance
         // Guarded like `trackerDistance` below — reassigning `@Observable`
         // storage to an equal value still triggers dependent views, so an
-        // unconditional write here would invalidate `ElevationChartView` (and,
-        // previously, `HikeDetailView` itself) on every fix that matched to
-        // the same place too.
+        // unconditional write here would invalidate the graph's moving marks
+        // and the progress row (and, previously, `HikeDetailView` itself) on
+        // every fix that matched to the same place too.
         if moved { tracker.liveTrackerDistance = distance }
         // Don't fight an in-progress manual scrub; the live dot still moves,
         // but the persistent tracker stays under the user's finger.

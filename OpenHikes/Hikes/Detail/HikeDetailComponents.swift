@@ -257,7 +257,8 @@ struct HikeHeaderSymbol: View {
 }
 
 /// Keeps route-tint changes inside the chart wrapper while tracker updates
-/// continue to invalidate only `ElevationChartView`.
+/// continue to invalidate only `ElevationChartView` and the marks it draws
+/// over its plot.
 struct HikeElevationChart: View {
     let hike: Hike
     let profile: RouteProfile

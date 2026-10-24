@@ -23,10 +23,11 @@
 //  twice, once for the area and once for the line. Neither the vectorized
 //  `AreaPlot`/`LinePlot` spellings nor a plainer interpolation made it any
 //  cheaper; both were measured. Traced with `Scripts/render-trace.sh` over the
-//  drag in `AccessibilityLabelUITests`, Swift Charts' own display ran 27 times
-//  for 127.6 ms of body time while the graph was one chart, and 39 times for
-//  2.4 ms once the plot was left alone — a Debug build on a simulator, so the
-//  ratio is the finding rather than the figures.
+//  drag in `AccessibilityLabelUITests`, Swift Charts' own display took
+//  127.6 ms of body time while the graph was one chart, and about 2.5 ms once
+//  the plot was left alone, while keeping up with several times as many of the
+//  drag's touch events — a Debug build on a simulator, so the ratio is the
+//  finding rather than the figures.
 //
 //  The finger moved with the marks because it had to. A chart that carries a
 //  selection and the gesture driving it is laid out again on every drag event,
@@ -440,7 +441,8 @@ final class ElevationScrubSelection {
 
 /// What moves on the graph — the scrub rule, the tracker's point and its
 /// callout, the live position — and the finger that moves it, as two charts
-/// laid over ``ElevationChartPlot``. The one view here that reads the tracker:
+/// laid over ``ElevationChartPlot``. The one layer of the graph that reads the
+/// tracker (``ElevationChartView`` reads it too, but only for what it speaks):
 /// re-evaluated on every scrub step and every fix, and cheap, because neither
 /// of its charts has a series to lay out.
 ///
