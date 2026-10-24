@@ -22,6 +22,28 @@
 //  breaks. Plain indices and the standard library only, because this package
 //  has no dependencies (see *Layout and targets* in AGENTS.md).
 //
+//  ## Every reader of a stored route, too
+//
+//  The phone's own readers of a route take it through
+//  `[RouteCoordinate].trailRuns` in `OpenHikesData` (#1035): the profile's
+//  matching, a place's anchor, a waypoint's track, a photograph's place,
+//  the steepness colours, the surface breakdown, the photo timeline, the
+//  height-spike filter and the map's paused lines. Each used to walk the legs
+//  itself, each with its own index convention, and every bug in the class
+//  came from one of those walks forgetting the rule (#962, #965, #991, #992).
+//  A reader that iterates the runs never sees a paused leg to forget.
+//
+//  ## A lone fix
+//
+//  A point with a pause on both sides of it — a GPX `<trkseg>` of one point,
+//  or either end of a line whose first or last leg was paused — belongs to
+//  no walked run. Readers differ about it on purpose, and this states both
+//  answers instead of choosing one: ``pieces`` keeps it as a piece of one
+//  point, for a reader that treats it as a fix the walk recorded (a
+//  waypoint's track, a photograph's place, the photo timeline), and
+//  ``walkedRuns`` leaves it out, for a reader that needs a leg (matching, an
+//  anchor, a slope, a surface, a line to draw). ``loneFixes`` names them.
+//
 
 /// A line of `pointCount` points cut at its pauses.
 public struct TrailRuns: Sendable, Equatable {
@@ -48,6 +70,15 @@ public struct TrailRuns: Sendable, Equatable {
     /// so nothing is left undrawn and nothing is drawn twice.
     public let walkedRuns: [Range<Int>]
 
+    /// The line cut at every paused leg, in order, as ranges of point
+    /// indices: ``walkedRuns`` with the ``loneFixes`` between them, each a
+    /// piece of one point.
+    ///
+    /// Every point is in exactly one piece, so a reader that numbers the
+    /// stretches of a walk, or treats each as a set of neighbours, reads
+    /// every fix. Empty only for a line of no points.
+    public let pieces: [Range<Int>]
+
     /// The stretches nobody walked, in order, as ranges of point indices:
     /// each run of adjacent ``pausedLegs``, from the point the first leaves to
     /// the point the last arrives at.
@@ -68,23 +99,39 @@ public struct TrailRuns: Sendable, Equatable {
             .map { $0 - 1 }
             .sorted()
         pausedLegs = legs
-        walkedRuns = Self.walkedRuns(pointCount: pointCount, pausedLegs: legs)
+        pieces = Self.pieces(pointCount: pointCount, pausedLegs: legs)
+        walkedRuns = pieces.filter { $0.count > 1 }
         pausedStretches = Self.pausedStretches(pausedLegs: legs)
     }
 
     /// Whether any leg is paused: `false` is a line drawn as one run.
     public var isPaused: Bool { !pausedLegs.isEmpty }
 
-    private static func walkedRuns(pointCount: Int, pausedLegs: [Int]) -> [Range<Int>] {
-        guard pointCount > 1 else { return [] }
-        var runs: [Range<Int>] = []
+    /// Every leg that was walked, in order, each by the index of the point it
+    /// leaves: the legs of the ``walkedRuns``, and every leg not in
+    /// ``pausedLegs``.
+    public var walkedLegs: some Sequence<Int> {
+        walkedRuns.lazy.flatMap { $0.dropLast() }
+    }
+
+    /// The points with a pause on both sides, or on the one side they have,
+    /// in order: each piece of one point. No leg was walked to or from one,
+    /// so a reader that measures legs measures nothing there. A line of one
+    /// point is one of these.
+    public var loneFixes: [Int] {
+        pieces.filter { $0.count == 1 }.map(\.lowerBound)
+    }
+
+    private static func pieces(pointCount: Int, pausedLegs: [Int]) -> [Range<Int>] {
+        guard pointCount > 0 else { return [] }
+        var cut: [Range<Int>] = []
         var start = 0
-        for leg in pausedLegs + [pointCount - 1] {
-            let end = leg + 1
-            if end - start > 1 { runs.append(start..<end) }
-            start = end
+        for leg in pausedLegs {
+            cut.append(start..<(leg + 1))
+            start = leg + 1
         }
-        return runs
+        cut.append(start..<pointCount)
+        return cut
     }
 
     private static func pausedStretches(pausedLegs: [Int]) -> [Range<Int>] {
