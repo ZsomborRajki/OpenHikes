@@ -139,8 +139,11 @@ same device.
     module)
   - a memberwise init hidden by a `private` stored property (write the init out)
 
-  `reorderable()` and `reorderContainer(for:)`, the app's only iOS 27 APIs, sit
-  behind `#if compiler(>=6.4)` so that this job still builds.
+  `reorderable()` and `reorderContainer(for:)`, the app's only iOS 27.0 APIs,
+  sit behind `#if compiler(>=6.4)` so that this job still builds. The one iOS
+  27.1 API, `toolbarVerticalBehavior(_:)`, sits behind
+  `#if canImport(SwiftUI, _version: 8.0.85)`: CI's Xcode 27.0 is Swift 6.4 too,
+  and only the SDK's SwiftUI version (8.0.84 there) tells it apart.
 - **The coverage floor.** `OpenHikes.app` line coverage must stay at or above
   76% (`COVERAGE_FLOOR`). The measurement leaves out the files in
   `Scripts/coverage-exclusions.txt`, which are entirely SwiftUI body code that
@@ -661,10 +664,19 @@ a change to recording, the map, the sheet or the render path; the PR template,
   alert lives in `MapScreenAlerts`, and `MapScreenAlertUITests` checks them,
   except the trail maker's missed-photo alert: it is attached beside them on the
   same contents, because a seventh parameter is past the lint limit.
-- **The primary surface has two shapes, and landscape is not the sheet.**
-  - Landscape ignores detents, so `MapSidePanel` draws the same `MapSheet`
-    beside the map, and `SheetPresentation.layout` settles the differences.
-  - `verticalSizeClass` is read only in `SheetLayoutReader`.
+- **The primary surface has two shapes: a sheet when the window is taller
+  than wide, a panel when it is wider.**
+  - A compact height ignores detents, so `MapSidePanel` draws the same
+    `MapSheet` beside the map, and `SheetPresentation.layout` settles the
+    differences.
+  - A wider window of regular height — an unfolded iPhone Duo, an iPad later —
+    takes the panel too, by choice; there the sheet was a card in the middle
+    of the bottom edge. `SheetLayout(windowSize:isCompactHeight:)` is the rule.
+  - `verticalSizeClass` and the window's size are read only in
+    `SheetLayoutReader`.
+  - The sheet keeps its toolbar across its top (`horizontalSheetToolbar()`).
+    A closed iPhone Duo stands a sheet's toolbar up its side, and the compact
+    detent holds one button of that column.
   - Only the map ignores the horizontal safe area, plus a photo viewer, which
     `MapSidePanel` widens to edge to edge.
   - `SheetPresentation` keeps each pushed screen's state objects until the

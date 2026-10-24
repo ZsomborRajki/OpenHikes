@@ -44,16 +44,18 @@ import SwiftUI
 
 /// The shape the sheet's contents are drawn in.
 ///
-/// Not a cosmetic choice: `.presentationDetents` are honoured only in a
-/// compact-width, regular-height presentation, and iPhone landscape is compact
-/// *height* — so the system presents the sheet full-screen there. For an app
-/// that keeps this sheet up permanently and re-presents it when it is
-/// dismissed, that is not a taller sheet but the whole UI, with the map behind
-/// it and no way back. Landscape gets a side panel instead.
+/// Not a cosmetic choice at a compact height: `.presentationDetents` are not
+/// honoured there, and iPhone landscape is compact *height* — so the system
+/// presents the sheet full-screen. For an app that keeps this sheet up
+/// permanently and re-presents it when it is dismissed, that is not a taller
+/// sheet but the whole UI, with the map behind it and no way back. Landscape
+/// gets a side panel instead, and so does any window wider than tall with
+/// room for the map beside it — see ``init(windowSize:isCompactHeight:)``,
+/// which is the whole rule.
 enum SheetLayout {
-    /// Portrait: an Apple Maps-style detented sheet over the map.
+    /// Taller than wide: an Apple Maps-style detented sheet over the map.
     case bottomSheet
-    /// Compact height: a panel down the leading edge, with the map beside it.
+    /// Wider than tall: a panel down the leading edge, with the map beside it.
     case sidePanel
 }
 
@@ -200,10 +202,11 @@ final class SheetPresentation {
     private(set) var isAtMiddleDetent: Bool
 
     /// Which shape the contents are drawn in. Written by ``SheetLayoutReader``,
-    /// which is where the vertical size class is read — on iPhone, a change to
-    /// it is a rotation. Read by `OpenHikesView`, which is why it is a
-    /// published flag and not an environment value: see that file for what the
-    /// environment read cost when it was in the root view's body.
+    /// which is where the window's shape is read — a change to it is a
+    /// rotation, or an iPhone Duo opening or closing. Read by `OpenHikesView`,
+    /// which is why it is a published flag and not an environment value: see
+    /// that file for what the environment read cost when it was in the root
+    /// view's body.
     var layout: SheetLayout {
         get {
             access(keyPath: \.layout)

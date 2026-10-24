@@ -112,13 +112,16 @@ struct OpenHikesView: View {
     /// Whether the sheet's contents belong in ``MapSidePanel`` rather than in
     /// the sheet: iPhone landscape, where the system ignores
     /// `.presentationDetents` and would present the sheet — the one this view
-    /// keeps up permanently — over the whole map. See ``SheetLayout``.
+    /// keeps up permanently — over the whole map, and any window wider than
+    /// tall with room for the map beside a panel, such as an unfolded iPhone
+    /// Duo. See ``SheetLayout``.
     ///
-    /// The flag, not the environment. `verticalSizeClass` is read in
-    /// ``SheetLayoutReader`` and reaches this body as a coarse published
-    /// property, which changes when the device is turned over and at no other
-    /// time. Reading the environment here instead re-ran this body on every
-    /// scene transition, and the measurement that says so is in that file.
+    /// The flag, not the environment. `verticalSizeClass` and the window's
+    /// size are read in ``SheetLayoutReader`` and reach this body as a coarse
+    /// published property, which changes when the window changes shape and at
+    /// no other time. Reading the environment here instead re-ran this body on
+    /// every scene transition, and the measurement that says so is in that
+    /// file.
     private var usesSidePanel: Bool { sheet.layout == .sidePanel }
 
     /// Whether the side panel has widened over the whole map, for a photo
@@ -401,18 +404,22 @@ struct OpenHikesView: View {
                     #endif
                     .presentationDragIndicator(.visible)
                     .interactiveDismissDisabled()
+                    // On the sheet and not on the panel, which is no
+                    // presentation: the window's bars stay the system's.
+                    .horizontalSheetToolbar()
             }
             // The sheet is the app's primary surface in portrait and must always
             // stay up there. The GPX document picker (a UIKit controller
             // presented from within a detented sheet) tears the sheet down on
             // dismissal — a known SwiftUI issue — so if it ever goes away, bring
-            // it right back. Landscape is the one dismissal that is meant, and
-            // the condition below is what tells the two apart.
+            // it right back. The side panel is the one dismissal that is meant,
+            // and the condition below is what tells the two apart.
             .onChange(of: showSheet) { _, shown in
                 if !shown, !usesSidePanel { showSheet = true }
             }
-            // Rotation takes the sheet down and puts it back up: in landscape
-            // the contents are in ``MapSidePanel`` and there is no sheet.
+            // A rotation, or an iPhone Duo opening, takes the sheet down and
+            // puts it back up: in a wide window the contents are in
+            // ``MapSidePanel`` and there is no sheet.
             //
             // Written into the flag rather than filtered through a `Binding`
             // built here, because such a binding is a new one on every pass of
