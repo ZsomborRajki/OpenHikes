@@ -187,6 +187,57 @@ struct WatchWalkAccumulatorTests {
         #expect(walk.elevationLossMeters == 80)
     }
 
+    /// #1026: what the recording screen is handed for its Climb figure. One
+    /// height is a position rather than a change, so there is nothing to
+    /// report until a second; from then on a level walk reports a zero.
+    @Test("The reported climb waits for a second trusted height")
+    func reportedClimbWaitsForASecondHeight() {
+        var walk = WatchWalkAccumulator()
+        #expect(walk.reportedElevationGainMeters == nil)
+        for step in 0..<2 {
+            walk.accept(
+                latitude: Fixture.latitude + Double(step) * 0.0001,
+                longitude: Fixture.longitude,
+                timestamp: Fixture.start.addingTimeInterval(Double(step) * Fixture.stepSeconds),
+                horizontalAccuracy: 5,
+                elevationMeters: 600
+            )
+            if step == 0 { #expect(walk.reportedElevationGainMeters == nil) }
+        }
+        #expect(walk.reportedElevationGainMeters == 0)
+    }
+
+    @Test("Fixes without a height report no climb at all")
+    func heightlessFixesReportNoClimb() {
+        var walk = WatchWalkAccumulator()
+        for step in 0..<5 {
+            walk.accept(
+                latitude: Fixture.latitude + Double(step) * 0.0001,
+                longitude: Fixture.longitude,
+                timestamp: Fixture.start.addingTimeInterval(Double(step) * Fixture.stepSeconds),
+                horizontalAccuracy: 5
+            )
+        }
+        #expect(walk.fixes.count == 5)
+        #expect(walk.reportedElevationGainMeters == nil)
+    }
+
+    @Test("The reported climb is the counted one once there is a change")
+    func reportedClimbIsTheCountedOne() {
+        var walk = WatchWalkAccumulator()
+        for (step, height) in [600.0, 650, 700, 660].enumerated() {
+            walk.accept(
+                latitude: Fixture.latitude + Double(step) * 0.0001,
+                longitude: Fixture.longitude,
+                timestamp: Fixture.start.addingTimeInterval(Double(step) * Fixture.stepSeconds),
+                horizontalAccuracy: 5,
+                elevationMeters: height
+            )
+        }
+        #expect(walk.reportedElevationGainMeters == walk.elevationGainMeters)
+        #expect(walk.reportedElevationGainMeters == 100)
+    }
+
     @Test("A recording with one fix is a place, and does not become a hike")
     func onePointIsNotWorthSending() {
         var walk = WatchWalkAccumulator()

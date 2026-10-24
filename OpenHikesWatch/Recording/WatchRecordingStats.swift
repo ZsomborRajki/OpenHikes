@@ -28,7 +28,9 @@ import Observation
 final class WatchRecordingStats {
     private(set) var distanceMeters: Double = 0
     private(set) var activeSeconds: TimeInterval = 0
-    private(set) var elevationGainMeters: Double = 0
+    /// `nil` until two fixes have carried a trusted height, so the screen
+    /// draws a dash rather than a climb of zero nobody has measured.
+    private(set) var elevationGainMeters: Double?
     private(set) var averageSpeedMetersPerSecond: Double?
     /// Beats per minute, from the workout session's own live samples. `nil`
     /// until the first one arrives, and on a watch whose sensor is covered by
@@ -53,7 +55,7 @@ final class WatchRecordingStats {
     func reset() {
         distanceMeters = 0
         activeSeconds = 0
-        elevationGainMeters = 0
+        elevationGainMeters = nil
         averageSpeedMetersPerSecond = nil
         heartRateBPM = nil
         fixCount = 0
@@ -68,7 +70,7 @@ final class WatchRecordingStats {
 struct WatchWalkAccumulatorSnapshot: Sendable, Equatable {
     var distanceMeters: Double
     var activeSeconds: TimeInterval
-    var elevationGainMeters: Double
+    var elevationGainMeters: Double?
     var averageSpeedMetersPerSecond: Double?
     var fixCount: Int
 }

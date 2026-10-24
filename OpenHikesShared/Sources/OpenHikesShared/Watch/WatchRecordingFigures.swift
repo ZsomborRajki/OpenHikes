@@ -50,7 +50,7 @@ public struct WatchRecordingFigures: Equatable, Sendable {
 
     public init(
         distanceMeters: Double,
-        elevationGainMeters: Double,
+        elevationGainMeters: Double?,
         averageSpeedMetersPerSecond: Double?,
         heartRateBPM: Double?,
         locale: Locale = .current
@@ -61,13 +61,22 @@ public struct WatchRecordingFigures: Equatable, Sendable {
         )
         climb = Figure(
             title: "Climb",
-            value: WidgetFormat.elevation(meters: elevationGainMeters, locale: locale)
+            value: Self.climbText(elevationGainMeters, locale: locale)
         )
         averageSpeed = Figure(
             title: "Avg Speed",
             value: Self.speedText(averageSpeedMetersPerSecond, locale: locale)
         )
         heartRate = Figure(title: "Heart", value: Self.heartRateText(heartRateBPM))
+    }
+
+    /// A dash until the walk has two trusted heights to compare, as on the
+    /// phone. A level walk that has them reads 0 m, because by then it is a
+    /// measurement; before them, and all through a walk whose heights
+    /// `AltitudePolicy` refuses, there is nothing measured to round to zero.
+    private static func climbText(_ meters: Double?, locale: Locale) -> String {
+        guard let meters else { return missing }
+        return WidgetFormat.elevation(meters: meters, locale: locale)
     }
 
     /// A dash until the walk has both a distance and time spent walking to
