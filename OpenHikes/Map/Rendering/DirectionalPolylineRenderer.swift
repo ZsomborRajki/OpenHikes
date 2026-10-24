@@ -253,8 +253,8 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         context: CGContext
     ) {
         let scale = contentScaleFactor
-        // A paused line is outlined run by run instead, so no border runs
-        // along a pause — see `DirectionalPolylineRenderer+Pauses.swift`.
+        // A paused line is outlined round its walked runs instead, so no
+        // border runs along a pause — see `DirectionalPolylineRenderer+Pauses.swift`.
         if pattern.drawsLine, !strokeRunBorders(mapRect, zoomScale: zoomScale, in: context) {
             borderLine(forScale: scale).draw(mapRect, zoomScale: zoomScale, in: context)
             // The line's own stroke, clearing what it covers. What is left is

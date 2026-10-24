@@ -17,6 +17,7 @@ import MapKit
 @testable import OpenHikes
 import OpenHikesData
 import Testing
+import UIKit
 
 // swiftlint:disable no_magic_numbers
 
@@ -111,6 +112,67 @@ extension DirectionalPolylineRendererTests {
 
         renderer.strokeColor = .clear
         #expect(try Self.drawCentered(renderer, of: line).inkedRows(inColumn: 40) == 0)
+    }
+
+    // MARK: Runs over each other
+
+    /// An out-and-back paused at the top, laid flat: walked out from 0 to
+    /// 180, paused back to 80, and walked on to 250, so the two runs lie over
+    /// each other from 80 to 180. Column 40 is the first run alone, 215 the
+    /// second alone and 130 both.
+    private static let retracedColumns: [Double] = [0, 180, 80, 250]
+
+    /// Drawn across the middle of the canvas, as ``drawCentered(_:of:)``
+    /// draws, but over a rect the canvas's size, as MapKit draws a tile,
+    /// rather than over the line's own rect: a line of constant latitude has
+    /// a rect of no height, and a layer bounded by that covers nothing.
+    private static func drawAsTile(
+        _ renderer: DirectionalPolylineRenderer,
+        of polyline: MKPolyline
+    ) throws -> Canvas {
+        let canvas = try Canvas()
+        let half = Double(canvas.context.height / 2)
+        canvas.context.translateBy(x: 0, y: CGFloat(half))
+        let origin = polyline.boundingMapRect.origin
+        let tile = MKMapRect(x: origin.x, y: origin.y - half, width: Double(canvas.context.width), height: half * 2)
+        renderer.draw(tile, zoomScale: 1, in: canvas.context)
+        return canvas
+    }
+
+    /// MapKit strokes the whole line as one path, which paints the places it
+    /// lies over itself once. Stroked run by run, the way home was laid over
+    /// the way out: a half-alpha line came out three-quarters opaque where
+    /// they meet, a translucent border the same, and the second run's border
+    /// round its start showed through the first run's line, which had been
+    /// cleared of its own border before the second was drawn.
+    ///
+    /// - Parameter borderAlpha: no border, the default opaque one, and a
+    ///   translucent one, whose rings lie over each other where the runs do.
+    @Test(
+        "a translucent line that retraces itself across a pause is drawn as one line where its runs meet",
+        arguments: [nil, 1, 0.5] as [CGFloat?]
+    )
+    func retracedRunsKeepTheLinesAlpha(borderAlpha: CGFloat?) throws {
+        let start = MKMapPoint(CLLocationCoordinate2D(latitude: 47.60, longitude: 12.85))
+        let coordinates = Self.retracedColumns.map { MKMapPoint(x: start.x + $0, y: start.y).coordinate }
+        let line = Self.polyline(coordinates)
+        let renderer = Self.renderer(.solid, on: line)
+        renderer.strokeColor = UIColor.blue.withAlphaComponent(0.5)
+        renderer.lineCap = RouteLinePattern.solid.lineCap
+        renderer.lineJoin = .round
+        renderer.borderColor = borderAlpha.map { CGColor(gray: 0, alpha: $0) }
+        Self.cut(renderer, coordinates)
+
+        let canvas = try Self.drawAsTile(renderer, of: line)
+        let middle = canvas.context.height / 2
+        let alone = canvas.pixel(x: 40, row: middle)
+        #expect(abs(Int(alone[3]) - 128) <= 8, "one run alone has to be the line's own alpha, \(alone)")
+        let differing = (0..<canvas.context.height).filter { row in
+            canvas.pixel(x: 130, row: row) != canvas.pixel(x: 40, row: row)
+        }
+        #expect(differing.isEmpty, "rows \(differing) are drawn otherwise where the runs lie over each other")
+        let showing = (8...242).filter { canvas.pixel(x: $0, row: middle) != alone }
+        #expect(showing.isEmpty, "columns \(showing) along the line's middle show something other than the line")
     }
 
     @Test("handing the line no paused legs strokes it whole again")

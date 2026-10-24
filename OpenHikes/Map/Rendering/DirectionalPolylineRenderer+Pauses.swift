@@ -24,6 +24,14 @@
 //  paused legs. Cut rather than cleared, because clearing the paused leg out
 //  of a drawn line would also cut a notch wherever a walked run crosses it.
 //
+//  The runs are still one line where they meet each other, though. An
+//  out-and-back paused at the top is two runs along the same trail, and a
+//  walk that resumes across its own path is two runs through one place, so
+//  each pass — every border, then every clear, then every line — is put down
+//  as one stroke of the whole line would put it: a translucent colour is
+//  painted once where runs lie over each other, and no run's border shows
+//  through another run's line.
+//
 //  A route with no pause takes none of this: its line is still MapKit's own
 //  stroke of the whole overlay.
 //
@@ -89,46 +97,124 @@ nonisolated extension DirectionalPolylineRenderer {
         runState.withLockUnchecked { $0.built = nil }
     }
 
-    /// The line's stroke: MapKit's own over the whole overlay, or each walked
-    /// run's copy when the line was paused.
+    /// The line's stroke: MapKit's own over the whole overlay, or the walked
+    /// runs' copies when the line was paused, put down as one stroke of them
+    /// all — see ``composite(_:alpha:in:zoomScale:context:_:)``.
     func strokeLine(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
         guard isCut else {
             super.draw(mapRect, zoomScale: zoomScale, in: context)
             return
         }
-        let reach = reachRect(mapRect, zoomScale: zoomScale)
-        for run in runLines(forScale: contentScaleFactor) where run.polyline.boundingMapRect.intersects(reach) {
-            drawInPlace(of: run.polyline, context: context) {
-                run.line.draw(mapRect, zoomScale: zoomScale, in: context)
-            }
+        let reached = runLines(reaching: mapRect, zoomScale: zoomScale)
+        let lineAlpha = strokeColor?.cgColor.alpha ?? 0
+        composite(reached, alpha: lineAlpha, in: mapRect, zoomScale: zoomScale, context: context) { run in
+            run.line.draw(mapRect, zoomScale: zoomScale, in: context)
         }
     }
 
     /// The border under the line, with the line's own stroke cleared back out
-    /// of it — see `drawBorder` — run by run when the line was paused.
-    /// Returns `false` for a line with no pause, whose border is drawn whole.
+    /// of it — see `drawBorder` — round every walked run when the line was
+    /// paused. Returns `false` for a line with no pause, whose border is drawn
+    /// whole.
+    ///
+    /// Every run's border goes down before any run's line is cleared out of
+    /// it, as the whole line's border goes down before the whole line is.
+    /// Outlined and cleared run by run, a later run's border landed inside
+    /// the middle already cleared out of an earlier run it crossed or
+    /// retraced, and showed through a translucent line there.
     func strokeRunBorders(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) -> Bool {
         guard isCut else { return false }
-        let reach = reachRect(mapRect, zoomScale: zoomScale)
-        for run in runLines(forScale: contentScaleFactor) where run.polyline.boundingMapRect.intersects(reach) {
+        let reached = runLines(reaching: mapRect, zoomScale: zoomScale)
+        let borderAlpha = borderColor?.alpha ?? 0
+        composite(reached, alpha: borderAlpha, in: mapRect, zoomScale: zoomScale, context: context) { run in
+            run.border?.draw(mapRect, zoomScale: zoomScale, in: context)
+        }
+        context.saveGState()
+        context.setBlendMode(.clear)
+        for run in reached {
             drawInPlace(of: run.polyline, context: context) {
-                run.border?.draw(mapRect, zoomScale: zoomScale, in: context)
-                context.saveGState()
-                context.setBlendMode(.clear)
                 run.line.draw(mapRect, zoomScale: zoomScale, in: context)
-                context.restoreGState()
             }
         }
+        context.restoreGState()
         return true
     }
 
-    /// `mapRect` grown by the widest thing a run strokes, its border, so a run
-    /// whose edge reaches into the rect is not skipped with the runs that
-    /// are nowhere near it.
-    private func reachRect(_ mapRect: MKMapRect, zoomScale: MKZoomScale) -> MKMapRect {
+    /// One pass over `runs`, each run's share of it drawn by `pass` once the
+    /// context is moved to that run, composited as one stroke of them all
+    /// would be: where runs lie over each other, a translucent colour is
+    /// painted once. An out-and-back paused at the top is two runs along the
+    /// same trail, and laid one over the other its line came out darker
+    /// there than the alpha the hiker chose — darker than MapKit, which
+    /// strokes the whole line as one path, ever drew it.
+    ///
+    /// So each run replaces what the runs before it put down rather than
+    /// being laid over it, `.copy` as the coloured stretches are, inside a
+    /// layer of their own so that it replaces nothing of the map's (see
+    /// `isolationBounds`), and the layer is laid over the map as one. Only
+    /// for a translucent pass with two runs or more within reach: an opaque
+    /// one paints the same either way, and the layer is a bitmap made on
+    /// every draw, so it is bounded by the runs it holds.
+    ///
+    /// Not one `MKMultiPolylineRenderer` holding every run, which composites
+    /// the same way by itself: it costs what the border's copy is MapKit's
+    /// own line to avoid (see ``borderLine``). Measured on a simulator, a
+    /// 20,000-point walk in two runs seen whole on a 512-pixel tile took it
+    /// 14.2 ms against 1.3 ms for the copies; cut and translucent, layer and
+    /// all, the line drew no slower than it does whole.
+    private func composite(
+        _ runs: [RunLine],
+        alpha: CGFloat,
+        in mapRect: MKMapRect,
+        zoomScale: MKZoomScale,
+        context: CGContext,
+        _ pass: (RunLine) -> Void
+    ) {
+        let layer = layerBounds(of: runs, alpha: alpha, in: mapRect, zoomScale: zoomScale)
+        if let layer {
+            context.beginTransparencyLayer(in: layer, auxiliaryInfo: nil)
+            context.saveGState()
+            context.setBlendMode(.copy)
+        }
+        for run in runs {
+            drawInPlace(of: run.polyline, context: context) { pass(run) }
+        }
+        if layer != nil {
+            context.restoreGState()
+            context.endTransparencyLayer()
+        }
+    }
+
+    /// Where ``composite(_:alpha:in:zoomScale:context:_:)`` puts a pass's
+    /// layer, or `nil` where the pass needs none.
+    private func layerBounds(
+        of runs: [RunLine],
+        alpha: CGFloat,
+        in mapRect: MKMapRect,
+        zoomScale: MKZoomScale
+    ) -> CGRect? {
+        guard runs.count > 1, alpha > 0, alpha < 1 else { return nil }
+        let reach = runReach(zoomScale: zoomScale)
+        let bounds = runs.reduce(MKMapRect.null) { $0.union($1.polyline.boundingMapRect) }
+            .insetBy(dx: -reach, dy: -reach)
+            .intersection(mapRect)
+        guard !bounds.isNull, !bounds.isEmpty else { return nil }
+        return rect(for: bounds)
+    }
+
+    /// The runs' copies whose strokes can reach into `mapRect`, leaving out
+    /// the runs that are nowhere near it.
+    private func runLines(reaching mapRect: MKMapRect, zoomScale: MKZoomScale) -> [RunLine] {
+        let reach = runReach(zoomScale: zoomScale)
+        let near = mapRect.insetBy(dx: -reach, dy: -reach)
+        return runLines(forScale: contentScaleFactor).filter { $0.polyline.boundingMapRect.intersects(near) }
+    }
+
+    /// How far the widest thing a run strokes, its border, reaches, in map
+    /// points at `zoomScale`.
+    private func runReach(zoomScale: MKZoomScale) -> Double {
         let width = Double(lineWidth)
-        let reach = (width + RouteBorder.width(forLineWidth: width) * 2) * Double(contentScaleFactor / zoomScale)
-        return mapRect.insetBy(dx: -reach, dy: -reach)
+        return (width + RouteBorder.width(forLineWidth: width) * 2) * Double(contentScaleFactor / zoomScale)
     }
 
     /// The runs' copies for a renderer at `scale` — none for a line that

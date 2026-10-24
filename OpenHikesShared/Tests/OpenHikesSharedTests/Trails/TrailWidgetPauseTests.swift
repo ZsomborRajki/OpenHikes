@@ -14,6 +14,7 @@
 import CoreGraphics
 import Foundation
 @testable import OpenHikesShared
+import SwiftUI
 import Testing
 
 // swiftlint:disable no_magic_numbers
@@ -159,6 +160,82 @@ struct TrailWidgetPauseTests {
         let pieces = TrailStroke.Pieces(points: points, pauseIndices: [2, 3])
         #expect(pieces.walked == [Array(points[0...1]), Array(points[3...5])])
         #expect(pieces.paused == [Array(points[1...3])])
+    }
+
+    // MARK: The stroke, drawn
+
+    /// An out-and-back paused at the top, in a canvas's own points along its
+    /// row 20: walked out from 10 to 90, paused a few points back, and walked
+    /// home to 30, so the two runs lie over each other from 30 to 85.
+    private static let retrace = [10.0, 90, 85, 30].map { CGPoint(x: $0, y: 20) }
+
+    /// What ``TrailStroke`` draws: a 100 × 40 bitmap's premultiplied RGBA
+    /// bytes, top row first.
+    private struct Drawn {
+        let bytes: [UInt8]
+        let width: Int
+
+        func pixel(x: Int, row: Int) -> [UInt8] {
+            let start = (row * width + x) * 4
+            return Array(bytes[start..<start + 4])
+        }
+    }
+
+    @MainActor
+    private static func draw(_ pieces: TrailStroke.Pieces, casing: Bool) throws -> Drawn {
+        let width = 100, height = 40
+        let renderer = ImageRenderer(
+            content: Canvas { context, _ in
+                TrailStroke.draw(
+                    pieces,
+                    liveFixPoint: nil,
+                    tint: Color(red: 0, green: 0, blue: 1).opacity(0.5),
+                    lineWidth: 6,
+                    casing: casing,
+                    in: &context
+                )
+            }
+            .frame(width: CGFloat(width), height: CGFloat(height))
+        )
+        renderer.scale = 1
+        let image = try #require(renderer.cgImage)
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        let copied = bytes.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(
+                data: buffer.baseAddress,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        try #require(copied)
+        return Drawn(bytes: bytes, width: width)
+    }
+
+    /// Stroked run by run, the way home was laid over the way out and a
+    /// translucent tint came out darker there — a half-alpha line at three
+    /// quarters, its casing nearly opaque — than the single line, which
+    /// paints where it crosses itself once, ever drew it.
+    @Test("where two walked runs lie over each other, a translucent line is painted once", arguments: [false, true])
+    @MainActor
+    func overlappingRunsKeepTheTintsAlpha(casing: Bool) throws {
+        let paused = try Self.draw(TrailStroke.Pieces(points: Self.retrace, pauseIndices: [2]), casing: casing)
+        let whole = try Self.draw(TrailStroke.Pieces(points: Self.retrace, pauseIndices: []), casing: casing)
+        let close = { (one: [UInt8], other: [UInt8]) in
+            zip(one, other).allSatisfy { abs(Int($0) - Int($1)) <= 2 }
+        }
+        // 20 is the way out alone, 60 both ways.
+        let overlap = paused.pixel(x: 60, row: 20)
+        let single = whole.pixel(x: 60, row: 20)
+        let alone = paused.pixel(x: 20, row: 20)
+        #expect(single[3] > 0, "the single line has to draw for the comparison to mean anything")
+        #expect(close(overlap, single), "\(overlap) where the single line drew \(single)")
+        #expect(close(overlap, alone), "\(overlap) where one run alone drew \(alone)")
     }
 }
 
