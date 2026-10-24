@@ -18,7 +18,6 @@
 //  all" is called, and what order the results read best in.
 //
 
-import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData

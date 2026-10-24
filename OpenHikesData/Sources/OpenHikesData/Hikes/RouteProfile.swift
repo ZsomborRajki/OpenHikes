@@ -165,7 +165,8 @@ nonisolated public struct RouteProfile: Sendable {
         var routeDistances: [Double] = []
         var routeSamples: [ElevationSample] = []
         var routePauseDistances: [Double] = []
-        // The route's own reading of its pauses, the one every reader takes.
+        // The paused legs as ``TrailRuns`` reads them, which the other readers
+        // #1035 moved take too.
         let routePausedSegments = Set(route.trailRuns.pausedLegs)
         var elevations = ElevationAccumulator()
         var routeClimbMarks: [ClimbMark] = []
