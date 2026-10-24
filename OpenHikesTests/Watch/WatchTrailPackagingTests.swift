@@ -140,7 +140,9 @@ struct WatchTrailPackagingTests {
     /// refuse without refusing the walking too.
     @Test("both ends of a pause cross, and the watch is told which leg it is")
     func pauseEndsSurviveDecimation() async throws {
-        try #require(!decimatedIndices(count: Fixture.pausedRoute.count, maxPoints: WatchTrailPackage.pointBudget)
+        // The stride the package takes: what the pause's two ends leave of
+        // the budget.
+        try #require(!decimatedIndices(count: Fixture.pausedRoute.count, maxPoints: WatchTrailPackage.pointBudget - 2)
             .contains(Fixture.pausedAt))
         let package = try #require(await WatchTrailPackaging.package(from: Fixture.pausedInput))
 
