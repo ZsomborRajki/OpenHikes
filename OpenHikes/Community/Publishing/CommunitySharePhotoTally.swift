@@ -55,11 +55,11 @@ import OpenHikesData
 ///
 /// Built from the list a form has already read rather than from the hike,
 /// because that list is a sort: ``CommunityPublisher/shareablePhotos(of:)``
-/// ends in ``Hike/orderedPhotos``, and every form that asked for a tally used
-/// to ask for that list again with it — five times a body pass on the share
-/// form and eight on the contribution form, on every keystroke in the notes.
-/// A form reads the list once per pass and hands the same array to the strip,
-/// the gallery and this. See AGENTS.md *Render isolation, in practice*.
+/// ends in ``Hike/orderedPhotos``. A tally that went back to the hike would
+/// sort the photographs again each time a form built one, and the share form
+/// builds one in a body its notes field re-runs on every keystroke. A form
+/// reads the list once per pass and hands the same array to the strip, the
+/// gallery and this. See AGENTS.md *Render isolation, in practice*.
 ///
 /// It is still built fresh on each pass, never stored, for the reason it
 /// always was: a stored copy would be a second answer able to go stale
