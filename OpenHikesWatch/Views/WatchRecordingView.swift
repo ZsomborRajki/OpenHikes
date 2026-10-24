@@ -365,7 +365,7 @@ private struct PhoneRecordingPanel: View {
                 // Hedged the way the phone's own screen hedges it: a hiker who
                 // stepped off the path a minute ago must not be told flatly
                 // that they are still on it.
-                Text(recording.isTrailNameStale ? "Last on \(trail)" : trail)
+                Text(recording.isTrailNameStale ? String(localized: "Last on \(trail)") : trail)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -418,7 +418,7 @@ private struct PhoneRecordingPanel: View {
 
     private func button(
         _ action: WatchRecordingCommand.Action,
-        _ label: String,
+        _ label: LocalizedStringKey,
         _ symbol: String,
         _ tint: Color
     ) -> some View {

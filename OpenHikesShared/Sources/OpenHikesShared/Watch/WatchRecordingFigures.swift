@@ -3,8 +3,8 @@
 //  OpenHikesShared
 //
 //  The four captioned figures under the clock on the watch's recording
-//  screen, worded and formatted here rather than in the view that lays them
-//  out.
+//  screen, captioned and formatted here rather than in the view that lays
+//  them out.
 //
 //  ## A caption and its number are one fact
 //
@@ -21,9 +21,10 @@
 //  ## Why here
 //
 //  *The watch app* in the repository instructions: there is no watch test
-//  bundle, so the words and the rounding live in this package, where
-//  `swift test` reaches them, and the watch's `RecordingFigures` only lays
-//  them out. The caption is also what VoiceOver reads the figure by, so the
+//  bundle, so which caption each figure takes, and the rounding, live in
+//  this package, where `swift test` reaches them, and the watch target
+//  only words the captions and lays them out. The caption is also what
+//  VoiceOver reads the figure by, so the
 //  two cannot part company either.
 //
 //  ## A heart rate has an age
@@ -53,8 +54,23 @@ public struct WatchRecordingFigures: Equatable, Sendable {
     /// One labelled number: the caption drawn under it, which is also its
     /// accessibility label, and the value.
     public struct Figure: Equatable, Sendable {
-        public let title: String
+        public let caption: Caption
         public let value: String
+    }
+
+    /// Which caption a figure is drawn under and read out by.
+    ///
+    /// The words themselves are the watch target's, in
+    /// `WatchRecordingFigures+Caption.swift`, because only an app target's
+    /// build extracts strings into its String Catalog (*Layout and targets*
+    /// in the repository instructions). A literal written here was drawn but
+    /// reached no catalog at all, so `sync-string-catalogs.sh --check` could
+    /// never notice it missing (#1028).
+    public enum Caption: Equatable, Sendable {
+        case distance
+        case climb
+        case averageSpeed
+        case heartRate
     }
 
     /// An em dash rather than a zero for a figure there is nothing to say
@@ -72,15 +88,15 @@ public struct WatchRecordingFigures: Equatable, Sendable {
         locale: Locale = .current
     ) {
         distance = Figure(
-            title: "Distance",
+            caption: .distance,
             value: WidgetFormat.length(meters: distanceMeters, locale: locale)
         )
         climb = Figure(
-            title: "Climb",
+            caption: .climb,
             value: Self.climbText(elevationGainMeters, locale: locale)
         )
         averageSpeed = Figure(
-            title: "Avg Speed",
+            caption: .averageSpeed,
             value: Self.speedText(averageSpeedMetersPerSecond, locale: locale)
         )
     }
@@ -129,7 +145,7 @@ public struct WatchRecordingFigures: Equatable, Sendable {
     /// The heart figure as it reads at `now`, for the last reading and the
     /// time it was sampled.
     public static func heartRate(bpm: Double?, sampledAt: Date?, now: Date) -> Figure {
-        Figure(title: "Heart", value: heartRateText(bpm, sampledAt: sampledAt, now: now))
+        Figure(caption: .heartRate, value: heartRateText(bpm, sampledAt: sampledAt, now: now))
     }
 
     /// A dash rather than a zero while there is no reading: before HealthKit

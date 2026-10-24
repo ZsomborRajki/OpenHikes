@@ -161,7 +161,7 @@ struct WatchGlanceView: View {
         }
     }
 
-    private var title: String {
+    private var title: LocalizedStringKey {
         switch display {
         case .idle: "OpenHikes"
         case .recording: "Recording"
@@ -169,7 +169,7 @@ struct WatchGlanceView: View {
         }
     }
 
-    private var label: String {
+    private var label: LocalizedStringKey {
         switch display {
         case .idle: "OpenHikes"
         case let .recording(distance, _): "Recording, \(distance)"

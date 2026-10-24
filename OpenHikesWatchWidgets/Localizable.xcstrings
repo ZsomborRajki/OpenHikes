@@ -4,6 +4,18 @@
     "OpenHikes" : {
 
     },
+    "Paused" : {
+
+    },
+    "Paused, %@" : {
+
+    },
+    "Recording" : {
+
+    },
+    "Recording, %@" : {
+
+    },
     "Start a recording, or see the one under way." : {
 
     },

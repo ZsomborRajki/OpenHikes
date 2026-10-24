@@ -280,7 +280,10 @@ final class PhoneLink: NSObject {
     ///
     /// One path out for every failure, so the screen has exactly one thing to
     /// handle: an outcome always arrives, and it always carries a state.
-    private func deliverRefusal(of command: WatchRecordingCommand, saying reason: String) {
+    /// The reason is a resource rather than a `String`, so the four written
+    /// in this file reach the watch's String Catalog (#1028). The phone's own
+    /// refusals arrive already worded by the phone.
+    private func deliverRefusal(of command: WatchRecordingCommand, saying reason: LocalizedStringResource) {
         onDelivery?(
             .commandOutcome(
                 WatchCommandOutcome(
@@ -289,7 +292,7 @@ final class PhoneLink: NSObject {
                     // phone, so it must not claim to know what its recorder
                     // is doing.
                     recording: .idle(),
-                    refusal: reason
+                    refusal: String(localized: reason)
                 )
             )
         )

@@ -112,8 +112,10 @@ func trailMapContent(
     // The titles are hidden rather than left off: a marker needs a name for
     // the accessibility tree and a watch screen has no room to print one. Two
     // words beside two 8 pt marks cost more of the map than the marks do.
+    // Typed as keys: a bare literal inside this builder was never extracted
+    // into the String Catalog (#1028).
     if let start = coordinates.first {
-        Annotation("Start", coordinate: start) {
+        Annotation("Start" as LocalizedStringKey, coordinate: start) {
             Circle()
                 .fill(tint)
                 .frame(width: 8, height: 8)
@@ -122,7 +124,7 @@ func trailMapContent(
         .annotationTitles(.hidden)
     }
     if let finish = coordinates.last, coordinates.count > 1 {
-        Annotation("Finish", coordinate: finish) {
+        Annotation("Finish" as LocalizedStringKey, coordinate: finish) {
             Image(systemName: "flag.checkered")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.white)
@@ -409,7 +411,7 @@ private struct TrailMapFull: View {
             }
         }
 
-        var label: String {
+        var label: LocalizedStringKey {
             switch self {
             case .off: "Follow your location"
             case .north: "Turn the map as you hike"
@@ -459,7 +461,7 @@ private struct TrailMapFull: View {
 
     private func button(
         symbol: String,
-        label: String,
+        label: LocalizedStringKey,
         tint: Color,
         action: @escaping () -> Void
     ) -> some View {

@@ -51,11 +51,13 @@ struct WatchRecordingFiguresTests {
 
     /// The bug this suite was written for: the watch drew "5.0 km/h" under
     /// "Pace". The phone's recording screen captions the same average
-    /// "Avg Speed", and the value is the one formatter both devices use.
+    /// "Avg Speed", and the value is the one formatter both devices use. The
+    /// word itself is the watch target's, where its String Catalog lists it
+    /// — see ``WatchRecordingFigures/Caption``.
     @Test("the average is captioned as a speed, as the phone captions it", arguments: [metric, imperial])
     func averageIsCaptionedAsASpeed(locale: Locale) {
         let speed = Self.figures(in: locale).averageSpeed
-        #expect(speed.title == "Avg Speed")
+        #expect(speed.caption == .averageSpeed)
         #expect(speed.value == WidgetFormat.speed(metersPerSecond: Self.hourlyFiveKilometers, locale: locale))
     }
 
@@ -72,11 +74,11 @@ struct WatchRecordingFiguresTests {
     func distanceAndClimbShareTheWidgetFormat() {
         let figures = Self.figures(in: Self.imperial)
         #expect(figures.distance == .init(
-            title: "Distance",
+            caption: .distance,
             value: WidgetFormat.length(meters: 5000, locale: Self.imperial)
         ))
         #expect(figures.climb == .init(
-            title: "Climb",
+            caption: .climb,
             value: WidgetFormat.elevation(meters: 342, locale: Self.imperial)
         ))
     }
@@ -95,7 +97,7 @@ struct WatchRecordingFiguresTests {
     /// phone draws a dash for the same climb.
     @Test("a climb with no change measured yet is a dash")
     func unmeasuredClimbIsADash() {
-        #expect(Self.figures(in: Self.metric, climb: nil).climb == .init(title: "Climb", value: "—"))
+        #expect(Self.figures(in: Self.metric, climb: nil).climb == .init(caption: .climb, value: "—"))
     }
 
     /// The other half: a level walk that has been measured did climb
@@ -114,7 +116,7 @@ struct WatchRecordingFiguresTests {
 
     @Test("a heart rate is whole beats")
     func heartRateIsWholeBeats() {
-        #expect(Self.heartRate(111.6) == .init(title: "Heart", value: "112"))
+        #expect(Self.heartRate(111.6) == .init(caption: .heartRate, value: "112"))
     }
 
     /// #1024: the builder's most recent sample never goes back to nothing, so
