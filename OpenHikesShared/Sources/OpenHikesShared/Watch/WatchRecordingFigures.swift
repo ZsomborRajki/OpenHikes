@@ -111,10 +111,19 @@ public struct WatchRecordingFigures: Equatable, Sendable {
     /// When the heart figure has to be drawn: at the sample, and again the
     /// moment it goes stale, which no callback announces. Handed to an
     /// explicit timeline, the first date is in the past, so the screen's
-    /// first pass is judged at the sample and the second at its expiry.
+    /// first pass is judged at the sample and the next at its expiry.
+    ///
+    /// It ends on a date that never comes, because an explicit timeline
+    /// never draws its last date. Measured on a Mac stand-in: a schedule of a
+    /// second ago and half a second ahead drew once, at a second ago, and
+    /// never again, and one wholly in the past drew the date before its last,
+    /// where the documentation says the last. With the expiry last, a reading
+    /// was judged at its sample time for as long as it stayed up. Followed by
+    /// `distantFuture`, the expiry is drawn on time and stays drawn, under the
+    /// documented behavior and the measured one alike.
     public static func heartRateRedraws(sampledAt: Date?) -> [Date] {
         guard let sampledAt else { return [] }
-        return [sampledAt, sampledAt.addingTimeInterval(heartRateFreshness)]
+        return [sampledAt, sampledAt.addingTimeInterval(heartRateFreshness), .distantFuture]
     }
 
     /// The heart figure as it reads at `now`, for the last reading and the

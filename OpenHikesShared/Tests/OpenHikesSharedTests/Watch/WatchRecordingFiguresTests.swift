@@ -143,16 +143,15 @@ struct WatchRecordingFiguresTests {
     }
 
     /// The screen is drawn again at the expiry, which no new sample would
-    /// prompt, and the figure judged there is the dash.
+    /// prompt, and the figure judged there is the dash. The expiry is not the
+    /// last date: an explicit timeline never draws that one, so a schedule
+    /// ending on the expiry left the reading judged at its sample time.
     @Test("the screen is redrawn the moment a reading goes stale")
-    func redrawsAtTheExpiry() throws {
+    func redrawsAtTheExpiry() {
         let sampledAt = Self.now
-        let redraws = WatchRecordingFigures.heartRateRedraws(sampledAt: sampledAt)
-        #expect(redraws.first == sampledAt)
-        let expiry = try #require(redraws.last)
-        #expect(expiry == sampledAt.addingTimeInterval(WatchRecordingFigures.heartRateFreshness))
-        let atExpiry = WatchRecordingFigures.heartRate(bpm: 112, sampledAt: sampledAt, now: expiry)
-        #expect(atExpiry.value == "—")
+        let expiry = sampledAt.addingTimeInterval(WatchRecordingFigures.heartRateFreshness)
+        #expect(WatchRecordingFigures.heartRateRedraws(sampledAt: sampledAt) == [sampledAt, expiry, .distantFuture])
+        #expect(WatchRecordingFigures.heartRate(bpm: 112, sampledAt: sampledAt, now: expiry).value == "—")
         #expect(WatchRecordingFigures.heartRateRedraws(sampledAt: nil).isEmpty)
     }
 }
