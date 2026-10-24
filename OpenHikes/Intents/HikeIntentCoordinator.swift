@@ -388,9 +388,10 @@ extension HikeIntentCoordinator {
     /// Every finished hike, newest first, as reports.
     ///
     /// The whole store rather than a page of it. A hiker's library is tens or
-    /// hundreds of rows, Spotlight wants all of them, and the entity query's
-    /// name match reads a folded title per row either way — so paging would
-    /// buy a second code path and no work saved.
+    /// hundreds of rows, and everything this read feeds wants all of them:
+    /// Spotlight indexes every hike, and the App Group catalogue that the
+    /// entity query matches names against is a copy of the whole library — so
+    /// paging would buy a second code path and no work saved.
     ///
     /// Read off the main actor, in a context of its own, through the same
     /// seam as ``readLibrary()``. Every report reads its route for the clock,
@@ -446,23 +447,6 @@ extension HikeIntentCoordinator {
             uniquingKeysWith: { first, _ in first }
         )
         return ids.compactMap { byID[$0] }
-    }
-
-    /// The finished hikes whose name answers `query`, best match first.
-    ///
-    /// Ranked by ``HikeNameMatch``, which is the same rule the sheet's search
-    /// field uses — so a trail findable by typing is findable by saying it.
-    /// The predicate cannot do this work: the match folds case, diacritics and
-    /// width, and it is ``Hike/displayTitle`` rather than a stored column,
-    /// since a renamed hike keeps its imported `title` and the hiker has only
-    /// ever seen the new name.
-    func finishedHikes(matchingName query: String) async throws(HikeIntentFailure) -> [FinishedHikeReport] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
-        let hikes = try await finishedHikes()
-        return HikeNameMatch
-            .rankedIndices(of: hikes.map(\.title), matching: trimmed)
-            .map { hikes[$0] }
     }
 
     /// One named hike, or the failure that says it is gone.

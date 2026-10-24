@@ -7,20 +7,27 @@
 //  ## Why it is its own type
 //
 //  ``HikeSearch`` ranks the hiker's own hikes against what they type into the
-//  sheet. ``HikeEntityQuery`` resolves the name they *say* to Siri, or type
-//  into Spotlight. Those are the same question about the same names, and two
-//  implementations of it would drift — one gaining a folding option, or an
-//  anchoring rule, that the other never heard about. A hiker who can find
-//  "Zugspitze" by typing would then fail to find it by saying it, which reads
-//  as Siri being broken rather than as two functions disagreeing.
+//  sheet, and it is mostly a cache: when to rank again, and what to keep. This
+//  is the ranking it caches — the rule itself, apart from the bookkeeping.
+//
+//  ## What does not use it
+//
+//  Siri, the shortcut picker and the widget's configuration picker resolve a
+//  name through ``HikeEntityQuery``, which matches against the App Group
+//  catalogue with `SharedHikeCatalog.hikes(matching:)`. That lives in
+//  OpenHikesShared, which cannot see this type, and it is deliberately the
+//  weaker match: case and diacritics fold but width does not, a blank query is
+//  every hike rather than none, and the order is the catalogue's, newest
+//  first, rather than prefix first. Making the two one rule would mean moving
+//  this type into that package, which it could do, since it needs only
+//  Foundation.
 //
 //  ## The rule
 //
 //  Case, diacritics and width are all folded away, because none of them is
 //  something a hiker is choosing when they name or look for a trail: "Thumsee"
-//  and "thumsee" are the same walk, and so are "Rosengarten" and "rosengarten"
-//  — and a name typed on a German keyboard and one dictated to Siri differ in
-//  exactly these ways.
+//  and "thumsee" are the same walk, and so are "Zürichberg" and "Zurichberg",
+//  which is what a keyboard without an umlaut types.
 //
 //  `contains` rather than `hasPrefix`, with a prefix *ranked above* a mere
 //  containment. Anchoring outright would lose "Ridge" for a hike called
@@ -46,8 +53,8 @@ nonisolated enum HikeNameMatch {
     /// Lower is better, and the two ranks are the whole of the ordering:
     /// a name that *starts* with the query before one that merely contains it,
     /// then alphabetically among equals. Returned as a number rather than a
-    /// `Bool` so the one caller that sorts and the one that filters read the
-    /// same rule.
+    /// `Bool` because it is both the filter and the sort key, so the two
+    /// cannot read different rules.
     static func rank(nameKey: String, queryKey: String) -> Int? {
         guard nameKey.contains(queryKey) else { return nil }
         return nameKey.hasPrefix(queryKey) ? 0 : 1

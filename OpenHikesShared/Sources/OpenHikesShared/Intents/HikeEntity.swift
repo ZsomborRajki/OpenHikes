@@ -21,8 +21,13 @@
 //  A renamed hike stores its new name in `customName` and leaves `title` at
 //  whatever the import called it. ``HikeSearch``'s header argues this at
 //  length: ranking on `title` makes a renamed trail unfindable by the only
-//  name the hiker has ever seen. Siri has exactly the same problem, and the
-//  matching itself is ``HikeNameMatch`` so the two cannot drift.
+//  name the hiker has ever seen. Siri has exactly the same problem, so the
+//  catalogue it reads carries the display name.
+//
+//  The matching is not the search field's. `HikeNameMatch` lives in the app,
+//  where this package cannot reach it, so ``HikeEntityQuery`` matches with
+//  ``SharedHikeCatalog/hikes(matching:)``, a containment deliberately weaker
+//  than the sheet's ranking. Its documentation lists the differences.
 //
 //  ## Spotlight
 //
