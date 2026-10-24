@@ -5,7 +5,7 @@
 //  The order a hiker's own photographs are offered in and sent in, asked of
 //  both places that read it: the strip both send forms draw
 //  (``CommunityPublisher/shareablePhotos(of:)``) and the list both uploads
-//  take (``CommunityPublisher/selectedPhotos(of:excluding:)``).
+//  take (``CommunityPublisher/selectedPhotos(from:excluding:onThisDevice:)``).
 //
 //  The rule is anchored photographs first, each half in the order it was
 //  taken, with a tie broken the way ``Hike/orderedPhotos`` breaks one. It is
@@ -63,7 +63,15 @@ struct CommunityPhotoOrderTests {
     }
 
     private static func upload(of hike: Hike, excluding excluded: Set<UUID> = []) -> [UUID] {
-        CommunityPublisher.selectedPhotos(of: hike, excluding: excluded).map(\.id)
+        // Every row taken to have its file here, because the order is what is
+        // asked and these rows carry no pixels — which rows have files is
+        // `CommunitySharePhotoCountTests`'s question.
+        let selected = CommunityPublisher.selectedPhotos(
+            from: CommunityPublisher.shareablePhotos(of: hike),
+            excluding: excluded,
+            onThisDevice: Set(hike.photos.map(\.id))
+        )
+        return selected.map(\.id)
     }
 
     /// Attaches a photograph whose pixels really are on this device for each

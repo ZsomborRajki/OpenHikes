@@ -254,7 +254,7 @@ struct CommunityPhotoPublisherTests {
     /// The exclusion the form's strip produces, applied before the cap the way
     /// a hike share applies it — the rule
     /// ``CommunitySharePhotoChoiceTests`` pins for the other publisher, asked
-    /// here because the two share ``CommunityPublisher/selectedPhotos(of:excluding:)``
+    /// here because the two share ``CommunityPublisher/sendablePhotos(of:excluding:store:)``
     /// and a contribution that filtered afterwards would be a second answer to
     /// one question.
     @Test("a struck-off photograph does not go")

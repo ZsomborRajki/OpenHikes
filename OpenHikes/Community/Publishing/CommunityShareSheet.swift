@@ -94,12 +94,12 @@ struct CommunityShareSheet: View {
     /// The photograph the full-screen gallery was opened at, while it is
     /// pushed. See ``CommunitySharePhotoViewer``.
     @State private var viewedPhotoID: UUID?
-    /// How many photographs this device can send, once the disk has been
-    /// asked. `nil` until then. Kept and written here rather than inside
+    /// Which of this hike's photographs this device holds the files of, once
+    /// the disk has been asked. Kept and written here rather than inside
     /// ``CommunitySharePhotoTally`` because it is the answer to a `.task`,
     /// which is this view's to own — see
-    /// ``SwiftUI/View/countsSendablePhotos(of:excluding:store:into:)``.
-    @State private var sendablePhotoCount: Int?
+    /// ``SwiftUI/View/findsPhotosOnThisDevice(of:store:into:)``.
+    @State private var photoFiles: CommunityPhotoFiles = .unasked
     /// Whether this hike may be published at all, once the library has been
     /// asked. `nil` until then, and the Share button waits for it: offering a
     /// send that the answer is about to withdraw is worse than offering it a
@@ -222,6 +222,7 @@ struct CommunityShareSheet: View {
                 $viewedPhotoID,
                 photos: offered,
                 excluded: $excludedPhotoIDs,
+                files: photoFiles,
                 store: store,
                 isSending: phase.isSending
             )
@@ -265,12 +266,7 @@ struct CommunityShareSheet: View {
                     store: store
                 )
             }
-            .countsSendablePhotos(
-                of: hike,
-                excluding: excludedPhotoIDs,
-                store: store,
-                into: $sendablePhotoCount
-            )
+            .findsPhotosOnThisDevice(of: hike, store: store, into: $photoFiles)
             // Asked here as well as on the hike's own screen, and not merely
             // trusted from there: the button is drawn from the two cheap rules
             // alone, and the retread check needs a fetch and a pass over every
@@ -301,7 +297,7 @@ private extension CommunityShareSheet {
         let photos = CommunitySharePhotoTally(
             offered: offered,
             excluding: excludedPhotoIDs,
-            sendableCount: sendablePhotoCount
+            files: photoFiles
         )
         return Section {
             // Editable, where it used to be a `LabeledContent` reporting the
@@ -396,6 +392,7 @@ private extension CommunityShareSheet {
         CommunitySharePhotoStrip(
             photos: offered,
             excluded: $excludedPhotoIDs,
+            files: photoFiles,
             store: store,
             isSending: phase.isSending,
             onView: { viewedPhotoID = $0 }

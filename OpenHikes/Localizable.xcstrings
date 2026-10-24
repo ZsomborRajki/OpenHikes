@@ -76,6 +76,16 @@
     "%@, already sent, not shared again" : {
 
     },
+    "%@, already sent, over the limit of %lld, not shared again" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, already sent, over the limit of %2$lld, not shared again"
+          }
+        }
+      }
+    },
     "%@, already sent, shared again" : {
 
     },
@@ -116,6 +126,16 @@
     },
     "%@, not shared" : {
 
+    },
+    "%@, over the limit of %lld, not shared" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, over the limit of %2$lld, not shared"
+          }
+        }
+      }
     },
     "%@, place only, no photo in the file" : {
 
@@ -527,6 +547,9 @@
 
     },
     "Already Sent · Left Out" : {
+
+    },
+    "Already Sent · Over the Limit" : {
 
     },
     "Already Sent · Sharing" : {
@@ -1734,6 +1757,9 @@
 
     },
     "Other hikers can find this hike now." : {
+
+    },
+    "Over the Limit" : {
 
     },
     "Parking" : {

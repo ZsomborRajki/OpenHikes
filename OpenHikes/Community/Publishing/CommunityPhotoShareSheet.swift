@@ -85,12 +85,12 @@ struct CommunityPhotoShareSheet: View {
     /// The photograph the full-screen gallery was opened at, while it is
     /// pushed. See ``CommunitySharePhotoViewer``.
     @State private var viewedPhotoID: UUID?
-    /// How many photographs this device can send, once the disk has been
-    /// asked. `nil` until then. Kept and written here rather than inside
+    /// Which of this hike's photographs this device holds the files of, once
+    /// the disk has been asked. Kept and written here rather than inside
     /// ``CommunitySharePhotoTally`` because it is the answer to a `.task`,
     /// which is this view's to own — see
-    /// ``SwiftUI/View/countsSendablePhotos(of:excluding:store:into:)``.
-    @State private var sendablePhotoCount: Int?
+    /// ``SwiftUI/View/findsPhotosOnThisDevice(of:store:into:)``.
+    @State private var photoFiles: CommunityPhotoFiles = .unasked
 
     /// - Parameter hike: The walk the photographs came from, and the only
     ///   thing this screen reads a `@Model` for.
@@ -177,7 +177,7 @@ struct CommunityPhotoShareSheet: View {
         let photos = CommunitySharePhotoTally(
             offered: offered,
             excluding: excludedPhotoIDs,
-            sendableCount: sendablePhotoCount
+            files: photoFiles
         )
         NavigationStack {
             Form { formContent(offered: offered, photos: photos) }
@@ -191,15 +191,11 @@ struct CommunityPhotoShareSheet: View {
                     $viewedPhotoID,
                     photos: offered,
                     excluded: $excludedPhotoIDs,
+                    files: photoFiles,
                     store: store,
                     isSending: phase.isSending
                 )
-                .countsSendablePhotos(
-                    of: hike,
-                    excluding: excludedPhotoIDs,
-                    store: store,
-                    into: $sendablePhotoCount
-                )
+                .findsPhotosOnThisDevice(of: hike, store: store, into: $photoFiles)
         }
     }
 
@@ -278,6 +274,7 @@ private extension CommunityPhotoShareSheet {
             CommunitySharePhotoStrip(
                 photos: offered,
                 excluded: $excludedPhotoIDs,
+                files: photoFiles,
                 store: store,
                 isSending: phase.isSending,
                 onView: { viewedPhotoID = $0 }

@@ -13,8 +13,9 @@
 //  behind any of it. A hiker was told eight photographs went with the hike and
 //  sent a submission with no assets at all.
 //
-//  So each of these computes the form's number the way the form does — through
-//  `CommunityPublisher.sendablePhotoCount` — and asserts it against
+//  So each of these computes the form's number the way the form does — the
+//  disk's answer from `CommunityPublisher.photosOnThisDevice`, counted by
+//  `CommunitySharePhotoTally` — and asserts it against
 //  `draft.photoFileURLs.count` from a real share, never against a count the
 //  test worked out for itself.
 //
@@ -62,10 +63,16 @@ struct CommunitySharePhotoCountTests {
         _ hike: Hike,
         in sandbox: PhotoStoreSandbox
     ) async throws -> Shared {
-        let formCount = await CommunityPublisher.sendablePhotoCount(
-            of: hike,
+        let offered = CommunityPublisher.shareablePhotos(of: hike)
+        let onThisDevice = await CommunityPublisher.photosOnThisDevice(
+            among: offered,
             store: sandbox.store
         )
+        let formCount = CommunitySharePhotoTally(
+            offered: offered,
+            excluding: [],
+            files: .answered(onThisDevice)
+        ).count
         let transport = StubCommunityTransport()
         let outcome = await CommunityPublisher.share(
             hike,
@@ -157,6 +164,38 @@ struct CommunitySharePhotoCountTests {
         let shared = try await share(hike, in: sandbox)
 
         #expect(shared.draft.photoFileURLs.count == CommunityPublisher.maximumPhotos)
+        #expect(shared.formCount == shared.draft.photoFileURLs.count)
+    }
+
+    /// The cap is spent on photographs this device can send (#1031).
+    ///
+    /// Four rows with nothing behind them lead the strip, because they were
+    /// taken first, and a full cap of pictures that are here follows them. The
+    /// four at the front must not hold slots that send nothing: the last four
+    /// pictures with files here go in their place, and the form says so.
+    @Test("rows with no file here do not take a place under the cap")
+    func missingFilesDoNotHoldPlacesUnderTheCap() async throws {
+        let context = try Fixture.modelContext()
+        let sandbox = PhotoStoreSandbox()
+        let hike = Fixture.hike(in: context)
+        let spot = CLLocationCoordinate2D(latitude: 47.6, longitude: 12.8)
+        for index in 0..<4 {
+            hike.photos.append(
+                HikePhoto(
+                    capturedAt: Date(timeIntervalSince1970: 1_699_990_000 + Double(index) * 60),
+                    coordinate: spot
+                )
+            )
+        }
+        let cap = CommunityPublisher.maximumPhotos
+        await addStoredPhotos(cap, to: hike, in: sandbox)
+
+        let shared = try await share(hike, in: sandbox)
+
+        #expect(shared.draft.photoFileURLs.count == cap, "a full cap of files, not four short")
+        let lastFour = (cap - 4..<cap).map { Date(timeIntervalSince1970: 1_700_000_000 + Double($0) * 60) }
+        let taken = Set(shared.draft.photoPins.map(\.capturedAt))
+        #expect(lastFour.allSatisfy(taken.contains), "the four past the rows with no file went")
         #expect(shared.formCount == shared.draft.photoFileURLs.count)
     }
 }

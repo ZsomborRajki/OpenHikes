@@ -148,11 +148,16 @@ struct CommunitySharePhotoChoiceTests {
         let photos = await addStoredPhotos(4, to: hike, in: sandbox)
         let excluded: Set<UUID> = [photos[0].id, photos[3].id]
 
-        let formCount = await CommunityPublisher.sendablePhotoCount(
-            of: hike,
-            excludingPhotos: excluded,
+        let offered = CommunityPublisher.shareablePhotos(of: hike)
+        let onThisDevice = await CommunityPublisher.photosOnThisDevice(
+            among: offered,
             store: sandbox.store
         )
+        let formCount = CommunitySharePhotoTally(
+            offered: offered,
+            excluding: excluded,
+            files: .answered(onThisDevice)
+        ).count
         let draft = try await share(hike, excluding: excluded, in: sandbox)
 
         #expect(formCount == draft.photoFileURLs.count)

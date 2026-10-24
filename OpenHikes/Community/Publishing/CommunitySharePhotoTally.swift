@@ -21,11 +21,12 @@
 //
 //  A photo row mirrors between a hiker's devices and its pixels never do, so
 //  the iPad shows a full strip for a walk recorded on the phone and can send
-//  none of it — and the upload drops exactly those, silently. Until the disk
-//  has answered, the capped row count is the best guess available; after that
-//  ``count`` is the number that will really go. The difference between the two
-//  is what ``unsendableCount`` names, and what the form says out loud rather
-//  than leaving a hiker to read a shrunken number as the app having lost their
+//  none of it — and the upload leaves exactly those out, before the cap so
+//  that they hold no place under it (#1031). Until the disk has answered, the
+//  capped row count is the best guess available; after that ``count`` is the
+//  number that will really go. The ticked pictures with no file here are what
+//  ``unsendableCount`` names, and what the form says out loud rather than
+//  leaving a hiker to read a shrunken number as the app having lost their
 //  pictures.
 //
 //  ## Its own file, and a suite
@@ -39,7 +40,7 @@
 //
 //  ## The cap is applied after the exclusions
 //
-//  Deliberately, and it is why ``includedCount`` is what comes in here rather
+//  Deliberately, and it is why ``includedCount`` is counted here rather
 //  than a raw total: striking a picture off should let the next one *in*
 //  rather than simply shorten the upload, which is the difference between
 //  choosing a full ``CommunityPublisher/maximumPhotos`` and getting one fewer
@@ -68,8 +69,9 @@ struct CommunitySharePhotoTally {
     /// The hiker's own photographs still ticked, before the cap and the disk
     /// have had their say.
     let includedCount: Int
-    /// What the disk answered, or `nil` while it has not been asked yet.
-    let sendableCount: Int?
+    /// How many of those this device holds the files of, or `nil` while the
+    /// disk has not been asked yet.
+    let reachableCount: Int?
 
     /// - Parameters:
     ///   - offered: What the strip draws, as
@@ -80,32 +82,37 @@ struct CommunitySharePhotoTally {
     ///     differs from ``CommunityPublisher/ownPhotos(of:)``, and a count does
     ///     not see order.
     ///   - excluded: The ones struck off the strip, by id.
-    ///   - sendableCount: What ``CommunityPublisher/sendablePhotoCount(of:excludingPhotos:store:)``
-    ///     last answered, or `nil` until it has.
-    init(offered: [HikePhoto], excluding excluded: Set<UUID>, sendableCount: Int?) {
+    ///   - files: What ``CommunityPublisher/photosOnThisDevice(among:store:)``
+    ///     answered, if it has.
+    init(offered: [HikePhoto], excluding excluded: Set<UUID>, files: CommunityPhotoFiles) {
         includedCount = offered.count(where: { !excluded.contains($0.id) })
-        self.sendableCount = sendableCount
+        reachableCount = switch files {
+        case .answered(let here): offered.count(where: { !excluded.contains($0.id) && here.contains($0.id) })
+        case .unasked: nil
+        }
     }
 
     /// The number to put in front of the hiker.
-    var count: Int { sendableCount ?? capped }
+    ///
+    /// The cap applied to the pictures with a file here, which is the order
+    /// ``CommunityPublisher/selectedPhotos(from:excluding:onThisDevice:)``
+    /// applies them in, so this is the length of the list that goes.
+    var count: Int { min(reachableCount ?? includedCount, CommunityPublisher.maximumPhotos) }
 
     /// How many of the ticked pictures are on another device, and so are not
     /// going anywhere from here. Zero until the disk has answered, because
     /// until then there is nothing to subtract.
     var unsendableCount: Int {
-        guard let sendableCount else { return 0 }
-        return capped - sendableCount
+        guard let reachableCount else { return 0 }
+        return includedCount - reachableCount
     }
 
     /// Whether the disk has answered. A form holds its Send button until it
     /// has: the count it would send on is a guess before this is true.
-    var hasCounted: Bool { sendableCount != nil }
+    var hasCounted: Bool { reachableCount != nil }
 
     /// Whether there is anything at all to send.
     var hasSomethingToSend: Bool { count > 0 }
-
-    private var capped: Int { min(includedCount, CommunityPublisher.maximumPhotos) }
 
     /// What to say about the pictures that are staying behind.
     ///
@@ -120,5 +127,81 @@ struct CommunitySharePhotoTally {
             added on, so they can’t be shared from here.
             """
         )
+    }
+}
+
+/// Which of a hike's photographs this device holds the files of, as far as a
+/// send form knows.
+///
+/// A case for not having asked rather than an optional set, because the two
+/// mean different things to every reader: before the disk answers, a form
+/// takes every row to have its file and holds its Send button; an empty
+/// answer means none of them does.
+nonisolated enum CommunityPhotoFiles: Equatable, Sendable {
+    /// The ids of the photographs whose files are here — what
+    /// ``CommunityPublisher/photosOnThisDevice(among:store:)`` answered.
+    case answered(Set<UUID>)
+    /// The disk has not answered yet.
+    case unasked
+}
+
+/// Which tiles in a send form's strip go, and which the cap holds back.
+///
+/// The strip used to draw two states, ticked or struck off, and a ticked tile
+/// past the cap was drawn and read exactly like one that goes (#1031). Which
+/// tiles those are moves as the hiker strikes pictures off, because an
+/// exclusion lets the next one in, so it is worked out from the upload's own
+/// rule — ``CommunityPublisher/selectedPhotos(from:excluding:onThisDevice:)``
+/// — rather than from a second spelling of it.
+///
+/// A ticked tile with no file here is never over the limit, since it holds no
+/// place under it. It reads as ``Choice/shared`` here and is drawn as the
+/// picture it cannot show, which says so itself
+/// (``PhotoUnavailability/notOnThisDevice``) — the form's footnote counts it.
+nonisolated struct CommunitySharePhotoChoices: Sendable {
+    /// What a tile's tick says.
+    enum Choice: Equatable, Sendable {
+        /// Ticked, with a file here, and past the cap: it will not go.
+        case overTheLimit
+        /// Ticked, and the cap has room for it.
+        case shared
+        /// Struck off by the hiker, or by the form for a picture already sent.
+        case struckOff
+    }
+
+    private let excluded: Set<UUID>
+    private let overTheLimit: Set<UUID>
+    /// How many of the tiles go.
+    let sharedCount: Int
+
+    /// - Parameters:
+    ///   - photos: The strip's list, in its order.
+    ///   - excluded: The ones struck off, by id.
+    ///   - files: What the disk answered, if it has. Until then every row is
+    ///     taken to have its file, which is the estimate
+    ///     ``CommunitySharePhotoTally`` makes too.
+    init(photos: [HikePhoto], excluding excluded: Set<UUID>, files: CommunityPhotoFiles) {
+        let here: Set<UUID> = switch files {
+        case .answered(let ids): ids
+        case .unasked: Set(photos.map(\.id))
+        }
+        let going = CommunityPublisher.selectedPhotos(
+            from: photos,
+            excluding: excluded,
+            onThisDevice: here
+        )
+        let goingIDs = Set(going.map(\.id))
+        self.excluded = excluded
+        sharedCount = going.count
+        overTheLimit = Set(
+            photos.lazy
+                .filter { !excluded.contains($0.id) && here.contains($0.id) && !goingIDs.contains($0.id) }
+                .map(\.id)
+        )
+    }
+
+    func choice(for photo: HikePhoto) -> Choice {
+        if excluded.contains(photo.id) { return .struckOff }
+        return overTheLimit.contains(photo.id) ? .overTheLimit : .shared
     }
 }

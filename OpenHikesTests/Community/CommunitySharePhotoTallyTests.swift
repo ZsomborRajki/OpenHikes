@@ -16,7 +16,7 @@
 //  suite that runs in CI, which is most of the point of extracting it.
 //
 //  Nothing here touches the disk. That is the shape of the type rather than a
-//  shortcut: `sendableCount` is an *input*, because the answer comes from a
+//  shortcut: `files` is an *input*, because the answer comes from a
 //  `.task` the view owns, and every case below is about what the tally does
 //  with an answer it has been given — or with not having one yet.
 //
@@ -33,11 +33,15 @@ import Testing
 struct CommunitySharePhotoTallyTests {
     /// A tally built the way both forms build one: from the strip's list,
     /// read once.
-    private func tally(of hike: Hike, excluding excluded: Set<UUID>, sendableCount: Int?) -> CommunitySharePhotoTally {
+    private func tally(
+        of hike: Hike,
+        excluding excluded: Set<UUID>,
+        files: CommunityPhotoFiles
+    ) -> CommunitySharePhotoTally {
         CommunitySharePhotoTally(
             offered: CommunityPublisher.shareablePhotos(of: hike),
             excluding: excluded,
-            sendableCount: sendableCount
+            files: files
         )
     }
 
@@ -50,7 +54,7 @@ struct CommunitySharePhotoTallyTests {
         let hike = Fixture.hike(in: context)
         for _ in 0..<3 { hike.photos.append(HikePhoto()) }
 
-        let tally = tally(of: hike, excluding: [], sendableCount: nil)
+        let tally = tally(of: hike, excluding: [], files: .unasked)
 
         #expect(tally.includedCount == 3)
         #expect(tally.count == 3)
@@ -65,9 +69,14 @@ struct CommunitySharePhotoTallyTests {
     func theDisksAnswerWins() throws {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
-        for _ in 0..<5 { hike.photos.append(HikePhoto()) }
+        let photos = (0..<5).map { _ in HikePhoto() }
+        for photo in photos { hike.photos.append(photo) }
 
-        let tally = tally(of: hike, excluding: [], sendableCount: 2)
+        let tally = tally(
+            of: hike,
+            excluding: [],
+            files: .answered([photos[0].id, photos[1].id])
+        )
 
         #expect(tally.count == 2)
         #expect(tally.hasCounted)
@@ -88,7 +97,7 @@ struct CommunitySharePhotoTallyTests {
         let tally = tally(
             of: hike,
             excluding: [photos[0].id, photos[1].id],
-            sendableCount: nil
+            files: .unasked
         )
 
         #expect(tally.includedCount == 2)
@@ -105,7 +114,7 @@ struct CommunitySharePhotoTallyTests {
         let photos = (0..<(CommunityPublisher.maximumPhotos + 4)).map { _ in HikePhoto() }
         for photo in photos { hike.photos.append(photo) }
 
-        let full = tally(of: hike, excluding: [], sendableCount: nil)
+        let full = tally(of: hike, excluding: [], files: .unasked)
         #expect(full.includedCount == CommunityPublisher.maximumPhotos + 4)
         #expect(full.count == CommunityPublisher.maximumPhotos)
 
@@ -114,9 +123,27 @@ struct CommunitySharePhotoTallyTests {
         let trimmed = tally(
             of: hike,
             excluding: [photos[0].id],
-            sendableCount: nil
+            files: .unasked
         )
         #expect(trimmed.count == CommunityPublisher.maximumPhotos)
+    }
+
+    /// More pictures with files here than the cap, behind rows with none: the
+    /// rows with no file are not what fills the cap, so the count is a full
+    /// one and the footnote names every ticked picture that is elsewhere
+    /// (#1031).
+    @Test("the cap is applied to the pictures with a file here")
+    func theCapComesAfterTheFiles() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let elsewhere = (0..<4).map { _ in HikePhoto() }
+        let here = (0..<CommunityPublisher.maximumPhotos + 2).map { _ in HikePhoto() }
+        for photo in elsewhere + here { hike.photos.append(photo) }
+
+        let tally = tally(of: hike, excluding: [], files: .answered(Set(here.map(\.id))))
+
+        #expect(tally.count == CommunityPublisher.maximumPhotos)
+        #expect(tally.unsendableCount == 4)
     }
 
     /// A hike saved from the community carries its author's pictures too, and
@@ -132,7 +159,7 @@ struct CommunitySharePhotoTallyTests {
         // picture behind it at all.
         hike.photos.append(HikePhoto(isPlaceOnly: true))
 
-        let tally = tally(of: hike, excluding: [], sendableCount: nil)
+        let tally = tally(of: hike, excluding: [], files: .unasked)
 
         #expect(tally.includedCount == 1)
     }
@@ -145,13 +172,13 @@ struct CommunitySharePhotoTallyTests {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
 
-        let unasked = tally(of: hike, excluding: [], sendableCount: nil)
+        let unasked = tally(of: hike, excluding: [], files: .unasked)
         #expect(!unasked.hasSomethingToSend)
 
         // And the case that only the files can report: rows the disk cannot
         // back, on the device that is not the one they were added on.
         hike.photos.append(HikePhoto())
-        let asked = tally(of: hike, excluding: [], sendableCount: 0)
+        let asked = tally(of: hike, excluding: [], files: .answered([]))
         #expect(!asked.hasSomethingToSend)
         #expect(asked.unsendableCount == 1)
     }
@@ -195,14 +222,19 @@ struct CommunitySharePhotoTallyTests {
         #expect(offered.count == own.count)
 
         let excluded: Set<UUID> = [sent.id, anchored.id]
-        let fromStrip = CommunitySharePhotoTally(offered: offered, excluding: excluded, sendableCount: nil)
-        let fromOwn = CommunitySharePhotoTally(offered: own, excluding: excluded, sendableCount: nil)
+        let fromStrip = CommunitySharePhotoTally(offered: offered, excluding: excluded, files: .unasked)
+        let fromOwn = CommunitySharePhotoTally(offered: own, excluding: excluded, files: .unasked)
         #expect(fromStrip.includedCount == 2)
         #expect(fromStrip.includedCount == fromOwn.includedCount)
         #expect(fromStrip.count == fromOwn.count)
         #expect(fromStrip.hasSomethingToSend == fromOwn.hasSomethingToSend)
 
-        let answered = CommunitySharePhotoTally(offered: offered, excluding: excluded, sendableCount: 1)
+        // One of the two still ticked has its file here.
+        let answered = CommunitySharePhotoTally(
+            offered: offered,
+            excluding: excluded,
+            files: .answered([unanchored.id])
+        )
         #expect(answered.count == 1)
         #expect(answered.unsendableCount == 1)
 
