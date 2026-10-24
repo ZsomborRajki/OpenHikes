@@ -296,6 +296,11 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
 nonisolated enum LibraryTotalsSweep {
     /// The two fetches the sweep makes. The app only ever uses ``store``; the
     /// seam is there so a test can make either one fail.
+    ///
+    /// The intents' read of the finished hikes makes the first of them through
+    /// here too — see `HikeIntentCoordinator.finishedHikes()` — so a failing
+    /// `hikes` fails that read as well, and a suite can see which thread it ran
+    /// on.
     struct Reads: Sendable {
         var hikes: @Sendable (ModelContext) throws -> [Hike]
         var walks: @Sendable (ModelContext) throws -> [HikeWalk]
