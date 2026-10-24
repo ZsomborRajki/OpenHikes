@@ -179,22 +179,47 @@ final class WatchModel {
 
     /// A trail screen came on screen and claims the live position feed.
     ///
-    /// The feed starts now only when there is a trail to match against and no
-    /// recording is already running it; otherwise the claim waits for the
+    /// The feed starts now only when the watch holds this screen's trail and
+    /// no recording is already running it; otherwise the claim waits for the
     /// trail to land or the recording to stop. See
     /// ``WatchRecorder/startFollowingFeed()`` for what the feed does and does
     /// not buy.
     ///
-    /// - Parameter screen: the screen claiming, the same when it leaves.
-    func startFollowing(for screen: UUID) {
+    /// - Parameters:
+    ///   - hikeID: the trail the screen shows. Another trail held here is not
+    ///     one it can show a position on, so it starts nothing.
+    ///   - screen: the screen claiming, the same when it leaves.
+    func startFollowing(_ hikeID: UUID, for screen: UUID) {
         let recording = recorder.phase.isActive
-        applyToReceiver(followClaim.screenAppeared(screen, holdingTrail: trail != nil, recording: recording))
+        applyToReceiver(
+            followClaim.screenAppeared(screen, asking: hikeID, holding: followableHikeID, recording: recording)
+        )
     }
 
     /// A trail screen left. Its claim goes with it whether or not anything is
     /// recording; a recording keeps the receiver, which is its own.
     func stopFollowing(for screen: UUID) {
         applyToReceiver(followClaim.screenLeft(screen, recording: recorder.phase.isActive))
+    }
+
+    /// The app left the screen or came back to it. A map still pushed when it
+    /// leaves gets no `onDisappear`, and the receiver would go on delivering
+    /// behind it — see ``WatchFollowClaim``.
+    func sceneMoved(onScreen: Bool) {
+        let recording = recorder.phase.isActive
+        applyToReceiver(
+            onScreen
+                ? followClaim.appReturned(holding: followableHikeID, recording: recording)
+                : followClaim.appLeftScreen(recording: recording)
+        )
+    }
+
+    /// The trail a map can show a position on: the one held, once it has a
+    /// line to match against. The same test ``TrailMapScreen`` draws by, so
+    /// the claim never starts the feed under its waiting view.
+    private var followableHikeID: UUID? {
+        guard let trail, trail.isDrawable else { return nil }
+        return trail.hikeID
     }
 
     private func applyToReceiver(_ change: WatchFollowClaim.FeedChange) {
@@ -204,7 +229,7 @@ final class WatchModel {
         // the receiver for a follow would hand ``advanceFollow(with:)``
         // whatever the simulator happens to be standing on and overwrite it,
         // which is a screenshot of a hiker a continent off their trail. Here
-        // rather than in ``startFollowing(for:)`` alone, so a Stop or a trail
+        // rather than in ``startFollowing(_:for:)`` alone, so a Stop or a trail
         // landing on a seeded screen cannot start it either.
         if WatchLaunchEnvironment.configuration.isUITesting { return }
         #endif
@@ -300,7 +325,7 @@ final class WatchModel {
         // recording owned it and stopping took it down, and a trail screen
         // left open behind it would freeze the hiker's dot where they
         // pressed Stop. A screen already gone asks for nothing.
-        applyToReceiver(followClaim.recordingStopped(holdingTrail: trail != nil))
+        applyToReceiver(followClaim.recordingStopped(holding: followableHikeID))
     }
 
     /// Tries again to write a walk that Stop could not. A success goes
@@ -379,9 +404,9 @@ final class WatchModel {
             store.save(package)
             // The screen that asked for this trail may have opened with
             // nothing to match against, which is every first launch: its
-            // ``startFollowing(for:)`` had no trail to start a feed for. This
-            // is that moment arriving.
-            applyToReceiver(followClaim.trailArrived(recording: recorder.phase.isActive))
+            // ``startFollowing(_:for:)`` had no trail of its own to start a
+            // feed for. This is that moment arriving, if this is its trail.
+            applyToReceiver(followClaim.trailArrived(holding: followableHikeID, recording: recorder.phase.isActive))
         case .walkKept(let sessionID):
             Task { [weak self, store] in
                 let queued = await store.walks.remove(sessionID)
