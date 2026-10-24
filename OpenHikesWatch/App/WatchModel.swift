@@ -335,14 +335,17 @@ final class WatchModel {
     ///
     /// The hook rather than the tail of ``stopRecording()``, for the reason
     /// ``walkQueued(_:queued:)`` is one: a failed session stops the recorder
-    /// without passing through here, and a trail map open behind it went on
-    /// showing the reading from the moment it failed (issue #1021).
+    /// without passing through ``stopRecording()``, and a trail map open
+    /// behind it went on showing the reading from the moment it failed
+    /// (issue #1021).
     private func recordingEnded() {
         // A walk along a trail leaves the hiker where they finished it, which
         // is where they are. Nothing is cleared — but the receiver is: the
         // recording owned it and stopping took it down, and a trail screen
-        // left open behind it would freeze the hiker's dot where the
-        // recording ended. A screen already gone asks for nothing.
+        // left open behind it would freeze its trail figures where the
+        // recording ended. A screen already gone asks for nothing, and one
+        // behind the watch face waits for the app to come back to it — see
+        // ``sceneMoved(onScreen:)``.
         applyToReceiver(followClaim.recordingStopped(holding: trail?.followableHikeID))
     }
 

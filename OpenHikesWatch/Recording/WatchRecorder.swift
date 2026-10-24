@@ -160,9 +160,9 @@ final class WatchRecorder: NSObject {
     /// For the reason ``onWalkQueued`` is a callback: ``stop()`` is not always
     /// the hiker's. A trail map still open under the recording was drawing
     /// from this receiver, and only the model knows whether one is still
-    /// asking. Told from here, a failed workout session gives that map its
-    /// feed back the way a Stop does; told only after the hiker's Stop, the
-    /// map's figures froze where the session failed (issue #1021).
+    /// asking. Told from here, a failed workout session reaches the decision
+    /// a Stop does; told only after the hiker's Stop, the map's figures froze
+    /// where the session failed (issue #1021).
     var onRecordingEnded: (@MainActor () -> Void)?
 
     @ObservationIgnored private let store: WatchStore
@@ -828,8 +828,8 @@ nonisolated extension WatchRecorder: HKWorkoutSessionDelegate {
             // a detail — but the walk so far is on the accumulator and stop()
             // will keep it. Stopping is therefore better than carrying on
             // into a suspension nobody would be told about. The walk reaches
-            // the phone through ``onWalkQueued``, and an open trail map gets
-            // its feed back through ``onRecordingEnded``, as for a Stop.
+            // the phone through ``onWalkQueued``, and the model hears through
+            // ``onRecordingEnded`` that the receiver is down, as for a Stop.
             Task { await self.stop() }
         }
     }
