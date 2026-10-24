@@ -19,18 +19,24 @@ struct WatchRecordingFiguresTests {
     private static let imperial = Locale(identifier: "en_US")
     /// Five kilometres in an hour: 5 km/h, which as a pace would be 12 min/km.
     private static let hourlyFiveKilometers = 5000.0 / 3600
+    /// The screen's clock. A fixed instant rather than `.now`, so a reading's
+    /// age is exactly what each test says it is.
+    private static let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
 
     private static func figures(
         in locale: Locale,
         climb: Double? = 342,
         speed: Double? = hourlyFiveKilometers,
-        heartRate: Double? = 112
+        heartRate: Double? = 112,
+        heartRateAge: TimeInterval? = 5
     ) -> WatchRecordingFigures {
         WatchRecordingFigures(
             distanceMeters: 5000,
             elevationGainMeters: climb,
             averageSpeedMetersPerSecond: speed,
             heartRateBPM: heartRate,
+            heartRateSampledAt: heartRateAge.map { now.addingTimeInterval(-$0) },
+            now: now,
             locale: locale
         )
     }
@@ -102,5 +108,52 @@ struct WatchRecordingFiguresTests {
     @Test("a heart rate is whole beats")
     func heartRateIsWholeBeats() {
         #expect(Self.figures(in: Self.metric, heartRate: 111.6).heartRate == .init(title: "Heart", value: "112"))
+    }
+
+    /// #1024: the builder's most recent sample never goes back to nothing, so
+    /// the last reading stayed up as the live one after the sensor stopped.
+    @Test("a reading older than the window is no reading", arguments: [
+        WatchRecordingFigures.heartRateFreshness,
+        WatchRecordingFigures.heartRateFreshness + 1,
+        600,
+    ])
+    func staleHeartRateIsADash(age: TimeInterval) {
+        #expect(Self.figures(in: Self.metric, heartRateAge: age).heartRate.value == "—")
+    }
+
+    @Test("a reading inside the window shows its beats", arguments: [
+        0,
+        WatchRecordingFigures.heartRateFreshness - 1,
+    ])
+    func freshHeartRateShowsItsBeats(age: TimeInterval) {
+        #expect(Self.figures(in: Self.metric, heartRateAge: age).heartRate.value == "112")
+    }
+
+    /// Nothing says how old it is, so nothing says it is current.
+    @Test("a reading with no sample time is no reading")
+    func undatedHeartRateIsADash() {
+        #expect(Self.figures(in: Self.metric, heartRateAge: nil).heartRate.value == "—")
+    }
+
+    /// The screen is drawn again at the expiry, which no new sample would
+    /// prompt, and the figure judged there is the dash.
+    @Test("the screen is redrawn the moment a reading goes stale")
+    func redrawsAtTheExpiry() throws {
+        let sampledAt = Self.now
+        let redraws = WatchRecordingFigures.heartRateRedraws(sampledAt: sampledAt)
+        #expect(redraws.first == sampledAt)
+        let expiry = try #require(redraws.last)
+        #expect(expiry == sampledAt.addingTimeInterval(WatchRecordingFigures.heartRateFreshness))
+        let atExpiry = WatchRecordingFigures(
+            distanceMeters: 0,
+            elevationGainMeters: 0,
+            averageSpeedMetersPerSecond: nil,
+            heartRateBPM: 112,
+            heartRateSampledAt: sampledAt,
+            now: expiry,
+            locale: Self.metric
+        )
+        #expect(atExpiry.heartRate.value == "—")
+        #expect(WatchRecordingFigures.heartRateRedraws(sampledAt: nil).isEmpty)
     }
 }

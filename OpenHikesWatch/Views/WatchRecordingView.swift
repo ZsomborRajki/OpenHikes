@@ -281,33 +281,43 @@ private struct RecordingFigures: View {
 
     var body: some View {
         let stats = model.recorder.stats
-        let figures = WatchRecordingFigures(
-            distanceMeters: stats.distanceMeters,
-            elevationGainMeters: stats.elevationGainMeters,
-            averageSpeedMetersPerSecond: stats.averageSpeedMetersPerSecond,
-            heartRateBPM: stats.heartRateBPM
-        )
-        return VStack(spacing: 4) {
-            Text(WidgetFormat.duration(seconds: stats.activeSeconds))
-                .font(.title2.monospacedDigit())
-                .accessibilityLabel("Time hiking")
-            // Top-aligned, so that a caption wrapping at a large text size
-            // ("Avg Speed" is two words in a narrow column) lengthens its own
-            // tile downwards rather than lowering the value beside it.
-            Grid(alignment: .top, horizontalSpacing: 8, verticalSpacing: 4) {
-                GridRow {
-                    WatchFigure(figures.distance)
-                    WatchFigure(figures.climb)
+        // Drawn again when the heart rate goes stale, as well as on every
+        // fix and sample: a sensor that has stopped reading sends nothing to
+        // redraw on, and fixes stop too when the hiker stands still or the
+        // sky is lost. Two dates per sample, so this costs one extra pass
+        // rather than a ticking clock.
+        let redraws = WatchRecordingFigures.heartRateRedraws(sampledAt: stats.heartRateSampledAt)
+        TimelineView(.explicit(redraws)) { context in
+            let figures = WatchRecordingFigures(
+                distanceMeters: stats.distanceMeters,
+                elevationGainMeters: stats.elevationGainMeters,
+                averageSpeedMetersPerSecond: stats.averageSpeedMetersPerSecond,
+                heartRateBPM: stats.heartRateBPM,
+                heartRateSampledAt: stats.heartRateSampledAt,
+                now: context.date
+            )
+            VStack(spacing: 4) {
+                Text(WidgetFormat.duration(seconds: stats.activeSeconds))
+                    .font(.title2.monospacedDigit())
+                    .accessibilityLabel("Time hiking")
+                // Top-aligned, so that a caption wrapping at a large text size
+                // ("Avg Speed" is two words in a narrow column) lengthens its own
+                // tile downwards rather than lowering the value beside it.
+                Grid(alignment: .top, horizontalSpacing: 8, verticalSpacing: 4) {
+                    GridRow {
+                        WatchFigure(figures.distance)
+                        WatchFigure(figures.climb)
+                    }
+                    GridRow {
+                        WatchFigure(figures.averageSpeed)
+                        WatchFigure(figures.heartRate)
+                    }
                 }
-                GridRow {
-                    WatchFigure(figures.averageSpeed)
-                    WatchFigure(figures.heartRate)
+                if stats.fixCount == 0 {
+                    Text("Finding your position…")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
-            }
-            if stats.fixCount == 0 {
-                Text("Finding your position…")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
             }
         }
     }
