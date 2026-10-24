@@ -29,6 +29,12 @@ struct WalkTimeLeftTests {
         return RouteProfile(route: route)
     }()
 
+    /// A walk's coverage from its stretches, each written the way it was
+    /// walked: `[1000, 0]` walked back towards the start.
+    private static func walked(_ intervals: Double...) -> TrailWalkCoverage {
+        TrailWalkCoverage(intervals: intervals, furthestDistanceMeters: 0)
+    }
+
     @Test("a stretch's climb is counted from its lower end to its higher")
     func climbBetweenTwoDistances() throws {
         let total = Self.profile.totalDistanceMeters
@@ -53,7 +59,7 @@ struct WalkTimeLeftTests {
             profile: Self.profile,
             position: 0,
             remainingMeters: total,
-            covered: [],
+            coverage: TrailWalkCoverage(),
             activeSeconds: 0
         ))
         let climb = try #require(Self.profile.climb(from: 0, to: total))
@@ -70,7 +76,7 @@ struct WalkTimeLeftTests {
     @Test("a slow walk's own pace stretches the time left")
     func aSlowWalkTakesLonger() throws {
         let total = Self.profile.totalDistanceMeters
-        let covered = [0...(total / 2)]
+        let covered = Self.walked(0, total / 2)
         let climb = try #require(Self.profile.climb(from: 0, to: total / 2))
         let signposts = WalkingTimeEstimate.seconds(
             distanceMeters: total / 2,
@@ -79,7 +85,7 @@ struct WalkTimeLeftTests {
         )
         let factor = try #require(WalkTimeLeft.paceFactor(
             profile: Self.profile,
-            covered: covered,
+            coverage: covered,
             activeSeconds: signposts * 1.5
         ))
         #expect(factor.isApproximatelyEqual(to: 1.5, absoluteTolerance: 0.001))
@@ -88,7 +94,7 @@ struct WalkTimeLeftTests {
             profile: Self.profile,
             position: total / 2,
             remainingMeters: total / 2,
-            covered: covered,
+            coverage: covered,
             activeSeconds: signposts * 1.5
         ))
         let flatRest = WalkingTimeEstimate.seconds(distanceMeters: total / 2, ascentMeters: 0, descentMeters: 0)
@@ -104,14 +110,14 @@ struct WalkTimeLeftTests {
     func aReversedWalkLooksTowardsTheStart() throws {
         let total = Self.profile.totalDistanceMeters
         let turn = Self.profile.distances[30]
-        let covered = [turn...total]
-        #expect(WalkTimeLeft.isReversed(position: turn, covered: covered, routeMeters: total))
+        let covered = Self.walked(total, turn)
+        #expect(WalkTimeLeft.isReversed(position: turn, covered: covered.ranges, routeMeters: total))
 
         let seconds = try #require(WalkTimeLeft.seconds(
             profile: Self.profile,
             position: turn,
             remainingMeters: turn,
-            covered: covered,
+            coverage: covered,
             activeSeconds: 0
         ))
         let firstHalf = try #require(Self.profile.climb(from: 0, to: turn))
@@ -128,17 +134,40 @@ struct WalkTimeLeftTests {
     @Test("a reversed walk's pace is measured against the way it was climbed")
     func aReversedWalkCalibratesAgainstItsDescent() throws {
         let turn = Self.profile.distances[30]
-        let covered = [0...turn]
         let upwards = try #require(
-            WalkTimeLeft.paceFactor(profile: Self.profile, covered: covered, activeSeconds: 3 * 3600)
+            WalkTimeLeft.paceFactor(profile: Self.profile, coverage: Self.walked(0, turn), activeSeconds: 3 * 3600)
         )
-        let downwards = try #require(WalkTimeLeft.paceFactor(
-            profile: Self.profile,
-            covered: covered,
-            activeSeconds: 3 * 3600,
-            reversed: true
-        ))
+        let downwards = try #require(
+            WalkTimeLeft.paceFactor(profile: Self.profile, coverage: Self.walked(turn, 0), activeSeconds: 3 * 3600)
+        )
         #expect(downwards > upwards)
+    }
+
+    /// Up 600 m to the top, then back down two thirds of it: 600 m up and
+    /// 400 m down over five kilometres of walking. Read as one union turned
+    /// round by the way ahead, it was 600 m of descent over three (#1039).
+    @Test("a walk that turned back is measured against what it climbed each way, over the ground walked twice")
+    func aTurnedWalkCalibratesAgainstBothWays() throws {
+        let top = Self.profile.distances[30]
+        let turnedAt = Self.profile.distances[10]
+        let coverage = Self.walked(0, top, top, turnedAt)
+        let up = try #require(Self.profile.climb(from: 0, to: top))
+        let down = try #require(Self.profile.climb(from: turnedAt, to: top))
+        #expect(up.gainMeters.isApproximatelyEqual(to: 600, absoluteTolerance: 1))
+        #expect(down.gainMeters.isApproximatelyEqual(to: 400, absoluteTolerance: 1))
+        let signposts = WalkingTimeEstimate.seconds(
+            distanceMeters: top + (top - turnedAt),
+            ascentMeters: up.gainMeters,
+            descentMeters: down.gainMeters
+        )
+
+        let factor = try #require(WalkTimeLeft.paceFactor(
+            profile: Self.profile,
+            coverage: coverage,
+            activeSeconds: signposts * 1.25
+        ))
+
+        #expect(factor.isApproximatelyEqual(to: 1.25, absoluteTolerance: 0.001))
     }
 
     @Test("the direction is read off the coverage, and off the nearer end before there is any")
@@ -153,12 +182,12 @@ struct WalkTimeLeftTests {
     @Test("the walk's own pace is bounded both ways")
     func thePaceFactorIsBounded() throws {
         let total = Self.profile.totalDistanceMeters
-        let covered = [0...(total / 2)]
+        let covered = Self.walked(0, total / 2)
         let sprint = try #require(
-            WalkTimeLeft.paceFactor(profile: Self.profile, covered: covered, activeSeconds: 16 * 60)
+            WalkTimeLeft.paceFactor(profile: Self.profile, coverage: covered, activeSeconds: 16 * 60)
         )
         let crawl = try #require(
-            WalkTimeLeft.paceFactor(profile: Self.profile, covered: covered, activeSeconds: 20 * 3600)
+            WalkTimeLeft.paceFactor(profile: Self.profile, coverage: covered, activeSeconds: 20 * 3600)
         )
         #expect(sprint == WalkTimeLeft.paceFactorBounds.lowerBound)
         #expect(crawl == WalkTimeLeft.paceFactorBounds.upperBound)
@@ -166,8 +195,10 @@ struct WalkTimeLeftTests {
 
     @Test("too little covered, or too little time, is not a pace")
     func calibrationNeedsDistanceAndTime() {
-        #expect(WalkTimeLeft.paceFactor(profile: Self.profile, covered: [0...500], activeSeconds: 3600) == nil)
-        #expect(WalkTimeLeft.paceFactor(profile: Self.profile, covered: [0...3000], activeSeconds: 600) == nil)
+        let short = Self.walked(0, 500)
+        let long = Self.walked(0, 3000)
+        #expect(WalkTimeLeft.paceFactor(profile: Self.profile, coverage: short, activeSeconds: 3600) == nil)
+        #expect(WalkTimeLeft.paceFactor(profile: Self.profile, coverage: long, activeSeconds: 600) == nil)
     }
 
     /// A flat figure on a route with no heights is the error the estimate
@@ -182,7 +213,7 @@ struct WalkTimeLeftTests {
             profile: flat,
             position: 0,
             remainingMeters: total,
-            covered: [],
+            coverage: TrailWalkCoverage(),
             activeSeconds: 0
         ) == nil)
     }
@@ -193,7 +224,7 @@ struct WalkTimeLeftTests {
             profile: Self.profile,
             position: Self.profile.totalDistanceMeters,
             remainingMeters: 0,
-            covered: [],
+            coverage: TrailWalkCoverage(),
             activeSeconds: 0
         ) == nil)
     }
