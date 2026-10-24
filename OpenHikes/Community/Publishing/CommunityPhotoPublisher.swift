@@ -92,7 +92,7 @@ nonisolated enum CommunityPhotoPublisher {
     ///   the same ``SettingsKey/communityAuthorName`` a shared hike uses.
     /// - Parameter excludingPhotos: The pictures struck off on the form, by
     ///   id. Applied *before* the cap, for the reason
-    ///   ``CommunityPublisher/selectedPhotos(of:excluding:)`` applies it
+    ///   ``CommunityPublisher/selectedPhotos(from:excluding:onThisDevice:)`` applies it
     ///   before the cap: taking one out should let the next one in.
     /// - Parameter save: The commit seam, the same shape every other write in
     ///   this feature takes one in.
@@ -112,12 +112,16 @@ nonisolated enum CommunityPhotoPublisher {
             authorName: authorName,
             takenOn: hike.date
         )
-        let photos = CommunityPublisher.selectedPhotos(of: hike, excluding: excluded)
-        // Checked against the rows before the directory is made, because the
-        // common way to get here with nothing to send is a hike nobody has
-        // photographed. The *files* are checked below, after the re-encode,
-        // where a row whose picture lives on another device finally shows up
-        // as a missing file.
+        let photos = await CommunityPublisher.sendablePhotos(
+            of: hike,
+            excluding: excluded,
+            store: store
+        )
+        // Checked before the directory is made, because the common way to get
+        // here with nothing to send is a hike nobody has photographed — or one
+        // photographed on another device, whose rows have no file here. The
+        // re-encode is checked below too, for a file that is here and will
+        // not read.
         guard !photos.isEmpty else { return .refused(.noPhotosToShare) }
 
         let workingDirectory = CommunityStaging.contributionDirectory(of: details.hikeID)

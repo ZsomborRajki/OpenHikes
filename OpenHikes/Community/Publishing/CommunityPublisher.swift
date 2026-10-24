@@ -112,7 +112,7 @@ nonisolated enum CommunityPublisher {
     /// **This is the number to bring back down first** if the public
     /// database's asset quota becomes a real cost, and it is the cheapest
     /// lever there is: it is read in one place on the way up
-    /// (``selectedPhotos(of:excluding:)``) and quoted rather than restated
+    /// (``selectedPhotos(from:excluding:onThisDevice:)``) and quoted rather than restated
     /// everywhere else, so lowering it changes what new uploads carry and
     /// nothing about what is already published. At
     /// ``photoMaxPixelSize``/``photoQuality`` a published photograph is a few
@@ -184,7 +184,9 @@ nonisolated enum CommunityPublisher {
             route: hike.route,
             places: hike.orderedPlaces.map { CommunityPlace($0.place) }
         )
-        let photos = selectedPhotos(of: hike, excluding: excluded)
+        // Still before the first suspension: this reads the hike's photos
+        // synchronously and only then asks the disk.
+        let photos = await sendablePhotos(of: hike, excluding: excluded, store: store)
 
         // One directory per *attempt*, not per hike, and under the parent a
         // sweep can reach — see ``CommunityStaging``. The `defer` below is the
@@ -241,71 +243,87 @@ nonisolated enum CommunityPublisher {
         )
     }
 
-    /// How many of `hike`'s photographs this device could actually send.
+    /// Which of `hike`'s photographs a send from this device carries, in
+    /// upload order.
     ///
-    /// The number the share form quotes, asked of the disk rather than of the
+    /// The list both publishers send, asked of the disk rather than of the
     /// rows. Photo *rows* mirror between a hiker's devices and photo *files*
     /// do not — see ``HikePhotoStore/hasImage(for:)`` and *Settled decisions*
     /// in the repository instructions — so a walk recorded on a phone has a
     /// full strip of pictures on the iPad and nothing behind any of them.
-    /// ``prepare(_:photos:in:store:)`` drops exactly those, silently and
-    /// correctly, which is why the form has to ask the same question rather
-    /// than count the rows.
+    /// Those are dropped *before* the cap (#1031): a row with no file here
+    /// sends nothing, so letting it hold a place under the cap only left
+    /// behind a picture that could have gone.
     ///
-    /// Counted over ``selectedPhotos(of:excluding:)`` so the cap and the
-    /// ordering are the upload's, not a second opinion about them.
+    /// Reads the hike before it suspends, so a caller that has read
+    /// everything else off the `@Model` first keeps that promise.
     @MainActor
-    static func sendablePhotoCount(
+    static func sendablePhotos(
         of hike: Hike,
-        excludingPhotos excluded: Set<UUID> = [],
+        excluding excluded: Set<UUID> = [],
         store: HikePhotoStore = .shared
-    ) async -> Int {
-        await reachablePhotoCount(
-            of: selectedPhotos(of: hike, excluding: excluded),
-            store: store
-        )
+    ) async -> [HikePhoto] {
+        let offered = shareablePhotos(of: hike)
+        let here = await photosOnThisDevice(among: offered, store: store)
+        return selectedPhotos(from: offered, excluding: excluded, onThisDevice: here)
     }
 
+    /// Which of `photos` this device holds the pixels of, by id.
+    ///
+    /// What a send form asks once when it opens, and what
+    /// ``sendablePhotos(of:excluding:store:)`` asks again on the way out. The
+    /// answer is about files, not about the choice, so striking a picture off
+    /// does not change it and the form does not ask again.
+    ///
     /// `@concurrent` for the reason ``prepare(_:photos:in:store:)`` is, and
     /// for one more: ``HikePhotoStore/hasImage(for:)`` asserts it is off the
     /// main thread, because it touches the file system once per photograph.
     @concurrent
-    private static func reachablePhotoCount(
-        of photos: [HikePhoto],
+    static func photosOnThisDevice(
+        among photos: [HikePhoto],
         store: HikePhotoStore
-    ) async -> Int {
-        photos.filter { store.hasImage(for: $0) }.count
+    ) async -> Set<UUID> {
+        Set(photos.lazy.filter { store.hasImage(for: $0) }.map(\.id))
     }
 
     /// Which of a hike's photographs go, and in what order.
     ///
-    /// The strip's list — ``shareablePhotos(of:)``, which is where the order
-    /// is decided — less the ones struck off, cut at the cap. Read rather than
-    /// ordered a second time, so the tiles the form draws first are the ones
-    /// that fit by construction rather than by two functions agreeing (#1001).
+    /// `offered` is the strip's list — ``shareablePhotos(of:)``, which is
+    /// where the order is decided — and this only removes from it: the ones
+    /// struck off, the ones with no file on this device, and then whatever
+    /// is past the cap. Read rather than ordered a second time, so the tiles
+    /// the form draws first are the ones that fit by construction rather than
+    /// by two functions agreeing (#1001).
     ///
     /// Struck-off pictures are dropped *before* the cap, which is what makes
     /// the share form's strip a choice rather than a subtraction: a hiker with
     /// more photographs than ``maximumPhotos`` who strikes off the first gets
     /// the first one past the cap in its place, where filtering afterwards
-    /// would simply have sent one fewer.
+    /// would simply have sent one fewer. Pictures with no file here are
+    /// dropped before it for the same reason (#1031).
     ///
     /// A photograph that came with somebody else's hike is not here at all,
     /// and that exclusion is nearer a safety rail than a rule about order —
     /// see ``ownPhotos(of:)``.
     ///
-    /// Internal rather than private because both publishers send from it:
-    /// ``CommunityPhotoPublisher`` takes the same list a hike share does.
-    @MainActor
-    static func selectedPhotos(of hike: Hike, excluding excluded: Set<UUID> = []) -> [HikePhoto] {
-        let offered = shareablePhotos(of: hike).filter { !excluded.contains($0.id) }
-        return Array(offered.prefix(maximumPhotos))
+    /// Pure, so the strip can draw which tiles the cap holds back from the
+    /// same rule the upload applies — see ``CommunitySharePhotoChoices``.
+    static func selectedPhotos(
+        from offered: [HikePhoto],
+        excluding excluded: Set<UUID>,
+        onThisDevice: Set<UUID>
+    ) -> [HikePhoto] {
+        Array(
+            offered.lazy
+                .filter { !excluded.contains($0.id) && onThisDevice.contains($0.id) }
+                .prefix(maximumPhotos)
+        )
     }
 
     /// The pictures a form must open with struck off: the ones a copy of
     /// which is already up there.
     ///
-    /// Here rather than inside the form for the reason ``selectedPhotos(of:excluding:)``
+    /// Here rather than inside the form for the reason ``selectedPhotos(from:excluding:onThisDevice:)``
     /// is here: what goes and what stays is the publisher's rule, and a screen
     /// that worked it out for itself would eventually disagree with the send
     /// it is describing. It is also the half of that rule a suite can reach —
@@ -363,7 +381,7 @@ nonisolated enum CommunityPublisher {
     /// they were taken. Within that, chronological — the order the walk
     /// produced them in, which is the order the gallery pages through.
     ///
-    /// The one place that order is written. ``selectedPhotos(of:excluding:)``
+    /// The one place that order is written. ``selectedPhotos(from:excluding:onThisDevice:)``
     /// takes this list and only removes from it, so the strip and the upload
     /// cannot come to disagree about which pictures fit under the cap. A
     /// screen that built its own order would eventually disagree with both.

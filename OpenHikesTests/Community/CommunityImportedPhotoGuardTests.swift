@@ -151,7 +151,7 @@ struct CommunityImportedPhotoGuardTests {
         #expect(hike.photos.count == 3)
         #expect(CommunityPublisher.ownPhotos(of: hike).count == 1)
         #expect(CommunityPublisher.shareablePhotos(of: hike).count == 1)
-        #expect(CommunityPublisher.selectedPhotos(of: hike).count == 1)
+        #expect(await CommunityPublisher.sendablePhotos(of: hike, store: sandbox.store).count == 1)
         #expect(CommunityPublisher.shareablePhotos(of: hike).first?.isOwn == true)
     }
 

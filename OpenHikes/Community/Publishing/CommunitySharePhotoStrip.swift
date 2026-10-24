@@ -30,7 +30,10 @@
 //    publishing are one interaction rather than two;
 //  - the order is ``CommunityPublisher/shareablePhotos(of:)``'s rather than the
 //    gallery's, so the tiles are in the order the upload will take them and
-//    the ones that fit under the cap are the first ones here.
+//    the ones that fit under the cap are the first ones here;
+//  - a ticked tile the cap holds back is drawn as a third state, faded with a
+//    glyph of its own and named as over the limit, because it will not go and
+//    a tick on it would say it does (#1031). See ``CommunitySharePhotoChoices``.
 //
 //  Two spellings of any of those is how the two screens end up meaning
 //  different things by the same tap.
@@ -58,6 +61,11 @@ struct CommunitySharePhotoStrip: View {
     /// the list is re-derived on every pass and an index would follow whatever
     /// moved into that slot.
     @Binding var excluded: Set<UUID>
+    /// Which of them this device holds the files of, once the disk has
+    /// answered — see ``CommunityPublisher/photosOnThisDevice(among:store:)``.
+    /// Decides which tiles the cap holds back, since a picture with no file
+    /// here holds no place under it.
+    var files: CommunityPhotoFiles = .unasked
     /// Where the photo files are.
     var store: HikePhotoStore = .shared
     /// Whether the form is mid-send, which is the one state the strip does not
@@ -69,7 +77,11 @@ struct CommunitySharePhotoStrip: View {
 
     var body: some View {
         if !photos.isEmpty {
-            strip
+            strip(CommunitySharePhotoChoices(
+                photos: photos,
+                excluding: excluded,
+                files: files
+            ))
             if let onView, let first = photos.first {
                 // A row of its own under the strip rather than a header
                 // button, so it is where the eye already is after the tiles,
@@ -84,14 +96,14 @@ struct CommunitySharePhotoStrip: View {
         }
     }
 
-    private var strip: some View {
+    private func strip(_ choices: CommunitySharePhotoChoices) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             // Lazy for the reason ``HikePhotoSection/gallery(_:)`` is: an eager
             // stack starts a decode for every tile at once, for a row that shows
             // a handful.
             LazyHStack(spacing: PhotoTileMetrics.spacing) {
                 ForEach(photos) { photo in
-                    tile(photo)
+                    tile(photo, choice: choices.choice(for: photo))
                 }
             }
             .padding(.vertical, 2)
@@ -100,9 +112,8 @@ struct CommunitySharePhotoStrip: View {
         .disabled(isSending)
     }
 
-    private func tile(_ photo: HikePhoto) -> some View {
-        let isExcluded = excluded.contains(photo.id)
-        return Button {
+    private func tile(_ photo: HikePhoto, choice: CommunitySharePhotoChoices.Choice) -> some View {
+        Button {
             toggle(photo)
         } label: {
             HikePhotoThumbnail(
@@ -110,14 +121,14 @@ struct CommunitySharePhotoStrip: View {
                 store: store,
                 size: PhotoTileMetrics.stripTileSize,
                 cornerRadius: PhotoTileMetrics.cornerRadius,
-                label: Self.label(for: photo, isExcluded: isExcluded, among: photos.count)
+                label: Self.label(for: photo, choice: choice, among: photos.count)
             )
-            .opacity(isExcluded ? Self.excludedTileOpacity : 1)
+            .opacity(choice == .shared ? 1 : Self.excludedTileOpacity)
             .overlay(alignment: .topTrailing) {
-                Image(systemName: isExcluded ? "circle" : "checkmark.circle.fill")
+                Image(systemName: Self.symbol(for: choice))
                     .font(.title3)
                     .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, isExcluded ? Color.secondary : Color.accentColor)
+                    .foregroundStyle(.white, choice == .shared ? Color.accentColor : Color.secondary)
                     .padding(4)
                     // The tick is what the label already says, so it is
                     // decoration rather than a second thing to hear.
@@ -172,22 +183,43 @@ struct CommunitySharePhotoStrip: View {
         }
     }
 
+    /// The tick's glyph, shared with ``CommunitySharePhotoViewer`` so the two
+    /// read as one control at two sizes. The cap's state has a shape of its
+    /// own, so it is not told apart by tint alone.
+    static func symbol(for choice: CommunitySharePhotoChoices.Choice) -> String {
+        switch choice {
+        case .shared: "checkmark.circle.fill"
+        case .struckOff: "circle"
+        case .overTheLimit: "minus.circle.fill"
+        }
+    }
+
     /// What a tile is called, which has to carry the state as well as the
     /// place: the difference between included and struck off is drawn as a
     /// glyph and an opacity, and neither is a thing a screen reader can see.
-    static func label(for photo: HikePhoto, isExcluded: Bool, among total: Int) -> String {
+    static func label(
+        for photo: HikePhoto,
+        choice: CommunitySharePhotoChoices.Choice,
+        among total: Int
+    ) -> String {
         let place = String(localized: "Photo, \(total) in this hike")
+        let limit = CommunityPublisher.maximumPhotos
         guard !photo.hasBeenSentToCommunity else {
             // The state and the reason for it, because a tile struck off by
             // the form and a tile struck off by the hiker look identical and
             // mean different things — and only one of them is a thing the
             // hiker did.
-            return isExcluded
-                ? String(localized: "\(place), already sent, not shared again")
-                : String(localized: "\(place), already sent, shared again")
+            return switch choice {
+            case .shared: String(localized: "\(place), already sent, shared again")
+            case .struckOff: String(localized: "\(place), already sent, not shared again")
+            case .overTheLimit:
+                String(localized: "\(place), already sent, over the limit of \(limit), not shared again")
+            }
         }
-        return isExcluded
-            ? String(localized: "\(place), not shared")
-            : String(localized: "\(place), shared")
+        return switch choice {
+        case .shared: String(localized: "\(place), shared")
+        case .struckOff: String(localized: "\(place), not shared")
+        case .overTheLimit: String(localized: "\(place), over the limit of \(limit), not shared")
+        }
     }
 }

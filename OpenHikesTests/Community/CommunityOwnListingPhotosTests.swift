@@ -164,7 +164,12 @@ struct CommunityOwnListingPhotosTests {
 
         #expect(excluded.count == 2)
         #expect(!excluded.contains(added.id))
-        #expect(CommunityPublisher.selectedPhotos(of: hike, excluding: excluded) == [added])
+        let sendable = await CommunityPublisher.sendablePhotos(
+            of: hike,
+            excluding: excluded,
+            store: sandbox.store
+        )
+        #expect(sendable == [added])
     }
 
     @Test("a top-up carries the new photograph and not the published one")
@@ -274,8 +279,8 @@ struct CommunityOwnListingPhotosTests {
         var photo = HikePhoto(capturedAt: Date(timeIntervalSince1970: 1_700_000_000))
         photo.sentToCommunityAt = Date(timeIntervalSince1970: 1_700_001_000)
 
-        let struckOff = CommunitySharePhotoStrip.label(for: photo, isExcluded: true, among: 3)
-        let putBack = CommunitySharePhotoStrip.label(for: photo, isExcluded: false, among: 3)
+        let struckOff = CommunitySharePhotoStrip.label(for: photo, choice: .struckOff, among: 3)
+        let putBack = CommunitySharePhotoStrip.label(for: photo, choice: .shared, among: 3)
 
         // The difference a tile cannot draw: struck off by the form because a
         // copy is already up there, as against struck off by the hiker.
@@ -283,7 +288,7 @@ struct CommunityOwnListingPhotosTests {
         #expect(putBack.contains("already sent"))
         let fresh = CommunitySharePhotoStrip.label(
             for: HikePhoto(capturedAt: Date(timeIntervalSince1970: 1_700_000_000)),
-            isExcluded: true,
+            choice: .struckOff,
             among: 3
         )
         #expect(!fresh.contains("already sent"))

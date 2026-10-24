@@ -54,6 +54,10 @@ struct CommunitySharePhotoViewer: View {
     /// Which pictures are struck off. The form's own set, so a choice made here
     /// is the strip's choice.
     @Binding var excluded: Set<UUID>
+    /// Which of them this device holds the files of, once the form has
+    /// asked — what decides which pictures the cap holds back, as on the
+    /// strip. See ``CommunitySharePhotoChoices``.
+    var files: CommunityPhotoFiles = .unasked
     var store: HikePhotoStore = .shared
     /// Whether the form is mid-send, the one state the choice is not offered
     /// in — the strip refuses taps then too.
@@ -65,15 +69,22 @@ struct CommunitySharePhotoViewer: View {
     var body: some View {
         let currentIndex = currentID.flatMap { id in photos.firstIndex { $0.id == id } }
         let current = currentIndex.map { photos[$0] }
+        let choices = CommunitySharePhotoChoices(
+            photos: photos,
+            excluding: excluded,
+            files: files
+        )
         // The identifier goes on the pages and not on the overlay: SwiftUI
         // pushes a container's identifier down onto every descendant, and the
         // toggle below has a name of its own to answer to.
         return HikePhotoPager(photos: photos, currentID: $currentID, store: store)
             .photoGalleryChrome()
             .accessibilityIdentifier("community-share-photo-viewer")
-            .overlay(alignment: .bottom) { bottomBar(current, currentIndex: currentIndex) }
+            .overlay(alignment: .bottom) {
+                bottomBar(current, choices: choices, currentIndex: currentIndex)
+            }
             .navigationTitle(title(currentIndex))
-            .navigationSubtitle(sharedSummary)
+            .navigationSubtitle(sharedSummary(choices))
             .onAppear {
                 // Assigning the scroll position before the scroll view exists
                 // is ignored, so the opening page is set on the first
@@ -92,11 +103,15 @@ struct CommunitySharePhotoViewer: View {
     /// One ``GlassStack`` around both, for the reason ``HikePhotoViewer``'s
     /// credit and chevrons share one: two pieces of glass that nearly touch
     /// should merge rather than render as two panes.
-    private func bottomBar(_ current: HikePhoto?, currentIndex: Int?) -> some View {
+    private func bottomBar(
+        _ current: HikePhoto?,
+        choices: CommunitySharePhotoChoices,
+        currentIndex: Int?
+    ) -> some View {
         GlassStack(spacing: 6) {
             VStack(spacing: 10) {
                 if let current {
-                    choice(current)
+                    choice(current, choice: choices.choice(for: current))
                 }
                 PhotoStepControls(
                     previousIdentifier: "community-share-previous-photo-button",
@@ -115,23 +130,19 @@ struct CommunitySharePhotoViewer: View {
     ///
     /// A picture a previous send already carried says so on the button, which
     /// is the fact the strip draws as a badge in the tile's corner.
-    private func choice(_ photo: HikePhoto) -> some View {
-        let isExcluded = excluded.contains(photo.id)
+    private func choice(_ photo: HikePhoto, choice: CommunitySharePhotoChoices.Choice) -> some View {
+        let isExcluded = choice == .struckOff
         return Button {
             withAnimation(.snappy) {
                 CommunitySharePhotoStrip.toggle(photo, in: &excluded)
             }
         } label: {
             Label {
-                if photo.hasBeenSentToCommunity {
-                    Text(isExcluded ? "Already Sent \u{00B7} Left Out" : "Already Sent \u{00B7} Sharing")
-                } else {
-                    Text(isExcluded ? "Left Out" : "Sharing")
-                }
+                Text(Self.title(of: choice, alreadySent: photo.hasBeenSentToCommunity))
             } icon: {
-                Image(systemName: isExcluded ? "circle" : "checkmark.circle.fill")
+                Image(systemName: CommunitySharePhotoStrip.symbol(for: choice))
                     .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, isExcluded ? Color.secondary : Color.accentColor)
+                    .foregroundStyle(.white, choice == .shared ? Color.accentColor : Color.secondary)
             }
             .contentTransition(.symbolEffect(.replace))
             .padding(.horizontal, 4)
@@ -145,7 +156,7 @@ struct CommunitySharePhotoViewer: View {
         // The strip's own sentence for the same state, so VoiceOver says the
         // same thing about a picture at either size.
         .accessibilityLabel(
-            CommunitySharePhotoStrip.label(for: photo, isExcluded: isExcluded, among: photos.count)
+            CommunitySharePhotoStrip.label(for: photo, choice: choice, among: photos.count)
         )
         .accessibilityHint(isExcluded ? "Includes this photo in the share" : "Leaves this photo out of the share")
         .accessibilityIdentifier("community-share-photo-toggle")
@@ -153,6 +164,21 @@ struct CommunitySharePhotoViewer: View {
         // left out to one being shared changes `isExcluded` without anybody
         // choosing anything, and that must not tick.
         .sensoryFeedback(.selection, trigger: excluded)
+    }
+
+    /// What the choice button says, in the strip's three states.
+    private static func title(
+        of choice: CommunitySharePhotoChoices.Choice,
+        alreadySent: Bool
+    ) -> LocalizedStringKey {
+        switch (choice, alreadySent) {
+        case (.shared, false): "Sharing"
+        case (.struckOff, false): "Left Out"
+        case (.overTheLimit, false): "Over the Limit"
+        case (.shared, true): "Already Sent \u{00B7} Sharing"
+        case (.struckOff, true): "Already Sent \u{00B7} Left Out"
+        case (.overTheLimit, true): "Already Sent \u{00B7} Over the Limit"
+        }
     }
 
     // MARK: - Titles
@@ -163,10 +189,10 @@ struct CommunitySharePhotoViewer: View {
     }
 
     /// How many are going, so a hiker paging through sixty can see the tally
-    /// move without going back to the form.
-    private var sharedSummary: String {
-        let shared = photos.count { !excluded.contains($0.id) }
-        return String(localized: "\(shared) of \(photos.count) shared")
+    /// move without going back to the form. Counted after the cap, so it is
+    /// the number the form's count row says rather than the ticks.
+    private func sharedSummary(_ choices: CommunitySharePhotoChoices) -> String {
+        String(localized: "\(choices.sharedCount) of \(photos.count) shared")
     }
 
     // MARK: - Actions
@@ -195,6 +221,7 @@ extension View {
         _ startID: Binding<UUID?>,
         photos: [HikePhoto],
         excluded: Binding<Set<UUID>>,
+        files: CommunityPhotoFiles,
         store: HikePhotoStore,
         isSending: Bool
     ) -> some View {
@@ -203,6 +230,7 @@ extension View {
                 photos: photos,
                 startID: id,
                 excluded: excluded,
+                files: files,
                 store: store,
                 isSending: isSending
             )

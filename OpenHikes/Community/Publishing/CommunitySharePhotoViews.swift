@@ -3,7 +3,7 @@
 //  OpenHikes
 //
 //  The two pieces of body code both publishing forms share: the task that asks
-//  the disk how many photographs can really go, and the section a form ends on
+//  the disk which photographs can really go, and the section a form ends on
 //  once the upload has landed.
 //
 //  Split out of `CommunitySharePhotoTally.swift` rather than sitting beside
@@ -21,25 +21,27 @@ import SwiftData
 import SwiftUI
 
 extension View {
-    /// Keeps `count` up to date with what this device can actually send.
+    /// Asks the disk which of `hike`'s own photographs this device holds the
+    /// files of, and keeps the answer in `files`.
     ///
-    /// Re-asked whenever the hiker strikes a photograph off or puts one back,
-    /// because the answer is about a particular set of *files*: the count
-    /// under the strip has to be what will really go, and the cap means taking
-    /// one out can let another in. Nothing else can change it while the form
-    /// is the screen on top.
-    func countsSendablePhotos(
+    /// Asked once, when the form appears, and not again as the hiker strikes
+    /// pictures off: the answer is about *files*, which a tap on the strip
+    /// does not change, and the count, the cap and the tiles the cap holds
+    /// back are all worked out from it as the choice moves — see
+    /// ``CommunitySharePhotoTally`` and ``CommunitySharePhotoChoices``.
+    /// Nothing else can change it while the form is the screen on top, and
+    /// the send asks again on its way out regardless.
+    func findsPhotosOnThisDevice(
         of hike: Hike,
-        excluding excluded: Set<UUID>,
         store: HikePhotoStore,
-        into count: Binding<Int?>
+        into files: Binding<CommunityPhotoFiles>
     ) -> some View {
-        task(id: excluded) {
-            count.wrappedValue = await CommunityPublisher.sendablePhotoCount(
-                of: hike,
-                excludingPhotos: excluded,
+        task(id: hike.id) {
+            let here = await CommunityPublisher.photosOnThisDevice(
+                among: CommunityPublisher.ownPhotos(of: hike),
                 store: store
             )
+            files.wrappedValue = .answered(here)
         }
     }
 }
