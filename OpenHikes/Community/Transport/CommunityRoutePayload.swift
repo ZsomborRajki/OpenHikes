@@ -171,7 +171,7 @@ nonisolated enum CommunityRoutePayload {
     ///
     /// Duplicate ids keep the first: a photograph names its place by id, and
     /// two places answering to one id would be a photograph on both. The
-    /// first is the first place *kept*, so one dropped for being off the map
+    /// first is the first one on the map, so a place dropped for being off it
     /// takes no id with it; and the cap is spent before either, on the list
     /// as it arrived.
     static func places(_ raw: [CommunityPlace]) -> [TrailPlace] {
