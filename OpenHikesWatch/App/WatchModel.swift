@@ -122,7 +122,10 @@ final class WatchModel {
         if let recording = fixture.recording {
             recorder.applySeededRecording(recording.phase, stats: recording.stats)
         }
-        recorder.stats.update(heartRateBPM: fixture.heartRateBPM)
+        recorder.stats.update(
+            heartRateBPM: fixture.heartRateBPM,
+            sampledAt: fixture.heartRateBPM == nil ? nil : .now
+        )
     }
     #endif
 

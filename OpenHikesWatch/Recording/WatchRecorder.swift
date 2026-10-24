@@ -851,6 +851,9 @@ nonisolated extension WatchRecorder: HKLiveWorkoutBuilderDelegate {
         else { return }
         let unit = HKUnit.count().unitDivided(by: .minute())
         let beats = statistics.mostRecentQuantity()?.doubleValue(for: unit)
-        onMainActor { [weak self] in self?.stats.update(heartRateBPM: beats) }
+        // The sample's own time, so the screen can tell a reading from the
+        // last one before the sensor stopped (#1024).
+        let sampledAt = statistics.mostRecentQuantityDateInterval()?.end
+        onMainActor { [weak self] in self?.stats.update(heartRateBPM: beats, sampledAt: sampledAt) }
     }
 }

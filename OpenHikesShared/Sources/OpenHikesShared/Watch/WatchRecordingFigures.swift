@@ -26,6 +26,19 @@
 //  them out. The caption is also what VoiceOver reads the figure by, so the
 //  two cannot part company either.
 //
+//  ## A heart rate has an age
+//
+//  The workout builder calls back only when HealthKit collects a sample, and
+//  its statistics cover the whole workout, so its most recent quantity is
+//  the last reading ever taken and never goes back to nothing. With the band
+//  loosened or the watch off the wrist, the last number stayed up beside a
+//  clock and a distance that kept moving, and read exactly like a live one
+//  (#1024). So the reading carries the time it was sampled, and a reading
+//  older than ``heartRateFreshness`` is no reading: the dash, as before the
+//  first sample. Since a stale reading by definition brings no callback,
+//  ``heartRateRedraws(sampledAt:)`` names the moments the screen has to be
+//  drawn again without one.
+//
 
 import Foundation
 
@@ -53,6 +66,8 @@ public struct WatchRecordingFigures: Equatable, Sendable {
         elevationGainMeters: Double?,
         averageSpeedMetersPerSecond: Double?,
         heartRateBPM: Double?,
+        heartRateSampledAt: Date?,
+        now: Date,
         locale: Locale = .current
     ) {
         distance = Figure(
@@ -67,7 +82,10 @@ public struct WatchRecordingFigures: Equatable, Sendable {
             title: "Avg Speed",
             value: Self.speedText(averageSpeedMetersPerSecond, locale: locale)
         )
-        heartRate = Figure(title: "Heart", value: Self.heartRateText(heartRateBPM))
+        heartRate = Figure(
+            title: "Heart",
+            value: Self.heartRateText(heartRateBPM, sampledAt: heartRateSampledAt, now: now)
+        )
     }
 
     /// A dash until the walk has two trusted heights to compare, as on the
@@ -86,13 +104,34 @@ public struct WatchRecordingFigures: Equatable, Sendable {
         return WidgetFormat.speed(metersPerSecond: metersPerSecond, locale: locale)
     }
 
+    /// How long a heart-rate sample is still the hiker's heart rate. A
+    /// workout session samples every few seconds, so a minute without one is
+    /// a sensor that has stopped reading; the margin beyond that is for Low
+    /// Power Mode, which samples less often and should not flicker a dash
+    /// between readings.
+    public static let heartRateFreshness: TimeInterval = 120
+
+    /// When the heart figure has to be drawn: at the sample, and again the
+    /// moment it goes stale, which no callback announces. Handed to an
+    /// explicit timeline, the first date is in the past, so the screen's
+    /// first pass is judged at the sample and the second at its expiry.
+    public static func heartRateRedraws(sampledAt: Date?) -> [Date] {
+        guard let sampledAt else { return [] }
+        return [sampledAt, sampledAt.addingTimeInterval(heartRateFreshness)]
+    }
+
     /// A dash rather than a zero while there is no reading: before HealthKit
     /// delivers a first sample, which without permission to read heart rate
     /// it never does. Drawn as 0 bpm, that would be the one number on this
     /// screen that alarms. A value that is not a finite number is no reading
-    /// either, and `Int(_:)` would trap on it in the middle of a walk.
-    private static func heartRateText(_ beats: Double?) -> String {
-        guard let beats, beats.isFinite else { return missing }
+    /// either, and `Int(_:)` would trap on it in the middle of a walk. Nor is
+    /// one without the time it was taken, or one taken longer ago than
+    /// ``heartRateFreshness``: the sensor has stopped, and its last number is
+    /// not the heart rate now.
+    private static func heartRateText(_ beats: Double?, sampledAt: Date?, now: Date) -> String {
+        guard let beats, beats.isFinite, let sampledAt,
+              now.timeIntervalSince(sampledAt) < heartRateFreshness
+        else { return missing }
         return "\(Int(beats.rounded()))"
     }
 }

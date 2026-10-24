@@ -32,10 +32,15 @@ final class WatchRecordingStats {
     /// draws a dash rather than a climb of zero nobody has measured.
     private(set) var elevationGainMeters: Double?
     private(set) var averageSpeedMetersPerSecond: Double?
-    /// Beats per minute, from the workout session's own live samples. `nil`
-    /// until the first one arrives, and on a watch whose sensor is covered by
-    /// a sleeve — which is a state to say rather than a zero to draw.
+    /// Beats per minute, from the workout session's own live samples, and
+    /// when that sample was taken. `nil` until the first one arrives. After
+    /// that it is the last reading, not a live one: the builder never goes
+    /// back to having none, so a sensor that stops reading — a loosened band,
+    /// a sleeve, a watch off the wrist — leaves its last number here. Whether
+    /// it is still the heart rate is ``WatchRecordingFigures``'s call, made
+    /// from the sample time.
     private(set) var heartRateBPM: Double?
+    private(set) var heartRateSampledAt: Date?
     /// How many fixes the recording has kept, which is the honest answer to
     /// "is this working?" before there is enough distance to show one.
     private(set) var fixCount = 0
@@ -48,8 +53,9 @@ final class WatchRecordingStats {
         fixCount = accumulator.fixCount
     }
 
-    func update(heartRateBPM: Double?) {
+    func update(heartRateBPM: Double?, sampledAt: Date?) {
         self.heartRateBPM = heartRateBPM
+        heartRateSampledAt = sampledAt
     }
 
     func reset() {
@@ -58,6 +64,7 @@ final class WatchRecordingStats {
         elevationGainMeters = nil
         averageSpeedMetersPerSecond = nil
         heartRateBPM = nil
+        heartRateSampledAt = nil
         fixCount = 0
     }
 }
