@@ -7,16 +7,17 @@
 //  charts laid over the plot. The split is worth exactly as much as the plot
 //  staying put while the marks move, and two things about the plot decide that.
 //
-//  Its equality leaves out everything a scrub or a fix changes — the tracker,
-//  the selection's copy and the closure that writes the selection — and still
-//  catches everything it draws from.
+//  Its equality leaves out the tracker, which a scrub or a fix moves, and the
+//  two scrub callbacks it passes on, and still catches everything it draws
+//  from.
 //
 //  And it holds no `Binding`. A binding held as a stored property is a dynamic
 //  property, and a write through it re-evaluates the view holding it,
 //  equatable, equal and unread as that view is — one pass per write, measured
-//  both on a stand-in and on a simulator. So the plot passes the selection on
-//  as a plain reference and a closure (``ElevationScrubSelection``), and the
-//  mirror below keeps it that way.
+//  both on a stand-in and on a simulator. So the selection never reaches the
+//  plot: the marks own it (``ElevationScrubSelection``), and the tracker and
+//  the two closures pass through untouched. The mirror below keeps the plot
+//  free of a binding.
 //
 //  The suite also pins the view around the plot: a scrub step writes the
 //  selection and the tracker, and ``ElevationChartView``'s own body reads

@@ -2,14 +2,15 @@
 //  ElevationChartWorkloadTests.swift
 //  OpenHikesTests
 //
-//  The elevation chart is the app's most expensive view and its most
-//  frequently invalidated one — a bad combination that only shows up on long
-//  tracks. `ElevationChartView` plots two marks (an `AreaMark` and a
-//  `LineMark`, both `catmullRom`-interpolated) per elevation sample, and
-//  left unthinned every point of an imported GPX would be one: a 1 Hz
-//  five-hour recording is 18,000 points, so 36,000 marks. That view is
-//  invalidated on every scrub event (drag frequency) and about once a second
-//  by auto-follow.
+//  The elevation chart is the app's most expensive view, and the cost only
+//  shows up on long tracks. `ElevationChartView` plots two marks (an
+//  `AreaMark` and a `LineMark`, both `catmullRom`-interpolated) per elevation
+//  sample, and left unthinned every point of an imported GPX would be one: a
+//  1 Hz five-hour recording is 18,000 points, so 36,000 marks, all laid out
+//  again on every pass of its plot (`ElevationChartPlot`). The view and its
+//  plot re-run when the profile, the tint or the measured width changes. A
+//  scrub event or an auto-follow fix re-runs only what follows the tracker:
+//  the moving marks laid over the plot, and the value VoiceOver speaks.
 //
 //  Rendering it through `ImageRenderer` at 390×200 pt, on this machine's
 //  Simulator (subtract ~0.2 ms of renderer overhead):
@@ -53,13 +54,13 @@ struct ElevationChartWorkloadTests {
     static let plottedSampleBudget = 500
 
     /// The headline: a long track hands Swift Charts tens of thousands of
-    /// marks, on the main thread, on every scrub event.
+    /// marks, on the main thread, on every pass of the plot.
     @Test("a long track's chart stays inside a drawable budget")
     func longTrackIsDownsampledForDrawing() {
         let profile = RouteProfile(route: Self.longRoute)
         #expect(
             profile.samples.count <= Self.plottedSampleBudget,
-            "the chart plots 2 marks per sample and is rebuilt at drag frequency"
+            "the chart plots 2 marks per sample, and lays them all out on every pass of its plot"
         )
     }
 
@@ -126,11 +127,10 @@ struct ElevationChartWorkloadTests {
     }
 
     /// `ElevationChartView.==` exists so the body stops re-evaluating when
-    /// nothing it draws has changed, and the file documents that body as
-    /// rebuilt at drag frequency during a scrub. `ElevationSample` is a
-    /// synthesized `Equatable` over two `Double`s and `nan != nan`, so for a
-    /// hike carrying one the comparison could never hold — the guard returned
-    /// `false` on every pass, on the one screen it was written to protect.
+    /// nothing it draws has changed. `ElevationSample` is a synthesized
+    /// `Equatable` over two `Double`s and `nan != nan`, so for a hike carrying
+    /// one the comparison could never hold — the guard returned `false` on
+    /// every pass, on the one screen it was written to protect.
     @Test("the chart's equality holds for a hike that carried a non-finite height")
     func equalityHoldsForARouteWithNonFiniteHeights() {
         let tracker = TrackerState()
