@@ -94,8 +94,9 @@ nonisolated public extension RouteProfile {
     /// the way it was walked: ``climb(over:)`` of those walked towards the
     /// route's end, and of those walked back towards its start turned round,
     /// since a descent walked uphill is an ascent. A stretch walked there and
-    /// back is climbed both ways. `nil` when no stretch had two heights to
-    /// compare.
+    /// back is climbed both ways; a match that landed behind the one before
+    /// it is no turn, and climbs nothing back. `nil` when no stretch had two
+    /// heights to compare.
     func climb(walking coverage: TrailWalkCoverage) -> (gainMeters: Double, lossMeters: Double)? {
         let onward = climb(over: coverage.walkedTowardsEnd)
         let back = climb(over: coverage.walkedTowardsStart)

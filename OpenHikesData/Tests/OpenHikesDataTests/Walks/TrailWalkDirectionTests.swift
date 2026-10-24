@@ -51,7 +51,7 @@ struct TrailWalkDirectionTests {
         #expect(coverage.walkedTowardsEnd == [0...300])
         #expect(coverage.walkedTowardsStart == [600...1000])
         #expect(coverage.ranges == [0...300, 600...1000])
-        #expect(coverage.coveredMeters == 700)
+        #expect(coverage.coveredMeters.isApproximatelyEqual(to: 700, absoluteTolerance: 1e-9))
     }
 
     /// Covered once, walked twice: the union is the ground, and each way
@@ -65,7 +65,7 @@ struct TrailWalkDirectionTests {
         #expect(coverage.walkedTowardsEnd == [0...400])
         #expect(coverage.walkedTowardsStart == [200...400])
         #expect(coverage.ranges == [0...400])
-        #expect(coverage.coveredMeters == 400)
+        #expect(coverage.coveredMeters.isApproximatelyEqual(to: 400, absoluteTolerance: 1e-9))
     }
 
     /// Each way is a union of its own, so walking back over ground walked
@@ -135,6 +135,39 @@ struct TrailWalkDirectionTests {
 
         #expect(climb.gainMeters.isApproximatelyEqual(to: 50, absoluteTolerance: 0.001))
         #expect(climb.lossMeters.isApproximatelyEqual(to: 50, absoluteTolerance: 0.001))
+    }
+
+    /// Matches are not smoothed, and two matchers feed them, so a walk that
+    /// only ever went one way still has the odd match land behind the one
+    /// before it. That step is covered, and it is no turn.
+    @Test("a match that lands behind the one before it is no turn")
+    func stepBackIsNoTurn() throws {
+        let up = walk(Array(0...30) + [27] + Array(33...50))
+        #expect(up.walkedTowardsStart.isEmpty)
+        #expect(up.ranges == [0...Self.hill.distances[50]])
+        let climb = try #require(Self.hill.climb(walking: up))
+        #expect(climb.gainMeters.isApproximatelyEqual(to: 100, absoluteTolerance: 0.001))
+        #expect(climb.lossMeters.isApproximatelyEqual(to: 0, absoluteTolerance: 0.001))
+
+        let down = walk(Array((20...50).reversed()) + [23] + Array((0...17).reversed()))
+        #expect(down.walkedTowardsEnd.isEmpty)
+        let descent = try #require(Self.hill.climb(walking: down))
+        #expect(descent.gainMeters.isApproximatelyEqual(to: 0, absoluteTolerance: 0.001))
+        #expect(descent.lossMeters.isApproximatelyEqual(to: 100, absoluteTolerance: 0.001))
+    }
+
+    /// Only a longer stretch leaves a short one out, so a there and back too
+    /// short to be a turn either way is still climbed both ways.
+    @Test("a short there and back keeps both ways")
+    func shortThereAndBackKeepsBothWays() throws {
+        let coverage = walk([0, 1, 2, 3, 2, 1, 0])
+        let stretch = 0...Self.hill.distances[3]
+        #expect(stretch.upperBound < TrailWalkPolicy.minimumTurnMeters)
+        #expect(coverage.walkedTowardsEnd == [stretch])
+        #expect(coverage.walkedTowardsStart == [stretch])
+        let climb = try #require(Self.hill.climb(walking: coverage))
+        #expect(climb.gainMeters.isApproximatelyEqual(to: 6, absoluteTolerance: 0.001))
+        #expect(climb.lossMeters.isApproximatelyEqual(to: 6, absoluteTolerance: 0.001))
     }
 
     @Test("a walk with no stretch along any heights has no climb to say")

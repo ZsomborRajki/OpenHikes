@@ -26,11 +26,13 @@
 //  Two honest limits are worth stating outright, because both bound what the
 //  placement below is worth.
 //
-//  Coverage is a union in route order, not a path in walking order. An
-//  out-and-back covers its outward half twice and stores it once; a walk taken
-//  from the far end runs against the stored direction. Progress through the
-//  union is therefore the order the *route* is written in, which is the order
-//  it was walked for the ordinary one-way case and is not for the others.
+//  The union is in route order, not a path in walking order. Coverage keeps
+//  which way each stretch was walked, for the climb, but never the order the
+//  stretches came in, and this reads only the union: an out-and-back covers
+//  its outward half twice and the union holds it once; a walk taken from the
+//  far end runs against the stored direction. Progress through the union is
+//  therefore the order the *route* is written in, which is the order it was
+//  walked for the ordinary one-way case and is not for the others.
 //
 //  And the fraction is of wall-clock time, not of ``HikeWalk/activeSeconds``.
 //  A walk records how long it was actually moving but not *when* it was
@@ -63,7 +65,8 @@ nonisolated struct HikeWalkPhotoTimeline: Equatable, Sendable {
     let startedAt: Date
     let endedAt: Date
     /// The covered union as ranges in metres along the route, ascending and
-    /// merged — ``TrailWalkCoverage/ranges`` as stored.
+    /// merged, whichever way each stretch was walked —
+    /// ``TrailWalkCoverage/ranges``.
     let ranges: [ClosedRange<Double>]
     /// The union's total length, which is the distance ``distanceAlongRoute(at:)``
     /// spreads the walk's clock over.

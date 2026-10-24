@@ -28,6 +28,12 @@ nonisolated public enum TrailWalkPolicy {
     /// A walk that covered less than this is not kept. Opening a trail at
     /// the trailhead for a look leaves no row behind.
     public static let minimumCoverageMeters: Double = 100
+    /// A stretch walked back over ground walked the other way is a turn only
+    /// from this long: shorter, inside a stretch of the other way's at least
+    /// this long, it is a match that landed behind the one before it. The
+    /// slack a match is allowed off the route, read along it — see
+    /// ``TrailWalkCoverage/walkedTowardsStart``.
+    public static let minimumTurnMeters: Double = RouteProfile.followMatchThresholdMeters
     /// Coverage at or above this, with a match this close to *either* end of
     /// the route, is the walk reaching the end on its own.
     ///
@@ -229,10 +235,11 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
     /// The ground covered, whichever way: both ways' stretches merged into
     /// one union, sorted by start.
     public var ranges: [ClosedRange<Double>] {
-        let towardsStart = walkedTowardsStart
-        guard !towardsStart.isEmpty else { return walkedTowardsEnd }
+        let towardsStart = Array(Self.stretches(of: intervals, back: true))
+        let towardsEnd = Array(Self.stretches(of: intervals, back: false))
+        guard !towardsStart.isEmpty else { return towardsEnd }
         var union: [ClosedRange<Double>] = []
-        for stretch in (walkedTowardsEnd + towardsStart).sorted(by: { $0.lowerBound < $1.lowerBound }) {
+        for stretch in (towardsEnd + towardsStart).sorted(by: { $0.lowerBound < $1.lowerBound }) {
             if let last = union.last, stretch.lowerBound <= last.upperBound {
                 union[union.count - 1] = last.lowerBound...max(last.upperBound, stretch.upperBound)
             } else {
@@ -243,15 +250,49 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
     }
 
     /// The stretches walked the way the route's distances run, merged and
-    /// sorted by start.
+    /// sorted by start, less a step too short to be a turn — see
+    /// ``walkedTowardsStart``.
     public var walkedTowardsEnd: [ClosedRange<Double>] {
-        Array(Self.stretches(of: intervals, back: false))
+        Self.turns(
+            Array(Self.stretches(of: intervals, back: false)),
+            against: Array(Self.stretches(of: intervals, back: true))
+        )
     }
 
     /// The stretches walked back towards the route's stored start, merged and
     /// sorted by start. A stretch walked there and back is in both.
+    ///
+    /// Less a step too short to be a turn. Matches are not smoothed, and two
+    /// feeds with two matchers supply them, so a walk that only ever went one
+    /// way still has the odd match land behind the one before it; stored as
+    /// walked back, that step would put a descent on the card of a walk
+    /// straight up a hill. A stretch shorter than
+    /// ``TrailWalkPolicy/minimumTurnMeters``, inside one of the other way's
+    /// at least that long, is left out of both readings: a deadband along the
+    /// route, as `ElevationAccumulator` keeps one on a height. Its ground is
+    /// still covered, and ``ranges`` still counts it.
     public var walkedTowardsStart: [ClosedRange<Double>] {
-        Array(Self.stretches(of: intervals, back: true))
+        Self.turns(
+            Array(Self.stretches(of: intervals, back: true)),
+            against: Array(Self.stretches(of: intervals, back: false))
+        )
+    }
+
+    /// `stretches` less each one too short to be a turn and lying inside one
+    /// of `other`'s long enough to be one. Only a longer stretch leaves one
+    /// out, so a short there and back keeps both ways.
+    private static func turns(
+        _ stretches: [ClosedRange<Double>],
+        against other: [ClosedRange<Double>]
+    ) -> [ClosedRange<Double>] {
+        let minimum = TrailWalkPolicy.minimumTurnMeters
+        return stretches.filter { stretch in
+            stretch.upperBound - stretch.lowerBound >= minimum || !other.contains { outer in
+                outer.upperBound - outer.lowerBound >= minimum
+                    && outer.lowerBound <= stretch.lowerBound
+                    && stretch.upperBound <= outer.upperBound
+            }
+        }
     }
 
     /// Covered length over the route's, clamped to 0…1 with the same
