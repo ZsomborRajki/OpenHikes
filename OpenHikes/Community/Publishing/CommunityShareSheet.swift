@@ -134,20 +134,6 @@ struct CommunityShareSheet: View {
         )
     }
 
-    /// What this share would actually carry, and what it would leave behind.
-    ///
-    /// ``CommunitySharePhotoTally`` rather than four members of this screen's
-    /// own: the contribution form asks exactly the same question about exactly
-    /// the same files, and the number under the strip has to be the number
-    /// that goes on both.
-    private var photos: CommunitySharePhotoTally {
-        CommunitySharePhotoTally(
-            hike: hike,
-            excluding: excludedPhotoIDs,
-            sendableCount: sendablePhotoCount
-        )
-    }
-
     /// The name this share is published under.
     ///
     /// Bounded and not merely trimmed, which is ``HikeTitle``'s rule applied
@@ -187,7 +173,11 @@ struct CommunityShareSheet: View {
     /// around it went past what the linter allows. The seam is a good one
     /// anyway: what this screen *is* and what it *does when it appears* are
     /// two different lists to read.
-    @ViewBuilder private var formContent: some View {
+    ///
+    /// - Parameter offered: The strip's photographs, as `body` read them for
+    ///   this pass.
+    @ViewBuilder
+    private func formContent(offered: [HikePhoto]) -> some View {
         switch phase {
         case .sent:
             sentSection
@@ -209,10 +199,10 @@ struct CommunityShareSheet: View {
                 if let target = eligibility?.photoTarget {
                     contributeSection(target)
                 }
-                contentsSection
+                contentsSection(offered: offered)
             } else {
                 duplicateSection
-                contentsSection
+                contentsSection(offered: offered)
                 nameSection
                 reviewSection
                 if case .failed(let failure) = phase {
@@ -224,13 +214,13 @@ struct CommunityShareSheet: View {
 
     /// The form, with the full-screen gallery its photo strip opens.
     ///
-    /// Out of `body` for the reason ``formContent`` is: the closure around it
-    /// is at the length the linter allows.
-    private var form: some View {
-        Form { formContent }
+    /// Out of `body` for the reason ``formContent(offered:)`` is: the closure
+    /// around it is at the length the linter allows.
+    private func form(offered: [HikePhoto]) -> some View {
+        Form { formContent(offered: offered) }
             .communitySharePhotoGallery(
                 $viewedPhotoID,
-                photos: CommunityPublisher.shareablePhotos(of: hike),
+                photos: offered,
                 excluded: $excludedPhotoIDs,
                 store: store,
                 isSending: phase.isSending
@@ -238,8 +228,15 @@ struct CommunityShareSheet: View {
     }
 
     var body: some View {
+        // Read once for the whole pass and handed down, because it is a sort
+        // that looks like a field: the gallery, the strip and the tally under
+        // it all draw from this one array. Every helper below is inlined into
+        // this body, so each of them asking for its own copy was five sorts a
+        // pass, and the notes field makes a pass of every keystroke. See
+        // ``CommunitySharePhotoTally``.
+        let offered = CommunityPublisher.shareablePhotos(of: hike)
         NavigationStack {
-            form
+            form(offered: offered)
             .navigationTitle("Share Hike")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -293,8 +290,20 @@ struct CommunityShareSheet: View {
 // MARK: - Sections
 
 private extension CommunityShareSheet {
-    var contentsSection: some View {
-        Section {
+    /// What gets shared, with the strip and the count beneath it.
+    ///
+    /// The tally is built here, once, from the list `body` read.
+    /// ``CommunitySharePhotoTally`` rather than four members of this screen's
+    /// own: the contribution form asks exactly the same question about exactly
+    /// the same files, and the number under the strip has to be the number
+    /// that goes on both.
+    func contentsSection(offered: [HikePhoto]) -> some View {
+        let photos = CommunitySharePhotoTally(
+            offered: offered,
+            excluding: excludedPhotoIDs,
+            sendableCount: sendablePhotoCount
+        )
+        return Section {
             // Editable, where it used to be a `LabeledContent` reporting the
             // name back. A hiker about to publish is looking at their hike's
             // name for the first time in a while and is the likeliest person
@@ -335,7 +344,7 @@ private extension CommunityShareSheet {
                 count: photos.count,
                 identifier: "community-share-photo-count"
             )
-            photoPicker
+            photoPicker(offered: offered)
             if photos.unsendableCount > 0 {
                 // Said here rather than left to the footer, because it is
                 // about the row directly above it: the number there is
@@ -383,9 +392,9 @@ private extension CommunityShareSheet {
     /// contribution form — see that file for the three rules the two screens
     /// have to agree about and why a second spelling of any of them would make
     /// the same tap mean two things.
-    @ViewBuilder var photoPicker: some View {
+    func photoPicker(offered: [HikePhoto]) -> some View {
         CommunitySharePhotoStrip(
-            photos: CommunityPublisher.shareablePhotos(of: hike),
+            photos: offered,
             excluded: $excludedPhotoIDs,
             store: store,
             isSending: phase.isSending,

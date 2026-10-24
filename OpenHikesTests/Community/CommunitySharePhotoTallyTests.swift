@@ -21,6 +21,7 @@
 //  with an answer it has been given — or with not having one yet.
 //
 
+import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
@@ -30,6 +31,16 @@ import Testing
 @MainActor
 @Suite("Community share photo tally")
 struct CommunitySharePhotoTallyTests {
+    /// A tally built the way both forms build one: from the strip's list,
+    /// read once.
+    private func tally(of hike: Hike, excluding excluded: Set<UUID>, sendableCount: Int?) -> CommunitySharePhotoTally {
+        CommunitySharePhotoTally(
+            offered: CommunityPublisher.shareablePhotos(of: hike),
+            excluding: excluded,
+            sendableCount: sendableCount
+        )
+    }
+
     /// Before the disk has answered, the capped row count is the best guess
     /// available — and it is a guess about *rows*, which is why the form holds
     /// its Send button until ``hasCounted``.
@@ -39,7 +50,7 @@ struct CommunitySharePhotoTallyTests {
         let hike = Fixture.hike(in: context)
         for _ in 0..<3 { hike.photos.append(HikePhoto()) }
 
-        let tally = CommunitySharePhotoTally(hike: hike, excluding: [], sendableCount: nil)
+        let tally = tally(of: hike, excluding: [], sendableCount: nil)
 
         #expect(tally.includedCount == 3)
         #expect(tally.count == 3)
@@ -56,7 +67,7 @@ struct CommunitySharePhotoTallyTests {
         let hike = Fixture.hike(in: context)
         for _ in 0..<5 { hike.photos.append(HikePhoto()) }
 
-        let tally = CommunitySharePhotoTally(hike: hike, excluding: [], sendableCount: 2)
+        let tally = tally(of: hike, excluding: [], sendableCount: 2)
 
         #expect(tally.count == 2)
         #expect(tally.hasCounted)
@@ -74,8 +85,8 @@ struct CommunitySharePhotoTallyTests {
         let photos = (0..<4).map { _ in HikePhoto() }
         for photo in photos { hike.photos.append(photo) }
 
-        let tally = CommunitySharePhotoTally(
-            hike: hike,
+        let tally = tally(
+            of: hike,
             excluding: [photos[0].id, photos[1].id],
             sendableCount: nil
         )
@@ -94,14 +105,14 @@ struct CommunitySharePhotoTallyTests {
         let photos = (0..<(CommunityPublisher.maximumPhotos + 4)).map { _ in HikePhoto() }
         for photo in photos { hike.photos.append(photo) }
 
-        let full = CommunitySharePhotoTally(hike: hike, excluding: [], sendableCount: nil)
+        let full = tally(of: hike, excluding: [], sendableCount: nil)
         #expect(full.includedCount == CommunityPublisher.maximumPhotos + 4)
         #expect(full.count == CommunityPublisher.maximumPhotos)
 
         // Striking one off leaves more than the cap still ticked, so the
         // number that goes does not move: the next picture takes the slot.
-        let trimmed = CommunitySharePhotoTally(
-            hike: hike,
+        let trimmed = tally(
+            of: hike,
             excluding: [photos[0].id],
             sendableCount: nil
         )
@@ -121,7 +132,7 @@ struct CommunitySharePhotoTallyTests {
         // picture behind it at all.
         hike.photos.append(HikePhoto(isPlaceOnly: true))
 
-        let tally = CommunitySharePhotoTally(hike: hike, excluding: [], sendableCount: nil)
+        let tally = tally(of: hike, excluding: [], sendableCount: nil)
 
         #expect(tally.includedCount == 1)
     }
@@ -134,15 +145,73 @@ struct CommunitySharePhotoTallyTests {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
 
-        let unasked = CommunitySharePhotoTally(hike: hike, excluding: [], sendableCount: nil)
+        let unasked = tally(of: hike, excluding: [], sendableCount: nil)
         #expect(!unasked.hasSomethingToSend)
 
         // And the case that only the files can report: rows the disk cannot
         // back, on the device that is not the one they were added on.
         hike.photos.append(HikePhoto())
-        let asked = CommunitySharePhotoTally(hike: hike, excluding: [], sendableCount: 0)
+        let asked = tally(of: hike, excluding: [], sendableCount: 0)
         #expect(!asked.hasSomethingToSend)
         #expect(asked.unsendableCount == 1)
+    }
+
+    /// The forms now read the strip's list once a pass and build the tally,
+    /// and the contribution form's already-sent count, from that one array
+    /// rather than each asking ``CommunityPublisher/ownPhotos(of:)`` for a
+    /// fresh sort. That is only the same answer if the strip's list is the
+    /// hiker's own photographs reordered and nothing else, so this pins it on
+    /// a hike holding every kind of row the gate tells apart.
+    @Test("the strip's list counts the same as the hiker's own photographs, on a mixed hike")
+    func theStripsListCountsLikeTheOwnPhotos() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let spot = CLLocationCoordinate2D(latitude: 47.6, longitude: 12.8)
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        // Later photographs first, and anchored ones in between, so the
+        // strip's order differs from the hike's.
+        let unanchored = HikePhoto(capturedAt: start)
+        let anchored = HikePhoto(capturedAt: start.addingTimeInterval(60), coordinate: spot)
+        var sent = HikePhoto(capturedAt: start.addingTimeInterval(120))
+        sent.sentToCommunityAt = start.addingTimeInterval(3600)
+        let sentAnchored = {
+            var photo = HikePhoto(capturedAt: start.addingTimeInterval(180), coordinate: spot)
+            photo.sentToCommunityAt = start.addingTimeInterval(3600)
+            return photo
+        }()
+        hike.photos = [
+            sentAnchored,
+            HikePhoto(importedFromListingID: "listing-1"),
+            sent,
+            HikePhoto(isPlaceOnly: true),
+            anchored,
+            unanchored,
+        ]
+
+        let own = CommunityPublisher.ownPhotos(of: hike)
+        let offered = CommunityPublisher.shareablePhotos(of: hike)
+        #expect(offered.map(\.id) != own.map(\.id), "precondition: the strip reorders")
+        #expect(Set(offered.map(\.id)) == Set(own.map(\.id)))
+        #expect(offered.count == own.count)
+
+        let excluded: Set<UUID> = [sent.id, anchored.id]
+        let fromStrip = CommunitySharePhotoTally(offered: offered, excluding: excluded, sendableCount: nil)
+        let fromOwn = CommunitySharePhotoTally(offered: own, excluding: excluded, sendableCount: nil)
+        #expect(fromStrip.includedCount == 2)
+        #expect(fromStrip.includedCount == fromOwn.includedCount)
+        #expect(fromStrip.count == fromOwn.count)
+        #expect(fromStrip.hasSomethingToSend == fromOwn.hasSomethingToSend)
+
+        let answered = CommunitySharePhotoTally(offered: offered, excluding: excluded, sendableCount: 1)
+        #expect(answered.count == 1)
+        #expect(answered.unsendableCount == 1)
+
+        // What the contribution form says is already up there, struck off.
+        let alreadySent = { (photos: [HikePhoto]) in
+            photos.count { $0.hasBeenSentToCommunity && excluded.contains($0.id) }
+        }
+        #expect(alreadySent(offered) == 1)
+        #expect(alreadySent(offered) == alreadySent(own))
     }
 
     /// Number-neutral after the count, the rule the rest of this feature's

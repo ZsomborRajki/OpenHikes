@@ -50,15 +50,20 @@
 
 import Foundation
 import OpenHikesData
-import SwiftData
 
 /// What a send would carry, and what it would leave behind.
 ///
-/// Main-actor isolated, which is the target default and is right here rather
-/// than incidental: it reads a `@Model`'s photographs through
-/// ``CommunityPublisher/ownPhotos(of:)``, and both callers are a `View` body.
-/// It is built fresh on each read for the same reason — a stored copy would be
-/// a second answer able to go stale against the rows it describes.
+/// Built from the list a form has already read rather than from the hike,
+/// because that list is a sort: ``CommunityPublisher/shareablePhotos(of:)``
+/// ends in ``Hike/orderedPhotos``, and every form that asked for a tally used
+/// to ask for that list again with it — five times a body pass on the share
+/// form and eight on the contribution form, on every keystroke in the notes.
+/// A form reads the list once per pass and hands the same array to the strip,
+/// the gallery and this. See AGENTS.md *Render isolation, in practice*.
+///
+/// It is still built fresh on each pass, never stored, for the reason it
+/// always was: a stored copy would be a second answer able to go stale
+/// against the rows it describes.
 struct CommunitySharePhotoTally {
     /// The hiker's own photographs still ticked, before the cap and the disk
     /// have had their say.
@@ -67,17 +72,18 @@ struct CommunitySharePhotoTally {
     let sendableCount: Int?
 
     /// - Parameters:
-    ///   - hike: The walk the photographs came from.
+    ///   - offered: What the strip draws, as
+    ///     ``CommunityPublisher/shareablePhotos(of:)`` returned it for this
+    ///     pass. Counted over the hiker's *own* photographs, which that list
+    ///     already is: a hike saved from the community carries its author's
+    ///     pictures too, and none of those is going anywhere. Only the order
+    ///     differs from ``CommunityPublisher/ownPhotos(of:)``, and a count does
+    ///     not see order.
     ///   - excluded: The ones struck off the strip, by id.
     ///   - sendableCount: What ``CommunityPublisher/sendablePhotoCount(of:excludingPhotos:store:)``
     ///     last answered, or `nil` until it has.
-    init(hike: Hike, excluding excluded: Set<UUID>, sendableCount: Int?) {
-        // Counted over the hiker's *own* photographs, the same list the strip
-        // draws and the upload takes: a hike saved from the community carries
-        // its author's pictures too, and none of those is going anywhere. See
-        // ``CommunityPublisher/ownPhotos(of:)``.
-        includedCount = CommunityPublisher.ownPhotos(of: hike)
-            .count(where: { !excluded.contains($0.id) })
+    init(offered: [HikePhoto], excluding excluded: Set<UUID>, sendableCount: Int?) {
+        includedCount = offered.count(where: { !excluded.contains($0.id) })
         self.sendableCount = sendableCount
     }
 
