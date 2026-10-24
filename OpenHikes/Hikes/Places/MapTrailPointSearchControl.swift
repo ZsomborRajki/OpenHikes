@@ -56,6 +56,11 @@ extension MapView {
     /// ``placeInAreaSearchStrip(_:on:alignedTo:)``. Two views occupying one
     /// strip is safe because only one of them is ever visible; see this file's
     /// header for why that needed saying out loud.
+    ///
+    /// The tap tells the finder what is on screen before it asks, as the
+    /// Community tab's does: the map above the sheet where it is now, or above
+    /// its middle detent when the lowered sheet's map is past the places'
+    /// ceiling. See `MapCoordinator+AreaSearchRegion.swift`.
     func addTrailPointSearchControl(
         to mapView: MKMapView,
         _ coordinator: Coordinator,
@@ -63,7 +68,14 @@ extension MapView {
     ) {
         let control = MapAreaSearchView(
             identifiers: .trailPoints,
-            onTap: { [trailMaker] in trailMaker.searchNearbyPlaces() },
+            onTap: { [trailMaker, weak coordinator, weak mapView] in
+                if let coordinator, let mapView {
+                    trailMaker.finder.regionDidSettle(
+                        coordinator.areaSearchRegionForTap(of: mapView, within: TrailPointFinder.isWithinCeiling)
+                    )
+                }
+                trailMaker.searchNearbyPlaces()
+            },
             onDismissNotice: { [trailMaker] in trailMaker.finder.dismissNotice() }
         )
         // The maker is not up on launch, and a pill that flashed in before its

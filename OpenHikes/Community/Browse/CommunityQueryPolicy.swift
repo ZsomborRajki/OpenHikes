@@ -170,7 +170,7 @@ struct CommunityQueryPolicy {
     ///
     /// `region` is the part of the map the hiker can see — the map above the
     /// sheet, which is what `MapView.Coordinator` hands over rather than its
-    /// whole view; see ``MapView/Coordinator/communitySearchRegion(of:sheet:)``.
+    /// whole view; see ``MapView/Coordinator/areaSearchRegion(of:sheet:)``.
     /// So its centre is the middle of what is on screen, which is where the
     /// rows are sorted outward from, and its span is the rectangle
     /// OpenStreetMap is asked about.
@@ -260,7 +260,7 @@ struct CommunityQueryPolicy {
     /// Shared with the pill's tap, not only ``action(for:)``. A region the tap
     /// hands the browser has to be one this accepts, or the browser settles on
     /// a map it refuses, dims the pill it came from and asks nothing — see
-    /// ``MapView/Coordinator/communitySearchRegionForTap(of:)``.
+    /// ``MapView/Coordinator/areaSearchRegionForTap(of:within:)``.
     static func isWithinCeiling(_ region: MKCoordinateRegion) -> Bool {
         visibleRadiusMeters(for: region) <= maximumRadiusMeters
     }

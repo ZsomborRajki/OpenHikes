@@ -119,8 +119,8 @@ final class TrailPointFinder {
     /// What the last search has to say for itself, or `nil`.
     private(set) var notice: TrailPointNotice?
 
-    /// The circle the map is showing, when it is small enough to ask about —
-    /// see ``regionDidSettle(_:)``.
+    /// The part of the map the hiker can see, when it is small enough to ask
+    /// about — see ``regionDidSettle(_:)``.
     private(set) var searchableArea: CommunitySearchArea?
 
     /// Whether this launch can ask at all. False under tests, which reach no
@@ -154,18 +154,49 @@ final class TrailPointFinder {
         self.deliver = deliver
     }
 
-    /// Takes the map's settled region, and offers a search only while the
-    /// visible circle is within ``TrailPointQuery/maximumRadiusMeters``.
+    /// Takes the part of the map the hiker can see — the map above the sheet,
+    /// which is what `MapView.Coordinator` hands over at a settle and at the
+    /// pill's tap, see `MapCoordinator+AreaSearchRegion.swift` — and offers a
+    /// search only while it is within the ceiling.
+    ///
+    /// The rectangle goes with the circle, so what Overpass is asked about is
+    /// the map on screen — see ``CommunitySearchArea/visibleSpan``. Without it
+    /// the search asked about the square around the circle, which was the
+    /// square around the whole map: as wide as the screen is tall, under the
+    /// sheet and past both sides of the screen. The middle is the middle of
+    /// what is visible too, which is what a search with no line to rank
+    /// against keeps the nearest places to — see ``TrailPointRanking``.
     func regionDidSettle(_ region: MKCoordinateRegion) {
-        let radius = CommunityQueryPolicy.visibleRadiusMeters(for: region)
-        guard radius > 0, radius <= TrailPointQuery.maximumRadiusMeters else {
+        guard Self.isWithinCeiling(region) else {
             guard searchableArea != nil else { return }
             searchableArea = nil
             return
         }
-        let area = CommunitySearchArea(coordinate: region.center, radiusMeters: radius)
+        let area = CommunitySearchArea(
+            coordinate: region.center,
+            radiusMeters: CommunityQueryPolicy.visibleRadiusMeters(for: region),
+            visibleSpan: CommunitySearchArea.Span(
+                latitudeDelta: region.span.latitudeDelta,
+                longitudeDelta: region.span.longitudeDelta
+            )
+        )
         guard searchableArea != area else { return }
         searchableArea = area
+    }
+
+    /// Whether `region` is narrow enough to ask about: its longer side no more
+    /// than twice ``TrailPointQuery/maximumRadiusMeters``, measured as
+    /// ``CommunityQueryPolicy/visibleRadiusMeters(for:)`` measures it.
+    ///
+    /// Shared with the pills' taps, not only ``regionDidSettle(_:)``. A region
+    /// a tap hands over has to be one this accepts, or the finder drops its
+    /// area, dims the pill it came from and asks nothing — see
+    /// ``MapView/Coordinator/areaSearchRegionForTap(of:within:)``. Written as
+    /// "within" for the reason the community's ceiling is: a region whose
+    /// radius is not a number is refused rather than searched.
+    static func isWithinCeiling(_ region: MKCoordinateRegion) -> Bool {
+        let radius = CommunityQueryPolicy.visibleRadiusMeters(for: region)
+        return radius > 0 && radius <= TrailPointQuery.maximumRadiusMeters
     }
 
     /// Asks what is in the visible area, ranked against `route` and leaving out

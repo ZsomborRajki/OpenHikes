@@ -173,10 +173,10 @@ nonisolated extension CuratedTrailQuery {
     /// The box that circumscribes `area`, or `nil` when the area is too wide
     /// to ask about.
     ///
-    /// What an area that is only a circle is asked about — the trail maker's
-    /// place searches are, through ``TrailPointQuery`` — while one the map
-    /// handed over carries the rectangle the hiker could see, and is asked
-    /// about that instead: see ``visibleBox(for:)``.
+    /// What an area that is only a circle is asked about — a place search
+    /// along a stretch of a route is, through ``TrailPointQuery`` — while one
+    /// the map handed over carries the rectangle the hiker could see, and is
+    /// asked about that instead: see ``visibleBox(for:)``.
     ///
     /// Circumscribing rather than inscribed, because a box inside the circle
     /// would leave out routes the circle was meant to reach. The corners bring

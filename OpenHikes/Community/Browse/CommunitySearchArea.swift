@@ -47,10 +47,13 @@ nonisolated struct CommunitySearchArea: Equatable, Sendable {
     /// The rectangle of map the hiker could see when the question was put,
     /// centred on ``coordinate`` — or `nil` for an area that is only a circle.
     ///
-    /// What the OpenStreetMap half is asked about — see this file's header and
-    /// ``CuratedTrailQuery/searchBoxes(for:)``. `nil` for every area that did
-    /// not come from the map: the trail maker's place searches, a stretch of a
-    /// route, a stored-route lookup. Those keep the square around the circle.
+    /// What OpenStreetMap is asked about — see this file's header and
+    /// ``CuratedTrailQuery/searchBoxes(for:)`` — by the *Community* tab and
+    /// by every place search a *Search this area* pill makes, which
+    /// ``TrailPointFinder`` builds from the same measurement of the map.
+    /// `nil` for every area the map did not hand over — a stretch of a route,
+    /// the reach around a fix, *Places Nearby*'s first question — and those
+    /// keep the square around the circle.
     var visibleSpan: Span?
 
     init(coordinate: CLLocationCoordinate2D, radiusMeters: Double, visibleSpan: Span? = nil) {

@@ -775,7 +775,7 @@ extension MapView {
     /// looking at more map than that — unless that is more than the zoom
     /// ceiling allows, when the middle detent's map is what is asked about, so
     /// that an enabled pill always searches something. See
-    /// `MapCommunitySearchRegion.swift`.
+    /// `MapCoordinator+AreaSearchRegion.swift`.
     func addAreaSearchControl(
         to mapView: MKMapView,
         _ coordinator: Coordinator,
@@ -785,7 +785,9 @@ extension MapView {
             identifiers: .community,
             onTap: { [community, weak coordinator, weak mapView] in
                 if let coordinator, let mapView {
-                    community.regionDidSettle(coordinator.communitySearchRegionForTap(of: mapView))
+                    community.regionDidSettle(
+                        coordinator.areaSearchRegionForTap(of: mapView, within: CommunityQueryPolicy.isWithinCeiling)
+                    )
                 }
                 community.searchVisibleArea()
             },

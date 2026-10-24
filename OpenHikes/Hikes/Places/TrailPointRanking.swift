@@ -11,8 +11,8 @@
 //  hiker drawing a valley walk wants the spring on the climb and the hut at
 //  the saddle, not the two hundred summits the box happens to contain. So the
 //  nearest few to the *nearest leg* are what is kept, and a drawing that has
-//  no line yet falls back to distance from the middle of the map, which is the
-//  only thing that can stand in for it.
+//  no line yet falls back to distance from the middle of the map on screen,
+//  which is the only thing that can stand in for it.
 //
 //  Choosing runs over everything the box held — 578 elements in the densest
 //  Alpine mapping there is, see ``TrailPointQuery`` — against a snapped line

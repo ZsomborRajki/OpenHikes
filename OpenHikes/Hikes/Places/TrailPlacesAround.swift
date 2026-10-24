@@ -227,6 +227,9 @@ extension MapView {
     /// *Places Around Trail*'s *Search This Area*, in the strip the other two
     /// share — see ``placeInAreaSearchStrip(_:on:alignedTo:)``. Only one of the
     /// three is ever visible.
+    ///
+    /// The tap tells the finder what is on screen before it asks, as the
+    /// other two do — see `MapCoordinator+AreaSearchRegion.swift`.
     func addPlacesAroundSearchControl(
         to mapView: MKMapView,
         _ coordinator: Coordinator,
@@ -235,7 +238,14 @@ extension MapView {
         let around = placePins.around
         let control = MapAreaSearchView(
             identifiers: .placesAround,
-            onTap: { around.searchVisibleArea() },
+            onTap: { [weak coordinator, weak mapView] in
+                if let coordinator, let mapView {
+                    around.finder.regionDidSettle(
+                        coordinator.areaSearchRegionForTap(of: mapView, within: TrailPointFinder.isWithinCeiling)
+                    )
+                }
+                around.searchVisibleArea()
+            },
             onDismissNotice: { around.finder.dismissNotice() }
         )
         placeInAreaSearchStrip(control, on: mapView, alignedTo: guide)
