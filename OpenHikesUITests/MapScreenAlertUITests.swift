@@ -111,6 +111,29 @@ nonisolated final class MapScreenAlertUITests: XCTestCase {
         XCTAssertTrue(element("map-sheet", in: app).exists, "and the sheet should have survived the question")
     }
 
+    /// A one-track file with one place more than an import keeps asks
+    /// nothing, so the import says afterwards what it left out (#1076) — and
+    /// says it from inside the sheet's contents, where an alert can open.
+    @MainActor
+    func testAnImportPastThePlaceCapSaysWhatItLeftOut() {
+        let app = launchApp(arguments: ["--ui-test-expanded-sheet", "--ui-test-import-gpx=ThumseeCrowdedPlaces"])
+        let alert = app.alerts["Not Every Place Was Imported"]
+        XCTAssertTrue(
+            alert.waitForExistence(timeout: UITestTimeout.navigation),
+            "a hike kept without every place should say so rather than look complete"
+        )
+        let message = "1 more place lies on this track but wasn’t imported, "
+            + "because one file can bring only so many."
+        XCTAssertTrue(alert.staticTexts[message].exists, "and say how many, in the confirmation's words")
+        alert.buttons["OK"].tap()
+
+        XCTAssertTrue(
+            awaitHikeRow(titled: "Thumsee Crowded Places", in: app).exists,
+            "the hike itself should still have been imported"
+        )
+        XCTAssertTrue(element("map-sheet", in: app).exists, "and the sheet should have survived the notice")
+    }
+
     /// Enough taps to land one inside another's presentation, and few enough
     /// that the test is over in a couple of seconds.
     private static let rapidTaps = 5

@@ -312,8 +312,12 @@ nonisolated enum GPXImport {
             // The same guard, for the same reason: a file whose waypoints *are*
             // its geometry has just had them read as the line, and reading them
             // again as places would mark every vertex of the track it drew.
+            //
+            // Uncapped, as a multi-track file's are: the cap is the import's
+            // to spend, and a parse that cut here left the import nothing to
+            // count, so the hike arrived looking complete (#1076).
             places: hasGeometryOfItsOwn
-                ? Array(document.waypoints.compactMap(place).prefix(maximumPlaces).enumerated())
+                ? Array(document.waypoints.compactMap(place).enumerated())
                 : []
         )
     }
@@ -376,7 +380,8 @@ nonisolated enum GPXImport {
     /// file's order — see ``placesKept(of:)`` — so neither a waypoint on no
     /// track nor a place on a track left unticked takes the slot of one on a
     /// ticked track, and the confirmation counts what it would cut from the
-    /// ticked ones.
+    /// ticked ones. A file of one track asks nothing, so its import counts
+    /// the cut instead and says so afterwards — see ``HikeImportPlaceNotice``.
     ///
     /// A cap rather than a refusal, and rather than none. Unlike the
     /// photographs — which are values in one column on the hike — every place

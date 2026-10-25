@@ -34,6 +34,10 @@ struct GPXMultiTrackPlaceCapTests {
     /// The import, ticking the tracks at `picks`: each saved hike's places,
     /// by name.
     private func imported(_ xml: String, picking picks: [Int]) async throws -> [Set<String>] {
+        try await importing(xml, picking: picks).hikes.map { Set($0.places.map(\.name)) }
+    }
+
+    private func importing(_ xml: String, picking picks: [Int]) async throws -> HikeImport.Imported {
         let url = try write(xml)
         let directory = url.deletingLastPathComponent()
         let context = ModelContext(
@@ -42,8 +46,7 @@ struct GPXMultiTrackPlaceCapTests {
                 localURL: directory.appending(path: "OpenHikesLocal.store")
             )
         )
-        let hikes = try await HikeImport.hikes(from: url, into: context) { _, _ in picks }
-        return hikes.map { Set($0.places.map(\.name)) }
+        return try await HikeImport.hikes(from: url, into: context) { _, _ in picks }
     }
 
     /// About 4.4 m of latitude, so even a few hundred waypoints in a row
@@ -152,6 +155,18 @@ struct GPXMultiTrackPlaceCapTests {
         let xml = Self.file(places: [limit + 5, 0])
 
         #expect(try await imported(xml, picking: [0]) == [Self.names(0, 0..<limit)])
+    }
+
+    /// The confirmation's footer counted the cut before Import was pressed,
+    /// so the import has nothing left to tell — unlike a file of one track,
+    /// which asks nothing (#1076).
+    @Test("a cut the confirmation already counted is not reported again")
+    func countedCutIsNotReportedAgain() async throws {
+        let limit = GPXImport.maximumPlaces
+        let result = try await importing(Self.file(places: [limit, 50]), picking: [0, 1])
+
+        #expect(result.hikes.map(\.places.count) == [limit, 0])
+        #expect(result.unannouncedPlacesPastLimit == 0)
     }
 
     // MARK: The cut

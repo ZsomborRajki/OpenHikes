@@ -93,13 +93,23 @@ nonisolated enum HikeImportFailure: LocalizedError, Equatable, Sendable {
 /// and the one that arrived with a copy of the file asks whether that copy is
 /// still worth anything.
 enum HikeImportOutcome {
-    case imported(Hike)
+    /// The hike, and how many places on it the import left out past
+    /// ``GPXImport/maximumPlaces`` with nothing having said so first — see
+    /// ``HikeImport/Imported/unannouncedPlacesPastLimit``.
+    case imported(Hike, placesPastLimit: Int = 0)
     case refused(HikeImportFailure)
 
     /// The hike, for a caller with something left to do to it.
     var hike: Hike? {
-        guard case .imported(let hike) = self else { return nil }
+        guard case .imported(let hike, _) = self else { return nil }
         return hike
+    }
+
+    /// The places the hiker has yet to be told were left out, for a caller
+    /// gathering several files into one notice. Zero for a refusal.
+    var placesPastLimit: Int {
+        guard case .imported(_, let placesPastLimit) = self else { return 0 }
+        return placesPastLimit
     }
 
     /// Whether the app's own copy of the imported file has nothing left to
@@ -110,6 +120,12 @@ enum HikeImportOutcome {
     /// directory nothing else reads. A save the store refused is the other way
     /// round: the file parsed, the app is what failed, and this copy is the
     /// only source OpenHikes controls. See ``GPXInbox``.
+    ///
+    /// A hike kept without every place still lets its copy go (#1076). The
+    /// places it lacks are cut by policy, not lost to a fault, so the same
+    /// copy imported again would lose the same ones: keeping it would keep a
+    /// file nothing in the app reads, and the notice the import raises is
+    /// what sends the hiker back to wherever the file came from.
     var discardsSourceCopy: Bool {
         switch self {
         case .imported, .refused(.file), .refused(.several): true
@@ -140,8 +156,8 @@ enum HikeImport {
     ) async throws(HikeImportFailure) -> Hike {
         // A caller with no way to ask which tracks answers "none of them",
         // which is the refusal a multi-track file used to get.
-        let hikes = try await hikes(from: url, into: modelContext, choosing: { _, _ in [] }, save: save)
-        guard let hike = hikes.first else { throw .file(.multipleTracks) }
+        let kept = try await hikes(from: url, into: modelContext, choosing: { _, _ in [] }, save: save)
+        guard let hike = kept.hikes.first else { throw .file(.multipleTracks) }
         return hike
     }
 
@@ -157,6 +173,8 @@ enum HikeImport {
     ///
     /// The chosen tracks share the one import's ``GPXImport/maximumPlaces``,
     /// spent here on their places alone — see ``GPXImport/placesKept(of:)``.
+    /// What it cuts comes back with the hikes when nothing asked first, so
+    /// the caller can say so — see ``Imported/unannouncedPlacesPastLimit``.
     ///
     /// All of the chosen tracks are committed together or none of them are:
     /// a refused save that kept three days of a five-day trip would leave the
@@ -166,7 +184,7 @@ enum HikeImport {
         into modelContext: ModelContext,
         choosing: ([GPXImport.Track], Int) async -> [Int],
         save: @Sendable (ModelContext) throws -> Void = { try $0.save() }
-    ) async throws(HikeImportFailure) -> [Hike] {
+    ) async throws(HikeImportFailure) -> Imported {
         let scoped = url.startAccessingSecurityScopedResource()
         defer {
             if scoped {
@@ -205,7 +223,25 @@ enum HikeImport {
         let ids = try await stored(rows, in: modelContext.container, save: save)
         var hikes: [Hike] = []
         for id in ids { hikes.append(try imported(id, into: modelContext)) }
-        return hikes
+        // Counted only when nothing asked: the confirmation's footer already
+        // said what the cap would cut from the tracks ticked, and said it
+        // before the hiker pressed Import.
+        let asked = contents.tracks.count != 1
+        let pastLimit = rows.reduce(0) { $0 + $1.track.places.count - $1.places.count }
+        return Imported(hikes: hikes, unannouncedPlacesPastLimit: asked ? 0 : pastLimit)
+    }
+
+    /// What one import kept.
+    struct Imported {
+        /// One for an ordinary file, one per chosen track for a file of
+        /// several, in the file's order. Never empty: a file that became
+        /// nothing throws.
+        let hikes: [Hike]
+        /// How many places on the hikes were left out past
+        /// ``GPXImport/maximumPlaces`` with nothing having said so before
+        /// the import — a file of one track, which asks nothing (#1076).
+        /// Zero after a confirmation, whose footer counted the cut first.
+        let unannouncedPlacesPastLimit: Int
     }
 
     /// One row to write: a track, the places it keeps, and the two things
