@@ -37,11 +37,24 @@
 //  reported alongside whatever was found — the maker's rule that a refusal
 //  never throws away what did arrive.
 //
+//  ## The walking, not the transfer
+//
+//  A pause is not trail (see *The app* in AGENTS.md), so only the walked runs
+//  are cut into stretches (#1075). The drive or the lift between two recorded
+//  pieces, or the jump between two GPX `<trkseg>`s, is never filled in with
+//  points, and no stretch begins at the point before a pause: a long transfer
+//  grown into circles spent the whole request budget before the resumed walk
+//  was reached, and ``kept(_:along:excluding:reaching:)`` drops what stands
+//  beside a transfer anyway. A walk resumed close by still joins the stretch
+//  before it when the two fit in one circle, so a short stop costs no second
+//  request.
+//
 
 import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 
 nonisolated enum TrailPlaceCorridorSearch {
     /// The widest stretch of line asked about at once, in metres of radius.
@@ -78,7 +91,10 @@ nonisolated enum TrailPlaceCorridorSearch {
     /// Greedy: a stretch grows point by point until its bounding circle would
     /// pass `radius`, and the next begins at the point that did not fit — so
     /// consecutive stretches share that point and no piece of line is left
-    /// between them. A line that needs more than ``maximumAreas`` stretches is
+    /// between them. A paused leg is not cut at all: the walk after a pause
+    /// joins the stretch before it only if it fits there, and otherwise begins
+    /// a stretch of its own at the point it resumed on — see this file's
+    /// header. A line that needs more than ``maximumAreas`` stretches is
     /// cut again with a wider radius, up to the query's own ceiling; one that
     /// still needs more at the ceiling keeps the first ``maximumAreas``.
     ///
@@ -140,25 +156,38 @@ nonisolated enum TrailPlaceCorridorSearch {
         margin: Double
     ) -> [CommunitySearchArea] {
         var result: [CommunitySearchArea] = []
-        var box = Box(route[0])
-        for point in densified(route, step: radius - margin).dropFirst() {
-            var grown = box
-            grown.include(point)
-            if grown.radiusMeters + margin <= radius {
-                box = grown
-            } else {
-                result.append(box.area(margin: margin))
-                var next = Box(box.last)
-                next.include(point)
-                box = next
+        var box: Box?
+        for run in route.trailRuns.walkedRuns {
+            for (offset, point) in densified(route[run], step: radius - margin).enumerated() {
+                guard let current = box else {
+                    box = Box(point)
+                    continue
+                }
+                var grown = current
+                grown.include(point)
+                if grown.radiusMeters + margin <= radius {
+                    box = grown
+                } else {
+                    result.append(current.area(margin: margin))
+                    // Along a walk the next stretch starts where this one
+                    // stopped, so no piece of it is left between them. Across
+                    // a pause it starts on the point the walk resumed on.
+                    var next = Box(offset == 0 ? point : current.last)
+                    next.include(point)
+                    box = next
+                }
             }
         }
-        result.append(box.area(margin: margin))
+        if let box {
+            result.append(box.area(margin: margin))
+        }
         return result
     }
 
-    /// `route` with points added along any segment longer than `step`, so no
-    /// two neighbours are further apart than that.
+    /// One walked run of a route with points added along any segment longer
+    /// than `step`, so no two neighbours are further apart than that. A
+    /// paused leg is never one of its segments, so nothing is filled in
+    /// across a transfer.
     ///
     /// The cut above only ever checks a stretch as it grows, and a stretch
     /// that starts afresh holds two points whatever their distance. A sparse
@@ -170,10 +199,10 @@ nonisolated enum TrailPlaceCorridorSearch {
     /// circle only has to hold the segment, not follow the ground — but the
     /// short way round, which ``RouteGeometry/interpolate(from:to:fraction:)``
     /// takes, or a segment across ±180° is filled in across the whole world.
-    private static func densified(_ route: [RouteCoordinate], step: Double) -> [RouteCoordinate] {
-        guard step > 0 else { return route }
-        var result: [RouteCoordinate] = [route[0]]
-        for (from, to) in route.adjacentPairs() {
+    private static func densified(_ run: ArraySlice<RouteCoordinate>, step: Double) -> [RouteCoordinate] {
+        guard step > 0, let first = run.first else { return Array(run) }
+        var result: [RouteCoordinate] = [first]
+        for (from, to) in run.adjacentPairs() {
             let length = RouteGeometry.distanceMeters(from: from.clCoordinate, to: to.clCoordinate)
             let pieces = Int((length / step).rounded(.up))
             if pieces > 1 {
