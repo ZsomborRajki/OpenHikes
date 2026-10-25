@@ -50,6 +50,9 @@ struct HikePhotoSection: View {
     @State private var discovery = PhotoDiscoveryController(
         reader: PhotoLibrarySource.reader()
     )
+    /// Whether the caption can promise a scan, kept across the passes that
+    /// change only `hike.photos` — see ``PhotoMatchAvailability``.
+    @State private var availability = PhotoMatchAvailability()
 
     var body: some View {
         // Taking a photo writes `hike.photos`, and this is the body that
@@ -72,7 +75,7 @@ struct HikePhotoSection: View {
 
             discoverButton
 
-            Text(caption(for: photos))
+            Text(caption(for: photos, canMatch: availability.canMatchLibraryPhotos(hike)))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -166,8 +169,12 @@ struct HikePhotoSection: View {
     /// Four things to say, and which one is true is the fastest way for
     /// somebody to tell whether the button in front of them is going to be
     /// able to do anything.
-    private func caption(for photos: [HikePhoto]) -> String {
-        guard hike.canMatchLibraryPhotos else {
+    ///
+    /// Told whether the route can be matched rather than asking: the question
+    /// walks the whole route, and this runs on every pass a photo write
+    /// causes. See ``PhotoMatchAvailability``.
+    private func caption(for photos: [HikePhoto], canMatch: Bool) -> String {
+        guard canMatch else {
             return String(
                 localized: """
                     This hike\u{2019}s route doesn\u{2019}t record when each point was \

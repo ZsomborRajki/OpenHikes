@@ -234,8 +234,13 @@ extension Hike {
     /// no longer counts, see ``walkPhotoTimelines``. An imported GPX has
     /// neither until somebody walks it, which is what the caption under the
     /// button says.
+    ///
+    /// Not a field, however it reads: an untimed route is walked end to end
+    /// for a timestamp, and one with walks is hashed for its revision. The
+    /// caption asks through ``PhotoMatchAvailability``, which keeps the answer
+    /// until the route or the walks change.
     var canMatchLibraryPhotos: Bool {
-        route.contains { $0.timestamp != nil } || !walkPhotoTimelines.isEmpty
+        route.contains { $0.timestamp != nil } || hasWalkPhotoTimeline
     }
 
     /// The library assets already imported into this hike, so a second scan
