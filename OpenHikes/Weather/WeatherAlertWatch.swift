@@ -86,11 +86,14 @@ nonisolated struct WeatherAlertWatch: Equatable {
     /// *clear* reading is a genuine all-clear, but re-announcing a warning
     /// that lapsed and was re-issued under the same identifier is a smaller
     /// harm than silence, so forgetting is left to the bound above.
+    ///
+    /// Recording is the commitment, so a caller that may yet fail to post —
+    /// one still waiting on notification permission — asks
+    /// ``unannounced(in:)`` first and calls this only once it can. An alert
+    /// marked said behind a refused prompt would stay silent after the hiker
+    /// allowed notifications, for as long as it stands.
     mutating func observed(_ alerts: WeatherAlerts) -> [WeatherAlertSummary] {
-        let worthSaying = alerts.summaries
-            .filter { $0.severity >= WeatherAlertPolicy.interruptionThreshold }
-            .filter { !announced.contains($0.id) }
-            .sorted { $0.severity > $1.severity }
+        let worthSaying = unannounced(in: alerts)
 
         for alert in worthSaying {
             announced.append(alert.id)
@@ -99,6 +102,14 @@ nonisolated struct WeatherAlertWatch: Equatable {
             announced.removeFirst(announced.count - WeatherAlertPolicy.rememberedAlertLimit)
         }
         return worthSaying
+    }
+
+    /// What ``observed(_:)`` would answer, without recording any of it.
+    func unannounced(in alerts: WeatherAlerts) -> [WeatherAlertSummary] {
+        alerts.summaries
+            .filter { $0.severity >= WeatherAlertPolicy.interruptionThreshold }
+            .filter { !announced.contains($0.id) }
+            .sorted { $0.severity > $1.severity }
     }
 
     /// Forgets everything, so the next reading announces whatever stands.

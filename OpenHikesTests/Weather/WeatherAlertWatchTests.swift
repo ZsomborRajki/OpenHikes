@@ -162,6 +162,23 @@ struct WeatherAlertWatchTests {
         #expect(said.isEmpty)
     }
 
+    /// The question asked before notification permission is: an alert it
+    /// answers with is still news until ``WeatherAlertWatch/observed(_:)``
+    /// records it.
+    @Test("asking what is unannounced records nothing")
+    func unannouncedRecordsNothing() {
+        var watch = WeatherAlertWatch()
+        let standing = WeatherAlerts.active([
+            Self.alert(id: "storm-1", severity: .severe),
+            Self.alert(id: "storm-2", severity: .extreme),
+        ])
+
+        #expect(watch.unannounced(in: standing).map(\.id) == ["storm-2", "storm-1"])
+        #expect(!watch.hasAnnounced)
+        #expect(watch.observed(standing).map(\.id) == ["storm-2", "storm-1"])
+        #expect(watch.unannounced(in: standing).isEmpty)
+    }
+
     @Test("neither empty is worth saying anything about")
     func bothEmptiesSayNothing() {
         var watch = WeatherAlertWatch()
