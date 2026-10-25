@@ -162,6 +162,24 @@ struct WatchTrailPackagingTests {
         #expect(!middle.isOnTrail)
     }
 
+    /// A pause named on the first point has nothing before it to have been
+    /// paused across, so it crosses as no pause at all (#1035).
+    @Test("a pause named on a route's first point is not sent as one")
+    func pauseOnTheFirstPointIsNotSent() {
+        let route = (0..<10).map { index in
+            RouteCoordinate(
+                latitude: Fixture.baseLatitude + Double(index) * Fixture.latitudeStep,
+                longitude: Fixture.longitude,
+                boundary: index == 0 || index == 6 ? .paused : nil
+            )
+        }
+
+        let kept = WatchTrailPackaging.keptPoints(of: route)
+
+        #expect(kept.routeIndices == Array(0..<10))
+        #expect(kept.pauseIndices == [6])
+    }
+
     enum Fixture {
         static let baseLatitude = 47.55
         static let longitude = 12.90

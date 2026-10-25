@@ -87,4 +87,36 @@ struct GPXPauseRoundTripTests {
 
         #expect(xml.components(separatedBy: "<trkseg>").count - 1 == 1)
     }
+
+    /// The rule at its edges (#1035). A pause named on the first point has
+    /// nothing before it to have been paused across, so it opens no segment
+    /// and none is written empty. A fix with a pause either side of it, and the
+    /// fix a pause on the last leg leaves, are a segment of one point each:
+    /// what a file split that way held when it was imported.
+    @Test("a pause at either end, and a fix between two pauses, are written as the segments they were")
+    func pausesAtTheEdgesRoundTrip() throws {
+        let route = (0..<6).map { index in
+            RouteCoordinate(
+                latitude: 47.63 + Double(index) * 0.001,
+                longitude: 12.86,
+                timestamp: Self.date.addingTimeInterval(Double(index) * 60),
+                boundary: [0, 2, 3, 5].contains(index) ? .paused : nil
+            )
+        }
+        let exported = track(route: route)
+
+        let xml = GPXExport.xml(for: exported)
+        #expect(xml.components(separatedBy: "<trkseg>").count - 1 == 4)
+
+        let imported = try reimported(exported)
+        #expect(imported.route.map(\.isPauseBoundary) == [false, false, true, true, false, true])
+    }
+
+    @Test("a route with no points is written as one empty segment")
+    func emptyRouteWritesOneEmptySegment() {
+        let xml = GPXExport.xml(for: track(route: []))
+
+        #expect(xml.components(separatedBy: "<trkseg>").count - 1 == 1)
+        #expect(!xml.contains("<trkpt"))
+    }
 }
