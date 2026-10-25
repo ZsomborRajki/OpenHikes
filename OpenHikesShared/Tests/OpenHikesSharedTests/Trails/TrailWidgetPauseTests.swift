@@ -106,6 +106,27 @@ struct TrailWidgetPauseTests {
         }
     }
 
+    /// A pause on every `every`th leg, from every leg (adjacent pauses that
+    /// share their ends) to one on the last leg and none at all. A stride over
+    /// the whole route spent a point on each end it happened to land on, so
+    /// the line came in short of the budget, as the watch's package did
+    /// before #1053: one pause on the last leg kept 179 points.
+    @Test(
+        "a route past the budget keeps exactly the budget, however its pauses fall",
+        arguments: [1, 2, 3, 9, 10, 11, 64, 500, 1999, 2000]
+    )
+    func longRouteFillsTheBudget(every: Int) {
+        let count = 2000
+        let legs = Array(stride(from: every - 1, to: count - 1, by: every))
+        let kept = SharedTrailSnapshot.keptIndices(count: count, maxPoints: 180, pausedLegs: legs, pauseEndBudget: 60)
+
+        #expect(kept.count == 180)
+        #expect(kept == kept.sorted() && Set(kept).count == kept.count)
+        #expect(kept.first == 0)
+        #expect(kept.last == count - 1)
+        #expect(legs.prefix(30).allSatisfy { kept.contains($0) && kept.contains($0 + 1) })
+    }
+
     @Test("kept indices never exceed the budget, however many pauses there are", arguments: [0, 1, 30, 31, 500])
     func keptIndicesAreBounded(pauseCount: Int) {
         let legs = (0..<pauseCount).map { $0 * 3 }
