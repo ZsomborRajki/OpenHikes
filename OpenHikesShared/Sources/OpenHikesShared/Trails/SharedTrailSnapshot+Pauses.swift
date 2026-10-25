@@ -11,7 +11,8 @@
 //  that reason, as many as ``WatchTrailPackage/pauseBudget`` (#1023).
 //  This keeps both ends of as many pauses as ``SharedTrailSnapshot/pauseEndBudget``
 //  allows, longest first, and spends the rest of the widget's points on the
-//  stride, so the line never grows past `maxPoints`.
+//  stride over the other points, so a line past `maxPoints` comes to exactly
+//  `maxPoints`, as the watch's comes to its budget.
 //
 
 public extension SharedTrailSnapshot {
@@ -67,7 +68,9 @@ public extension SharedTrailSnapshot {
 
     /// Which of `count` points the line keeps: both ends of each of
     /// `pausedLegs`, in the order given, until `pauseEndBudget` points are
-    /// spent, and the stride over the rest. Never more than `maxPoints`.
+    /// spent, and the stride over the points that are not one of those ends.
+    /// All of them for a route that fits in `maxPoints`, and exactly
+    /// `maxPoints` for a longer one.
     ///
     /// Internal so the bound can be tested without building a route.
     internal static func keptIndices(
@@ -77,8 +80,8 @@ public extension SharedTrailSnapshot {
         pauseEndBudget: Int
     ) -> [Int] {
         guard count > maxPoints else { return Array(0..<max(0, count)) }
-        // Two points are left for the stride at least, so its first and
-        // last points — the route's — are always kept.
+        // Two points are left for the stride at least, so the route's first
+        // and last points are always kept, as the stride's own or as an end.
         let budget = min(pauseEndBudget, maxPoints - 2)
         var ends = Set<Int>()
         for leg in pausedLegs where leg >= 0 && leg + 1 < count {
@@ -86,8 +89,13 @@ public extension SharedTrailSnapshot {
             guard ends.count + added.count <= budget else { continue }
             ends.formUnion(added)
         }
-        let strided = decimatedIndices(count: count, maxPoints: maxPoints - ends.count)
-        return ends.isEmpty ? strided : Set(strided).union(ends).sorted()
+        // The stride never lands on an end, so none of its points is spent on
+        // one that is kept anyway. Taken over the whole route, it lost a point
+        // to every end it happened to keep, and the line came in short of
+        // `maxPoints`, as the watch's package did before #1053.
+        let others = (0..<count).filter { !ends.contains($0) }
+        let strided = decimatedIndices(count: others.count, maxPoints: maxPoints - ends.count)
+        return ends.union(strided.map { others[$0] }).sorted()
     }
 
     private static func pausedLegsByLength<Element>(
