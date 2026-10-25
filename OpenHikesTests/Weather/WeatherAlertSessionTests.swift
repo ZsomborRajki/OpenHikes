@@ -194,8 +194,7 @@ struct WeatherAlertSessionTests {
                     summary: "Severe thunderstorm warning",
                     severity: .severe,
                     detailsURL: URL(string: "https://weather.example/storm-1") ?? URL(filePath: "/"),
-                    source: "Deutscher Wetterdienst",
-                    expires: nil
+                    source: "Deutscher Wetterdienst"
                 ),
             ])
         )

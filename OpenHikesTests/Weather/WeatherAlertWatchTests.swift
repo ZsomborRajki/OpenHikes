@@ -39,8 +39,7 @@ struct WeatherAlertWatchTests {
             // Non-optional on purpose: an alert this app cannot link is an
             // alert it must not draw. See `WeatherAlerts`.
             detailsURL: detailsURL(id),
-            source: "Deutscher Wetterdienst",
-            expires: nil
+            source: "Deutscher Wetterdienst"
         )
     }
 
