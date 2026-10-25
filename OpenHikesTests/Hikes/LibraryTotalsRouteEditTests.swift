@@ -42,8 +42,7 @@ struct LibraryTotalsRouteEditTests {
         static let redrawn: [Double] = [600, 1100, 1600]
     }
 
-    private static let year = 2026
-    /// A day in ``year``.
+    /// A day in the year being summed.
     private static let walkedAt = Date(timeIntervalSince1970: 1_790_000_000)
     private static let hour: TimeInterval = 3600
 
@@ -68,7 +67,7 @@ struct LibraryTotalsRouteEditTests {
 
     private static func totals(in container: ModelContainer) async throws -> LibraryTotals {
         let read = try await LibraryTotalsSweep.read(from: container)
-        return LibraryTotals(hikes: read.hikes, walks: read.walks, year: year)
+        return LibraryTotals(hikes: read.hikes, walks: read.walks, asOf: walkedAt)
     }
 
     /// The whole of one walk along `hike` as it is drawn now.

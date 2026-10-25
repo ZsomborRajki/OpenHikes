@@ -73,7 +73,7 @@ struct LibraryTotalsTests {
     }
 
     private static func totals(_ hikes: [LibraryHikeFacts], _ walks: [LibraryWalkFacts] = []) -> LibraryTotals {
-        LibraryTotals(hikes: hikes, walks: walks, year: 2026, calendar: calendar)
+        LibraryTotals(hikes: hikes, walks: walks, asOf: date(2026, 6), calendar: calendar)
     }
 
     // MARK: What counts as walked

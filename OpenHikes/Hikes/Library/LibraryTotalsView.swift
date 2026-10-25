@@ -26,12 +26,27 @@ struct LibraryTotalsView: View {
     var onOpenHike: (Hike) -> Void = { _ in /* no-op default */ }
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.calendar) private var calendar
+    @Environment(\.timeZone) private var timeZone
     @State private var totals: LibraryTotals?
     @State private var couldNotRead = false
     /// Bumped by *Try Again*, which re-runs the sum.
     @State private var attempt = 0
 
+    private struct SumRequest: Hashable {
+        let attempt: Int
+        let calendar: Calendar
+
+        init(attempt: Int, calendar: Calendar, timeZone: TimeZone) {
+            self.attempt = attempt
+            var calendar = calendar
+            calendar.timeZone = timeZone
+            self.calendar = calendar
+        }
+    }
+
     var body: some View {
+        let request = SumRequest(attempt: attempt, calendar: calendar, timeZone: timeZone)
         ScrollView {
             if let totals {
                 LibraryTotalsContent(totals: totals, onOpenHike: open)
@@ -57,18 +72,20 @@ struct LibraryTotalsView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .task(id: attempt) { await sum() }
+        .task(id: request) { await sum(in: request.calendar) }
     }
 
     /// Replaces the figures with a fresh sum, or with the failure: figures
     /// from an earlier read are not left up as if they were this one's.
-    private func sum() async {
+    private func sum(in calendar: Calendar) async {
         couldNotRead = false
+        let date = Date.now
         do {
             let read = try await LibraryTotalsSweep.read(from: modelContext.container)
-            let year = Calendar.autoupdatingCurrent.component(.year, from: .now)
-            totals = LibraryTotals(hikes: read.hikes, walks: read.walks, year: year)
+            try Task.checkCancellation()
+            totals = LibraryTotals(hikes: read.hikes, walks: read.walks, asOf: date, calendar: calendar)
         } catch {
+            guard !Task.isCancelled else { return }
             Self.logger.error(
                 "The library could not be read for its totals: \(error.localizedDescription, privacy: .public)"
             )
@@ -188,6 +205,7 @@ private struct LibraryMonthChart: View {
     private static let lastYearOpacity = 0.5
 
     let totals: LibraryTotals
+    @Environment(\.locale) private var locale
 
     private struct Bar: Identifiable {
         /// What the bar is plotted against. The x axis is categorical, so a
@@ -209,15 +227,14 @@ private struct LibraryMonthChart: View {
     }
 
     private var thisYear: String { String(totals.year) }
-    private var lastYear: String { String(totals.year - 1) }
+    private var lastYear: String { String(totals.previousYear) }
 
     private var columns: [Column] {
         totals.monthColumns.compactMap { months in
             guard let named = months.thisYear ?? months.lastYear else { return nil }
-            let date = Self.naming(named)
             return Column(
-                key: date.formatted(.dateTime.month(.abbreviated)),
-                label: date.formatted(.dateTime.month(.narrow)),
+                key: months.month.chartKey,
+                label: totals.name(of: named, width: .narrow, locale: locale),
                 months: months
             )
         }
@@ -248,7 +265,7 @@ private struct LibraryMonthChart: View {
             .clipShape(
                 UnevenRoundedRectangle(topLeadingRadius: Self.cornerRadius, topTrailingRadius: Self.cornerRadius)
             )
-            .accessibilityLabel("\(Self.naming(bar.month).formatted(.dateTime.month(.wide))) \(bar.series)")
+            .accessibilityLabel("\(totals.name(of: bar.month, width: .wide, locale: locale)) \(bar.series)")
             .accessibilityValue(TotalsFormat.distance(bar.month.distanceMeters))
         }
         .chartForegroundStyleScale([lastYear: Color.gray.opacity(Self.lastYearOpacity), thisYear: Color.accentColor])
@@ -265,13 +282,6 @@ private struct LibraryMonthChart: View {
         .chartYAxisLabel(unit.symbol)
         .frame(height: Self.height)
         .accessibilityIdentifier("library-month-chart")
-    }
-
-    /// A moment in the middle of the month, to name it by: its first instant
-    /// would read as the month before in a zone a little west of the one it
-    /// was summed in.
-    private static func naming(_ month: LibraryTotals.MonthDistance) -> Date {
-        month.interval.start.addingTimeInterval(month.interval.duration / 2)
     }
 
     private static func value(_ meters: Double, in unit: UnitLength) -> Double {
