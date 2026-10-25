@@ -94,7 +94,7 @@ struct LocationFixStreamTests {
                 log.append(coordinate)
             }
         }
-        // `Observations` opens by emitting the value it starts tracking, so
+        // The sequence opens by emitting the value it starts tracking, so
         // every started consumer has exactly one element owed to it.
         await settle(log, untilCount: 1, sourceLocation: sourceLocation)
         return (log, task)

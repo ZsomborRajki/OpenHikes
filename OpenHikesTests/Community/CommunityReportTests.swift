@@ -131,7 +131,9 @@ struct CommunityReportTests {
     func queryDelimitersInTheNoteAreEscaped() throws {
         let note = "Photo 2 & photo 3 = the same house"
         let url = try #require(Self.report(reason: .privacy, note: note).mailURL)
-        let query = try #require(url.query(percentEncoded: false))
+        // Through `URLComponents`, which reads a `mailto:` query on every
+        // release: below iOS 26 `URL` keeps none for an opaque URL.
+        let query = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.query)
 
         #expect(url.absoluteString.contains("%26"))
         #expect(query.contains(note))

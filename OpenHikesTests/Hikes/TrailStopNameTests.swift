@@ -31,14 +31,18 @@ import MapKit
 import OpenHikesData
 import Testing
 
+/// Every test is iOS 26's: each answer here is an `MKMapItem` built by hand,
+/// which only iOS 26 can do — and a suite cannot carry `@available` itself.
+/// The answer below 26 is held to its rule by `TrailStopEarlierNameTests`.
 @Suite("Trail stop names")
 struct TrailStopNameTests {
     private static let somewhere = CLLocation(latitude: 47.6300, longitude: 12.86)
-    private static let address = MKAddress(
+    @available(iOS 26.0, *) private static let address = MKAddress(
         fullAddress: "Könyves Kálmán körút 12-14, 1097 Budapest",
         shortAddress: "Könyves Kálmán körút 12-14"
     )
 
+    @available(iOS 26.0, *)
     private static func item(name: String?, address: MKAddress?) -> MKMapItem {
         let item = MKMapItem(location: somewhere, address: address)
         item.name = name
@@ -48,12 +52,14 @@ struct TrailStopNameTests {
     /// The placeholder, pinned. If a future SDK ever makes `name` genuinely
     /// optional this goes red, which is the signal to simplify the two
     /// functions below back into one.
+    @available(iOS 26.0, *)
     @Test("MapKit always has something to call an item, even when it has nothing")
     func nameIsNeverEmpty() {
         let bare = Self.item(name: nil, address: nil)
         #expect(bare.name?.isEmpty == false, "a nulled name comes back as a placeholder")
     }
 
+    @available(iOS 26.0, *)
     @Test("nothing at all is no name, either way")
     func noItemIsNoName() {
         #expect(TrailStopName.chosen(nil) == nil)
@@ -64,6 +70,7 @@ struct TrailStopNameTests {
 
     /// A summit, a hut or a station comes back with a name, and the name is
     /// what a hiker recognises — it is also what they tapped.
+    @available(iOS 26.0, *)
     @Test("a picked place is called what it is called")
     func aPickedPlaceKeepsItsName() {
         let item = Self.item(name: "Lurdy Ház", address: Self.address)
@@ -75,12 +82,14 @@ struct TrailStopNameTests {
     /// The half a search result cannot answer: a tap in the middle of a field.
     /// An address is what "here" means, which is the same answer Apple Maps
     /// gives a dropped pin.
+    @available(iOS 26.0, *)
     @Test("a tapped spot is named by its address, never by its name")
     func aSpotIsItsAddress() {
         let item = Self.item(name: "Lurdy Ház", address: Self.address)
         #expect(TrailStopName.here(item, at: Self.somewhere.coordinate) == "Könyves Kálmán körút 12-14")
     }
 
+    @available(iOS 26.0, *)
     @Test("and by the full address when there is no short one")
     func theFullAddressIsTheLastResort() {
         let cityOnly = MKAddress(fullAddress: "1097 Budapest", shortAddress: nil)
@@ -90,6 +99,7 @@ struct TrailStopNameTests {
 
     /// The placeholder has nowhere to get in: an item MapKit could not place is
     /// no name at all, and the row keeps the word for what it is to the route.
+    @available(iOS 26.0, *)
     @Test("a spot MapKit cannot place is no name, not a placeholder")
     func anUnplaceableSpotIsNoName() {
         let item = Self.item(name: nil, address: nil)
@@ -102,6 +112,7 @@ struct TrailStopNameTests {
     /// the postcode, placed 1.8 km away at the postcode's middle. Every pin in
     /// that forest got the same answer, which is how two rows of one route
     /// both came to read "4810 Gmunden".
+    @available(iOS 26.0, *)
     @Test("a postcode answered from across the valley is no name for the spot")
     func aPostcodeIsNoName() {
         let pin = CLLocationCoordinate2D(latitude: 47.9118, longitude: 13.8215)
@@ -120,6 +131,7 @@ struct TrailStopNameTests {
     /// A summit is named at its own mark, which a pin on the top need not be
     /// right on: this answer stood 552 m off, and is still the mountain the
     /// pin is on. Its short address is also MapKit's, gap and all.
+    @available(iOS 26.0, *)
     @Test("a summit a few hundred metres off is still its name, without MapKit's empty part")
     func aSummitNamesItsTop() {
         let top = CLLocationCoordinate2D(latitude: 47.8727, longitude: 13.8306)
@@ -135,6 +147,7 @@ struct TrailStopNameTests {
         #expect(TrailStopName.here(summit, at: top) == "Traunstein, Gmunden")
     }
 
+    @available(iOS 26.0, *)
     @Test("an answer is a name up to a kilometre from the spot, and not beyond")
     func theBoundIsAKilometer() throws {
         let bound = TrailStopName.farthestAnswerMeters
@@ -160,6 +173,7 @@ struct TrailStopNameTests {
     /// The bound every name in this app is taken through where it enters — and
     /// this one arrives from a service rather than from a keyboard, which is
     /// exactly the unattended input ``HikeTitle``'s argument is about.
+    @available(iOS 26.0, *)
     @Test("a name arriving from MapKit is bounded like any other")
     func aLongNameIsBounded() throws {
         let long = String(repeating: "Kehlsteinhaus ", count: 100)

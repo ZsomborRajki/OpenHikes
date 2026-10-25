@@ -35,37 +35,84 @@
 //  What a drop *reports* is what the draft and the map follow, and the list
 //  redraws to match it, so the two never disagree about the order.
 //
-//  Neither modifier exists before the iOS 27 SDK, and CodeQL still builds on
-//  Xcode 26.6, so both are the identity on an older compiler.
+//  ## Below iOS 27
+//
+//  Neither modifier exists before iOS 27, so below it the rows carry
+//  `onMove` instead, which drags the same way outside edit mode — a press and
+//  hold lifts a row, and the swipe stays — and measured 3/3 in a sheet in the
+//  same prototype. It reports a drop as offsets and a destination rather than
+//  as rows and a target, and ``TrailStopSlot/drop(in:moving:to:)`` turns the
+//  one into the other, so ``TrailDraftView`` hears about a drop in one shape
+//  on every release and the container is the identity below 27.
+//
+//  Each branch is a `return` rather than a view builder's `if`, so iOS 27
+//  gets the `reorderable()` rows as their own type: a builder would wrap the
+//  newer branch in an `AnyView`, which is not the list every trap above was
+//  measured against.
+//
+//  Neither modifier exists in the iOS 26 SDK either, and CodeQL still builds
+//  on Xcode 26.6, so an older compiler gets the `onMove` rows whatever the
+//  release.
 //
 
 import SwiftUI
 
 extension DynamicViewContent {
     /// Lets a press and hold lift one of these rows and drop it among the
-    /// others. The drop reaches ``SwiftUI/View/trailStopReorderContainer(_:)``.
-    func trailStopsReorderable() -> some View {
+    /// others. On iOS 27 the drop reaches
+    /// ``SwiftUI/View/trailStopReorderContainer(_:)``; below it, `move`.
+    ///
+    /// - Parameters:
+    ///   - ids: The rows' identifiers in the order the list draws them, which
+    ///     is what `onMove`'s offsets count.
+    ///   - move: Where a drop lands below iOS 27: the dragged rows'
+    ///     identifiers, and the row they now sit in front of, or `nil` for the
+    ///     end — the container's terms.
+    func trailStopsReorderable(
+        _ ids: [String],
+        move: @escaping (_ sources: [String], _ before: String?) -> Void
+    ) -> some View {
         #if compiler(>=6.4)
-        reorderable()
+        if #available(iOS 27.0, *) {
+            return reorderable()
+        } else {
+            return movable(ids, move: move)
+        }
         #else
-        self
+        return movable(ids, move: move)
         #endif
+    }
+
+    private func movable(
+        _ ids: [String],
+        move: @escaping (_ sources: [String], _ before: String?) -> Void
+    ) -> some DynamicViewContent {
+        onMove { offsets, destination in
+            let drop = TrailStopSlot.drop(in: ids, moving: offsets, to: destination)
+            move(drop.sources, drop.before)
+        }
     }
 }
 
 extension View {
-    /// Where a drop among the stops is handed over: the dragged rows'
-    /// identifiers, and the row they now sit in front of, or `nil` for the end.
+    /// Where a drop among the stops is handed over on iOS 27: the dragged
+    /// rows' identifiers, and the row they now sit in front of, or `nil` for
+    /// the end. Below 27 the rows report it themselves — see
+    /// ``SwiftUI/DynamicViewContent/trailStopsReorderable(_:move:)``.
     func trailStopReorderContainer(_ move: @escaping (_ sources: [String], _ before: String?) -> Void) -> some View {
         #if compiler(>=6.4)
-        reorderContainer(for: TrailStopSlot.self) { difference in
-            switch difference.destination.position {
-            case .before(let id): move(difference.sources, id)
-            case .end: move(difference.sources, nil)
+        if #available(iOS 27.0, *) {
+            return reorderContainer(for: TrailStopSlot.self) { difference in
+                switch difference.destination.position {
+                case .before(let id): move(difference.sources, id)
+                case .end: move(difference.sources, nil)
+                }
             }
+        } else {
+            return self
         }
         #else
-        self
+        return self
         #endif
     }
 }

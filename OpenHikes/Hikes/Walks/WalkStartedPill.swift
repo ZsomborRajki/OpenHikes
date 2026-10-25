@@ -22,6 +22,7 @@
 //  when a walk starts, when it ends and when the *x* is tapped.
 //
 
+import OpenHikesShared
 import SwiftUI
 
 struct WalkStartedPill: View {
@@ -85,10 +86,9 @@ struct WalkStartedPill: View {
             .accessibilityHint("Opens the trail, where the hike can be paused or ended.")
             .accessibilityIdentifier("walk-started-pill")
 
-            Button(role: .close) {
+            RoleButton(.close, isIconOnly: true) {
                 session.dismissStartNotice()
             }
-            .labelStyle(.iconOnly)
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
             .frame(

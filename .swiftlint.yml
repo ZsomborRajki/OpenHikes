@@ -526,17 +526,20 @@ custom_rules:
     message: "Spell user-visible text the American way: color, center, license, meter, gray (#847)."
     severity: error
 
-  # `ForEach` takes `photos.enumerated()` as it is: enumerating a random-access
-  # collection gives a random-access collection. Wrapped in `Array(…)` it is
-  # copied into a fresh array of pairs every time the body runs (#220). A
-  # sweep took the wrapper out of every view (#229), and two views had it back
-  # by #940, so this keeps it out.
+  # `ForEach` takes `photos.indexed()`, from swift-algorithms: indexing a
+  # random-access collection gives a random-access collection, so nothing is
+  # copied. Wrapped in `Array(…)`, `photos.enumerated()` is copied into a
+  # fresh array of pairs every time the body runs (#220). A sweep took the
+  # wrapper out of every view (#229), and two views had it back by #940, so
+  # this keeps it out. `photos.enumerated()` alone is random access only from
+  # iOS 26, above the deployment floor, which is what the compiler says when
+  # it is handed to `ForEach` as it is.
   #
   # Each `\s*` lets the match cross a line break, so a call wrapped the way
   # `multiline_arguments_brackets` lays it out is caught as well as one on a
   # single line. The base itself is held to one line, so a match cannot run on
   # past the call into the code below it. A base that is not random access (a
-  # `Set`, a `zip`) does need a copy: copy the base, `Array(set).enumerated()`,
+  # `Set`, a `zip`) does need a copy: copy the base, `Array(set).indexed()`,
   # which this does not match.
   foreach_enumerated_without_array:
     name: "ForEach Without Array Around enumerated()"
@@ -544,5 +547,5 @@ custom_rules:
     excluded_match_kinds:
       - comment
       - doccomment
-    message: "Pass `x.enumerated()` to ForEach as it is; Array(…) only copies it (#940)."
+    message: "Pass `x.indexed()` to ForEach; Array(x.enumerated()) only copies it (#940)."
     severity: error

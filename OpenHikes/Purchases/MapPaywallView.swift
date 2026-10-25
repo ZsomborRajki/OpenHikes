@@ -145,11 +145,11 @@ struct MapPaywallView: View {
             // other sheet in the app puts its cancel, and it is beside the
             // `OpenHikes Pro` title a customer is matching against a charge.
             .storeButton(.hidden, for: .cancellation)
-            // `safeAreaBar` rather than `safeAreaInset`, for the reason
+            // A glass bar rather than a `safeAreaInset`, for the reason
             // ``PhotoDiscoverySheet``'s selection bar gives: the system draws
             // the glass and handles the scroll edge, so the row stops carrying
-            // a `.bar` material of its own.
-            .safeAreaBar(edge: .bottom) { restoreRow }
+            // a `.bar` material of its own above iOS 26.
+            .glassBar(.bottom) { restoreRow }
             // The product's own name, as App Store Connect and
             // `OpenHikes.storekit` spell it, rather than a description of
             // what it currently unlocks: a customer reads this beside a

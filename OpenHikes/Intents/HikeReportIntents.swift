@@ -23,7 +23,7 @@ struct CurrentHikeProgressIntent: AppIntent, HikeCoordinatingIntent {
         "Says how far and how long you are into the hike you are recording.",
         categoryName: "Recording"
     )
-    static let supportedModes: IntentModes = .background
+    @available(iOS 26.0, *) static let supportedModes: IntentModes = .background
 
     @Dependency var appCoordinator: HikeIntentCoordinator
 
@@ -40,7 +40,7 @@ struct HikeDistanceTodayIntent: AppIntent, HikeCoordinatingIntent {
         "Adds up everything you have hiked today.",
         categoryName: "Hikes"
     )
-    static let supportedModes: IntentModes = .background
+    @available(iOS 26.0, *) static let supportedModes: IntentModes = .background
 
     /// What the totals are read back against — "today", not a date. The
     /// coordinator resolves which day that is against the hiker's own
@@ -65,7 +65,7 @@ struct LastHikeIntent: AppIntent, HikeCoordinatingIntent {
         "Reports the most recent hike you finished.",
         categoryName: "Hikes"
     )
-    static let supportedModes: IntentModes = .background
+    @available(iOS 26.0, *) static let supportedModes: IntentModes = .background
 
     @Dependency var appCoordinator: HikeIntentCoordinator
 
@@ -99,7 +99,7 @@ struct HikeDurationIntent: AppIntent, HikeCoordinatingIntent {
         "Reports how far and how long a hike you have saved was.",
         categoryName: "Hikes"
     )
-    static let supportedModes: IntentModes = .background
+    @available(iOS 26.0, *) static let supportedModes: IntentModes = .background
 
     @Parameter(title: "Hike") var hike: HikeEntity
 

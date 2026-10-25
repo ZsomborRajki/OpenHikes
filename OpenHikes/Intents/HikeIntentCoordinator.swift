@@ -509,7 +509,7 @@ extension HikeIntentCoordinator {
 ///
 /// Separate from ``HikeRecordingControlHandling`` because the two answer
 /// different questions with different escape routes: a Control Center tap can
-/// `continueInForeground(_:)` and ask Core Location for what it needs, and a
+/// continue in the foreground and ask Core Location for what it needs, and a
 /// Lock Screen tap cannot — so this one never throws and reports a refusal the
 /// panel can draw instead. See ``HikeActivityControlRefusal``.
 extension HikeIntentCoordinator: HikeActivityControlHandling {

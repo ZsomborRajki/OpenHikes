@@ -8,6 +8,7 @@
 //
 
 import OpenHikesData
+import OpenHikesShared
 import SwiftUI
 #if os(iOS)
 import UIKit
@@ -32,10 +33,9 @@ struct RecordingRecoveryNotice: View {
                 )
                 .font(.subheadline)
                 Spacer()
-                Button(role: .close) {
+                RoleButton(.close, isIconOnly: true) {
                     recorder.dismissRecoveryNotice()
                 }
-                .labelStyle(.iconOnly)
                 .font(.caption.weight(.semibold))
                 .minimumTapTarget()
                 .accessibilityIdentifier("recording-recovery-dismiss")

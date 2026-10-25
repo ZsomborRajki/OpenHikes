@@ -31,9 +31,12 @@ extension MapCoordinatorTests {
         static let north: Double = 37.3400
     }
 
-    /// The accent colour's variant for one appearance, as RGBA.
+    /// The accent colour's variant for one appearance, as RGBA — the asset's,
+    /// which is what the app draws in. `Color.accentColor` bridged to UIKit is
+    /// not the same thing everywhere: resolved outside a view, iOS 18 hands
+    /// back the system blue for it, where iOS 26 hands back the asset.
     private static func accent(_ style: UIUserInterfaceStyle) -> [CGFloat] {
-        UIColor(Color.accentColor)
+        (UIColor(named: "AccentColor") ?? .clear)
             .resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
             .cgColor.components ?? []
     }

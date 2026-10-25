@@ -31,6 +31,9 @@ import Foundation
 import Testing
 import UIKit
 
+/// Every test is iOS 26's, like the typed messages it pins — and a suite
+/// cannot carry `@available` itself. `LifecycleObservationTests` holds the
+/// app's own observation to the same contract on every release.
 @MainActor
 @Suite("Lifecycle observation tokens")
 struct LifecycleObservationTokenTests {
@@ -55,6 +58,7 @@ struct LifecycleObservationTokenTests {
     /// Goes red the day dropping a token stops deregistering — at which point
     /// three controllers are leaking an observer each and the comments above
     /// their storage are wrong.
+    @available(iOS 26.0, *)
     @Test("a token nobody keeps stops observing")
     func aDroppedTokenEndsItsObservation() {
         let center = Self.center()
@@ -78,6 +82,7 @@ struct LifecycleObservationTokenTests {
     /// keeps delivering for as long as it is held, and `removeObserver` is
     /// still available for a registration that has to end before its holder
     /// does.
+    @available(iOS 26.0, *)
     @Test("a token that is kept goes on observing until it is removed")
     func aRetainedTokenObservesUntilRemoved() {
         let center = Self.center()
@@ -107,6 +112,7 @@ struct LifecycleObservationTokenTests {
     /// this bridge ever stops working those suites go quiet rather than red —
     /// they would post into a centre nobody was listening to and assert that
     /// nothing had happened.
+    @available(iOS 26.0, *)
     @Test("a legacy post reaches a typed observer registered with no subject")
     func aLegacyPostReachesATypedObserver() {
         let center = Self.center()

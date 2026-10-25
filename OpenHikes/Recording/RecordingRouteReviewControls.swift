@@ -12,6 +12,7 @@
 //  leave the whole review answering to one name.
 //
 
+import Algorithms
 import OpenHikesData
 import os
 import SwiftUI
@@ -58,8 +59,8 @@ struct RecordingRouteReviewControls: View {
             GlassStack(spacing: choiceGlassSpacing) {
                 VStack(alignment: .leading, spacing: choiceSpacing) {
                     ForEach(
-                        section.availableChoices.enumerated(),
-                        id: \.offset
+                        section.availableChoices.indexed(),
+                        id: \.index
                     ) { _, choice in
                         choiceButton(choice, in: section)
                     }

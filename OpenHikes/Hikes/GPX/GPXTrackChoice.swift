@@ -26,6 +26,7 @@ import DequeModule
 import Foundation
 import Observation
 import OpenHikesData
+import OpenHikesShared
 import SwiftUI
 
 /// One track of the file, as the list shows it.
@@ -196,7 +197,7 @@ struct GPXTrackChoiceSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(role: .cancel) { choice.cancel() }
+                    RoleButton(.cancel) { choice.cancel() }
                         .accessibilityIdentifier("gpx-track-choice-cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {

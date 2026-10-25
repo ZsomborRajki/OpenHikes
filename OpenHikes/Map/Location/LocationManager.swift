@@ -335,8 +335,8 @@ final class LocationManager: NSObject {
     ///
     /// Consumers stay on the main actor: the sequence inherits the isolation
     /// of whoever asks for it, and this is main-actor state.
-    var fixes: Observations<CLLocationCoordinate2D?, Never> {
-        Observations { self.coordinate }
+    var fixes: some AsyncSequence<CLLocationCoordinate2D?, Never> & Sendable {
+        observedValues { self.coordinate }
     }
 }
 

@@ -237,8 +237,8 @@ final class WeatherFocus {
     ///
     /// Same shape as ``LocationManager/fixes``, and for the same reason: the
     /// loop should wake when the answer changes rather than ask on a timer.
-    var subjects: Observations<WeatherSubject?, Never> {
-        Observations { self.subject }
+    var subjects: some AsyncSequence<WeatherSubject?, Never> & Sendable {
+        observedValues { self.subject }
     }
 
     /// Assigns only on a real change, so a repeated fix or a re-selection of

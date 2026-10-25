@@ -28,8 +28,9 @@
 //  because a conformance could otherwise block the caller, this one cannot
 //  choose: `MKReverseGeocodingRequest.mapItems` is declared `NS_SWIFT_UI_ACTOR`
 //  in the SDK, so MapKit delivers its answer on the main actor whatever the
-//  caller does. The work itself is a round trip in another process; what
-//  arrives here is a string.
+//  caller does — and below iOS 26, where ``ReverseGeocode`` asks `CLGeocoder`
+//  instead, that calls back on the main thread too. The work itself is a round
+//  trip in another process; what arrives here is a string.
 //
 
 import CoreLocation
@@ -57,12 +58,12 @@ final class GeocodedAreaNames: CommunityAreaNaming {
     /// One at a time because there is only ever one header: a hiker who
     /// takes two offers in quick succession wants the second name, and the
     /// first request's answer would otherwise be free to land after it.
-    private var request: MKReverseGeocodingRequest?
+    private var request: ReverseGeocode?
 
     func name(for area: CommunitySearchArea) async -> String? {
         request?.cancel()
         let location = CLLocation(latitude: area.latitude, longitude: area.longitude)
-        guard let pending = MKReverseGeocodingRequest(location: location) else { return nil }
+        guard let pending = ReverseGeocode(location: location) else { return nil }
         request = pending
         do {
             let items = try await pending.mapItems
@@ -73,7 +74,7 @@ final class GeocodedAreaNames: CommunityAreaNaming {
             // place, and a street is a smaller thing than the circle this
             // describes.
             return items.first.flatMap { item in
-                item.addressRepresentations?.cityName ?? item.name
+                item.cityName ?? item.name
             }
         } catch {
             // Logged and no more, exactly as a failed title search is. A

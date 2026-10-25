@@ -335,9 +335,7 @@ extension MapView {
         // one appearing behind a capsule would show as a square inside it.
         tracking.backgroundColor = .clear
 
-        let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
-        glass.translatesAutoresizingMaskIntoConstraints = false
-        glass.cornerConfiguration = .capsule()
+        let glass = MapGlass.view(.capsule)
         glass.contentView.addSubview(tracking)
 
         let refused = makeRefusedTrackingButton(coordinator)

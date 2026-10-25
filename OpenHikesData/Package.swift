@@ -21,7 +21,8 @@ import PackageDescription
 /// with the composition root in `App/Configuration/`.
 ///
 /// Built statically, like `OpenHikesShared`: launch time is measured here,
-/// and a dynamic library is a dylib load on the launch path for nothing.
+/// and a dynamic library is a dylib load on the launch path for nothing. Its
+/// platforms are `OpenHikesShared`'s, for the reason that manifest gives.
 ///
 /// swift-numerics is linked by the test target only, for
 /// `isApproximatelyEqual(to:absoluteTolerance:)`, as it is in
@@ -30,10 +31,10 @@ import PackageDescription
 let package = Package(
     name: "OpenHikesData",
     platforms: [
-        .iOS(.v26),
-        .macOS(.v26),
-        .visionOS(.v26),
-        .watchOS(.v26)
+        .iOS("18.4"),
+        .macOS("15.4"),
+        .visionOS("2.4"),
+        .watchOS(.v11)
     ],
     products: [
         .library(name: "OpenHikesData", targets: ["OpenHikesData"])

@@ -84,7 +84,7 @@ nonisolated struct TrailStopSearchPick: Equatable, Sendable {
     /// with them.
     init?(firstOf items: [MKMapItem], fallbackName: String, subtitle: String = "") {
         guard let item = items.first else { return nil }
-        let coordinate = item.location.coordinate
+        let coordinate = item.standingLocation.coordinate
         guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
         // MapKit's own spelling in preference to the completion's title,
         // because they differ exactly where it matters: "kehlstein" comes

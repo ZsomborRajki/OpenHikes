@@ -192,6 +192,25 @@ nonisolated enum TrailStopSlot: Hashable, Sendable, Identifiable {
         rest.insert(contentsOf: moving, at: index)
         return rest
     }
+
+    /// A drop as `onMove` reports it below iOS 27 — `offsets` lifted out of
+    /// `ids` and put down at `destination` — in the terms
+    /// ``rearranged(_:moving:before:)`` takes, which are the terms iOS 27's
+    /// container reports it in.
+    ///
+    /// `destination` counts the rows as they stood before the drop, so the row
+    /// in front is the first one at or after it that did not move: one row
+    /// put down at its own position, or at the one after it, stays where it
+    /// was.
+    static func drop(
+        in ids: [String],
+        moving offsets: IndexSet,
+        to destination: Int
+    ) -> (sources: [String], before: String?) {
+        let sources = offsets.filter(ids.indices.contains).map { ids[$0] }
+        let before = ids.dropFirst(max(destination, 0)).first { !sources.contains($0) }
+        return (sources, before)
+    }
 }
 
 /// A point under a finger: which one, and where it is right now.

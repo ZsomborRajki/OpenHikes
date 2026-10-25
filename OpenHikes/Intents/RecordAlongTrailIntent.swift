@@ -51,7 +51,7 @@ import OpenHikesShared
 
 /// Not `nonisolated`, for the reason ``HikeEntity`` gives: `@Parameter` and
 /// `@Dependency` wrap mutable stored properties.
-struct RecordAlongTrailIntent: AppIntent, HikeCoordinatingIntent {
+struct RecordAlongTrailIntent: AppIntent, ForegroundContinuableIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Record Along a Trail"
     // periphery:ignore - see `StartHikeRecordingIntent.description`.
     static let description = IntentDescription(
@@ -62,7 +62,7 @@ struct RecordAlongTrailIntent: AppIntent, HikeCoordinatingIntent {
     /// reason: `recorder.start()` is the only call that asks Core Location
     /// anything, and the prompt it may put up cannot be shown from the
     /// background.
-    static let supportedModes: IntentModes = [.background, .foreground(.dynamic)]
+    @available(iOS 26.0, *) static let supportedModes: IntentModes = [.background, .foreground(.dynamic)]
 
     @Parameter(title: "Trail") var hike: HikeEntity
 
@@ -77,7 +77,7 @@ struct RecordAlongTrailIntent: AppIntent, HikeCoordinatingIntent {
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         if await coordinator.authorization.needsForeground {
-            try await continueInForeground(
+            try await askToContinueInForeground(
                 IntentDialog("OpenHikes needs your location before it can record a hike.")
             )
         }

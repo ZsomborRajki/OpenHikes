@@ -108,7 +108,7 @@ struct CommonsPhotoGroupView: View {
             columns: [GridItem(.adaptive(minimum: Self.tileMinimum), spacing: Self.tileSpacing)],
             spacing: Self.tileSpacing
         ) {
-            ForEach(photos.enumerated(), id: \.element.credit.license.sourceURL) { index, photo in
+            ForEach(photos.indexed(), id: \.element.credit.license.sourceURL) { index, photo in
                 Button {
                     onOpen(photo)
                 } label: {

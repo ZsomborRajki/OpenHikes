@@ -56,6 +56,15 @@
 # reported, and the device is erased, or created, the way it was before
 # templates.
 #
+# ## A pool on the deployment floor
+#
+# The pool runs the newest runtime that runs its device type, which is where
+# every gate runs. OPENHIKES_SIM_POOL_RUNTIME pins an older one instead, for
+# running the suites on the oldest release the app supports — see
+# *Deployment floor* in AGENTS.md. A pinned pool wants a prefix and a device
+# type of its own: an iPhone 18 Pro has no iOS 18, and devices of two
+# runtimes under one prefix would swap runtimes as they changed hands.
+#
 # ## Granting
 #
 # Every device it hands out has the photo library granted to the app, clean or
@@ -86,6 +95,7 @@ pool_prefix="${OPENHIKES_SIM_POOL_PREFIX:-OpenHikes Pool}"
 pool_max="${OPENHIKES_SIM_POOL_MAX:-5}"
 ttl_minutes="${OPENHIKES_SIM_POOL_TTL_MINUTES:-180}"
 device_type="${OPENHIKES_SIM_POOL_DEVICE_TYPE:-iPhone 18 Pro}"
+pinned_runtime="${OPENHIKES_SIM_POOL_RUNTIME:-}"
 app_bundle_id="tappium.com.OpenHikes"
 claim_root="${OPENHIKES_SIM_POOL_DIR:-${HOME:-/tmp}/Library/Caches/OpenHikes/sim-pool}"
 # Scripts/run-ui-tests.sh's own claims, read so the pool never hands out a
@@ -121,6 +131,9 @@ Environment:
   OPENHIKES_SIM_POOL_MAX           Most devices the pool creates (default 5)
   OPENHIKES_SIM_POOL_TTL_MINUTES   Idle minutes before a claim lapses (180)
   OPENHIKES_SIM_POOL_DEVICE_TYPE   Device type created (iPhone 18 Pro)
+  OPENHIKES_SIM_POOL_RUNTIME       Runtime identifier the devices run (the
+                                   newest that runs the device type), for a
+                                   pool on the deployment floor
   OPENHIKES_SIM_POOL_DIR           Where claims are recorded
   OPENHIKES_SIM_POOL_PREFIX        The devices' name before their number
                                    (OpenHikes Pool); another prefix is
@@ -358,8 +371,8 @@ release_pool_lock() {
 # The UDID of the settled template every pool device is cloned from, settling
 # it first if it needs it.
 pool_template() {
-    local runtime
-    runtime="$(newest_simulator_runtime iOS "$device_type")"
+    local runtime="$pinned_runtime"
+    [[ -n "$runtime" ]] || runtime="$(newest_simulator_runtime iOS "$device_type")"
     if [[ -z "$runtime" ]]; then
         echo "No iOS simulator runtime installed to build a template on." >&2
         return 1
@@ -460,7 +473,8 @@ acquire() {
 
     if [[ -z "$chosen" ]]; then
         echo "Creating $chosen_name ($device_type)." >&2
-        if ! chosen="$(xcrun simctl create "$chosen_name" "$device_type")" || [[ -z "$chosen" ]]; then
+        if ! chosen="$(xcrun simctl create "$chosen_name" "$device_type" ${pinned_runtime:+"$pinned_runtime"})" \
+            || [[ -z "$chosen" ]]; then
             release_pool_lock
             echo "simctl could not create '$chosen_name' as a '$device_type'." >&2
             exit 1

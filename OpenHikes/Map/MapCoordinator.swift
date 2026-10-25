@@ -89,19 +89,19 @@ extension MapView {
         private weak var observedRecordingMapView: MKMapView?
         /// The lifecycle observations, held for exactly as long as the
         /// coordinator is — which is the whole of the deregistration.
-        /// `NotificationCenter.ObservationToken` ends its observation when it
-        /// goes out of scope, so releasing this array along with the
-        /// coordinator is what takes both observers off the centre. That is
-        /// why there is no `deinit` here at all any more, and with it went the
+        /// A ``LifecycleObservation`` ends its observation when it is
+        /// released, so releasing this array along with the coordinator is
+        /// what takes both observers off the centre. That is why there is no
+        /// `deinit` here at all any more, and with it went the
         /// `nonisolated(unsafe)` that the old untyped tokens needed purely so
         /// a nonisolated `deinit` could reach them.
         ///
-        /// Stored rather than discarded for the same reason: a token dropped
-        /// at the end of `startObservingScenePhaseIfNeeded` would take the
-        /// registration down with it before the first fix ever arrived.
-        /// `LifecycleObservationTokenTests` pins both halves of that, since
+        /// Stored rather than discarded for the same reason: an observation
+        /// dropped at the end of `startObservingScenePhaseIfNeeded` would take
+        /// the registration down with it before the first fix ever arrived.
+        /// `LifecycleObservationTests` pins both halves of that, since
         /// neither is a `removeObserver` call a map test could watch.
-        private var scenePhaseObservers: [NotificationCenter.ObservationToken] = []
+        private var scenePhaseObservers: [LifecycleObservation] = []
 
         /// The live renderer for the route line, kept so a tint change can recolor
         /// it in place without rebuilding the overlay.
@@ -659,14 +659,14 @@ private extension MapView.Coordinator {
     /// trace. Lazily, from `observeRecordingTrace`, because a map that never
     /// shows a recording never needs them.
     ///
-    /// Typed `MainActorMessage` observers rather than named notifications:
-    /// the handler is synchronously main-actor isolated, which is what removes
-    /// the `MainActor.assumeIsolated` these two used to open with. That the
-    /// body runs *in* the post rather than a turn later is load-bearing rather
-    /// than tidy — a fix already in flight would otherwise be drawn after the
-    /// app had gone away — so it is pinned rather than assumed, by
-    /// `MapCoordinatorLifecycleTests.lifecycleGateMovesSynchronously`. Neither
-    /// handler may grow a hop of its own.
+    /// ``LifecycleObservation``s rather than named notifications: the
+    /// handler runs synchronously on the main actor on every release, which
+    /// is what removes the `MainActor.assumeIsolated` these two used to open
+    /// with. That the body runs *in* the post rather than a turn later is
+    /// load-bearing rather than tidy — a fix already in flight would otherwise
+    /// be drawn after the app had gone away — so it is pinned rather than
+    /// assumed, by `MapCoordinatorLifecycleTests.lifecycleGateMovesSynchronously`.
+    /// Neither handler may grow a hop of its own.
     ///
     /// No subject is passed, so the registration is not scoped to
     /// `UIApplication.shared`. There is exactly one application object in the
@@ -679,14 +679,10 @@ private extension MapView.Coordinator {
         guard scenePhaseObservers.isEmpty else { return }
         let center = NotificationCenter.default
         scenePhaseObservers = [
-            center.addObserver(
-                for: UIApplication.DidEnterBackgroundMessage.self
-            ) { [weak self] _ in
+            LifecycleObservation(.didEnterBackground, on: center) { [weak self] in
                 self?.isForeground = false
             },
-            center.addObserver(
-                for: UIApplication.WillEnterForegroundMessage.self
-            ) { [weak self] _ in
+            LifecycleObservation(.willEnterForeground, on: center) { [weak self] in
                 self?.resumeForegroundDrawing()
             },
         ]

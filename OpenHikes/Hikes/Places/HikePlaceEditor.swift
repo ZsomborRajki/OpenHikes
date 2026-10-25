@@ -12,6 +12,7 @@
 //
 
 import OpenHikesData
+import OpenHikesShared
 import SwiftUI
 
 struct HikePlaceEditor: View {
@@ -52,7 +53,7 @@ struct HikePlaceEditor: View {
                     DismissButton(role: .cancel)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(role: .confirm) {
+                    RoleButton(.confirm, title: "Save") {
                         do throws(HikePlaceRefusal) {
                             try onSave(name, symbol, note)
                             isSaved = true

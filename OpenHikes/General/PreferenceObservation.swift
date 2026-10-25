@@ -25,8 +25,8 @@ import UIKit
 /// `MapView.Coordinator` makes and for the same reason.
 ///
 /// **The two are not the same kind of observation and must not be collapsed
-/// into one.** `DidBecomeActiveMessage` is a `MainActorMessage`, so its handler
-/// is synchronously main-actor isolated and needs no hop.
+/// into one.** The foreground one is a ``LifecycleObservation``, whose handler
+/// runs synchronously on the main actor and needs no hop.
 /// `UserDefaults.didChangeNotification` has no typed message and arrives on
 /// whichever thread wrote the key, so it keeps its `onMainActor`.
 ///
@@ -34,14 +34,13 @@ import UIKit
 /// it is written twice and typed once wrong — so it is written here.
 @MainActor
 final class PreferenceObservation {
-    /// The typed lifecycle observation, held for exactly as long as its owner
-    /// is — which is the whole of its deregistration.
-    /// `NotificationCenter.ObservationToken` ends its observation when it goes
-    /// out of scope, so releasing this array is what takes the observer off
-    /// the centre; dropping the token at the end of ``observe(lifecycleCenter:defaults:onForeground:onDefaultsChange:)``
+    /// The lifecycle observation, held for exactly as long as its owner is —
+    /// which is the whole of its deregistration. A ``LifecycleObservation``
+    /// ends its observation when it is released, so releasing this array is
+    /// what takes the observer off the centre; dropping it at the end of ``observe(lifecycleCenter:defaults:onForeground:onDefaultsChange:)``
     /// would instead take the registration down before the hiker ever left the
-    /// app. `LifecycleObservationTokenTests` pins both halves.
-    private var lifecycleObservers: [NotificationCenter.ObservationToken] = []
+    /// app. `LifecycleObservationTests` pins both halves.
+    private var lifecycleObservers: [LifecycleObservation] = []
 
     /// The untyped one, which has no such lifetime: a block-based observer is
     /// retained by the notification centre until it is removed by token, and
@@ -76,9 +75,7 @@ final class PreferenceObservation {
     ) {
         #if canImport(UIKit)
         lifecycleObservers.append(
-            lifecycleCenter.addObserver(
-                for: UIApplication.DidBecomeActiveMessage.self
-            ) { _ in
+            LifecycleObservation(.didBecomeActive, on: lifecycleCenter) {
                 onForeground()
             }
         )

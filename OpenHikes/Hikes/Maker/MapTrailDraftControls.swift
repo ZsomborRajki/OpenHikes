@@ -123,9 +123,7 @@ final class MapTrailDraftControlsView: UIView {
             isRecording ? Self.recordingSymbolName : Self.recordSymbolName
         )
         recordButton.configuration?.baseForegroundColor = isRecording ? .white : .systemRed
-        let glass = UIGlassEffect(style: .regular)
-        if isRecording { glass.tintColor = .systemRed }
-        recordGlass.effect = glass
+        MapGlass.tint(recordGlass, with: isRecording ? .systemRed : nil)
         recordButton.accessibilityLabel = isRecording
             ? String(localized: "Open hike recording")
             : String(localized: "Record a hike")

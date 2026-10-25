@@ -80,6 +80,9 @@ extension HikePhotoImportTests {
     /// until the repeat is attached, so the import can find it only at its
     /// second check. A yield would guarantee neither ordering and could let
     /// this pass through the early check or the refused new-photo path.
+    /// `Task.immediate` is iOS 26's, and the ordering it buys is the test; the
+    /// import it drives is the same code on every release.
+    @available(iOS 26.0, *)
     @MainActor
     @Test("a repeat found after the file write keeps its filing when the move cannot be saved")
     func lateRefileRollsBackWhenTheSaveFails() async throws {

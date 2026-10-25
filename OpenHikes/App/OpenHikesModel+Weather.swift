@@ -75,7 +75,7 @@ extension OpenHikesModel {
             significantLocations.movements.map { _ in WeatherWake.movement },
             merge(
                 dueDates.map { _ in WeatherWake.expiry },
-                Observations { self.weatherAlertSession }
+                observedValues { self.weatherAlertSession }
                     .removeDuplicates()
                     .map { _ in WeatherWake.session }
             )

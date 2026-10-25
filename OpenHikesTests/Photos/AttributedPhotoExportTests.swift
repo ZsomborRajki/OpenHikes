@@ -86,6 +86,11 @@ struct AttributedPhotoExportTests {
             as String? == Self.licenseText.absoluteString)
     }
 
+    /// iOS 26's: below it ImageIO writes no XMP into a PNG it copies, and such
+    /// a copy is withheld instead — see `unchangedCopyrightIsWithheld`. A
+    /// Commons copy is always a JPEG (`CommonsPhotoQuery.photographType`)
+    /// either way.
+    @available(iOS 26.0, *)
     @Test("the copyright notice alone names the author, the licence and both links")
     func noticeCarriesAllThree() async throws {
         // A PNG keeps no IPTC and no `dc:creator`, so the notice is the whole
@@ -131,16 +136,18 @@ struct AttributedPhotoExportTests {
     @Test("sharing a Commons copy sends a credited copy and leaves the stored file alone")
     func shareSendsACreditedCopy() async throws {
         let sandbox = CreditSandbox()
-        let photo = try await Self.storedPhoto(in: sandbox)
+        // A JPEG, as every Commons copy is — and a container ImageIO writes the
+        // credit into on every release, where a PNG takes it only from iOS 26.
+        let photo = try await Self.storedPhoto(in: sandbox, data: Self.image(jpeg: true))
         let stored = sandbox.store.url(for: photo)
         let before = try Data(contentsOf: stored)
         let output = sandbox.output
 
         let sent = try await offMain {
-            try HikePhotoFile.stageCredited(stored, with: Self.credit, named: "Thumsee-1.png", in: output)
+            try HikePhotoFile.stageCredited(stored, with: Self.credit, named: "Thumsee-1.jpeg", in: output)
         }
 
-        #expect(sent.lastPathComponent == "Thumsee-1.png")
+        #expect(sent.lastPathComponent == "Thumsee-1.jpeg")
         #expect(Self.copyright(of: try Data(contentsOf: sent)) == Self.credit.notice)
         #expect(try Data(contentsOf: stored) == before)
     }
@@ -190,7 +197,8 @@ struct AttributedPhotoExportTests {
     func archiveCreditsACopy() async throws {
         let sandbox = CreditSandbox()
         let own = try await Self.storedPhoto(in: sandbox)
-        let commons = try await Self.storedPhoto(in: sandbox)
+        // A JPEG, for the reason `shareSendsACreditedCopy` gives.
+        let commons = try await Self.storedPhoto(in: sandbox, data: Self.image(jpeg: true))
         let archive = Self.archive([(own, nil), (commons, Self.credit)])
 
         let root = try await offMain {
@@ -203,21 +211,21 @@ struct AttributedPhotoExportTests {
             try Data(contentsOf: photos.appendingPathComponent("photo-1.png"))
                 == Data(contentsOf: sandbox.store.url(for: own))
         )
-        let copy = try Data(contentsOf: photos.appendingPathComponent("photo-2.png"))
+        let copy = try Data(contentsOf: photos.appendingPathComponent("photo-2.jpeg"))
         #expect(Self.copyright(of: copy) == Self.credit.notice)
 
         let credits = try String(
             contentsOf: root.appendingPathComponent(HikeArchive.creditsFileName),
             encoding: .utf8
         )
-        #expect(credits == "Photos/photo-2.png\n\(Self.credit.notice)\n")
+        #expect(credits == "Photos/photo-2.jpeg\n\(Self.credit.notice)\n")
 
         let xml = try String(contentsOf: root.appendingPathComponent("\(archive.stem).gpx"), encoding: .utf8)
         // One `<desc>`, on the Commons copy's waypoint, and its page linked
         // after the file — in the order GPX 1.1 fixes for `<wpt>`'s children.
         #expect(xml.components(separatedBy: "<desc>").count - 1 == 1)
         let description = try #require(xml.range(of: "<desc>Photo by Anna Berger · CC BY-SA 4.0</desc>"))
-        let file = try #require(xml.range(of: "<link href=\"Photos/photo-2.png\"/>"))
+        let file = try #require(xml.range(of: "<link href=\"Photos/photo-2.jpeg\"/>"))
         let pageLink = try #require(xml.range(of: "<link href=\"\(Self.page.absoluteString)\"/>"))
         let symbol = try #require(xml.range(of: "<sym>", range: pageLink.upperBound..<xml.endIndex))
         #expect(description.upperBound < file.lowerBound)

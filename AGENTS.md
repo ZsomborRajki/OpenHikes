@@ -60,6 +60,14 @@ xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
 #   -only-testing:OpenHikesTests/HikeStatisticsTests
 #   -only-testing:'OpenHikesTests/HikeStatisticsTests/elevationGainAndLoss()'
 
+# The same two bundles on the deployment floor, from a pool of its own: an
+# iPhone 16 Pro on iOS 18.6 (see *Deployment floor*). Then the same test
+# command with -destination "platform=iOS Simulator,id=$floor".
+floor="$(OPENHIKES_SIM_POOL_PREFIX='OpenHikes Floor' \
+  OPENHIKES_SIM_POOL_DEVICE_TYPE='iPhone 16 Pro' \
+  OPENHIKES_SIM_POOL_RUNTIME=com.apple.CoreSimulator.SimRuntime.iOS-18-6 \
+  Scripts/sim-pool.sh acquire)"
+
 # The two local packages, on the macOS host, with warnings as errors as CI runs
 # them (CI repeats both with --configuration release). Add --filter <Suite> for
 # one suite, such as MercatorTests in OpenHikesShared.
@@ -78,7 +86,8 @@ xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikesWatch \
 # clones, then a serial pass
 Scripts/run-ui-tests.sh --all --device "$udid" --derived-data DerivedData
 
-# Give the simulator back once this session's testing is done
+# Give the simulator back once this session's testing is done (the floor's
+# with the same OPENHIKES_SIM_POOL_PREFIX)
 Scripts/sim-pool.sh release
 ```
 
@@ -140,7 +149,8 @@ same device.
   - a memberwise init hidden by a `private` stored property (write the init out)
 
   `reorderable()` and `reorderContainer(for:)`, the app's only iOS 27.0 APIs,
-  sit behind `#if compiler(>=6.4)` so that this job still builds. The one iOS
+  sit behind `#if compiler(>=6.4)` as well as `#available`, so that this job
+  still builds — at the deployment floor, like every other job. The one iOS
   27.1 API, `toolbarVerticalBehavior(_:)`, sits behind
   `#if canImport(SwiftUI, _version: 8.0.85)`: CI's Xcode 27.0 is Swift 6.4 too,
   and only the SDK's SwiftUI version (8.0.84 there) tells it apart.
@@ -344,7 +354,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     - American spelling in names and in literals outside the test bundles
       (color, center, license, meter, gray)
     - the typographic ’ in user-visible copy
-    - `x.enumerated()` handed to `ForEach` as it is, not wrapped in `Array(…)`
+    - `ForEach` over `x.indexed()`, never over `Array(x.enumerated())`
+      (`x.enumerated()` alone is random access only from iOS 26)
 
     Somebody else's vocabulary, such as an OSM tag or a wire key, carries
     `swiftlint:disable:this`.
@@ -430,7 +441,7 @@ a change to recording, the map, the sheet or the render path; the PR template,
     each watch product. Write the few lines by hand.
 - **Targets: iPhone, plus a watch companion, and nothing else.** The shipping
   targets are `OpenHikes`, `OpenWidgetExtension` (the widget, the Live Activity
-  views and the Control Center toggle), `OpenHikesWatch` (watchOS 26) and
+  views and the Control Center toggle), `OpenHikesWatch` (watchOS 11) and
   `OpenHikesWatchWidgets`.
   - The app embeds the watch app, so building `OpenHikes` builds the watch
     too. Breaking the watch cannot leave CI green.
@@ -520,9 +531,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - The recorder stays the single authority. The coordinator holds no state,
     settles recovery before it reads the phase, and reads the phase back
     afterwards, because refusals arrive as `.failed`, not as a throw.
-  - Start and resume use `continueInForeground(_:)` for the two
-    foreground-only location prompts. A `needsToContinueInForegroundError`
-    re-run would find the same undecided authorization.
+  - Start and resume hand off with `askToContinueInForeground(_:)` for the
+    two foreground-only location prompts: `continueInForeground(_:)` on iOS
+    26, `requestToContinueInForeground` below it. A
+    `needsToContinueInForegroundError` re-run would find the same undecided
+    authorization.
   - Suites reach the intents through `HikeIntentContext.$override`.
   - `AppShortcutsProvider` silently drops shortcuts past ten.
 - **The Control Center toggle and the Live Activity buttons live in
@@ -655,6 +668,59 @@ a change to recording, the map, the sheet or the render path; the PR template,
     the TipKit parameter that keeps a new hiker
 
 ## Conventions
+
+### Deployment floor
+
+- **The floor is iOS 18.4 and watchOS 11.0.** The packages declare the same
+  generation (macOS 15.4, visionOS 2.4), so that `swift test` refuses what the
+  iOS build refuses. Below 18 the app would lose `Mutex` and the Control
+  Center control. 18.4 is `DispatchQueue` as a `TaskExecutor` (`TileCache`,
+  `TrailBasemapRenderer`), and every iPhone that runs 18 can update to it.
+- **A newer API is reached through one wrapper, with its fallback beside
+  it.** A screen asks for a shape or a behavior, never for a release. The
+  `if #available` lives in:
+  - `RoleButton` (`OpenHikesShared`), for the role-only close, cancel and
+    confirm buttons. Below 26 they say *Cancel* and *Done*, or the screen's
+    own verb (*Save*, *Add*, *Send*), and a pill or a notice draws the glyph.
+  - `LiquidGlass.swift` and `GlassButtonStyle.swift`, for SwiftUI glass, which
+    falls back to the regular material and the bordered styles, as the
+    visionOS branches always did. `MapGlass` does the same for the map's
+    UIKit controls.
+  - `observedValues(_:)` for `Observations`, `LifecycleObservation` for the
+    typed lifecycle messages, `ReverseGeocode` and the `MKMapItem` readers
+    beside it for MapKit's iOS 26 geocoding (`CLGeocoder` below), and
+    `askToContinueInForeground(_:)` for an intent's foreground hand-off.
+  - `trailStopsReorderable(_:move:)`, for the one iOS 27 API: `reorderable()`
+    on 27, `onMove` below.
+- **A fallback with logic in it is tested on the current simulator.** Each
+  wrapper exposes its earlier form, so a suite can hold it to the same
+  contract on a release that would never run it: `EarlierObservations`,
+  `LifecycleObservation(earlier:on:perform:)`, `TrailStopName.EarlierAnswer`,
+  `TrailStopSlot.drop(in:moving:to:)` and `EarlierMapGlassView`.
+- **Swift Testing refuses `@available` on a `@Suite`.** Put it on each
+  `@Test`, and on the helpers that build the newer values.
+- **The compiler does not check SF Symbol names.** A `systemName:` newer than
+  the floor compiles and draws nothing. Look a new one up in the SF Symbols
+  app's `Contents/Resources/Metadata/name_availability.plist`, where 2024 is
+  iOS 18.0.
+- **Some differences compile and only show at run time.** Each of these
+  passed on iOS 27 and failed on iOS 18.6:
+  - Foundation's ISO 8601 parser insists on a fraction the style includes
+    (`GPXImport` keeps a whole-second style beside the fractional one).
+  - `URL` keeps no query for an opaque URL such as a `mailto:`; read one
+    through `URLComponents`.
+  - `UIColor(Color.accentColor)` resolved outside a view is the system blue;
+    the `AccentColor` asset is the accent.
+  - ImageIO writes no XMP into a PNG it copies, so only a JPEG, a HEIC or a
+    TIFF takes a Commons credit there.
+- **Nothing in CI runs on the floor.** The image has no iOS 18 runtime, so the
+  compile at 18.4 is the only gate there. Before a release, and after changing
+  a fallback, run the unit suite on an iOS 18 simulator (*Build and test*).
+  Xcode 27.1 will not download one (`iOS 18.4 is not available for
+  download`), so it has to be a runtime an earlier Xcode installed. An image
+  still in `/System/Library/AssetsV2/com_apple_MobileAsset_iOSSimulatorRuntime`
+  comes back with `xcrun simctl runtime add <its .dmg>`, with nothing to
+  download.
 
 ### Concurrency
 
@@ -1130,7 +1196,7 @@ is world-readable, because browsing needs no account.
 
 ## The watch app
 
-`OpenHikesWatch` is a watchOS 26 companion, embedded in the phone app. Read
+`OpenHikesWatch` is a watchOS 11 companion, embedded in the phone app. Read
 this before changing `OpenHikesWatch/`, `OpenHikes/Watch/` or the shared
 `Watch/` folder.
 
@@ -1216,6 +1282,9 @@ Reopening one needs new evidence, not a fresh reading of the same code.
     synchronous blocking work that should not be awaited (`TileCache`'s
     maintenance queue, `TrailBasemapRenderer`'s render executor).
   - `UIImagePickerController` for the camera.
+  - `CLGeocoder`, `MKPlacemark` and `ForegroundContinuableIntent` below iOS
+    26, where each is the only form there is, reached only through its
+    wrapper (*Deployment floor*).
   - The lint-pragma'd force unwraps of literal URLs in `MapPurchaseLinks` and
     `TileAttribution`.
   - The `fatalError` when even the in-memory store fails.

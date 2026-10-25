@@ -24,6 +24,7 @@
 
 import CoreLocation
 import OpenHikesData
+import OpenHikesShared
 import SwiftData
 import SwiftUI
 import TipKit

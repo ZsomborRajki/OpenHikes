@@ -24,8 +24,8 @@ struct DirectionsTrailLegRouterTests {
         case .hiking: .any
         }
         #expect(request.transportType == expected)
-        #expect(request.source?.location.coordinate.latitude == Self.ends.start.latitude)
-        #expect(request.destination?.location.coordinate.longitude == Self.ends.end.longitude)
+        #expect(request.source?.standingLocation.coordinate.latitude == Self.ends.start.latitude)
+        #expect(request.destination?.standingLocation.coordinate.longitude == Self.ends.end.longitude)
         #expect(request.requestsAlternateRoutes)
     }
 
