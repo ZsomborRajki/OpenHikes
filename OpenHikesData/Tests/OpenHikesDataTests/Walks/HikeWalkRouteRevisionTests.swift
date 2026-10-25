@@ -6,7 +6,8 @@
 //  route. The summary draws them, and the share card climbs them, on the
 //  current line, so a line that moved under the walk has to say so even when
 //  its length did not: a reversed route used to pass, and a walk over the
-//  first quarter of it was drawn over the opposite end (#880).
+//  first quarter of it was drawn over the opposite end (#880). A pause
+//  moves the distances without moving a point (#1080).
 //
 
 import Foundation
@@ -81,6 +82,26 @@ struct HikeWalkRouteRevisionTests {
         let extended = Self.route + [RouteCoordinate(latitude: 47.02, longitude: 12.003)]
 
         #expect(!Self.isAlong(Self.walk(revision: TrailWalkRecord.routeRevision(of: Self.route)), along: extended))
+    }
+
+    @Test("a pause under unmoved points is a different distance axis, and does not match")
+    func pauseOnlyEditDoesNotMatch() {
+        let continuous = [
+            RouteCoordinate(latitude: 47, longitude: 11),
+            RouteCoordinate(latitude: 47.01, longitude: 11),
+            RouteCoordinate(latitude: 47, longitude: 17),
+            RouteCoordinate(latitude: 47.01, longitude: 17),
+        ]
+        var paused = continuous
+        paused[2].boundary = .paused
+        // The drive between the two valleys is the whole difference: about
+        // 457 km of route against about 2.2 km.
+        #expect(RouteProfile(route: continuous).totalDistanceMeters > 400_000)
+        #expect(RouteProfile(route: paused).totalDistanceMeters < 3000)
+
+        let walk = Self.walk(revision: TrailWalkRecord.routeRevision(of: continuous))
+        #expect(!Self.isAlong(walk, along: paused))
+        #expect(Self.isAlong(walk, along: continuous))
     }
 
     @Test("a walk that names no line is along none, even one of its length")
