@@ -166,7 +166,11 @@ final class WatchRecorder: NSObject {
     /// asking. Told from here, a failed workout session reaches the decision
     /// a Stop does; told only after the hiker's Stop, the map's figures froze
     /// where the session failed (issue #1021).
-    var onRecordingEnded: (@MainActor () -> Void)?
+    ///
+    /// Handed whether the recording was paused when it ended: nothing reaches
+    /// ``onFix`` from a pause on, so the last fix it passed on is where the
+    /// hiker paused rather than where they are.
+    var onRecordingEnded: (@MainActor (_ whilePaused: Bool) -> Void)?
 
     @ObservationIgnored private let store: WatchStore
     /// The complication's copy of this recording — see ``WatchGlance``.
@@ -268,6 +272,7 @@ final class WatchRecorder: NSObject {
     /// ``retrySave()``.
     @discardableResult func stop() async -> WatchRecordedWalk? {
         guard phase.isActive else { return nil }
+        let wasPaused = phase == .paused
         // Before anything is awaited, so a second Stop finds nothing to stop.
         phase = .saving
         locations.stopUpdatingLocation()
@@ -277,7 +282,7 @@ final class WatchRecorder: NSObject {
         // Now rather than once the walk is written: the phase is no longer
         // active, so a trail screen still asking can have the receiver back
         // at once instead of after a disk write.
-        onRecordingEnded?()
+        onRecordingEnded?(wasPaused)
 
         let walk = accumulator.recordedWalk(
             sessionID: sessionID,

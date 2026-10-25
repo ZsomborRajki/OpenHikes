@@ -95,7 +95,7 @@ final class WatchModel {
         if let trail { tracker = WatchRouteTracker(trail) }
         recorder.onFix = { [weak self] location in self?.advanceFollow(with: location) }
         recorder.onWalkQueued = { [weak self] walk, queued in self?.walkQueued(walk, queued: queued) }
-        recorder.onRecordingEnded = { [weak self] in self?.recordingEnded() }
+        recorder.onRecordingEnded = { [weak self] whilePaused in self?.recordingEnded(whilePaused: whilePaused) }
     }
 
     #if DEBUG
@@ -235,11 +235,13 @@ final class WatchModel {
             recorder.startFollowingFeed()
         case .restart:
             // The gap ``resumeRecording()`` lets go of for a pause, here for
-            // the app's time off screen. Kept, the anchor would hold the
-            // first fix to the ground around where the app left, which on an
-            // out-and-back is the outbound leg for the whole way home, and
-            // the figures would go on showing the last reading as current
-            // until a new fix replaced it.
+            // the app's time off screen, a map opened again with none open
+            // in between, or a walk stopped while paused — see
+            // ``WatchFollowClaim``. Kept, the anchor would hold the first fix
+            // to the ground around the last one, which on an out-and-back is
+            // the outbound leg for the whole way home, and the figures would
+            // go on showing the last reading as current until a new fix
+            // replaced it.
             tracker?.forgetPosition()
             follow.clear()
             recorder.startFollowingFeed()
@@ -328,7 +330,7 @@ final class WatchModel {
 
     /// Stops. The walk, if there was one, goes through
     /// ``walkQueued(_:queued:)``, and the receiver through
-    /// ``recordingEnded()``.
+    /// ``recordingEnded(whilePaused:)``.
     func stopRecording() async {
         await recorder.stop()
     }
@@ -341,15 +343,20 @@ final class WatchModel {
     /// without passing through ``stopRecording()``, and a trail map open
     /// behind it went on showing the reading from the moment it failed
     /// (issue #1021).
-    private func recordingEnded() {
+    private func recordingEnded(whilePaused: Bool) {
         // A walk along a trail leaves the hiker where they finished it, which
-        // is where they are. Nothing is cleared — but the receiver is: the
-        // recording owned it and stopping took it down, and a trail screen
-        // left open behind it would freeze its trail figures where the
-        // recording ended. A screen already gone asks for nothing, and one
-        // behind the watch face waits for the app to come back to it — see
+        // is where they are, so nothing is cleared. A walk that ended paused
+        // left them where they paused instead, and the claim answers that
+        // with a restart. Either way the receiver comes back to a screen still
+        // asking: the recording owned it and stopping took it down, and a
+        // trail screen left open behind it would freeze its trail figures
+        // where the recording ended.
+        // A screen already gone asks for nothing, and one behind the watch
+        // face waits for the app to come back to it — see
         // ``sceneMoved(onScreen:)``.
-        applyToReceiver(followClaim.recordingStopped(holding: trail?.followableHikeID))
+        applyToReceiver(
+            followClaim.recordingStopped(holding: trail?.followableHikeID, whilePaused: whilePaused)
+        )
     }
 
     /// Tries again to write a walk that Stop could not. A success goes

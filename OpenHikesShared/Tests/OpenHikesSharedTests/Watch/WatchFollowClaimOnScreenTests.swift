@@ -101,7 +101,7 @@ struct WatchFollowClaimOnScreenTests {
         _ = claim.appLeftScreen(recording: true)
 
         // A workout session that fails behind the watch face ends it.
-        #expect(claim.recordingStopped(holding: trail) == .unchanged)
+        #expect(claim.recordingStopped(holding: trail, whilePaused: false) == .unchanged)
         #expect(claim.appReturned(holding: trail, recording: false) == .restart)
     }
 
