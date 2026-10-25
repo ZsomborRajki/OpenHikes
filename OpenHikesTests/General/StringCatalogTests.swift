@@ -59,6 +59,14 @@ struct StringCatalogTests {
         #expect(CommunityPublishedPhotos.removalWarning(count: 2).hasPrefix("Publishing deletes the 2 faded photos"))
         #expect(CommunityPublishedPhotos.incompleteDownload(missing: 1).hasPrefix("One of this submission’s photos"))
         #expect(CommunityPublishedPhotos.incompleteDownload(missing: 2).hasPrefix("2 of this submission’s photos"))
+        // The hike detail's offline notes, which `OfflineDownloadStatus` and
+        // `OfflineStorageStatus` word privately, so these are read by key too.
+        #expect(String(localized: "Saving \(1) tiles…") == "Saving 1 tile…")
+        #expect(String(localized: "Saving \(2) tiles…") == "Saving 2 tiles…")
+        #expect(
+            String(localized: "Auto-saved \(1) tiles near the trail — storage limit reached.")
+                == "Auto-saved 1 tile near the trail — storage limit reached."
+        )
     }
 
     /// The singular drops the count but not the trail, so it names the trail
@@ -163,6 +171,33 @@ struct StringCatalogTests {
         "OpenHikes couldn’t read the other hikes’ offline coverage. No tiles were deleted.",
     ])
     func settingsWordsReachTheCatalog(key: String) throws {
+        let strings = try Self.catalog(in: "OpenHikes")
+        let entry = try #require(strings[key] as? [String: Any], "\(key) is not in the app's catalog")
+        #expect(entry["extractionState"] as? String != "stale")
+    }
+
+    /// Words the hike detail, the library's totals, a walk's summary and the
+    /// live recording once handed through a bare `String` (#1028). One for
+    /// each way that happened: a ``Stat`` caption and what it is spoken as, a
+    /// caption written straight into a ``StatRow``, ``StatList``'s own
+    /// heading, a metadata row's label, a heading and a record named through a
+    /// helper's `String` parameter, a word a value or an outcome hands back, a
+    /// clause of a spoken value, and a note joined with `+`. Read from the
+    /// catalog for the reason the settings words above are.
+    @Test("the hike detail, totals and walk words are in the app's catalog", arguments: [
+        "Elevation Gain",
+        "Moving Average Speed",
+        "Current Speed",
+        "Statistics",
+        "Keywords",
+        "All Time",
+        "Steepest",
+        "Stopped",
+        "Left open",
+        "about %@ to go",
+        "This trail has changed since the hike, so the stretches it covered can no longer be drawn along it.",
+    ])
+    func hikeDetailWordsReachTheCatalog(key: String) throws {
         let strings = try Self.catalog(in: "OpenHikes")
         let entry = try #require(strings[key] as? [String: Any], "\(key) is not in the app's catalog")
         #expect(entry["extractionState"] as? String != "stale")

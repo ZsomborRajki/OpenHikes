@@ -115,28 +115,30 @@ private struct LibraryTotalsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.sectionSpacing) {
-            section(String(totals.year)) {
+            section(Text(verbatim: String(totals.year))) {
                 StatSummary(stats: Self.stats(totals.thisYear, comparedWith: totals.lastYear))
                 LibraryMonthChart(totals: totals)
             }
-            section("All Time") {
+            section(Text("All Time")) {
                 StatSummary(stats: Self.stats(totals.allTime, comparedWith: nil))
             }
             if totals.longest != nil {
-                section("Records") {
+                section(Text("Records")) {
                     StatList {
-                        record("Longest", totals.longest) { TotalsFormat.distance($0.distanceMeters) }
-                        record("Highest", totals.highest) { TotalsFormat.height($0.highestMeters ?? 0) }
-                        record("Steepest", totals.steepest) { TotalsFormat.height($0.climbMeters ?? 0) + " up" }
+                        record("Longest", id: "longest", totals.longest) { TotalsFormat.distance($0.distanceMeters) }
+                        record("Highest", id: "highest", totals.highest) { TotalsFormat.height($0.highestMeters ?? 0) }
+                        record("Steepest", id: "steepest", totals.steepest) { candidate in
+                            String(localized: "\(TotalsFormat.height(candidate.climbMeters ?? 0)) up")
+                        }
                     }
                 }
             }
             VStack(alignment: .leading, spacing: Self.footnoteSpacing) {
-                Text(
-                    "Recordings and GPX files with times count as hiked, "
-                        + "and so does every activity along a saved trail. "
-                        + "A trail you drew or saved counts once you hike it."
-                )
+                Text("""
+                Recordings and GPX files with times count as hiked, \
+                and so does every activity along a saved trail. \
+                A trail you drew or saved counts once you hike it.
+                """)
                 if totals.allTime.outingsWithoutClimb > 0 {
                     Text("""
                     Climb, Highest and Steepest leave out activities along trails \
@@ -149,18 +151,23 @@ private struct LibraryTotalsContent: View {
         }
     }
 
-    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+    /// A `Text`, so a year is drawn as it is and every other heading is a key
+    /// the String Catalog lists; a `String` was drawn verbatim (#1028).
+    private func section(_ title: Text, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: Self.headingSpacing) {
-            Text(title)
+            title
                 .font(.title3.weight(.semibold))
                 .accessibilityAddTraits(.isHeader)
             content()
         }
     }
 
+    /// `label` is a key, so the String Catalog lists it. A key cannot be
+    /// lowercased into the identifier, so that is passed beside it.
     @ViewBuilder
     private func record(
-        _ label: String,
+        _ label: LocalizedStringKey,
+        id: String,
         _ candidate: LibraryRecordCandidate?,
         value: (LibraryRecordCandidate) -> String
     ) -> some View {
@@ -169,7 +176,7 @@ private struct LibraryTotalsContent: View {
                 StatRow(label: label, value: "\(candidate.title) · \(value(candidate))")
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier("library-record-\(label.lowercased())")
+            .accessibilityIdentifier("library-record-\(id)")
         }
     }
 

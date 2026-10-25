@@ -6,6 +6,13 @@
 //  the community preview, a walk's summary and the live recording — and the
 //  hike detail's metadata rows.
 //
+//  Every caption reaches the String Catalog. ``Stat`` takes its words as a
+//  `LocalizedStringResource` and keeps them resolved, because it is built off
+//  the main actor and read back as text. A view takes a caption written at
+//  its call site as a `LocalizedStringKey`, as a SwiftUI parameter does, and
+//  draws a ``Stat``'s as it is. A literal handed through a bare `String` was
+//  drawn verbatim and listed nowhere (#1028).
+//
 
 import SwiftUI
 
@@ -20,10 +27,15 @@ nonisolated struct Stat: Identifiable, Sendable {
     /// Drawn in the card's strip rather than its list — see ``StatSummary``.
     let isHeadline: Bool
 
-    init(_ label: String, _ value: String, spokenAs spokenLabel: String? = nil, headline: Bool = false) {
-        self.label = label
+    init(
+        _ label: LocalizedStringResource,
+        _ value: String,
+        spokenAs spokenLabel: LocalizedStringResource? = nil,
+        headline: Bool = false
+    ) {
+        self.label = String(localized: label)
         self.value = value
-        self.spokenLabel = spokenLabel
+        self.spokenLabel = spokenLabel.map { String(localized: $0) }
         isHeadline = headline
     }
 }
@@ -116,14 +128,17 @@ struct StatStrip<Content: View>: View {
 struct StatFigure: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    let label: String
+    /// A `Text`, so that a caption written at the call site is a key and one
+    /// a ``Stat`` already resolved is drawn as it is — see the inits below.
+    let label: Text
     let value: String
     /// See ``Stat/spokenLabel``.
-    var spokenLabel: String?
+    var spokenLabel: Text?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(label.uppercased())
+            label
+                .textCase(.uppercase)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -151,10 +166,20 @@ struct StatFigure: View {
 }
 
 extension StatFigure {
+    /// A caption written here, as a key.
+    init(label: LocalizedStringKey, value: String, spokenLabel: LocalizedStringKey? = nil) {
+        self.init(label: Text(label), value: value, spokenLabel: spokenLabel.map { Text($0) })
+    }
+
     /// A ``Stat`` whole, so that what it is spoken by comes with it: the
-    /// hike detail drew its figures field by field and dropped that.
+    /// hike detail drew its figures field by field and dropped that. Its
+    /// words are already resolved, so they are drawn verbatim.
     init(_ stat: Stat) {
-        self.init(label: stat.label, value: stat.value, spokenLabel: stat.spokenLabel)
+        self.init(
+            label: Text(verbatim: stat.label),
+            value: stat.value,
+            spokenLabel: stat.spokenLabel.map { Text(verbatim: $0) }
+        )
     }
 }
 
@@ -162,7 +187,8 @@ extension StatFigure {
 /// between rows — the *Details* card of a Maps place card. A
 /// ``PlaceCardList`` that always has a heading.
 struct StatList<Content: View>: View {
-    var title = "Statistics"
+    /// Worded with `String(localized:)`, as every ``PlaceCardList`` title is.
+    var title = String(localized: "Statistics")
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -177,14 +203,15 @@ struct StatList<Content: View>: View {
 struct StatRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    let label: String
+    /// See ``StatFigure/label``.
+    let label: Text
     let value: String
     /// See ``Stat/spokenLabel``.
-    var spokenLabel: String?
+    var spokenLabel: Text?
 
     var body: some View {
         layout {
-            Text(label)
+            label
                 .foregroundStyle(.primary)
             Text(value)
                 .monospacedDigit()
@@ -215,9 +242,24 @@ struct StatRow: View {
 }
 
 extension StatRow {
+    /// A label written here, as a key.
+    init(label: LocalizedStringKey, value: String, spokenLabel: LocalizedStringKey? = nil) {
+        self.init(label: Text(label), value: value, spokenLabel: spokenLabel.map { Text($0) })
+    }
+
+    /// A label some other type has already put into words, such as a place
+    /// fact's kind, drawn as it is.
+    init(verbatim label: String, value: String) {
+        self.init(label: Text(verbatim: label), value: value)
+    }
+
     /// A ``Stat`` whole — see ``StatFigure/init(_:)``.
     init(_ stat: Stat) {
-        self.init(label: stat.label, value: stat.value, spokenLabel: stat.spokenLabel)
+        self.init(
+            label: Text(verbatim: stat.label),
+            value: stat.value,
+            spokenLabel: stat.spokenLabel.map { Text(verbatim: $0) }
+        )
     }
 }
 
@@ -229,7 +271,8 @@ struct DetailRow: View {
     private static let iconWidth: CGFloat = 26
     private static let iconSpacing: CGFloat = 10
 
-    let label: String
+    /// A key, for the reason ``StatFigure``'s caption is one.
+    let label: LocalizedStringKey
     let value: String
     /// An SF Symbol drawn ahead of the label, where there is one that says
     /// what the label says.

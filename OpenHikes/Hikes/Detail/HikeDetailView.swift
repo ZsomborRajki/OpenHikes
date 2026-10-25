@@ -437,8 +437,8 @@ nonisolated enum HikeDetailSegment: String, CaseIterable, Identifiable, Sendable
 
     var title: String {
         switch self {
-        case .details: "Details"
-        case .history: "History"
+        case .details: String(localized: "Details")
+        case .history: String(localized: "History")
         }
     }
 }
@@ -718,7 +718,7 @@ private extension HikeDetailView {
         }
     }
 
-    private func aboutRow(_ label: String, _ value: String) -> some View {
+    private func aboutRow(_ label: LocalizedStringKey, _ value: String) -> some View {
         DetailRow(label: label, value: value)
             .padding(.vertical, 10)
     }

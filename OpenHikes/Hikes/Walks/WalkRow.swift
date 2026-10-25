@@ -54,23 +54,24 @@ struct WalkRow: View {
     private var percent: Int { Int((walk.coveredFraction * 100).rounded()) }
 
     private var subtitle: String {
-        "\(percent)% hiked · \(HikeFormat.duration(walk.activeSeconds)) · \(Self.outcome(walk.endReason))"
+        let duration = HikeFormat.duration(walk.activeSeconds)
+        return String(localized: "\(percent)% hiked · \(duration) · \(Self.outcome(walk.endReason))")
     }
 
     private var spokenSubtitle: String {
         let duration = HikeFormat.spokenDuration(walk.activeSeconds)
-        return "\(percent) percent hiked, \(duration), \(Self.outcome(walk.endReason).lowercased())"
+        return String(localized: "\(percent) percent hiked, \(duration), \(Self.outcome(walk.endReason).lowercased())")
     }
 
     /// The word for how a walk ended. A reason this build does not know reads
     /// as a plain end rather than as a blank.
     static func outcome(_ reason: TrailWalkEndReason?) -> String {
         switch reason {
-        case .reachedEnd: "Completed"
-        case .abandoned: "Left open"
-        case .recorded: "Recorded"
-        case .routeChanged: "Route changed"
-        case .ended, nil: "Ended"
+        case .reachedEnd: String(localized: "Completed")
+        case .abandoned: String(localized: "Left open")
+        case .recorded: String(localized: "Recorded")
+        case .routeChanged: String(localized: "Route changed")
+        case .ended, nil: String(localized: "Ended")
         }
     }
 

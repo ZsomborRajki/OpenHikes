@@ -234,7 +234,7 @@ private struct ElevationChartSpokenPosition: ViewModifier {
         of sample: ElevationSample?,
         in profile: RouteProfile
     ) -> String {
-        guard let sample else { return "No elevation data" }
+        guard let sample else { return String(localized: "No elevation data") }
         let elevation = HikeFormat.spokenElevation(
             Measurement(value: sample.elevation, unit: UnitLength.meters)
         )
@@ -243,10 +243,10 @@ private struct ElevationChartSpokenPosition: ViewModifier {
             unit: UnitLength.meters
         ).formatted(.measurement(width: .wide, usage: .road))
         guard let fraction = profile.fractionComplete(atDistance: sample.distanceMeters) else {
-            return "\(elevation) at \(distance)"
+            return String(localized: "\(elevation) at \(distance)")
         }
         let percent = fraction.formatted(.percent.precision(.fractionLength(0)))
-        return "\(elevation) at \(distance), \(percent) along the trail"
+        return String(localized: "\(elevation) at \(distance), \(percent) along the trail")
     }
 }
 
