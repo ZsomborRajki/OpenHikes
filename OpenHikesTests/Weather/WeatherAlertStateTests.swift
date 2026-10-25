@@ -38,8 +38,7 @@ struct WeatherAlertStateTests {
             summary: "Severe thunderstorm warning",
             severity: severity,
             detailsURL: detailsURL(id),
-            source: "Deutscher Wetterdienst",
-            expires: nil
+            source: "Deutscher Wetterdienst"
         )
     }
 
