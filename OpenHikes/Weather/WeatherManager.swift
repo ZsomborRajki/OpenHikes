@@ -747,31 +747,52 @@ final class WeatherManager {
     ///
     /// A watch per subject, because an alert already announced over one ridge
     /// is news again over another: it is a different place being warned about.
+    ///
+    /// **Said only once it can be.** The watch is asked before permission and
+    /// told after it: a refused or failed `authorize()` leaves the alert
+    /// unsaid, so the poll after the hiker allows notifications in Settings
+    /// still has it to post. And the telling happens after the suspension, in
+    /// the same main-actor turn as the decision to post, so two attempts that
+    /// overlap while a prompt is up cannot both post: whichever resumes first
+    /// marks the alert, and the other finds nothing left to say.
     private func announceAlerts(
         in snapshot: WeatherSnapshot,
         for subject: WeatherSubject
     ) async {
         guard let notifier, let alerts = snapshot.alerts else { return }
-        var watch = alertWatches[subject.key] ?? WeatherAlertWatch()
-        let worthSaying = watch.observed(alerts)
-        alertWatches[subject.key] = watch
-        alertWatches.move(keys: CollectionOfOne(subject.key), to: alertWatches.count)
-        if alertWatches.count > WeatherRequestState.trackedSubjectLimit {
-            alertWatches.removeFirst()
-        }
-        guard let worst = worthSaying.first else { return }
+        guard !touchAlertWatch(for: subject).unannounced(in: alerts).isEmpty else { return }
         // Asked rather than assumed, and asked only when there is something to
         // say: `authorize()` prompts the first time, and a prompt that arrives
         // because a storm warning just came in is a question about something
         // the hiker is in the middle of. One at launch is a question about
         // something that may never happen.
         guard await notifier.authorize() else { return }
+        var watch = touchAlertWatch(for: subject)
+        let worthSaying = watch.observed(alerts)
+        alertWatches[subject.key] = watch
+        guard let worst = worthSaying.first else { return }
         await notifier.post(
             MovementReminderWording.severeWeather(
                 worst,
                 placeName: knownPlace(for: subject)?.place.cityName ?? subject.placeName ?? ""
             )
         )
+    }
+
+    /// `subject`'s alert watch, made the most recently used so the bound
+    /// evicts some other subject's first.
+    ///
+    /// Touched on every announcement pass, not only the ones that say
+    /// something: a warning standing over the walked trail is asked about on
+    /// every poll, and its watch is the last one that should be forgotten.
+    private func touchAlertWatch(for subject: WeatherSubject) -> WeatherAlertWatch {
+        let watch = alertWatches[subject.key] ?? WeatherAlertWatch()
+        alertWatches[subject.key] = watch
+        alertWatches.move(keys: CollectionOfOne(subject.key), to: alertWatches.count)
+        if alertWatches.count > WeatherRequestState.trackedSubjectLimit {
+            alertWatches.removeFirst()
+        }
+        return watch
     }
 
     /// Moves the badge, and tells the widget what the badge now says.

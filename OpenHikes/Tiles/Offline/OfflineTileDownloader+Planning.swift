@@ -69,15 +69,24 @@ nonisolated extension OfflineTileDownloader {
         return Plan(tiles: result, footprint: box?.footprint)
     }
 
-    /// What a previous run of the same download already saved and claimed.
+    /// What a previous, unfinished run of the same download already saved and
+    /// claimed: the union of the hike's *partial* records for this provider
+    /// and depth.
     ///
-    /// Read straight off the hike's partial records rather than re-derived
-    /// from the route, which is what makes it cheap enough to ask on the main
-    /// actor at the moment of the tap: a partial record lists its exact keys,
-    /// and a *complete* one for this provider and depth means there is nothing
-    /// left to fetch at all — reported here as the full grid being outstanding
-    /// of nothing, since `plannedTiles` will then filter every tile away and
-    /// the run finishes without a request.
+    /// Read straight off those records rather than re-derived from the route,
+    /// which is what makes it cheap enough to ask on the main actor at the
+    /// moment of the tap: a partial record lists its exact keys.
+    ///
+    /// **A complete record contributes nothing.** It lists no keys, and
+    /// re-deriving its grid would be the O(tileBudget) trig work this function
+    /// exists to keep off the main actor. Nothing upstream stops another run
+    /// over a map that is already whole either — the button stays offered —
+    /// so such a run plans the full grid, starts its progress at zero and
+    /// offers every tile to `TileCache.saveTileDurably(forKey:url:)`. That is
+    /// where a whole map is reused: a tile already in durable storage is
+    /// promoted in place without a request, the space check counts only bytes
+    /// not already there, and only a tile that has gone missing since is
+    /// fetched again.
     ///
     /// Matched on provider **and** depth, because neither alone is the same
     /// download: tiles are namespaced by provider, and a shallower previous
@@ -90,11 +99,7 @@ nonisolated extension OfflineTileDownloader {
         for record in records
         where record.providerID == source.providerID && record.maxZoom == source.maximumZ {
             guard !record.savedTileKeys.isEmpty else {
-                // A complete record. Re-deriving its grid here would be the
-                // O(tileBudget) trig work this function exists to avoid, and
-                // it is not needed: the button that starts a download is not
-                // offered for a map that is already whole, and a run started
-                // anyway plans the grid and finds every tile present.
+                // A complete record: nothing to resume from (see above).
                 continue
             }
             keys.formUnion(record.savedTileKeys)
