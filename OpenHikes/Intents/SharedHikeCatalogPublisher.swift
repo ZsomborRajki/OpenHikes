@@ -207,8 +207,9 @@ nonisolated enum SharedHikeCatalogPublisher {
         )
     }
 
-    /// One pinned hike read into values, in a context of its own off the main
-    /// actor.
+    /// One hike read into values, in a context of its own off the main actor:
+    /// each pinned trail at launch, and the trail a watch asks for
+    /// (``WatchTrailPackaging/answer(to:from:fetch:)``).
     ///
     /// `HikeRouteInput` reads `route`, which is external storage decoded
     /// whole, and a long recording is the likeliest thing to pin. Read inside

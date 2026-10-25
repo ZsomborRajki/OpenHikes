@@ -24,17 +24,54 @@
 //  A route is the largest thing this app holds in memory and the longest thing
 //  it serializes; this walks one and encodes a few hundred points of it, and a
 //  watch asking for a trail must not cost the hiker a frame on the phone they
-//  are holding. The same shape `HikeImport.stored` and
-//  `BackgroundTrailTracker.buildSnapshotOffMain` use: values are read off the
-//  model on the main actor, and only values cross — ``HikeRouteInput``, the
-//  same one the widget's snapshot starts from.
+//  are holding. Reading it is off the main actor too: the hike is fetched into
+//  a context made and dropped inside one call, the way the launch sweep reads
+//  a pinned trail, and only values cross — ``HikeRouteInput``, the same one
+//  the widget's snapshot starts from.
 //
 
 import Foundation
 import OpenHikesData
 import OpenHikesShared
+import SwiftData
 
 nonisolated enum WatchTrailPackaging {
+    /// The package that answers `request`, or `nil` when there is nothing to
+    /// send: a hike deleted since the watch's list was published, a hike with
+    /// no line, or a trail the watch already holds exactly this copy of.
+    ///
+    /// The hike is read in a context of its own off the main actor, by the
+    /// read the launch sweep makes of each pinned trail. `HikeRouteInput`
+    /// reads `route`, which is external storage decoded whole, and reading it
+    /// inside `MainActor.run` cost the phone in the hiker's hand a stall for
+    /// every trail the watch asked for (#1025).
+    ///
+    /// Stamped as the read starts, on the caller's executor — the main actor,
+    /// where an edit is saved — so the line a package carries is never older
+    /// than its stamp says. See ``package(from:readAt:requestID:)`` for what
+    /// the stamp orders.
+    ///
+    /// - Parameter fetch: the store's fetch of one hike, a seam so a suite can
+    ///   see which thread it ran on.
+    static func answer(
+        to request: WatchTrailRequest,
+        from container: ModelContainer,
+        fetch: @Sendable (ModelContext, UUID) throws -> Hike? = SharedHikeCatalogPublisher.fetchHike
+    ) async -> WatchTrailPackage? {
+        let readAt = Date.now
+        guard let input = await SharedHikeCatalogPublisher.routeInput(
+            for: request.hikeID,
+            in: container,
+            fetch: fetch
+        ),
+            let package = await package(from: input, readAt: readAt, requestID: request.id)
+        else { return nil }
+        // The watch already holds exactly this, and asked to find out whether
+        // the route had been edited since. It had not, so there is nothing to
+        // send: the copy it has stays the one it draws.
+        return request.needs(package) ? package : nil
+    }
+
     /// The package, or `nil` for a hike with no line to send.
     ///
     /// A single-point route is a place rather than a trail, and every consumer
