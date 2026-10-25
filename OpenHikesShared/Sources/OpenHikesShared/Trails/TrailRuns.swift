@@ -24,14 +24,31 @@
 //
 //  ## Readers of a stored route, too
 //
-//  The readers of a route that #1035 moved take it through
-//  `[RouteCoordinate].trailRuns` in `OpenHikesData`: the profile's
-//  matching, a place's anchor, a waypoint's track, a photograph's place,
-//  the steepness colours, the surface breakdown, the photo timeline, the
-//  height-spike filter and the map's paused lines. Each used to walk the legs
-//  itself, each with its own index convention, and every bug in the class
-//  came from one of those walks forgetting the rule (#962, #965, #991, #992).
-//  A reader that iterates the runs never sees a paused leg to forget.
+//  A stored route's pauses are read through `[RouteCoordinate].trailRuns` in
+//  `OpenHikesData` (#1035), by the profile's matching, a place's anchor, a
+//  waypoint's track, a photograph's place, the steepness colours, the surface
+//  breakdown, the photo timeline, the height-spike filter, the map's cut and
+//  its paused lines, the GPX export's segments, the Health workout's pauses,
+//  the heights asked of Stadia and filled in along the line, and the points
+//  the widget and the watch are sent. Each used to walk the legs itself, each
+//  with its own index convention, and every bug in the class came from one of
+//  those walks forgetting the rule (#962, #965, #991, #992). A reader that
+//  iterates the runs never sees a paused leg to forget.
+//
+//  ## Readers fed one point at a time
+//
+//  Three readers still read the boundary on the point they are handed, as
+//  `RouteCoordinate.legMeters(from:)` does for distance:
+//  `ElevationAccumulator.record(_:)`, `MovingTimeAccumulator.record(_:)` and
+//  the fastest-speed check in `HikeRouteStatistics`. The recorder feeds the
+//  two accumulators a fix at a time, live, and every reader of a saved route
+//  feeds them the same way, so the live figure and the saved one come from
+//  one rule; the speed check rides the same walk. Cutting saved routes here
+//  while live ones were read point by point would make two rules that have
+//  to agree, which is the hazard this type exists to remove. Reading a
+//  point's own boundary takes no index convention to get wrong, and a pause
+//  named on the first point closes nothing in either accumulator, as `init`
+//  drops one there.
 //
 //  ## A lone fix
 //
@@ -47,6 +64,10 @@
 
 /// A line of `pointCount` points cut at its pauses.
 public struct TrailRuns: Sendable, Equatable {
+    /// How many points the line has: every index the views below name is
+    /// below it. Never negative.
+    public let pointCount: Int
+
     /// The legs a pause opened, in order, each by the index of the point it
     /// leaves: leg `i` runs from point `i` to point `i + 1`.
     ///
@@ -98,6 +119,7 @@ public struct TrailRuns: Sendable, Equatable {
         let legs = Set(pauseIndices.filter { $0 > 0 && $0 < pointCount })
             .map { $0 - 1 }
             .sorted()
+        self.pointCount = max(0, pointCount)
         pausedLegs = legs
         pieces = Self.pieces(pointCount: pointCount, pausedLegs: legs)
         walkedRuns = pieces.filter { $0.count > 1 }

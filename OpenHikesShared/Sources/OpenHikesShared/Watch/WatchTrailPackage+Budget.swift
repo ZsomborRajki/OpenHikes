@@ -34,8 +34,9 @@
 //  ## Why here rather than on the phone
 //
 //  The watch has no test bundle and the phone's half is the expensive one to
-//  test, so the arithmetic is here under `swift test`. The phone only measures
-//  each break and hands over the indices (`WatchTrailPackaging`).
+//  test, so the arithmetic is here under `swift test`. The phone only hands
+//  over the route cut at its pauses, ``TrailRuns``, and measures each break
+//  (`WatchTrailPackaging`).
 //
 
 import Foundation
@@ -49,19 +50,6 @@ public extension WatchTrailPackage {
     /// and at most 152 polylines on the watch's map. A recording rarely comes
     /// near it; a GPX file split at every dropout can pass it many times over.
     static let pauseBudget = 50
-
-    /// A point a route resumed on after a pause, and how far it is from the
-    /// point before it: the length of the break, on the ground.
-    struct RoutePause: Sendable, Equatable {
-        /// The index into the route of the point the pause arrives at.
-        public var resumedAt: Int
-        public var gapMeters: Double
-
-        public init(resumedAt: Int, gapMeters: Double) {
-            self.resumedAt = resumedAt
-            self.gapMeters = gapMeters
-        }
-    }
 
     /// The points of a route that cross, and which of them a recording
     /// resumed on.
@@ -77,7 +65,7 @@ public extension WatchTrailPackage {
         public var pauseIndices: [Int]
     }
 
-    /// Which points of a route of `count` points cross, given its `pauses`.
+    /// Which points of a route cross, given the route cut at its pauses.
     ///
     /// The kept pauses are the ``pauseBudget`` with the longest gaps, ties
     /// going to the earlier one so that the same route always packages the
@@ -87,38 +75,50 @@ public extension WatchTrailPackage {
     /// fits therefore crosses whole, and a longer one as exactly
     /// ``pointBudget`` points, its first and last among them.
     ///
-    /// A pause the route cannot hold — at `0`, with nothing before it, or past
-    /// the end — is ignored, and one named twice counts once.
+    /// A pause the route cannot hold is already gone: ``TrailRuns`` drops one
+    /// at `0`, with nothing before it, or past the end, and counts one named
+    /// twice once.
+    ///
+    /// - Parameters:
+    ///   - runs: the route cut at its pauses.
+    ///   - gapMeters: the length of the break across paused leg `leg`, on the
+    ///     ground. Asked only when there are more pauses than cross.
     static func keptPoints(
-        count: Int,
-        pauses: [RoutePause],
+        of runs: TrailRuns,
+        gapMeters: (_ leg: Int) -> Double,
         pointBudget: Int = Self.pointBudget,
         pauseBudget: Int = Self.pauseBudget
     ) -> KeptPoints {
-        var seen = Set<Int>()
-        let valid = pauses
-            .filter { $0.resumedAt > 0 && $0.resumedAt < count && seen.insert($0.resumedAt).inserted }
-            // A non-finite gap would make the order below inconsistent, and
-            // a break nobody can measure is no reason to keep it over one
-            // that can be.
-            .map { $0.gapMeters.isFinite ? $0 : RoutePause(resumedAt: $0.resumedAt, gapMeters: 0) }
         // A pause costs at most two points, and the stride needs two of its
         // own for the ends of the line.
         let affordable = max(0, min(pauseBudget, (pointBudget - 2) / 2))
-        let kept = valid.count <= affordable ? valid : Array(
-            valid
-                .sorted { $0.gapMeters != $1.gapMeters ? $0.gapMeters > $1.gapMeters : $0.resumedAt < $1.resumedAt }
+        let keptLegs: [Int]
+        if runs.pausedLegs.count <= affordable {
+            keptLegs = runs.pausedLegs
+        } else {
+            // A non-finite gap would make the order below inconsistent, and a
+            // break nobody can measure is no reason to keep it over one that
+            // can be.
+            let gaps = runs.pausedLegs.map { leg in
+                let gap = gapMeters(leg)
+                return gap.isFinite ? gap : 0
+            }
+            keptLegs = runs.pausedLegs.indices
+                .sorted { gaps[$0] != gaps[$1] ? gaps[$0] > gaps[$1] : $0 < $1 }
                 .prefix(affordable)
-        )
-        let resumes = Set(kept.map(\.resumedAt))
-        let ends = Set(resumes.flatMap { [$0 - 1, $0] })
+                .map { runs.pausedLegs[$0] }
+        }
+        let ends = Set(keptLegs.flatMap { [$0, $0 + 1] })
+        // The point each kept pause arrives at, which is what the package's
+        // pause indices name.
+        let resumes = Set(keptLegs.map { $0 + 1 })
         // The stride never lands on an end, so none of its points is spent on
         // one that is kept anyway. Taken over the whole route, it lost a point
         // to every end it happened to keep: a route of 800 points with a pause
         // every 16 crossed as 714, and a 900-point file of 100 segments as
         // 700. The route's first and last points are kept either way, as the
         // stride's own or as an end.
-        let others = (0..<max(0, count)).filter { !ends.contains($0) }
+        let others = (0..<runs.pointCount).filter { !ends.contains($0) }
         let strided = decimatedIndices(count: others.count, maxPoints: max(2, pointBudget - ends.count))
         let routeIndices = ends.union(strided.map { others[$0] }).sorted()
         let pauseIndices = routeIndices.indices.filter { resumes.contains(routeIndices[$0]) }

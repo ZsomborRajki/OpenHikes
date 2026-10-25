@@ -84,10 +84,4 @@ nonisolated public extension [RouteCoordinate] {
     var pausedSegments: [[CLLocationCoordinate2D]] {
         trailRuns.pausedLegs.map { leg in [self[leg].clCoordinate, self[leg + 1].clCoordinate] }
     }
-
-    /// Whether the recording was ever paused mid-walk. The first point is
-    /// excluded because nothing precedes it to have been paused across.
-    var containsPause: Bool {
-        dropFirst().contains(where: \.isPauseBoundary)
-    }
 }

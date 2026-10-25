@@ -39,27 +39,28 @@ public extension SharedTrailSnapshot {
     /// drawn. Equal lengths go in route order.
     ///
     /// - Parameters:
-    ///   - isPauseBoundary: whether a pause arrives at this point — the
-    ///     phone's `RouteCoordinate.isPauseBoundary`.
+    ///   - runs: `route` cut at its pauses — on the phone,
+    ///     `[RouteCoordinate].trailRuns`.
     static func line<Element>(
         of route: [Element],
+        cutAt runs: TrailRuns,
         maxPoints: Int = 180,
         pauseEndBudget: Int = pauseEndBudget,
-        coordinate: (Element) -> CodableCoordinate,
-        isPauseBoundary: (Element) -> Bool
+        coordinate: (Element) -> CodableCoordinate
     ) -> (polyline: [CodableCoordinate], pauseIndices: [Int]) {
-        let pauses = route.indices.dropFirst().filter { isPauseBoundary(route[$0]) }
+        assert(runs.pointCount == route.count, "the runs of another line")
         let kept = keptIndices(
             count: route.count,
             maxPoints: maxPoints,
-            pausedLegs: pausedLegsByLength(pauses.map { $0 - 1 }, in: route, coordinate: coordinate),
+            pausedLegs: pausedLegsByLength(runs.pausedLegs, in: route, coordinate: coordinate),
             pauseEndBudget: pauseEndBudget
         )
         // Only a kept leg that is the pause alone, both ends next to each
         // other on the route: a leg the stride drew across a pause it could
         // not afford also has walking in it, and is drawn as the line.
+        let paused = Set(runs.pausedLegs)
         let pauseIndices = kept.indices.dropFirst().filter { position in
-            kept[position - 1] == kept[position] - 1 && isPauseBoundary(route[kept[position]])
+            kept[position] == kept[position - 1] + 1 && paused.contains(kept[position - 1])
         }
         return (kept.map { coordinate(route[$0]) }, pauseIndices)
     }

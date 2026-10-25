@@ -22,6 +22,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import OpenHikesShared
 import RealModule
 import Testing
 
@@ -124,7 +125,7 @@ struct GPXImportContainerTests {
     @Test("an unbroken track carries no boundaries")
     func singleSegmentHasNoBoundaries() throws {
         let track = try GPXImport.load(from: try gpxFile(Self.unbrokenTrack))
-        #expect(!track.route.containsPause)
+        #expect(!track.route.trailRuns.isPaused)
         #expect(!track.route.containsInferredGeometry)
     }
 
@@ -146,7 +147,7 @@ struct GPXImportContainerTests {
         """
         let track = try GPXImport.load(from: try gpxFile(xml))
         #expect(track.points.count == 2)
-        #expect(!track.route.containsPause)
+        #expect(!track.route.trailRuns.isPaused)
     }
 
     /// Two `<trk>` elements are two walks, and a hike holds one route. Joining

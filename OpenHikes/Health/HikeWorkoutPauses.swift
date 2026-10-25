@@ -30,6 +30,7 @@
 import Algorithms
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 
 nonisolated enum HikeWorkoutPauses {
     /// When the workout ends: when the hiker stopped, or the last point if the
@@ -76,25 +77,19 @@ nonisolated enum HikeWorkoutPauses {
         return pauses
     }
 
-    /// Each unbroken run of timestamped points, first to last. A point with no
-    /// timestamp says nothing about time and is passed over, the way
-    /// `HealthKitWorkoutWriter` leaves it off the workout's route.
+    /// Each piece of the route cut at its pauses (``TrailRuns/pieces``), from
+    /// its first timestamp to its latest. A point with no timestamp says
+    /// nothing about time and is passed over, the way `HealthKitWorkoutWriter`
+    /// leaves it off the workout's route, and a piece with none is no segment.
+    ///
+    /// Cut before an untimed point is passed over, so a pause that lands on
+    /// one still ends the segment before it. Passed over first, the pause went
+    /// with the point and the walking either side of it became one segment.
     private static func activeSegments(of route: [RouteCoordinate]) -> [DateInterval] {
-        var segments: [DateInterval] = []
-        var current: DateInterval?
-        for point in route {
-            guard let timestamp = point.timestamp else { continue }
-            if point.boundary == .paused, let finished = current {
-                segments.append(finished)
-                current = nil
-            }
-            if let open = current {
-                current = DateInterval(start: open.start, end: max(open.end, timestamp))
-            } else {
-                current = DateInterval(start: timestamp, duration: 0)
-            }
+        route.trailRuns.pieces.compactMap { piece in
+            let times = route[piece].compactMap(\.timestamp)
+            guard let first = times.first, let latest = times.max() else { return nil }
+            return DateInterval(start: first, end: latest)
         }
-        if let current { segments.append(current) }
-        return segments
     }
 }

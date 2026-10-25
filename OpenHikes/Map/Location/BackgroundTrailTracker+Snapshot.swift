@@ -183,9 +183,9 @@ extension BackgroundTrailTracker {
         guard !Task.isCancelled else { return nil }
         // Decimated with both ends of its pauses kept, so the widget can draw
         // a drive between two walked pieces as a pause rather than as trail.
-        let line = SharedTrailSnapshot.line(of: input.route) { coordinate in
+        let line = SharedTrailSnapshot.line(of: input.route, cutAt: input.route.trailRuns) { coordinate in
             SharedTrailSnapshot.CodableCoordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        } isPauseBoundary: { $0.isPauseBoundary }
+        }
         return SharedTrailSnapshot(
             hikeID: input.hikeID,
             title: input.title,

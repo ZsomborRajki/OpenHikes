@@ -178,11 +178,7 @@ nonisolated enum CuratedElevationRequest {
         let spread = sampleIndexes(count: route.count, limit: limit)
         // A route asked about whole has every pause's ends in it already.
         guard spread.count < route.count else { return spread }
-        let pauseEnds = Set(
-            route.indices.dropFirst()
-                .filter { route[$0].isPauseBoundary }
-                .flatMap { [$0 - 1, $0] }
-        )
+        let pauseEnds = Set(route.trailRuns.pausedLegs.flatMap { [$0, $0 + 1] })
         guard !pauseEnds.isEmpty, pauseEnds.count <= limit / 2 else { return spread }
         // The rest, at least half the request, is spread over the points that
         // are not a pause's end, so no point is asked about twice and the
@@ -457,12 +453,16 @@ nonisolated struct RouteHeightSamples: Equatable, Sendable {
         for reading in readings {
             filled[reading.0].elevation = reading.1
         }
+        let pausedLegs = route.trailRuns.pausedLegs
         for (start, end) in readings.adjacentPairs() where end.0 - start.0 > 1 {
-            let between = (start.0 + 1)...end.0
-            if let firstPause = between.first(where: { route[$0].isPauseBoundary }) {
-                let lastPause = between.last { route[$0].isPauseBoundary } ?? firstPause
-                for index in (start.0 + 1)..<firstPause { filled[index].elevation = start.1 }
-                for index in lastPause..<end.0 { filled[index].elevation = end.1 }
+            // The paused legs between the two readings, in order: leg
+            // `start.0` is the first out of the one before, and `end.0 - 1`
+            // the last into the one after.
+            let first = pausedLegs.partitioningIndex { $0 >= start.0 }
+            let past = pausedLegs.partitioningIndex { $0 >= end.0 }
+            if first < past {
+                for index in (start.0 + 1)..<(pausedLegs[first] + 1) { filled[index].elevation = start.1 }
+                for index in (pausedLegs[past - 1] + 1)..<end.0 { filled[index].elevation = end.1 }
                 continue
             }
             // How far along the line each point between the two is, from the

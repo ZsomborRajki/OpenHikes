@@ -100,7 +100,7 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
     /// tracker and the map both read it through ``pausedLegs``. The phone
     /// keeps both ends of every paused leg it sends, so a pause is always
     /// exactly one leg of the line here. At most ``pauseBudget`` of them,
-    /// whatever the route holds: see ``keptPoints(count:pauses:pointBudget:pauseBudget:)``.
+    /// whatever the route holds: see ``keptPoints(of:gapMeters:pointBudget:pauseBudget:)``.
     public var pauseIndices: [Int]
     /// The request this answers. A newer request supersedes this answer even
     /// when the phone sends nothing because the watch already has its revision.

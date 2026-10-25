@@ -23,7 +23,11 @@ extension MapCoordinatorTests {
     /// three points each, with the drive between them.
     private static func pausedRoute() -> DisplayedRoute {
         let coordinates = (0..<6).map { CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86 + Double($0) * 0.001) }
-        return DisplayedRoute(id: UUID(), coordinates: coordinates, pauseIndices: [3])
+        return DisplayedRoute(
+            id: UUID(),
+            coordinates: coordinates,
+            runs: TrailRuns(pointCount: coordinates.count, pauseIndices: [3])
+        )
     }
 
     @Test("a paused route's renderer is handed its walked runs and its paused legs")
