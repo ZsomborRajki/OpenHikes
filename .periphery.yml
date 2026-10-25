@@ -82,7 +82,7 @@ retain_hashable_properties: true
 # reached by `swift test --package-path OpenHikesShared`, so Periphery never
 # indexes it. Every declaration under `OpenHikesShared/Sources` that only its
 # own suite exercises is therefore reported as unused when it is not —
-# `decimate(_:maxPoints:)` and `PendingRecordingFixStore.append(_:)` both are.
+# `PendingRecordingFixStore.append(_:)` is one such declaration.
 # Check a shared-package finding against `OpenHikesShared/Tests` before acting
 # on it. `OpenHikesData` is the same: the scheme builds its library into the
 # app, so its sources are scanned, but `OpenHikesData/Tests` is SwiftPM's and
