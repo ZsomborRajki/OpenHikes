@@ -365,15 +365,23 @@ struct ElevationChartPlot: View, Equatable {
             }
         }
         .chartOverlay { proxy in
-            ElevationChartMarks(
-                proxy: proxy,
-                profile: profile,
-                tint: tint,
-                domain: domain,
-                tracker: tracker,
-                onScrub: onScrub,
-                onScrubbingChanged: onScrubbingChanged
-            )
+            // The proxy is read here and not handed on: Swift Charts runs this
+            // again with a new one whenever the chart moves on screen — see
+            // ``ElevationChartMarks/==(_:_:)``.
+            GeometryReader { geometry in
+                if let plotFrame = proxy.plotFrame {
+                    ElevationChartMarks(
+                        plot: geometry[plotFrame],
+                        profile: profile,
+                        tint: tint,
+                        domain: domain,
+                        tracker: tracker,
+                        onScrub: onScrub,
+                        onScrubbingChanged: onScrubbingChanged
+                    )
+                    .equatable()
+                }
+            }
         }
     }
 
@@ -542,8 +550,9 @@ private struct ElevationScrubRelay: View {
 /// where a vertical drag still scrolls the sheet — and is reported in the same
 /// coordinates. Laid over the plot area with the same x-domain, it selects the
 /// same distance at every position as the plot did, past either end included.
-private struct ElevationChartMarks: View {
-    let proxy: ChartProxy
+struct ElevationChartMarks: View, Equatable {
+    /// Where the plot area sits, in this view's own space.
+    let plot: CGRect
     let profile: RouteProfile
     let tint: Color
     let domain: ClosedRange<Double>
@@ -575,6 +584,26 @@ private struct ElevationChartMarks: View {
     /// Opacity for the callout shadow.
     private static let shadowOpacity: Double = 0.15
 
+    // What the marks draw and where, compared as ``ElevationChartPlot``
+    // compares its own: the samples in full, the scales, and the plot area's
+    // frame. The tracker is left out, as it is there — the same instance every
+    // time, whose moves reach this body through Observation — and so are the
+    // callbacks, for the reason the plot gives.
+    //
+    // The plot area arrives as a frame rather than as the `ChartProxy` it is
+    // read from, because Swift Charts runs `chartOverlay` again, with a new
+    // proxy, whenever the chart moves on screen. A proxy compares unequal
+    // every time, so the marks ran on every frame of a scroll down the hike's
+    // card or a drag of the sheet, about 140 times a swipe, and laid out both
+    // of their charts again for a picture that had not changed. The frame, in
+    // this view's own space, stays where it is.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.plot == rhs.plot
+            && lhs.tint == rhs.tint
+            && lhs.domain == rhs.domain
+            && lhs.profile.samples == rhs.profile.samples
+    }
+
     var body: some View {
         let trackerSample = profile.sample(atDistance: tracker.trackerDistance)
         let liveSample = tracker.liveTrackerDistance.flatMap { profile.sample(atDistance: $0) }
@@ -583,13 +612,10 @@ private struct ElevationChartMarks: View {
             set: { scrub.select($0) }
         )
         GeometryReader { geometry in
-            if let plotFrame = proxy.plotFrame {
-                let plot = geometry[plotFrame]
-                drawnChart(tracker: trackerSample, live: liveSample, plot: plot, size: geometry.size)
-                touchChart(selection: selection)
-                    .frame(width: plot.width, height: plot.height)
-                    .position(x: plot.midX, y: plot.midY)
-            }
+            drawnChart(tracker: trackerSample, live: liveSample, size: geometry.size)
+            touchChart(selection: selection)
+                .frame(width: plot.width, height: plot.height)
+                .position(x: plot.midX, y: plot.midY)
         }
         // The cancellation half of the reset in ``touchChart(selection:)`` —
         // see ``isTouchingChart``.
@@ -607,7 +633,6 @@ private struct ElevationChartMarks: View {
     private func drawnChart(
         tracker trackerSample: ElevationSample?,
         live liveSample: ElevationSample?,
-        plot: CGRect,
         size: CGSize
     ) -> some View {
         Chart {
