@@ -47,6 +47,7 @@
 //  battery rather than in frames.
 //
 
+import Foundation
 import OpenHikesShared
 import SwiftUI
 
@@ -184,8 +185,8 @@ struct WatchRecordingView: View {
                 .font(.title3.monospacedDigit())
             Text(
                 model.queuedWalkCount > 0
-                    ? "Waiting for your iPhone. It’ll go across on its own."
-                    : "Sent to your iPhone."
+                    ? String(localized: "Waiting for your iPhone. It’ll go across on its own.")
+                    : String(localized: "Sent to your iPhone.")
             )
             .font(.caption2)
             .foregroundStyle(.secondary)

@@ -499,7 +499,9 @@ extension HikeRecorder {
     ) async throws -> RecordingStopOutcome {
         guard phase == .waitingForFix
             || phase == .recording
-            || phase == .paused else { throw RecordingFailure.save("No active recording is ready to stop.") }
+            || phase == .paused else { throw RecordingFailure.save(String(
+                localized: "No active recording is ready to stop."
+            )) }
         guard let journal, sessionStartedAt != nil else {
             let failure = RecordingFailure.storageUnavailable
             fail(failure)
@@ -634,17 +636,19 @@ extension HikeRecorder {
     }
 
     func saveReviewedRecording() async throws -> Hike {
-        guard phase == .reviewing else { throw RecordingFailure.save("No reviewed recording is ready to save.") }
+        guard phase == .reviewing else { throw RecordingFailure.save(String(
+            localized: "No reviewed recording is ready to save."
+        )) }
         return try await savePendingReviewedRecording()
     }
 
     func retrySave() async throws -> Hike {
         guard case .failed = phase, let journal else {
-            throw RecordingFailure.save("No failed recording save is ready to retry.")
+            throw RecordingFailure.save(String(localized: "No failed recording save is ready to retry."))
         }
         if pendingReviewSave != nil { return try await savePendingReviewedRecording() }
         guard let pendingPreparedSave else {
-            throw RecordingFailure.save("No failed recording save is ready to retry.")
+            throw RecordingFailure.save(String(localized: "No failed recording save is ready to retry."))
         }
 
         phase = .saving
@@ -668,14 +672,16 @@ extension HikeRecorder {
     private func savePendingReviewedRecording() async throws -> Hike {
         guard let pendingReviewSave,
               let routeReview,
-              let journal else { throw RecordingFailure.save("No reviewed recording is ready to save.") }
+              let journal else {
+            throw RecordingFailure.save(String(localized: "No reviewed recording is ready to save."))
+        }
         phase = .saving
         do {
             let points = pendingReviewSave.normalizedPoints
             let choices = routeReview.legChoices
             let startedAt = pendingReviewSave.session.metadata.startedAt
             guard pendingReviewSave.session.metadata.endedAt != nil else {
-                throw RecordingFailure.save("The recording has not been finished yet.")
+                throw RecordingFailure.save(String(localized: "The recording has not been finished yet."))
             }
             let prepared = try await RecordingPreparation.prepareResolvedOffMain(
                 points: points,

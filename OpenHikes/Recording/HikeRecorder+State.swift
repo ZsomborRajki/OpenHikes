@@ -24,22 +24,22 @@ nonisolated enum RecordingFailure: LocalizedError, Equatable, Sendable {
 
     var errorDescription: String? {
         switch self {
-        case .locationDenied: "Location access is needed to record a hike."
-        case .preciseLocationRequired: "Precise Location is needed to record a hike."
-        case .save: "The recorded hike couldn’t be saved."
-        case .storage: "The recording could not be written safely."
-        case .storageUnavailable: "The recording journal couldn’t be created."
-        case .tooShort: "This recording has only one track point."
+        case .locationDenied: String(localized: "Location access is needed to record a hike.")
+        case .preciseLocationRequired: String(localized: "Precise Location is needed to record a hike.")
+        case .save: String(localized: "The recorded hike couldn’t be saved.")
+        case .storage: String(localized: "The recording could not be written safely.")
+        case .storageUnavailable: String(localized: "The recording journal couldn’t be created.")
+        case .tooShort: String(localized: "This recording has only one track point.")
         }
     }
 
     var recoverySuggestion: String? {
         switch self {
-        case .locationDenied: "Allow location access in Settings, then try again."
-        case .preciseLocationRequired: "Turn on Precise Location for OpenHikes in Settings."
+        case .locationDenied: String(localized: "Allow location access in Settings, then try again.")
+        case .preciseLocationRequired: String(localized: "Turn on Precise Location for OpenHikes in Settings.")
         case .save(let detail), .storage(let detail): detail
-        case .storageUnavailable: "Check that the app has storage available, then try again."
-        case .tooShort: "A hike needs at least two points to have a route."
+        case .storageUnavailable: String(localized: "Check that the app has storage available, then try again.")
+        case .tooShort: String(localized: "A hike needs at least two points to have a route.")
         }
     }
 }

@@ -320,9 +320,9 @@ nonisolated enum CommonsPhotoFailure: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .busy: "Wikimedia Commons is busy."
-        case .refused(let code): "Wikimedia Commons refused the request: \(code)."
-        case .server(let statusCode): "Wikimedia Commons answered \(statusCode)."
+        case .busy: String(localized: "Wikimedia Commons is busy.")
+        case .refused(let code): String(localized: "Wikimedia Commons refused the request: \(code).")
+        case .server(let statusCode): String(localized: "Wikimedia Commons answered \(statusCode).")
         }
     }
 }

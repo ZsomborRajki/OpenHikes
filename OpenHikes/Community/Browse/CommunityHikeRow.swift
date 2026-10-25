@@ -15,6 +15,7 @@
 //  taps it.
 //
 
+import Foundation
 import SwiftUI
 
 struct CommunityHikeRow: View {
@@ -31,7 +32,7 @@ struct CommunityHikeRow: View {
             // The listing's colour, which is what ``HikeRow`` does with its own
             // status capsule: the badge belongs to the row it is in, and a row
             // whose circle and capsule disagree reads as two things.
-            badge: isImported ? TrailListRow.Badge(title: "Saved", tint: listing.tint) : nil,
+            badge: isImported ? TrailListRow.Badge(title: String(localized: "Saved"), tint: listing.tint) : nil,
             subtitle: subtitle,
             identifier: "community-hike-row"
         ) {
@@ -77,7 +78,7 @@ struct CommunityHikeRow: View {
             )
         }
         if !listing.authorName.isEmpty {
-            parts.append("by \(listing.authorName)")
+            parts.append(String(localized: "by \(listing.authorName)"))
         }
         if let facts = listing.curatedFacts {
             if let shape = facts.shape { parts.append(shape.displayName) }
@@ -85,7 +86,7 @@ struct CommunityHikeRow: View {
         }
         if listing.photoCount > 0 {
             parts.append(
-                listing.photoCount == 1 ? "1 photo" : "\(listing.photoCount) photos"
+                String(localized: "\(listing.photoCount) photos")
             )
         }
         return parts.joined(separator: " · ")

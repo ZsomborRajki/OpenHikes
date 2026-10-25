@@ -20,6 +20,7 @@
 //  cannot know is that it is the reason the button did nothing.
 //
 
+import Foundation
 import SwiftUI
 
 /// Which location grant is missing, from the point of view of the thing that
@@ -35,8 +36,8 @@ enum LocationAccessNeed {
 
     var title: String {
         switch self {
-        case .always: "Background Location Off"
-        case .whileUsing: "Location Access Off"
+        case .always: String(localized: "Background Location Off")
+        case .whileUsing: String(localized: "Location Access Off")
         }
     }
 
@@ -48,18 +49,18 @@ enum LocationAccessNeed {
     var message: String {
         switch self {
         case .always:
-            """
+            String(localized: """
             Background Trail Tracking needs Always location access, which \
             OpenHikes doesn’t have. Without it your widget and Live Activity \
             stop updating as soon as you close the app. You can grant it in \
             Settings.
-            """
+            """)
         case .whileUsing:
-            """
+            String(localized: """
             OpenHikes can’t show where you are, center the map on you, or \
             report the weather where you’re standing. Turn on Location \
             Access for OpenHikes in Settings to use the location button.
-            """
+            """)
         }
     }
 }

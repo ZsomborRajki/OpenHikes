@@ -126,12 +126,12 @@ nonisolated enum TrailGraphProviderError: LocalizedError, Equatable, Sendable {
 
     var errorDescription: String? {
         switch self {
-        case .aborted(let remark): "Overpass could not finish the query: \(remark)"
-        case .invalidResponse: "Overpass returned an invalid response."
-        case .server(let statusCode): "Overpass returned HTTP \(statusCode)."
-        case .rateLimited: "Overpass temporarily rate-limited trail downloads."
-        case .malformedGraph: "The downloaded trail graph could not be decoded."
-        case .storage: "The trail graph cache could not be updated."
+        case .aborted(let remark): String(localized: "Overpass could not finish the query: \(remark)")
+        case .invalidResponse: String(localized: "Overpass returned an invalid response.")
+        case .server(let statusCode): String(localized: "Overpass returned HTTP \(statusCode).")
+        case .rateLimited: String(localized: "Overpass temporarily rate-limited trail downloads.")
+        case .malformedGraph: String(localized: "The downloaded trail graph could not be decoded.")
+        case .storage: String(localized: "The trail graph cache could not be updated.")
         }
     }
 }

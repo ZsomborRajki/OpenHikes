@@ -122,7 +122,7 @@ final class WatchRecordingMirror {
             return WatchCommandOutcome(
                 commandID: command.id,
                 recording: .idle(),
-                refusal: "OpenHikes isn’t ready on your iPhone yet."
+                refusal: String(localized: "OpenHikes isn’t ready on your iPhone yet.")
             )
         }
         var refusal: String?

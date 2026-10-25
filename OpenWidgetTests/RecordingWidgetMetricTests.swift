@@ -1,6 +1,6 @@
 //
 //  RecordingWidgetMetricTests.swift
-//  OpenHikesSharedTests
+//  OpenWidgetTests
 //
 //  "Recording widget metrics", split out of TrailWidgetMetricTests.swift so
 //  that a file declares one @Suite. That file's header still holds the

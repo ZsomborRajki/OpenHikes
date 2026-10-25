@@ -27,6 +27,7 @@
 //  without either becoming an input of the root view's body.
 //
 
+import Foundation
 import SwiftUI
 
 /// Whether the weather detail sheet is up.
@@ -237,7 +238,10 @@ struct WeatherDetailView: View {
             // A glyph, a number and a phrase that are one fact — the same
             // shape ``StatRow`` and ``DetailRow`` take.
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(placeName.map { "Conditions in \($0)" } ?? "Current conditions")
+            .accessibilityLabel(
+                placeName.map { String(localized: "Conditions in \($0)") }
+                    ?? String(localized: "Current conditions")
+            )
             .accessibilityValue("\(snapshot.spokenTemperature()), \(snapshot.conditionDescription)")
             .accessibilityIdentifier("weather-detail-conditions")
         }
@@ -340,7 +344,8 @@ struct WeatherDetailView: View {
     private var unavailableSection: some View {
         Section {
             Label(
-                placeName.map { "No forecast for \($0)" } ?? "No forecast available",
+                placeName.map { String(localized: "No forecast for \($0)") }
+                    ?? String(localized: "No forecast available"),
                 systemImage: "cloud.slash"
             )
                 .accessibilityIdentifier("weather-detail-unavailable")
@@ -468,8 +473,7 @@ struct WeatherDetailView: View {
         } footer: {
             if snapshot.isStale() {
                 Text(
-                    "OpenHikes hasn\u{2019}t been able to refresh this reading, "
-                        + "so it\u{2019}s shown dimmed on the map."
+                    "OpenHikes hasn\u{2019}t been able to refresh this reading, so it\u{2019}s shown dimmed on the map."
                 )
             }
         }
@@ -596,7 +600,7 @@ private extension WeatherDetailView {
             Section {
                 DetailRow(
                     label: "Warnings",
-                    value: "None",
+                    value: String(localized: "None"),
                     systemImage: "checkmark.shield"
                 )
                     .accessibilityIdentifier("weather-detail-alerts-clear")
@@ -607,7 +611,7 @@ private extension WeatherDetailView {
                 // here is known to be clear, and a shield would say it is.
                 DetailRow(
                     label: "Warnings",
-                    value: "Not reported here",
+                    value: String(localized: "Not reported here"),
                     systemImage: "questionmark.circle"
                 )
                     .accessibilityIdentifier("weather-detail-alerts-unavailable")

@@ -133,6 +133,7 @@
 //  without. See ``actionsToolbarItem``.
 //
 
+import Foundation
 import OpenHikesData
 import OpenHikesShared
 import os
@@ -694,11 +695,11 @@ private extension CommunityHikeView {
     /// requires and the reason this string is never empty. The licence itself
     /// is reachable from ``curatedAttribution``, one row below.
     var credit: String {
-        guard !listing.isCurated else { return "From OpenStreetMap contributors" }
+        guard !listing.isCurated else { return String(localized: "From OpenStreetMap contributors") }
         let day = listing.hikeDate?.formatted(date: .abbreviated, time: .omitted)
         switch (listing.authorName.isEmpty, day) {
-        case (false, let day?): return "Shared by \(listing.authorName) · \(day)"
-        case (false, nil): return "Shared by \(listing.authorName)"
+        case (false, let day?): return String(localized: "Shared by \(listing.authorName) · \(day)")
+        case (false, nil): return String(localized: "Shared by \(listing.authorName)")
         case (true, let day?): return day
         case (true, nil): return ""
         }

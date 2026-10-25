@@ -23,6 +23,7 @@
 //  fix that extends coverage redraws neither this nor the detail around it.
 //
 
+import Foundation
 import OpenHikesData
 import OpenHikesShared
 import SwiftUI
@@ -115,8 +116,14 @@ private struct WalkPhaseRefusalAlert: ViewModifier {
         } message: {
             Text(
                 refused == .paused
-                    ? "Pausing it could not be saved, so the hike is still under way. Try pausing it again."
-                    : "Resuming it could not be saved, so the hike is still paused. Try resuming it again."
+                    ? String(localized: """
+                        Pausing it could not be saved, so the hike is still under way. \
+                        Try pausing it again.
+                        """)
+                    : String(localized: """
+                        Resuming it could not be saved, so the hike is still paused. \
+                        Try resuming it again.
+                        """)
             )
         }
     }

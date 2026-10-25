@@ -59,19 +59,21 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
 
     var errorDescription: String? {
         switch self {
-        case .busyFinishing: "OpenHikes is still finishing your last recording."
-        case .couldNotSave: "Your hike couldn’t be saved."
-        case .unknownDay: "OpenHikes couldn’t work out which day that is."
-        case .noActiveRecording: "OpenHikes isn’t recording a hike right now."
-        case .alreadyRecording: "OpenHikes is already recording a hike."
-        case .walking(let trail): "You’re hiking \(trail). End the hike in OpenHikes to start recording."
-        case .notPaused: "That hike isn’t paused."
+        case .busyFinishing: String(localized: "OpenHikes is still finishing your last recording.")
+        case .couldNotSave: String(localized: "Your hike couldn’t be saved.")
+        case .unknownDay: String(localized: "OpenHikes couldn’t work out which day that is.")
+        case .noActiveRecording: String(localized: "OpenHikes isn’t recording a hike right now.")
+        case .alreadyRecording: String(localized: "OpenHikes is already recording a hike.")
+        case .walking(let trail): String(
+            localized: "You’re hiking \(trail). End the hike in OpenHikes to start recording."
+        )
+        case .notPaused: String(localized: "That hike isn’t paused.")
         case .recording(let failure): failure.errorDescription
         case .awaitingRouteReview:
-            "Your hike is saved, but it needs you to pick which trail you followed."
-        case .noHikesYet: "There aren’t any hikes in OpenHikes yet."
-        case .nothingWalkedYet: "You haven’t walked any of your hikes yet."
-        case .storage: "Your hikes couldn’t be read."
+            String(localized: "Your hike is saved, but it needs you to pick which trail you followed.")
+        case .noHikesYet: String(localized: "There aren’t any hikes in OpenHikes yet.")
+        case .nothingWalkedYet: String(localized: "You haven’t walked any of your hikes yet.")
+        case .storage: String(localized: "Your hikes couldn’t be read.")
         }
     }
 
@@ -79,13 +81,13 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
         switch self {
         case .alreadyRecording, .noActiveRecording, .notPaused, .noHikesYet, .nothingWalkedYet, .unknownDay, .walking:
             nil
-        case .busyFinishing: "Try again in a moment."
+        case .busyFinishing: String(localized: "Try again in a moment.")
         case .recording(let failure): failure.recoverySuggestion
-        case .awaitingRouteReview: "Open OpenHikes to finish reviewing it."
+        case .awaitingRouteReview: String(localized: "Open OpenHikes to finish reviewing it.")
         // Fixed rather than the store's own words: what SwiftData has to say
         // about a failed fetch is a sentence for a developer, and this one is
         // spoken. It is logged in `HikeIntentCoordinator.fetch(_:)` instead.
-        case .couldNotSave, .storage: "Open OpenHikes to check on your hikes."
+        case .couldNotSave, .storage: String(localized: "Open OpenHikes to check on your hikes.")
         }
     }
 }
@@ -97,7 +99,7 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
 /// framework's own generic "there was a problem" line.
 nonisolated extension HikeIntentFailure: CustomLocalizedStringResourceConvertible {
     var localizedStringResource: LocalizedStringResource {
-        let reason = errorDescription ?? "Something went wrong."
+        let reason = errorDescription ?? String(localized: "Something went wrong.")
         guard let recoverySuggestion else { return "\(reason)" }
         return "\(reason) \(recoverySuggestion)"
     }

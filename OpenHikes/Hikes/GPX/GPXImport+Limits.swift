@@ -110,11 +110,11 @@ nonisolated extension GPXImport {
 
         var errorDescription: String? {
             switch self {
-            case .multipleTracks: "This GPX file holds more than one track."
-            case .noUsablePoints: "No track points were found in this file."
-            case .tooLarge: "This GPX file is too large to import."
-            case .tooShort: "This GPX file has only one track point."
-            case .unreadable: "This file couldn’t be read."
+            case .multipleTracks: String(localized: "This GPX file holds more than one track.")
+            case .noUsablePoints: String(localized: "No track points were found in this file.")
+            case .tooLarge: String(localized: "This GPX file is too large to import.")
+            case .tooShort: String(localized: "This GPX file has only one track point.")
+            case .unreadable: String(localized: "This file couldn’t be read.")
             }
         }
 
@@ -124,16 +124,24 @@ nonisolated extension GPXImport {
             // hiker's own answer — so this is read only where a caller cannot
             // ask, ``HikeImport/hike(from:into:save:)``, and says what the
             // asking path would have done.
-            case .multipleTracks: "Each track imports as a hike of its own. Choose at least one to import the file."
+            case .multipleTracks: String(
+                localized: "Each track imports as a hike of its own. Choose at least one to import the file."
+            )
             // Deliberately covers "it isn't GPX at all" as well — see the case's
             // own note for why that lands here.
-            case .noUsablePoints: "It may not be a GPX file, or its points are missing coordinates or out of range."
+            case .noUsablePoints: String(
+                localized: "It may not be a GPX file, or its points are missing coordinates or out of range."
+            )
             // No number in the copy: the message has to be true of both bounds,
             // and the hiker can act on it without knowing which one was hit.
-            case .tooLarge: "A single hike is a few megabytes at most, and a file holds a few dozen tracks at most. "
-                + "This one is past what can be imported at once."
-            case .tooShort: "A hike needs at least two points to have a route."
-            case .unreadable: "Check that it’s a .gpx file and isn’t damaged."
+            case .tooLarge: String(
+                localized: """
+                    A single hike is a few megabytes at most, and a file holds a few dozen tracks at most. \
+                    This one is past what can be imported at once.
+                    """
+            )
+            case .tooShort: String(localized: "A hike needs at least two points to have a route.")
+            case .unreadable: String(localized: "Check that it’s a .gpx file and isn’t damaged.")
             }
         }
     }

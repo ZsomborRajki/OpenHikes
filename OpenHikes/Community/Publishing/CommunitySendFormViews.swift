@@ -36,6 +36,7 @@
 //  is called, and when it is allowed to be pressed.
 //
 
+import Foundation
 import OpenHikesShared
 import SwiftUI
 
@@ -62,7 +63,7 @@ struct CommunityCreditSection: View {
     @Binding var authorName: String
     /// What this screen says the name will be shown beside, which is the one
     /// part of the section that is genuinely per-form.
-    let footer: String
+    let footer: LocalizedStringKey
     let identifier: String
     let phase: CommunitySendPhase
 
@@ -102,7 +103,7 @@ struct CommunitySendPhotoCountRow: View {
             .accessibilityIdentifier(identifier)
     }
 
-    private var spoken: String { count == 0 ? "None" : "\(count)" }
+    private var spoken: String { count == 0 ? String(localized: "None") : "\(count)" }
 }
 
 /// The two toolbar items a send form has, in the states a send puts them in.

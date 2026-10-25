@@ -1,6 +1,6 @@
 //
 //  SharedRecordingSnapshotTests.swift
-//  OpenHikesSharedTests
+//  OpenWidgetTests
 //
 
 import Foundation

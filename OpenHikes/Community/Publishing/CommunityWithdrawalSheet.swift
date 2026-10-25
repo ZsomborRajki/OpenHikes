@@ -31,6 +31,7 @@
 //  picker would read as a bar to clear.
 //
 
+import Foundation
 import SwiftUI
 
 struct CommunityWithdrawalSheet: View {
@@ -97,8 +98,8 @@ private extension CommunityWithdrawalSheet {
         } footer: {
             Text(
                 withdrawal.isPublished
-                    ? "Other hikers can find this hike now."
-                    : "This was sent and has not been published yet."
+                    ? String(localized: "Other hikers can find this hike now.")
+                    : String(localized: "This was sent and has not been published yet.")
             )
         }
     }
@@ -145,7 +146,7 @@ private extension CommunityWithdrawalSheet {
     func outcomeSections(_ outcome: CommunityMailOutcome) -> some View {
         CommunityMailOutcomeSections(
             outcome: outcome,
-            noun: "Request",
+            noun: String(localized: "Request"),
             plainText: composed.plainText,
             identifiers: .init(
                 handedOff: "community-withdrawal-handed-off",

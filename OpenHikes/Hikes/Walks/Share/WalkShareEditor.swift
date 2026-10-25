@@ -11,6 +11,7 @@
 //  when that box is tapped, and goes when the photograph is.
 //
 
+import Foundation
 import SwiftUI
 
 struct WalkShareEditor: View {
@@ -97,7 +98,7 @@ private struct WalkShareBoxControls: View {
         let style = widget == .stats ? model.layout.statsStyle : model.layout.routeStyle
         return Picker("Style", selection: Binding(get: { style }, set: { model.setStyle($0, of: widget) })) {
             Text("Card").tag(WalkShareBoxStyle.card)
-            Text(widget == .stats ? "Text" : "Line").tag(WalkShareBoxStyle.bare)
+            Text(widget == .stats ? String(localized: "Text") : String(localized: "Line")).tag(WalkShareBoxStyle.bare)
         }
         .pickerStyle(.segmented)
         .fixedSize()

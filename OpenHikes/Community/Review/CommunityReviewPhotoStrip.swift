@@ -25,6 +25,7 @@
 //
 
 import Algorithms
+import Foundation
 import SwiftUI
 
 struct CommunityReviewPhotoStrip<Subject: CommunityReviewSubject>: View {
@@ -39,10 +40,10 @@ struct CommunityReviewPhotoStrip<Subject: CommunityReviewSubject>: View {
     /// contribution the photographs *are* the submission, so an empty set is
     /// a decline and the screen says so rather than offering a publish that
     /// would create a record of nothing.
-    var emptiedMessage: String?
+    var emptiedMessage: LocalizedStringKey?
     /// What to say when nothing arrived at all, or `nil` for a screen that
     /// handles that case before it gets here.
-    var emptyMessage: String?
+    var emptyMessage: LocalizedStringKey?
     /// Tells the map what the strip now shows.
     let showOnMap: (Subject) -> Void
 
@@ -74,8 +75,8 @@ struct CommunityReviewPhotoStrip<Subject: CommunityReviewSubject>: View {
             // exactly as it did before there was anything to count twice.
             Text(
                 decisions.removedPhotos.isEmpty
-                    ? "Photos (\(subject.photoFileURLs.count))"
-                    : "Photos (\(decisions.keptPhotoCount) of \(subject.photoFileURLs.count))"
+                    ? String(localized: "Photos (\(subject.photoFileURLs.count))")
+                    : String(localized: "Photos (\(decisions.keptPhotoCount) of \(subject.photoFileURLs.count))")
             )
         } footer: {
             footer

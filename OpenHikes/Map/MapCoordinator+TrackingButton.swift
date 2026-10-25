@@ -26,6 +26,7 @@
 //  been forced to stop anyway.
 //
 
+import Foundation
 import MapKit
 import SwiftUI
 #if canImport(UIKit)
@@ -400,8 +401,8 @@ extension MapView {
         button.isHidden = true
         // A glyph is not a label, and `performAccessibilityAudit` measures
         // both — the same rule the camera pill's buttons carry.
-        button.accessibilityLabel = "Location access off"
-        button.accessibilityHint = "Explains why OpenHikes can’t show your location."
+        button.accessibilityLabel = String(localized: "Location access off")
+        button.accessibilityHint = String(localized: "Explains why OpenHikes can’t show your location.")
         button.accessibilityIdentifier = "location-access-refused"
         return button
     }

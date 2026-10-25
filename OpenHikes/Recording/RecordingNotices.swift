@@ -7,6 +7,7 @@
 //  track out without stopping it.
 //
 
+import Foundation
 import OpenHikesData
 import OpenHikesShared
 import SwiftUI
@@ -54,9 +55,10 @@ struct RecordingRecoveryNotice: View {
                 Label("Recovered recording", systemImage: "clock.arrow.circlepath")
                     .font(.headline)
                 Text(
-                    "\(distance(summary.distanceMeters)) · "
-                        + "\(summary.pointCount.formatted()) points · "
-                        + "\(HikeFormat.duration(max(0, summary.lastUpdatedAt.timeIntervalSince(summary.startedAt))))"
+                    """
+                        \(distance(summary.distanceMeters)) · \(summary.pointCount.formatted()) points · \
+                        \(HikeFormat.duration(max(0, summary.lastUpdatedAt.timeIntervalSince(summary.startedAt))))
+                        """
                 )
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -111,7 +113,9 @@ struct RecordingConditionsNotice: View {
         }
         if UIApplication.shared.backgroundRefreshStatus != .available {
             warnings.append(
-                "Background App Refresh is off, so the track may be sparse while OpenHikes isn’t open."
+                String(
+                    localized: "Background App Refresh is off, so the track may be sparse while OpenHikes isn’t open."
+                )
             )
         }
         return warnings

@@ -106,9 +106,30 @@ mkdir -p "$stub_bin"
 # that should grow ends with an iOS one. STUB_CLONED_UDID is the same for
 # `simctl clone`. `delete` and `rename` edit the fixture as the real ones edit
 # the machine, and `list runtimes` answers from STUB_RUNTIMES.
+export STUB_REAL_SWIFT="$(xcrun --find swift)"
+export STUB_REAL_MACOS_SDK="$(xcrun --sdk macosx --show-sdk-path)"
 cat > "$stub_bin/xcrun" <<'STUB'
 #!/usr/bin/env bash
 printf 'xcrun %s\n' "$*" >> "$STUB_CALL_LOG"
+if [[ "${1:-} ${2:-}" == "--find swift" ]]; then
+    printf '%s\n' "$STUB_REAL_SWIFT"
+    exit 0
+fi
+if [[ "${1:-} ${2:-} ${3:-}" == "--sdk macosx --show-sdk-path" ]]; then
+    printf '%s\n' "$STUB_REAL_MACOS_SDK"
+    exit 0
+fi
+if [[ "${1:-}" == "swiftc" ]]; then
+    [[ -z "${STUB_SHARED_EXTRACTION_FAIL:-}" ]] || exit 17
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" == "-emit-localized-strings-path" ]]; then
+            : > "$2/SharedTargetStrings.stringsdata"
+            break
+        fi
+        shift
+    done
+    exit 0
+fi
 # A recording, read back: `xctrace export` and `xcresulttool` answer from the
 # fixture files in STUB_TRACE_DIR, the table of contents or whichever table
 # the export names.
@@ -1846,8 +1867,8 @@ fi
 
 echo "String catalog check"
 
-# Scripts/sync-string-catalogs.sh --check is the only completeness check the
-# String Catalogs have, and CI runs it after the build: a catalog that is
+# Scripts/sync-string-catalogs.sh --check checks the compiler's extraction,
+# and CI runs it after the build: a catalog that is
 # behind the source must be the exit status, not a message nobody reads. The
 # stubbed xcstringstool stands in for the sync; the derived data is a folder of
 # empty .stringsdata files, one per target, because the script only needs to
@@ -1861,9 +1882,14 @@ for target in OpenHikes OpenWidgetExtension OpenHikesWatch OpenHikesWatchWidgets
 done
 
 unset STUB_CATALOG_BEHIND || true
+catalog_hashes_before="$(shasum -a 256 \
+    "$repository_root"/{OpenHikes,OpenWidget,OpenHikesWatch,OpenHikesWatchWidgets}/Localizable.xcstrings)"
 run_script "sync-string-catalogs --check passes when every catalog is current" \
     "$catalog_check" --check "$catalog_dd"
-if expect_status 0 && expect_contains "$output" "current OpenHikes/Localizable.xcstrings" "the output"; then
+if expect_status 0 \
+    && expect_contains "$output" "current OpenHikes/Localizable.xcstrings" "the output" \
+    && expect_contains "$calls" "swiftc -c -emit-localized-strings" "the shared extraction" \
+    && expect_contains "$calls" "SharedTargetStrings.stringsdata" "the shared strings passed to sync"; then
     pass
 fi
 
@@ -1874,8 +1900,18 @@ if expect_status 2 && expect_contains "$output" "OpenHikes/Localizable.xcstrings
 fi
 
 run_script "sync-string-catalogs --check changes no catalog in the checkout" \
-    git -C "$repository_root" status --porcelain -- '*.xcstrings'
-if expect_status 0 && expect_absent "$output" "xcstrings" "the working tree changes"; then
+    shasum -a 256 \
+    "$repository_root"/{OpenHikes,OpenWidget,OpenHikesWatch,OpenHikesWatchWidgets}/Localizable.xcstrings
+if expect_status 0; then
+    if [[ "$output" == "$catalog_hashes_before" ]]; then pass
+    else fail "a catalog changed during --check"; fi
+fi
+
+STUB_SHARED_EXTRACTION_FAIL=1 run_script "sync refuses a failed shared extraction" \
+    "$catalog_check" --check "$catalog_dd"
+if expect_status 1 \
+    && expect_contains "$output" "shared localized strings could not be extracted" "the error" \
+    && expect_absent "$calls" "xcstringstool sync" "the rejected sync"; then
     pass
 fi
 
@@ -2801,4 +2837,13 @@ if (( failures > 0 )); then
     echo "$failures case(s) failed." >&2
     exit 1
 fi
+echo "String extraction guard"
+current="the source extraction guard rejects hidden copy and accepts localized helpers"
+if "$repository_root/Scripts/check-string-extraction.sh" --self-test; then
+    pass
+else
+    fail "the source extraction fixtures failed"
+    exit 1
+fi
+
 echo "All script smoke tests passed."

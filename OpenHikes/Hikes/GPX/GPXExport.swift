@@ -145,7 +145,7 @@ nonisolated enum GPXExport {
     /// Not the hike's name and not the file's: the hike's is already on the
     /// track and repeating it would give every waypoint the same label, while
     /// the file's names something the export does not carry.
-    static let photographName = "Photo"
+    static let photographName = String(localized: "Photo")
     /// `<sym>` is a hint to the reader's own symbol table rather than a
     /// drawing, and this is the name readers conventionally map to a camera.
     static let photographSymbol = "Photo"
@@ -440,7 +440,7 @@ nonisolated extension GPXExport {
 nonisolated extension GPXExport {
     /// Used when a hike's name is empty, or is nothing but punctuation a file
     /// system won't take.
-    private static let fallbackFileStem = "Hike"
+    private static let fallbackFileStem = String(localized: "Hike")
     /// Well inside every file system's limit, and long enough that a trimmed
     /// name is still recognisable in a Files folder.
     private static let maximumFileStemLength = 64

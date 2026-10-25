@@ -51,6 +51,7 @@
 //  have cost.
 //
 
+import Foundation
 import MapKit
 import OpenHikesData
 import OpenHikesShared
@@ -174,7 +175,7 @@ struct TrailDraftView: View {
             search.end()
             completer.clear()
         }
-        .navigationTitle(maker.editingHikeID == nil ? "New Trail" : "Edit Trail")
+        .navigationTitle(maker.editingHikeID == nil ? String(localized: "New Trail") : String(localized: "Edit Trail"))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -198,11 +199,16 @@ struct TrailDraftView: View {
         // from inside the sheet's contents*, and which ``RecordingView``'s own
         // alerts already follow.
         .confirmationDialog(
-            maker.editingHikeID == nil ? "Close this trail?" : "Close this edit?",
+            maker.editingHikeID == nil ? String(localized: "Close this trail?") : String(localized: "Close this edit?"),
             isPresented: $isConfirmingClose,
             titleVisibility: .visible
         ) {
-            Button(maker.editingHikeID == nil ? "Discard Trail" : "Discard Changes", role: .destructive) {
+            Button(
+                maker.editingHikeID == nil
+                    ? String(localized: "Discard Trail")
+                    : String(localized: "Discard Changes"),
+                role: .destructive
+            ) {
                 maker.discard()
                 onClose()
             }

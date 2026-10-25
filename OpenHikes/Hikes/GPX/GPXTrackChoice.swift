@@ -99,7 +99,7 @@ final class GPXTrackChoice {
         let options = tracks.enumerated().map { index, track in
             GPXTrackOption(
                 id: index,
-                title: HikeTitle.bounded(track.name) ?? "Track \(index + 1)",
+                title: HikeTitle.bounded(track.name) ?? String(localized: "Track \(index + 1)"),
                 distanceMeters: track.distanceMeters,
                 date: track.startTime,
                 placeCount: track.places.count

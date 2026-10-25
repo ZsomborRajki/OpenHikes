@@ -46,7 +46,7 @@ struct HikeDistanceTodayIntent: AppIntent, HikeCoordinatingIntent {
     /// coordinator resolves which day that is against the hiker's own
     /// calendar, so this string and that fetch have to keep meaning the same
     /// thing.
-    private static let dayLabel = "today"
+    private static let dayLabel = String(localized: "today")
 
     @Dependency var appCoordinator: HikeIntentCoordinator
 

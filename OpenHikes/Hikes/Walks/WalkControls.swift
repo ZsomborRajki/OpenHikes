@@ -25,6 +25,7 @@
 //  walk's End, and vice versa.
 //
 
+import Foundation
 import OpenHikesData
 import OpenHikesShared
 import SwiftUI
@@ -143,7 +144,7 @@ private struct WalkPhaseRow: View {
                 .fill(phase == .following ? tint : Color.secondary)
                 .frame(width: 10, height: 10)
                 .accessibilityHidden(true)
-            Text(phase == .following ? "Hike Active" : "Hike Paused")
+            Text(phase == .following ? String(localized: "Hike Active") : String(localized: "Hike Paused"))
                 .font(.headline)
             Spacer()
             if phase == .following, scenePhase == .active {

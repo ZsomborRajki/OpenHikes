@@ -1,6 +1,6 @@
 //
 //  WalkPresentationTests.swift
-//  OpenHikesSharedTests
+//  OpenWidgetTests
 //
 //  What a followed trail's Live Activity says once a walk is under way along
 //  it — and that a plain follow, with no walk, still says what it always did.

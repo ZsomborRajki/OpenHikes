@@ -13,6 +13,7 @@
 //
 
 import AppIntents
+import Foundation
 import OpenHikesShared
 
 struct StartHikeRecordingIntent: AppIntent, ForegroundContinuableIntent, HikeCoordinatingIntent {
@@ -45,9 +46,9 @@ struct StartHikeRecordingIntent: AppIntent, ForegroundContinuableIntent, HikeCoo
     /// own summary would read "You're 0 metres in, 0s elapsed."
     nonisolated private static func confirmation(for recording: LiveRecordingReport) -> String {
         guard let trailName = recording.trailName, !trailName.isEmpty else {
-            return "Recording your hike."
+            return String(localized: "Recording your hike.")
         }
-        return "Recording your hike on \(trailName)."
+        return String(localized: "Recording your hike on \(trailName).")
     }
 }
 
@@ -113,6 +114,6 @@ struct StopHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
     /// Named "Saved" rather than "Stopped": stopping is what the hiker asked
     /// for, and what they want confirmed is that it survived.
     nonisolated private static func confirmation(for hike: FinishedHikeReport) -> String {
-        "Saved \(hike.spokenSummary)"
+        String(localized: "Saved \(hike.spokenSummary)")
     }
 }

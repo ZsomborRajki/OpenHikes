@@ -144,7 +144,7 @@ nonisolated extension CloudKitCommunityTransport {
         // the hike later.
         guard let entry = ContributionRecord(record: saved) else {
             throw CommunityFailure.unavailable(
-                "The photos were published but the record came back unreadable."
+                String(localized: "The photos were published but the record came back unreadable.")
             )
         }
 

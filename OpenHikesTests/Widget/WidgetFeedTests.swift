@@ -201,7 +201,7 @@ final class WidgetFeedTests {
 
         let fraction = try #require(snapshot.fractionComplete)
         #expect(fraction > 0 && fraction < 1)
-        #expect(snapshot.statusText.contains("%"))
+        #expect(snapshot.progressFraction == fraction)
         let remaining = try #require(snapshot.remainingDistanceMeters)
         #expect(
             remaining.isApproximatelyEqual(to: hike.distanceMeters - fix.distanceAlongRouteMeters, absoluteTolerance: 1)
@@ -256,7 +256,7 @@ final class WidgetFeedTests {
         #expect(walk.coveredFraction == session.coveredFraction)
         #expect(walk.furthestDistanceMeters.isApproximatelyEqual(to: profile.distances[2], absoluteTolerance: 1))
         #expect(snapshot.progressFraction == walk.coveredFraction)
-        #expect(snapshot.statusText.contains("% hiked"))
+        // The widget’s localized wording is exercised by SharedTrailSnapshotTests in OpenWidgetTests.
     }
 
     @Test("a fix off the trail publishes no position")
@@ -275,7 +275,8 @@ final class WidgetFeedTests {
 
         let snapshot = try #require(SharedStore.load())
         #expect(snapshot.liveFix == nil)
-        #expect(!snapshot.statusText.contains("%"))
+        #expect(snapshot.fractionComplete == nil)
+        #expect(snapshot.progressFraction == nil)
     }
 
     /// Fixes can arrive seconds apart; the feed must not publish that often.

@@ -1,6 +1,6 @@
 //
 //  TrailWidgetMetricTests.swift
-//  OpenHikesSharedTests
+//  OpenWidgetTests
 //
 //  The stat chips are the widget's only elevation reporting, and they are
 //  built in this package precisely so the app and the extension cannot round

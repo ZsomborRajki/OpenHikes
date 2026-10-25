@@ -56,8 +56,8 @@ enum WatchWalkImportFailure: LocalizedError, Equatable, Sendable {
 
     var errorDescription: String? {
         switch self {
-        case .notSaved: "This hike couldn’t be saved."
-        case .tooShort: "That hike was too short to keep."
+        case .notSaved: String(localized: "This hike couldn’t be saved.")
+        case .tooShort: String(localized: "That hike was too short to keep.")
         }
     }
 }

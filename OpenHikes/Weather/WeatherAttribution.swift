@@ -34,7 +34,7 @@ nonisolated struct WeatherAttributionMarks: Equatable, Sendable {
     /// What the legal link is called when Apple has not supplied its own
     /// wording. Apple's `legalAttributionText` is preferred wherever it is
     /// available, because it is the phrasing the terms were written around.
-    static let defaultLinkTitle = "Other data sources"
+    static let defaultLinkTitle = String(localized: "Other data sources")
 
     let legalPageURL: URL
     /// The wordmark-plus-glyph pair. Combined rather than `squareMarkURL`,
@@ -85,7 +85,7 @@ nonisolated enum AppleWeatherAttribution {
 
     /// The wording the terms require beside the data, and the one thing that
     /// is drawn whether or not the marks ever arrive.
-    static let serviceName = "Apple Weather"
+    static let serviceName = String(localized: "Apple Weather")
 
     /// How tall the published mark is drawn, atop the weather sheet and in its
     /// attribution section alike — one figure, so the credit Apple's terms ask

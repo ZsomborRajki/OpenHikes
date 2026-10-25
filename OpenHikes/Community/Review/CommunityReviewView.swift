@@ -258,7 +258,7 @@ private extension CommunityReviewView {
                 // An empty credit is ordinary rather than wrong — the field is
                 // optional on the share form — so it says so rather than
                 // leaving a blank the reviewer has to interpret.
-                Text(pending.authorName.isEmpty ? "None given" : pending.authorName)
+                Text(pending.authorName.isEmpty ? String(localized: "None given") : pending.authorName)
                     .foregroundStyle(pending.authorName.isEmpty ? .secondary : .primary)
             }
             LabeledContent("Hiked") {

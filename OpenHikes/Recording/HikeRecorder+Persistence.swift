@@ -28,7 +28,9 @@ extension HikeRecorder {
         prepared: PreparedRecording,
         review: PendingReviewSave?
     ) {
-        guard session.metadata.endedAt != nil else { throw .save("The recording has not been finished yet.") }
+        guard session.metadata.endedAt != nil else { throw .save(String(
+            localized: "The recording has not been finished yet."
+        )) }
 
         let (normalized, graph, gapEvidence) = await normalizeSession(session)
         // `prepareOffMain` is typed `throws(RecordingFailure)` and `@concurrent`
@@ -570,10 +572,10 @@ extension HikeRecorder {
     ) -> String {
         let timeOfDay: String
         switch calendar.component(.hour, from: date) {
-        case 5..<12: timeOfDay = "Morning Hike"
-        case 12..<Self.afternoonEndHour: timeOfDay = "Afternoon Hike"
-        case Self.afternoonEndHour..<Self.eveningEndHour: timeOfDay = "Evening Hike"
-        default: timeOfDay = "Hike"
+        case 5..<12: timeOfDay = String(localized: "Morning Hike")
+        case 12..<Self.afternoonEndHour: timeOfDay = String(localized: "Afternoon Hike")
+        case Self.afternoonEndHour..<Self.eveningEndHour: timeOfDay = String(localized: "Evening Hike")
+        default: timeOfDay = String(localized: "Hike")
         }
 
         // `Date.FormatStyle` rather than `DateFormatter`: the old formatter is

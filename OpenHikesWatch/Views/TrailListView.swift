@@ -10,6 +10,7 @@
 //  ``TrailMapScreen``.
 //
 
+import Foundation
 import OpenHikesShared
 import SwiftUI
 
@@ -67,8 +68,10 @@ struct TrailListView: View {
                 systemImage: "antenna.radiowaves.left.and.right",
                 description: Text(
                     model.link.isReachable
-                        ? "Asking your iPhone for your trails…"
-                        : "Bring your iPhone nearby, with OpenHikes installed, to send your trails over."
+                        ? String(localized: "Asking your iPhone for your trails…")
+                        : String(localized: """
+                            Bring your iPhone nearby, with OpenHikes installed, to send your trails over.
+                            """)
                 )
             )
         } else {

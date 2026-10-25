@@ -20,6 +20,7 @@
 //  of them it would be a Lock Screen widget that says nothing at all.
 //
 
+import Foundation
 import OpenHikesShared
 import SwiftUI
 import WidgetKit
@@ -57,7 +58,7 @@ enum TrailWidgetAccessorySubject: Equatable {
     /// and speak another's.
     var title: String {
         switch self {
-        case .empty: "OpenHikes"
+        case .empty: String(localized: "OpenHikes")
         case let .recording(recording): recording.title
         case let .trail(trail): trail.title
         }
@@ -65,7 +66,7 @@ enum TrailWidgetAccessorySubject: Equatable {
 
     var status: String {
         switch self {
-        case .empty: "Select a trail"
+        case .empty: String(localized: "Select a trail")
         case let .recording(recording): recording.statusText
         case let .trail(trail): trail.statusText
         }

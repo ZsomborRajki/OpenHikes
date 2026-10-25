@@ -1,0 +1,429 @@
+[
+  {
+    "path": "OpenHikes/App/Configuration/ModelConfiguration+OpenHikes.swift",
+    "reason": "SwiftData configuration identifiers, not display names.",
+    "literals": [
+      "\"Hikes\"",
+      "\"Hikes\"",
+      "\"HikeLocalState\"",
+      "\"HikeLocalState\""
+    ]
+  },
+  {
+    "path": "OpenHikes/App/Configuration/Secrets.swift",
+    "reason": "The bundled plist resource name.",
+    "literals": [
+      "\"Secrets\""
+    ]
+  },
+  {
+    "path": "OpenHikes/App/OpenHikesModel+Composition.swift",
+    "reason": "Developer diagnostics logged when a container cannot open; the alert has its own localized text.",
+    "literals": [
+      "\"Neither the persistent nor temporary SwiftData store\"",
+      "\" could be opened: \\(error.localizedDescription)\"",
+      "\"The persistent SwiftData store could not be opened;\"",
+      "\" using temporary storage for this launch: \\(error.localizedDescription)\""
+    ]
+  },
+  {
+    "path": "OpenHikes/App/OpenHikesModel+LaunchSweeps.swift",
+    "reason": "A device-local cache directory name.",
+    "literals": [
+      "\"FieldMetrics\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Community/Browse/CommunityCommonsPhotos.swift",
+    "reason": "A device-local cache directory name.",
+    "literals": [
+      "\"CommunityCommonsPhotos\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Community/Curated/CommonsPhotoText.swift",
+    "reason": "License-name tokens matched against the upstream Commons API, not app-authored labels.",
+    "literals": [
+      "\"CC BY\"",
+      "\"Public domain\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Community/Curated/CuratedTrailQuery.swift",
+    "reason": "Overpass query syntax sent over the wire.",
+    "literals": [
+      "\"\"\"\n        [out:json][timeout:\\(listingTimeoutSeconds)];\n        (\n        \\(boxes.map(routeFilter(in:)).joined(separator: \"\\n\"))\n        );\n        out tags bb;\n        \"\"\"",
+      "\"\"\"\n        [out:json][timeout:\\(geometryTimeoutSeconds)];\n        (\n        \\(boxes.map(routeFilter(in:)).joined(separator: \"\\n\"))\n        );\n        out geom;\n        \"\"\"",
+      "\"  rel[\\\"route\\\"=\\\"hiking\\\"][\\\"name\\\"](\\(box.overpassLiteral))\"",
+      "\"(if: count_members() < \\(maximumMemberCount));\"",
+      "\"\"\"\n        [out:json][timeout:\\(geometryTimeoutSeconds)];\n        rel(id:\\(list));\n        out geom;\n        \"\"\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Community/Publishing/CommunityStaging.swift",
+    "reason": "The device-local upload staging directory name.",
+    "literals": [
+      "\"Community\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Community/Publishing/CommunityWithdrawal.swift",
+    "reason": "Reviewer emails intentionally stay in English (AGENTS.md, The community feature).",
+    "literals": [
+      "\"OpenHikes removal request: \\(listingID ?? submissionID)\"",
+      "\"The hike\"",
+      "\"The hike the photos came from\"",
+      "\"Title: \\(title)\"",
+      "\"Hiked: \\(CommunityReport.reviewerDate.string(from: hikeDate))\"",
+      "\"Status: \\(isPublished ? \"published\" : \"awaiting review\")\"",
+      "\"awaiting review\"",
+      "\"From the hiker:\"",
+      "\"Records to remove\"",
+      "\"The hiker who shared this hike is asking for it to be taken down.\"",
+      "\"The hiker who sent this submission is asking to withdraw it.\"",
+      "\"\"\"\n            The hiker who contributed these photos is asking for them to be taken down. \\\n            The trail itself is somebody else’s and is not part of this request.\n            \"\"\"",
+      "\"The hiker who sent these photos is asking to withdraw them before review.\"",
+      "\"Deleting the \\(kind.publishedType) record unlists it; deleting the\"",
+      "\"There is no \\(kind.publishedType) record yet. Deleting the\"",
+      "\"\\(kind.submissionType) record removes the route and photographs behind it.\"",
+      "\"\\(kind.submissionType) record removes the photographs behind it.\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Community/Review/CommunityReport.swift",
+    "reason": "Reviewer emails intentionally stay in English; UI reasons have separate localized titles.",
+    "literals": [
+      "\"Offensive or inappropriate content\"",
+      "\"Reveals a private place or an identifiable person\"",
+      "\"Published without the owner’s permission\"",
+      "\"Dangerous or misleading route\"",
+      "\"Something else\"",
+      "\"OpenHikes photo report: \\($0.contributionID)\"",
+      "\"OpenHikes report: \\(listing.id)\"",
+      "\"A hike published in OpenHikes has been reported.\"",
+      "\"A photo somebody added to a hike in OpenHikes has been reported.\"",
+      "\"Reported for: \\(reason.reportedDescription)\"",
+      "\"From the reporter:\"",
+      "\"The photos\"",
+      "\"Added by: \\(contribution.credit ?? \"(no name given)\")\"",
+      "\"(no name given)\"",
+      "\"(no name given)\"",
+      "\"Records to review\"",
+      "\"Records to review\"",
+      "\"Deleting the \\(CommunitySchema.contributionType) record takes the photos off\"",
+      "\"the hike; deleting the \\(CommunitySchema.photoSubmissionType) record removes\"",
+      "\"the photos themselves.\"",
+      "\"The hike below is somebody else’s and is not part of this report.\"",
+      "\"The hike\"",
+      "\"The hike they were added to\"",
+      "\"Title: \\(listing.title)\"",
+      "\"Shared by: \\(listing.authorName.isEmpty ? \"(no name given)\" : listing.authorName)\"",
+      "\"Hiked: \\(listing.hikeDate.map(Self.reviewerDate.string(from:)) ?? \"(not recorded)\")\"",
+      "\"(not recorded)\"",
+      "\"Published: \\(Self.reviewerDate.string(from: listing.publishedAt))\"",
+      "\"(this listing names no OpenStreetMap relation: \\(listing.id))\"",
+      "\"This hike came from OpenStreetMap and was not published by anyone.\"",
+      "\"There is no record to remove. Corrections belong upstream, at\"",
+      "\"CommunityHike: \\(listing.id)\"",
+      "\"CommunityHikeSubmission: \\(submissionID)\"",
+      "\"Deleting the CommunityHike record unlists the hike; deleting the\"",
+      "\"CommunityHikeSubmission record removes the route and photographs behind it.\"",
+      "\"To: \\(recipient)\\nSubject: \\(subject)\\n\\n\\(body)\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Community/Transport/CloudKitCommunityTransport.swift",
+    "reason": "Developer-only query diagnostic context.",
+    "literals": [
+      "\"a nearby search\"",
+      "\"a title search\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Community/Transport/CommunitySchema.swift",
+    "reason": "Stable CloudKit record type names.",
+    "literals": [
+      "\"CommunityHikeSubmission\"",
+      "\"CommunityHike\"",
+      "\"CommunitySubmissionNotice\"",
+      "\"CommunityPhotoSubmission\"",
+      "\"CommunityPhotoContribution\""
+    ]
+  },
+  {
+    "path": "OpenHikes/General/Diagnostics/MainThreadWatchdog.swift",
+    "reason": "Developer diagnostics and the diagnostic thread name.",
+    "literals": [
+      "\"Main thread unresponsive for\"",
+      "\" — something synchronous (disk I/O, a big collection op,\"",
+      "\" SwiftData work) is running on it.\"",
+      "\" Pause in the debugger or profile with Instruments to find what.\"",
+      "\"MainThreadWatchdog\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Hikes/GPX/GPXExport.swift",
+    "reason": "GPX XML syntax, creator ID and the GPX Photo symbol token. Display names are localized separately.",
+    "literals": [
+      "\"OpenHikes\"",
+      "\"http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd\"",
+      "\"Photo\"",
+      "\"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?>\\n\"",
+      "\"<gpx version=\\\"1.1\\\" creator=\\\"\\(escaped(creator))\\\"\"",
+      "\" xmlns=\\\"\\(namespace)\\\"\"",
+      "\" xmlns:xsi=\\\"\\(schemaNamespace)\\\"\"",
+      "\" xsi:schemaLocation=\\\"\\(schemaLocation)\\\">\\n\"",
+      "\"  <metadata>\\n\"",
+      "\"    <name>\\(escaped(track.name))</name>\\n\"",
+      "\"    <name>\\(escaped(track.name))</name>\\n\"",
+      "\"    <desc>\\(escaped(trackDescription))</desc>\\n\"",
+      "\"    <desc>\\(escaped(trackDescription))</desc>\\n\"",
+      "\"    <author>\\n\"",
+      "\"      <name>\\(escaped(author))</name>\\n\"",
+      "\"    </author>\\n\"",
+      "\"    <time>\\(timeStyle.format(track.date))</time>\\n\"",
+      "\"    <keywords>\\(escaped(keywords))</keywords>\\n\"",
+      "\"  </metadata>\\n\"",
+      "\"  <wpt lat=\\\"\\(latitude)\\\" lon=\\\"\\(longitude)\\\">\\n\"",
+      "\"  <wpt lat=\\\"\\(latitude)\\\" lon=\\\"\\(longitude)\\\">\\n\"",
+      "\"    <ele>\\(elevation.formatted(elevationStyle))</ele>\\n\"",
+      "\"    <time>\\(timeStyle.format(photograph.capturedAt))</time>\\n\"",
+      "\"    <name>\\(escaped(photographName))</name>\\n\"",
+      "\"    <desc>\\(escaped(credit.line))</desc>\\n\"",
+      "\"    <link href=\\\"\\(escaped(href))\\\"/>\\n\"",
+      "\"    <link href=\\\"\\(escaped(source.absoluteString))\\\"/>\\n\"",
+      "\"    <sym>\\(escaped(photographSymbol))</sym>\\n\"",
+      "\"  </wpt>\\n\"",
+      "\"  </wpt>\\n\"",
+      "\"    <name>\\(escaped(place.displayName))</name>\\n\"",
+      "\"    <desc>\\(escaped(place.note))</desc>\\n\"",
+      "\"    <link href=\\\"\\(escaped(url.absoluteString))\\\"/>\\n\"",
+      "\"    <sym>\\(escaped(symbol.rawValue))</sym>\\n\"",
+      "\"  <trk>\\n\"",
+      "\"    <trkseg>\\n\"",
+      "\"    <trkseg>\\n\"",
+      "\"    </trkseg>\\n\"",
+      "\"    </trkseg>\\n\"",
+      "\"  </trk>\\n\"",
+      "\"lat=\\\"\\(latitude)\\\" lon=\\\"\\(longitude)\\\"\"",
+      "\"      <trkpt \\(attributes)/>\\n\"",
+      "\"      <trkpt \\(attributes)>\\n\"",
+      "\"        <ele>\\(elevation.formatted(elevationStyle))</ele>\\n\"",
+      "\"        <time>\\(timeStyle.format(timestamp))</time>\\n\"",
+      "\"      </trkpt>\\n\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Hikes/GPX/GPXInbox.swift",
+    "reason": "The system Documents/Inbox directory name.",
+    "literals": [
+      "\"Inbox\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Hikes/Library/HikeArchive.swift",
+    "reason": "The Photos folder inside the GPX archive, referenced by its relative paths.",
+    "literals": [
+      "\"Photos\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Hikes/Maker/MapTrailDraftTint.swift",
+    "reason": "The AccentColor asset name.",
+    "literals": [
+      "\"AccentColor\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Hikes/Maker/TrailDraftPhotos.swift",
+    "reason": "A device-local staging directory name.",
+    "literals": [
+      "\"TrailDraftPhotos\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Hikes/Maker/TrailPlaceCard.swift",
+    "reason": "The OSM input unit suffix stripped before formatting the elevation in the hiker’s locale.",
+    "literals": [
+      "\" m\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Hikes/Places/TrailPointQuery.swift",
+    "reason": "Overpass query syntax sent over the wire.",
+    "literals": [
+      "\"\"\"\n        [out:json][timeout:\\(timeoutSeconds)];\n        (\n        \\(filters)\n        );\n        out tags center;\n        \"\"\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Hikes/Walks/TrailWalkSession.swift",
+    "reason": "A save operation’s diagnostic context; user-facing failure messages are localized by the caller.",
+    "literals": [
+      "\"ending a walk\"",
+      "\"clearing an orphaned walk\"",
+      "\"writing the walk in progress\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Map/Location/TrailRegionMonitor+CoreLocation.swift",
+    "reason": "The stable Core Location region identifier.",
+    "literals": [
+      "\"OpenHikesTrailProximity\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Photos/HikePhotoStore.swift",
+    "reason": "Device-local photo and thumbnail directory names.",
+    "literals": [
+      "\"HikePhotos\"",
+      "\"Thumbnails\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Recording/OverpassTrailGraphProvider.swift",
+    "reason": "Overpass query syntax sent over the wire.",
+    "literals": [
+      "\"\"\"\n        [out:json][timeout:\\(queryTimeoutSeconds)];\n        way[\"highway\"~\"^(\\(TrailGraphHighway.all.joined(separator: \"|\")))$\"](\\(bounds))->.ways;\n        rel(bw.ways)[\"route\"=\"hiking\"]->.routes;\n        node(w.ways)->.wayNodes;\n        (.ways;.routes;.wayNodes;);\n        out body;\n        \"\"\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Recording/RecordingModels.swift",
+    "reason": "The NSLocationTemporaryUsageDescriptionDictionary purpose key in Info.plist.",
+    "literals": [
+      "\"RecordHike\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Settings/SettingsView.swift",
+    "reason": "The explicitly verbatim DEBUG-only contributor instruction; it is absent from shipping builds.",
+    "literals": [
+      "\"Adding one is a build-time step — see Secrets.example.plist in the project.\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Tiles/Cache/TileCache+StorageManagement.swift",
+    "reason": "Developer-only tile cache diagnostics and its HTTP user agent.",
+    "literals": [
+      "\"Trimmed \\(freed) bytes unclaimed (was \\(total))\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Tiles/Cache/TileCache+Transport.swift",
+    "reason": "Developer-only tile cache diagnostics and its HTTP user agent.",
+    "literals": [
+      "\"OpenHikes/\\(AppVersion.marketing) (iOS; +\\(repositoryURL))\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Tiles/Cache/TileCache.swift",
+    "reason": "Developer-only tile cache diagnostics and its HTTP user agent.",
+    "literals": [
+      "\"Tile \\(key) failed: HTTP \\(http.statusCode)\"",
+      "\" (\\(data.count)b) from \\(url.redactedForLogging)\"",
+      "\"Tile \\(key) failed: undecodable\"",
+      "\" (\\(data.count)b HTTP \\(http.statusCode) \\(contentType))\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Tiles/Offline/BackgroundTimeReservation.swift",
+    "reason": "The OS background task’s diagnostic name.",
+    "literals": [
+      "\"OfflineTileDownload\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Tiles/TileAttribution.swift",
+    "reason": "Provider-prescribed map credit wording (AGENTS.md, Tiles).",
+    "literals": [
+      "\"OpenStreetMap\"",
+      "\"OpenStreetMap\"",
+      "\"Stadia Maps\"",
+      "\"Stamen Design\"",
+      "\"OpenMapTiles\"",
+      "\"Thunderforest\"",
+      "\"Maps ©\"",
+      "\"OpenStreetMap contributors\"",
+      "\"Data ©\"",
+      "\"Waymarked Trails\"",
+      "\"Routes ©\"",
+      "\"Apple\"",
+      "\"Map data ©\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Tiles/TileURLRedaction.swift",
+    "reason": "Developer-only redacted URL diagnostics.",
+    "literals": [
+      "\"<unparseable \\(host() ?? \"URL\")>\"",
+      "\"<unrenderable \\(host() ?? \"URL\")>\""
+    ]
+  },
+  {
+    "path": "OpenHikesShared/Sources/OpenHikesShared/General/SharedStoreDiagnostics.swift",
+    "reason": "Developer-only shared-store decoding diagnostics.",
+    "literals": [
+      "\"\\(file) could not be decoded: \\(detail)\"",
+      "\"\\(file) uses unsupported schema v\\(found); this build reads v\\(supported)\"",
+      "\"malformed at \\(path(context)): \\(context.debugDescription)\"",
+      "\"missing key '\\(key.stringValue)' at \\(path(context))\"",
+      "\"wrong type at \\(path(context)): expected \\(type)\"",
+      "\"null where \\(type) was required, at \\(path(context))\""
+    ]
+  },
+  {
+    "path": "OpenHikesShared/Sources/OpenHikesShared/Recording/SharedRecordingFix.swift",
+    "reason": "App Group transport diagnostics; the recorder presents its own localized failure messages.",
+    "literals": [
+      "\"The shared recording container is unavailable.\""
+    ]
+  },
+  {
+    "path": "OpenHikesShared/Sources/OpenHikesShared/Trails/SharedTrailSnapshot.swift",
+    "reason": "The stable widget kind identifier.",
+    "literals": [
+      "\"TrailWidget\""
+    ]
+  },
+  {
+    "path": "OpenHikesShared/Sources/OpenHikesShared/Watch/WatchGlance.swift",
+    "reason": "The stable complication kind identifier.",
+    "literals": [
+      "\"WatchRecordingGlance\""
+    ]
+  },
+  {
+    "path": "OpenHikesShared/Sources/OpenHikesShared/Watch/WatchLink.swift",
+    "reason": "Developer-only wire decoding diagnostics logged by the connectivity adapters.",
+    "literals": [
+      "\"A \\(kind.rawValue) message could not be read: \\(detail)\"",
+      "\"A \\(kind.rawValue) message arrived with nothing in it.\"",
+      "\"The other device sent a message this version doesn’t recognize (\\(raw ?? \"no kind\")).\"",
+      "\"no kind\"",
+      "\"A \\(kind.rawValue) message is in format \\(found); this version reads \\(supported).\""
+    ]
+  },
+  {
+    "path": "OpenHikesShared/Sources/OpenHikesShared/Widget/SharedWeatherReading.swift",
+    "reason": "The Apple Weather attribution mark prescribed by the provider.",
+    "literals": [
+      "\"\\u{F8FF} Weather\""
+    ]
+  },
+  {
+    "path": "OpenWidget/TrailWidgetPlaceholder.swift",
+    "reason": "The example trail’s proper name in preview data.",
+    "literals": [
+      "\"Jenner Ridge\""
+    ]
+  },
+  {
+    "path": "OpenWidget/TrailWidgetPlaceholderBasemaps.swift",
+    "reason": "Bundled placeholder asset names.",
+    "literals": [
+      "\"PlaceholderBasemapSquareDark\"",
+      "\"PlaceholderBasemapSquareLight\"",
+      "\"PlaceholderBasemapWideDark\"",
+      "\"PlaceholderBasemapWideLight\""
+    ]
+  }
+]

@@ -59,6 +59,7 @@
 //
 
 import Algorithms
+import Foundation
 import SwiftUI
 
 /// The dotted stem that joins one stop to the next.
@@ -204,7 +205,7 @@ struct TrailStopRowView: View {
         switch slot {
         case .open:
             // By place, like the identifier above.
-            Text(position == 0 ? LocalizedStringKey("Choose Start") : "Choose Destination")
+            Text(position == 0 ? LocalizedStringKey("Choose Start") : LocalizedStringKey("Choose Destination"))
                 .foregroundStyle(.secondary)
         case .point(let index, _):
             let name = draft.name(ofWaypointAt: index)

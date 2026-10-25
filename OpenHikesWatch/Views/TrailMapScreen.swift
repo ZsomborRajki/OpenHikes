@@ -39,6 +39,7 @@
 //  body would read an environment SwiftUI never injected.
 //
 
+import Foundation
 import MapKit
 import OpenHikesShared
 import SwiftUI
@@ -257,8 +258,8 @@ struct TrailMapScreen: View {
             ProgressView()
             Text(
                 model.link.isReachable
-                    ? "Fetching this trail from your iPhone…"
-                    : "Waiting for your iPhone to come back in range…"
+                    ? String(localized: "Fetching this trail from your iPhone…")
+                    : String(localized: "Waiting for your iPhone to come back in range…")
             )
             .font(.footnote)
             .foregroundStyle(.secondary)

@@ -5,6 +5,7 @@
 //  Helper views used only by HikeDetailView.
 //
 
+import Foundation
 import OpenHikesData
 import OpenHikesShared
 import SwiftData
@@ -369,8 +370,8 @@ struct OfflineDownloadButton: View {
         // is carried as the value.
         .accessibilityLabel(
             downloader.phase == .downloading
-                ? "Cancel offline map download"
-                : "Save maps for offline use"
+                ? String(localized: "Cancel offline map download")
+                : String(localized: "Save maps for offline use")
         )
         .accessibilityValue(accessibilityValue)
         .accessibilityIdentifier("offline-download-button")

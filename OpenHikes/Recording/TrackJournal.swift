@@ -154,7 +154,9 @@ actor TrackJournal {
         )
         guard !points.isEmpty else { return 0 }
         try flush()
-        guard fileHandle != nil else { throw TrackJournalError.io("The recording journal is closed.") }
+        guard fileHandle != nil else { throw TrackJournalError.io(String(
+            localized: "The recording journal is closed."
+        )) }
 
         let data: Data
         do {
@@ -188,7 +190,7 @@ actor TrackJournal {
 
     func pause(at date: Date) throws {
         try flush()
-        guard var metadata else { throw TrackJournalError.io("No recording session is open.") }
+        guard var metadata else { throw TrackJournalError.io(String(localized: "No recording session is open.")) }
         if metadata.pausedIntervals.last?.endedAt != nil || metadata.pausedIntervals.isEmpty {
             metadata.pausedIntervals.append(
                 RecordingPauseInterval(startedAt: date, endedAt: nil)
@@ -201,7 +203,7 @@ actor TrackJournal {
 
     func resume(at date: Date) throws {
         try flush()
-        guard var metadata else { throw TrackJournalError.io("No recording session is open.") }
+        guard var metadata else { throw TrackJournalError.io(String(localized: "No recording session is open.")) }
         if let index = metadata.pausedIntervals.indices.last,
            metadata.pausedIntervals[index].endedAt == nil {
             metadata.pausedIntervals[index].endedAt = date
@@ -214,7 +216,7 @@ actor TrackJournal {
 
     func finish(at date: Date) throws {
         try flush()
-        guard var metadata else { throw TrackJournalError.io("No recording session is open.") }
+        guard var metadata else { throw TrackJournalError.io(String(localized: "No recording session is open.")) }
         if let index = metadata.pausedIntervals.indices.last,
            metadata.pausedIntervals[index].endedAt == nil {
             metadata.pausedIntervals[index].endedAt = date
@@ -229,7 +231,7 @@ actor TrackJournal {
     func flush() throws {
         assertOffMainThread("Track journal writes must stay off the main thread")
         guard !pending.isEmpty else { return }
-        guard let fileHandle else { throw TrackJournalError.io("The recording journal is closed.") }
+        guard let fileHandle else { throw TrackJournalError.io(String(localized: "The recording journal is closed.")) }
 
         do {
             var bytes = Data()

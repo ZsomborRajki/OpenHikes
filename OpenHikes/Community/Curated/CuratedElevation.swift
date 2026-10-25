@@ -195,7 +195,7 @@ nonisolated enum CuratedElevationRequest {
         var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
         components?.queryItems = [URLQueryItem(name: "api_key", value: apiKey)]
         guard let url = components?.url else {
-            throw CuratedElevationFailure.unusable("the endpoint could not be formed")
+            throw CuratedElevationFailure.unusable(String(localized: "the endpoint could not be formed"))
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -221,7 +221,7 @@ nonisolated enum CuratedElevationRequest {
         let answer = try JSONDecoder().decode(Answer.self, from: data)
         guard answer.height.count == expecting else {
             throw CuratedElevationFailure.unusable(
-                "asked about \(expecting) points and \(answer.height.count) came back"
+                String(localized: "asked about \(expecting) points and \(answer.height.count) came back")
             )
         }
         return answer.height
@@ -274,10 +274,10 @@ nonisolated enum CuratedElevationFailure: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .noKey: "This build has no elevation key."
-        case .notEntitled: "Elevation for these routes comes with OpenHikes Pro."
-        case .server(let statusCode): "The elevation service answered \(statusCode)."
-        case .unusable(let reason): "The elevation service’s answer was unusable: \(reason)."
+        case .noKey: String(localized: "This build has no elevation key.")
+        case .notEntitled: String(localized: "Elevation for these routes comes with OpenHikes Pro.")
+        case .server(let statusCode): String(localized: "The elevation service answered \(statusCode).")
+        case .unusable(let reason): String(localized: "The elevation service’s answer was unusable: \(reason).")
         }
     }
 }

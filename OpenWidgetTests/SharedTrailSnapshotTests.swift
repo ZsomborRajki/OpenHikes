@@ -1,6 +1,6 @@
 //
 //  SharedTrailSnapshotTests.swift
-//  OpenHikesSharedTests
+//  OpenWidgetTests
 //
 //  The snapshot is the contract between the app and the iOS widget, which
 //  renders it without recomputing trail geometry or route matching. It crosses

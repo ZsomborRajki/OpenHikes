@@ -42,6 +42,7 @@
 //  there without asking.
 //
 
+import Foundation
 import OpenHikesData
 import SwiftUI
 
@@ -163,7 +164,11 @@ struct CommunitySharePhotoViewer: View {
         // changes nothing that is sent, and putting one back past it leaves it
         // over the limit. The label says the outcome, and VoiceOver reads it
         // again after the tap.
-        .accessibilityHint(isExcluded ? "Puts this photo back" : "Strikes this photo off")
+        .accessibilityHint(
+            isExcluded
+                ? String(localized: "Puts this photo back")
+                : String(localized: "Strikes this photo off")
+        )
         .accessibilityIdentifier("community-share-photo-toggle")
         // The set rather than this page's state of it: paging from a picture
         // left out to one being shared changes `isExcluded` without anybody

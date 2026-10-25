@@ -75,6 +75,23 @@ fi
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 
+# Shared App Intent declarations and RoleButton defaults cannot move to one
+# consuming target. SwiftPM does not emit their source .stringsdata, so extract
+# their typed static literals once for the four bundles that link the package.
+# The words remain in their declarations; the generated source is disposable.
+Scripts/check-string-extraction.sh --shared-strings > "$scratch/SharedTargetStrings.swift"
+if ! xcrun swiftc -c -emit-localized-strings -emit-localized-strings-path "$scratch" \
+    -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
+    "$scratch/SharedTargetStrings.swift" -o "$scratch/SharedTargetStrings.o"; then
+    echo "error: the shared localized strings could not be extracted" >&2
+    exit 1
+fi
+shared_strings="$scratch/SharedTargetStrings.stringsdata"
+if [[ ! -f "$shared_strings" ]]; then
+    echo "error: the compiler emitted no shared localized strings" >&2
+    exit 1
+fi
+
 # Catalog folder, then the target whose compile extracts its strings.
 for pair in OpenHikes:OpenHikes OpenWidget:OpenWidgetExtension OpenHikesWatch:OpenHikesWatch \
     OpenHikesWatchWidgets:OpenHikesWatchWidgets; do
@@ -91,6 +108,7 @@ for pair in OpenHikes:OpenHikes OpenWidget:OpenWidgetExtension OpenHikesWatch:Op
         echo "error: $target has no extracted strings under $1 — was it built?" >&2
         exit 1
     fi
+    args+=(--stringsdata "$shared_strings")
     catalog="$folder/Localizable.xcstrings"
     if $check; then
         # A folder per catalog, because the file name is the table the sync

@@ -225,3 +225,27 @@ public extension HikeActivityAttributes.ContentState.RunState {
         }
     }
 }
+
+public extension HikeActivityAttributes {
+    /// Fraction of the followed trail walked, or `nil` when there is no live
+    /// fix or no route length to measure against.
+    ///
+    /// Mirrors ``SharedTrailSnapshot/fractionComplete`` rather than
+    /// reimplementing it — same clamp, same refusal on a zero-length route.
+    func fractionComplete(for state: ContentState) -> Double? {
+        guard state.offRouteMeters != nil,
+              let routeDistanceMeters,
+              routeDistanceMeters > 0
+        else { return nil }
+        return min(1, max(0, state.distanceMeters / routeDistanceMeters))
+    }
+
+    /// Distance left to the end of the followed trail, or `nil` on the same
+    /// terms as ``fractionComplete(for:)``.
+    func remainingDistanceMeters(for state: ContentState) -> Double? {
+        guard state.offRouteMeters != nil, let routeDistanceMeters
+        else { return nil }
+        return max(0, routeDistanceMeters - state.distanceMeters)
+    }
+
+}

@@ -21,6 +21,7 @@
 //  declared here and conformed to beside each category's own colours.
 //
 
+import Foundation
 import SwiftUI
 
 /// What drawing a breakdown needs from its category, on top of what measuring
@@ -88,7 +89,7 @@ struct TrailBreakdownSection<Category: TrailCategoryPresentation>: View {
                 .accessibilityAddTraits(.isHeader)
             TrailBreakdownBar(
                 shares: breakdown.shares,
-                label: "\(title) breakdown",
+                label: String(localized: "\(title) breakdown"),
                 identifier: identifier
             )
             VStack(spacing: 8) {
@@ -106,7 +107,7 @@ struct TrailBreakdownSection<Category: TrailCategoryPresentation>: View {
         let surveyed = breakdown.surveyedFraction
         guard surveyed < TrailBreakdownMetrics.fullCoverageThreshold else { return "\(source)." }
         let formatted = surveyed.formatted(Self.percentStyle)
-        return "\(source), which describes \(formatted) of this route."
+        return String(localized: "\(source), which describes \(formatted) of this route.")
     }
 }
 

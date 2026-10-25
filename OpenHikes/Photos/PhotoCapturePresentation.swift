@@ -141,9 +141,10 @@ private struct PhotoCaptureAlerts: ViewModifier {
                 Button("Not Now", role: .cancel) { /* dismiss */ }
             } message: {
                 Text(
-                    "OpenHikes needs the camera to take photos on a hike. "
-                        + "You can turn it on in Settings. "
-                        + "Photos already on your device can still be added from your library."
+                    """
+                        OpenHikes needs the camera to take photos on a hike. You can turn it on in Settings. \
+                        Photos already on your device can still be added from your library.
+                        """
                 )
             }
             // A capture that could not be encoded or written is simply gone:
