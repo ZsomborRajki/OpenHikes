@@ -10,8 +10,8 @@
 //  `LocalizedStringResource` and keeps them resolved, because it is built off
 //  the main actor and read back as text. A view takes a caption written at
 //  its call site as a `LocalizedStringKey`, as a SwiftUI parameter does, and
-//  draws a ``Stat``'s as it is. A literal handed through a bare `String` was
-//  drawn verbatim and listed nowhere (#1028).
+//  draws a ``Stat``'s as it is — see ``StatCaption``. A literal handed
+//  through a bare `String` was drawn verbatim and listed nowhere (#1028).
 //
 
 import SwiftUI
@@ -120,6 +120,26 @@ struct StatStrip<Content: View>: View {
     }
 }
 
+/// What a ``StatFigure`` or a ``StatRow`` is captioned by: a key for words
+/// written at the call site, which the String Catalog lists, or words some
+/// other type has already resolved — a ``Stat``'s, a place fact's — drawn as
+/// they are rather than looked up a second time as if they were a key.
+///
+/// A value that compares, rather than the `Text` it draws: the two views
+/// compare their inputs with `==` (below) so that a pass of the screen around
+/// them that changes none of their words skips their bodies.
+enum StatCaption: Equatable {
+    case key(LocalizedStringKey)
+    case verbatim(String)
+
+    var text: Text {
+        switch self {
+        case .key(let key): Text(key)
+        case .verbatim(let words): Text(verbatim: words)
+        }
+    }
+}
+
 /// One figure in a ``StatStrip``: a small caption over the number.
 ///
 /// It stores the formatted value rather than anything it was formatted from,
@@ -128,16 +148,14 @@ struct StatStrip<Content: View>: View {
 struct StatFigure: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    /// A `Text`, so that a caption written at the call site is a key and one
-    /// a ``Stat`` already resolved is drawn as it is — see the inits below.
-    let label: Text
+    let label: StatCaption
     let value: String
     /// See ``Stat/spokenLabel``.
-    var spokenLabel: Text?
+    var spokenLabel: StatCaption?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            label
+            label.text
                 .textCase(.uppercase)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -160,15 +178,24 @@ struct StatFigure: View {
         // is spoken from `label` rather than from the uppercased text above,
         // which VoiceOver would otherwise spell out ("A V G Speed").
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spokenLabel ?? label)
+        .accessibilityLabel((spokenLabel ?? label).text)
         .accessibilityValue(value)
+    }
+}
+
+/// Compared by what it draws, written out because the environment reader is
+/// not a value. Without it, every pass of the hike detail ran all three
+/// figures and all nine rows again, words unchanged.
+extension StatFigure: Equatable {
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.label == rhs.label && lhs.value == rhs.value && lhs.spokenLabel == rhs.spokenLabel
     }
 }
 
 extension StatFigure {
     /// A caption written here, as a key.
     init(label: LocalizedStringKey, value: String, spokenLabel: LocalizedStringKey? = nil) {
-        self.init(label: Text(label), value: value, spokenLabel: spokenLabel.map { Text($0) })
+        self.init(label: .key(label), value: value, spokenLabel: spokenLabel.map(StatCaption.key))
     }
 
     /// A ``Stat`` whole, so that what it is spoken by comes with it: the
@@ -176,9 +203,9 @@ extension StatFigure {
     /// words are already resolved, so they are drawn verbatim.
     init(_ stat: Stat) {
         self.init(
-            label: Text(verbatim: stat.label),
+            label: .verbatim(stat.label),
             value: stat.value,
-            spokenLabel: stat.spokenLabel.map { Text(verbatim: $0) }
+            spokenLabel: stat.spokenLabel.map(StatCaption.verbatim)
         )
     }
 }
@@ -203,15 +230,14 @@ struct StatList<Content: View>: View {
 struct StatRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    /// See ``StatFigure/label``.
-    let label: Text
+    let label: StatCaption
     let value: String
     /// See ``Stat/spokenLabel``.
-    var spokenLabel: Text?
+    var spokenLabel: StatCaption?
 
     var body: some View {
         layout {
-            label
+            label.text
                 .foregroundStyle(.primary)
             Text(value)
                 .monospacedDigit()
@@ -230,7 +256,7 @@ struct StatRow: View {
         // accessibility audit reports as a hit area too small to touch.
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spokenLabel ?? label)
+        .accessibilityLabel((spokenLabel ?? label).text)
         .accessibilityValue(value)
     }
 
@@ -241,24 +267,31 @@ struct StatRow: View {
     }
 }
 
+/// See ``StatFigure``'s `==`.
+extension StatRow: Equatable {
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.label == rhs.label && lhs.value == rhs.value && lhs.spokenLabel == rhs.spokenLabel
+    }
+}
+
 extension StatRow {
     /// A label written here, as a key.
     init(label: LocalizedStringKey, value: String, spokenLabel: LocalizedStringKey? = nil) {
-        self.init(label: Text(label), value: value, spokenLabel: spokenLabel.map { Text($0) })
+        self.init(label: .key(label), value: value, spokenLabel: spokenLabel.map(StatCaption.key))
     }
 
     /// A label some other type has already put into words, such as a place
     /// fact's kind, drawn as it is.
     init(verbatim label: String, value: String) {
-        self.init(label: Text(verbatim: label), value: value)
+        self.init(label: .verbatim(label), value: value)
     }
 
     /// A ``Stat`` whole — see ``StatFigure/init(_:)``.
     init(_ stat: Stat) {
         self.init(
-            label: Text(verbatim: stat.label),
+            label: .verbatim(stat.label),
             value: stat.value,
-            spokenLabel: stat.spokenLabel.map { Text(verbatim: $0) }
+            spokenLabel: stat.spokenLabel.map(StatCaption.verbatim)
         )
     }
 }
