@@ -44,6 +44,11 @@ struct DecimatedIndicesKeepingTests {
         #expect(decimatedIndices(count: 30, maxPoints: 10, keeping: [0, 1, 28, 29])
             == [0, 1, 2, 7, 12, 17, 22, 27, 28, 29])
     }
+
+    @Test("less than two remaining stride points keeps the line whole", arguments: [0, 1, 2, 3])
+    func insufficientRemainingBudget(maxPoints: Int) {
+        #expect(decimatedIndices(count: 10, maxPoints: maxPoints, keeping: [3, 4]) == Array(0..<10))
+    }
 }
 
 // swiftlint:enable no_magic_numbers

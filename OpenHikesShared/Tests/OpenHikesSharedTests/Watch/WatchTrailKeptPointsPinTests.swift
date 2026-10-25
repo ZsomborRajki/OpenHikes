@@ -75,9 +75,9 @@ struct WatchTrailKeptPointsPinTests {
             == .init(routeIndices: [0, 7, 14, 19, 20, 23, 29, 30, 32, 39], pauseIndices: [4, 7]))
     }
 
-    @Test("a budget below two still keeps the route's two ends")
-    func budgetBelowTwo() {
-        #expect(Self.kept(count: 40, pointBudget: 1) == .init(routeIndices: [0, 39], pauseIndices: []))
+    @Test("a budget of two or less still keeps the route's two ends", arguments: [0, 1, 2])
+    func budgetAtMostTwo(pointBudget: Int) {
+        #expect(Self.kept(count: 40, pointBudget: pointBudget) == .init(routeIndices: [0, 39], pauseIndices: []))
     }
 }
 

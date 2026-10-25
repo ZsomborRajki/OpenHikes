@@ -15,7 +15,6 @@
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
-import OpenHikesShared
 import Testing
 
 // swiftlint:disable no_magic_numbers
@@ -63,17 +62,21 @@ struct CuratedElevationSampleIndexesPinTests {
         #expect(Self.indexes(count: 40, pausedAt: [10, 20, 30]) == [0, 4, 9, 13, 17, 22, 26, 30, 35, 39])
     }
 
-    /// Every route length up to fifteen times the request, at the request's
-    /// real size: the spread was the widget's stride already, index for
-    /// index, before it became that stride.
-    @Test("at two hundred points the spread is the shared stride")
-    func spreadIsTheSharedStride() {
+    /// Integer arithmetic is an independent oracle for the old elevation
+    /// spread: each ideal position rounds to its nearest route index. The
+    /// 199 intervals cannot put a position exactly on a half. Comparing the
+    /// wrapper to the shared stride itself would pass with any rounding in
+    /// that stride, so it would not prove the request stayed unchanged.
+    @Test("at two hundred points the spread keeps the previous rounding")
+    func productionSpreadKeepsPreviousRounding() {
         let limit = CuratedElevationRequest.maximumShapePoints
         let differing = (0...3000).filter { count in
-            CuratedElevationRequest.sampleIndexes(count: count, limit: limit)
-                != decimatedIndices(count: count, maxPoints: limit)
+            let expected = count <= limit ? Array(0..<count) : (0..<limit).map { position in
+                (position * (count - 1) + (limit - 1) / 2) / (limit - 1)
+            }
+            return CuratedElevationRequest.sampleIndexes(count: count, limit: limit) != expected
         }
-        #expect(differing.isEmpty, "route lengths read apart from the widget's stride: \(differing.prefix(5))")
+        #expect(differing.isEmpty, "route lengths whose readings changed: \(differing.prefix(5))")
     }
 
     /// Fifteen points over 62 put one position on 30.5. Multiplied out
