@@ -91,11 +91,13 @@ struct WatchRouteTrackerTests {
     @Test("Without a course the same fix reads as the outbound leg")
     func withoutACourseTheFirstLegWins() throws {
         var tracker = WatchRouteTracker(Fixture.outAndBackPackage)
+        // Out with a course, as above, so the turn is where the hiker is.
         for step in stride(from: 0.0, through: 1.0, by: 0.25) {
             _ = tracker.advance(
                 latitude: Fixture.latitude,
                 longitude: Fixture.startLongitude
-                    + (Fixture.endLongitude - Fixture.startLongitude) * step
+                    + (Fixture.endLongitude - Fixture.startLongitude) * step,
+                courseDegrees: Fixture.east
             )
         }
         let back = tracker.advance(latitude: Fixture.latitude, longitude: Fixture.midpointLongitude)

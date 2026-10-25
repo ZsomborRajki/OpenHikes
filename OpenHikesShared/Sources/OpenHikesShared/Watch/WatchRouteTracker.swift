@@ -42,6 +42,14 @@
 //  then to the first candidate, which is the reading a hiker who has just
 //  opened the app should get.
 //
+//  That first candidate is a guess, so it is shown and not kept. Once a match
+//  says where the hiker is, the next fix is looked for in the window around
+//  it, and the course can choose only among the legs inside that window. A
+//  hiker on the way home who opened the app standing still was put on the way
+//  out by the guess, and kept there every step home: the window around it held
+//  only the outbound leg. So until there is a position, a fix with no course
+//  sets none, and the first fix with a course does.
+//
 //  The phone shares this file's constants but not, on every path, its rule
 //  (#836). Its foreground follow lets continuity decide and asks the course
 //  for a second opinion that wins only after a run of contrary fixes
@@ -217,12 +225,14 @@ public struct WatchRouteTracker: Sendable, Equatable {
     public var isUsable: Bool { points.count > 1 }
 
     /// Forgets where the hiker was, so the next fix is searched against the
-    /// whole trail.
+    /// whole trail, and the first one with a course says where they are again
+    /// — see this file's header.
     ///
-    /// What a resumed walk wants: the stretch between a pause and a resume is
-    /// unobserved by construction, and it can be longer than the continuity
-    /// window — a hiker who paused at a saddle and resumed at the hut has
-    /// moved further than any run of rejected fixes ever would.
+    /// What a feed back after a gap wants, a resumed walk first among them:
+    /// the stretch between a pause and a resume is unobserved by construction,
+    /// and it can be longer than the continuity window — a hiker who paused at
+    /// a saddle and resumed at the hut has moved further than any run of
+    /// rejected fixes ever would. `WatchFollowClaim` names the other gaps.
     public mutating func forgetPosition() { anchorLineDistance = nil }
 
     /// Matches a fix, advancing the continuity anchor if it landed on the
@@ -248,7 +258,12 @@ public struct WatchRouteTracker: Sendable, Equatable {
             courseDegrees: courseDegrees
         ) else { return nil }
         let isOnTrail = match.offRouteMeters <= Self.matchThresholdMeters
-        if isOnTrail { anchorLineDistance = match.lineDistance }
+        // With no position yet, a fix with no course is a guess between legs,
+        // and a guess kept would hold the window to it — see this file's
+        // header.
+        if isOnTrail, anchorLineDistance != nil || Self.isCourse(courseDegrees) {
+            anchorLineDistance = match.lineDistance
+        }
         let alongTrail = min(max(match.lineDistance * scale, 0), totalDistanceMeters)
         return Position(
             distanceAlongRouteMeters: alongTrail,
@@ -379,12 +394,20 @@ public struct WatchRouteTracker: Sendable, Equatable {
         _ projection: WatchGeodesy.SegmentProjection,
         courseDegrees: Double?
     ) -> Bool {
-        guard let courseDegrees, courseDegrees.isFinite, courseDegrees >= 0,
+        guard Self.isCourse(courseDegrees), let courseDegrees,
               projection.dx != 0 || projection.dy != 0 else { return false }
         var difference = abs(projection.bearingDegrees - courseDegrees)
             .truncatingRemainder(dividingBy: 360)
         if difference > 180 { difference = 360 - difference }
         return difference < Self.courseAgreementDegrees
+    }
+
+    /// Whether `degrees` says which way the hiker is going. A caller passes
+    /// `nil` when `CLLocation.course` is negative, but a value that is not a
+    /// finite bearing is no course either.
+    private static func isCourse(_ degrees: Double?) -> Bool {
+        guard let degrees else { return false }
+        return degrees.isFinite && degrees >= 0
     }
 
     /// The trail's height at a point part-way along a segment.
