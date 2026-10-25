@@ -228,11 +228,11 @@ struct SettingsView: View {
                 }
                 if !entitlement.isEntitled,
                    TileProvider.all.contains(where: \.requiresPaidAccess) {
-                    Text(
-                        "Maps with a lock are commercial map services that bill"
-                        + " OpenHikes for every map view, every month. Subscribing pays for that,"
-                        + " and keeps the free OpenStreetMap option free."
-                    )
+                    Text("""
+                    Maps with a lock are commercial map services that bill OpenHikes for every map \
+                    view, every month. Subscribing pays for that, and keeps the free OpenStreetMap \
+                    option free.
+                    """)
                 }
             }
         }
@@ -248,7 +248,7 @@ struct SettingsView: View {
         Button {
             showManageSubscription = true
         } label: {
-            LabeledContent("OpenHikes Pro", value: "Subscribed")
+            LabeledContent("OpenHikes Pro", value: String(localized: "Subscribed"))
         }
         .accessibilityIdentifier("manage-subscription-row")
         .accessibilityHint("Opens the App Store subscription settings.")
@@ -305,41 +305,41 @@ struct SettingsView: View {
                 Button("Delete All", role: .destructive) { deleteAllTiles() }
                 Button("Cancel", role: .cancel) { /* intentionally empty */ }
             } message: {
-                Text(
-                    "Your hikes lose their offline maps, and the map cache is cleared too."
-                    + " Tiles re-download when you view maps online again."
-                )
+                Text("""
+                Your hikes lose their offline maps, and the map cache is cleared too. Tiles \
+                re-download when you view maps online again.
+                """)
             }
         } header: {
             Text("Offline Storage")
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
-                Text(
-                    "Saved tiles keep your hikes usable without a signal. The map cache is just"
-                    + " what you’ve recently looked at — it’s kept under"
-                    + " \(Self.byteText(TileCache.cacheByteLimit)), oldest first,"
-                    + " and clearing it costs you nothing offline."
-                    + " Photos are only removed when you delete them, or the hike they belong to."
-                )
+                Text("""
+                Saved tiles keep your hikes usable without a signal. The map cache is just what \
+                you’ve recently looked at — it’s kept under \(Self.byteText(TileCache.cacheByteLimit)), \
+                oldest first, and clearing it costs you nothing offline. Photos are only removed when \
+                you delete them, or the hike they belong to.
+                """)
                 if let quota = DurableTileQuota.all.first {
                     // Named rather than described in general terms: a ceiling
                     // that isn't the phone's free space needs to say whose it
                     // is, or it reads as a bug. And the styles are listed,
                     // because one figure covering two of them is the part
                     // nobody would guess.
-                    Text(
-                        "The \(quota.holder) license allows"
-                        + " \(Self.byteText(quota.byteLimit)) of saved tiles on this device,"
-                        + " shared by \(quota.providers.map(\.name).formatted(.list(type: .and)))."
-                        + " Once that’s used, saving a new route asks before replacing"
-                        + " your least-recently-used saved tiles. Other sources are unlimited."
-                    )
+                    Text("""
+                    The \(quota.holder) license allows \(Self.byteText(quota.byteLimit)) of saved tiles \
+                    on this device, shared by \(quota.providers.map(\.name).formatted(.list(type: .and))). \
+                    Once that’s used, saving a new route asks before replacing your least-recently-used \
+                    saved tiles. Other sources are unlimited.
+                    """)
                 }
             }
         }
     }
 
-    private func usageRow(_ title: String, systemImage: String, bytes: Int64?) -> some View {
+    /// `title` is a key so the names written at the call sites reach the
+    /// String Catalog; a `String` was drawn by the verbatim overloads (#1028).
+    private func usageRow(_ title: LocalizedStringKey, systemImage: String, bytes: Int64?) -> some View {
         HStack {
             Label(title, systemImage: systemImage)
             Spacer()
@@ -350,7 +350,7 @@ struct SettingsView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         // "…" is a placeholder a screen reader has no way to interpret.
-        .accessibilityValue(bytes.map(Self.byteText) ?? "Measuring")
+        .accessibilityValue(bytes.map(Self.byteText) ?? String(localized: "Measuring"))
     }
 }
 
@@ -373,12 +373,12 @@ private extension SettingsView {
         } header: {
             Text("Photos")
         } footer: {
-            Text(
-                "Photos you take on a hike are always kept in OpenHikes and shown"
-                + " with that hike. Turn this on to put a copy in your photo library"
-                + " too, stamped with when and where you took it. You’ll be asked"
-                + " for permission the first time one is saved."
-            )
+            Text("""
+            Photos you take on a hike are always kept in OpenHikes and shown \
+            with that hike. Turn this on to put a copy in your photo library \
+            too, stamped with when and where you took it. You’ll be asked \
+            for permission the first time one is saved.
+            """)
         }
     }
 }
@@ -406,15 +406,15 @@ private extension SettingsView {
         } header: {
             Text("Health")
         } footer: {
-            Text(
-                "Writes each hike you finish recording to the Health app as a hiking"
-                + " workout, with its distance, time, climb and route — so it counts"
-                + " towards your rings and sits beside your other activity. Deleting a"
-                + " hike removes its workout from Health too. OpenHikes reads nothing"
-                + " from Health on your iPhone; on Apple Watch a recording reads your"
-                + " heart rate to show it while you hike. You’ll be asked for permission"
-                + " the first time a hike is saved."
-            )
+            Text("""
+            Writes each hike you finish recording to the Health app as a hiking \
+            workout, with its distance, time, climb and route — so it counts \
+            towards your rings and sits beside your other activity. Deleting a \
+            hike removes its workout from Health too. OpenHikes reads nothing \
+            from Health on your iPhone; on Apple Watch a recording reads your \
+            heart rate to show it while you hike. You’ll be asked for permission \
+            the first time a hike is saved.
+            """)
         }
         #endif
     }
@@ -438,11 +438,11 @@ private extension SettingsView {
         } header: {
             Text("Live Activity")
         } footer: {
-            Text(
-                "Puts your distance, elapsed time and progress along the trail on the Lock Screen"
-                + " and in the Dynamic Island while you are recording or following a hike."
-                + " iOS Settings › OpenHikes can turn these off for the app entirely."
-            )
+            Text("""
+            Puts your distance, elapsed time and progress along the trail on the Lock Screen \
+            and in the Dynamic Island while you are recording or following a hike. \
+            iOS Settings › OpenHikes can turn these off for the app entirely.
+            """)
         }
         #endif
     }
@@ -472,18 +472,18 @@ private extension SettingsView {
         } header: {
             Text("Reminders")
         } footer: {
-            Text(
-                "Notices when a paused hike has moved half a kilometer — or a"
-                + " quarter of one at cycling pace — and asks whether you meant to"
-                + " resume, with a button that does it without unlocking the phone."
-                + " It also offers to pause a recording you have not moved on for"
-                + " fifteen minutes. A paused recording is watched either way: with"
-                + " Always location access that costs nothing, and without it the"
-                + " pause keeps a coarse location feed running. A paused hike along a"
-                + " trail starts no feed of its own — it is watched while OpenHikes is"
-                + " open, and behind it only with Background Trail Tracking on, so a"
-                + " pocketed phone may not be reminded."
-            )
+            Text("""
+            Notices when a paused hike has moved half a kilometer — or a \
+            quarter of one at cycling pace — and asks whether you meant to \
+            resume, with a button that does it without unlocking the phone. \
+            It also offers to pause a recording you have not moved on for \
+            fifteen minutes. A paused recording is watched either way: with \
+            Always location access that costs nothing, and without it the \
+            pause keeps a coarse location feed running. A paused hike along a \
+            trail starts no feed of its own — it is watched while OpenHikes is \
+            open, and behind it only with Background Trail Tracking on, so a \
+            pocketed phone may not be reminded.
+            """)
         }
         #endif
     }
@@ -508,14 +508,14 @@ private extension SettingsView {
         } header: {
             Text("Display")
         } footer: {
-            Text(
-                "Stops the screen dimming while you are on the recording screen, or on a"
-                + " trail you are hiking. Only while OpenHikes is open and the hike is"
-                + " under way — the screen locks as usual everywhere else, and once the"
-                + " phone is back in your pocket. The display is the hungriest thing on"
-                + " the device, so leave this off unless you are navigating with the map"
-                + " in your hand."
-            )
+            Text("""
+            Stops the screen dimming while you are on the recording screen, or on a \
+            trail you are hiking. Only while OpenHikes is open and the hike is \
+            under way — the screen locks as usual everywhere else, and once the \
+            phone is back in your pocket. The display is the hungriest thing on \
+            the device, so leave this off unless you are navigating with the map \
+            in your hand.
+            """)
         }
         #endif
     }
@@ -653,28 +653,28 @@ extension SettingsView {
         // they are cached and auto-saved like any map's.
         switch drawsHikingRoutes ? nil : selectedProvider.systemStyle {
         case .standard:
-            Text(
-                "Apart from the previews above, OpenHikes downloads, caches and auto-saves"
-                + " no map tiles while this is selected, so it uses the least battery and"
-                + " data — but the map needs"
-                + " a signal where the system hasn’t already cached it."
-                + " Tiles already saved by other sources are kept, and listed below."
-            )
+            Text("""
+            Apart from the previews above, OpenHikes downloads, caches and auto-saves \
+            no map tiles while this is selected, so it uses the least battery and \
+            data — but the map needs \
+            a signal where the system hasn’t already cached it. \
+            Tiles already saved by other sources are kept, and listed below.
+            """)
         case .hybrid:
             // Not the wording above: imagery is the heaviest thing
             // the map can stream, and MapKit offers no way to keep it.
-            Text(
-                "Apart from the previews above, OpenHikes downloads, caches and auto-saves"
-                + " no map tiles while this is selected. Apple streams the imagery itself"
-                + " and none of it can be saved for offline use, so the map needs a signal."
-                + " Tiles already saved by other sources are kept, and listed below."
-            )
+            Text("""
+            Apart from the previews above, OpenHikes downloads, caches and auto-saves \
+            no map tiles while this is selected. Apple streams the imagery itself \
+            and none of it can be saved for offline use, so the map needs a signal. \
+            Tiles already saved by other sources are kept, and listed below.
+            """)
         case nil:
             if drawsHikingRoutes, selectedProvider.usesSystemBaseMap {
-                Text(
-                    "The hiking routes are the only map tiles OpenHikes downloads, caches"
-                    + " and auto-saves while this is selected."
-                )
+                Text("""
+                The hiking routes are the only map tiles OpenHikes downloads, caches \
+                and auto-saves while this is selected.
+                """)
             }
         }
     }

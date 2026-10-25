@@ -114,11 +114,11 @@ struct AboutSection: View {
         } header: {
             Text("About")
         } footer: {
-            Text(
-                "The policy and the terms open in your browser, and are the ones the App Store"
-                + " listing links too. Share feedback, suggestions, or report an issue on GitHub"
-                + " \u{2014} the version above says which build you’re on."
-            )
+            Text("""
+            The policy and the terms open in your browser, and are the ones the App Store \
+            listing links too. Share feedback, suggestions, or report an issue on GitHub \
+            \u{2014} the version above says which build you’re on.
+            """)
         }
     }
 }

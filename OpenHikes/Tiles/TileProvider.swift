@@ -18,6 +18,9 @@ import Foundation
 /// has nothing for an actor to protect.
 nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
     let id: String
+    /// The name Settings shows. Worded through the String Catalog like the
+    /// rest of the screen, product names included, so a translation sees each
+    /// one and can keep it (#1028).
     let name: String
     /// One-line description shown under the name in Settings.
     let summary: String
@@ -112,7 +115,11 @@ nonisolated struct DurableTileQuota: Hashable, Sendable {
     /// Device-wide and licence-wide — not per hike, and not per style — which
     /// is why it is enforced against a running total of everything any Stadia
     /// style has durably on disk rather than against any one download.
-    static let stadia = Self(id: "stadia", holder: "Stadia Maps", byteLimit: 100 * 1024 * 1024)
+    static let stadia = Self(
+        id: "stadia",
+        holder: String(localized: "Stadia Maps", comment: "The company whose license limits saved map tiles"),
+        byteLimit: 100 * 1024 * 1024
+    )
 
     /// The catalog entries that count against this quota, in display order.
     var providers: [TileProvider] {
@@ -139,9 +146,11 @@ nonisolated extension TileProvider {
     /// The current default: OpenStreetMap's standard raster tiles.
     static let openStreetMap = TileProvider(
         id: "osm",
-        name: "OpenStreetMap",
-        summary: "Standard street map. Its tile policy disallows bulk downloads, " +
-            "so viewed tiles are auto-saved for offline use instead.",
+        name: String(localized: "OpenStreetMap", comment: "The name of a map style in Settings"),
+        summary: String(localized: """
+            Standard street map. Its tile policy disallows bulk downloads, \
+            so viewed tiles are auto-saved for offline use instead.
+            """),
         urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         maximumZ: osmMaximumZ,
         attribution: TileAttribution([.openStreetMap]),
@@ -166,9 +175,11 @@ nonisolated extension TileProvider {
     /// installs no overlay.
     static let appleMaps = TileProvider(
         id: "apple_maps",
-        name: "Apple Maps",
-        summary: "The system’s built-in map. Downloads no tiles and saves nothing to disk, "
-            + "so it uses the least battery and data.",
+        name: String(localized: "Apple Maps", comment: "The name of a map style in Settings"),
+        summary: String(localized: """
+            The system’s built-in map. Downloads no tiles and saves nothing to disk, \
+            so it uses the least battery and data.
+            """),
         urlTemplate: "",
         maximumZ: 0,
         attribution: TileAttribution([.apple]),
@@ -195,9 +206,11 @@ nonisolated extension TileProvider {
     /// than borrowing Apple Maps' "saves nothing" wording.
     static let appleSatellite = TileProvider(
         id: "apple_satellite",
-        name: "Apple Satellite",
-        summary: "Satellite imagery with road and place names. Shows forest, rock and clearings, "
-            + "but needs a connection: none of it can be saved for offline use.",
+        name: String(localized: "Apple Satellite", comment: "The name of a map style in Settings"),
+        summary: String(localized: """
+            Satellite imagery with road and place names. Shows forest, rock and clearings, \
+            but needs a connection: none of it can be saved for offline use.
+            """),
         urlTemplate: "",
         maximumZ: 0,
         attribution: TileAttribution([.apple]),
@@ -214,10 +227,12 @@ nonisolated extension TileProvider {
     /// within the 100 MB per-device ceiling its terms set.
     static let stadiaOutdoors = TileProvider(
         id: "stadia_outdoors",
-        name: "Stadia Outdoors",
-        summary: "Topographic map tuned for hiking, with contour lines and trails. Offline "
-            + "downloads are allowed, sharing Stadia’s 100 MB of saved tiles on this device "
-            + "with Stamen Terrain.",
+        name: String(localized: "Stadia Outdoors", comment: "The name of a map style in Settings"),
+        summary: String(localized: """
+            Topographic map tuned for hiking, with contour lines and trails. Offline \
+            downloads are allowed, sharing Stadia’s 100 MB of saved tiles on this device \
+            with Stamen Terrain.
+            """),
         urlTemplate: "https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}.png?api_key={key}",
         maximumZ: stadiaMaximumZ,
         attribution: TileAttribution([.stadiaMaps, .openMapTiles, .openStreetMap]),
@@ -239,10 +254,12 @@ nonisolated extension TileProvider {
     /// Stadia's attribution page requires, ahead of OpenMapTiles.
     static let stamenTerrain = TileProvider(
         id: "stadia_stamen_terrain",
-        name: "Stamen Terrain",
-        summary: "Hillshaded terrain in natural colors, a softer look than Stadia Outdoors. "
-            + "Offline downloads are allowed, sharing Stadia’s 100 MB of saved tiles on this "
-            + "device with Stadia Outdoors.",
+        name: String(localized: "Stamen Terrain", comment: "The name of a map style in Settings"),
+        summary: String(localized: """
+            Hillshaded terrain in natural colors, a softer look than Stadia Outdoors. \
+            Offline downloads are allowed, sharing Stadia’s 100 MB of saved tiles on this \
+            device with Stadia Outdoors.
+            """),
         urlTemplate: "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png?api_key={key}",
         maximumZ: stadiaMaximumZ,
         attribution: TileAttribution([.stadiaMaps, .stamenDesign, .openMapTiles, .openStreetMap]),
@@ -265,9 +282,11 @@ nonisolated extension TileProvider {
     /// Restoring the flag means buying that plan first.
     static let thunderforestOutdoors = TileProvider(
         id: "thunderforest_outdoors",
-        name: "Thunderforest Outdoors",
-        summary: "Topographic map with deep zoom for sharp close-up detail. Its plan "
-            + "disallows bulk downloads, so viewed tiles are auto-saved for offline use instead.",
+        name: String(localized: "Thunderforest Outdoors", comment: "The name of a map style in Settings"),
+        summary: String(localized: """
+            Topographic map with deep zoom for sharp close-up detail. Its plan \
+            disallows bulk downloads, so viewed tiles are auto-saved for offline use instead.
+            """),
         urlTemplate: "https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey={key}",
         maximumZ: thunderforestMaximumZ,
         attribution: TileAttribution([.thunderforest, .openStreetMapData]),

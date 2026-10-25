@@ -66,11 +66,15 @@ private struct OfflineStorageAlerts: ViewModifier {
     static func deletionMessage(for failure: StoredTileDeletion.Failure) -> String {
         switch failure {
         case .claimsUnreadable:
-            "OpenHikes couldn’t read the other hikes’ offline coverage."
-            + " No tiles were deleted."
+            String(localized: """
+                OpenHikes couldn’t read the other hikes’ offline coverage. \
+                No tiles were deleted.
+                """)
         case .notSaved:
-            "OpenHikes couldn’t record the change, so no tiles were deleted."
-            + " This hike’s saved map is still on your device. Try again."
+            String(localized: """
+                OpenHikes couldn’t record the change, so no tiles were deleted. \
+                This hike’s saved map is still on your device. Try again.
+                """)
         }
     }
 
@@ -85,11 +89,15 @@ private struct OfflineStorageAlerts: ViewModifier {
             fromByteCount: shortfall.bytesToFree,
             countStyle: .file
         )
-        return "\(shortfall.licenseHolder) allows \(limit) of saved maps on this device, across all"
-            + " its map styles, and that’s already in use. Saving this route will delete about"
-            + " \(freeing) of your least-recently-used saved tiles, whichever of its styles they"
-            + " were saved in.\n\nThe hikes they belong to keep their routes, and their maps"
-            + " refill the next time you view them online."
+        return String(localized: """
+            \(shortfall.licenseHolder) allows \(limit) of saved maps on this device, across all \
+            its map styles, and that’s already in use. Saving this route will delete about \
+            \(freeing) of your least-recently-used saved tiles, whichever of its styles they \
+            were saved in.
+
+            The hikes they belong to keep their routes, and their maps \
+            refill the next time you view them online.
+            """)
     }
 }
 

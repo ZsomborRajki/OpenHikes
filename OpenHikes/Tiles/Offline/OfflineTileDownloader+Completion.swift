@@ -55,5 +55,5 @@ extension OfflineTileDownloader {
     /// spoken for by nobody, so what the hiker has is a download to run
     /// again rather than a map to finish.
     static let unclaimedMessage =
-        "Downloaded the map, but couldn’t record it for this hike. Try again."
+        String(localized: "Downloaded the map, but couldn’t record it for this hike. Try again.")
 }

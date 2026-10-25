@@ -10,7 +10,9 @@
 //  observer; this owns the sentence. Splitting them is what lets the reducer
 //  be driven straight from a test — see ``CloudSyncCoordinator/apply(_:)`` —
 //  without a settings screen, and keeps every string the row can show in one
-//  file.
+//  file. Each is written with `String(localized:)`: a literal handed back as
+//  a bare `String` is drawn verbatim and never reaches the String Catalog
+//  (#1028).
 //
 //  Both are `@MainActor` and `@Observable`, and the coordinator holds this as
 //  a plain `let`, so a SwiftUI body reads it directly with nothing to await.
@@ -116,16 +118,16 @@ final class CloudSyncStatus {
 
     /// The headline the settings row shows.
     var title: String {
-        if pendingRelaunch { return "Restart to Apply" }
+        if pendingRelaunch { return String(localized: "Restart to Apply") }
         // Ahead of the account, which on a launch that does not mirror is
         // still `.unknown` and always will be: nothing asked iCloud about it,
         // and "Checking iCloud…" over a settled row is a wait that never ends.
         if activity == .disabled { return activityTitle }
         switch account {
         case .available: return activityTitle
-        case .noAccount: return "No Apple Account"
-        case .restricted: return "iCloud Restricted"
-        case .unknown: return "Checking iCloud…"
+        case .noAccount: return String(localized: "No Apple Account")
+        case .restricted: return String(localized: "iCloud Restricted")
+        case .unknown: return String(localized: "Checking iCloud…")
         }
     }
 
@@ -133,52 +135,56 @@ final class CloudSyncStatus {
     /// working" is the only question this section exists to answer.
     var detail: String {
         if pendingRelaunch {
-            return "Quit and reopen OpenHikes to finish changing this setting."
+            return String(localized: "Quit and reopen OpenHikes to finish changing this setting.")
         }
         if activity == .disabled { return activityDetail }
         switch account {
         case .available:
             return activityDetail
         case .noAccount:
-            return "Sign in to iCloud in the Settings app to sync your hikes across your devices."
+            return String(localized: "Sign in to iCloud in the Settings app to sync your hikes across your devices.")
         case .restricted:
-            return "This device’s settings don’t allow iCloud, so hikes stay on this device."
+            return String(localized: "This device’s settings don’t allow iCloud, so hikes stay on this device.")
         case .unknown:
-            return "Asking iCloud whether it’s available on this device."
+            return String(localized: "Asking iCloud whether it’s available on this device.")
         }
     }
 
     private var activityTitle: String {
         switch activity {
-        case .disabled: "Sync Off"
-        case .failed: "Sync Problem"
-        case .idle: "Synced with iCloud"
-        case .paused: "Sync Off"
-        case .retrying: "Waiting for iCloud"
-        case .working: "Syncing…"
+        case .disabled: String(localized: "Sync Off")
+        case .failed: String(localized: "Sync Problem")
+        case .idle: String(localized: "Synced with iCloud")
+        case .paused: String(localized: "Sync Off")
+        case .retrying: String(localized: "Waiting for iCloud")
+        case .working: String(localized: "Syncing…")
         }
     }
 
     private var activityDetail: String {
         switch activity {
         case .disabled:
-            "Your hikes stay on this device only."
+            String(localized: "Your hikes stay on this device only.")
         case .failed(let reason):
             reason
         case .idle:
             lastSyncedAt.map { date in
-                "Last synced \(HikeFormat.timestamp(date))."
-            } ?? "Your hikes and photo details are kept in your private iCloud storage. "
-                + "Photo files stay on the device they were added on."
+                String(localized: "Last synced \(HikeFormat.timestamp(date)).")
+            } ?? String(localized: """
+                Your hikes and photo details are kept in your private iCloud storage. \
+                Photo files stay on the device they were added on.
+                """)
         case .paused:
-            "Your hikes stay on this device only."
+            String(localized: "Your hikes stay on this device only.")
         case .retrying:
             lastSyncedAt.map { date in
-                "iCloud hasn’t finished this yet. It will catch up on its own. "
-                    + "Last synced \(HikeFormat.timestamp(date))."
-            } ?? "iCloud hasn’t finished this yet. It will catch up on its own."
+                String(localized: """
+                    iCloud hasn’t finished this yet. It will catch up on its own. \
+                    Last synced \(HikeFormat.timestamp(date)).
+                    """)
+            } ?? String(localized: "iCloud hasn’t finished this yet. It will catch up on its own.")
         case .working:
-            "Sending and receiving your hikes and photo details."
+            String(localized: "Sending and receiving your hikes and photo details.")
         }
     }
 

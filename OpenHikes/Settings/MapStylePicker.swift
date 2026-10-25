@@ -104,12 +104,14 @@ struct MapStylePicker: View {
     }
 
     /// Spoken after the card, because the lock is a glyph and the disabled
-    /// state of a waiting card explains itself to nobody.
-    private static func hint(for tap: PaidFeatureTap) -> String {
+    /// state of a waiting card explains itself to nobody. A `Text` rather
+    /// than a `String`, which `accessibilityHint` read out verbatim and the
+    /// String Catalog never listed (#1028).
+    private static func hint(for tap: PaidFeatureTap) -> Text {
         switch tap {
-        case .allow: ""
-        case .unlock: "Requires OpenHikes Pro. Opens the unlock screen."
-        case .wait: "Checking your subscription."
+        case .allow: Text(verbatim: "")
+        case .unlock: Text("Requires OpenHikes Pro. Opens the unlock screen.")
+        case .wait: Text("Checking your subscription.")
         }
     }
 }
