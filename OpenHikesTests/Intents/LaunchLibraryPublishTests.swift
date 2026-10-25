@@ -4,9 +4,9 @@
 //
 //  The launch reads the library once and hands the one list to the App
 //  Group's catalogue and to Spotlight. Each read fetches every hike into a
-//  context of its own and decodes every route for its clock, and the two
-//  consumers used to make that read for themselves from two detached tasks
-//  at once, so a launch held the library's routes twice (#1025).
+//  context of its own, and the two consumers used to make that read for
+//  themselves from two detached tasks at once, so a launch held the library
+//  twice, in two readings free to disagree (#1025).
 //
 //  Counted through the coordinator's read seam, `LibraryTotalsSweep.Reads`,
 //  and asserted on what each consumer was handed. The consumers are injected

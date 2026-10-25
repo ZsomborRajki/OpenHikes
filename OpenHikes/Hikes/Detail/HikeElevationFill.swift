@@ -79,12 +79,12 @@ enum HikeElevationFill {
         // have replaced the line, or given it heights, in the meantime.
         let route = hike.route
         guard canFill(hike), samples.describes(route) else { return false }
-        hike.route = samples.interpolating(route)
+        hike.replaceRoute(with: samples.interpolating(route))
         do {
             try save(context)
         } catch {
             context.rollback()
-            hike.route = route
+            hike.replaceRoute(with: route)
             logger.error("Heights for a hike could not be saved: \(error.localizedDescription, privacy: .public)")
             return false
         }

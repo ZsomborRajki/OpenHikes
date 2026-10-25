@@ -282,7 +282,7 @@ enum TrailDraftSave {
         // only the route to be recomputed from, and after this it would be
         // recomputed from the new one — tiles nobody fetched.
         hike.pinUnboxedDownloads()
-        hike.route = heights?.interpolating(route) ?? route
+        hike.replaceRoute(with: heights?.interpolating(route) ?? route)
         hike.distanceMeters = draft.distanceMeters
         hike.surfaceMetersByCategory = [:]
         hike.difficultyMetersByGrade = [:]
@@ -299,7 +299,7 @@ enum TrailDraftSave {
             try save(context)
         } catch {
             context.rollback()
-            hike.route = before.route
+            hike.replaceRoute(with: before.route)
             hike.distanceMeters = before.distance
             hike.drawnRouteData = before.drawn
             hike.surfaceMetersByCategory = before.surface

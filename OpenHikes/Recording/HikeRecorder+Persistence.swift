@@ -294,7 +294,7 @@ extension HikeRecorder {
 
         existing.distanceMeters = prepared.distanceMeters
         existing.date = prepared.startedAt
-        existing.route = prepared.route
+        existing.replaceRoute(with: prepared.route)
         existing.rawRoute = prepared.rawRoute
         existing.customName = customName
         // The draft was named for the time of day before the first fix
@@ -324,7 +324,7 @@ extension HikeRecorder {
             discardRecordedWalk(walk)
             existing.distanceMeters = previousDistance
             existing.date = previousDate
-            existing.route = previousRoute
+            existing.replaceRoute(with: previousRoute)
             existing.rawRoute = previousRawRoute
             existing.customName = previousCustomName
             existing.title = previousTitle

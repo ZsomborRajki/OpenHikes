@@ -20,7 +20,7 @@ struct WalkSummaryTrailTests {
     ]
 
     private func walk(in context: ModelContext) -> HikeWalk {
-        let hike = Fixture.hike(in: context) { $0.route = Self.route }
+        let hike = Fixture.hike(in: context) { $0.replaceRoute(with: Self.route) }
         let length = RouteProfile(route: hike.route).totalDistanceMeters
         let walk = HikeWalk(
             hikeID: hike.id,
@@ -73,7 +73,7 @@ struct WalkSummaryTrailTests {
         let trail = try await WalkSummaryTrail.prepare(along: WalkSummaryRouteKey(walk: walk))
         #expect(trail.matches(walk))
 
-        hike.route.reverse()
+        hike.replaceRoute(with: hike.route.reversed())
 
         #expect(!trail.matches(walk), "before the replacement profile has even been prepared")
         await #expect(throws: CancellationError.self) {
@@ -98,7 +98,7 @@ struct WalkSummaryTrailTests {
             }
         }
         await settleDelegateHop(until: "the covered-stretch calculation is in flight") { gate.started }
-        hike.route.reverse()
+        hike.replaceRoute(with: hike.route.reversed())
         gate.resume()
 
         await #expect(throws: CancellationError.self) { try await task.value }

@@ -394,11 +394,10 @@ extension HikeIntentCoordinator {
     /// paging would buy a second code path and no work saved.
     ///
     /// Read off the main actor, in a context of its own, through the same
-    /// seam as ``readLibrary()``. Every report reads its route for the clock,
-    /// and a route is external storage decoded whole: a library of long
-    /// recordings is a few hundred milliseconds of decoding, which the two
-    /// launch sweeps that used to read this each did on the main actor while
-    /// the map was coming up (#999).
+    /// seam as ``readLibrary()``. A report decodes no route — its clock is a
+    /// column of the row (#1025) — but this is still a fetch of every hike in
+    /// the library, which the two launch sweeps that used to read it each
+    /// made on the main actor while the map was coming up (#999).
     func finishedHikes() async throws(HikeIntentFailure) -> [FinishedHikeReport] {
         do {
             return try await Self.readFinishedHikes(from: container, using: libraryReads)
@@ -423,7 +422,7 @@ extension HikeIntentCoordinator {
         from container: ModelContainer,
         using reads: LibraryTotalsSweep.Reads
     ) async throws -> [FinishedHikeReport] {
-        assertOffMainThread("Reading every route for its clock must stay off the main thread")
+        assertOffMainThread("Reading the whole library must stay off the main thread")
         return try reads.hikes(ModelContext(container))
             .filter { !$0.isRecording }
             .map(report(for:))
@@ -458,36 +457,24 @@ extension HikeIntentCoordinator {
         return report
     }
 
-    /// Reads the elapsed clock off the route's own end stamps rather than
-    /// through ``Hike/routeStatistics``.
+    /// Reads the elapsed clock the row stores, ``Hike/durationSeconds``, and
+    /// never the route.
     ///
-    /// That property is documented at its declaration as deriving every
-    /// statistic "from scratch, on the calling thread, on every read", and
-    /// stopping reaches here on the main actor immediately after a save — so
-    /// a saved multi-hour hike, which is thousands of points, would run a full
-    /// accumulator pass on the main actor inside an intent that has a system
-    /// execution budget. The read of the whole library reaches here once per
-    /// saved hike, off the main actor, where two searches still cost less
-    /// than an accumulator pass each.
+    /// This reaches every finished hike in the library at launch, and the
+    /// hike just saved, on the main actor, when a recording stops inside an
+    /// intent's execution budget. A route is external storage decoded whole,
+    /// even to find its first and last stamps (#1025).
     ///
-    /// The answer is the same one: `HikeRouteStatistics` takes its duration
-    /// between the first and last *stamped* points, which is what these two
-    /// searches find, and calls it `nil` unless the clock actually ran.
+    /// The answer is the one the hike's detail screen gives: the column is
+    /// written by the rule `HikeRouteStatistics` measures *Duration* by, first
+    /// stamped point to last and `nil` unless the clock actually ran.
     nonisolated private static func report(for hike: Hike) -> FinishedHikeReport {
-        let route = hike.route
-        let first = route.first { $0.timestamp != nil }?.timestamp
-        let last = route.last { $0.timestamp != nil }?.timestamp
-        let duration: TimeInterval? = if let first, let last, last > first {
-            last.timeIntervalSince(first)
-        } else {
-            nil
-        }
-        return FinishedHikeReport(
+        FinishedHikeReport(
             id: hike.id,
             title: hike.displayTitle,
             date: hike.date,
             distance: hike.distance,
-            duration: duration
+            duration: hike.durationSeconds
         )
     }
 
@@ -495,8 +482,8 @@ extension HikeIntentCoordinator {
     /// disagree about how far it went.
     ///
     /// Its time is the one its own screen shows. A clocked hike's is its
-    /// clock, first stamp to last — what ``report(for:)`` reads off the
-    /// route, so *Last Hike* and *Hike Summary* say the same of one
+    /// clock, first stamp to last — the figure ``report(for:)`` reads off the
+    /// row, so *Last Hike* and *Hike Summary* say the same of one
     /// recording. A walk's is its active time, the figure its History row
     /// speaks, and never the clock of the recording or file its trail came
     /// from.

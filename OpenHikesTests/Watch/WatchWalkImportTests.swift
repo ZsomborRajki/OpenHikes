@@ -28,6 +28,9 @@ struct WatchWalkImportTests {
         #expect(hike.route.count == walk.fixes.count)
         #expect(hike.watchSessionID == walk.sessionID)
         #expect(hike.date == walk.startedAt)
+        // Its clock, first fix to last, on the row (#1025): five fixes eight
+        // seconds apart.
+        #expect(hike.durationSeconds == 32)
         #expect(outcome.deservesReceipt)
     }
 

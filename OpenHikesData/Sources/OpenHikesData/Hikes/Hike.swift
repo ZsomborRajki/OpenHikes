@@ -47,6 +47,24 @@ public final class Hike {
     public var title: String = ""
     /// Total route length, in meters.
     public var distanceMeters: Double = 0
+    /// Seconds from the route's first stamped point to its last, or `nil` for
+    /// a route whose clock never ran: a drawn trail, a GPX without
+    /// timestamps. The hike's *Duration*, by the rule
+    /// ``HikeRouteStatistics/duration`` follows.
+    ///
+    /// Stored so that a read wanting only this need not decode ``route``,
+    /// which is external storage read whole. Siri, Spotlight and the widget's
+    /// catalogue want it for every finished hike, and decoding a library of
+    /// long recordings to find two stamps apiece was most of what that read
+    /// cost (#1025). Written with the route and nowhere else, by the
+    /// initializer and ``replaceRoute(with:)``, so the two cannot describe
+    /// different lines.
+    ///
+    /// Mirrored, so a hike that arrives from another device brings the figure
+    /// its route was saved with. A row saved before this column existed reads
+    /// as having no clock, and nothing converts it: AGENTS.md *Schema and
+    /// migration policy*.
+    public private(set) var durationSeconds: Double?
     /// Activity date — the GPX start time when available, otherwise the import date.
     public var date = Date.distantPast
     /// Route tint, stored as "#RRGGBB" or "#RRGGBBAA". The alpha is used only for
@@ -72,7 +90,12 @@ public final class Hike {
     /// is a couple of megabytes encoded, and a `CKRecord`'s fields have to add
     /// up to less than one. Without this the longest hikes — the ones most
     /// worth keeping — are exactly the ones that would silently fail to sync.
-    @Attribute(.externalStorage) public var route: [RouteCoordinate] = []
+    ///
+    /// Written through ``replaceRoute(with:)`` once the hike exists, which
+    /// keeps ``durationSeconds`` describing it. The setter is private so that
+    /// the compiler holds every writer to that, the app's and the suites'
+    /// alike.
+    @Attribute(.externalStorage) public private(set) var route: [RouteCoordinate] = []
     /// A user-chosen name that overrides the GPS/import-derived ``title``.
     /// `nil` means no override is set and the original title is displayed.
     public var customName: String?
@@ -354,6 +377,7 @@ public final class Hike {
         self.routeBorderHex = routeBorderHex
         self.symbol = symbol
         self.route = route
+        durationSeconds = HikeRouteStatistics.duration(of: route)
         self.rawRoute = rawRoute
         self.isRecording = isRecording
         self.autoFollowEnabled = autoFollowEnabled
@@ -363,6 +387,22 @@ public final class Hike {
         self.surfaceMetersByCategory = surfaceMetersByCategory
         self.difficultyMetersByGrade = difficultyMetersByGrade
         self.photos = photos
+    }
+}
+
+// MARK: - The route
+
+public extension Hike {
+    /// Replaces the route, and the duration stored from it.
+    ///
+    /// The one way to write ``route`` once the hike exists, and here, in the
+    /// file that declares it, because its setter is private: a recording's
+    /// save, *Edit Route*, heights filled onto a line, and every rollback that
+    /// puts a line back all come through here, so none of them can leave
+    /// ``durationSeconds`` describing the line before.
+    func replaceRoute(with route: [RouteCoordinate]) {
+        self.route = route
+        durationSeconds = HikeRouteStatistics.duration(of: route)
     }
 }
 

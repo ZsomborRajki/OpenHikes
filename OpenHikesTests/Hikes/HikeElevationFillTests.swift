@@ -49,7 +49,7 @@ struct HikeElevationFillTests {
     private static func library(route: [RouteCoordinate]) throws -> (ModelContext, Hike) {
         let context = ModelContext(try ModelContainer.openHikes(isStoredInMemoryOnly: true))
         let hike = Hike(title: "Imported", distanceMeters: 1000)
-        hike.route = route
+        hike.replaceRoute(with: route)
         context.insert(hike)
         try context.save()
         return (context, hike)

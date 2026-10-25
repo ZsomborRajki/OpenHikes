@@ -98,11 +98,12 @@ struct HikeWalkPhotoRouteRevisionTests {
         #expect(hike.canMatchLibraryPhotos)
         #expect(!hike.photoSearchPlan.isEmpty)
 
-        hike.route = hike.route.map { point in
+        let withHeights = hike.route.map { point in
             var filled = point
             filled.elevation = 100
             return filled
         }
+        hike.replaceRoute(with: withHeights)
 
         #expect(hike.walkPhotoTimelines.count == 1)
     }
@@ -116,7 +117,7 @@ struct HikeWalkPhotoRouteRevisionTests {
         let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.unstampedRoute)
         Self.addWalk(to: hike, in: context)
 
-        hike.route = edit.apply(to: hike.route)
+        hike.replaceRoute(with: edit.apply(to: hike.route))
 
         #expect(hike.walkPhotoTimelines.isEmpty)
         #expect(!hike.canMatchLibraryPhotos)
@@ -143,7 +144,7 @@ struct HikeWalkPhotoRouteRevisionTests {
         let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.unstampedRoute)
         Self.addWalk(to: hike, in: context)
 
-        hike.route = RouteEdit.rerouted.apply(to: hike.route)
+        hike.replaceRoute(with: RouteEdit.rerouted.apply(to: hike.route))
         Self.addWalk(
             to: hike,
             in: context,
@@ -166,7 +167,7 @@ struct HikeWalkPhotoRouteRevisionTests {
         let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.unstampedRoute)
         Self.addWalk(to: hike, in: context)
 
-        hike.route = RouteEdit.reversed.apply(to: hike.route)
+        hike.replaceRoute(with: RouteEdit.reversed.apply(to: hike.route))
 
         let located = PhotoDiscoveryFixture.asset(
             "located",

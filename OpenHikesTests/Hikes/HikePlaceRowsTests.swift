@@ -139,7 +139,7 @@ struct HikePlaceRowsTests {
         let rows = Self.rows(tally)
         let north = rows.rows(of: hike)
 
-        hike.route = Self.route(northward: false)
+        hike.replaceRoute(with: Self.route(northward: false))
         let south = rows.rows(of: hike)
 
         #expect(tally.calls == 2)
@@ -213,7 +213,7 @@ struct HikePlaceRowsTests {
         let rows = Self.rows(tally, budget: 0)
 
         _ = rows.rows(of: hike)
-        hike.route = Self.route(northward: false)
+        hike.replaceRoute(with: Self.route(northward: false))
         _ = rows.rows(of: hike)
         // Both measurements finished, so each one's landing is queued on the
         // main actor behind it, and the round trips after this run after
