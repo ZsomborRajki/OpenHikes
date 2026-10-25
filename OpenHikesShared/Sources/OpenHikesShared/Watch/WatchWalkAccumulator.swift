@@ -121,9 +121,12 @@ public struct WatchWalkAccumulator: Sendable, Equatable {
 
     public var lastFix: WatchRecordedFix? { fixes.last }
 
-    /// Metres per second over the time actually spent walking, or `nil` before
-    /// there is any. The recording screen draws it as a speed, captioned as the
-    /// phone captions its own — see ``WatchRecordingFigures``.
+    /// Metres per second over ``activeSeconds``, or `nil` before there is any.
+    /// That clock leaves out a pause but not a rest taken without one, as the
+    /// phone's live average does; *Settled decisions* in the repository
+    /// instructions says why it is not moving time. The recording screen draws
+    /// it as a speed, captioned as the phone captions its own — see
+    /// ``WatchRecordingFigures``.
     public var averageSpeedMetersPerSecond: Double? {
         guard activeSeconds > 0, distanceMeters > 0 else { return nil }
         return distanceMeters / activeSeconds

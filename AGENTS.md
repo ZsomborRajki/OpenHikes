@@ -1264,6 +1264,18 @@ Reopening one needs new evidence, not a fresh reading of the same code.
   quota belongs to the hiker. Another device shows the photo as unavailable
   (`PhotoUnavailability`), with no retry and no remove. The community's public
   copies do not reopen this.
+- **The live average speed keeps its clock, and is spoken in full.** Every
+  *Avg Speed* that is not named for a clock divides by the walk's active
+  clock: the time between kept fixes, which leaves pauses out and counts a
+  rest taken without one. That covers the recording screen, the watch, the
+  widget and Live Activity chip and the share card, and it is the clock a
+  walk's *Active Time* shows. A saved hike's two averages are named for their
+  own clocks, *Overall* and *Moving*, so after a pause the live figure matches
+  neither. Moving time live would need a moving-time rule for the watch in
+  `OpenHikesShared`, written without `Deque`, and a mirrored `HikeWalk` column
+  for the share card to agree. The caption stays *Avg Speed*, which fits a
+  watch tile, and every surface speaks "Average Speed", as the chip always
+  has.
 - **Two foreground location managers, on purpose.** iOS coalesces demand to the
   most demanding request, so the second manager costs dispatch, not power, and
   keeps background semantics out of browsing. Revisit only with a device energy

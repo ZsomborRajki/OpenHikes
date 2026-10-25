@@ -113,10 +113,10 @@ nonisolated enum HikeDetailPreparation {
             // the new one would leave the older row still answering a question
             // it was never measuring.
             statistics.averageSpeed.map { speed in
-                Stat("Overall Avg Speed", HikeFormat.speed(speed))
+                Stat("Overall Avg Speed", HikeFormat.speed(speed), spokenAs: "Overall Average Speed")
             },
             statistics.movingAverageSpeed.map { speed in
-                Stat("Moving Avg Speed", HikeFormat.speed(speed))
+                Stat("Moving Avg Speed", HikeFormat.speed(speed), spokenAs: "Moving Average Speed")
             },
             statistics.maxSpeed.map { speed in
                 Stat("Max Speed", HikeFormat.speed(speed))

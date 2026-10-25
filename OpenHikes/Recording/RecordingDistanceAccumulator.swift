@@ -83,6 +83,10 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
     /// first minute of every walk gets.
     static let minimumRecentSpeedSpan: TimeInterval = 60
 
+    /// Distance over ``recordedDuration``. The widget's chip and the Live
+    /// Activity show this figure, and the watch and a walk's share card divide
+    /// by the same clock. It is not moving time, on purpose: see *Settled
+    /// decisions* in the repository instructions.
     var averageSpeedMetersPerSecond: Double? {
         recordedDuration > 0 ? distanceMeters / recordedDuration : nil
     }

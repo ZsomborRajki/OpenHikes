@@ -58,6 +58,10 @@ extension AccessibilityUITests {
         let figures = element("walk-share-figures", in: app)
         XCTAssertTrue(figures.waitForExistence(timeout: UITestTimeout.existence), "the stats box's bar carries Figures")
         XCTAssertTrue(controls.exists)
+        // The box prints "AVG SPEED", and is read with the name in full.
+        let spoken = stats.value as? String ?? ""
+        XCTAssertTrue(spoken.contains("Average Speed"), "the box reads its average in full, got \"\(spoken)\"")
+        XCTAssertFalse(spoken.contains("Avg Speed"), "got \"\(spoken)\"")
         try audit(app)
 
         figures.tap()
@@ -66,6 +70,8 @@ extension AccessibilityUITests {
             app.buttons["Distance"].waitForExistence(timeout: UITestTimeout.existence),
             "Figures opens a menu of the figures the box can print"
         )
+        // A control's spoken name is the one it shows, so the menu spells it out.
+        XCTAssertTrue(app.buttons["Average Speed"].exists, "the menu names the average in full")
         try audit(app)
     }
 

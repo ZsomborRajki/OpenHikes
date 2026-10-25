@@ -30,7 +30,7 @@ struct RecordingStatsSection: View {
             StatList {
                 StatRow(label: "Moving", value: HikeFormat.duration(stats.movingSeconds))
                 StatRow(label: "Current Speed", value: currentSpeed)
-                StatRow(label: "Avg Speed", value: averageSpeed)
+                StatRow(label: "Avg Speed", value: averageSpeed, spokenLabel: "Average Speed")
                 StatRow(label: "Accuracy", value: accuracy)
                 // `StatRow` already exposes itself as one label/value element;
                 // only the identifier UI automation waits on is added here.

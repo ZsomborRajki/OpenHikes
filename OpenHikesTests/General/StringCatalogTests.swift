@@ -127,6 +127,17 @@ struct StringCatalogTests {
         #expect(strings["Pace"] == nil)
     }
 
+    /// What VoiceOver reads the watch's average by, which its tile shortens
+    /// to "Avg Speed" (*Settled decisions* in the repository instructions).
+    /// Read out of the catalog for the reason the test above gives: the words
+    /// are the watch target's, and a sync deletes a key no build extracts.
+    @Test("the watch speaks its average in full, as the phone does")
+    func watchSpeaksTheAverageInFull() throws {
+        let strings = try Self.catalog(in: "OpenHikesWatch")
+        let spoken = try #require(strings["Average Speed"] as? [String: Any])
+        #expect(spoken["extractionState"] as? String != "stale")
+    }
+
     /// The checkout this file was compiled from, which the catalogs and the
     /// lint configuration are read out of.
     private static var sourceRoot: URL {

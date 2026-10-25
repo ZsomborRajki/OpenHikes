@@ -599,7 +599,7 @@ private extension HikeDetailView {
         if !figures.isEmpty {
             StatStrip {
                 ForEach(figures) { stat in
-                    StatFigure(label: stat.label, value: stat.value)
+                    StatFigure(stat)
                 }
             }
         }
@@ -611,7 +611,7 @@ private extension HikeDetailView {
         if !rows.isEmpty {
             StatList {
                 ForEach(rows) { stat in
-                    StatRow(label: stat.label, value: stat.value)
+                    StatRow(stat)
                 }
             }
         }

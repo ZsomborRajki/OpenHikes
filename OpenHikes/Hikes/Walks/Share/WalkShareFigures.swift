@@ -9,8 +9,8 @@
 //  walk covered, the climb is what the covered stretches climb the way they
 //  were walked, and the speed is that distance over the active clock — so a
 //  walk abandoned halfway does not advertise the whole trail's ascent, a walk
-//  down from the trail's stored end does not advertise its climb, and breaks
-//  do not drag the speed down. The summary screen beside it shows the trail's
+//  down from the trail's stored end does not advertise its climb, and a pause
+//  does not drag the speed down. The summary screen beside it shows the trail's
 //  figures for context; a card sent to somebody else has no such context to
 //  lean on.
 //
@@ -50,6 +50,20 @@ nonisolated enum WalkShareStat: String, Codable, Sendable {
         case .descent: String(localized: "Descent")
         case .completion: String(localized: "Completed")
         case .date: String(localized: "Date")
+        }
+    }
+
+    /// What the figure is called in full: what the *Figures* menu lists and
+    /// what VoiceOver reads the box by. The card's caption, ``label``, is the
+    /// same words except where the box has no room for them.
+    ///
+    /// The menu spells it out rather than speaking a name it does not show,
+    /// because its items are controls, and what a hiker reads on one is what
+    /// they would say to Voice Control to pick it.
+    var name: String {
+        switch self {
+        case .speed: String(localized: "Average Speed")
+        case .ascent, .completion, .date, .descent, .distance, .time: label
         }
     }
 
@@ -110,6 +124,13 @@ nonisolated struct WalkShareFigures: Equatable, Sendable {
         case .date:
             return startedAt.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(locale))
         }
+    }
+
+    /// What VoiceOver reads the stats box as: each of `shown` the box prints,
+    /// by its ``WalkShareStat/name``, and none it leaves off.
+    func spokenSummary(of shown: [WalkShareStat], locale: Locale = .autoupdatingCurrent) -> String {
+        shown.compactMap { stat in value(of: stat, locale: locale).map { "\(stat.name) \($0)" } }
+            .joined(separator: ", ")
     }
 }
 
