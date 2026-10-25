@@ -101,11 +101,11 @@ nonisolated struct WeatherAlertSummary: Codable, Equatable, Identifiable, Sendab
     var detailsURL: URL
     /// Who issued it, for the sheet to attribute the warning to somebody.
     var source: String
-    // No end time, because WeatherKit carries none. The only date on a
-    // `WeatherAlert` is `metadata.expirationDate`, which is when the
-    // *response* stops being current, not when the authority lifts the
-    // warning, and nothing here may read it as the latter. A warning stands
-    // for as long as WeatherKit keeps serving it.
+    // No end time, because WeatherKit carries none. An alert's
+    // `metadata.expirationDate` says when the *response* stops being
+    // current, not when the authority lifts the warning, and nothing here
+    // may read it as the latter. A warning stands for as long as WeatherKit
+    // keeps serving it.
 }
 
 /// What `.alerts` said about a place.
