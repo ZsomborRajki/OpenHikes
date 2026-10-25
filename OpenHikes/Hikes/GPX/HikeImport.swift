@@ -233,9 +233,8 @@ enum HikeImport {
 
     /// What one import kept.
     struct Imported {
-        /// One for an ordinary file, one per chosen track for a file of
-        /// several, in the file's order. Never empty: a file that became
-        /// nothing throws.
+        /// One for an ordinary file, one per valid chosen track for a file
+        /// of several, in the file's order.
         let hikes: [Hike]
         /// How many places on the hikes were left out past
         /// ``GPXImport/maximumPlaces`` with nothing having said so before
