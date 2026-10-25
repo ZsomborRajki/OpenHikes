@@ -60,13 +60,22 @@
 //  as it does when a paused recording resumes.
 //
 //  The app's time off screen is one gap of three. A map opened when no map
-//  was showing its trail starts the feed after one too, since the feed has
-//  been down from the moment the last map closed, however far the hiker has
-//  walked since. So does a recording stopped while paused: from the pause
-//  on, nothing was matched, and the last fix is where the hiker paused. Each
-//  is a ``FeedChange/restart``. Only a map that takes over from another one
-//  showing the same trail starts the feed as it stands, because for that map
-//  it never stopped.
+//  was showing its trail starts the feed after one too: nothing has been
+//  matched since the last map closed, or since a recording that outlived it
+//  stopped, however far the hiker has walked meanwhile. So does a recording
+//  stopped while paused: from the pause on, nothing was matched, and the last
+//  fix is where the hiker paused. Each is a ``FeedChange/restart``. Only a
+//  map that takes over from another one showing the same trail starts the
+//  feed as it stands, because for that map it never stopped.
+//
+//  Stop is on the Record tab, and swiping to it takes the map off screen: on
+//  the watchOS 27 simulator its `onDisappear` runs, and swiping back runs its
+//  `.task` again. So a hiker's own Stop finds no map asking, and the map they
+//  swipe back to restarts the feed. A map is still asking at
+//  ``recordingStopped(holding:whilePaused:)`` only when a workout session
+//  fails under it. A restart at the trailhead a loop or an out-and-back ends
+//  at still reads the walk finished, because `WatchRouteTracker` settles a
+//  fix with no course by where the hiker was.
 //
 //  The app leaves the screen when the scene reaches the background, and comes
 //  back when it is active again. `.inactive` lies between the two and moves

@@ -8,6 +8,10 @@
 //  and the guess, kept, held every later fix to its window: a hiker on the way
 //  home was read on the way out, and falling, all the way back.
 //
+//  After a forget the guess goes to the leg the hiker was last on, which is
+//  right for one who has not moved since: a walk resumed where it paused, or
+//  a map gone back to at the trailhead a walk has just finished at.
+//
 
 import Foundation
 @testable import OpenHikesShared
@@ -59,6 +63,46 @@ struct WatchRouteTrackerFirstFixTests {
         #expect(homeward.fractionComplete.isApproximatelyEqual(to: 5.0 / 6, absoluteTolerance: 0.01))
     }
 
+    @Test("After a forget, a fix with no course reads the leg the hiker was last on")
+    func aForgottenPositionSettlesTheGuess() throws {
+        var tracker = WatchRouteTracker(Self.outAndBack)
+        Self.walkHome(to: Self.kilometerOut, on: &tracker)
+        // Paused here, and resumed standing still.
+        tracker.forgetPosition()
+
+        let still = tracker.advance(latitude: Self.latitude, longitude: Self.kilometerOut, courseDegrees: nil)
+        let reading = try #require(still)
+        // The first candidate would be the way out: a sixth of the way along.
+        #expect(reading.fractionComplete.isApproximatelyEqual(to: 5.0 / 6, absoluteTolerance: 0.01))
+    }
+
+    @Test("A walk finished at the trailhead it started from still reads finished after a forget")
+    func aFinishedWalkReadsFinished() throws {
+        var tracker = WatchRouteTracker(Self.outAndBack)
+        for longitude in stride(from: Self.trailhead, through: Self.turn, by: Self.fixSpacing) {
+            _ = tracker.advance(latitude: Self.latitude, longitude: longitude, courseDegrees: Self.east)
+        }
+        Self.walkHome(to: Self.trailhead, on: &tracker)
+        tracker.forgetPosition()
+
+        let still = tracker.advance(latitude: Self.latitude, longitude: Self.trailhead, courseDegrees: nil)
+        let reading = try #require(still)
+        // The first candidate would be the start: the whole trail to walk.
+        #expect(reading.fractionComplete.isApproximatelyEqual(to: 1, absoluteTolerance: 0.01))
+    }
+
+    @Test("A course still outranks where the hiker was before a forget")
+    func aCourseOutranksAForgottenPosition() throws {
+        var tracker = WatchRouteTracker(Self.outAndBack)
+        Self.walkHome(to: Self.kilometerOut, on: &tracker)
+        tracker.forgetPosition()
+
+        // Turned round while nothing was matched, and walking out again.
+        let fix = tracker.advance(latitude: Self.latitude, longitude: Self.kilometerOut, courseDegrees: Self.east)
+        let outbound = try #require(fix)
+        #expect(outbound.fractionComplete.isApproximatelyEqual(to: 1.0 / 6, absoluteTolerance: 0.01))
+    }
+
     // MARK: Fixture
 
     private static let latitude = 47.55
@@ -71,6 +115,7 @@ struct WatchRouteTrackerFirstFixTests {
     /// About 75 m between fixes.
     private static let fixSpacing = 0.001
     /// Clockwise from north, the way `CLLocation.course` reports it.
+    private static let east = 90.0
     private static let west = 270.0
 
     /// Out to the turn and back along the same line, about 6 km in all.
@@ -82,5 +127,13 @@ struct WatchRouteTrackerFirstFixTests {
             totalDistanceMeters: 0,
             points: [trailhead, turn, trailhead].map { WatchTrailPoint(latitude: latitude, longitude: $0) }
         )
+    }
+
+    /// Home from the turn as far as `longitude`, each fix carrying its course,
+    /// so the tracker knows the hiker is on the way back.
+    private static func walkHome(to longitude: Double, on tracker: inout WatchRouteTracker) {
+        for step in stride(from: turn, through: longitude, by: -fixSpacing) {
+            _ = tracker.advance(latitude: latitude, longitude: step, courseDegrees: west)
+        }
     }
 }

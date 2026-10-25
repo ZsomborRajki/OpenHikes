@@ -93,6 +93,36 @@ struct WatchFollowClaimGapTests {
         #expect(outbound.fractionComplete.isApproximatelyEqual(to: 1.0 / 6, absoluteTolerance: 0.01))
     }
 
+    /// Stop is on the Record tab, and swiping to it takes the map off screen,
+    /// so the map a hiker swipes back to after Stop restarts — see
+    /// `WatchFollowClaim`'s header.
+    @Test("The map swiped back to after a Stop at the trailhead reads the walk finished")
+    func mapAfterStopAtTheTrailheadReadsFinished() throws {
+        var claim = WatchFollowClaim()
+        var tracker = WatchRouteTracker(Self.outAndBack(trail))
+        _ = claim.screenAppeared(map, asking: trail, holding: trail, recording: false)
+        // Recorded out to the turn and home: a recording's fixes reach the
+        // tracker whether or not a map is open.
+        for longitude in stride(from: Self.trailhead, through: Self.turn, by: Self.fixSpacing) {
+            _ = tracker.advance(latitude: Self.latitude, longitude: longitude, courseDegrees: Self.east)
+        }
+        for longitude in stride(from: Self.turn, through: Self.trailhead, by: -Self.fixSpacing) {
+            _ = tracker.advance(latitude: Self.latitude, longitude: longitude, courseDegrees: Self.west)
+        }
+
+        // To the Record tab for Stop, and back to the map.
+        _ = claim.screenLeft(map, recording: true)
+        #expect(claim.recordingStopped(holding: trail, whilePaused: false) == .unchanged)
+        let change = claim.screenAppeared(map, asking: trail, holding: trail, recording: false)
+        #expect(change == .restart)
+        if change == .restart { tracker.forgetPosition() }
+
+        // Standing at the trailhead, which is both the start and the finish.
+        let fix = tracker.advance(latitude: Self.latitude, longitude: Self.trailhead, courseDegrees: nil)
+        let finished = try #require(fix)
+        #expect(finished.fractionComplete.isApproximatelyEqual(to: 1, absoluteTolerance: 0.01))
+    }
+
     // MARK: Fixture
 
     private static let latitude = 47.55
