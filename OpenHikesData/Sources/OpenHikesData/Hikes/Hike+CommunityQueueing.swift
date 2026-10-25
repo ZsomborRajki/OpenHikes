@@ -17,7 +17,7 @@
 import Foundation
 
 /// The rule for when an unqueued-submission marker still means anything.
-nonisolated public enum CommunityQueueingMarker {
+nonisolated enum CommunityQueueingMarker {
     /// The submission a hike still owes a review-queue entry for, or `nil`
     /// when there is nothing to finish.
     ///
@@ -47,7 +47,7 @@ nonisolated public enum CommunityQueueingMarker {
     ///   - submissionID: The mirrored column naming the submission this hike
     ///     last sent.
     ///   - resultID: The mirrored column a reviewer's *yes* is written to.
-    public static func pendingID(
+    static func pendingID(
         marker: String?,
         submissionID: String?,
         resultID: String?

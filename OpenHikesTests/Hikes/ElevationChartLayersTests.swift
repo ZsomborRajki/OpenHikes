@@ -40,6 +40,7 @@ import Testing
 
 /// A view holding a binding as a stored property, for the mirror to find.
 private struct HeldBindingProbe: View {
+    // periphery:ignore - read by the mirror, which is the point of it.
     let selection: Binding<Double?>
 
     var body: some View { Color.clear }
@@ -47,6 +48,7 @@ private struct HeldBindingProbe: View {
 
 /// A view keeping a selection in its own state, for the mirror to find.
 private struct HeldSelectionProbe: View {
+    // periphery:ignore - read by the mirror, which is the point of it.
     @State private var selection: Double?
 
     var body: some View { Color.clear }

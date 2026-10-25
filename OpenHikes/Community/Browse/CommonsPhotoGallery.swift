@@ -13,7 +13,6 @@
 //  cover — see ``TrailDraftPhotoHeader``.
 //
 
-import OpenHikesData
 import SwiftUI
 
 struct CommonsPhotoGallery: View {

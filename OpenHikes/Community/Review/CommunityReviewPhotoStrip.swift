@@ -25,7 +25,6 @@
 //
 
 import Algorithms
-import OpenHikesData
 import SwiftUI
 
 struct CommunityReviewPhotoStrip<Subject: CommunityReviewSubject>: View {

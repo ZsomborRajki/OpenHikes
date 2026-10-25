@@ -206,12 +206,17 @@ struct SharedTrailSnapshotTests {
             let offset = Double(step) * 1e-5
             return (latitude: 47.63 + offset, longitude: 12.86 + offset)
         }
+        // The line the phone sends, through the widget's own decimation.
+        let runs = TrailRuns(pointCount: long.count, pauseIndices: [])
+        let line = SharedTrailSnapshot.line(of: long, cutAt: runs) { point in
+            SharedTrailSnapshot.CodableCoordinate(latitude: point.latitude, longitude: point.longitude)
+        }
         let snapshot = SharedTrailSnapshot(
             hikeID: UUID(),
             title: "Very long trail",
             tintHex: "#34C759FF",
             totalDistanceMeters: 90_000,
-            polyline: decimate(long)
+            polyline: line.polyline
         )
         let data = try JSONEncoder().encode(snapshot)
         #expect(data.count < 16_000)

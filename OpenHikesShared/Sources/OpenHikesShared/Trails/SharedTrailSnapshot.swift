@@ -234,38 +234,14 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
     }
 }
 
-// periphery:ignore - exercised by `OpenHikesShared/Tests`, a SwiftPM target
-// the Xcode-scheme scan does not index.
-/// Decimates an ordered coordinate list to at most `maxPoints` by fixed
-/// stride, always keeping the first and last point so the drawn shape's
-/// endpoints match the real route. A widget is only ever a few hundred
-/// pixels wide, so a simple stride is enough — no need for Douglas-Peucker.
-public func decimate(
-    _ coordinates: [(latitude: Double, longitude: Double)],
-    maxPoints: Int = 180
-) -> [SharedTrailSnapshot.CodableCoordinate] {
-    decimate(coordinates, maxPoints: maxPoints) { coord in
-        SharedTrailSnapshot.CodableCoordinate(latitude: coord.latitude, longitude: coord.longitude)
-    }
-}
-
-/// Decimates values that can be projected to coordinates without first
-/// mapping the entire source collection. Long GPX routes therefore transform
-/// only the points the widget will actually keep.
-public func decimate<Element>(
-    _ elements: [Element],
-    maxPoints: Int = 180,
-    transform: (Element) -> SharedTrailSnapshot.CodableCoordinate
-) -> [SharedTrailSnapshot.CodableCoordinate] {
-    decimatedIndices(count: elements.count, maxPoints: maxPoints)
-        .map { transform(elements[$0]) }
-}
-
-/// Which indices ``decimate(_:maxPoints:transform:)`` keeps.
+/// Which of `count` points a line of at most `maxPoints` keeps: a fixed
+/// stride that always keeps the first and the last, so the drawn shape's
+/// endpoints match the real route. A widget is only ever a few hundred pixels
+/// wide, so a simple stride is enough — no need for Douglas-Peucker.
 ///
-/// Extracted so a caller that needs *more than a coordinate* from each kept
-/// point — the watch's trail package wants the elevation there too — takes the
-/// same points rather than reimplementing the stride. Two implementations of
+/// Indices rather than points, so every caller takes the same points however
+/// much it needs from each — the watch's trail package wants the elevation
+/// there too — rather than reimplementing the stride. Two implementations of
 /// one stride is two roundings that have to agree, and the cost of their
 /// disagreeing is a point drawn at one place and labelled with the height of
 /// another.

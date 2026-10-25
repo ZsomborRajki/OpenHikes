@@ -40,6 +40,8 @@ final class LifecycleObservation {
         case willEnterForeground
     }
 
+    // periphery:ignore - held and never read: releasing it is what ends the
+    // observation, as the deinit says.
     /// The typed message's token, which ends the observation itself.
     private let typedToken: Any?
     /// The block-based observer's token, which ``center`` keeps until it is
