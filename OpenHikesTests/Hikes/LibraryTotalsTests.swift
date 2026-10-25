@@ -251,9 +251,9 @@ struct LibraryTotalsTests {
             Self.hike(on: Self.date(2026, 3, 20), meters: 500),
             Self.hike(on: Self.date(2025, 12), meters: 700),
         ])
-        #expect(totals.monthsThisYear[2] == 1500)
-        #expect(totals.monthsThisYear.reduce(0, +) == 1500)
-        #expect(totals.monthsLastYear[11] == 700)
+        #expect(totals.monthsThisYear[2].distanceMeters == 1500)
+        #expect(totals.monthsThisYear.reduce(0) { $0 + $1.distanceMeters } == 1500)
+        #expect(totals.monthsLastYear[11].distanceMeters == 700)
     }
 
     // MARK: A trail redrawn since
@@ -356,6 +356,6 @@ struct LibraryTotalsTests {
         let totals = Self.totals([])
         #expect(totals.allTime.outings == 0)
         #expect(totals.longest == nil)
-        #expect(totals.monthsThisYear == Array(repeating: 0, count: 12))
+        #expect(totals.monthsThisYear.map(\.distanceMeters) == Array(repeating: 0, count: 12))
     }
 }

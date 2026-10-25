@@ -69,6 +69,20 @@
 //  one is left out, and ``WalkSummaryView`` will not draw or climb such a
 //  walk's stretches for the same reason.
 //
+//  ## The months are the hiker's calendar's
+//
+//  The year is the one the hiker's own calendar is in — the screen is
+//  headed with it — and so are its months, rather than a Gregorian January
+//  to December under, say, a Hebrew year's heading. A year is then not
+//  always twelve months: a Hebrew leap year has thirteen (Foundation numbers
+//  Adar I as 6, and a common year skips it, so Elul is 13 in both), every
+//  Ethiopic and Coptic year has thirteen, and a Chinese leap year repeats a
+//  month under the same number. So a year's months are read off the
+//  calendar, one after another from the year's first day to its last, and a
+//  month is its number plus whether it is that repeat. Every outing a year
+//  counts is in one of its bars (#1079), and this year is laid beside last
+//  year month for month, a month only one of them has standing alone.
+//
 //  ## Where it is worked out
 //
 //  Not in a body. Every route in the library is walked once, off the main
@@ -196,13 +210,44 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
         }
     }
 
+    /// One month of the hiker's calendar, as it is laid beside the same month
+    /// of the year before: its number, and whether it is the repeat of that
+    /// number a Chinese leap year inserts after it.
+    struct Month: Hashable, Comparable, Sendable {
+        let number: Int
+        let isLeap: Bool
+
+        static func < (lhs: Self, rhs: Self) -> Bool {
+            (lhs.number, lhs.isLeap ? 1 : 0) < (rhs.number, rhs.isLeap ? 1 : 0)
+        }
+    }
+
+    /// How far was walked in one month of a year.
+    struct MonthDistance: Equatable, Sendable {
+        let month: Month
+        /// The month's span in the calendar, which is what names it: one
+        /// number can be two months, as a Hebrew year's 7 is Adar, or Adar II
+        /// in a leap year.
+        let interval: DateInterval
+        var distanceMeters: Double
+    }
+
+    /// One column of the chart: a month, and what was walked in it in each of
+    /// the two years that has it.
+    struct MonthColumn: Equatable, Sendable {
+        let month: Month
+        let thisYear: MonthDistance?
+        let lastYear: MonthDistance?
+    }
+
     let year: Int
     let thisYear: Figures
     let lastYear: Figures
     let allTime: Figures
-    /// Distance by month, January first, twelve entries each.
-    let monthsThisYear: [Double]
-    let monthsLastYear: [Double]
+    /// Distance by month, in the calendar's order: every month the year has,
+    /// whether or not anything was walked in it — see the file header.
+    let monthsThisYear: [MonthDistance]
+    let monthsLastYear: [MonthDistance]
     let longest: LibraryRecordCandidate?
     let highest: LibraryRecordCandidate?
     let steepest: LibraryRecordCandidate?
@@ -248,6 +293,20 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
         steepest = candidates
             .filter { $0.distanceMeters >= Self.steepestMinimumMeters && ($0.climbMeters ?? 0) > 0 }
             .max { $0.gradient < $1.gradient }
+    }
+
+    /// The chart's columns: every month either year has, in order, with each
+    /// year's distance in it, or `nil` for a year without that month — a
+    /// common Hebrew year has no Adar I to stand beside a leap year's.
+    var monthColumns: [MonthColumn] {
+        let months = Set(monthsThisYear.map(\.month)).union(monthsLastYear.map(\.month)).sorted()
+        return months.map { month in
+            MonthColumn(
+                month: month,
+                thisYear: monthsThisYear.first { $0.month == month },
+                lastYear: monthsLastYear.first { $0.month == month }
+            )
+        }
     }
 
     /// Every outing in the library, by the rules the file header gives.
@@ -307,14 +366,37 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
         hikes.keyed(by: \.hikeID, resolvingConflictsWith: { _, first, _ in first })
     }
 
-    private static func months(of outings: [LibraryOuting], in year: Int, calendar: Calendar) -> [Double] {
-        var months = Array(repeating: 0.0, count: 12)
-        for outing in outings {
-            let parts = calendar.dateComponents([.year, .month], from: outing.date)
-            guard parts.year == year, let month = parts.month, (1...12).contains(month) else { continue }
-            months[month - 1] += outing.distanceMeters
+    /// `year`'s months in `calendar`, each with the distance of the outings in
+    /// it. The months are walked from the year's first day to its last, so a
+    /// month nothing was walked in still has its bar.
+    private static func months(of outings: [LibraryOuting], in year: Int, calendar: Calendar) -> [MonthDistance] {
+        var months: [MonthDistance] = []
+        if let first = calendar.date(from: DateComponents(year: year)),
+           let span = calendar.dateInterval(of: .year, for: first) {
+            var start = span.start
+            while start < span.end, let interval = calendar.dateInterval(of: .month, for: start), interval.end > start {
+                let month = month(of: start, in: calendar)
+                months.append(MonthDistance(month: month, interval: interval, distanceMeters: 0))
+                start = interval.end
+            }
+        }
+        for outing in outings where calendar.component(.year, from: outing.date) == year {
+            let month = month(of: outing.date, in: calendar)
+            if let index = months.firstIndex(where: { $0.month == month }) {
+                months[index].distanceMeters += outing.distanceMeters
+            } else if let interval = calendar.dateInterval(of: .month, for: outing.date) {
+                // A month the walk above did not reach is still the year's,
+                // and an outing the year counts is never left out of its bars.
+                months.append(MonthDistance(month: month, interval: interval, distanceMeters: outing.distanceMeters))
+                months.sort { $0.month < $1.month }
+            }
         }
         return months
+    }
+
+    private static func month(of date: Date, in calendar: Calendar) -> Month {
+        let parts = calendar.dateComponents([.month, .isLeapMonth], from: date)
+        return Month(number: parts.month ?? 0, isLeap: parts.isLeapMonth ?? false)
     }
 }
 

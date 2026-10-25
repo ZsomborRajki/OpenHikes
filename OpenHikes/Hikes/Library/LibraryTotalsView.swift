@@ -175,6 +175,10 @@ private struct LibraryTotalsContent: View {
 /// draws rather than states. This year is the point and wears the tint; last
 /// year is context and is gray. A legend names both, so neither is carried by
 /// colour alone, and every bar speaks its month and distance.
+///
+/// The months are the hiker's calendar's, as many as the two years have —
+/// see ``LibraryTotals`` — and each is named from its own span, so a Hebrew
+/// leap year's seventh month reads Adar II and a common year's Adar.
 private struct LibraryMonthChart: View {
     /// Thin bars, the gap between a month's pair left by their width, and
     /// 4pt rounded tops.
@@ -182,40 +186,61 @@ private struct LibraryMonthChart: View {
     private static let cornerRadius: CGFloat = 4
     private static let height: CGFloat = 180
     private static let lastYearOpacity = 0.5
-    /// What a bar is plotted against. The x axis is categorical, so its
-    /// values have to be twelve distinct ones — the one-letter names are not:
-    /// January, June and July would share a single "J" column.
-    private static let monthKeys = Calendar.autoupdatingCurrent.shortMonthSymbols
-    /// What the axis prints under each key, which only has to fit.
-    private static let monthLabels = Calendar.autoupdatingCurrent.veryShortMonthSymbols
 
     let totals: LibraryTotals
 
     private struct Bar: Identifiable {
-        let month: Int
+        /// What the bar is plotted against. The x axis is categorical, so a
+        /// column needs a value of its own — the one-letter names are not:
+        /// January, June and July would share a single "J" column.
+        let column: String
         let series: String
-        let meters: Double
-        var id: String { "\(series)-\(month)" }
+        let month: LibraryTotals.MonthDistance
+        var id: String { "\(series)-\(column)" }
+    }
+
+    /// One month's column, named from this year's month where it has one.
+    private struct Column {
+        /// What the column's bars are plotted against.
+        let key: String
+        /// What the axis prints under it, which only has to fit.
+        let label: String
+        let months: LibraryTotals.MonthColumn
     }
 
     private var thisYear: String { String(totals.year) }
     private var lastYear: String { String(totals.year - 1) }
 
-    private var bars: [Bar] {
-        (0..<12).flatMap { month in
+    private var columns: [Column] {
+        totals.monthColumns.compactMap { months in
+            guard let named = months.thisYear ?? months.lastYear else { return nil }
+            let date = Self.naming(named)
+            return Column(
+                key: date.formatted(.dateTime.month(.abbreviated)),
+                label: date.formatted(.dateTime.month(.narrow)),
+                months: months
+            )
+        }
+    }
+
+    private func bars(_ columns: [Column]) -> [Bar] {
+        columns.flatMap { column in
             [
-                Bar(month: month, series: lastYear, meters: totals.monthsLastYear[month]),
-                Bar(month: month, series: thisYear, meters: totals.monthsThisYear[month]),
+                column.months.lastYear.map { Bar(column: column.key, series: lastYear, month: $0) },
+                column.months.thisYear.map { Bar(column: column.key, series: thisYear, month: $0) },
             ]
+            .compactMap(\.self)
         }
     }
 
     var body: some View {
         let unit = TotalsFormat.chartUnit
-        Chart(bars) { bar in
+        let drawn = columns
+        let labels = Dictionary(drawn.map { ($0.key, $0.label) }, uniquingKeysWith: { first, _ in first })
+        Chart(bars(drawn)) { bar in
             BarMark(
-                x: .value("Month", Self.monthKeys[bar.month]),
-                y: .value("Distance", Self.value(bar.meters, in: unit)),
+                x: .value("Month", bar.column),
+                y: .value("Distance", Self.value(bar.month.distanceMeters, in: unit)),
                 width: .ratio(Self.barWidth)
             )
             .foregroundStyle(by: .value("Year", bar.series))
@@ -223,16 +248,16 @@ private struct LibraryMonthChart: View {
             .clipShape(
                 UnevenRoundedRectangle(topLeadingRadius: Self.cornerRadius, topTrailingRadius: Self.cornerRadius)
             )
-            .accessibilityLabel("\(Calendar.autoupdatingCurrent.monthSymbols[bar.month]) \(bar.series)")
-            .accessibilityValue(TotalsFormat.distance(bar.meters))
+            .accessibilityLabel("\(Self.naming(bar.month).formatted(.dateTime.month(.wide))) \(bar.series)")
+            .accessibilityValue(TotalsFormat.distance(bar.month.distanceMeters))
         }
         .chartForegroundStyleScale([lastYear: Color.gray.opacity(Self.lastYearOpacity), thisYear: Color.accentColor])
         .chartLegend(position: .top, alignment: .leading)
         .chartXAxis {
             AxisMarks { value in
                 AxisValueLabel {
-                    if let key = value.as(String.self), let month = Self.monthKeys.firstIndex(of: key) {
-                        Text(Self.monthLabels[month])
+                    if let key = value.as(String.self), let label = labels[key] {
+                        Text(label)
                     }
                 }
             }
@@ -240,6 +265,13 @@ private struct LibraryMonthChart: View {
         .chartYAxisLabel(unit.symbol)
         .frame(height: Self.height)
         .accessibilityIdentifier("library-month-chart")
+    }
+
+    /// A moment in the middle of the month, to name it by: its first instant
+    /// would read as the month before in a zone a little west of the one it
+    /// was summed in.
+    private static func naming(_ month: LibraryTotals.MonthDistance) -> Date {
+        month.interval.start.addingTimeInterval(month.interval.duration / 2)
     }
 
     private static func value(_ meters: Double, in unit: UnitLength) -> Double {
