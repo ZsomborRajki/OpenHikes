@@ -133,6 +133,9 @@ final class HikePlacesAroundSearch {
     /// The place whose card is open.
     var selection: UUID?
 
+    /// Where each row of ``found`` sits, by id and by element; told about
+    /// every row appended to it.
+    @ObservationIgnored private var foundIndex = TrailPlaceFoundIndex()
     @ObservationIgnored private var searchedReach: Double?
     @ObservationIgnored private var searchedSymbols: Set<TrailPlaceSymbol> = []
     @ObservationIgnored private var task: Task<Void, Never>?
@@ -223,7 +226,7 @@ final class HikePlacesAroundSearch {
 
     /// The found place `id`, if it was found.
     func row(_ id: UUID) -> TrailPlaceRow? {
-        found.first { $0.id == id }
+        foundIndex.position(of: id).map { found[$0] }
     }
 
     /// Puts one found place on `hike` and saves it. Answers whether it went
@@ -247,25 +250,12 @@ final class HikePlacesAroundSearch {
 
     /// Adds the rows not already found — one of each OpenStreetMap element,
     /// since an area search and the line both answer for the hut between them
-    /// — and answers the ids that now stand for every row given.
+    /// — and answers the ids that now stand for every row given. One pass over
+    /// `rows`, whatever has been found — see ``TrailPlaceFoundIndex``.
     @discardableResult private func merge(_ rows: [TrailPlaceRow]) -> Set<UUID> {
-        var ids: Set<UUID> = []
-        var added: [TrailPlaceRow] = []
-        for row in rows {
-            let key = Self.element(row.place)
-            if let existing = found.first(where: { $0.id == row.id || (key != nil && Self.element($0.place) == key) }) {
-                ids.insert(existing.id)
-            } else if !added.contains(where: { key != nil && Self.element($0.place) == key }) {
-                added.append(row)
-                ids.insert(row.id)
-            }
-        }
-        if !added.isEmpty { found += added }
-        return ids
-    }
-
-    private static func element(_ place: TrailPlace) -> String? {
-        place.osm.map { "\($0.elementType)/\($0.elementID)" }
+        let merge = foundIndex.merge(rows)
+        if !merge.added.isEmpty { found += merge.added }
+        return merge.ids
     }
 
     @concurrent
