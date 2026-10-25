@@ -7,6 +7,8 @@
 //  length.
 //
 
+import Algorithms
+
 nonisolated extension GPXImport {
     /// What a file becomes: its tracks, and how many of its loose waypoints
     /// lay on none of them and were left out — see ``GPXTrackSplit``.
@@ -33,10 +35,15 @@ nonisolated extension GPXImport {
     /// Each track's places are in the file's order, so what one keeps is the
     /// start of its own list, and the file's first ``maximumPlaces`` among all
     /// of them are among each track's own first that many. Only those are
-    /// sorted, which bounds the work by the cap and the number of tracks
-    /// rather than by how many places the file brought.
+    /// candidates, which bounds the work by the cap and the number of tracks
+    /// rather than by how many places the file brought. And of them only the
+    /// file's first ``maximumPlaces`` and one more are wanted, the last being
+    /// where the cut falls, so they are selected rather than all sorted
+    /// (#1083): fifty full tracks offer some ten thousand candidates for the
+    /// two hundred and one read.
     static func placesKept(of tracks: [Track]) -> [Int] {
-        let earliest = tracks.flatMap { $0.placeOffsets.prefix(maximumPlaces + 1) }.sorted()
+        let earliest = tracks.flatMap { $0.placeOffsets.prefix(maximumPlaces + 1) }
+            .min(count: maximumPlaces + 1)
         guard earliest.count > maximumPlaces else { return tracks.map(\.placeOffsets.count) }
         // The first place past the cap: it, and every place after it in the
         // file, is cut.
