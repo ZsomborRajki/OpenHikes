@@ -21,7 +21,11 @@
 //  were measured along, and per place against its id and coordinate: a
 //  rename, a note, a re-kind or a photograph reuses them, an edited or synced
 //  route measures every place again, and a place added or moved measures that
-//  place alone. The rows themselves are rebuilt on every read — sorting a few
+//  place alone. A place beside no walked leg — every leg of a GPX with one
+//  point per `<trkseg>` is a pause — has no anchor to keep, and is kept as
+//  measured all the same: otherwise every read asked again, and past the
+//  budget each answer bumped ``revision`` and woke the read that asked the
+//  next one. The rows themselves are rebuilt on every read — sorting a few
 //  dozen places is nothing — so what they say is always the hike as it is now.
 //
 //  Comparing the route is what makes this both cheap and right. SwiftData
@@ -121,7 +125,7 @@ final class HikePlaceRows {
         // The storage just read, so the next comparison is answered by
         // identity even when this read had to compare element by element.
         entry.route = route
-        let missing = places.filter { entry.anchors[Spot($0)] == nil }
+        let missing = places.filter { !entry.hasMeasured($0) }
         if !missing.isEmpty {
             if (route.count - 1) * missing.count <= budget {
                 entry.record(measure(missing, route), of: missing)
@@ -131,8 +135,7 @@ final class HikePlaceRows {
         }
         // Only what the places are now, so a moved or removed place's old
         // anchor is not kept for a spot nothing stands on.
-        let spots = Set(places.map(Spot.init))
-        entry.anchors = entry.anchors.filter { spots.contains($0.key) }
+        entry.keep(only: Set(places.map(Spot.init)))
         remember(entry, for: owner)
         let known = places.compactMap { place in entry.anchors[Spot(place)].map { (place.id, $0) } }
         // Two rows sharing an id, which nothing writes, keep the first's
@@ -207,11 +210,30 @@ nonisolated private struct Spot: Hashable {
 private struct Measured {
     var route: [RouteCoordinate]
     var anchors: [Spot: TrailPlaceAnchor] = [:]
+    /// The spots measured along `route` that came back with no anchor,
+    /// which only a line with no walked leg answers.
+    var unanchored: Set<Spot> = []
+
+    func hasMeasured(_ place: TrailPlace) -> Bool {
+        let spot = Spot(place)
+        return anchors[spot] != nil || unanchored.contains(spot)
+    }
 
     mutating func record(_ measured: [UUID: TrailPlaceAnchor], of places: [TrailPlace]) {
         for place in places {
-            if let anchor = measured[place.id] { anchors[Spot(place)] = anchor }
+            let spot = Spot(place)
+            if let anchor = measured[place.id] {
+                anchors[spot] = anchor
+                unanchored.remove(spot)
+            } else {
+                unanchored.insert(spot)
+            }
         }
+    }
+
+    mutating func keep(only spots: Set<Spot>) {
+        anchors = anchors.filter { spots.contains($0.key) }
+        unanchored.formIntersection(spots)
     }
 }
 
