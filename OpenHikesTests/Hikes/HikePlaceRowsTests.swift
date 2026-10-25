@@ -241,6 +241,72 @@ struct HikePlaceRowsTests {
         #expect(tally.calls == 1, "the read after the landing has everything it needs")
     }
 
+    // MARK: Places nothing walked reaches
+
+    /// A GPX with one point per `<trkseg>` imports as a line whose every leg
+    /// is a pause, so no place on it has an anchor (see ``RouteBoundary``).
+    private func unwalkedHike(places count: Int = 8) throws -> (Hike, ModelContext) {
+        let route = Self.route().enumerated().map { index, point in
+            var point = point
+            if index > 0 { point.boundary = .paused }
+            return point
+        }
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: route)
+        hike.replacePlaces(with: Self.places(count), in: context)
+        try context.save()
+        return (hike, context)
+    }
+
+    @Test("a place with no anchor is measured once, in the read that needs it")
+    func unanchoredPlaceIsMeasuredOnce() throws {
+        let (hike, _) = try unwalkedHike()
+        let tally = Tally()
+        let rows = Self.rows(tally)
+
+        for _ in 0..<3 {
+            #expect(rows.rows(of: hike).allSatisfy { $0.anchor == nil })
+        }
+        #expect(tally.calls == 1, "measured and found nowhere is still measured")
+        #expect(rows.rows(of: hike) == hike.orderedPlaces)
+
+        hike.replaceRoute(with: Array(Self.route().reversed()))
+        _ = rows.rows(of: hike)
+        #expect(tally.calls == 2, "an edited route measures every place again")
+        #expect(tally.places == 16)
+    }
+
+    /// The finding: past the budget, every landing bumped ``revision`` with
+    /// nothing anchored, the read it woke asked again, and that answer woke
+    /// the next read.
+    @Test("a place with no anchor is measured once off the main thread, and lands once")
+    func unanchoredPlaceLandsOnce() async throws {
+        let (hike, context) = try unwalkedHike()
+        let tally = Tally()
+        let rows = Self.rows(tally, budget: 0)
+
+        _ = rows.rows(of: hike)
+        await settleDelegateHop(until: "the first answer lands") { rows.revision == 1 }
+        for _ in 0..<3 {
+            #expect(rows.rows(of: hike).allSatisfy { $0.anchor == nil })
+        }
+
+        // A place added asks about that place alone, and its answer is the
+        // effect that has to follow anything those reads sent out.
+        let added = TrailPlace(latitude: Line.south + 0.001, longitude: Line.longitude, name: "Trailhead")
+        #expect(hike.addPlace(added, in: context))
+        _ = rows.rows(of: hike)
+        await settleDelegateHop(until: "the added place's answer lands") {
+            rows.revision >= 2 && tally.finished == tally.calls
+        }
+        await settleDelegateHop()
+
+        #expect(tally.calls == 2, "the unchanged reads asked nothing")
+        #expect(tally.places == 9, "the added place was asked about alone")
+        #expect(rows.revision == 2, "one landing per answer, and no more")
+        #expect(tally.onMainThread == 0)
+    }
+
     // MARK: The detached-row guard
 
     @Test("a deleted hike has no places, and nothing is measured")
