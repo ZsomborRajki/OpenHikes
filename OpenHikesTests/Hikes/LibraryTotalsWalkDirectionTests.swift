@@ -85,7 +85,7 @@ struct LibraryTotalsWalkDirectionTests {
         ))
         try context.save()
         let read = try await LibraryTotalsSweep.read(from: container)
-        return LibraryTotals(hikes: read.hikes, walks: read.walks, year: 2026)
+        return LibraryTotals(hikes: read.hikes, walks: read.walks, asOf: walkedAt)
     }
 
     /// Down the whole of a trail that only ever climbs: the share card reads
