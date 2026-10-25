@@ -145,6 +145,48 @@ struct TrailPlaceCorridorPauseTests {
         Self.expectWalkCovered(route, by: areas)
     }
 
+    @Test("many nearby GPX segments share the budget instead of dropping the last walk")
+    func manyNearbyRunsShareACircle() {
+        let route = (0..<32).flatMap { index in
+            let longitude = Walk.west + Double(index) * 0.0001
+            return [
+                RouteCoordinate(latitude: Walk.latitude, longitude: longitude, boundary: .paused),
+                RouteCoordinate(latitude: Walk.north, longitude: longitude),
+            ]
+        }
+        let areas = TrailPlaceCorridorSearch.areas(along: route)
+        let commons = CommonsTrailPhotos.areas(along: route)
+
+        #expect(areas.count == 1)
+        #expect(commons.count == 1)
+        Self.expectWalkCovered(route, by: areas)
+        Self.expectWalkCovered(route, by: commons, beside: CommonsTrailPhotos.corridorMeters)
+    }
+
+    @Test("lone fixes before, between and after walks spend no search requests")
+    func loneFixesDoNotSpendTheBudget() {
+        var start = Walk.before[0]
+        start.boundary = .paused
+        let route = [
+            RouteCoordinate(latitude: Walk.latitude, longitude: Walk.west - 6),
+            start,
+            Walk.before[1],
+            RouteCoordinate(latitude: Walk.latitude, longitude: Walk.west + 3, boundary: .paused),
+            Walk.after[0],
+            Walk.after[1],
+            RouteCoordinate(latitude: Walk.latitude, longitude: Walk.east + 6, boundary: .paused),
+        ]
+        let areas = TrailPlaceCorridorSearch.areas(along: route)
+        let commons = CommonsTrailPhotos.areas(along: route)
+
+        #expect(areas.count == 2)
+        #expect(commons.count == 2)
+        #expect(!Self.asksAboutTheTransfer(areas))
+        #expect(!Self.asksAboutTheTransfer(commons))
+        Self.expectWalkCovered(route, by: areas)
+        Self.expectWalkCovered(route, by: commons, beside: CommonsTrailPhotos.corridorMeters)
+    }
+
     @Test("a line whose only leg is a pause is nothing to ask about")
     func onlyAPauseIsNothing() {
         let route = [Walk.before[0], Walk.after[0]]
