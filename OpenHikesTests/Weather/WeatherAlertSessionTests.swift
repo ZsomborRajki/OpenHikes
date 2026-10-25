@@ -103,6 +103,68 @@ struct WeatherAlertSessionTests {
         #expect(notifier.posted.isEmpty)
     }
 
+    // MARK: Permission
+
+    /// A refused prompt posts nothing, so it must say nothing either: the
+    /// hiker who then allows notifications in Settings and comes back to the
+    /// same walk is still under the same warning.
+    @Test("a refused permission leaves the alert to announce once it is granted")
+    func refusedPermissionDoesNotSpendTheAlert() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+
+        notifier.isAuthorized = false
+        await manager.announceStandingAlerts(during: walk)
+        #expect(notifier.posted.isEmpty)
+
+        notifier.isAuthorized = true
+        await manager.announceStandingAlerts(during: walk)
+        await manager.announceStandingAlerts(during: walk)
+
+        #expect(notifier.postedKinds == [.severeWeather])
+    }
+
+    /// The alert is recorded after `authorize()` returns, so a second pass
+    /// can arrive while the first prompt is still up and find it unsaid. The
+    /// second is answered at once and posts; the first, answered after it,
+    /// must find nothing left. Held by the stub rather than raced, so the
+    /// order is the test's and not the scheduler's.
+    @Test("two attempts overlapping one prompt post one banner")
+    func overlappingAttemptsPostOnce() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+        notifier.holdsThePrompt = true
+
+        let first = Task { await manager.announceStandingAlerts(during: walk) }
+        guard await notifier.awaitPrompt() else { return }
+        await manager.announceStandingAlerts(during: walk)
+        #expect(notifier.postedKinds == [.severeWeather])
+
+        notifier.answerPrompt(allowing: true)
+        await first.value
+
+        #expect(notifier.postedKinds == [.severeWeather])
+        #expect(notifier.authorizationRequests == 2)
+    }
+
+    /// The other order: the held prompt is refused after a second pass was
+    /// granted. The refusal must not undo what the granted pass said.
+    @Test("a refusal answered after a granted overlap posts nothing more")
+    func refusalAfterOverlapPostsNothingMore() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+        notifier.holdsThePrompt = true
+
+        let first = Task { await manager.announceStandingAlerts(during: walk) }
+        guard await notifier.awaitPrompt() else { return }
+        await manager.announceStandingAlerts(during: walk)
+        notifier.answerPrompt(allowing: false)
+        await first.value
+        await manager.announceStandingAlerts(during: walk)
+
+        #expect(notifier.postedKinds == [.severeWeather])
+    }
+
     // MARK: Fixtures
 
     /// A manager with a fresh reading carrying one severe alert on the badge,
@@ -132,8 +194,7 @@ struct WeatherAlertSessionTests {
                     summary: "Severe thunderstorm warning",
                     severity: .severe,
                     detailsURL: URL(string: "https://weather.example/storm-1") ?? URL(filePath: "/"),
-                    source: "Deutscher Wetterdienst",
-                    expires: nil
+                    source: "Deutscher Wetterdienst"
                 ),
             ])
         )
