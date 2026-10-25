@@ -89,6 +89,13 @@ struct TrailWalkRouteRevisionTests {
         #expect(walk.isAlong(timestamps))
     }
 
+    @Test("a boundary on the first point changes no leg and keeps the line")
+    func firstPointBoundaryKeepsTheLine() {
+        #expect(Self.record(along: Self.route).isAlong(Self.pausing(Self.route, at: [0])))
+        let paused = Self.pausing(Self.route, at: [2])
+        #expect(Self.record(along: paused).isAlong(Self.pausing(Self.route, at: [0, 2])))
+    }
+
     /// The hash a route without a pause has always had, so that a walk
     /// stamped before pauses counted is still along its unchanged line.
     @Test("a line with no pause keeps the revision it had before pauses counted")

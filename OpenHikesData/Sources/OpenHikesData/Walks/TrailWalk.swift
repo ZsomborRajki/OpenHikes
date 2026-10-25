@@ -519,13 +519,13 @@ nonisolated public struct TrailWalkRecord: Codable, Equatable, Sendable {
     /// A point that continues the one before it adds its position alone, so
     /// a line with no pause hashes as it did before pauses counted, and the
     /// walks stamped along it still are. A pause adds its raw value after its
-    /// position.
+    /// position, except on the first point: it has no arriving leg to close.
     public static func routeRevision(of route: [RouteCoordinate]) -> String {
         var hasher = StableHasher()
-        for point in route {
+        for (index, point) in route.enumerated() {
             hasher.combine(point.latitude)
             hasher.combine(point.longitude)
-            if let boundary = point.boundary { hasher.combine(boundary.rawValue) }
+            if index > 0, let boundary = point.boundary { hasher.combine(boundary.rawValue) }
         }
         return String(hasher.value, radix: 16)
     }
