@@ -478,9 +478,7 @@ final class MapAreaSearchView: UIView {
         searchButton.accessibilityIdentifier = identifiers.button
         button = searchButton
 
-        let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
-        glass.translatesAutoresizingMaskIntoConstraints = false
-        glass.cornerConfiguration = .capsule()
+        let glass = MapGlass.view(.capsule)
         glass.contentView.addSubview(searchButton)
 
         let noticeCapsule = buildNotice()
@@ -568,9 +566,7 @@ final class MapAreaSearchView: UIView {
         row.spacing = Self.noticePadding
         row.translatesAutoresizingMaskIntoConstraints = false
 
-        let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
-        glass.translatesAutoresizingMaskIntoConstraints = false
-        glass.cornerConfiguration = .corners(radius: .fixed(Self.noticeCornerRadius))
+        let glass = MapGlass.view(.rounded(Self.noticeCornerRadius))
         glass.contentView.addSubview(row)
         // Starts collapsed: there is nothing to report until a search has been
         // refused, and a gap under the pill on launch would be a control

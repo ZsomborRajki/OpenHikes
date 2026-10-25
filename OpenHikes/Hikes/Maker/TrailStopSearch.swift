@@ -44,6 +44,7 @@
 import CoreLocation
 import MapKit
 import Observation
+import OpenHikesShared
 import SwiftUI
 
 /// The sheet: a field, the places it finds, and the hiker's own position.
@@ -91,7 +92,7 @@ struct TrailStopSearchSheet: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(role: .cancel, action: onClose)
+                    RoleButton(.cancel, action: onClose)
                         .accessibilityIdentifier("trail-stop-search-cancel")
                 }
             }

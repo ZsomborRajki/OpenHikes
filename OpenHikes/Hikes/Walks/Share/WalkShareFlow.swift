@@ -13,7 +13,9 @@
 //  the trip because it is remembered rather than held here.
 //
 
+import Algorithms
 import OpenHikesData
+import OpenHikesShared
 import PhotosUI
 import SwiftUI
 
@@ -112,7 +114,7 @@ struct WalkShareFlow: View {
                     .font(.headline)
                     .accessibilityAddTraits(.isHeader)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.thumbnailSide), spacing: 4)], spacing: 4) {
-                    ForEach(photos.enumerated(), id: \.element.id) { index, photo in
+                    ForEach(photos.indexed(), id: \.element.id) { index, photo in
                         Button {
                             Task { await open(photo) }
                         } label: {

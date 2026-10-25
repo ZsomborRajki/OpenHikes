@@ -31,16 +31,15 @@ That is local-first with one deliberate exception. There is no OpenHikes account
 ## Requirements
 
 - Xcode 27 or later — CI builds on Xcode 27.0 (`27A266a`). The phone targets
-  deploy to iOS 27.0, because the trail maker's stops reorder with iOS 27's
-  `reorderable()`; the two local packages, `OpenHikesShared` and
-  `OpenHikesData`, still declare iOS 26. The
-  CodeQL workflow is the one exception and still builds on Xcode 26.6, because
-  CodeQL's Swift extractor does not read Swift 6.4 yet — it builds without the
-  maker's drag, which is the one iOS 27 API in the app.
+  deploy to iOS 18.4, and the two local packages, `OpenHikesShared` and
+  `OpenHikesData`, declare the same floor; *Deployment floor* in
+  [`AGENTS.md`](AGENTS.md) covers how the app reaches newer APIs. The CodeQL
+  workflow is the one exception and still builds on Xcode 26.6, because
+  CodeQL's Swift extractor does not read Swift 6.4 yet.
 - An Apple development team that can sign the WeatherKit entitlement, both App Groups, the iCloud container, the push and Time Sensitive Notifications entitlements and HealthKit.
 - iPhone, plus an optional Apple Watch app. The phone targets set
   `TARGETED_DEVICE_FAMILY = 1`; `OpenHikesWatch` sets `4` and deploys to
-  watchOS 26.0. The watch app is embedded in the phone app, so building the
+  watchOS 11.0. The watch app is embedded in the phone app, so building the
   `OpenHikes` scheme builds it too.
 
 OpenStreetMap is the keyless default and neither Apple option needs a key either. Stadia and Thunderforest require build-time API keys *and* a paid subscription with each vendor, whose terms forbid using them free of charge in a shipping app — in OpenHikes they sit behind a monthly subscription, OpenHikes Pro, which is what pays for them, along with saving a whole route's Stadia map for offline use — Thunderforest's licence reserves pre-caching for a plan this app is not on — and Stadia's elevation for drawn trails, OpenStreetMap routes and hikes imported without heights, which is billed per call too. Everything else in the app, the community feature included, is free. A build without keys shows them locked, and OpenStreetMap keeps working.

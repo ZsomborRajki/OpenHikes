@@ -2544,6 +2544,37 @@ if expect_status 0 \
     pass
 fi
 
+# A pool on the deployment floor: an older runtime pinned, which the newest
+# that runs the same device type must not displace, under a prefix of its own.
+floor_template="A0000000-0000-4000-8000-0000000000f1"
+floor_one="A0000000-0000-4000-8000-000000000101"
+cat > "$work/runtimes-floor.json" <<'EOF'
+{"runtimes":[{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-18-6","supportedDeviceTypes":[{"name":"iPhone 16 Pro"}]},{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-27-0","supportedDeviceTypes":[{"name":"iPhone 16 Pro"},{"name":"iPhone 18 Pro"}]}]}
+EOF
+cat > "$work/devices-floor.txt" <<'EOF'
+== Devices ==
+-- iOS 18.6 --
+EOF
+asset_jobs_table "$floor_template" 0
+STUB_RUNTIMES="$work/runtimes-floor.json" STUB_DEVICES="$work/devices-floor.txt" \
+OPENHIKES_SIM_POOL_PREFIX="OpenHikes Floor" OPENHIKES_SIM_POOL_DEVICE_TYPE="iPhone 16 Pro" \
+OPENHIKES_SIM_POOL_RUNTIME="com.apple.CoreSimulator.SimRuntime.iOS-18-6" \
+STUB_CREATED_UDID="$floor_template" STUB_CLONED_UDID="$floor_one" \
+    run_script "sim-pool builds a pinned runtime's template rather than the newest one's" \
+    "$sim_pool" acquire --owner floor
+if expect_status 0 \
+    && expect_contains "$calls" \
+        "simctl create OpenHikes Template (iPhone 16 Pro, iOS 18.6) iPhone 16 Pro com.apple.CoreSimulator.SimRuntime.iOS-18-6" \
+        "the recorded calls" \
+    && expect_contains "$calls" "simctl clone $floor_template OpenHikes Floor 1" "the recorded calls" \
+    && expect_absent "$calls" "iOS-27-0" "the recorded calls"; then
+    if [[ "$(printf '%s\n' "$output" | tail -n 1)" != "$floor_one" ]]; then
+        fail "did not end its output with the device's UDID" "$output"
+    else
+        pass
+    fi
+fi
+
 echo "Render trace"
 
 # Scripts/render-trace.sh records with Instruments and cannot record here, but

@@ -143,11 +143,11 @@ jobs:
       # the build step's duration in a green run is the number that says
       # whether the headroom arrived.
       #
-      # `IPHONEOS_DEPLOYMENT_TARGET=26.0` because the phone targets deploy to
-      # iOS 27.0 and Xcode 26.6 has no iOS 27 SDK to build against. The one
-      # iOS 27 API the app uses, the maker's `reorderable()`, sits behind
+      # At the project's own deployment floor, iOS 18.4, like every job in
+      # `ci.yml`: an older SDK is no reason to analyse a different build. The
+      # one iOS 27 API the app uses, the maker's `reorderable()`, sits behind
       # `#if compiler(>=6.4)` in `TrailStopReordering.swift`, so this build
-      # compiles the app without it — analysed, never run.
+      # compiles the `onMove` rows that run below iOS 27 instead.
       #
       # Not piped through xcbeautify: this build is an input to the extractor
       # rather than a report for a human, and when extraction goes wrong the
@@ -164,7 +164,6 @@ jobs:
             -jobs 2 \
             ARCHS=arm64 \
             ONLY_ACTIVE_ARCH=NO \
-            IPHONEOS_DEPLOYMENT_TARGET=26.0 \
             COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \

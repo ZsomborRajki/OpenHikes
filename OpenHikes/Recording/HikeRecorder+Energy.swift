@@ -56,7 +56,7 @@ extension HikeRecorder {
     /// Re-evaluates the profile for the rest of the recorder's life, once per
     /// power-state change.
     ///
-    /// An `Observations` sequence rather than the fire-once
+    /// An ``observedValues(_:)`` sequence rather than the fire-once
     /// `withObservationTracking` + re-arm recursion this used to be — and that
     /// ``MapView/Coordinator`` still uses deliberately, because there the
     /// point is to stay synchronous and off SwiftUI's render path.
@@ -68,9 +68,11 @@ extension HikeRecorder {
     /// real handle instead of a dropped closure. And the value has settled by
     /// the time it arrives — `onChange` fires *before* the write lands, which
     /// is why the old body had to hop through `Task { @MainActor in … }` to
-    /// read anything true.
+    /// read anything true. Below iOS 26 the recursion is still underneath, in
+    /// ``EarlierObservations``, but written once and held to its contract by a
+    /// suite rather than once per caller.
     ///
-    /// `dropFirst()` because `Observations` opens by emitting the value it
+    /// `dropFirst()` because the sequence opens by emitting the value it
     /// starts tracking, and this is a change subscription. Re-evaluating on
     /// arrival would be harmless — the session isn't capturing fixes yet at
     /// `init`, and ``updateEnergyProfile()`` returns early — but "only on a
@@ -79,7 +81,7 @@ extension HikeRecorder {
         powerStateObservation?.cancel()
         let monitor = powerMonitor
         powerStateObservation = Task { [weak self] in
-            for await _ in Observations({ monitor.state }).dropFirst() {
+            for await _ in observedValues({ monitor.state }).dropFirst() {
                 guard let self else { return }
                 updateEnergyProfile()
             }

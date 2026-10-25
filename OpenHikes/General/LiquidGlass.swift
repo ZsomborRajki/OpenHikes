@@ -12,6 +12,16 @@
 //  branch that has one — the same "a build away, not a rewrite away" guard
 //  ``glassButtonStyle()`` already uses.
 //
+//  The same stand-in is what lets the app run below iOS 26, where there is no
+//  `Glass` either. There the surface falls back to what iOS 18 itself draws
+//  under a floating control — the regular material, with a tint carried as a
+//  wash over it — and the container, the spacer and the scroll edge fall
+//  back to nothing, because each only refines how glass is drawn. Every one of
+//  those fallbacks is a branch in this file, so a screen never asks. Each
+//  branch is a `return` rather than a view builder's `if`, so each release
+//  gets its own concrete type: a builder would wrap the newer branch in an
+//  `AnyView`, on views the map redraws.
+//
 //  Where glass goes, and where it doesn't: Liquid Glass is the *controls*
 //  layer. Buttons, badges, floating callouts and anything that hovers over the
 //  map or a chart belong on it. The content those controls act on — stat
@@ -78,7 +88,7 @@ struct GlassSurface: Equatable {
 
     #if !os(visionOS)
     /// The SwiftUI value this stands for. Only reachable where `Glass` exists.
-    var resolved: Glass {
+    @available(iOS 26.0, *) var resolved: Glass {
         var glass: Glass = .regular
         if let tintColor {
             glass = glass.tint(tintColor)
@@ -89,6 +99,22 @@ struct GlassSurface: Equatable {
         return glass
     }
     #endif
+
+    /// What stands in for the glass where there is none: the regular
+    /// material, and the tint washed over it, so a recording's red and a
+    /// warning's orange still say what they say.
+    func earlierBackground(in shape: some Shape) -> some View {
+        ZStack {
+            shape.fill(.regularMaterial)
+            if let tintColor {
+                shape.fill(tintColor.opacity(Self.earlierTintOpacity))
+            }
+        }
+    }
+
+    /// How strongly a tint shows through the material below iOS 26 — enough
+    /// to read as the colour, not so much that the text on it loses contrast.
+    private static let earlierTintOpacity = 0.3
 }
 
 /// Groups the glass shapes inside it so they are rendered in one pass and
@@ -112,9 +138,13 @@ struct GlassStack<Content: View>: View {
 
     var body: some View {
         #if os(visionOS)
-        content
+        return content
         #else
-        GlassEffectContainer(spacing: spacing) { content }
+        if #available(iOS 26.0, *) {
+            return GlassEffectContainer(spacing: spacing) { content }
+        } else {
+            return content
+        }
         #endif
     }
 }
@@ -142,9 +172,14 @@ struct GlassToolbarSpacer: ToolbarContent {
 
     var body: some ToolbarContent {
         #if os(visionOS)
-        ToolbarItem(placement: placement) { EmptyView() }
+        return ToolbarItem(placement: placement) { EmptyView() }
         #else
-        ToolbarSpacer(.fixed, placement: placement)
+        if #available(iOS 26.0, *) {
+            return ToolbarSpacer(.fixed, placement: placement)
+        } else {
+            // No glass to split below 26, so the visionOS answer again.
+            return ToolbarItem(placement: placement) { EmptyView() }
+        }
         #endif
     }
 }
@@ -153,17 +188,38 @@ extension View {
     /// Draws `shape` behind this view as Liquid Glass.
     ///
     /// The visionOS branch falls back to `.regularMaterial`, which is what a
-    /// view-level background is there.
-    @ViewBuilder
+    /// view-level background is there, and so does iOS below 26, with the
+    /// surface's tint washed over it.
     func glassSurface(
         _ surface: GlassSurface,
         in shape: some Shape
     ) -> some View {
         #if os(visionOS)
-        background(.regularMaterial, in: shape)
+        return background(.regularMaterial, in: shape)
         #else
-        glassEffect(surface.resolved, in: shape)
+        if #available(iOS 26.0, *) {
+            return glassEffect(surface.resolved, in: shape)
+        } else {
+            return background { surface.earlierBackground(in: shape) }
+        }
         #endif
+    }
+
+    /// Pins `content` to `edge` as chrome over a scrolling screen.
+    ///
+    /// `safeAreaBar` on iOS 26 and later, which gives the bar the system's
+    /// glass and the scroll-edge behaviour that goes with it. Below 26 it is
+    /// the `safeAreaInset` that came before, painting the `.bar` material it
+    /// used to paint on itself.
+    func glassBar(
+        _ edge: VerticalEdge,
+        @ViewBuilder content: () -> some View
+    ) -> some View {
+        if #available(iOS 26.0, *) {
+            return safeAreaBar(edge: edge, content: content)
+        } else {
+            return safeAreaInset(edge: edge) { content().background(.bar) }
+        }
     }
 
     /// Lets a scroll view's content fade into a progressive blur under the bar
@@ -171,13 +227,17 @@ extension View {
     /// navigation bar is drawn to sit on.
     ///
     /// Wrapped for the same reason the rest of this file is: the modifier is
-    /// `@available(visionOS, unavailable)`.
-    @ViewBuilder
+    /// `@available(visionOS, unavailable)`, and iOS 26's. Below 26 the bar is
+    /// not glass and content meets it the way it always has.
     func softScrollEdgeEffect(for edges: Edge.Set) -> some View {
         #if os(visionOS)
-        self
+        return self
         #else
-        scrollEdgeEffectStyle(.soft, for: edges)
+        if #available(iOS 26.0, *) {
+            return scrollEdgeEffectStyle(.soft, for: edges)
+        } else {
+            return self
+        }
         #endif
     }
 }

@@ -77,8 +77,8 @@ final class SignificantLocationFeed: NSObject {
 
     /// The feed as an async sequence, for a poll loop to wake on. Same shape
     /// as ``LocationManager/fixes``.
-    var movements: Observations<CLLocationCoordinate2D?, Never> {
-        Observations { self.coordinate }
+    var movements: some AsyncSequence<CLLocationCoordinate2D?, Never> & Sendable {
+        observedValues { self.coordinate }
     }
 
     /// Publishes a delivery, or drops it.

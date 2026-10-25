@@ -84,7 +84,7 @@ struct CommunitySharePhotoViewer: View {
                 bottomBar(current, choices: choices, currentIndex: currentIndex)
             }
             .navigationTitle(title(currentIndex))
-            .navigationSubtitle(sharedSummary(choices))
+            .navigationSubtitle(sharedSummary(choices), below: title(currentIndex))
             .onAppear {
                 // Assigning the scroll position before the scroll view exists
                 // is ignored, so the opening page is set on the first
@@ -213,6 +213,28 @@ struct CommunitySharePhotoViewer: View {
         let index = currentID.flatMap { id in photos.firstIndex { $0.id == id } }
         guard let target = destination(from: index, by: offset) else { return }
         withAnimation { currentID = photos[target].id }
+    }
+}
+
+private extension View {
+    /// `navigationSubtitle(_:)` on iOS 26 and later. Below 26 there is no
+    /// subtitle, so the bar's middle draws the two lines iOS 18's own apps
+    /// draw there, and the tally still moves with every tick.
+    @ViewBuilder
+    func navigationSubtitle(_ subtitle: String, below title: String) -> some View {
+        if #available(iOS 26.0, *) {
+            navigationSubtitle(subtitle)
+        } else {
+            toolbar {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 0) {
+                        Text(title).font(.headline)
+                        Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
     }
 }
 

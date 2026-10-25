@@ -1,21 +1,21 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-/// Platforms track the app rather than trailing it, as closely as the CodeQL
-/// build allows: the phone targets deploy to iOS 27.0, but CodeQL still builds
-/// the app on Xcode 26.6 with `IPHONEOS_DEPLOYMENT_TARGET=26.0` (see
-/// `codeql.yml`), and the watch app deploys to watchOS 26.0. A shared target
-/// that claimed anything older — iOS 18, say — would be refusing every API
-/// added since, silently, as an unavailability error at the one call site that
-/// reached for one. watchOS is named because `OpenHikesWatch` genuinely builds
-/// against it and reads the payloads, the trail glyph and the formatters from
-/// here; what is iOS-only says so with `#if` — the Live Activity's ActivityKit
-/// conformance and its buttons, the Spotlight half of `HikeEntity`, and the
-/// UIKit haptics. macOS and visionOS are named at the same level for a weaker
-/// reason: nothing builds them today (see the `canImport` guards in the
-/// sources), but if one ever does it should start where the app already is.
-/// `swift test` runs the suite on the macOS host, which CI pins to the
-/// `xcode-27` runner image.
+/// Platforms are the app's own floor, exactly: the phone targets deploy to
+/// iOS 18.4 and the watch app to watchOS 11.0. Higher, and neither could link
+/// this. Lower, and every API added since would be refused here, silently, as
+/// an unavailability error at the one call site that reached for one. An API
+/// newer than the floor is reached through `if #available` with a fallback,
+/// as it is in the app — *Deployment floor* in the repository instructions.
+/// watchOS is named because `OpenHikesWatch` genuinely builds against it and
+/// reads the payloads, the trail glyph and the formatters from here; what is
+/// iOS-only says so with `#if` — the Live Activity's ActivityKit conformance
+/// and its buttons, the Spotlight half of `HikeEntity`, and the UIKit haptics.
+/// macOS and visionOS are named at the same generation, macOS 15.4 and
+/// visionOS 2.4, so that `swift test`, which runs the suite on the macOS host,
+/// refuses the same APIs the iOS build does. Nothing else builds them (see the
+/// `canImport` guards in the sources). CI pins that host to the `xcode-27`
+/// runner image.
 ///
 /// The library has no dependencies, deliberately: every product that links
 /// this package and nothing else — the widget, the watch app, its
@@ -29,10 +29,10 @@ import PackageDescription
 let package = Package(
     name: "OpenHikesShared",
     platforms: [
-        .iOS(.v26),
-        .macOS(.v26),
-        .visionOS(.v26),
-        .watchOS(.v26)
+        .iOS("18.4"),
+        .macOS("15.4"),
+        .visionOS("2.4"),
+        .watchOS(.v11)
     ],
     products: [
         .library(name: "OpenHikesShared", targets: ["OpenHikesShared"])

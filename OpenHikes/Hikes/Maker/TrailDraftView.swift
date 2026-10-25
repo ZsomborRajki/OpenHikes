@@ -148,8 +148,8 @@ struct TrailDraftView: View {
         // lists. A grouped list otherwise paints its own opaque grey over it;
         // the rows keep their own cards either way.
         .scrollContentBackground(.hidden)
-        // The container the rows' `reorderable()` hands a drop to. See
-        // `TrailStopReordering.swift`.
+        // The container the rows' `reorderable()` hands a drop to on iOS 27.
+        // See `TrailStopReordering.swift`.
         .trailStopReorderContainer { moveRows($0, before: $1) }
         // **The camera goes to the drawing that is already there.** A draft
         // outlives the screen it is drawn on — it is on disk between launches —
@@ -186,10 +186,10 @@ struct TrailDraftView: View {
             // Save and close share one glass pill on the trailing edge, the ✕
             // outermost, where Apple Maps puts its own.
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button(role: .confirm, action: saveTapped)
+                RoleButton(.confirm, title: "Save", action: saveTapped)
                     .disabled(!draft.canBeSaved)
                     .accessibilityIdentifier("trail-draft-save")
-                Button(role: .close, action: close)
+                RoleButton(.close, title: "Close", action: close)
                     .accessibilityIdentifier("trail-draft-close")
             }
         }
@@ -282,7 +282,7 @@ struct TrailDraftView: View {
             ForEach(rows) { slot in
                 row(slot, at: rows.firstIndex(of: slot) ?? 0)
             }
-            .trailStopsReorderable()
+            .trailStopsReorderable(rows.map(\.id)) { moveRows($0, before: $1) }
             .listRowInsets(TrailStopRowView.rowInsets)
             .listRowSeparator(.hidden)
             if draft.canBeSaved {

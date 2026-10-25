@@ -19,6 +19,7 @@
 //  modal at a time, so a `.sheet` attached beside it is simply never shown.
 //
 
+import Algorithms
 import OpenHikesData
 import SwiftUI
 
@@ -110,7 +111,7 @@ struct PhotoDiscoverySheet: View {
                 ],
                 spacing: PhotoTileMetrics.spacing
             ) {
-                ForEach(controller.matches.enumerated(), id: \.element.id) { index, match in
+                ForEach(controller.matches.indexed(), id: \.element.id) { index, match in
                     DiscoveredPhotoCell(
                         match: match,
                         controller: controller,
@@ -131,11 +132,12 @@ struct PhotoDiscoverySheet: View {
         // pushes a container's identifier down onto every descendant, which
         // would leave every cell answering to this name instead of its own.
         .accessibilityIdentifier("photo-discovery-grid")
-        // `safeAreaBar` rather than `safeAreaInset`: the bar is chrome over a
+        // A glass bar rather than a `safeAreaInset`: the bar is chrome over a
         // scrolling grid, so it takes the system's Liquid Glass background and
         // the scroll-edge behaviour that goes with it, instead of the flat
-        // `.bar` material it used to paint on itself.
-        .safeAreaBar(edge: .bottom) { selectionBar }
+        // `.bar` material it used to paint on itself — which is what it keeps
+        // below iOS 26. See ``SwiftUI/View/glassBar(_:content:)``.
+        .glassBar(.bottom) { selectionBar }
     }
 
     private var selectionBar: some View {

@@ -75,12 +75,14 @@ struct MapSidePanel<Content: View>: View {
             .frame(width: fillsWindow ? nil : MapSidePanelLayout.width)
             .frame(maxWidth: fillsWindow ? .infinity : nil, maxHeight: .infinity)
             // An overlay has no system sheet material of its own. Use
-            // adaptive glass here too, bounded by the panel's four edges.
+            // adaptive glass here too, bounded by the panel's four edges —
+            // or, below iOS 26, the material ``glassSurface(_:in:)`` stands
+            // in with.
             .background {
                 #if os(visionOS)
                 Color.clear
                 #else
-                Color.clear.glassEffect(
+                Color.clear.glassSurface(
                     .regular,
                     in: .rect(cornerRadius: MapSidePanelLayout.cornerRadius)
                 )

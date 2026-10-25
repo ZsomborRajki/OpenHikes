@@ -77,6 +77,7 @@
 
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 import SwiftUI
 
 /// One submission, and the decision about it.
@@ -247,7 +248,7 @@ private extension CommunityReviewView {
                     .toolbar {
                         ToolbarItemGroup(placement: .keyboard) {
                             Spacer()
-                            Button(role: .confirm) { isEditingTitle = false }
+                            RoleButton(.confirm) { isEditingTitle = false }
                                 .accessibilityIdentifier("keyboard-done")
                         }
                     }

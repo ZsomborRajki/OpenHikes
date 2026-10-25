@@ -110,13 +110,11 @@ nonisolated extension DirectionsTrailLegRouter {
 
     static func request(for ends: TrailLegEnds, mode: TrailTravelMode) -> MKDirections.Request {
         let request = MKDirections.Request()
-        request.source = MKMapItem(
-            location: CLLocation(latitude: ends.start.latitude, longitude: ends.start.longitude),
-            address: nil
+        request.source = .standing(
+            at: CLLocationCoordinate2D(latitude: ends.start.latitude, longitude: ends.start.longitude)
         )
-        request.destination = MKMapItem(
-            location: CLLocation(latitude: ends.end.latitude, longitude: ends.end.longitude),
-            address: nil
+        request.destination = .standing(
+            at: CLLocationCoordinate2D(latitude: ends.end.latitude, longitude: ends.end.longitude)
         )
         request.requestsAlternateRoutes = true
         switch mode {

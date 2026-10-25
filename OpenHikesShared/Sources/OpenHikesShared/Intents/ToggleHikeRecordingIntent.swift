@@ -33,9 +33,9 @@ public enum HikeRecordingControlOutcome: Equatable, Sendable {
     case requiresForegroundAuthorization
 }
 
-public struct ToggleHikeRecordingIntent: AppIntent {
+public struct ToggleHikeRecordingIntent: AppIntent, ForegroundContinuableIntent {
     public static let title: LocalizedStringResource = "Toggle Hike Recording"
-    public static let supportedModes: IntentModes = [
+    @available(iOS 26.0, macOS 26.0, watchOS 26.0, visionOS 26.0, *) public static let supportedModes: IntentModes = [
         .background,
         .foreground(.dynamic),
     ]
@@ -46,13 +46,13 @@ public struct ToggleHikeRecordingIntent: AppIntent {
         // Required for App Intents metadata construction.
     }
 
-    /// - Note: `continueInForeground(_:)` rather than
-    ///   `needsToContinueInForegroundError(_:)`, for the reason the recording
-    ///   intents in the app carry: that error re-*runs* `perform()`, and the
-    ///   re-run would find the same unanswered authorization, because nothing
-    ///   between the two runs asked Core Location. Continuing carries on in
-    ///   the same `perform()`, where the second call is allowed to reach the
-    ///   recorder and let *it* put the prompt up.
+    /// - Note: ``ForegroundContinuableIntent/askToContinueInForeground(_:)``
+    ///   rather than `needsToContinueInForegroundError(_:)`, for the reason the
+    ///   recording intents in the app carry: that error re-*runs* `perform()`,
+    ///   and the re-run would find the same unanswered authorization, because
+    ///   nothing between the two runs asked Core Location. Continuing carries
+    ///   on in the same `perform()`, where the second call is allowed to reach
+    ///   the recorder and let *it* put the prompt up.
     public func perform() async throws -> some IntentResult {
         switch try await recordingControl.toggleHikeRecording(
             canPromptForLocation: false
@@ -60,7 +60,7 @@ public struct ToggleHikeRecordingIntent: AppIntent {
         case .completed:
             return .result()
         case .requiresForegroundAuthorization:
-            try await continueInForeground(
+            try await askToContinueInForeground(
                 IntentDialog(
                     "OpenHikes needs your location before it can record a hike."
                 )

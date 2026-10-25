@@ -30,6 +30,7 @@
 //  built.
 //
 
+import OpenHikesShared
 import SwiftUI
 
 /// A button that closes the presentation it is in, and the only thing that
@@ -44,26 +45,27 @@ import SwiftUI
 /// button underneath, so a caller that needs one attaches it as a modifier
 /// rather than passing it in.
 ///
-/// The system draws it: a role-only `Button`, so its glyph, its styling and
-/// the word VoiceOver says are Apple's own. `.close` for a screen that has
-/// nothing to lose, `.cancel` for one that abandons what was typed into it.
+/// The system draws it on iOS 26 and later: a ``RoleButton``, so its glyph,
+/// its styling and the word VoiceOver says are Apple's own, and the same word
+/// in the toolbar below 26. `.close` for a screen that has nothing to lose,
+/// `.cancel` for one that abandons what was typed into it.
 ///
 /// `before` is the work a screen does on the way out — committing what was
 /// typed, say — run ahead of the dismissal. It is the screen's closure and it
 /// runs on the screen's behalf; only the environment read moves here.
 struct DismissButton: View {
-    private let role: ButtonRole
+    private let role: RoleButton.Role
     private let before: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
 
-    init(role: ButtonRole = .close, before: (() -> Void)? = nil) {
+    init(role: RoleButton.Role = .close, before: (() -> Void)? = nil) {
         self.role = role
         self.before = before
     }
 
     var body: some View {
-        Button(role: role) {
+        RoleButton(role) {
             before?()
             dismiss()
         }

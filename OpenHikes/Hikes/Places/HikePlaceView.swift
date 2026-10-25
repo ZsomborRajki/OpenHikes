@@ -231,7 +231,7 @@ struct HikePlacePhotoStrip: View {
             } else {
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: PhotoTileMetrics.spacing) {
-                        ForEach(photos.enumerated(), id: \.element.id) { index, photo in
+                        ForEach(photos.indexed(), id: \.element.id) { index, photo in
                             Button { onOpen(photo) } label: {
                                 HikePhotoThumbnail(
                                     photo: photo,

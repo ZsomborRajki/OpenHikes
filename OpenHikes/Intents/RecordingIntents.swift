@@ -13,8 +13,9 @@
 //
 
 import AppIntents
+import OpenHikesShared
 
-struct StartHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
+struct StartHikeRecordingIntent: AppIntent, ForegroundContinuableIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Start Hike Recording"
     // periphery:ignore - an optional `AppIntent` requirement, read through the
     // AppIntents metadata rather than by any call site.
@@ -22,13 +23,13 @@ struct StartHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
         "Starts recording a new hike, with the screen off and the phone in your pocket.",
         categoryName: "Recording"
     )
-    static let supportedModes: IntentModes = [.background, .foreground(.dynamic)]
+    @available(iOS 26.0, *) static let supportedModes: IntentModes = [.background, .foreground(.dynamic)]
 
     @Dependency var appCoordinator: HikeIntentCoordinator
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         if await coordinator.authorization.needsForeground {
-            try await continueInForeground(
+            try await askToContinueInForeground(
                 IntentDialog("OpenHikes needs your location before it can record a hike.")
             )
         }
@@ -57,7 +58,7 @@ struct PauseHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
         "Pauses the hike being recorded, and turns the GPS off until you resume.",
         categoryName: "Recording"
     )
-    static let supportedModes: IntentModes = .background
+    @available(iOS 26.0, *) static let supportedModes: IntentModes = .background
 
     @Dependency var appCoordinator: HikeIntentCoordinator
 
@@ -67,14 +68,14 @@ struct PauseHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
     }
 }
 
-struct ResumeHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
+struct ResumeHikeRecordingIntent: AppIntent, ForegroundContinuableIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Resume Hike Recording"
     // periphery:ignore - see `StartHikeRecordingIntent.description`.
     static let description = IntentDescription(
         "Picks the paused hike back up where you left it.",
         categoryName: "Recording"
     )
-    static let supportedModes: IntentModes = [.background, .foreground(.dynamic)]
+    @available(iOS 26.0, *) static let supportedModes: IntentModes = [.background, .foreground(.dynamic)]
 
     @Dependency var appCoordinator: HikeIntentCoordinator
 
@@ -84,7 +85,7 @@ struct ResumeHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
         // and then fails with `.preciseLocationRequired` when it did not land
         // — so it earns the same foreground hand-off.
         if await coordinator.authorization.needsForeground {
-            try await continueInForeground(
+            try await askToContinueInForeground(
                 IntentDialog("OpenHikes needs your location before it can pick your hike back up.")
             )
         }
@@ -100,7 +101,7 @@ struct StopHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
         "Stops the hike being recorded and saves it.",
         categoryName: "Recording"
     )
-    static let supportedModes: IntentModes = .background
+    @available(iOS 26.0, *) static let supportedModes: IntentModes = .background
 
     @Dependency var appCoordinator: HikeIntentCoordinator
 

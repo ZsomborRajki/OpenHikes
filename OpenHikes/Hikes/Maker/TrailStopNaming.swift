@@ -47,13 +47,15 @@
 //  — which is why the answer carries the question back and
 //  ``TrailDraftController`` refuses it for a stop that has moved since.
 //
-//  ## MapKit's own geocoder, not Core Location's
+//  ## MapKit's own geocoder, and Core Location's below iOS 26
 //
-//  `CLGeocoder` is deprecated as of iOS 26 and this project builds with
-//  warnings as errors, so it is not an option here even where it would do.
-//  `MKReverseGeocodingRequest` is the replacement, its completion handler is
-//  declared on the main actor, and ``TrailStopNaming`` is main-actor isolated
-//  to match rather than hopping twice to arrive back where it started.
+//  `MKReverseGeocodingRequest` asks on iOS 26 and later; its completion
+//  handler is declared on the main actor, and ``TrailStopNaming`` is
+//  main-actor isolated to match rather than hopping twice to arrive back
+//  where it started. Below 26 there is no such request, and the question goes
+//  to `CLGeocoder` instead — through ``ReverseGeocode``, which owns the split.
+//  The two answers stand in different places, which is why
+//  ``TrailStopName/here(_:at:)`` reads them by different rules.
 //
 
 import Algorithms
@@ -88,7 +90,7 @@ struct MapKitTrailStopNaming: TrailStopNaming {
         )
         // Failable, for a location MapKit will not accept — the same refusal
         // `MKLocalSearch` makes of a region that is not a place.
-        guard let request = MKReverseGeocodingRequest(location: location) else {
+        guard let request = ReverseGeocode(location: location) else {
             return nil
         }
         return try? await request.mapItems.first
@@ -101,7 +103,8 @@ struct MapKitTrailStopNaming: TrailStopNaming {
 /// half worth asserting on: an `MKMapItem` can be built by hand since iOS 26
 /// (`init(location:address:)`), so a suite can hand this every shape a response
 /// takes without a network call — which is the whole of what
-/// ``MapKitTrailStopNaming`` cannot be asked.
+/// ``MapKitTrailStopNaming`` cannot be asked. The answer below 26 is read
+/// through ``EarlierAnswer``, which a suite can build on any release.
 ///
 /// ## Two questions, two orders, and `name` is not a reliable answer to either
 ///
@@ -146,12 +149,12 @@ nonisolated enum TrailStopName {
     /// and its address only if MapKit declines to name it.
     static func chosen(_ item: MKMapItem?) -> String? {
         guard let item else { return nil }
-        return first(of: [item.name, shortAddress(of: item), item.address?.fullAddress])
+        return first(of: [item.name, shortAddress(of: item), item.fullAddressLine])
     }
 
     /// The whole address, for the place sheet, where there is room for it.
     static func address(of item: MKMapItem) -> String? {
-        first(of: [item.address?.fullAddress, shortAddress(of: item)])
+        first(of: [item.fullAddressLine, shortAddress(of: item)])
     }
 
     /// The best line for a coordinate nobody named — a tap on the map.
@@ -164,18 +167,58 @@ nonisolated enum TrailStopName {
     /// is the area the spot is in rather than anything at it: "Stop 2" is the
     /// honest answer there too, and unlike the area it is never also the name
     /// of the row above.
+    ///
+    /// Below iOS 26 the answer is Core Location's, which stands at the spot
+    /// whatever it describes, so its distance says nothing and ``here(_:)``
+    /// reads the answer itself instead.
     static func here(_ item: MKMapItem?, at coordinate: CLLocationCoordinate2D) -> String? {
         guard let item else { return nil }
+        guard #available(iOS 26.0, *) else {
+            return here(EarlierAnswer(item.placemark))
+        }
         let spot = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         guard item.location.distance(from: spot) <= farthestAnswerMeters else { return nil }
-        return first(of: [shortAddress(of: item), item.address?.fullAddress])
+        return first(of: [shortAddress(of: item), item.fullAddressLine])
+    }
+
+    /// What Core Location says about a spot, in the four fields ``here(_:)``
+    /// reads: its own type, so a suite can hand it the answers measured on
+    /// 2026-10-25 without a network or a release below 26.
+    nonisolated struct EarlierAnswer: Equatable {
+        var name: String?
+        var thoroughfare: String?
+        var areaOfInterest: String?
+        var locality: String?
+    }
+
+    /// The line for a tapped spot below iOS 26.
+    ///
+    /// Core Location places every answer at the spot it was asked about, so
+    /// how far the answer stands — the rule above 26 — says nothing. What it
+    /// *is* says it all. A thing with a name of its own, a summit or a
+    /// station, is what stands there, and so is a street address. An answer
+    /// with neither is the postcode or the municipality the spot is in: the
+    /// forest above the Traunsee came back as "4810", with no street and
+    /// nothing of interest — the same "4810 Gmunden" the distance refuses
+    /// above 26.
+    static func here(_ answer: EarlierAnswer) -> String? {
+        if let feature = answer.areaOfInterest {
+            return first(of: [joined(feature, answer.locality)])
+        }
+        guard let street = answer.thoroughfare else { return nil }
+        return first(of: [joined(answer.name ?? street, answer.locality)])
+    }
+
+    private static func joined(_ place: String, _ locality: String?) -> String {
+        guard let locality, !locality.isEmpty, locality != place else { return place }
+        return "\(place), \(locality)"
     }
 
     /// MapKit's short address, without the empty part it carries for a place
     /// with no street: "Traunstein,, Gmunden" for the summit, measured on
     /// 2026-10-20, where the same answer's full address has no gap.
     private static func shortAddress(of item: MKMapItem) -> String? {
-        item.address?.shortAddress.map { address in
+        item.shortAddressLine.map { address in
             address
                 .split(separator: ",", omittingEmptySubsequences: false)
                 .filter { !$0.allSatisfy(\.isWhitespace) }
@@ -190,6 +233,17 @@ nonisolated enum TrailStopName {
     /// service, which is precisely the unattended input that bound exists for.
     private static func first(of candidates: [String?]) -> String? {
         candidates.firstNonNil { BoundedText.bounded($0, to: .title) }
+    }
+}
+
+nonisolated extension TrailStopName.EarlierAnswer {
+    init(_ placemark: CLPlacemark) {
+        self.init(
+            name: placemark.name,
+            thoroughfare: placemark.thoroughfare,
+            areaOfInterest: placemark.areasOfInterest?.first,
+            locality: placemark.locality
+        )
     }
 }
 

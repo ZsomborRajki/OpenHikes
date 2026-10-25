@@ -124,7 +124,7 @@ final class HikeLiveActivityController {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let clock: @Sendable () -> Date
 
-    /// Where `UIApplication.DidBecomeActiveMessage` is observed. A seam and
+    /// Where the app becoming active is observed. A seam and
     /// nothing more: the app never passes anything but `.default`, and it
     /// covers only the *lifecycle* observation, because
     /// `UserDefaults.didChangeNotification` is posted by the system on

@@ -36,6 +36,7 @@
 //  is called, and when it is allowed to be pressed.
 //
 
+import OpenHikesShared
 import SwiftUI
 
 /// The display name a send is published under.
@@ -138,7 +139,7 @@ struct CommunitySendToolbar: ToolbarContent {
                 ProgressView()
                     .accessibilityLabel("Sending")
             } else if !phase.hasFinished, offersConfirmation {
-                Button(role: .confirm, action: confirm)
+                RoleButton(.confirm, title: "Send", action: confirm)
                     .accessibilityIdentifier(confirmIdentifier)
                     .disabled(!canConfirm)
             }

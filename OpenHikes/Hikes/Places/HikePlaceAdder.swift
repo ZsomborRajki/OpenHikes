@@ -66,7 +66,9 @@
 //  the form cost while it read the draft itself.
 //
 
+import Algorithms
 import OpenHikesData
+import OpenHikesShared
 import SwiftData
 import SwiftUI
 
@@ -127,7 +129,7 @@ struct HikePlaceAdder: View {
         .navigationBarBackButtonHidden()
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button(role: .cancel, action: onCancel)
+                RoleButton(.cancel, action: onCancel)
                     .disabled(session.isAdding)
                     .accessibilityIdentifier("hike-place-adder-cancel")
             }
@@ -351,7 +353,7 @@ private struct HikePlaceAdderAddButton: View {
         if session.isAdding || session.stagingCount > 0 {
             ProgressView()
         } else {
-            Button(role: .confirm, action: add)
+            RoleButton(.confirm, title: "Add", action: add)
                 .accessibilityIdentifier("hike-place-adder-add")
         }
     }
@@ -409,7 +411,7 @@ private struct HikePlaceStagedPhotoStrip: View {
                 ScrollViewReader { tiles in
                     ScrollView(.horizontal) {
                         LazyHStack(spacing: PhotoTileMetrics.spacing) {
-                            ForEach(photos.enumerated(), id: \.element.id) { index, photo in
+                            ForEach(photos.indexed(), id: \.element.id) { index, photo in
                                 tile(photo, label: String(localized: "Photo \(index + 1) of \(photos.count)"))
                             }
                         }

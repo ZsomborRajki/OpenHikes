@@ -43,8 +43,9 @@
 //  Unlike ``WeatherManager/update(for:)``, this one cannot choose:
 //  `MKReverseGeocodingRequest.mapItems` is declared `NS_SWIFT_UI_ACTOR` in the
 //  SDK, so MapKit delivers its answer on the main actor whatever the caller
-//  does. The work itself is a round trip in another process; what arrives here
-//  is a string. ``GeocodedAreaNames`` says the same thing for the same reason
+//  does — and below iOS 26, where ``ReverseGeocode`` asks `CLGeocoder`
+//  instead, that calls back on the main thread too. The work itself is a round
+//  trip in another process; what arrives here is a string. ``GeocodedAreaNames`` says the same thing for the same reason
 //  — two small geocoders rather than one shared abstraction, because they
 //  cancel against different questions and cache on different keys.
 //
@@ -83,12 +84,12 @@ final class GeocodedWeatherPlaceNames: WeatherPlaceNaming {
     /// the sheet, dismisses it and selects another trail wants the second
     /// name, and the first request's answer would otherwise be free to land
     /// after it.
-    private var request: MKReverseGeocodingRequest?
+    private var request: ReverseGeocode?
 
     func place(at coordinate: CLLocationCoordinate2D) async -> WeatherPlaceDescription? {
         request?.cancel()
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        guard let pending = MKReverseGeocodingRequest(location: location) else { return nil }
+        guard let pending = ReverseGeocode(location: location) else { return nil }
         request = pending
         do {
             let items = try await pending.mapItems
@@ -104,7 +105,7 @@ final class GeocodedWeatherPlaceNames: WeatherPlaceNaming {
             // still worth having.
             guard let item = items.first else { return nil }
             return WeatherPlaceDescription(
-                cityName: item.addressRepresentations?.cityName,
+                cityName: item.cityName,
                 timeZone: item.timeZone
             )
         } catch {

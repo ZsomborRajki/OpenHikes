@@ -9,7 +9,9 @@
 //  Both are `@available(visionOS, unavailable)` — glass there is the window's
 //  own material, not a control's — so they are wrapped the same way
 //  ``glassSurface(_:in:)`` wraps `glassEffect`: the guard costs nothing
-//  and keeps the visionOS path a build away rather than a rewrite away.
+//  and keeps the visionOS path a build away rather than a rewrite away. Both
+//  are iOS 26's too, and below 26 they are the bordered styles they replaced,
+//  which is the visionOS answer again.
 //
 //  For a glass *surface* rather than a glass control — a badge, a floating
 //  callout, a tile — see `LiquidGlass.swift`.
@@ -19,24 +21,30 @@ import SwiftUI
 
 extension View {
     /// Standard glass control — the Liquid Glass form of `.bordered`.
-    @ViewBuilder
     func glassButtonStyle() -> some View {
         #if os(visionOS)
-        buttonStyle(.bordered)
+        return buttonStyle(.bordered)
         #else
-        buttonStyle(.glass)
+        if #available(iOS 26.0, *) {
+            return buttonStyle(.glass)
+        } else {
+            return buttonStyle(.bordered)
+        }
         #endif
     }
 
     /// The call to action in its context — the Liquid Glass form of
     /// `.borderedProminent`. Honours an enclosing `.tint()` exactly as the
     /// bordered style did.
-    @ViewBuilder
     func prominentGlassButtonStyle() -> some View {
         #if os(visionOS)
-        buttonStyle(.borderedProminent)
+        return buttonStyle(.borderedProminent)
         #else
-        buttonStyle(.glassProminent)
+        if #available(iOS 26.0, *) {
+            return buttonStyle(.glassProminent)
+        } else {
+            return buttonStyle(.borderedProminent)
+        }
         #endif
     }
 

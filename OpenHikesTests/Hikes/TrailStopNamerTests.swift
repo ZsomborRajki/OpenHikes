@@ -18,6 +18,9 @@ import MapKit
 @testable import OpenHikes
 import Testing
 
+/// Every test is iOS 26's, for the stub's answers, which are `MKMapItem`s
+/// built by hand — and a suite cannot carry `@available` itself. The queue it
+/// exercises is the same code on every release.
 @MainActor
 @Suite("Trail stop namer")
 struct TrailStopNamerTests {
@@ -45,6 +48,7 @@ struct TrailStopNamerTests {
             }
             returned += 1
             guard !answers.isEmpty, let answer = answers.removeFirst() else { return nil }
+            guard #available(iOS 26.0, *) else { return nil }
             return MKMapItem(
                 location: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude),
                 address: MKAddress(fullAddress: answer, shortAddress: answer)
@@ -121,6 +125,7 @@ struct TrailStopNamerTests {
         }
     }
 
+    @available(iOS 26.0, *)
     @Test("a launch with no geocoder asks nothing and says so")
     func withoutASourceNothingIsAsked() {
         let namer = TrailStopNamer(source: nil)
@@ -133,6 +138,7 @@ struct TrailStopNamerTests {
         #expect(!namer.canAsk)
     }
 
+    @available(iOS 26.0, *)
     @Test("a point that already has a name is not asked about")
     func namedPointsAreSkipped() async {
         let stub = Stub()
@@ -149,6 +155,7 @@ struct TrailStopNamerTests {
     }
 
     /// The burst this queue exists to prevent.
+    @available(iOS 26.0, *)
     @Test("three points are three questions, asked one at a time")
     func questionsAreSerialized() async {
         let stub = Stub()
@@ -174,6 +181,7 @@ struct TrailStopNamerTests {
         #expect(named.all == ["One", "Two", "Three"])
     }
 
+    @available(iOS 26.0, *)
     @Test("asking again while a question is open does not ask it twice")
     func asecondPassDoesNotDuplicate() async {
         let stub = Stub()
@@ -203,6 +211,7 @@ struct TrailStopNamerTests {
     /// The same policy a refused leg has, and for the same reason: asking again
     /// on the next tap would spend a request per point to be told the same
     /// thing.
+    @available(iOS 26.0, *)
     @Test("a refusal is not retried by itself")
     func refusalsAreNotRetried() async {
         let stub = Stub()
@@ -223,6 +232,7 @@ struct TrailStopNamerTests {
 
     /// A dragged stop keeps its id and loses its name, so a record kept by id
     /// alone left its row reading "Stop 2" for the rest of the drawing.
+    @available(iOS 26.0, *)
     @Test("a stop that moves is asked about again, where it now stands")
     func aMovedStopIsAskedAgain() async {
         let stub = Stub()
@@ -250,6 +260,7 @@ struct TrailStopNamerTests {
     /// End to end through the controller: the answer for where a stop *was*
     /// lands after it has been dragged, and must not name it; the stop is then
     /// asked about where it stands now.
+    @available(iOS 26.0, *)
     @Test("a dragged stop is named where it now stands, not where it was")
     func aDraggedStopIsNamedWhereItStands() async {
         let stub = Stub()
@@ -282,6 +293,7 @@ struct TrailStopNamerTests {
     /// request when the next one starts. It must neither answer for the new
     /// drawing nor leave the next call starting a second reader beside the
     /// running one — two lookups at once.
+    @available(iOS 26.0, *)
     @Test("a reader that was cleared cannot let a second one start beside the next")
     func aClearedDrainDoesNotDoubleTheNext() async {
         let stub = Stub()
@@ -314,6 +326,7 @@ struct TrailStopNamerTests {
 
     /// A hiker who closes the maker and comes back has plausibly moved, and one
     /// more attempt per point per opening is a bound they set with their thumb.
+    @available(iOS 26.0, *)
     @Test("closing the maker forgets what was asked, so reopening asks again")
     func clearingForgetsTheRecord() async {
         let stub = Stub()

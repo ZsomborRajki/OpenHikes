@@ -32,6 +32,7 @@
 //  between an explanation and a row of broken pictures.
 //
 
+import Algorithms
 import OpenHikesData
 import SwiftUI
 
@@ -130,7 +131,7 @@ struct HikePhotoSection: View {
                 // Enumerated rather than plain, so a tile is handed the
                 // position it is already standing in. See
                 // ``label(for:at:among:)``.
-                ForEach(photos.enumerated(), id: \.element.id) { index, photo in
+                ForEach(photos.indexed(), id: \.element.id) { index, photo in
                     Button {
                         onOpen(photo)
                     } label: {

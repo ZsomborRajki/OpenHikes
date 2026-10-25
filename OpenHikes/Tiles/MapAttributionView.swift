@@ -156,9 +156,7 @@ final class MapAttributionView: UIView {
     /// than the words in it. ``point(inside:with:)`` is what keeps the
     /// overhang tappable.
     private func addGlassBackedButton() {
-        let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
-        glass.translatesAutoresizingMaskIntoConstraints = false
-        glass.cornerConfiguration = .capsule()
+        let glass = MapGlass.view(.capsule)
         // The button above it is the control; a background that swallowed
         // touches would leave the tap target it is centred in unreachable.
         glass.isUserInteractionEnabled = false

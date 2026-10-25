@@ -26,9 +26,9 @@ owns, and it is an exception argued for in *The community feature* in
 ## Setting up
 
 See [Requirements](README.md#requirements) and [Setup](README.md#setup). In
-short: Xcode 27 or later, an iOS 27.0 deployment target, and an Apple
-development team that can sign the WeatherKit entitlement, both App Groups, the
-iCloud container, push, Time Sensitive Notifications and HealthKit.
+short: Xcode 27 or later (the app deploys to iOS 18.4 and watchOS 11.0), and
+an Apple development team that can sign the WeatherKit entitlement, both App
+Groups, the iCloud container, push, Time Sensitive Notifications and HealthKit.
 
 `OpenHikes/Secrets.plist` holds the optional Stadia and Thunderforest keys. It
 is gitignored and **must never be committed** — `cp Secrets.example.plist
