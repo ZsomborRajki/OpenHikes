@@ -57,6 +57,26 @@ struct HikeWorkoutPausesTests {
         #expect(active == 60 + 100)
     }
 
+    /// A fix with a pause either side of it was recorded, but nothing was
+    /// walked to it or from it, so it is no time on the move: the pause it
+    /// interrupts runs on across it.
+    @Test("a fix between two pauses is part of the pause it interrupts")
+    func aLoneFixIsInsideThePause() {
+        let route = [
+            Self.point(0),
+            Self.point(60),
+            Self.point(600, resumes: true),
+            Self.point(1200, resumes: true),
+            Self.point(1260),
+        ]
+        let pauses = HikeWorkoutPauses.pauses(
+            in: route,
+            from: Self.start,
+            to: Self.start.addingTimeInterval(1260)
+        )
+        #expect(pauses == [Self.interval(60, 1200)])
+    }
+
     /// A point with no time says nothing about when, and a route with none
     /// at all says nothing about pauses rather than that the walk was one.
     @Test("points with no timestamp are passed over")

@@ -117,6 +117,20 @@ struct TrailWidgetPauseTests {
         #expect(affordable.allSatisfy { kept.contains($0) && kept.contains($0 + 1) })
     }
 
+    /// A pause named on the first point has nothing before it to have been
+    /// paused across, so it names nothing, and one on the last point names
+    /// the last leg, whether the line keeps every point or is thinned (#1035).
+    @Test("a pause on the first point names nothing, and one on the last names the last leg", arguments: [40, 1000])
+    func pausesAtTheEnds(count: Int) throws {
+        let route = Self.route(count: count, pauses: [0, count - 1])
+        let line = Self.line(route)
+
+        let position = try #require(line.pauseIndices.first)
+        #expect(line.pauseIndices.count == 1)
+        #expect(position == line.polyline.count - 1)
+        #expect(line.polyline[position - 1] == route[count - 2].coordinate)
+    }
+
     @Test("an unpaused route decimates exactly as the plain stride does")
     func unpausedRouteIsTheStride() {
         let route = Self.route(count: 1000, pauses: [])

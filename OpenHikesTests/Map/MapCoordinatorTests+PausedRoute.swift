@@ -13,6 +13,7 @@ import CoreLocation
 import MapKit
 @testable import OpenHikes
 import OpenHikesData
+import OpenHikesShared
 import Testing
 
 // swiftlint:disable no_magic_numbers
@@ -36,6 +37,33 @@ extension MapCoordinatorTests {
 
         let line = try #require(coordinator.routeOverlay)
         #expect(line.pointCount == 6, "the overlay is still the whole route")
+        let renderer = try #require(coordinator.mapView(map, rendererFor: line) as? DirectionalPolylineRenderer)
+        #expect(renderer.pausedLegs == [2])
+        #expect(renderer.runs.map(\.pointCount) == [3, 3])
+    }
+
+    /// The cut comes from the selected hike's own route: a pause named on its
+    /// first point opens nothing, and one arriving at its fourth cuts it there.
+    @Test("a selected hike's pauses reach its renderer")
+    func selectedHikesPausesCutItsLine() throws {
+        let route = (0..<6).map { index in
+            RouteCoordinate(
+                latitude: 47.63,
+                longitude: 12.86 + Double(index) * 0.001,
+                boundary: index == 0 || index == 3 ? .paused : nil
+            )
+        }
+        let hike = Hike(title: "Two Halves", distanceMeters: 300, route: route)
+        let drawn = try #require(DisplayedRoute.forSelection(hike, cache: DisplayedRouteCoordinateCache()))
+        #expect(drawn.runs.pausedLegs == [2])
+
+        let coordinator = MapView.Coordinator()
+        let view = mapView(route: drawn)
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        view.update(map, coordinator)
+
+        let line = try #require(coordinator.routeOverlay)
         let renderer = try #require(coordinator.mapView(map, rendererFor: line) as? DirectionalPolylineRenderer)
         #expect(renderer.pausedLegs == [2])
         #expect(renderer.runs.map(\.pointCount) == [3, 3])

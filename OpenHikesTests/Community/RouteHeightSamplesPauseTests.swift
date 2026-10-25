@@ -121,4 +121,42 @@ struct RouteHeightSamplesPauseTests {
 
         #expect(heights == [600, 600, nil, nil, 1600, 1600, 1600])
     }
+
+    /// A pause right beside a reading: the leg it opens is the first after
+    /// the reading or the last before the next one (#1035). Each reading
+    /// still holds its own side, and nothing on the far side of the pause.
+    @Test("a reading beside a pause holds its own side and nothing past it")
+    func readingsBesideAPause() {
+        func heights(pausedAt pause: Int) -> [Double?] {
+            var line = (0..<5).map { index in
+                RouteCoordinate(latitude: Valley.south + Double(index) * Valley.spacing, longitude: Valley.longitude)
+            }
+            line[pause].boundary = .paused
+            let samples = RouteHeightSamples(
+                routePointCount: line.count,
+                indexes: [0, 4],
+                coordinates: [line[0], line[4]],
+                heights: [Valley.floorMeters, Valley.ridgeMeters]
+            )
+            return samples.interpolating(line).map(\.elevation)
+        }
+
+        #expect(heights(pausedAt: 1) == [600, 1600, 1600, 1600, 1600], "the pause leaves the first reading")
+        #expect(heights(pausedAt: 4) == [600, 600, 600, 600, 1600], "the pause arrives at the second")
+    }
+
+    /// A pause named on the first point has nothing before it to have been
+    /// paused across, so it has no ends to read, and the route is asked
+    /// about exactly as one with no pause is.
+    @Test("a pause named on the first point adds nothing to the request")
+    func pauseOnTheFirstPointIsNotSampled() {
+        var line = Self.route
+        line[0].boundary = .paused
+        line[397].boundary = nil
+
+        #expect(
+            CuratedElevationRequest.sampleIndexes(of: line)
+                == CuratedElevationRequest.sampleIndexes(count: line.count)
+        )
+    }
 }
