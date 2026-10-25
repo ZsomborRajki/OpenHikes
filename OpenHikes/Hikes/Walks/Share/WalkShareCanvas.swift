@@ -221,7 +221,7 @@ struct WalkShareStatsBox: View {
         .fixedSize()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Hike Figures")
-        .accessibilityValue(rows.map { "\($0.0.label) \($0.1)" }.joined(separator: ", "))
+        .accessibilityValue(figures.spokenSummary(of: shown))
     }
 
     private func figure(_ stat: WalkShareStat, _ value: String) -> some View {

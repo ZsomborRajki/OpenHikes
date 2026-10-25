@@ -132,7 +132,9 @@ nonisolated final class AccessibilityLabelUITests: XCTestCase {
 
     /// A caption and a number in the stats strip are one fact, and the caption
     /// is drawn uppercased — which VoiceOver spells out ("A V G Speed") unless
-    /// the label is spoken from the original.
+    /// the label is spoken from the original. The list's two averages are
+    /// captioned "… Avg Speed", which a voice would have to guess at too, and
+    /// are spoken in full.
     @MainActor
     func testStatFiguresReadAsLabelAndValue() {
         let app = launchApp(
@@ -154,6 +156,15 @@ nonisolated final class AccessibilityLabelUITests: XCTestCase {
             (distance.value as? String ?? "").isEmpty,
             "a stat figure's number belongs in its accessibility value"
         )
+
+        // The fixture carries a clock, so both averages are drawn.
+        for spoken in ["Overall Average Speed", "Moving Average Speed"] {
+            let average = app.descendants(matching: .any)
+                .matching(NSPredicate(format: "label == %@", spoken))
+                .firstMatch
+            XCTAssertTrue(scrollUntilVisible(average, in: app), "the detail should speak \"\(spoken)\"")
+            XCTAssertFalse((average.value as? String ?? "").isEmpty, "with its speed as the value")
+        }
     }
 
     /// The graph is a drag target with no leaves of its own, so it is only

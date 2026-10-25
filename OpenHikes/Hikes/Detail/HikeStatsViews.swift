@@ -13,12 +13,17 @@ nonisolated struct Stat: Identifiable, Sendable {
     let id = UUID()
     let label: String
     let value: String
+    /// What VoiceOver reads the figure by, where that is not ``label``:
+    /// "Average Speed" for "Avg Speed" (*Settled decisions* in the repository
+    /// instructions). `nil` reads ``label``.
+    let spokenLabel: String?
     /// Drawn in the card's strip rather than its list — see ``StatSummary``.
     let isHeadline: Bool
 
-    init(_ label: String, _ value: String, headline: Bool = false) {
+    init(_ label: String, _ value: String, spokenAs spokenLabel: String? = nil, headline: Bool = false) {
         self.label = label
         self.value = value
+        self.spokenLabel = spokenLabel
         isHeadline = headline
     }
 }
@@ -41,14 +46,14 @@ struct StatSummary: View {
             if !headline.isEmpty {
                 StatStrip {
                     ForEach(headline) { stat in
-                        StatFigure(label: stat.label, value: stat.value)
+                        StatFigure(stat)
                     }
                 }
             }
             if !details.isEmpty {
                 StatList {
                     ForEach(details) { stat in
-                        StatRow(label: stat.label, value: stat.value)
+                        StatRow(stat)
                     }
                 }
             }
@@ -113,6 +118,8 @@ struct StatFigure: View {
 
     let label: String
     let value: String
+    /// See ``Stat/spokenLabel``.
+    var spokenLabel: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -138,8 +145,16 @@ struct StatFigure: View {
         // is spoken from `label` rather than from the uppercased text above,
         // which VoiceOver would otherwise spell out ("A V G Speed").
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label)
+        .accessibilityLabel(spokenLabel ?? label)
         .accessibilityValue(value)
+    }
+}
+
+extension StatFigure {
+    /// A ``Stat`` whole, so that what it is spoken by comes with it: the
+    /// hike detail drew its figures field by field and dropped that.
+    init(_ stat: Stat) {
+        self.init(label: stat.label, value: stat.value, spokenLabel: stat.spokenLabel)
     }
 }
 
@@ -164,6 +179,8 @@ struct StatRow: View {
 
     let label: String
     let value: String
+    /// See ``Stat/spokenLabel``.
+    var spokenLabel: String?
 
     var body: some View {
         layout {
@@ -186,7 +203,7 @@ struct StatRow: View {
         // accessibility audit reports as a hit area too small to touch.
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label)
+        .accessibilityLabel(spokenLabel ?? label)
         .accessibilityValue(value)
     }
 
@@ -194,6 +211,13 @@ struct StatRow: View {
         dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
+    }
+}
+
+extension StatRow {
+    /// A ``Stat`` whole — see ``StatFigure/init(_:)``.
+    init(_ stat: Stat) {
+        self.init(label: stat.label, value: stat.value, spokenLabel: stat.spokenLabel)
     }
 }
 

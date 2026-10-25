@@ -13,10 +13,10 @@
 //  ``WidgetFormat/speed(metersPerSecond:locale:)``, so an hour's 5 km read
 //  "5.0 km/h" under a word that means time per distance — 12 min/km. The
 //  figure stays a speed and takes the phone's caption for it. The phone's
-//  recording screen draws the same average, distance over the time spent
-//  walking, as "Avg Speed" through the same formatter, and the share card
-//  and the widget's chip say speed too; a watch that alone said pace would
-//  be a second description of one number.
+//  recording screen draws the same average, distance over the time the
+//  recording ran with its pauses taken out, as "Avg Speed" through the same
+//  formatter, and the share card and the widget's chip say speed too; a
+//  watch that alone said pace would be a second description of one number.
 //
 //  ## Why here
 //
@@ -24,7 +24,9 @@
 //  bundle, so which caption each figure takes, and the rounding, live in
 //  this package, where `swift test` reaches them, and the watch target
 //  only words the captions and lays them out. The caption is also what
-//  VoiceOver reads the figure by, so the two cannot part company either.
+//  VoiceOver reads the figure by — in full where the tile shortens it, as
+//  "Average Speed" for "Avg Speed" — and the watch target words both from
+//  the one caption, so the two cannot part company either.
 //
 //  ## A heart rate has an age
 //
@@ -50,8 +52,8 @@ import Foundation
 /// The live figures on the watch's recording screen, each already captioned
 /// and formatted for the locale in force.
 public struct WatchRecordingFigures: Equatable, Sendable {
-    /// One labelled number: the caption drawn under it, which is also its
-    /// accessibility label, and the value.
+    /// One labelled number: the caption drawn under it, which also names it
+    /// to VoiceOver, and the value.
     public struct Figure: Equatable, Sendable {
         public let caption: Caption
         public let value: String
@@ -109,8 +111,8 @@ public struct WatchRecordingFigures: Equatable, Sendable {
         return WidgetFormat.elevation(meters: meters, locale: locale)
     }
 
-    /// A dash until the walk has both a distance and time spent walking to
-    /// divide it by.
+    /// A dash until the walk has both a distance and time on its clock to
+    /// divide it by — see ``WatchWalkAccumulator/averageSpeedMetersPerSecond``.
     private static func speedText(_ metersPerSecond: Double?, locale: Locale) -> String {
         guard let metersPerSecond else { return missing }
         return WidgetFormat.speed(metersPerSecond: metersPerSecond, locale: locale)

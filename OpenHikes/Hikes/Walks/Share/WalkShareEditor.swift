@@ -126,7 +126,7 @@ private struct WalkShareBoxControls: View {
             ForEach(WalkShareStat.menuOrder, id: \.self) { stat in
                 let isOn = shown.contains(stat)
                 Toggle(
-                    stat.label,
+                    stat.name,
                     systemImage: stat.symbol,
                     isOn: Binding(get: { isOn }, set: { _ in model.toggle(stat) })
                 )

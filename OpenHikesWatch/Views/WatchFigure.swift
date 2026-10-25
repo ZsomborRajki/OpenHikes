@@ -33,6 +33,9 @@ struct WatchFigure: View {
     /// draw it and list it nowhere (#1028).
     let title: LocalizedStringKey
     let value: String
+    /// What VoiceOver reads the figure by, where ``title`` is shortened to fit
+    /// the tile. `nil` reads ``title``.
+    var spokenTitle: LocalizedStringKey?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,7 +49,7 @@ struct WatchFigure: View {
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
+        .accessibilityLabel(spokenTitle ?? title)
         .accessibilityValue(value)
     }
 }
@@ -55,6 +58,6 @@ extension WatchFigure {
     /// A figure whose caption and value were decided together, in the shared
     /// package — see ``WatchRecordingFigures``.
     init(_ figure: WatchRecordingFigures.Figure) {
-        self.init(title: figure.caption.label, value: figure.value)
+        self.init(title: figure.caption.label, value: figure.value, spokenTitle: figure.caption.spokenLabel)
     }
 }

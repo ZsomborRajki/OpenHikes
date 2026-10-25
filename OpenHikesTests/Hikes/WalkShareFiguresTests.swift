@@ -65,6 +65,32 @@ struct WalkShareFiguresTests {
         #expect(card.value(of: .completion, locale: Locale(identifier: "en_US")) == "62%")
     }
 
+    /// The box prints the average under "AVG SPEED", which is what a quarter
+    /// of it has room for. The *Figures* menu and VoiceOver have room for the
+    /// name, and say it in full (*Settled decisions*).
+    @Test("the speed is captioned short and named in full; every other figure is named by its caption")
+    func speedIsNamedInFull() {
+        #expect(WalkShareStat.speed.label == "Avg Speed")
+        #expect(WalkShareStat.speed.name == "Average Speed")
+        for stat in WalkShareStat.menuOrder where stat != .speed {
+            #expect(stat.name == stat.label)
+        }
+    }
+
+    @Test("the box is read as the figures it prints, in order, each by its name")
+    func spokenSummaryNamesWhatIsPrinted() throws {
+        let card = figures(ascentMeters: nil)
+        let distance = try #require(card.value(of: .distance, locale: Self.metric))
+        let speed = try #require(card.value(of: .speed, locale: Self.metric))
+
+        // The climb cannot be said, so it is left out of the summary as it is
+        // left off the card.
+        #expect(
+            card.spokenSummary(of: [.distance, .ascent, .speed], locale: Self.metric)
+                == "Distance \(distance), Average Speed \(speed)"
+        )
+    }
+
     /// Over the whole route the walk's climb is the trail's, through the same
     /// accumulator — so the card cannot disagree with the detail screen about
     /// a walk that covered everything.

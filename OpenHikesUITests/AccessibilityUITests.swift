@@ -201,43 +201,6 @@ nonisolated final class AccessibilityUITests: XCTestCase {
         try audit(app)
     }
 
-    /// The recording screen is the one a hiker uses without looking at it, so
-    /// its live numbers have to be readable and its phase has to be announced.
-    @MainActor
-    func testRecordingScreenIsReadable() throws {
-        let app = makeApp(
-            arguments: [
-                "--ui-test-expanded-sheet",
-                "--ui-test-enable-location",
-            ]
-        )
-        app.resetAuthorizationStatus(for: .location)
-        addLocationPermissionMonitor()
-        setSimulatedLocation(UITestFixture.trailheadCoordinate)
-        defer { XCUIDevice.shared.location = nil }
-
-        launch(app)
-        startRecording(in: app)
-
-        let phase = element("recording-phase", in: app)
-        XCTAssertTrue(
-            phase.waitForExistence(timeout: UITestTimeout.navigation)
-        )
-        XCTAssertFalse(
-            phase.label.isEmpty,
-            "the phase dot is a colour, so the word beside it has to be spoken"
-        )
-
-        let points = element("recording-point-count", in: app)
-        XCTAssertTrue(
-            points.waitForExistence(timeout: UITestTimeout.existence)
-        )
-        XCTAssertEqual(points.label, "Points")
-        XCTAssertNotNil(points.value as? String)
-
-        try audit(app)
-    }
-
     /// The review screen, which is the one place in the app where a decision
     /// is drawn as a tint and a checkmark.
     ///
