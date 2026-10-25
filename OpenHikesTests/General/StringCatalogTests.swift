@@ -138,6 +138,36 @@ struct StringCatalogTests {
         #expect(spoken["extractionState"] as? String != "stale")
     }
 
+    /// Words Settings, iCloud sync and offline maps once handed through a
+    /// bare `String`, which drew them verbatim and listed them nowhere
+    /// (#1028). One for each way that happened: a footer joined with `+`, a
+    /// row named through a helper's `String` parameter, a value
+    /// `LabeledContent` drew as it was, a spoken hint, a status a model
+    /// words, a map style's name and its license holder's, and the messages
+    /// an offline download fails with. Put back as a bare literal, each fails
+    /// `sync-string-catalogs.sh --check` only until the next sync deletes its
+    /// key, so, as for the watch's caption above, this reads the catalog that
+    /// sync leaves behind.
+    @Test("the settings, sync and offline-map words are in the app's catalog", arguments: [
+        "The hiking routes are the only map tiles OpenHikes downloads, caches and auto-saves while this is selected.",
+        "Map cache",
+        "Subscribed",
+        "Requires OpenHikes Pro. Opens the unlock screen.",
+        "OpenHikes doesn’t have Always location access, so this can’t run. Turn it on in Settings.",
+        "Sync Off",
+        "Last synced %@.",
+        "Apple Satellite",
+        "Stadia Maps",
+        "Nothing to save.",
+        "Saved %lld of %lld tiles. Try again to finish the download.",
+        "OpenHikes couldn’t read the other hikes’ offline coverage. No tiles were deleted.",
+    ])
+    func settingsWordsReachTheCatalog(key: String) throws {
+        let strings = try Self.catalog(in: "OpenHikes")
+        let entry = try #require(strings[key] as? [String: Any], "\(key) is not in the app's catalog")
+        #expect(entry["extractionState"] as? String != "stale")
+    }
+
     /// The checkout this file was compiled from, which the catalogs and the
     /// lint configuration are read out of.
     private static var sourceRoot: URL {

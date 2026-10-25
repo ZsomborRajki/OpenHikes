@@ -56,11 +56,8 @@ struct BackgroundTrackingSection: View {
             // in common is a switch that is on and a feature that is off, and
             // the only honest way to show that is a line that stays.
             if backgroundTrackingEnabled, !locationManager.hasAlwaysAccess {
-                warning(
-                    "OpenHikes doesn’t have Always location access, so this can’t run. "
-                        + "Turn it on in Settings."
-                )
-                .accessibilityIdentifier("background-tracking-needs-always")
+                warning("OpenHikes doesn’t have Always location access, so this can’t run. Turn it on in Settings.")
+                    .accessibilityIdentifier("background-tracking-needs-always")
             }
             if backgroundTrackingEnabled, UIApplication.shared.backgroundRefreshStatus != .available {
                 warning("Background App Refresh is off, so this may not update while OpenHikes is closed.")
@@ -83,7 +80,9 @@ struct BackgroundTrackingSection: View {
         #endif
     }
 
-    private func warning(_ text: String) -> some View {
+    /// A key, so the warnings written above reach the String Catalog; a
+    /// `String` was drawn by `Label`'s verbatim overload (#1028).
+    private func warning(_ text: LocalizedStringKey) -> some View {
         Label(text, systemImage: "exclamationmark.triangle")
             .font(.caption)
             .foregroundStyle(.orange)

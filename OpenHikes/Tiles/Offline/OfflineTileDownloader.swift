@@ -28,6 +28,9 @@ final class OfflineTileDownloader {
         /// fetched or deleted at this point.
         case needsSpace(SpaceShortfall)
         case finished
+        /// Said to the hiker as it is, so each site words it with
+        /// `String(localized:)`: a bare literal here was drawn but never
+        /// reached the String Catalog (#1028).
         case failed(String)
     }
 
@@ -224,15 +227,15 @@ final class OfflineTileDownloader {
     ) {
         guard phase != .downloading else { return }
         guard source.permitsBulkDownload else {
-            phase = .failed("This map source doesn’t allow offline downloads.")
+            phase = .failed(String(localized: "This map source doesn’t allow offline downloads."))
             return
         }
         guard route.count > 1 else {
-            phase = .failed("No route to save.")
+            phase = .failed(String(localized: "No route to save."))
             return
         }
         guard isOnline() else {
-            phase = .failed("You’re offline — connect to save tiles.")
+            phase = .failed(String(localized: "You’re offline — connect to save tiles."))
             return
         }
 
@@ -307,7 +310,7 @@ final class OfflineTileDownloader {
         let tiles = plan.tiles
         footprint = plan.footprint
         guard !tiles.isEmpty else {
-            phase = .failed("Nothing to save.")
+            phase = .failed(String(localized: "Nothing to save."))
             finishPlanning()
             return
         }

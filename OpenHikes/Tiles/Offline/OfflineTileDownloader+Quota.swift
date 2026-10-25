@@ -190,15 +190,19 @@ extension OfflineTileDownloader {
             let name = license.holder
             let limit = ByteCountFormatter.string(fromByteCount: space.limit, countStyle: .file)
             return savedCount == 0
-                ? "Saved maps from \(name) are full. Its license allows \(limit) of saved tiles on "
-                    + "this device, across all its map styles — delete another saved map to make room."
-                : "Saved \(savedCount) of \(plannedCount) tiles, then reached the \(limit) "
-                    + "\(name) allows on this device across all its map styles. Delete another "
-                    + "saved map to make room."
+                ? String(localized: """
+                    Saved maps from \(name) are full. Its license allows \(limit) of saved tiles on \
+                    this device, across all its map styles — delete another saved map to make room.
+                    """)
+                : String(localized: """
+                    Saved \(savedCount) of \(plannedCount) tiles, then reached the \(limit) \
+                    \(name) allows on this device across all its map styles. Delete another \
+                    saved map to make room.
+                    """)
         }
         return savedCount == 0
-            ? "Couldn’t save any tiles. Check your connection and try again."
-            : "Saved \(savedCount) of \(plannedCount) tiles. Try again to finish the download."
+            ? String(localized: "Couldn’t save any tiles. Check your connection and try again.")
+            : String(localized: "Saved \(savedCount) of \(plannedCount) tiles. Try again to finish the download.")
     }
 
 }

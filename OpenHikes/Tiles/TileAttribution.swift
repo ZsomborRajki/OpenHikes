@@ -16,6 +16,11 @@
 //
 //  A plain `String` could satisfy none of that, which is what this replaces.
 //
+//  The credits are not localized, and deliberately so. Each is worded the way
+//  its provider's terms word it — "Maps ©", "Data ©", "OpenStreetMap
+//  contributors" — so translating one is a question for those terms rather
+//  than for a translator (#1028).
+//
 
 import Foundation
 

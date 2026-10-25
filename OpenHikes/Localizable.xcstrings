@@ -38,6 +38,16 @@
         }
       }
     },
+    "%@ allows %@ of saved maps on this device, across all its map styles, and that’s already in use. Saving this route will delete about %@ of your least-recently-used saved tiles, whichever of its styles they were saved in.\n\nThe hikes they belong to keep their routes, and their maps refill the next time you view them online." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ allows %2$@ of saved maps on this device, across all its map styles, and that’s already in use. Saving this route will delete about %3$@ of your least-recently-used saved tiles, whichever of its styles they were saved in.\n\nThe hikes they belong to keep their routes, and their maps refill the next time you view them online."
+          }
+        }
+      }
+    },
     "%@ along the route" : {
 
     },
@@ -614,11 +624,23 @@
     "Anything that helps decide quickly — which photo, which part of the route." : {
 
     },
+    "Apart from the previews above, OpenHikes downloads, caches and auto-saves no map tiles while this is selected, so it uses the least battery and data — but the map needs a signal where the system hasn’t already cached it. Tiles already saved by other sources are kept, and listed below." : {
+
+    },
+    "Apart from the previews above, OpenHikes downloads, caches and auto-saves no map tiles while this is selected. Apple streams the imagery itself and none of it can be saved for offline use, so the map needs a signal. Tiles already saved by other sources are kept, and listed below." : {
+
+    },
+    "Apple Maps" : {
+      "comment" : "The name of a map style in Settings"
+    },
     "Apple Maps directions are unavailable. Try again." : {
 
     },
     "Apple Maps is busy. Try again later." : {
 
+    },
+    "Apple Satellite" : {
+      "comment" : "The name of a map style in Settings"
     },
     "Apple Weather has no severe-weather source for this area." : {
 
@@ -638,6 +660,9 @@
     "Ask for Removal First" : {
 
     },
+    "Asking iCloud whether it’s available on this device." : {
+
+    },
     "At least one photo couldn’t be added to this hike. It’s still in your photo library." : {
 
     },
@@ -651,6 +676,9 @@
 
     },
     "Back to the %@" : {
+
+    },
+    "Background App Refresh is off, so this may not update while OpenHikes is closed." : {
 
     },
     "Background Tracking" : {
@@ -741,6 +769,12 @@
 
     },
     "Check Whether It’s Still Live" : {
+
+    },
+    "Checking iCloud…" : {
+
+    },
+    "Checking your subscription." : {
 
     },
     "Choose a Photo" : {
@@ -852,6 +886,9 @@
 
     },
     "Couldn’t reset" : {
+
+    },
+    "Couldn’t save any tiles. Check your connection and try again." : {
 
     },
     "Couldn’t Save Photo" : {
@@ -990,6 +1027,9 @@
 
     },
     "Done Reordering" : {
+
+    },
+    "Downloaded the map, but couldn’t record it for this hike. Try again." : {
 
     },
     "Drinking Water" : {
@@ -1225,6 +1265,9 @@
     "Hiking Routes" : {
 
     },
+    "Hillshaded terrain in natural colors, a softer look than Stadia Outdoors. Offline downloads are allowed, sharing Stadia’s 100 MB of saved tiles on this device with Stadia Outdoors." : {
+
+    },
     "Hours" : {
 
     },
@@ -1232,6 +1275,15 @@
 
     },
     "iCloud" : {
+
+    },
+    "iCloud hasn’t finished this yet. It will catch up on its own." : {
+
+    },
+    "iCloud hasn’t finished this yet. It will catch up on its own. Last synced %@." : {
+
+    },
+    "iCloud Restricted" : {
 
     },
     "If no message opened — no mail account set up, or you closed the draft — copy this and send it yourself." : {
@@ -1323,6 +1375,9 @@
     "Last Hike" : {
 
     },
+    "Last synced %@." : {
+
+    },
     "Leave out any photo that shouldn’t be published. The rest still go." : {
 
     },
@@ -1407,6 +1462,9 @@
     "Make a Trail" : {
 
     },
+    "Map cache" : {
+
+    },
     "Map Tiles" : {
 
     },
@@ -1419,6 +1477,9 @@
     "Maps marked “Needs API key” aren’t available in this build." : {
 
     },
+    "Maps with a lock are commercial map services that bill OpenHikes for every map view, every month. Subscribing pays for that, and keeps the free OpenStreetMap option free." : {
+
+    },
     "Mark a Place" : {
 
     },
@@ -1426,6 +1487,9 @@
 
     },
     "matched by both time and place" : {
+
+    },
+    "Measuring" : {
 
     },
     "measuring the climb" : {
@@ -1527,6 +1591,9 @@
     "No" : {
 
     },
+    "No Apple Account" : {
+
+    },
     "No community hikes here" : {
 
     },
@@ -1584,6 +1651,9 @@
     "No route found for this travel mode" : {
 
     },
+    "No route to save." : {
+
+    },
     "No Shared Photos From This Hike" : {
 
     },
@@ -1638,10 +1708,16 @@
     "Nothing to Restore" : {
 
     },
+    "Nothing to save." : {
+
+    },
     "Nothing written." : {
 
     },
     "Nothing yet. Add photos to this hike and they can go on %@ for other hikers to see." : {
+
+    },
+    "Notices when a paused hike has moved half a kilometer — or a quarter of one at cycling pace — and asks whether you meant to resume, with a button that does it without unlocking the phone. It also offers to pause a recording you have not moved on for fifteen minutes. A paused recording is watched either way: with Always location access that costs nothing, and without it the pause keeps a coarse location feed running. A paused hike along a trail starts no feed of its own — it is watched while OpenHikes is open, and behind it only with Background Trail Tracking on, so a pocketed phone may not be reminded." : {
 
     },
     "NW" : {
@@ -1723,7 +1799,16 @@
     "OpenHikes couldn’t reach Apple Weather. It will try again automatically." : {
 
     },
+    "OpenHikes couldn’t read the other hikes’ offline coverage. No tiles were deleted." : {
+
+    },
+    "OpenHikes couldn’t record the change, so no tiles were deleted. This hike’s saved map is still on your device. Try again." : {
+
+    },
     "OpenHikes couldn’t store the photo you just took, so it hasn’t been added to this hike. Check that your device has free space and try again." : {
+
+    },
+    "OpenHikes doesn’t have Always location access, so this can’t run. Turn it on in Settings." : {
 
     },
     "OpenHikes keeps photo files on the device they were added on — only where and when the photo was taken travels with the hike." : {
@@ -1782,6 +1867,9 @@
     },
     "Opens the trail, where the hike can be paused or ended." : {
 
+    },
+    "OpenStreetMap" : {
+      "comment" : "The name of a map style in Settings"
     },
     "OpenStreetMap has nothing of these kinds here. Move the map to look somewhere else." : {
 
@@ -1971,6 +2059,9 @@
     "Photos waiting for review" : {
 
     },
+    "Photos you take on a hike are always kept in OpenHikes and shown with that hike. Turn this on to put a copy in your photo library too, stamped with when and where you took it. You’ll be asked for permission the first time one is saved." : {
+
+    },
     "Photos you take on this hike appear here." : {
 
     },
@@ -2089,6 +2180,12 @@
     "Puts this photo back" : {
 
     },
+    "Puts your distance, elapsed time and progress along the trail on the Lock Screen and in the Dynamic Island while you are recording or following a hike. iOS Settings › OpenHikes can turn these off for the app entirely." : {
+
+    },
+    "Quit and reopen OpenHikes to finish changing this setting." : {
+
+    },
     "Read the ground you hike on" : {
 
     },
@@ -2188,7 +2285,13 @@
     "Reports the most recent hike you finished." : {
 
     },
+    "Requires OpenHikes Pro. Opens the unlock screen." : {
+
+    },
     "Reset" : {
+
+    },
+    "Restart to Apply" : {
 
     },
     "Restore Purchases" : {
@@ -2239,6 +2342,9 @@
     "S" : {
 
     },
+    "Satellite imagery with road and place names. Shows forest, rock and clearings, but needs a connection: none of it can be saved for offline use." : {
+
+    },
     "Save" : {
 
     },
@@ -2257,7 +2363,43 @@
     "Saved" : {
 
     },
+    "Saved %lld of %lld tiles, then reached the %@ %@ allows on this device across all its map styles. Delete another saved map to make room." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saved %1$lld of %2$lld tiles, then reached the %3$@ %4$@ allows on this device across all its map styles. Delete another saved map to make room."
+          }
+        }
+      }
+    },
+    "Saved %lld of %lld tiles. Try again to finish the download." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saved %1$lld of %2$lld tiles. Try again to finish the download."
+          }
+        }
+      }
+    },
+    "Saved for offline" : {
+
+    },
     "Saved Hikes Unavailable" : {
+
+    },
+    "Saved maps from %@ are full. Its license allows %@ of saved tiles on this device, across all its map styles — delete another saved map to make room." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saved maps from %1$@ are full. Its license allows %2$@ of saved tiles on this device, across all its map styles — delete another saved map to make room."
+          }
+        }
+      }
+    },
+    "Saved tiles keep your hikes usable without a signal. The map cache is just what you’ve recently looked at — it’s kept under %@, oldest first, and clearing it costs you nothing offline. Photos are only removed when you delete them, or the hike they belong to." : {
 
     },
     "Says how far and how long you are into the hike you are recording." : {
@@ -2303,6 +2445,9 @@
 
     },
     "Sending" : {
+
+    },
+    "Sending and receiving your hikes and photo details." : {
 
     },
     "Sent %@" : {
@@ -2392,6 +2537,9 @@
     "Shows where this photo comes from and its license" : {
 
     },
+    "Sign in to iCloud in the Settings app to sync your hikes across your devices." : {
+
+    },
     "Skip" : {
 
     },
@@ -2414,6 +2562,18 @@
 
     },
     "SSW" : {
+
+    },
+    "Stadia Maps" : {
+      "comment" : "The company whose license limits saved map tiles"
+    },
+    "Stadia Outdoors" : {
+      "comment" : "The name of a map style in Settings"
+    },
+    "Stamen Terrain" : {
+      "comment" : "The name of a map style in Settings"
+    },
+    "Standard street map. Its tile policy disallows bulk downloads, so viewed tiles are auto-saved for offline use instead." : {
 
     },
     "Start" : {
@@ -2455,6 +2615,9 @@
     "Stops the hike being recorded and saves it." : {
 
     },
+    "Stops the screen dimming while you are on the recording screen, or on a trail you are hiking. Only while OpenHikes is open and the hike is under way — the screen locks as usual everywhere else, and once the phone is back in your pocket. The display is the hungriest thing on the device, so leave this off unless you are navigating with the map in your hand." : {
+
+    },
     "Strikes this photo off" : {
 
     },
@@ -2462,6 +2625,9 @@
 
     },
     "Submission" : {
+
+    },
+    "Subscribed" : {
 
     },
     "Summit" : {
@@ -2473,7 +2639,19 @@
     "SW" : {
 
     },
+    "Sync Off" : {
+
+    },
+    "Sync Problem" : {
+
+    },
     "Sync with iCloud" : {
+
+    },
+    "Synced with iCloud" : {
+
+    },
+    "Syncing…" : {
 
     },
     "Take a photo of this trail" : {
@@ -2531,6 +2709,16 @@
     "That place couldn’t be found. Try another search." : {
 
     },
+    "The %@ license allows %@ of saved tiles on this device, shared by %@. Once that’s used, saving a new route asks before replacing your least-recently-used saved tiles. Other sources are unlimited." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The %1$@ license allows %2$@ of saved tiles on this device, shared by %3$@. Once that’s used, saving a new route asks before replacing your least-recently-used saved tiles. Other sources are unlimited."
+          }
+        }
+      }
+    },
     "The %@ reaches the reviewer only once you send it there." : {
 
     },
@@ -2541,6 +2729,9 @@
 
     },
     "The hike itself isn’t reported — only the photo somebody added to it." : {
+
+    },
+    "The hiking routes are the only map tiles OpenHikes downloads, caches and auto-saves while this is selected." : {
 
     },
     "The maker holds one trail at a time, and the one you left half-drawn will be discarded." : {
@@ -2561,6 +2752,9 @@
     "The photos are off the hike for everybody, but the copy stored with their submission couldn’t be deleted. %@ To finish, take them down again before leaving this photo — once you leave, the app can’t reach that copy." : {
 
     },
+    "The policy and the terms open in your browser, and are the ones the App Store listing links too. Share feedback, suggestions, or report an issue on GitHub — the version above says which build you’re on." : {
+
+    },
     "The published copy stays in the community; deleting this hike does not take it down." : {
 
     },
@@ -2574,6 +2768,9 @@
 
     },
     "The shared copy shows the route before your edit. Ask for its removal, then share this one." : {
+
+    },
+    "The system’s built-in map. Downloads no tiles and saves nothing to disk, so it uses the least battery and data." : {
 
     },
     "Their community hikes don’t appear on this device. Blocking is kept on this device only, and doesn’t remove anything for anyone else — to have a hike taken down, report it from the hike’s own screen." : {
@@ -2603,6 +2800,9 @@
     "This came from an imported GPX file, which records where a photo was taken but cannot carry the photo itself. Its place on the trail is on the map." : {
 
     },
+    "This device’s settings don’t allow iCloud, so hikes stay on this device." : {
+
+    },
     "This hike is already in your list." : {
 
     },
@@ -2622,6 +2822,9 @@
 
     },
     "This is wider than a search reaches." : {
+
+    },
+    "This map source doesn’t allow offline downloads." : {
 
     },
     "This photo couldn’t be opened." : {
@@ -2657,6 +2860,9 @@
     "This was sent and has not been published yet." : {
 
     },
+    "Thunderforest Outdoors" : {
+      "comment" : "The name of a map style in Settings"
+    },
     "Time" : {
 
     },
@@ -2682,6 +2888,12 @@
 
     },
     "Top right" : {
+
+    },
+    "Topographic map tuned for hiking, with contour lines and trails. Offline downloads are allowed, sharing Stadia’s 100 MB of saved tiles on this device with Stamen Terrain." : {
+
+    },
+    "Topographic map with deep zoom for sharp close-up detail. Its plan disallows bulk downloads, so viewed tiles are auto-saved for offline use instead." : {
 
     },
     "Totals" : {
@@ -2765,6 +2977,9 @@
     "W" : {
 
     },
+    "Waiting for iCloud" : {
+
+    },
     "Waiting for review" : {
 
     },
@@ -2834,6 +3049,9 @@
     "WNW" : {
 
     },
+    "Writes each hike you finish recording to the Health app as a hiking workout, with its distance, time, climb and route — so it counts towards your rings and sits beside your other activity. Deleting a hike removes its workout from Health too. OpenHikes reads nothing from Health on your iPhone; on Apple Watch a recording reads your heart rate to show it while you hike. You’ll be asked for permission the first time a hike is saved." : {
+
+    },
     "WSW" : {
 
     },
@@ -2847,6 +3065,9 @@
 
     },
     "You don’t have to give a reason. It’s your hike." : {
+
+    },
+    "You’re offline — connect to save tiles." : {
 
     },
     "You’ve already added photos from this hike. Sending again adds a second set beside the first — it doesn’t replace it, and this app can’t take that one down. Ask for it to be removed from this hike’s own screen." : {
@@ -2870,6 +3091,15 @@
     "Your Hikes" : {
 
     },
+    "Your hikes and photo details are kept in your private iCloud storage. Photo files stay on the device they were added on." : {
+
+    },
+    "Your hikes lose their offline maps, and the map cache is cleared too. Tiles re-download when you view maps online again." : {
+
+    },
+    "Your hikes stay on this device only." : {
+
+    },
     "Your library couldn’t be read just now." : {
 
     },
@@ -2886,6 +3116,9 @@
 
     },
     "Your photos are uploaded, but the request for a person to review them didn’t go through, so they won’t appear on this trail yet. Finishing sends only that request — nothing is uploaded again." : {
+
+    },
+    "Your recorded and imported hikes, and where and when each of their photos was taken, are kept in your private iCloud storage and appear on your other devices. The photo files themselves are not — they stay on the device they were added on, as downloaded maps stay on the device that downloaded them." : {
 
     },
     "Your report opens in your mail app so you can send it. You don’t need an account to report a hike." : {
