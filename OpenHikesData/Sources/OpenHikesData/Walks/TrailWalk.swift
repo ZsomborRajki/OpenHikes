@@ -504,16 +504,28 @@ nonisolated public struct TrailWalkRecord: Codable, Equatable, Sendable {
         return stamped
     }
 
-    /// The line `route` draws, as a stable hash of its coordinates.
+    /// The line `route` draws, as a stable hash of its coordinates and of
+    /// where its pauses fall.
     ///
-    /// Positions only. A height filled in or a timestamp dropped leaves every
-    /// distance along the route where it was, and ending a walk over one
-    /// would end it for an edit that changed nothing it measures.
+    /// Everything that places a distance along the route, and nothing else. A
+    /// pause is in it although it moves no point: the leg it opens is no
+    /// distance (``RouteCoordinate/legMeters(from:)``), so adding, dropping or
+    /// moving one moves every metre after it, and a walk's stretches read
+    /// against the other version would land somewhere else (#1080). A height
+    /// filled in or a timestamp dropped leaves every distance where it was,
+    /// and ending a walk over one would end it for an edit that changed
+    /// nothing it measures.
+    ///
+    /// A point that continues the one before it adds its position alone, so
+    /// a line with no pause hashes as it did before pauses counted, and the
+    /// walks stamped along it still are. A pause adds its raw value after its
+    /// position, except on the first point: it has no arriving leg to close.
     public static func routeRevision(of route: [RouteCoordinate]) -> String {
         var hasher = StableHasher()
-        for point in route {
+        for (index, point) in route.enumerated() {
             hasher.combine(point.latitude)
             hasher.combine(point.longitude)
+            if index > 0, let boundary = point.boundary { hasher.combine(boundary.rawValue) }
         }
         return String(hasher.value, radix: 16)
     }
