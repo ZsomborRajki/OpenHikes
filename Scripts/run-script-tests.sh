@@ -280,8 +280,12 @@ run_script() {
     status=0
     # A PATH of the stubs plus the system directories only: xcbeautify is
     # deliberately out of reach, so the output these cases read is the same on
-    # a machine that has it and one that does not.
-    output="$(PATH="$stub_bin:/usr/bin:/bin:/usr/sbin:/sbin" "$@" 2>&1)" || status=$?
+    # a machine that has it and one that does not. SIGPIPE is ignored, as in
+    # every step a GitHub runner starts: the runner is a .NET process, .NET
+    # ignores the signal, and a child keeps an ignored signal across exec. So a
+    # script that hangs there once a reader leaves a pipe early hangs here too,
+    # rather than in CI alone, as Scripts/duo-pose.sh's display list did.
+    output="$(trap '' PIPE; PATH="$stub_bin:/usr/bin:/bin:/usr/sbin:/sbin" "$@" 2>&1)" || status=$?
     calls="$(cat "$STUB_CALL_LOG")"
     if [[ "$verbose" == true ]]; then
         printf '\n--- %s ---\n%s\n' "$current" "$output"

@@ -100,6 +100,11 @@ fi
 # The cover display is the primary one; the inner is the other `LCD`. A field
 # devicectl does not report yet is left empty: for a few seconds after a boot
 # no display says whether it is active.
+#
+# A write that fails ends the list. Where SIGPIPE is ignored, as it is in CI, a
+# reader that has gone does not stop this loop: the line that failed stays in
+# bash's output buffer, each `$(…)` forked after it writes that line out again,
+# and the loop reads it as the name of one more display, forever.
 displays() {
     local json index=0 name
     json="$(xcrun devicectl device info displays -d "$udid" --json-output - 2>/dev/null)" || return 1
@@ -109,7 +114,7 @@ displays() {
                 "$(display_field "$json" "$index" displayId)" \
                 "$(display_field "$json" "$index" primary)" \
                 "$(display_field "$json" "$index" active)" \
-                "$(display_field "$json" "$index" currentOrientation)"
+                "$(display_field "$json" "$index" currentOrientation)" || return 1
         fi
         index=$((index + 1))
     done
@@ -120,9 +125,11 @@ display_field() {
     /usr/bin/plutil -extract "result.displays.$2.$3" raw -o - -- - <<< "$1" 2>/dev/null || true
 }
 
-# `cover` or `inner`, and its rotation, for the display that is active.
+# `cover` or `inner`, and its rotation, for the display that is active. The
+# whole list is read rather than left at the first match, so that `displays`
+# never writes to a reader that has gone.
 active_display() {
-    displays | awk -F'\t' '$3 == "true" { print ($2 == "true" ? "cover" : "inner") "\t" $4; exit }'
+    displays | awk -F'\t' '$3 == "true" && !found { print ($2 == "true" ? "cover" : "inner") "\t" $4; found = 1 }'
 }
 
 if (( $(displays | wc -l) < 2 )); then
