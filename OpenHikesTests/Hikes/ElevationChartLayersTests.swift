@@ -26,6 +26,11 @@
 //  spoken value reads the tracker in a modifier of its own. Before, the outer
 //  body ran twice per selection change, once for each.
 //
+//  The marks have an equality of their own, which is what leaves them alone
+//  while the chart only moves on screen: they are handed where the plot area
+//  sits rather than the chart's proxy, which Swift Charts hands their overlay
+//  anew on every frame of a scroll.
+//
 //  Whether the plot is then left alone during a scrub is a question for
 //  `Scripts/render-trace.sh`, which is where it was answered. A window hosted
 //  from this bundle counted the same probe's bodies differently from one run to
@@ -115,6 +120,46 @@ struct ElevationChartLayersTests {
         #expect(base != plot(profile, domain: domain, tint: .red))
         #expect(base != plot(profile, domain: 0...1200))
         #expect(base != plot(RouteProfile(route: Array(Fixture.ridgeRoute.dropLast())), domain: domain))
+    }
+
+    /// What lets the marks be skipped while the chart only moves on screen —
+    /// Swift Charts hands their overlay a new proxy on every frame of a scroll
+    /// down the card — and still redrawn when what they draw, or where, does
+    /// change.
+    @Test("the marks' equality leaves out what moves, and catches what they draw from")
+    func marksEqualityLeavesOutWhatMoves() {
+        let profile = RouteProfile(route: Fixture.ridgeRoute)
+        func marks(
+            _ profile: RouteProfile,
+            plot: CGRect = CGRect(x: 40, y: 8, width: 300, height: 170),
+            domain: ClosedRange<Double> = 0...1000,
+            tint: Color = .green,
+            tracker: TrackerState = TrackerState()
+        ) -> ElevationChartMarks {
+            ElevationChartMarks(
+                plot: plot,
+                profile: profile,
+                tint: tint,
+                domain: domain,
+                tracker: tracker,
+                onScrub: { _ in /* no-op */ },
+                onScrubbingChanged: { _ in /* no-op */ }
+            )
+        }
+        let base = marks(profile)
+
+        // The marks read the tracker in their body, through Observation, so
+        // their equality must not: as for the plot, a tracker standing
+        // somewhere else is what an equality that read it would tell apart.
+        let tracker = TrackerState()
+        tracker.trackerDistance = 500
+        tracker.liveTrackerDistance = 250
+        #expect(base == marks(profile, tracker: tracker), "a tracker's moves reach the marks through Observation")
+
+        #expect(base != marks(profile, plot: CGRect(x: 40, y: 8, width: 280, height: 170)))
+        #expect(base != marks(profile, domain: 0...1200))
+        #expect(base != marks(profile, tint: .red))
+        #expect(base != marks(RouteProfile(route: Array(Fixture.ridgeRoute.dropLast()))))
     }
 
     // MARK: The view around the plot
