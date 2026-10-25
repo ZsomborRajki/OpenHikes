@@ -135,6 +135,64 @@ struct HikePlacesAroundSearchTests {
         #expect(search.candidates(showing: Self.everything, held: []).map(\.place.osm?.elementID) == [1, 2])
     }
 
+    // MARK: Merging answers
+
+    private static func row(_ place: TrailPlace) -> TrailPlaceRow {
+        TrailPlaceRow(place: place, offRouteMeters: 0)
+    }
+
+    private static func receive(_ places: [TrailPlace], into search: HikePlacesAroundSearch) {
+        search.receive(.init(rows: places.map(row), outage: nil), reach: 1000, symbols: everything)
+    }
+
+    @Test("an answer repeated, in any order, adds nothing and keeps the first answer's order")
+    func repeatedAnswerKeepsTheOrder() {
+        let search = HikePlacesAroundSearch()
+
+        Self.receive([Self.spring, Self.hut, Self.summit], into: search)
+        Self.receive([Self.summit, Self.hut, Self.spring], into: search)
+
+        #expect(search.found.map(\.id) == [Self.spring.id, Self.hut.id, Self.summit.id])
+    }
+
+    @Test("a later answer appends only what is new, after what was found")
+    func laterAnswerAppends() {
+        let search = HikePlacesAroundSearch()
+        let pond = Self.place(4, latitude: 47.618)
+
+        Self.receive([Self.hut, Self.spring], into: search)
+        Self.receive([pond, Self.spring, Self.summit], into: search)
+
+        #expect(search.found.map(\.place.osm?.elementID) == [2, 1, 4, 3])
+    }
+
+    @Test("the same element under another id keeps the first row's id, from the line or an area")
+    func sameElementKeepsTheFirstID() async {
+        let search = HikePlacesAroundSearch()
+        let sameSpring = Self.place(1, latitude: 47.605)
+        let sameHut = Self.place(2, latitude: 47.61, offEast: 400, symbol: .shelter)
+
+        Self.receive([Self.spring, sameSpring, Self.hut], into: search)
+        await search.receiveArea([sameHut], along: Line.route).value
+
+        #expect(search.found.map(\.id) == [Self.spring.id, Self.hut.id])
+        #expect(search.askedAbout == [Self.hut.id], "the area's hut stands for the row already found")
+        #expect(search.row(sameHut.id) == nil)
+        #expect(search.row(Self.hut.id)?.place.osm?.elementID == 2)
+    }
+
+    @Test("a place with no element is one row per id")
+    func placeWithoutAnElementIsKeptByID() {
+        let search = HikePlacesAroundSearch()
+        let bench = TrailPlace(latitude: 47.607, longitude: Line.longitude, name: "Bench")
+        let rock = TrailPlace(latitude: 47.607, longitude: Line.longitude, name: "Bench")
+
+        Self.receive([bench, rock], into: search)
+        Self.receive([rock, bench], into: search)
+
+        #expect(search.found.map(\.id) == [bench.id, rock.id])
+    }
+
     // MARK: Refusals
 
     @Test("a refusal with nothing found is a failure, and with something found a caption")
