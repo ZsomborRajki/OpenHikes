@@ -11,6 +11,7 @@ import CoreLocation
 import CoreTransferable
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 import UniformTypeIdentifiers
 
 nonisolated enum GPXExport {
@@ -332,23 +333,27 @@ nonisolated private extension GPXExport {
             xml += "    <desc>\(escaped(trackDescription))</desc>\n"
         }
         xml += "    <trkseg>\n"
-        for (index, point) in track.route.enumerated() {
-            // GPX 1.1's own way of saying the recording stopped and started
-            // again, and the reason a pause is worth persisting at all: it is
-            // the one thing about a walk this format can carry that a single
-            // flat list of points cannot. ``GPXImport`` reads it straight back
-            // as a pause, so a hike exported and re-imported keeps its breaks
-            // rather than flattening into one uninterrupted line.
-            //
-            // Never before the first point: a boundary describes the leg
-            // arriving at a point, so opening a segment there would write an
-            // empty one. A route with no pauses writes exactly the single
-            // segment this always wrote.
-            if index > 0, point.isPauseBoundary {
+        // GPX 1.1's own way of saying the recording stopped and started
+        // again, and the reason a pause is worth persisting at all: it is the
+        // one thing about a walk this format can carry that a single flat list
+        // of points cannot. ``GPXImport`` reads it straight back as a pause, so
+        // a hike exported and re-imported keeps its breaks rather than
+        // flattening into one uninterrupted line.
+        //
+        // A segment per piece of the route cut at its pauses
+        // (``TrailRuns/pieces``), so a fix with a pause either side of it is a
+        // segment of one point, as it was in the file it came from. A pause
+        // named on the first point opens nothing, so no segment is written
+        // empty. A route with no pauses is one piece, and writes exactly the
+        // single segment this always wrote, empty for a route of no points.
+        for piece in track.route.trailRuns.pieces {
+            if piece.lowerBound > 0 {
                 xml += "    </trkseg>\n"
                 xml += "    <trkseg>\n"
             }
-            appendPoint(point, to: &xml)
+            for point in track.route[piece] {
+                appendPoint(point, to: &xml)
+            }
         }
         xml += "    </trkseg>\n"
         xml += "  </trk>\n"

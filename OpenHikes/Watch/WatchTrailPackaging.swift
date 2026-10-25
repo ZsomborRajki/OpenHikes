@@ -122,8 +122,8 @@ nonisolated enum WatchTrailPackaging {
     }
 
     /// Which of the route's points cross, and which of them a pause arrives
-    /// at — ``WatchTrailPackage/keptPoints(count:pauses:pointBudget:pauseBudget:)``,
-    /// handed each pause and the length of its break.
+    /// at — ``WatchTrailPackage/keptPoints(of:gapMeters:pointBudget:pauseBudget:)``,
+    /// handed the route cut at its pauses and the length of each break.
     ///
     /// Taken as *indices*, so a kept point's height is the height of that
     /// point rather than of one nearby — see
@@ -134,18 +134,9 @@ nonisolated enum WatchTrailPackaging {
     /// than the budget has points, so past ``WatchTrailPackage/pauseBudget``
     /// the shortest breaks are folded into the line (#1023).
     static func keptPoints(of route: [RouteCoordinate]) -> WatchTrailPackage.KeptPoints {
-        let pauses = route.indices.dropFirst()
-            .filter { route[$0].isPauseBoundary }
-            .map { index in
-                WatchTrailPackage.RoutePause(
-                    resumedAt: index,
-                    gapMeters: RouteGeometry.distanceMeters(
-                        from: route[index - 1].clCoordinate,
-                        to: route[index].clCoordinate
-                    )
-                )
-            }
-        return WatchTrailPackage.keptPoints(count: route.count, pauses: pauses)
+        WatchTrailPackage.keptPoints(of: route.trailRuns) { leg in
+            RouteGeometry.distanceMeters(from: route[leg].clCoordinate, to: route[leg + 1].clCoordinate)
+        }
     }
 
     /// Climb and descent over the *whole* route.

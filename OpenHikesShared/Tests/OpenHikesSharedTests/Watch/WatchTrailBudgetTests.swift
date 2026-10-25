@@ -16,7 +16,33 @@ import Testing
 
 @Suite("Watch trail budget")
 struct WatchTrailBudgetTests {
-    private typealias Pause = WatchTrailPackage.RoutePause
+    /// A pause as the package names one, by the point it resumed on, with
+    /// the length of the break it crossed.
+    private struct Pause {
+        let resumedAt: Int
+        let gapMeters: Double
+    }
+
+    /// What crosses of a `count`-point route paused at each of `pauses`, cut
+    /// by ``TrailRuns`` as the phone cuts it. A pause named twice keeps the
+    /// first break given for it.
+    private static func kept(
+        count: Int,
+        pauses: [Pause],
+        pointBudget: Int = WatchTrailPackage.pointBudget,
+        pauseBudget: Int = WatchTrailPackage.pauseBudget
+    ) -> WatchTrailPackage.KeptPoints {
+        var gaps: [Int: Double] = [:]
+        for pause in pauses where gaps[pause.resumedAt] == nil {
+            gaps[pause.resumedAt] = pause.gapMeters
+        }
+        return WatchTrailPackage.keptPoints(
+            of: TrailRuns(pointCount: count, pauseIndices: pauses.map(\.resumedAt)),
+            gapMeters: { leg in gaps[leg + 1] ?? 0 },
+            pointBudget: pointBudget,
+            pauseBudget: pauseBudget
+        )
+    }
 
     /// A pause at every `every`th point of a `count`-point route, each with
     /// the gap `gap` gives it.
@@ -26,7 +52,7 @@ struct WatchTrailBudgetTests {
 
     @Test("a route with no pause is the widget's stride at the full budget")
     func noPauseIsThePlainStride() {
-        let kept = WatchTrailPackage.keptPoints(count: 5000, pauses: [])
+        let kept = Self.kept(count: 5000, pauses: [])
 
         #expect(kept.routeIndices == decimatedIndices(count: 5000, maxPoints: WatchTrailPackage.pointBudget))
         #expect(kept.pauseIndices.isEmpty)
@@ -34,7 +60,7 @@ struct WatchTrailBudgetTests {
 
     @Test("a short route crosses whole, every pause with it")
     func shortRouteIsUntouched() {
-        let kept = WatchTrailPackage.keptPoints(count: 10, pauses: Self.pauses(count: 10, every: 3))
+        let kept = Self.kept(count: 10, pauses: Self.pauses(count: 10, every: 3))
 
         #expect(kept.routeIndices == Array(0..<10))
         #expect(kept.pauseIndices == [3, 6, 9])
@@ -44,7 +70,7 @@ struct WatchTrailBudgetTests {
     /// to keep, so this crossed as 714 points though all 800 fit (#1053).
     @Test("a route that fits crosses whole, pauses and all")
     func aRouteThatFitsCrossesWhole() {
-        let kept = WatchTrailPackage.keptPoints(count: 800, pauses: Self.pauses(count: 800, every: 16))
+        let kept = Self.kept(count: 800, pauses: Self.pauses(count: 800, every: 16))
 
         #expect(kept.routeIndices == Array(0..<800))
         #expect(kept.pauseIndices == Array(stride(from: 16, to: 800, by: 16)))
@@ -59,7 +85,7 @@ struct WatchTrailBudgetTests {
         let route = (0..<750).map { index in
             WatchTrailPoint(latitude: 47.55 + Double(index) * 0.0001, longitude: index == bend ? 12.9025 : 12.90)
         }
-        let kept = WatchTrailPackage.keptPoints(count: route.count, pauses: Self.pauses(count: 501, every: 10))
+        let kept = Self.kept(count: route.count, pauses: Self.pauses(count: 501, every: 10))
         var tracker = WatchRouteTracker(WatchTrailPackage(
             hikeID: UUID(),
             title: "Bend",
@@ -78,7 +104,7 @@ struct WatchTrailBudgetTests {
     /// A stride over the whole route crossed it as 700 points (#1053).
     @Test("a file past the budget crosses as exactly the budget")
     func aSegmentedFileFillsTheBudget() {
-        let kept = WatchTrailPackage.keptPoints(count: 900, pauses: Self.pauses(count: 900, every: 9))
+        let kept = Self.kept(count: 900, pauses: Self.pauses(count: 900, every: 9))
 
         #expect(kept.routeIndices.count == WatchTrailPackage.pointBudget)
         #expect(kept.pauseIndices.count == WatchTrailPackage.pauseBudget)
@@ -87,7 +113,7 @@ struct WatchTrailBudgetTests {
     /// The issue's own figures: 2,000 segments of ten points kept 4,648.
     @Test("a route with thousands of pauses crosses as exactly the point budget")
     func manyPausesStayWithinBudget() {
-        let kept = WatchTrailPackage.keptPoints(count: 20_000, pauses: Self.pauses(count: 20_000, every: 10))
+        let kept = Self.kept(count: 20_000, pauses: Self.pauses(count: 20_000, every: 10))
 
         #expect(kept.routeIndices.count == WatchTrailPackage.pointBudget)
         #expect(kept.pauseIndices.count == WatchTrailPackage.pauseBudget)
@@ -102,7 +128,7 @@ struct WatchTrailBudgetTests {
     func exactlyTheBudget(pauseCount: Int) {
         let count = 6000
         let pauses = (0..<pauseCount).map { Pause(resumedAt: 1 + $0, gapMeters: Double($0)) }
-        let kept = WatchTrailPackage.keptPoints(count: count, pauses: pauses)
+        let kept = Self.kept(count: count, pauses: pauses)
 
         #expect(kept.routeIndices.count == WatchTrailPackage.pointBudget)
         #expect(kept.pauseIndices.count == min(pauseCount, WatchTrailPackage.pauseBudget))
@@ -113,7 +139,7 @@ struct WatchTrailBudgetTests {
     @Test("every kept pause is exactly one leg of the route")
     func eachKeptPauseIsOneLeg() {
         let pauses = Self.pauses(count: 20_000, every: 7) { Double($0 % 97) }
-        let kept = WatchTrailPackage.keptPoints(count: 20_000, pauses: pauses)
+        let kept = Self.kept(count: 20_000, pauses: pauses)
         let resumes = Set(pauses.map(\.resumedAt))
 
         for position in kept.pauseIndices {
@@ -130,7 +156,7 @@ struct WatchTrailBudgetTests {
     @Test("a folded pause is never named, even where the stride keeps its point")
     func foldedPausesAreNotNamed() throws {
         let pauses = Self.pauses(count: 20_000, every: 10)
-        let kept = WatchTrailPackage.keptPoints(count: 20_000, pauses: pauses)
+        let kept = Self.kept(count: 20_000, pauses: pauses)
         let named = Set(kept.pauseIndices.map { kept.routeIndices[$0] })
         let strayResumes = kept.routeIndices.filter { $0.isMultiple(of: 10) && $0 > 0 && !named.contains($0) }
 
@@ -142,7 +168,7 @@ struct WatchTrailBudgetTests {
     func longestBreaksAreKept() {
         let drives: Set<Int> = [70, 9000, 19_990]
         let pauses = Self.pauses(count: 20_000, every: 10) { drives.contains($0) ? 1500 : 12 }
-        let kept = WatchTrailPackage.keptPoints(count: 20_000, pauses: pauses, pauseBudget: 3)
+        let kept = Self.kept(count: 20_000, pauses: pauses, pauseBudget: 3)
 
         #expect(Set(kept.pauseIndices.map { kept.routeIndices[$0] }) == drives)
     }
@@ -150,7 +176,7 @@ struct WatchTrailBudgetTests {
     @Test("ties go to the earlier break, so the same route packages the same way")
     func tiesAreDeterministic() {
         let pauses = Self.pauses(count: 1000, every: 10)
-        let kept = WatchTrailPackage.keptPoints(count: 1000, pauses: pauses.reversed(), pauseBudget: 4)
+        let kept = Self.kept(count: 1000, pauses: pauses.reversed(), pauseBudget: 4)
 
         #expect(kept.pauseIndices.map { kept.routeIndices[$0] } == [10, 20, 30, 40])
     }
@@ -158,7 +184,7 @@ struct WatchTrailBudgetTests {
     @Test("adjacent pauses share their middle point, and each is still one leg")
     func adjacentPausesShareAPoint() {
         let pauses = [Pause(resumedAt: 2500, gapMeters: 500), Pause(resumedAt: 2501, gapMeters: 500)]
-        let kept = WatchTrailPackage.keptPoints(count: 5000, pauses: pauses)
+        let kept = Self.kept(count: 5000, pauses: pauses)
 
         let named = kept.pauseIndices.map { kept.routeIndices[$0] }
         #expect(named == [2500, 2501])
@@ -170,7 +196,7 @@ struct WatchTrailBudgetTests {
     func unmeasurableBreaksGoLast() {
         let gaps: [Double] = [.nan, 40, .infinity, 30, .nan, 20]
         let pauses = gaps.enumerated().map { Pause(resumedAt: 100 * ($0.offset + 1), gapMeters: $0.element) }
-        let kept = WatchTrailPackage.keptPoints(count: 5000, pauses: pauses, pauseBudget: 3)
+        let kept = Self.kept(count: 5000, pauses: pauses, pauseBudget: 3)
 
         #expect(kept.pauseIndices.map { kept.routeIndices[$0] } == [200, 400, 600])
     }
@@ -178,14 +204,14 @@ struct WatchTrailBudgetTests {
     @Test("a pause the route cannot hold is ignored, and a repeat counts once")
     func invalidPausesAreIgnored() {
         let pauses = [0, -3, 5, 5, 10, 42].map { Pause(resumedAt: $0, gapMeters: 100) }
-        let kept = WatchTrailPackage.keptPoints(count: 10, pauses: pauses)
+        let kept = Self.kept(count: 10, pauses: pauses)
 
         #expect(kept.pauseIndices.map { kept.routeIndices[$0] } == [5])
     }
 
     @Test("a budget too small for its pauses still leaves the line its two ends")
     func tinyBudgetKeepsTheEnds() {
-        let kept = WatchTrailPackage.keptPoints(
+        let kept = Self.kept(
             count: 100,
             pauses: Self.pauses(count: 100, every: 5),
             pointBudget: 6
@@ -202,7 +228,7 @@ struct WatchTrailBudgetTests {
     @Test("the watch's map draws a bounded number of lines")
     func mapLinesAreBounded() {
         let count = 20_000
-        let kept = WatchTrailPackage.keptPoints(count: count, pauses: Self.pauses(count: count, every: 10))
+        let kept = Self.kept(count: count, pauses: Self.pauses(count: count, every: 10))
         let package = WatchTrailPackage(
             hikeID: UUID(),
             title: "Segmented",

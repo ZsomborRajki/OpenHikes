@@ -16,6 +16,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import OpenHikesShared
 import RealModule
 import Testing
 
@@ -79,7 +80,7 @@ struct PauseBoundaryTests {
             startedAt: start
         )
 
-        #expect(!prepared.route.containsPause)
+        #expect(!prepared.route.trailRuns.isPaused)
     }
 
     /// The map draws the pause as its own overlay, so the boundary has to
@@ -99,7 +100,7 @@ struct PauseBoundaryTests {
         #expect(segment.count == 2)
         #expect(segment[0].latitude == 47.631)
         #expect(segment[1].latitude == 47.64)
-        #expect(prepared.route.containsPause)
+        #expect(prepared.route.trailRuns.isPaused)
     }
 
     /// A pause is not distance (#962): the profile's axis leaves the paused
@@ -140,7 +141,7 @@ struct PauseBoundaryTests {
             RouteCoordinate(latitude: 47.64, longitude: 12.86),
         ]
 
-        #expect(!route.containsPause)
+        #expect(!route.trailRuns.isPaused)
         #expect(route.pausedSegments.isEmpty)
         #expect(RouteProfile(route: route).pauseDistances.isEmpty)
     }

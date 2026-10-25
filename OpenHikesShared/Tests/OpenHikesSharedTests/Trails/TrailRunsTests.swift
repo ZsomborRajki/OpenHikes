@@ -122,6 +122,9 @@ struct TrailRunsTests {
             loneFixes: [],
             pausedStretches: []
         ))
+        #expect(TrailRuns(pointCount: 1, pauseIndices: []).pointCount == 1)
+        #expect(TrailRuns(pointCount: 0, pauseIndices: []).pointCount == 0)
+        #expect(TrailRuns(pointCount: -3, pauseIndices: [1]).pointCount == 0, "a count below none is none")
     }
 
     @Test("a pause on the first point, past the end, or named twice changes nothing it cannot")
@@ -135,6 +138,7 @@ struct TrailRunsTests {
         for (count, pauses) in [(1, [Int]()), (6, [2, 3]), (5, [1, 4]), (3, [1, 2]), (9, [1, 3, 4, 8])] {
             let runs = TrailRuns(pointCount: count, pauseIndices: pauses)
 
+            #expect(runs.pointCount == count, "\(count) points, \(pauses)")
             #expect(runs.pieces.flatMap { Array($0) } == Array(0..<count), "\(count) points, \(pauses)")
             #expect(
                 (Array(runs.walkedLegs) + runs.pausedLegs).sorted() == Array(0..<max(0, count - 1)),

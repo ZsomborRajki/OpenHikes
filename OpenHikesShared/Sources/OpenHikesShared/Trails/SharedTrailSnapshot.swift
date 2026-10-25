@@ -34,7 +34,7 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
     /// Cumulative descent, the companion to ``elevationGainMeters``.
     public var elevationLossMeters: Double?
     /// Decimated route, in order — enough points to draw the trail's shape,
-    /// not the full track. See ``line(of:maxPoints:pauseEndBudget:coordinate:isPauseBoundary:)``.
+    /// not the full track. See ``line(of:cutAt:maxPoints:pauseEndBudget:coordinate:)``.
     public var polyline: [CodableCoordinate]
     /// The indices into ``polyline`` of the points a pause arrives at, in
     /// order — the convention ``WatchTrailPackage/pauseIndices`` keeps.

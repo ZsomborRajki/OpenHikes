@@ -87,6 +87,27 @@ struct HikeWorkoutPausesTests {
         #expect(HikeWorkoutPauses.pauses(in: route, from: Self.start, to: end).isEmpty)
     }
 
+    /// The route is cut at its pauses before an untimed point is passed over
+    /// (#1035). Passed over first, a pause landing on one went with it, the
+    /// walking either side of the pause became one segment, and the workout
+    /// reached Health with no pause in it.
+    @Test("a pause landing on a point with no timestamp still ends the stretch before it")
+    func aPauseOnAnUntimedPointStillSplits() {
+        let route = [
+            Self.point(0),
+            Self.point(60),
+            Self.point(nil, resumes: true),
+            Self.point(600),
+            Self.point(660),
+        ]
+        let pauses = HikeWorkoutPauses.pauses(
+            in: route,
+            from: Self.start,
+            to: Self.start.addingTimeInterval(660)
+        )
+        #expect(pauses == [Self.interval(60, 600)])
+    }
+
     /// A fix from before Start — a cached one, say — is not inside the
     /// workout, so it cannot make a segment reach outside it.
     @Test("segments are clamped to the workout")

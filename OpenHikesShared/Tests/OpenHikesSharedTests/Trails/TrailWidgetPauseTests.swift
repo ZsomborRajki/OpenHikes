@@ -47,7 +47,8 @@ struct TrailWidgetPauseTests {
         _ route: [Point],
         maxPoints: Int = 180
     ) -> (polyline: [SharedTrailSnapshot.CodableCoordinate], pauseIndices: [Int]) {
-        SharedTrailSnapshot.line(of: route, maxPoints: maxPoints, coordinate: \.coordinate, isPauseBoundary: \.paused)
+        let runs = TrailRuns(pointCount: route.count, pauseIndices: route.indices.filter { route[$0].paused })
+        return SharedTrailSnapshot.line(of: route, cutAt: runs, maxPoints: maxPoints, coordinate: \.coordinate)
     }
 
     // MARK: Decimation
