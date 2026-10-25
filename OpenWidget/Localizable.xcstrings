@@ -11,22 +11,160 @@
         }
       }
     },
+    "%@ hiked" : {
+
+    },
+    "%@ long" : {
+
+    },
+    "%@ percent complete" : {
+
+    },
+    "%@ percent hiked" : {
+
+    },
+    "%@ remaining" : {
+
+    },
+    "%@%@ · %@ left" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@%2$@ · %3$@ left"
+          }
+        }
+      }
+    },
+    "%lld pts" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pts"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pts"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld%% · %@ left" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld%% · %2$@ left"
+          }
+        }
+      }
+    },
+    "%lld%% hiked" : {
+
+    },
+    "Ascent" : {
+
+    },
+    "Average speed" : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Complete" : {
+
+    },
+    "Distance" : {
+
+    },
+    "Done" : {
+
+    },
     "Elapsed" : {
+
+    },
+    "Elevation" : {
+
+    },
+    "Finished" : {
+
+    },
+    "Hike" : {
 
     },
     "Hike Recording" : {
 
     },
+    "Hiked" : {
+
+    },
+    "Length" : {
+
+    },
+    "Off trail" : {
+
+    },
+    "OpenHikes" : {
+
+    },
     "OpenHikes couldn’t do that." : {
+
+    },
+    "OpenHikes needs your location before it can record a hike." : {
 
     },
     "Pause" : {
 
     },
+    "Pause Hike" : {
+
+    },
+    "Paused" : {
+
+    },
+    "Paused · " : {
+
+    },
+    "Pauses the hike being recorded, from its Lock Screen panel." : {
+
+    },
+    "Recording" : {
+
+    },
+    "Recording Hike" : {
+
+    },
+    "Recording Paused" : {
+
+    },
+    "Remaining" : {
+
+    },
     "Resume" : {
 
     },
+    "Resume Hike" : {
+
+    },
+    "Resumes the paused hike, from its Lock Screen panel." : {
+
+    },
+    "Select a trail" : {
+
+    },
     "Select a trail in OpenHikes" : {
+
+    },
+    "Shows a trail you choose, or your selected trail, or a hike currently being recorded." : {
 
     },
     "Shows your selected trail or a hike currently being recorded." : {
@@ -44,7 +182,19 @@
     "That hike isn’t recording any more." : {
 
     },
+    "Time left" : {
+
+    },
+    "Toggle Hike Recording" : {
+
+    },
+    "Track points" : {
+
+    },
     "Trail" : {
+
+    },
+    "Trail length" : {
 
     },
     "Turn on Precise Location in Settings to carry on." : {

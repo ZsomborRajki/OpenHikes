@@ -1,7 +1,22 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Cancel" : {
+
+    },
+    "Done" : {
+
+    },
+    "Hike" : {
+
+    },
     "OpenHikes" : {
+
+    },
+    "OpenHikes needs your location before it can record a hike." : {
+
+    },
+    "Pause Hike" : {
 
     },
     "Paused" : {
@@ -10,16 +25,34 @@
     "Paused, %@" : {
 
     },
+    "Pauses the hike being recorded, from its Lock Screen panel." : {
+
+    },
     "Recording" : {
 
     },
     "Recording, %@" : {
 
     },
+    "Resume Hike" : {
+
+    },
+    "Resumes the paused hike, from its Lock Screen panel." : {
+
+    },
+    "Shows a trail you choose, or your selected trail, or a hike currently being recorded." : {
+
+    },
     "Start a recording, or see the one under way." : {
 
     },
     "Tap to record a hike" : {
+
+    },
+    "Toggle Hike Recording" : {
+
+    },
+    "Trail" : {
 
     }
   },

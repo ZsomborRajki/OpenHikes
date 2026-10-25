@@ -145,6 +145,9 @@ jobs:
       - name: Run strict SwiftLint
         run: Scripts/lint.sh
 
+      - name: Check user-visible string extraction
+        run: Scripts/check-string-extraction.sh
+
       # SwiftLint sees no shell. Nothing else in this repository executes
       # ci_scripts/ci_post_clone.sh either — Xcode Cloud runs it by name, and a
       # syntax error in it would surface as a failed cloud archive rather than

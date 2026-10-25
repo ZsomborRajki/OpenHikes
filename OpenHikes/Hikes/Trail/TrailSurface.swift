@@ -53,12 +53,12 @@ nonisolated enum TrailSurface: String, CaseIterable, Codable, Hashable, Sendable
     /// Position in ``displayOrdering``. Supplied by ``TrailCategory``.
     var displayName: String {
         switch self {
-        case .paved: "Paved"
-        case .gravel: "Gravel"
-        case .ground: "Ground"
-        case .rock: "Rock"
-        case .unknown: "Unknown"
-        case .unmapped: "Not mapped"
+        case .paved: String(localized: "Paved")
+        case .gravel: String(localized: "Gravel")
+        case .ground: String(localized: "Ground")
+        case .rock: String(localized: "Rock")
+        case .unknown: String(localized: "Unknown")
+        case .unmapped: String(localized: "Not mapped")
         }
     }
 
@@ -66,12 +66,12 @@ nonisolated enum TrailSurface: String, CaseIterable, Codable, Hashable, Sendable
     /// the legend so a percentage can be interpreted rather than just read.
     var summary: String {
         switch self {
-        case .paved: "Asphalt, concrete, paving stones"
-        case .gravel: "Gravel and compacted hardcore"
-        case .ground: "Dirt, grass, sand, mud"
-        case .rock: "Bare rock and scree"
-        case .unknown: "Mapped trail, untagged surface"
-        case .unmapped: "No mapped trail nearby"
+        case .paved: String(localized: "Asphalt, concrete, paving stones")
+        case .gravel: String(localized: "Gravel and compacted hardcore")
+        case .ground: String(localized: "Dirt, grass, sand, mud")
+        case .rock: String(localized: "Bare rock and scree")
+        case .unknown: String(localized: "Mapped trail, untagged surface")
+        case .unmapped: String(localized: "No mapped trail nearby")
         }
     }
 }

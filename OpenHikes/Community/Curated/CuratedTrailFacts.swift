@@ -64,16 +64,16 @@ nonisolated enum WaymarkColor: String, CaseIterable, Hashable, Sendable {
 
     var displayName: String {
         switch self {
-        case .black: "Black"
-        case .blue: "Blue"
-        case .brown: "Brown"
-        case .gray: "Gray"
-        case .green: "Green"
-        case .orange: "Orange"
-        case .purple: "Purple"
-        case .red: "Red"
-        case .white: "White"
-        case .yellow: "Yellow"
+        case .black: String(localized: "Black")
+        case .blue: String(localized: "Blue")
+        case .brown: String(localized: "Brown")
+        case .gray: String(localized: "Gray")
+        case .green: String(localized: "Green")
+        case .orange: String(localized: "Orange")
+        case .purple: String(localized: "Purple")
+        case .red: String(localized: "Red")
+        case .white: String(localized: "White")
+        case .yellow: String(localized: "Yellow")
         }
     }
 }
@@ -120,9 +120,9 @@ nonisolated struct TrailWaymark: Hashable, Sendable {
     /// painted on a rock.
     var displayName: String {
         switch (color, reference) {
-        case let (color?, reference?): "\(color.displayName) waymark \(reference)"
-        case let (color?, nil): "\(color.displayName) waymark"
-        case let (nil, reference?): "Waymark \(reference)"
+        case let (color?, reference?): String(localized: "\(color.displayName) waymark \(reference)")
+        case let (color?, nil): String(localized: "\(color.displayName) waymark")
+        case let (nil, reference?): String(localized: "Waymark \(reference)")
         case (nil, nil): ""
         }
     }
@@ -142,8 +142,8 @@ nonisolated enum TrailShape: Hashable, Sendable {
 
     var displayName: String {
         switch self {
-        case .loop: "Loop"
-        case .pointToPoint: "Point to point"
+        case .loop: String(localized: "Loop")
+        case .pointToPoint: String(localized: "Point to point")
         }
     }
 }
@@ -187,9 +187,9 @@ nonisolated struct CuratedTrailFacts: Hashable, Sendable {
     /// together to learn the thing either was for.
     var journey: String? {
         switch (origin, destination) {
-        case let (origin?, destination?): "\(origin) to \(destination)"
-        case let (origin?, nil): "From \(origin)"
-        case let (nil, destination?): "To \(destination)"
+        case let (origin?, destination?): String(localized: "\(origin) to \(destination)")
+        case let (origin?, nil): String(localized: "From \(origin)")
+        case let (nil, destination?): String(localized: "To \(destination)")
         case (nil, nil): nil
         }
     }

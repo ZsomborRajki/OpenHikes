@@ -122,9 +122,10 @@ private struct MapScreenAlerts: ViewModifier {
                 Button("OK", role: .cancel) { /* dismiss */ }
             } message: {
                 Text(
-                    "OpenHikes couldn’t open its saved hikes. " +
-                    "This launch is using temporary storage, so changes won’t survive a relaunch. " +
-                    "Existing data was left untouched."
+                    """
+                        OpenHikes couldn’t open its saved hikes. This launch is using temporary storage, so \
+                        changes won’t survive a relaunch. Existing data was left untouched.
+                        """
                 )
             }
             .locationAccessAlert(.whileUsing, isPresented: $locationAccess)

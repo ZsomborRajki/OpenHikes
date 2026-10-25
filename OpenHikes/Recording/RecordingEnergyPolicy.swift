@@ -74,7 +74,7 @@ nonisolated struct RecordingEnergyProfile: Equatable, Sendable {
         name: "paused-watch",
         desiredAccuracy: RecordingEnergyPolicy.pausedWatchAccuracy,
         distanceFilter: RecordingEnergyPolicy.pausedWatchDistanceFilter,
-        reason: "Paused — watching for a hundred meters at a time in case you set off again."
+        reason: String(localized: "Paused — watching for a hundred meters at a time in case you set off again.")
     )
 }
 
@@ -165,10 +165,12 @@ nonisolated enum RecordingEnergyPolicy {
         hot: Bool,
         stationary: Bool
     ) -> String? {
-        if lowPower, hot { return "Low Power Mode and heat — recording at ten-meter accuracy to save battery." }
-        if lowPower { return "Low Power Mode — recording at ten-meter accuracy to save battery." }
-        if hot { return "The device is warm — recording at ten-meter accuracy until it cools." }
-        if stationary { return "You’ve stopped — checking position less often until you move on." }
+        if lowPower, hot { return String(
+            localized: "Low Power Mode and heat — recording at ten-meter accuracy to save battery."
+        ) }
+        if lowPower { return String(localized: "Low Power Mode — recording at ten-meter accuracy to save battery.") }
+        if hot { return String(localized: "The device is warm — recording at ten-meter accuracy until it cools.") }
+        if stationary { return String(localized: "You’ve stopped — checking position less often until you move on.") }
         return nil
     }
 }

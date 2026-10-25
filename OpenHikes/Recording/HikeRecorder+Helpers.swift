@@ -535,7 +535,9 @@ extension HikeRecorder {
     ) -> HikeActivityAttributes {
         .recording(
             from: snapshot,
-            title: currentHike?.displayTitle ?? snapshot.title,
+            title: currentHike?.displayTitle ?? (snapshot.isCapturingFixes
+                ? String(localized: "Recording Hike")
+                : String(localized: "Recording Paused")),
             tintHex: currentHike?.tintHex ?? Hike.defaultTintHex
         )
     }

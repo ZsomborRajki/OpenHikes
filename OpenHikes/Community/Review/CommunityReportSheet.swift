@@ -37,6 +37,7 @@
 //  the person who typed it.
 //
 
+import Foundation
 import SwiftUI
 
 struct CommunityReportSheet: View {
@@ -84,7 +85,7 @@ struct CommunityReportSheet: View {
                     outcomeSections(.noMailApp)
                 }
             }
-            .navigationTitle(contribution == nil ? "Report Hike" : "Report Photo")
+            .navigationTitle(contribution == nil ? String(localized: "Report Hike") : String(localized: "Report Photo"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -199,7 +200,7 @@ private extension CommunityReportSheet {
     func outcomeSections(_ outcome: CommunityMailOutcome) -> some View {
         CommunityMailOutcomeSections(
             outcome: outcome,
-            noun: "Report",
+            noun: String(localized: "Report"),
             plainText: report.plainText,
             identifiers: .init(
                 handedOff: "community-report-handed-off",

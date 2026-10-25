@@ -102,8 +102,10 @@ final class TrailWalkActivityTests {
         // of matches followed.
         #expect(state.elapsedSeconds.isApproximatelyEqual(to: 120, absoluteTolerance: 1))
         let stored = try #require(SharedStore.load())
-        #expect(stored.walk?.coveredFraction == session.coveredFraction)
-        #expect(stored.statusText.contains("hiked"))
+        let storedWalk = try #require(stored.walk)
+        #expect(storedWalk.coveredFraction == session.coveredFraction)
+        #expect(storedWalk.state == .active)
+        #expect(storedWalk.activeSeconds.isApproximatelyEqual(to: state.elapsedSeconds, absoluteTolerance: 1))
     }
 
     /// Pausing reaches the panel at once, through the run-state bypass —
@@ -125,8 +127,9 @@ final class TrailWalkActivityTests {
 
         let paused = try #require(presenter.updatedStates.last)
         #expect(paused.runState == .paused)
-        #expect(SharedStore.load()?.walk?.state == .paused)
-        #expect(SharedStore.load()?.statusText.hasPrefix("Paused") == true)
+        let storedWalk = try #require(SharedStore.load()?.walk)
+        #expect(storedWalk.state == .paused)
+        #expect(storedWalk.activeSeconds.isApproximatelyEqual(to: paused.elapsedSeconds, absoluteTolerance: 1))
     }
 
     /// End leaves the closing figures on the Lock Screen for a while, the

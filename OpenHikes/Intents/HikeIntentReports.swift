@@ -99,17 +99,17 @@ nonisolated extension LiveRecordingReport {
         )
         let clock = HikeFormat.spokenDuration(elapsed)
         let lead = isPaused
-            ? "Your hike is paused at \(length)"
-            : "You’re \(length) in"
+            ? String(localized: "Your hike is paused at \(length)")
+            : String(localized: "You’re \(length) in")
         guard let trailName, !trailName.isEmpty else {
-            return "\(lead), \(clock) elapsed."
+            return String(localized: "\(lead), \(clock) elapsed.")
         }
         // "last on" rather than "on" for a match newer fixes have overtaken.
         // It is the sentence's whole hedge, and it is the difference between
         // telling somebody where they are and telling them where they were.
         return isTrailNameStale
-            ? "\(lead), last on \(trailName), \(clock) elapsed."
-            : "\(lead) on \(trailName), \(clock) elapsed."
+            ? String(localized: "\(lead), last on \(trailName), \(clock) elapsed.")
+            : String(localized: "\(lead) on \(trailName), \(clock) elapsed.")
     }
 }
 
@@ -120,9 +120,9 @@ nonisolated extension FinishedHikeReport {
         )
         let day = date.formatted(date: .abbreviated, time: .omitted)
         guard let duration else {
-            return "\(title): \(length) on \(day)."
+            return String(localized: "\(title): \(length) on \(day).")
         }
-        return "\(title): \(length) in \(HikeFormat.spokenDuration(duration)) on \(day)."
+        return String(localized: "\(title): \(length) in \(HikeFormat.spokenDuration(duration)) on \(day).")
     }
 }
 
@@ -131,11 +131,11 @@ nonisolated extension HikeTotalsReport {
     /// hike of no length" are different answers and the distance alone tells
     /// them apart only by accident.
     func spokenSummary(for label: String) -> String {
-        guard hikeCount > 0 else { return "You haven’t recorded a hike \(label)." }
+        guard hikeCount > 0 else { return String(localized: "You haven’t recorded a hike \(label).") }
         let length = distance.formatted(
             .measurement(width: .wide, usage: .road)
         )
-        let hikes = hikeCount == 1 ? "1 hike" : "\(hikeCount) hikes"
-        return "\(length) across \(hikes) \(label)."
+        let hikes = String(localized: "\(hikeCount) hikes")
+        return String(localized: "\(length) across \(hikes) \(label).")
     }
 }

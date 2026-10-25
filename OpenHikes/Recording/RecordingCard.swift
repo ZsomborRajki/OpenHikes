@@ -8,6 +8,7 @@
 //  under it are the hike detail's own — see ``RecordingStatsSection``.
 //
 
+import Foundation
 import OpenHikesData
 import os
 import SwiftUI
@@ -80,7 +81,7 @@ struct RecordingCard: View {
             // hiker types nothing, so this is the same answer ``persist``
             // writes, measured moments earlier against the live distance.
             TextField(
-                stopNameSuggestion ?? recorder.currentHike?.title ?? "Hike name",
+                stopNameSuggestion ?? recorder.currentHike?.title ?? String(localized: "Hike name"),
                 text: $stopNameDraft
             )
             Button("Save") {
@@ -163,7 +164,7 @@ struct RecordingCard: View {
         case .failed(let failure):
             if recorder.canRetrySave {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(failure.errorDescription ?? "The hike could not be saved.")
+                    Text(failure.errorDescription ?? String(localized: "The hike could not be saved."))
                         .font(.headline)
                     if let suggestion = failure.recoverySuggestion {
                         Text(suggestion)
@@ -282,14 +283,14 @@ private struct RecordingPhaseTitle: View {
 extension HikeRecorder.Phase {
     var accessibilityTitle: String {
         switch self {
-        case .idle: "Ready"
-        case .recovering: "Recovering"
-        case .waitingForFix: "Finding GPS"
-        case .recording: "Recording"
-        case .paused: "Paused"
-        case .saving: "Saving"
-        case .reviewing: "Review Route"
-        case .failed: "Needs Attention"
+        case .idle: String(localized: "Ready")
+        case .recovering: String(localized: "Recovering")
+        case .waitingForFix: String(localized: "Finding GPS")
+        case .recording: String(localized: "Recording")
+        case .paused: String(localized: "Paused")
+        case .saving: String(localized: "Saving")
+        case .reviewing: String(localized: "Review Route")
+        case .failed: String(localized: "Needs Attention")
         }
     }
 }
@@ -317,7 +318,7 @@ private struct RecordingTrailLine: View {
     var body: some View {
         if let trail = stats.currentTrail, !trail.isEmpty {
             Label(
-                ([trail.name ?? "On a mapped trail"] + trail.descriptors)
+                ([trail.name ?? String(localized: "On a mapped trail")] + trail.descriptors)
                     .joined(separator: " · "),
                 systemImage: Self.symbolName
             )
@@ -338,7 +339,7 @@ private struct RecordingTrailLine: View {
     /// is decorative and `·` is spoken, both of which `Label` and the
     /// joined line above would otherwise hand to VoiceOver verbatim.
     private func accessibilityLabel(for trail: RecordingTrailContext) -> String {
-        let name = trail.name.map { "On \($0)" } ?? "On a mapped trail"
+        let name = trail.name.map { String(localized: "On \($0)") } ?? String(localized: "On a mapped trail")
         guard !trail.descriptors.isEmpty else { return name }
         return "\(name). \(trail.descriptors.joined(separator: ", "))"
     }

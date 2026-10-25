@@ -13,6 +13,7 @@
 //
 
 import Algorithms
+import Foundation
 import OpenHikesData
 import os
 import SwiftUI
@@ -42,8 +43,7 @@ struct RecordingRouteReviewControls: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(
-                "Section \(review.currentIndex + 1) of "
-                    + "\(review.sections.count)"
+                "Section \(review.currentIndex + 1) of \(review.sections.count)"
             )
             .font(.headline)
             .accessibilityAddTraits(.isHeader)
@@ -170,15 +170,15 @@ private extension RecordingRouteReviewControls {
     func prompt(for section: RouteReviewSection) -> String {
         switch section.kind {
         case .snapped:
-            return "The highlighted section was moved onto a mapped trail."
+            return String(localized: "The highlighted section was moved onto a mapped trail.")
         case .ambiguous:
             return Self.unobservedPrefix(section)
-                + "The highlighted section has more than one plausible route."
+                + String(localized: "The highlighted section has more than one plausible route.")
         case .gap:
             return Self.unobservedPrefix(section) + (
                 section.isBridged
-                    ? "The highlighted line follows a mapped trail across the gap."
-                    : "No mapped route fits the gap, so the line is drawn straight across it."
+                    ? String(localized: "The highlighted line follows a mapped trail across the gap.")
+                    : String(localized: "No mapped route fits the gap, so the line is drawn straight across it.")
             )
         }
     }
@@ -188,7 +188,7 @@ private extension RecordingRouteReviewControls {
     /// after it is about what the app did with that.
     static func unobservedPrefix(_ section: RouteReviewSection) -> String {
         guard let duration = section.unobservedDuration else { return "" }
-        return "No position was recorded for \(HikeFormat.duration(duration)). "
+        return String(localized: "No position was recorded for \(HikeFormat.duration(duration)). ")
     }
 
     func title(
@@ -196,9 +196,14 @@ private extension RecordingRouteReviewControls {
         in section: RouteReviewSection
     ) -> String {
         switch choice {
-        case .matched: section.trailName.map { "Use \($0)" } ?? "Use the mapped trail"
-        case .gps: section.kind == .gap ? "Draw a straight line" : "Use GPS only"
-        case .alternative(let alternativeID): "Option \(Self.optionLabel(alternativeID))"
+        case .matched:
+            return section.trailName.map { name in String(localized: "Use \(name)") }
+                ?? String(localized: "Use the mapped trail")
+        case .gps:
+            if section.kind == .gap { return String(localized: "Draw a straight line") }
+            return String(localized: "Use GPS only")
+        case .alternative(let alternativeID):
+            return String(localized: "Option \(Self.optionLabel(alternativeID))")
         }
     }
 
@@ -207,15 +212,14 @@ private extension RecordingRouteReviewControls {
         in section: RouteReviewSection
     ) -> String {
         switch choice {
-        case .matched: "Snapped to the trail · " + Self.formatted(section.matchedDistanceMeters)
-        case .gps: (
-            section.kind == .gap
-                ? "Straight across the gap · "
-                : "Keep the recorded line · "
-        ) + Self.formatted(section.rawDistanceMeters)
-        case .alternative(let alternativeID): section.alternatives
-            .first { $0.id == alternativeID }
-            .map(Self.alternativeSubtitle) ?? ""
+        case .matched:
+            return String(localized: "Snapped to the trail · \(Self.formatted(section.matchedDistanceMeters))")
+        case .gps:
+            let distance = Self.formatted(section.rawDistanceMeters)
+            if section.kind == .gap { return String(localized: "Straight across the gap · \(distance)") }
+            return String(localized: "Keep the recorded line · \(distance)")
+        case .alternative(let alternativeID):
+            return section.alternatives.first { $0.id == alternativeID }.map(Self.alternativeSubtitle) ?? ""
         }
     }
 
@@ -229,7 +233,7 @@ private extension RecordingRouteReviewControls {
         _ alternative: TrailMatchAlternative
     ) -> String {
         let names = alternative.trailNames.isEmpty
-            ? "Unnamed trail"
+            ? String(localized: "Unnamed trail")
             : alternative.trailNames.joined(separator: ", ")
         return "\(names) · \(formatted(alternative.distanceMeters))"
     }

@@ -20,6 +20,7 @@
 //
 
 import Algorithms
+import Foundation
 import OpenHikesData
 import SwiftUI
 
@@ -289,7 +290,9 @@ private struct DiscoveryEmptyState: View {
         return VStack(spacing: Self.spacing) {
             ContentUnavailableView {
                 Label(
-                    canSelectMore ? "No Shared Photos From This Hike" : "No Photos Found",
+                    canSelectMore
+                        ? String(localized: "No Shared Photos From This Hike")
+                        : String(localized: "No Photos Found"),
                     systemImage: "photo.on.rectangle.angled"
                 )
             } description: {
@@ -386,7 +389,7 @@ private struct DiscoverySelectionBar: View {
         return VStack(spacing: 0) {
             if controller.importFailed { failureNotice }
             HStack {
-                Button(selected == total ? "Deselect All" : "Select All") {
+                Button(selected == total ? String(localized: "Deselect All") : String(localized: "Select All")) {
                     if selected == total {
                         controller.deselectAll()
                     } else {

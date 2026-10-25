@@ -411,7 +411,7 @@ nonisolated extension CloudKitCommunityTransport {
         // that here rather than discover it by searching for the hike later.
         guard let listing = CommunityListing(record: saved) else {
             throw CommunityFailure.unavailable(
-                "The hike was published but the listing came back unreadable."
+                String(localized: "The hike was published but the listing came back unreadable.")
             )
         }
 

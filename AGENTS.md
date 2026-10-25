@@ -593,8 +593,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
   selected. When WidgetKit cannot say what is pinned, nothing is pruned.
 - **The Live Activity is split along the same seam.**
   - `OpenHikesShared/LiveActivity/` owns the payload (`HikeActivityAttributes`)
-    and every word and rounding (`HikeActivityPresentation`). `OpenWidget/`
-    draws it. `OpenHikes/LiveActivity/` decides when one exists.
+    and numeric projections and rounding. `OpenWidget/`
+    owns the wording (`HikeActivityPresentation`) and draws it, so its build
+    extracts the words into the widget’s String Catalog. `OpenHikes/LiveActivity/` decides when one exists.
   - It renders `context.state` only, fed by the widget's two funnels.
   - Its clock ticks by itself through `Text(timerInterval:)`.
   - The payload must fit 4 KB (`payloadFitsTheActivityBudget`), so it carries no
@@ -826,7 +827,16 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - `xcodebuild` does not merge extracted strings the way the IDE does. After
     changing text, build, then run
     `Scripts/sync-string-catalogs.sh <derived-data>`. CI's `--check` exits 2
-    when a catalog is behind.
+    when a catalog is behind. `Scripts/check-string-extraction.sh` audits the
+    source for copy that bypasses extraction, including concatenations and
+    `String` label parameters. It reads helper parameter types with the selected
+    toolchain’s SwiftSyntax and runs regression fixtures. Intentional machine
+    text and prescribed credits are listed with reasons in
+    `Scripts/string-extraction-exclusions.json`; stale entries fail the gate.
+    Shared App Intent metadata and `RoleButton` defaults must remain in their
+    package declarations. The sync script derives temporary typed literals
+    from them and asks the compiler to extract those for all four catalogs;
+    no second copy of their wording is checked in.
   - A count is a plural variation, never `if count == 1`.
   - Figures are formatted per locale and never catalogued.
 - **OpenHikes Pro is one monthly subscription.**

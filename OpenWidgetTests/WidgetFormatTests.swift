@@ -1,6 +1,6 @@
 //
 //  WidgetFormatTests.swift
-//  OpenHikesSharedTests
+//  OpenWidgetTests
 //
 //  "Widget number formatting", split out of TrailWidgetMetricTests.swift so
 //  that a file declares one @Suite. That file's header still holds the

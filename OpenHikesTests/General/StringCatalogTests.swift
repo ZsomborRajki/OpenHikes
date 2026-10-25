@@ -223,7 +223,7 @@ struct StringCatalogTests {
 
     /// `folder`'s catalog as the source tree has it: every key, with its
     /// entry.
-    private static func catalog(in folder: String) throws -> [String: Any] {
+    static func catalog(in folder: String) throws -> [String: Any] {
         let data = try Data(contentsOf: sourceRoot.appending(path: "\(folder)/Localizable.xcstrings"))
         let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         return try #require(json["strings"] as? [String: Any])

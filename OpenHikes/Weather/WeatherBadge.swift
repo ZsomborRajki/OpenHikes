@@ -45,6 +45,7 @@
 //
 
 import CoreLocation
+import Foundation
 import SwiftUI
 
 struct WeatherBadge: View {
@@ -186,13 +187,17 @@ struct WeatherBadge: View {
         case .idle:
             ""
         case .loading:
-            "Loading"
+            String(localized: "Loading")
         case .unavailable:
-            "Not available"
+            String(localized: "Not available")
         case .reading(let snapshot, _):
             if isStale {
-                "\(snapshot.spokenTemperature()), \(snapshot.conditionDescription), "
-                    + "last updated \(snapshot.formattedAge()) ago"
+                String(
+                    localized: """
+                        \(snapshot.spokenTemperature()), \(snapshot.conditionDescription), last updated \
+                        \(snapshot.formattedAge()) ago
+                        """
+                )
             } else {
                 "\(snapshot.spokenTemperature()), \(snapshot.conditionDescription)"
             }
@@ -229,11 +234,11 @@ extension WeatherBadgeState {
     /// context and "Current weather" for a city three hundred kilometres away
     /// would be wrong.
     var badgeAccessibilityLabel: String {
-        guard let subject else { return "Current weather" }
+        guard let subject else { return String(localized: "Current weather") }
         switch subject {
-        case .me: return "Current weather"
-        case .place(_, let name): return "Weather in \(name)"
-        case .trail: return "Trail weather"
+        case .me: return String(localized: "Current weather")
+        case .place(_, let name): return String(localized: "Weather in \(name)")
+        case .trail: return String(localized: "Trail weather")
         }
     }
 }

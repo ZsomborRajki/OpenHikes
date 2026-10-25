@@ -113,9 +113,9 @@ struct RecordAlongTrailIntent: AppIntent, ForegroundContinuableIntent, HikeCoord
             // The entity had no name to speak. Falls back to exactly what
             // `StartHikeRecordingIntent` would have said, since that is what
             // this has become.
-            return recording.trailName.map { "Recording your hike on \($0)." }
-                ?? "Recording your hike."
+            return recording.trailName.map { String(localized: "Recording your hike on \($0).") }
+                ?? String(localized: "Recording your hike.")
         }
-        return "Recording your hike, following \(trailName)."
+        return String(localized: "Recording your hike, following \(trailName).")
     }
 }

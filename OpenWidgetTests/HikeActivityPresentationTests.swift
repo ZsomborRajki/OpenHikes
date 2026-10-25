@@ -1,6 +1,6 @@
 //
 //  HikeActivityPresentationTests.swift
-//  OpenHikesSharedTests
+//  OpenWidgetTests
 //
 //  "Hike activity presentation", split out of HikeActivityTests.swift so that
 //  a file declares one @Suite. That file's header still holds the context the

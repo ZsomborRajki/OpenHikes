@@ -190,8 +190,8 @@ nonisolated enum MovementReminderAction: String, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .pause: "Pause"
-        case .resume: "Resume"
+        case .pause: String(localized: "Pause")
+        case .resume: String(localized: "Resume")
         }
     }
 }
@@ -226,10 +226,13 @@ nonisolated enum MovementReminderWording {
     static func resumeRecording(movedMeters: Double, pausedFor: TimeInterval) -> MovementReminder {
         MovementReminder(
             kind: .resumeRecording,
-            title: "Still hiking?",
-            body: "Your recording has been paused for \(HikeFormat.duration(pausedFor))"
-                + " and you’ve moved \(distance(movedMeters)) since."
-                + " Resume to put the rest of the hike on the track."
+            title: String(localized: "Still hiking?"),
+            body: String(
+                localized: """
+                    Your recording has been paused for \(HikeFormat.duration(pausedFor)) and you’ve moved \
+                    \(distance(movedMeters)) since. Resume to put the rest of the hike on the track.
+                    """
+            )
         )
     }
 
@@ -237,12 +240,16 @@ nonisolated enum MovementReminderWording {
     /// which walk this is; one who has been comparing three does not, and the
     /// title is the only thing on the banner that could tell them.
     static func resumeWalk(trailTitle: String, movedMeters: Double) -> MovementReminder {
-        let subject = trailTitle.isEmpty ? "Your hike" : trailTitle
+        let subject = trailTitle.isEmpty ? String(localized: "Your hike") : trailTitle
         return MovementReminder(
             kind: .resumeWalk,
-            title: "Still on the trail?",
-            body: "\(subject) is paused, but you’ve covered \(distance(movedMeters))"
-                + " of it since. Resume to keep your progress."
+            title: String(localized: "Still on the trail?"),
+            body: String(
+                localized: """
+                    \(subject) is paused, but you’ve covered \(distance(movedMeters)) of it since. Resume \
+                    to keep your progress.
+                    """
+            )
         )
     }
 
@@ -255,11 +262,11 @@ nonisolated enum MovementReminderWording {
     /// fog what to do about terrain the app cannot see. What it owes them is
     /// the fact, at the moment they can still act on it.
     static func leftTheTrail(trailTitle: String, offRouteMeters: Double) -> MovementReminder {
-        let subject = trailTitle.isEmpty ? "the trail" : trailTitle
+        let subject = trailTitle.isEmpty ? String(localized: "the trail") : trailTitle
         return MovementReminder(
             kind: .leftTheTrail,
-            title: "Off the trail",
-            body: "You’re about \(distance(offRouteMeters)) from \(subject)."
+            title: String(localized: "Off the trail"),
+            body: String(localized: "You’re about \(distance(offRouteMeters)) from \(subject).")
         )
     }
 
@@ -268,13 +275,17 @@ nonisolated enum MovementReminderWording {
     /// ``leftTheTrail(trailTitle:offRouteMeters:)`` gives none — turning back,
     /// pushing on and taking a head torch out are the hiker's call.
     static func afterDark(trailTitle: String, finishAt: Date, civilDusk: Date) -> MovementReminder {
-        let subject = trailTitle.isEmpty ? "the trail" : trailTitle
+        let subject = trailTitle.isEmpty ? String(localized: "the trail") : trailTitle
         let time = Date.FormatStyle(date: .omitted, time: .shortened)
         return MovementReminder(
             kind: .afterDark,
-            title: "Finishing after dark",
-            body: "At your pace you’ll reach the end of \(subject) around \(finishAt.formatted(time)),"
-                + " and it’s dark from \(civilDusk.formatted(time))."
+            title: String(localized: "Finishing after dark"),
+            body: String(
+                localized: """
+                    At your pace you’ll reach the end of \(subject) around \(finishAt.formatted(time)), and \
+                    it’s dark from \(civilDusk.formatted(time)).
+                    """
+            )
         )
     }
 
@@ -296,20 +307,24 @@ nonisolated enum MovementReminderWording {
         _ alert: WeatherAlertSummary,
         placeName: String
     ) -> MovementReminder {
-        let subject = placeName.isEmpty ? "your route" : placeName
+        let subject = placeName.isEmpty ? String(localized: "your route") : placeName
         return MovementReminder(
             kind: .severeWeather,
-            title: "Weather warning",
-            body: "\(alert.summary) — \(subject). Issued by \(alert.source)."
+            title: String(localized: "Weather warning"),
+            body: String(localized: "\(alert.summary) — \(subject). Issued by \(alert.source).")
         )
     }
 
     static func pauseRecording(stillFor: TimeInterval) -> MovementReminder {
         MovementReminder(
             kind: .pauseRecording,
-            title: "Taking a break?",
-            body: "You haven’t moved for \(HikeFormat.duration(stillFor))."
-                + " Pause the recording to keep the stop out of your moving time."
+            title: String(localized: "Taking a break?"),
+            body: String(
+                localized: """
+                    You haven’t moved for \(HikeFormat.duration(stillFor)). Pause the recording to keep the \
+                    stop out of your moving time.
+                    """
+            )
         )
     }
 }

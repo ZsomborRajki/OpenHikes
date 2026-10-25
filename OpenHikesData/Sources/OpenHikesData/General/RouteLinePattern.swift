@@ -56,16 +56,6 @@ nonisolated public enum RouteLinePattern: String, CaseIterable, Identifiable, Se
         self = Self(rawValue: storedID) ?? .default
     }
 
-    public var title: String {
-        switch self {
-        case .solid: "Solid"
-        case .directional: "Arrows"
-        case .dashed: "Dashed"
-        case .dotted: "Dotted"
-        case .arrowheads: "Arrows only"
-        }
-    }
-
     /// Whether the stroke itself is drawn. False for ``arrowheads``, which is
     /// the whole difference between it and ``directional``.
     public var drawsLine: Bool { self != .arrowheads }

@@ -90,45 +90,49 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
     var errorDescription: String? {
         switch self {
         case .notSignedIn:
-            "Sharing a hike needs an Apple Account."
+            String(localized: "Sharing a hike needs an Apple Account.")
         case .unreachable:
-            "Couldn’t reach iCloud."
+            String(localized: "Couldn’t reach iCloud.")
         case .notEligible(let reason):
             reason.title
         case .noPhotosToShare:
-            "There are no photos to add."
+            String(localized: "There are no photos to add.")
         case .nothingToShare:
-            "This hike has no route to share."
+            String(localized: "This hike has no route to share.")
         case .notPermitted:
-            "This account can’t review submissions."
+            String(localized: "This account can’t review submissions.")
         case .noLongerAvailable:
-            "This hike isn’t available any more."
+            String(localized: "This hike isn’t available any more.")
         case .unavailable:
-            "Something went wrong."
+            String(localized: "Something went wrong.")
         }
     }
 
     var recoverySuggestion: String? {
         switch self {
         case .notSignedIn:
-            "Sign in to iCloud in Settings, then try again. Browsing community hikes works without one."
+            String(
+                localized: "Sign in to iCloud in Settings, then try again. Browsing community hikes works without one."
+            )
         case .unreachable:
-            "Check your connection and try again."
+            String(localized: "Check your connection and try again.")
         case .notEligible(let reason):
             reason.explanation()
         case .noPhotosToShare:
-            """
+            String(localized: """
             Add photos to this hike first, or check that they aren’t on the device \
             they were taken on — a photo’s file stays where it was added.
-            """
+            """)
         case .nothingToShare:
-            "Record or import a route first."
+            String(localized: "Record or import a route first.")
         case .notPermitted:
-            "Its reviewer role may have been changed. Check the CloudKit Console for this environment."
+            String(
+                localized: "Its reviewer role may have been changed. Check the CloudKit Console for this environment."
+            )
         case .noLongerAvailable:
-            "It may have been taken down. Pull the list again to refresh it."
+            String(localized: "It may have been taken down. Pull the list again to refresh it.")
         case .unavailable:
-            "Try again in a moment."
+            String(localized: "Try again in a moment.")
         }
     }
 }

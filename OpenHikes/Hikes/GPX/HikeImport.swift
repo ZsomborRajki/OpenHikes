@@ -62,11 +62,8 @@ nonisolated enum HikeImportFailure: LocalizedError, Equatable, Sendable {
     var errorDescription: String? {
         switch self {
         case .file(let failure): failure.errorDescription
-        // One of several picked is the common case — a folder of walks with
-        // one bad file in it — so the count is said in the singular too.
-        case .several(let failures) where failures.count == 1: "1 file couldn’t be imported."
-        case .several(let failures): "\(failures.count) files couldn’t be imported."
-        case .notSaved: "This hike couldn’t be saved."
+        case .several(let failures): String(localized: "\(failures.count) files couldn’t be imported.")
+        case .notSaved: String(localized: "This hike couldn’t be saved.")
         }
     }
 
@@ -76,7 +73,9 @@ nonisolated enum HikeImportFailure: LocalizedError, Equatable, Sendable {
         // Says the file is untouched, because the obvious reading of a failed
         // import is that the file was the problem — and here it wasn't, so the
         // next thing to try is the same file again.
-        case .notSaved: "The file wasn’t changed. Check that the device has storage available, then import it again."
+        case .notSaved: String(
+            localized: "The file wasn’t changed. Check that the device has storage available, then import it again."
+        )
         // The others are hikes now, and this says which were not and why —
         // the one thing a single "some failed" would leave the hiker to find
         // out by scrolling their library.

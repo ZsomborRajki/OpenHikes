@@ -43,6 +43,7 @@
 //  would be offering a second upload, which is how the first one was stranded.
 //
 
+import Foundation
 import OpenHikesData
 import SwiftData
 import SwiftUI
@@ -745,22 +746,20 @@ nonisolated enum CommunityShareDisclosure {
         // are each present or not, and four separate spellings is how one of
         // them ends up describing an upload that has moved on.
         var sentences = [
-            """
+            String(localized: """
             Your route — each point on it with the time you reached it — \
             its name, its length and the date you hiked it.
-            """,
+            """),
         ]
         if hasNotes {
-            sentences.append("The notes above go with it.")
+            sentences.append(String(localized: "The notes above go with it."))
         }
         if placeCount > 0 {
             // Names and notes as well as positions, because a place the hiker
             // added and named is text they wrote, shown to strangers.
-            sentences.append(
-                placeCount == 1
-                    ? "The place marked along it goes too, with its name, kind and note."
-                    : "The \(placeCount) places marked along it go too, each with its name, kind and note."
-            )
+            sentences.append(String(localized: """
+                The \(placeCount) places marked along it go too, each with its name, kind and note.
+                """))
         }
         if photoCount > 0 {
             // The time as well as the place, because a pin is both. The
@@ -774,20 +773,18 @@ nonisolated enum CommunityShareDisclosure {
             //
             // Number-neutral after the count, so one photograph reads as
             // written English rather than as a template with a 1 in it.
-            let photos = photoCount == 1
-                ? "One photo goes with it, with the spot on the trail and the time it was taken at"
-                : """
+            let photos = String(localized: """
                 \(photoCount) photos go with it, each with the spot on the trail \
                 and the time it was taken at
-                """
+                """)
             sentences.append(
-                """
+                String(localized: """
                 \(photos) — resized before sending, with camera details and original \
                 location data removed.
-                """
+                """)
             )
         }
-        sentences.append("Nothing else from this hike.")
+        sentences.append(String(localized: "Nothing else from this hike."))
         return sentences.joined(separator: " ")
     }
 }

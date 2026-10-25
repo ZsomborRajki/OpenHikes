@@ -54,6 +54,7 @@
 //  opposite things said to a customer who may already be paying.
 //
 
+import Foundation
 import OpenHikesShared
 import StoreKit
 import SwiftUI
@@ -68,7 +69,7 @@ struct MapPaywallView: View {
     /// dismissal or an error, and neither may claim that.
     @State private var showNothingToRestore = false
 
-    private static let features: [(icon: String, title: String, detail: String)] = [
+    private static let features: [(icon: String, title: LocalizedStringKey, detail: LocalizedStringKey)] = [
         (
             "mountain.2.fill",
             "Stadia Outdoors",
@@ -82,8 +83,10 @@ struct MapPaywallView: View {
         (
             "map.fill",
             "Thunderforest Outdoors",
-            "Bright, high-contrast trail cartography that stays readable in sunlight. It keeps "
-                + "the tiles you’ve looked at; downloading a route ahead is Stadia only."
+            """
+                Bright, high-contrast trail cartography that stays readable in sunlight. It keeps the \
+                tiles you’ve looked at; downloading a route ahead is Stadia only.
+                """
         ),
         (
             "arrow.down.circle.fill",
@@ -93,14 +96,18 @@ struct MapPaywallView: View {
         (
             "chart.xyaxis.line",
             "Elevation Where There Is None",
-            "The climb, the elevation profile and steepness colors for trails you draw, routes "
-                + "found on OpenStreetMap and hikes whose file has no heights, from Stadia Maps."
+            """
+                The climb, the elevation profile and steepness colors for trails you draw, routes found \
+                on OpenStreetMap and hikes whose file has no heights, from Stadia Maps.
+                """
         ),
         (
             "heart.fill",
             "Keeps OpenStreetMap Free",
-            "The paid maps are billed per view. Paying for those is what keeps the free "
-                + "map on donated servers OpenHikes doesn’t charge for."
+            """
+                The paid maps are billed per view. Paying for those is what keeps the free map on \
+                donated servers OpenHikes doesn’t charge for.
+                """
         ),
     ]
 
@@ -178,7 +185,7 @@ struct MapPaywallView: View {
         VStack(alignment: .leading, spacing: Self.sectionSpacing) {
             header
             VStack(alignment: .leading, spacing: Self.featureSpacing) {
-                ForEach(Self.features, id: \.title) { feature in
+                ForEach(Self.features, id: \.icon) { feature in
                     featureRow(feature)
                 }
             }
@@ -203,9 +210,11 @@ struct MapPaywallView: View {
             // your phone" sold the wrong half of the subscription to anybody
             // who bought it for Thunderforest.
             Text(
-                "OpenStreetMap stays free and stays the default. Pro adds three commercial "
-                + "outdoor map styles built for trails, and both Stadia styles download a "
-                + "whole route to your phone for a hike with no signal."
+                """
+                    OpenStreetMap stays free and stays the default. Pro adds three commercial outdoor map \
+                    styles built for trails, and both Stadia styles download a whole route to your phone \
+                    for a hike with no signal.
+                    """
             )
             .font(.subheadline)
             .foregroundStyle(.secondary)
@@ -214,7 +223,7 @@ struct MapPaywallView: View {
     }
 
     private func featureRow(
-        _ feature: (icon: String, title: String, detail: String)
+        _ feature: (icon: String, title: LocalizedStringKey, detail: LocalizedStringKey)
     ) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: feature.icon)
@@ -283,8 +292,10 @@ struct MapPaywallView: View {
             Button("OK", role: .cancel) { /* dismiss */ }
         } message: {
             Text(
-                "No previous purchase was found for this Apple Account. If you bought Pro "
-                + "with a different account, sign in to that one and try again."
+                """
+                    No previous purchase was found for this Apple Account. If you bought Pro with a \
+                    different account, sign in to that one and try again.
+                    """
             )
         }
     }
@@ -310,8 +321,10 @@ struct MapPaywallView: View {
             // so nothing is known about what this account owns — telling the
             // customer to sign in to another one would be a guess, and a
             // discouraging one to hand somebody who is already paying.
-            message = "Restore couldn’t be completed. \(reason) Nothing has "
-                + "changed — you can try again in a moment."
+            message = String(localized: """
+                Restore couldn’t be completed. \(reason) Nothing has \
+                changed — you can try again in a moment.
+                """)
         }
     }
 }

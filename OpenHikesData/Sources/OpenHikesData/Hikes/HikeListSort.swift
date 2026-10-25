@@ -57,19 +57,6 @@ public enum HikeListSort: String, CaseIterable, Identifiable {
         .newest, .alphabetical, .longest, .mostWalked, .hilliest,
     ]
 
-    /// What the menu says, phrased as the answer rather than the field: a
-    /// hiker picking an order is asking "show me the long ones", not naming a
-    /// column.
-    public var title: String {
-        switch self {
-        case .newest: "Newest First"
-        case .alphabetical: "Name"
-        case .longest: "Longest"
-        case .mostWalked: "Most Hiked"
-        case .hilliest: "Hilliest"
-        }
-    }
-
     public var symbol: String {
         switch self {
         case .newest: "calendar"

@@ -20,6 +20,7 @@
 //  same shape ``HikeElevationChart`` has around ``ElevationChartView``.
 //
 
+import Foundation
 import OpenHikesData
 import SwiftUI
 
@@ -46,8 +47,8 @@ struct TrailSurfaceSection: View {
     var body: some View {
         TrailBreakdownSection(
             breakdown: breakdown,
-            title: "Surface",
-            source: "Surfaces from OpenStreetMap",
+            title: String(localized: "Surface"),
+            source: String(localized: "Surfaces from OpenStreetMap"),
             identifier: "surface-bar"
         )
     }

@@ -16,6 +16,7 @@
 //  downloads and go when it does.
 //
 
+import Foundation
 import SwiftUI
 
 // MARK: - The button
@@ -83,7 +84,7 @@ extension CommunityHikeView {
     /// wordings for it would read as two different things to do.
     var importButtonTitle: String {
         if isImporting { return "Adding…" }
-        return existingHike == nil ? "Add to My Hikes" : "Open in My Hikes"
+        return existingHike == nil ? String(localized: "Add to My Hikes") : String(localized: "Open in My Hikes")
     }
 
     /// The glyph beside that title, shared for the same reason.

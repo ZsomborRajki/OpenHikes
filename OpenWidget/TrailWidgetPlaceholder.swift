@@ -7,6 +7,7 @@
 //  timeline logic stays readable next to sixty lines of fixture coordinates.
 //
 
+import Foundation
 import OpenHikesShared
 import SwiftUI
 
@@ -56,7 +57,7 @@ extension TrailWidgetProvider {
     /// the one being chosen.
     static let placeholderSnapshot = SharedTrailSnapshot(
         hikeID: UUID(),
-        title: "Trail",
+        title: String(localized: "Trail"),
         tintHex: "#1B7F3B",
         totalDistanceMeters: Placeholder.totalDistanceMeters,
         polyline: [

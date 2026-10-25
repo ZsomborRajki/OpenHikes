@@ -441,7 +441,9 @@ extension HikeDetailView {
             title: hike.displayTitle
         ), contribution != .awaitingReview {
             Button(
-                contribution == .published ? "Add More Photos" : "Add Photos to This Trail",
+                contribution == .published
+                    ? String(localized: "Add More Photos")
+                    : String(localized: "Add Photos to This Trail"),
                 systemImage: "photo.badge.plus"
             ) {
                 contributionTarget = target

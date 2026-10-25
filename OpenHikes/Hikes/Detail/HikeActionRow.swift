@@ -14,6 +14,7 @@
 //  ``WalkToggleButton``, which is on screen at every detent.
 //
 
+import Foundation
 import OpenHikesData
 import SwiftUI
 
@@ -125,7 +126,7 @@ private struct FollowTileToggleStyle: ToggleStyle {
                 Image(systemName: "location.fill.viewfinder")
                     .font(.title3)
                     .accessibilityHidden(true)
-                Text(configuration.isOn ? "Following" : "Follow")
+                Text(configuration.isOn ? String(localized: "Following") : String(localized: "Follow"))
                     .font(.caption2.weight(.medium))
                     .accessibilityHidden(true)
             }

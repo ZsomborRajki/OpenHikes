@@ -67,6 +67,9 @@
     "Bring your iPhone nearby, with OpenHikes installed, to send your trails over." : {
 
     },
+    "Cancel" : {
+
+    },
     "Climb" : {
 
     },
@@ -104,6 +107,9 @@
 
     },
     "Heart" : {
+
+    },
+    "Hike" : {
 
     },
     "Hike Interrupted" : {
@@ -163,7 +169,13 @@
     "OpenHikes needs permission to start a workout, which is what keeps a recording running." : {
 
     },
+    "OpenHikes needs your location before it can record a hike." : {
+
+    },
     "Pause" : {
+
+    },
+    "Pause Hike" : {
 
     },
     "Pause recording" : {
@@ -173,6 +185,9 @@
 
     },
     "Paused. The ground you cover now isn’t part of the hike." : {
+
+    },
+    "Pauses the hike being recorded, from its Lock Screen panel." : {
 
     },
     "Progress along the trail" : {
@@ -196,10 +211,16 @@
     "Resume" : {
 
     },
+    "Resume Hike" : {
+
+    },
     "Resume recording" : {
 
     },
     "Resume recording on your iPhone" : {
+
+    },
+    "Resumes the paused hike, from its Lock Screen panel." : {
 
     },
     "Save Hike" : {
@@ -209,6 +230,9 @@
 
     },
     "Sent to your iPhone." : {
+
+    },
+    "Shows a trail you choose, or your selected trail, or a hike currently being recorded." : {
 
     },
     "Start" : {
@@ -245,6 +269,9 @@
 
     },
     "Time hiking" : {
+
+    },
+    "Toggle Hike Recording" : {
 
     },
     "Trail" : {

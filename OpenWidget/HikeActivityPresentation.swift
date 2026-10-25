@@ -1,6 +1,6 @@
 //
 //  HikeActivityPresentation.swift
-//  OpenHikesShared
+//  OpenWidget
 //
 //  What a Live Activity says, decided here rather than in the widget
 //  extension's view bodies.
@@ -8,53 +8,55 @@
 //  Same argument as ``TrailWidgetMetric``: the app decides when an activity
 //  starts and what goes in it, the extension draws it, and the wording,
 //  rounding and choice of which fact is worth the width have to be made once.
-//  It also means the interesting half — a percentage, an off-trail warning, a
-//  paused clock — is reachable from `swift test` on the macOS host, where a
-//  rendered `ActivityConfiguration` is not.
+//  The payload, projections and numeric formatters remain in OpenHikesShared.
+//  These words belong to the target whose build extracts them. The value
+//  tests live in OpenWidgetTests and exercise this without rendering an
+//  ActivityConfiguration.
 //
 
 import Foundation
+import OpenHikesShared
 
 /// One rendered Live Activity, in the smallest form every family can be built
 /// from: the Lock Screen banner, the expanded Dynamic Island, and the two
 /// compact regions all read this.
-public struct HikeActivityPresentation: Sendable, Equatable {
+nonisolated struct HikeActivityPresentation: Sendable, Equatable {
     /// The trail's name, or the recording's.
-    public var title: String
+    var title: String
     /// The glyph beside ``title``, and the one the minimal Dynamic Island
     /// presentation shows on its own.
-    public var symbolName: String
+    var symbolName: String
     /// A short word about what is wrong or unusual — "Paused", "Off trail" —
     /// or `nil` when the walk is simply proceeding. Never used for anything
     /// routine: a label that is always there is a label nobody reads.
-    public var statusLabel: String?
+    var statusLabel: String?
     /// The one number worth the largest type on the screen.
-    public var primaryValue: String
-    public var primaryCaption: String
+    var primaryValue: String
+    var primaryCaption: String
     /// The second number, where there is one. `nil` for a running recording,
     /// whose second slot is the self-ticking clock — see ``showsElapsedTimer``.
-    public var secondaryValue: String?
-    public var secondaryCaption: String?
-    public var metrics: [TrailWidgetMetric]
+    var secondaryValue: String?
+    var secondaryCaption: String?
+    var metrics: [TrailWidgetMetric]
     /// Fraction of the trail walked, 0...1, or `nil` when there is nothing to
     /// measure against — every recording, and a follow with no live fix.
-    public var progress: Double?
+    var progress: Double?
     /// Whether the view should draw a system-ticked `Text(timerInterval:)`
     /// from ``timerStart`` rather than ``elapsedText``.
     ///
     /// The distinction is the whole reason both exist: a running clock must
     /// tick without the app sending an update, and a paused one must not tick
     /// at all.
-    public var showsElapsedTimer: Bool
-    public var timerStart: Date
+    var showsElapsedTimer: Bool
+    var timerStart: Date
     /// The clock as text, for the paused case and for VoiceOver — which reads
     /// a `Text(timerInterval:)` as an unhelpful running number.
-    public var elapsedText: String
-    public var accessibilityLabel: String
-    public var accessibilityValue: String
+    var elapsedText: String
+    var accessibilityLabel: String
+    var accessibilityValue: String
 }
 
-public extension HikeActivityPresentation {
+nonisolated extension HikeActivityPresentation {
     /// What belongs in the second slot, decided once.
     ///
     /// Both surfaces that draw one — the Lock Screen panel and the Dynamic
@@ -87,7 +89,7 @@ public extension HikeActivityPresentation {
     }
 }
 
-public extension HikeActivityAttributes {
+nonisolated extension HikeActivityAttributes {
     /// The presentation for `state`.
     ///
     /// - Parameter metricLimit: how many stat chips the family has room for,
@@ -148,12 +150,12 @@ public extension HikeActivityAttributes {
             symbolName: status.symbolName,
             statusLabel: status.label,
             primaryValue: distance,
-            primaryCaption: "Distance",
+            primaryCaption: String(localized: "Distance"),
             // Only when the clock has stopped. A running recording puts the
             // live timer in this slot instead, which the view builds from
             // `timerStart`.
             secondaryValue: state.isTicking ? nil : elapsed,
-            secondaryCaption: "Elapsed",
+            secondaryCaption: String(localized: "Elapsed"),
             metrics: metrics,
             progress: nil,
             showsElapsedTimer: state.isTicking,
@@ -162,7 +164,7 @@ public extension HikeActivityAttributes {
             accessibilityLabel: status.label.map { "\(title), \($0.lowercased())" }
                 ?? title,
             accessibilityValue: Self.spoken(
-                ["\(distance) hiked", elapsed],
+                [String(localized: "\(distance) hiked"), elapsed],
                 metrics: metrics
             )
         )
@@ -178,8 +180,8 @@ public extension HikeActivityAttributes {
     ) -> (symbolName: String, label: String?) {
         switch runState {
         case .running: ("figure.hiking", nil)
-        case .paused: ("pause.circle.fill", "Paused")
-        case .finished: ("checkmark.circle.fill", "Finished")
+        case .paused: ("pause.circle.fill", String(localized: "Paused"))
+        case .finished: ("checkmark.circle.fill", String(localized: "Finished"))
         }
     }
 
@@ -238,15 +240,15 @@ public extension HikeActivityAttributes {
             statusLabel: status.label,
             primaryValue: percentage ?? total,
             primaryCaption: walk.isWalking
-                ? "Hiked"
-                : (progress == nil ? "Trail length" : "Complete"),
+                ? String(localized: "Hiked")
+                : (progress == nil ? String(localized: "Trail length") : String(localized: "Complete")),
             // A running walk puts its live timer here instead, exactly as a
             // running recording does; a paused or finished one shows the
             // frozen clock, and a plain follow keeps the distance left.
             secondaryValue: walk.isWalking
                 ? (showsTimer ? nil : elapsed)
                 : walk.remaining,
-            secondaryCaption: walk.isWalking ? "Elapsed" : "Remaining",
+            secondaryCaption: walk.isWalking ? String(localized: "Elapsed") : String(localized: "Remaining"),
             metrics: metrics,
             progress: progress,
             showsElapsedTimer: showsTimer,
@@ -256,13 +258,19 @@ public extension HikeActivityAttributes {
                 ?? title,
             accessibilityValue: Self.spoken(
                 [
-                    percentage.map { "\($0.dropLast()) percent \(walk.isWalking ? "hiked" : "complete")" }
-                        ?? "\(total) long",
-                    walk.isWalking ? elapsed : walk.remaining.map { "\($0) remaining" },
+                    percentage.map { Self.spokenPercentage($0, walking: walk.isWalking) }
+                        ?? String(localized: "\(total) long"),
+                    walk.isWalking ? elapsed : walk.remaining.map { String(localized: "\($0) remaining") },
                 ],
                 metrics: metrics
             )
         )
+    }
+
+    private static func spokenPercentage(_ percentage: String, walking: Bool) -> String {
+        let value = String(percentage.dropLast())
+        if walking { return String(localized: "\(value) percent hiked") }
+        return String(localized: "\(value) percent complete")
     }
 
     /// The figures a walk contributes, or their absence for a plain follow.
@@ -307,34 +315,13 @@ public extension HikeActivityAttributes {
         isOnRoute: Bool
     ) -> (symbolName: String, label: String?) {
         switch runState {
-        case .paused: return ("pause.circle.fill", "Paused")
-        case .finished: return ("checkmark.circle.fill", "Finished")
+        case .paused: return ("pause.circle.fill", String(localized: "Paused"))
+        case .finished: return ("checkmark.circle.fill", String(localized: "Finished"))
         case .running, nil:
             return isOnRoute
                 ? ("figure.hiking", nil)
-                : ("exclamationmark.triangle.fill", "Off trail")
+                : ("exclamationmark.triangle.fill", String(localized: "Off trail"))
         }
-    }
-
-    /// Fraction of the followed trail walked, or `nil` when there is no live
-    /// fix or no route length to measure against.
-    ///
-    /// Mirrors ``SharedTrailSnapshot/fractionComplete`` rather than
-    /// reimplementing it — same clamp, same refusal on a zero-length route.
-    func fractionComplete(for state: ContentState) -> Double? {
-        guard state.offRouteMeters != nil,
-              let routeDistanceMeters,
-              routeDistanceMeters > 0
-        else { return nil }
-        return min(1, max(0, state.distanceMeters / routeDistanceMeters))
-    }
-
-    /// Distance left to the end of the followed trail, or `nil` on the same
-    /// terms as ``fractionComplete(for:)``.
-    func remainingDistanceMeters(for state: ContentState) -> Double? {
-        guard state.offRouteMeters != nil, let routeDistanceMeters
-        else { return nil }
-        return max(0, routeDistanceMeters - state.distanceMeters)
     }
 
     /// Joins the spoken figures and the chips into the single phrase VoiceOver

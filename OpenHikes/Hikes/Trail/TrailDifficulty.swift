@@ -43,28 +43,28 @@ nonisolated enum TrailDifficulty: String, CaseIterable, Codable, Hashable, Senda
 
     var displayName: String {
         switch self {
-        case .hiking: "Hiking"
-        case .mountainHiking: "Mountain Hiking"
-        case .demandingMountainHiking: "Demanding Mountain Hiking"
-        case .alpineHiking: "Alpine Hiking"
-        case .demandingAlpineHiking: "Demanding Alpine Hiking"
-        case .difficultAlpineHiking: "Difficult Alpine Hiking"
-        case .unknown: "Unknown"
-        case .unmapped: "Not mapped"
+        case .hiking: String(localized: "Hiking")
+        case .mountainHiking: String(localized: "Mountain Hiking")
+        case .demandingMountainHiking: String(localized: "Demanding Mountain Hiking")
+        case .alpineHiking: String(localized: "Alpine Hiking")
+        case .demandingAlpineHiking: String(localized: "Demanding Alpine Hiking")
+        case .difficultAlpineHiking: String(localized: "Difficult Alpine Hiking")
+        case .unknown: String(localized: "Unknown")
+        case .unmapped: String(localized: "Not mapped")
         }
     }
 
     /// A short note on what this grade means in practice.
     var summary: String {
         switch self {
-        case .hiking: "Marked path, gentle terrain"
-        case .mountainHiking: "Steeper path, surefootedness helpful"
-        case .demandingMountainHiking: "Hands occasionally needed for balance"
-        case .alpineHiking: "Broken terrain, hands used continuously"
-        case .demandingAlpineHiking: "Exposed, technically demanding"
-        case .difficultAlpineHiking: "Full mountaineering equipment required"
-        case .unknown: "Mapped trail, untagged difficulty"
-        case .unmapped: "No mapped trail nearby"
+        case .hiking: String(localized: "Marked path, gentle terrain")
+        case .mountainHiking: String(localized: "Steeper path, surefootedness helpful")
+        case .demandingMountainHiking: String(localized: "Hands occasionally needed for balance")
+        case .alpineHiking: String(localized: "Broken terrain, hands used continuously")
+        case .demandingAlpineHiking: String(localized: "Exposed, technically demanding")
+        case .difficultAlpineHiking: String(localized: "Full mountaineering equipment required")
+        case .unknown: String(localized: "Mapped trail, untagged difficulty")
+        case .unmapped: String(localized: "No mapped trail nearby")
         }
     }
 

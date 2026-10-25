@@ -137,7 +137,7 @@ private extension CommunityPhotoReviewView {
     var contributionSection: some View {
         Section {
             LabeledContent("Credit") {
-                Text(pending.authorName.isEmpty ? "None given" : pending.authorName)
+                Text(pending.authorName.isEmpty ? String(localized: "None given") : pending.authorName)
                     .foregroundStyle(pending.authorName.isEmpty ? .secondary : .primary)
             }
             LabeledContent("Hiked") {
@@ -151,7 +151,11 @@ private extension CommunityPhotoReviewView {
             }
             .accessibilityIdentifier("photo-review-target")
         } header: {
-            Text(pending.isCurated ? "Photos for an OpenStreetMap trail" : "Photos for a hike")
+            Text(
+                pending.isCurated
+                    ? String(localized: "Photos for an OpenStreetMap trail")
+                    : String(localized: "Photos for a hike")
+            )
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Sent \(pending.noticedAt.formatted(date: .abbreviated, time: .shortened))")

@@ -11,6 +11,7 @@
 //  detail screen.
 //
 
+import Foundation
 import OpenHikesData
 import SwiftUI
 
@@ -45,8 +46,8 @@ struct TrailDifficultySection: View {
     var body: some View {
         TrailBreakdownSection(
             breakdown: breakdown,
-            title: "Difficulty",
-            source: "Difficulty grades from OpenStreetMap (SAC scale)",
+            title: String(localized: "Difficulty"),
+            source: String(localized: "Difficulty grades from OpenStreetMap (SAC scale)"),
             identifier: "difficulty-bar"
         )
     }

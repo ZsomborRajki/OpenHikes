@@ -23,6 +23,7 @@
 //  the colour they picked, and it says so under itself.
 //
 
+import Foundation
 import OpenHikesData
 import OpenHikesShared
 import SwiftUI
@@ -286,11 +287,15 @@ private struct RouteShadeKey: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(coloring == .elevation ? "Steepness colors" : "Difficulty colors")
+        .accessibilityLabel(
+            coloring == .elevation
+                ? String(localized: "Steepness colors")
+                : String(localized: "Difficulty colors")
+        )
         .accessibilityValue(
             coloring == .elevation
-                ? "From green for level ground to black for grades of 40 percent or more"
-                : "From green for hiking to black for difficult alpine hiking"
+                ? String(localized: "From green for level ground to black for grades of 40 percent or more")
+                : String(localized: "From green for hiking to black for difficult alpine hiking")
         )
     }
 

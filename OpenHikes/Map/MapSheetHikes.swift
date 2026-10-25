@@ -16,6 +16,7 @@
 //  hike. `SheetQueryIsolationTests` measures both halves of the claim.
 //
 
+import Foundation
 import MapKit
 import OpenHikesData
 import OpenHikesShared
@@ -406,7 +407,7 @@ private extension MapSheetHikes {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.up.arrow.down")
-                Text(isCustomOrder ? "Your Order" : sort.title)
+                Text(isCustomOrder ? String(localized: "Your Order") : sort.title)
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.bold))
             }
@@ -426,7 +427,7 @@ private extension MapSheetHikes {
         // trigger costs nothing new.
         .sensoryFeedback(HapticMoment.choiceChanged.feedback, trigger: sort)
         .accessibilityLabel("Sort hikes")
-        .accessibilityValue(isCustomOrder ? "Your order" : sort.title)
+        .accessibilityValue(isCustomOrder ? String(localized: "Your order") : sort.title)
         .accessibilityIdentifier("hike-order-button")
     }
 
@@ -641,8 +642,10 @@ private extension MapSheetHikes {
                 // nothing spoken, so the sentence has to name the buttons it
                 // is pointing at.
                 .accessibilityLabel(
-                    "Tap the Record a hike button on the map to record a hike, "
-                        + "or the Make a trail button to draw a trail."
+                    """
+                        Tap the Record a hike button on the map to record a hike, or the Make a trail button to \
+                        draw a trail.
+                        """
                 )
             #endif
             Text("Have a GPX file? Tap \(importIcon) to import it.")
@@ -809,23 +812,25 @@ private extension MapSheetHikes {
     func walkStatus(for hike: Hike) -> HikeRow.Status? {
         guard walkSession.walkedHikeID == hike.id, let phase = walkSession.phase else { return nil }
         return switch phase {
-        case .following: HikeRow.Status(title: "Active", tint: hike.tintOpaque)
-        case .paused: HikeRow.Status(title: "Paused", tint: .secondary)
+        case .following: HikeRow.Status(title: String(localized: "Active"), tint: hike.tintOpaque)
+        case .paused: HikeRow.Status(title: String(localized: "Paused"), tint: .secondary)
         }
     }
 
     func recordingStatus(for hike: Hike) -> HikeRow.Status? {
         guard belongsToActiveRecording(hike) else { return nil }
-        guard hike.id == recorder.currentHike?.id else { return HikeRow.Status(title: "Recording", tint: .red) }
+        guard hike.id == recorder.currentHike?.id else {
+            return HikeRow.Status(title: String(localized: "Recording"), tint: .red)
+        }
         return switch recorder.phase {
-        case .idle: HikeRow.Status(title: "Recording", tint: .red)
-        case .recovering: HikeRow.Status(title: "Recovering", tint: .orange)
-        case .waitingForFix: HikeRow.Status(title: "Finding GPS", tint: .orange)
-        case .recording: HikeRow.Status(title: "Recording", tint: .red)
-        case .paused: HikeRow.Status(title: "Paused", tint: .secondary)
-        case .saving: HikeRow.Status(title: "Saving", tint: .orange)
-        case .reviewing: HikeRow.Status(title: "Review Route", tint: .orange)
-        case .failed: HikeRow.Status(title: "Needs Attention", tint: .red)
+        case .idle: HikeRow.Status(title: String(localized: "Recording"), tint: .red)
+        case .recovering: HikeRow.Status(title: String(localized: "Recovering"), tint: .orange)
+        case .waitingForFix: HikeRow.Status(title: String(localized: "Finding GPS"), tint: .orange)
+        case .recording: HikeRow.Status(title: String(localized: "Recording"), tint: .red)
+        case .paused: HikeRow.Status(title: String(localized: "Paused"), tint: .secondary)
+        case .saving: HikeRow.Status(title: String(localized: "Saving"), tint: .orange)
+        case .reviewing: HikeRow.Status(title: String(localized: "Review Route"), tint: .orange)
+        case .failed: HikeRow.Status(title: String(localized: "Needs Attention"), tint: .red)
         }
     }
 

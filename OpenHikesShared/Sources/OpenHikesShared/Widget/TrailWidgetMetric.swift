@@ -5,10 +5,9 @@
 //  The small stat chips the iOS widget draws in the band beneath its map, and
 //  the number formatting they share with the status line above them.
 //
-//  They live here rather than in the widget target for the same reason
-//  `statusText` does: the app computes the numbers and the extension renders
-//  them, so the wording, the rounding, and the decision about which stat is
-//  worth the width have to be made once, in one place.
+//  The package chooses the figures and formats them once for every surface.
+//  Their words and spoken phrases live in the widget target’s extensions,
+//  where the build extracts them into its String Catalog.
 //
 
 import Foundation
@@ -277,8 +276,8 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
     public var id: String { kind.rawValue }
 
     /// The SF Symbol drawn beside ``value``. Purely decorative: the widget is
-    /// a single accessibility element and speaks ``accessibilityPhrase``
-    /// instead of the glyph.
+    /// a single accessibility element and speaks the target-owned label
+    /// and formatted value instead of the glyph.
     public var symbolName: String {
         switch kind {
         case .ascent: "arrow.up.forward"
@@ -292,21 +291,6 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
         }
     }
 
-    /// What the glyph means, spelled out for VoiceOver.
-    public var spokenLabel: String {
-        switch kind {
-        case .ascent: "Ascent"
-        case .averageSpeed: "Average speed"
-        case .currentElevation: "Elevation"
-        case .distance: "Hiked"
-        case .length: "Length"
-        case .points: "Track points"
-        case .remaining: "Remaining"
-        case .timeLeft: "Time left"
-        }
-    }
-
-    public var accessibilityPhrase: String { "\(spokenLabel) \(value)" }
 }
 
 /// The one place each chip is built.
@@ -320,7 +304,7 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
 extension TrailWidgetMetric {
     /// Absent for a route with no elevations, and for a flat one: "Ascent 0 m"
     /// is a chip's width spent saying nothing.
-    static func ascent(meters: Double?, locale: Locale) -> Self? {
+    public static func ascent(meters: Double?, locale: Locale) -> Self? {
         guard let meters, meters > 0 else { return nil }
         return Self(
             kind: .ascent,
@@ -360,7 +344,7 @@ extension TrailWidgetMetric {
 
     /// Sea level is a real height, so this one is absent only when there is no
     /// live fix to read a height from.
-    static func currentElevation(meters: Double?, locale: Locale) -> Self? {
+    public static func currentElevation(meters: Double?, locale: Locale) -> Self? {
         guard let meters else { return nil }
         return Self(
             kind: .currentElevation,
@@ -370,14 +354,14 @@ extension TrailWidgetMetric {
 
     /// Absent with nothing honest to say — see
     /// ``SharedTrailSnapshot/Walk/secondsLeft`` — and once the trail is done.
-    static func timeLeft(seconds: TimeInterval?) -> Self? {
+    public static func timeLeft(seconds: TimeInterval?) -> Self? {
         guard let seconds, seconds.isFinite, seconds > 0 else { return nil }
         return Self(kind: .timeLeft, value: WidgetFormat.timeLeft(seconds: seconds))
     }
 
     /// Absent until the walk has covered ground: an average of zero, or none
     /// before the second fix, is not a fact about the walk.
-    static func averageSpeed(metersPerSecond: Double?, locale: Locale) -> Self? {
+    public static func averageSpeed(metersPerSecond: Double?, locale: Locale) -> Self? {
         guard let metersPerSecond, metersPerSecond > 0 else { return nil }
         return Self(
             kind: .averageSpeed,
@@ -390,7 +374,7 @@ extension TrailWidgetMetric {
 
     /// Absent before the first fix lands, when "0 pts" would read as a broken
     /// recording rather than as one that has just started.
-    static func points(_ count: Int?, locale: Locale) -> Self? {
+    public static func points(_ count: Int?, locale: Locale) -> Self? {
         guard let count, count > 0 else { return nil }
         return Self(
             kind: .points,
@@ -417,11 +401,6 @@ extension TrailWidgetMetric {
         return Array(candidates.compactMap(\.self).prefix(limit))
     }
 
-    /// The same chips as one phrase, for a widget's single accessibility
-    /// element — the glyphs themselves say nothing to VoiceOver.
-    static func accessibilityText(for metrics: [TrailWidgetMetric]) -> String {
-        metrics.map(\.accessibilityPhrase).joined(separator: ", ")
-    }
 }
 
 extension SharedTrailSnapshot: TrailWidgetMetricSource {}
@@ -429,25 +408,13 @@ extension SharedRecordingSnapshot: TrailWidgetMetricSource {}
 
 /// Something a widget can draw a band of stat chips for.
 ///
-/// Two snapshots answer this and they answer it differently — a trail's
-/// chips are ascent and where the hiker is, a recording's are ascent and
-/// average speed. What they do not differ about is turning whichever chips
-/// came back into the one phrase a widget speaks, so that lives here: a
-/// widget is a single accessibility element, the glyphs say nothing to
-/// VoiceOver, and a second spelling of the joining would be a widget that
-/// reads differently depending on what it happens to be showing.
+/// The package decides which figures a snapshot offers and formats their
+/// values. The widget target supplies localized labels and joins them into
+/// its single accessibility element.
 public protocol TrailWidgetMetricSource {
     /// This snapshot's chips, most useful first, truncated to whatever the
     /// widget family has width for.
     func metrics(limit: Int, locale: Locale) -> [TrailWidgetMetric]
-}
-
-public extension TrailWidgetMetricSource {
-    /// The same chips as one phrase, for the widget's single accessibility
-    /// element.
-    func metricsAccessibilityText(limit: Int, locale: Locale = .current) -> String {
-        TrailWidgetMetric.accessibilityText(for: metrics(limit: limit, locale: locale))
-    }
 }
 
 public extension SharedTrailSnapshot {
