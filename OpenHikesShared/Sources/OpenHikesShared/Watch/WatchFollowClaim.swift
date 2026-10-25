@@ -59,6 +59,15 @@
 //  next fix for the wrong leg. So the model lets go of that position first,
 //  as it does when a paused recording resumes.
 //
+//  The app's time off screen is one gap of three. A map opened when no map
+//  was showing its trail starts the feed after one too, since the feed has
+//  been down from the moment the last map closed, however far the hiker has
+//  walked since. So does a recording stopped while paused: from the pause
+//  on, nothing was matched, and the last fix is where the hiker paused. Each
+//  is a ``FeedChange/restart``. Only a map that takes over from another one
+//  showing the same trail starts the feed as it stands, because for that map
+//  it never stopped.
+//
 //  The app leaves the screen when the scene reaches the background, and comes
 //  back when it is active again. `.inactive` lies between the two and moves
 //  nothing. Out of `.active` it is a lowered wrist: the app stays frontmost,
@@ -84,9 +93,10 @@ public struct WatchFollowClaim: Equatable, Sendable {
     public enum FeedChange: Equatable, Sendable {
         /// Start it for the screen that is asking.
         case start
-        /// Start it again for a screen that went on asking while the app was
-        /// off screen. Where the last fix put the hiker is let go first: they
-        /// walked on with the feed down, as across a recording's pause.
+        /// Start it after a gap, in which nothing was matched: the app off
+        /// screen, no map showing the trail, or a recording paused. Where the
+        /// last fix put the hiker is let go first: they may have walked on, as
+        /// across a recording's pause.
         case restart
         /// Stop it: nothing that can show it is asking any longer.
         case stop
@@ -128,6 +138,12 @@ public struct WatchFollowClaim: Equatable, Sendable {
     /// trail it shows is not this screen's: the two screens' callbacks come
     /// in no promised order, and the one leaving may have started it.
     ///
+    /// Otherwise the feed starts as a ``FeedChange/restart``, unless the
+    /// screen it replaced was showing this trail: then the feed never stopped,
+    /// and its last fix still says where the hiker is. A map opened again
+    /// after a walk with none open was read from where the last one closed,
+    /// which on a trail that comes back along itself can be the other leg.
+    ///
     /// - Parameters:
     ///   - screen: the screen, the same for its whole time on screen.
     ///   - hikeID: the trail the screen shows.
@@ -142,10 +158,14 @@ public struct WatchFollowClaim: Equatable, Sendable {
         holding held: UUID?,
         recording: Bool
     ) -> FeedChange {
+        // Read before this screen takes the claim: the one it replaces, if
+        // that one is still asking for the same trail.
+        let isFeedingThisTrail = isClaimed && claimedHikeID == hikeID
         claimant = screen
         claimedHikeID = hikeID
         guard !recording, isAppOnScreen else { return .unchanged }
-        return held == hikeID ? .start : .stop
+        guard held == hikeID else { return .stop }
+        return isFeedingThisTrail ? .start : .restart
     }
 
     /// A trail screen left.
@@ -175,8 +195,15 @@ public struct WatchFollowClaim: Equatable, Sendable {
     /// ended — and only once the watch holds that screen's trail, and only
     /// while the app is on screen. A recording that ends off screen leaves the
     /// feed to ``appReturned(holding:recording:)``.
-    public func recordingStopped(holding held: UUID?) -> FeedChange {
-        isClaimed && isAppOnScreen && held == claimedHikeID ? .start : .unchanged
+    ///
+    /// - Parameter whilePaused: whether the recording was paused when it
+    ///   stopped. It matched nothing from the pause on, so the feed comes back
+    ///   as a ``FeedChange/restart``. A recording stopped while it ran leaves
+    ///   the hiker where they are, which may be a trailhead both ends of the
+    ///   trail share, and only its last fix can say which end.
+    public func recordingStopped(holding held: UUID?, whilePaused: Bool) -> FeedChange {
+        guard isClaimed, isAppOnScreen, held == claimedHikeID else { return .unchanged }
+        return whilePaused ? .restart : .start
     }
 
     /// The app left the screen: the scene went to the background, with a map

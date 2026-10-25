@@ -35,7 +35,7 @@ struct WatchFollowClaimTrailTests {
         // the phone, out of range, has not sent.
         _ = claim.screenAppeared(map, asking: asked, holding: held, recording: true)
 
-        #expect(claim.recordingStopped(holding: held) == .unchanged)
+        #expect(claim.recordingStopped(holding: held, whilePaused: false) == .unchanged)
         #expect(claim.trailArrived(holding: asked, recording: false) == .start)
     }
 
@@ -43,7 +43,7 @@ struct WatchFollowClaimTrailTests {
     func mapOpeningOverAnotherTrailsFeedStopsIt() {
         var claim = WatchFollowClaim()
         let previous = UUID()
-        #expect(claim.screenAppeared(previous, asking: held, holding: held, recording: false) == .start)
+        #expect(claim.screenAppeared(previous, asking: held, holding: held, recording: false) == .restart)
 
         // The next map arrives before the previous one's `onDisappear`, which
         // then leaves the new claim alone.
@@ -92,7 +92,7 @@ struct WatchFollowClaimTrailTests {
         // shows none of it.
         var claim = WatchFollowClaim()
         #expect(claim.screenAppeared(map, asking: asked, holding: place.followableHikeID, recording: false) == .stop)
-        #expect(claim.recordingStopped(holding: place.followableHikeID) == .unchanged)
+        #expect(claim.recordingStopped(holding: place.followableHikeID, whilePaused: false) == .unchanged)
         // The same trail as a line is what the map is waiting for.
         #expect(claim.trailArrived(holding: line.followableHikeID, recording: false) == .start)
     }

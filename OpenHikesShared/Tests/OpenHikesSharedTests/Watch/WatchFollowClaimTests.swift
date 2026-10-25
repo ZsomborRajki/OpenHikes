@@ -20,7 +20,7 @@ struct WatchFollowClaimTests {
     @Test("A map left during a recording does not restart the receiver at Stop")
     func mapLeftDuringRecordingIsNotRestoredAtStop() {
         var claim = WatchFollowClaim()
-        #expect(claim.screenAppeared(map, asking: trail, holding: trail, recording: false) == .start)
+        #expect(claim.screenAppeared(map, asking: trail, holding: trail, recording: false) == .restart)
 
         // Recording along the trail, the hiker goes back to the list and
         // swipes to the Record tab. The recording keeps its feed.
@@ -28,7 +28,7 @@ struct WatchFollowClaimTests {
         #expect(!claim.isClaimed)
 
         // Stop takes the receiver down, and no map is asking for it back.
-        #expect(claim.recordingStopped(holding: trail) == .unchanged)
+        #expect(claim.recordingStopped(holding: trail, whilePaused: false) == .unchanged)
     }
 
     @Test("A map still open when the recording stops gets its feed back")
@@ -36,7 +36,7 @@ struct WatchFollowClaimTests {
         var claim = WatchFollowClaim()
         _ = claim.screenAppeared(map, asking: trail, holding: trail, recording: false)
 
-        #expect(claim.recordingStopped(holding: trail) == .start)
+        #expect(claim.recordingStopped(holding: trail, whilePaused: false) == .start)
     }
 
     @Test("A map that comes back during the recording claims the feed again for after Stop")
@@ -47,7 +47,7 @@ struct WatchFollowClaimTests {
 
         // Under the recording, which already has the receiver.
         #expect(claim.screenAppeared(map, asking: trail, holding: trail, recording: true) == .unchanged)
-        #expect(claim.recordingStopped(holding: trail) == .start)
+        #expect(claim.recordingStopped(holding: trail, whilePaused: false) == .start)
     }
 
     @Test("Stop starts nothing for a map still waiting for its trail")
@@ -56,7 +56,7 @@ struct WatchFollowClaimTests {
         // Opened under a recording, on a watch the phone has sent no trail.
         _ = claim.screenAppeared(map, asking: trail, holding: nil, recording: true)
 
-        #expect(claim.recordingStopped(holding: nil) == .unchanged)
+        #expect(claim.recordingStopped(holding: nil, whilePaused: false) == .unchanged)
         #expect(claim.isClaimed)
         // The trail landing is the moment the feed is for.
         #expect(claim.trailArrived(holding: trail, recording: false) == .start)
@@ -69,7 +69,7 @@ struct WatchFollowClaimTests {
 
         #expect(claim.screenLeft(map, recording: false) == .stop)
         #expect(!claim.isClaimed)
-        #expect(claim.recordingStopped(holding: trail) == .unchanged)
+        #expect(claim.recordingStopped(holding: trail, whilePaused: false) == .unchanged)
     }
 
     @Test(
@@ -84,7 +84,7 @@ struct WatchFollowClaimTests {
 
         #expect(claim.screenLeft(map, recording: recording) == .unchanged)
         #expect(claim.claimant == next)
-        #expect(claim.recordingStopped(holding: trail) == .start)
+        #expect(claim.recordingStopped(holding: trail, whilePaused: false) == .start)
         #expect(claim.screenLeft(next, recording: recording) == (recording ? .unchanged : .stop))
         #expect(!claim.isClaimed)
     }
@@ -132,7 +132,7 @@ struct WatchFollowClaimTests {
 
         #expect(!claim.isClaimed)
         #expect(claim.trailArrived(holding: trail, recording: false) == .unchanged)
-        #expect(claim.recordingStopped(holding: trail) == .unchanged)
+        #expect(claim.recordingStopped(holding: trail, whilePaused: false) == .unchanged)
         #expect(claim.screenLeft(map, recording: false) == .unchanged)
     }
 }
