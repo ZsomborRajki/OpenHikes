@@ -11,11 +11,12 @@ nonisolated extension GPXImport {
     /// What a file becomes: its tracks, and how many of its loose waypoints
     /// lay on none of them and were left out — see ``GPXTrackSplit``.
     ///
-    /// In a file of several tracks each keeps every place it takes, however
-    /// many: they are bounded by what bounds the file, the points and bytes
-    /// of ``Limits``, because each is a `<wpt>` the parse counted. The cap on
-    /// what an import writes is spent later, by ``placesKept(of:)``, once the
-    /// hiker has said which tracks they want.
+    /// Each track keeps every place it takes, however many, in a file of one
+    /// track as in a file of several: they are bounded by what bounds the
+    /// file, the points and bytes of ``Limits``, because each is a `<wpt>`
+    /// the parse counted. The cap on what an import writes is spent later, by
+    /// ``placesKept(of:)``, on the tracks the import keeps, which is what lets
+    /// it count what the cap cut (#1076).
     struct Contents: Sendable {
         var tracks: [Track]
         var unplacedWaypoints = 0

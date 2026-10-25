@@ -52,7 +52,8 @@ extension View {
     /// presented from.
     ///
     /// - Parameters:
-    ///   - importFailure: A picked file that couldn't become a kept hike.
+    ///   - importReport: A picked file that couldn't become a kept hike, or
+    ///     became one without every place — see ``HikeImportReport``.
     ///   - searchFailure: A search that couldn't be answered.
     ///   - startupIssue: Whether this launch is on temporary storage.
     ///   - locationAccess: Whether the map's refused "my location" button has
@@ -61,7 +62,7 @@ extension View {
     ///   - walkEndRefused: The record button's End Hike and Record, refused by
     ///     the store — see ``RecordingEntry/walkEndRefused``.
     func mapScreenAlerts(
-        importFailure: Binding<HikeImportFailure?>,
+        importReport: Binding<HikeImportReport>,
         searchFailure: Binding<SearchFailure?>,
         startupIssue: Binding<Bool>,
         locationAccess: Binding<Bool>,
@@ -70,7 +71,7 @@ extension View {
     ) -> some View {
         modifier(
             MapScreenAlerts(
-                importFailure: importFailure,
+                importReport: importReport,
                 searchFailure: searchFailure,
                 startupIssue: startupIssue,
                 locationAccess: locationAccess,
@@ -82,17 +83,36 @@ extension View {
 }
 
 private struct MapScreenAlerts: ViewModifier {
-    @Binding var importFailure: HikeImportFailure?
+    @Binding var importReport: HikeImportReport
     @Binding var searchFailure: SearchFailure?
     @Binding var startupIssue: Bool
     @Binding var locationAccess: Bool
     @Binding var photoCapture: PhotoCaptureState
     @Binding var walkEndRefused: Bool
 
+    private var placeNoticeShown: Binding<Bool> {
+        Binding(
+            get: { importReport.placeNotice != nil && importReport.failure == nil },
+            set: { if !$0 { importReport.placeNotice = nil } }
+        )
+    }
+
     func body(content: Content) -> some View {
         content
-            .alert(isPresented: $importFailure.isPresent(), error: importFailure) {
+            .alert(isPresented: $importReport.failure.isPresent(), error: importReport.failure) {
                 Button("OK", role: .cancel) { /* dismiss */ }
+            }
+            // Behind the failure, which one pick of several files can raise
+            // beside it: presented once that one is dismissed, rather than
+            // lost to it. See ``HikeImportReport``.
+            .alert(
+                "Not Every Place Was Imported",
+                isPresented: placeNoticeShown,
+                presenting: importReport.placeNotice
+            ) { _ in
+                Button("OK", role: .cancel) { /* dismiss */ }
+            } message: { notice in
+                Text(notice.message)
             }
             // A silent search is indistinguishable from a broken one.
             .alert(isPresented: $searchFailure.isPresent(), error: searchFailure) {

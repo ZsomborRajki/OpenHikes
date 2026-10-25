@@ -273,7 +273,8 @@ struct GPXPlaceRoundTripTests {
 
     /// Every place is a CloudKit record, so an unattended file cannot be
     /// allowed to write ten thousand of them — and refusing the file instead
-    /// would lose a route that is perfectly fine.
+    /// would lose a route that is perfectly fine. The parse keeps them all;
+    /// the import is what cuts, so that it can count the cut (#1076).
     @Test("a file with more waypoints than the ceiling is cut rather than refused")
     func tooManyWaypointsAreCut() throws {
         var xml = """
@@ -299,7 +300,8 @@ struct GPXPlaceRoundTripTests {
 
         let read = try GPXImport.load(from: url)
 
-        #expect(read.places.count == GPXImport.maximumPlaces)
+        #expect(read.places.count == GPXImport.maximumPlaces + 20)
+        #expect(GPXImport.placesKept(of: [read]) == [GPXImport.maximumPlaces])
         #expect(read.route.count == 2, "the line is untouched")
     }
 }

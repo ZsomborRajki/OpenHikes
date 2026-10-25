@@ -96,13 +96,15 @@ struct OpenHikesView: View {
     /// see ``GPXTrackChoice``. Presented from inside `MapSheet`, like the
     /// pickers above.
     @State var gpxTrackChoice = GPXTrackChoice()
-    /// Set when a picked file couldn't become a hike; drives the alert that
-    /// says so. `nil` the rest of the time.
+    /// Set when a picked file couldn't become a hike, or became one without
+    /// every place it marked; drives the alerts that say so. Empty the rest
+    /// of the time — see ``HikeImportReport``.
     ///
-    /// Wider than the parser's own failure, because a file that read perfectly
-    /// and a store that refused to keep it are different sentences and only
-    /// one of them is about the hiker's file. See ``HikeImportFailure``.
-    @State var importFailure: HikeImportFailure?
+    /// Its failure is wider than the parser's own, because a file that read
+    /// perfectly and a store that refused to keep it are different sentences
+    /// and only one of them is about the hiker's file. See
+    /// ``HikeImportFailure``.
+    @State var importReport = HikeImportReport()
     /// Invalidates an import's permission to replace the current selection
     /// when recording or navigation moves on while GPX parsing is off-main.
     @State var importSelectionGate = ImportSelectionGate()
@@ -570,7 +572,7 @@ extension OpenHikesView {
             placePins: appModel.placePins,
             trailMaker: appModel.trailMaker,
             onImportGPX: importGPX,
-            onImportFailed: { importFailure = .file(.unreadable) },
+            onImportFailed: { importReport.failure = .file(.unreadable) },
             onSearchFailed: { failure in searchFailure = failure },
             onSheetTopChange: onSheetTopChange,
             onSheetDetentCommitted: onSheetDetentCommitted
@@ -586,7 +588,7 @@ extension OpenHikesView {
             .weatherDetailSheet(weatherDetail, weather: appModel.weatherManager)
             .gpxTrackChoice(gpxTrackChoice)
             .mapScreenAlerts(
-                importFailure: $importFailure,
+                importReport: $importReport,
                 searchFailure: $searchFailure,
                 startupIssue: showingStorageStartupIssue,
                 locationAccess: locationAccessPrompt.isShowingBinding,

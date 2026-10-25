@@ -227,7 +227,7 @@ struct GPXMultiTrackTests {
         let hikes = try await HikeImport.hikes(from: url, into: context) { tracks, unplaced in
             asked = (tracks.count, unplaced)
             return [2, 1]
-        }
+        }.hikes
 
         #expect(asked?.count == 3)
         #expect(asked?.unplaced == 1)
@@ -269,7 +269,7 @@ struct GPXMultiTrackTests {
         let hikes = try await HikeImport.hikes(from: url, into: context) { _, _ in
             asked = true
             return []
-        }
+        }.hikes
 
         #expect(!asked)
         #expect(hikes.map(\.title) == ["Thumsee"])
