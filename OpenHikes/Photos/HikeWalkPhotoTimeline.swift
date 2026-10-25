@@ -168,20 +168,33 @@ extension Hike {
     /// row* and has no list to rank — the reason the relationship exists at
     /// all beyond its cascade.
     var walkPhotoTimelines: [HikeWalkPhotoTimeline] {
+        walksAlongCurrentRoute
+            .compactMap(Self.photoTimeline(of:))
+            .sorted { $0.startedAt < $1.startedAt }
+    }
+
+    /// Whether ``walkPhotoTimelines`` would hold anything — all a caption
+    /// needs — without building every timeline and sorting them to find out.
+    var hasWalkPhotoTimeline: Bool {
+        walksAlongCurrentRoute.contains { Self.photoTimeline(of: $0) != nil }
+    }
+
+    /// The finished walks along the line the hike has now, by the rule
+    /// ``walkPhotoTimelines`` states.
+    private var walksAlongCurrentRoute: [HikeWalk] {
         let finished = walks ?? []
         // The revision reads every point of the route, so a hike with no walks
         // — most of them — never pays for it.
         guard !finished.isEmpty else { return [] }
         let revision = TrailWalkRecord.routeRevision(of: route)
-        return finished
-            .filter { $0.isAlong(revision: revision) }
-            .compactMap { walk in
-                HikeWalkPhotoTimeline(
-                    startedAt: walk.startedAt,
-                    endedAt: walk.endedAt,
-                    coverage: walk.coverage
-                )
-            }
-            .sorted { $0.startedAt < $1.startedAt }
+        return finished.filter { $0.isAlong(revision: revision) }
+    }
+
+    private static func photoTimeline(of walk: HikeWalk) -> HikeWalkPhotoTimeline? {
+        HikeWalkPhotoTimeline(
+            startedAt: walk.startedAt,
+            endedAt: walk.endedAt,
+            coverage: walk.coverage
+        )
     }
 }
