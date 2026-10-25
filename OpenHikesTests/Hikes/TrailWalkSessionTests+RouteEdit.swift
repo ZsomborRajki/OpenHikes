@@ -51,7 +51,7 @@ extension TrailWalkSessionTests {
 
         // What `TrailDraftSave.update` and a mirrored edit both come to: the
         // same hike, a new line.
-        hike.route = Self.straightRoute(through: 20)
+        hike.replaceRoute(with: Self.straightRoute(through: 20))
         let extended = RouteProfile(route: hike.route)
         hike.distanceMeters = extended.totalDistanceMeters
         try context.save()
@@ -73,7 +73,7 @@ extension TrailWalkSessionTests {
         let session = session()
         let hike = Fixture.hike(in: context, route: Self.straightRoute(through: 10))
         walk(session, hike: hike, profile: RouteProfile(route: hike.route), from: 0, through: 4)
-        hike.route = Self.straightRoute(through: 20)
+        hike.replaceRoute(with: Self.straightRoute(through: 20))
         let extended = RouteProfile(route: hike.route)
 
         #expect(session.start(hike: hike, profile: extended), "Start ends the old walk and begins the new one")
@@ -97,7 +97,7 @@ extension TrailWalkSessionTests {
 
         var moved = hike.route
         moved[3].longitude += 0.0005
-        hike.route = moved
+        hike.replaceRoute(with: moved)
         let distance = hike.distanceMeters
         session.recordBackgroundMatch(hikeID: hike.id, distance: profile.distances[6], at: clock.now)
 
@@ -115,11 +115,12 @@ extension TrailWalkSessionTests {
         let profile = RouteProfile(route: hike.route)
         walk(session, hike: hike, profile: profile, from: 0, through: 5)
 
-        hike.route = hike.route.map { point in
+        let raised = hike.route.map { point in
             var filled = point
             filled.elevation = (point.elevation ?? 0) + 12
             return filled
         }
+        hike.replaceRoute(with: raised)
         hike.title = "Renamed"
         session.endIfRouteChanged()
         walk(session, hike: hike, profile: profile, from: 6, through: 7)
@@ -137,7 +138,7 @@ extension TrailWalkSessionTests {
         walk(session, hike: hike, profile: RouteProfile(route: hike.route), from: 0, through: 5)
         #expect(session.pause())
 
-        hike.route = Array(hike.route.dropLast())
+        hike.replaceRoute(with: Array(hike.route.dropLast()))
         session.endIfRouteChanged()
 
         #expect(session.walkedHikeID == nil)
@@ -151,7 +152,7 @@ extension TrailWalkSessionTests {
         let hike = hike()
         walk(session(), hike: hike, profile: RouteProfile(route: hike.route), from: 0, through: 5)
         #expect(hike.walkInProgress != nil)
-        hike.route = Array(hike.route.dropLast())
+        hike.replaceRoute(with: Array(hike.route.dropLast()))
         try context.save()
 
         let relaunched = session()
@@ -179,7 +180,7 @@ extension TrailWalkSessionTests {
         #expect(relaunched.walkedHikeID == hike.id, "nothing to tell an edit from")
         #expect(relaunched.record?.isAlong(hike.route) == true)
 
-        hike.route = Array(hike.route.dropLast())
+        hike.replaceRoute(with: Array(hike.route.dropLast()))
         relaunched.endIfRouteChanged()
         #expect(relaunched.walkedHikeID == nil, "the stamped revision catches the next edit")
     }

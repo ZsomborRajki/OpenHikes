@@ -43,6 +43,18 @@ struct HikeImportTests {
     </gpx>
     """
 
+    /// The same line walked: twenty minutes, stamp to stamp.
+    private static let timedGPX = """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <gpx version="1.1" creator="OpenHikesTests" xmlns="http://www.topografix.com/GPX/1/1">
+        <trk><name>Thumsee Loop</name><trkseg>
+        <trkpt lat="47.6300" lon="12.8600"><time>2026-06-01T08:00:00Z</time></trkpt>
+        <trkpt lat="47.6310" lon="12.8600"><time>2026-06-01T08:10:00Z</time></trkpt>
+        <trkpt lat="47.6320" lon="12.8600"><time>2026-06-01T08:20:00Z</time></trkpt>
+        </trkseg></trk>
+    </gpx>
+    """
+
     /// One point: a pin, and the file the import's own policy refuses.
     private static let singlePointGPX = """
     <?xml version="1.0" encoding="UTF-8"?>
@@ -129,6 +141,27 @@ struct HikeImportTests {
         )
         #expect(reopened.count == 1)
         #expect(reopened.first?.route.count == 3)
+    }
+
+    /// The clock Siri, Spotlight and the widget's catalogue read instead of
+    /// the route (#1025), asked of the store the way the launch sweep asks
+    /// it: off the row, in a store opened fresh.
+    @Test("a timed file's clock is kept on the row it was imported as")
+    func timedFileKeepsItsClock() async throws {
+        let sandbox = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: sandbox) }
+        let file = try writeGPX(Self.timedGPX, in: sandbox)
+
+        let id: UUID
+        do {
+            let context = try openStore(in: sandbox)
+            id = try await HikeImport.hike(from: file, into: context).id
+        }
+
+        let reopened = try openStore(in: sandbox).fetch(
+            FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
+        )
+        #expect(reopened.first?.durationSeconds == 1200)
     }
 
     // MARK: Photo waypoints

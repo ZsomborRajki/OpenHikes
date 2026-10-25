@@ -86,12 +86,10 @@ nonisolated enum SharedHikeCatalogPublisher {
     /// Reads the finished hikes once and hands the one list to every
     /// consumer.
     ///
-    /// Once, because each read fetches the library into a context of its own
-    /// and decodes every route for its clock, and the context keeps those
-    /// routes until the read returns. Spotlight and the catalogue each used to
-    /// make that read for themselves, from two detached tasks at once, so a
-    /// launch held the library's routes twice and spent two cores decoding
-    /// the same rows (#1025).
+    /// Once, because each read fetches the whole library into a context of
+    /// its own. Spotlight and the catalogue each used to make that read for
+    /// themselves, from two detached tasks at once, so a launch held the
+    /// library twice, in two readings that were free to disagree (#1025).
     ///
     /// A failed read reaches no consumer. A library that could not be read is
     /// not an empty one, and handing either an empty list would delete every

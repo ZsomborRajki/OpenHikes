@@ -180,10 +180,7 @@ nonisolated public struct HikeRouteStatistics: Sendable {
         var previousPoint: RouteCoordinate?
 
         var duration: TimeInterval? {
-            guard let firstTimestamp,
-                  let lastTimestamp,
-                  lastTimestamp > firstTimestamp else { return nil }
-            return lastTimestamp.timeIntervalSince(firstTimestamp)
+            HikeRouteStatistics.clock(from: firstTimestamp, to: lastTimestamp)
         }
 
         /// The share of the walked length that lies between the first and the
@@ -388,6 +385,24 @@ nonisolated public struct HikeRouteStatistics: Sendable {
             builder.consume(point, segmentMeters: origin.map(point.legMeters(from:)) ?? 0)
         }
         self = builder.finish()
+    }
+
+    /// ``duration`` without the walk: the first stamped point and the last
+    /// are found by a search in from each end, which for a recording stops at
+    /// once. What ``Hike/durationSeconds`` stores, so the stored figure and
+    /// the one a hike's detail screen works out follow one rule.
+    public static func duration(of route: [RouteCoordinate]) -> TimeInterval? {
+        clock(
+            from: route.first { $0.timestamp != nil }?.timestamp,
+            to: route.last { $0.timestamp != nil }?.timestamp
+        )
+    }
+
+    /// The time from the first stamp to the last, or `nil` unless the clock
+    /// actually ran forward between them.
+    private static func clock(from first: Date?, to last: Date?) -> TimeInterval? {
+        guard let first, let last, last > first else { return nil }
+        return last.timeIntervalSince(first)
     }
 
     private init(

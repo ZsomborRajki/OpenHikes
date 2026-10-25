@@ -191,7 +191,7 @@ extension ObservationCostTests {
         #expect(routeCounter.count == 0)
 
         hike.routeWidth = hike.routeWidth
-        hike.route = hike.route
+        hike.replaceRoute(with: hike.route)
         await tintCounter.settle()
         #expect(widthCounter.count == 1, "a stored scalar notifies")
         #expect(routeCounter.count == 1, "and so does an externally-stored array")

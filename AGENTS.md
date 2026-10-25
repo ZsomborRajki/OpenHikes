@@ -620,6 +620,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
     deployment (*Schema and migration policy*).
   - The rows join on `hikeID`, so deleting a hike calls
     `hike.deleteLocalState()`, after the tile-deletion plan is built.
+- **A route is written only through `Hike.replaceRoute(with:)`**, which keeps
+  `Hike.durationSeconds` describing it. That column is the synced clock Siri,
+  Spotlight and the widget's catalogue read instead of decoding every route at
+  launch. `route`'s setter is private, so the compiler holds every writer to
+  it.
 - **`CloudSyncCoordinator` only reports and toggles; SwiftData owns sync.** That
   gives up four things, deliberately:
   - photo pixels on other devices (see *Settled decisions*)
@@ -952,18 +957,21 @@ in its source header. Do not weaken one without a measurement.
   | `String?` | `STRING QUERYABLE SEARCHABLE SORTABLE` |
   | `Data?` or a `Codable` array, without external storage | `BYTES QUERYABLE SORTABLE` |
   | `Int` or `Bool` | `INT64 QUERYABLE SORTABLE` |
+  | `Double` or `Double?` | `DOUBLE QUERYABLE SORTABLE` |
 
   A hand-declared shape is inferred, so let a development build save the field
   once before promoting. An `@Attribute(.externalStorage)` column, such as
   `Hike.route`, also mirrors through a `CD_<name>_ckAsset` asset field: check
   that the development export has it, and promote both.
-- **Deployment state, checked 2026-10-23.** Both environments exported
-  byte-identical, `md5 c652e74eea29171e927aeee8a4be698a`, and every attribute
-  in `MirroredCloudKitSchema.recordTypes` has its column. The only live columns
-  the contract does not name are SwiftData's own `CD_entityName` and the
-  to-one reference columns that the contract lists as relationships. Re-export
-  before believing these numbers, and update this paragraph when they move.
-  Deployment facts live here, not in code.
+- **Deployment state, checked 2026-10-25.** Development exports
+  `md5 a3ab9849bf6af7d5bf89fb03d667682f` and has a column for every attribute
+  in `MirroredCloudKitSchema.recordTypes`. Production exports
+  `md5 c652e74eea29171e927aeee8a4be698a` and lacks one of them,
+  `CD_Hike.CD_durationSeconds`. The only live columns the contract does not
+  name are SwiftData's own `CD_entityName` and the to-one reference columns
+  that the contract lists as relationships. Re-export before believing these
+  numbers, and update this paragraph when they move. Deployment facts live
+  here, not in code.
 
 ## The community feature
 

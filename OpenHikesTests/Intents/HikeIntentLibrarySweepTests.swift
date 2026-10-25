@@ -3,18 +3,18 @@
 //  OpenHikesTests
 //
 //  The read under the launch sweep: every finished hike, as the reports
-//  Spotlight indexes and the App Group's catalogue lists. Each report reads
-//  its route for the clock, and a route is external storage decoded whole, so
-//  *where* the read runs is the property worth pinning (#999). The two sweeps
-//  that used to make it were started off the main actor and hopped straight
-//  back onto it for the read, which put a library's worth of decoding on the
-//  main thread at every launch, twice. Since #1025 the launch makes it once,
-//  which `LaunchLibraryPublishTests` pins.
+//  Spotlight indexes and the App Group's catalogue lists. The two sweeps that
+//  used to make it were started off the main actor and hopped straight back
+//  onto it for the read, which put a whole library's worth of reading on the
+//  main thread at every launch, twice (#999). Since #1025 the launch makes it
+//  once, which `LaunchLibraryPublishTests` pins, and a report takes its clock
+//  off the row rather than decoding the route for it, which is pinned here
+//  beside where the read runs.
 //
 //  Asserted through the coordinator's read seam rather than a stopwatch, as
 //  `CloudSyncCoordinatorTests` asserts its own hop: the fetch records the
-//  thread it ran on, and the projection that decodes each route runs after
-//  it in the same context.
+//  thread it ran on, and the projection into reports runs after it in the
+//  same context.
 //
 
 import Foundation
@@ -76,7 +76,7 @@ final class HikeIntentLibrarySweepTests {
     }
 
     /// What the read used to ask the store for — no drafts, newest first —
-    /// and each clock off its route's own stamps, now that the read is the
+    /// and each clock its route's stamps give, now that the read is the
     /// whole library walked into values.
     @Test("the read is the finished hikes, newest first, each timed by its route's stamps")
     func theReadIsTheFinishedHikesNewestFirst() async throws {
@@ -89,6 +89,29 @@ final class HikeIntentLibrarySweepTests {
 
         #expect(reports.map(\.title) == ["Newest", "Middle", "Older"])
         #expect(reports.map(\.duration) == [nil, 5400, 3600])
+    }
+
+    /// A report's clock is the one its row stores, ``Hike/durationSeconds``.
+    /// The route is external storage decoded whole, and the launch used to
+    /// decode every finished hike's to find two stamps apiece (#1025).
+    ///
+    /// The row's route is swapped here for an unstamped copy behind
+    /// ``Hike/replaceRoute(with:)``'s back, which nothing in the app can do,
+    /// so a report that still read the route would come back with no clock.
+    @Test("a report's clock is the one its row stores, not one read off the route")
+    func theClockIsReadOffTheRow() async throws {
+        try insertHike(title: "Thumsee Loop", clockSeconds: 3600) { hike in
+            let unstamped = hike.route.map { point in
+                var copy = point
+                copy.timestamp = nil
+                return copy
+            }
+            hike.setValue(forKey: \.route, to: unstamped)
+        }
+
+        let reports = try await coordinator().finishedHikes()
+
+        #expect(reports.map(\.duration) == [3600])
     }
 
     /// A sweep that read nothing would replace the catalogue and the index

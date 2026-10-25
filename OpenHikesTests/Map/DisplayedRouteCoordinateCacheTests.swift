@@ -21,7 +21,7 @@ struct DisplayedRouteCoordinateCacheTests {
 
         #expect(cache.coordinates(for: hike).count == 2)
 
-        hike.route = [RouteCoordinate(latitude: 48, longitude: 13)]
+        hike.replaceRoute(with: [RouteCoordinate(latitude: 48, longitude: 13)])
         #expect(cache.coordinates(for: hike).count == 2, "the selected hike reuses its immutable route projection")
 
         cache.clear()

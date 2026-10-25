@@ -45,6 +45,7 @@ enum MirroredCloudKitSchema {
                 "difficultyMetersByGrade",
                 "distanceMeters",
                 "drawnRouteData",
+                "durationSeconds",
                 "id",
                 "importedAuthorName",
                 "importedFromListingID",

@@ -15,18 +15,18 @@
 //
 //  A full replace at launch cannot disagree. A hiker's library is tens or
 //  hundreds of rows, the whole set is one fetch the intent coordinator already
-//  performs, and it runs once per cold launch off the main actor — the fetch
-//  and every route it reads for a clock included, in a context of the
-//  coordinator's own (#999). The cost of being wrong the other way is small
+//  performs, and it runs once per cold launch off the main actor, in a context
+//  of the coordinator's own (#999). It decodes no route: a hike's clock is a
+//  column of its row (#1025). The cost of being wrong the other way is small
 //  and self-correcting: a hike saved this session is searchable next launch.
 //
 //  ## Why it is handed the library rather than reading it
 //
 //  The App Group's catalogue wants the same list at the same moment, and two
-//  sweeps reading it each for themselves read every route twice, at once, in
-//  two contexts that each hold the whole library decoded until their read
-//  returns (#1025). So ``SharedHikeCatalogPublisher`` reads it once and hands
-//  the reports to both — the argument it already makes for the watch.
+//  sweeps reading it each for themselves made the same whole-library fetch
+//  twice, at once, in two contexts (#1025). So ``SharedHikeCatalogPublisher``
+//  reads it once and hands the reports to both — the argument it already
+//  makes for the watch.
 //
 //  ## Why it is behind the test guard
 //

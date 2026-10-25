@@ -52,7 +52,7 @@ struct AutoSaveRouteEditTests {
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()
 
-        hike.route = Self.movedRoute
+        hike.replaceRoute(with: Self.movedRoute)
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()
 
@@ -78,7 +78,7 @@ struct AutoSaveRouteEditTests {
         let savedKey = "autosave-route-edit/17/before@2.0"
         try await persist(key: savedKey, on: Fixture.ridgeRoute[2])
 
-        hike.route = Self.movedRoute
+        hike.replaceRoute(with: Self.movedRoute)
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()
 
@@ -114,9 +114,9 @@ struct AutoSaveRouteEditTests {
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()
 
-        hike.route = Self.movedRoute
+        hike.replaceRoute(with: Self.movedRoute)
         controller.hikeSelectionChanged(to: hike)
-        hike.route = Fixture.ridgeRoute
+        hike.replaceRoute(with: Fixture.ridgeRoute)
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()
 

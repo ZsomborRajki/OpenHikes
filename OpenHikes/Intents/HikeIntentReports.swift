@@ -72,7 +72,7 @@ nonisolated struct FinishedHikeReport: Equatable, Sendable {
     let date: Date
     let distance: Measurement<UnitLength>
     /// `nil` for a route carrying no clock — an imported GPX without
-    /// timestamps. See ``HikeRouteStatistics``.
+    /// timestamps. See ``Hike/durationSeconds``.
     let duration: TimeInterval?
 }
 

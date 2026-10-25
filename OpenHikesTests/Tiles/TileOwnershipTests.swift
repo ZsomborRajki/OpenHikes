@@ -164,7 +164,7 @@ struct TileOwnershipTests {
         let ownership = TileOwnership(hike)
 
         hike.autoSavedTileKeys = []
-        hike.route = []
+        hike.replaceRoute(with: [])
 
         let claimed = try await offMain { try ownership.tileKeys() }
         #expect(claimed == ["osm/18/1/1@2.0"])
