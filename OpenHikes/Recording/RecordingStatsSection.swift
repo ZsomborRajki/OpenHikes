@@ -64,7 +64,7 @@ struct RecordingStatsSection: View {
     /// at a viewpoint is not travelling at 0.1 km/h, they have stopped, and
     /// the distance beside this has stopped counting for the same reason.
     private var currentSpeed: String {
-        if stats.isStationary { return "Stopped" }
+        if stats.isStationary { return String(localized: "Stopped") }
         guard let speed = stats.recentSpeedMetersPerSecond else { return "—" }
         return HikeFormat.speed(
             Measurement(value: speed, unit: UnitSpeed.metersPerSecond)
@@ -75,8 +75,10 @@ struct RecordingStatsSection: View {
     /// hard-coded to metres — which is what it was, and what made this the one
     /// figure on the recording screen a US hiker could not read.
     private var accuracy: String {
-        guard let horizontalAccuracy = stats.horizontalAccuracy else { return "Searching…" }
-        guard horizontalAccuracy <= RecordingFixPolicy.maximumHorizontalAccuracy else { return "Weak signal" }
+        guard let horizontalAccuracy = stats.horizontalAccuracy else { return String(localized: "Searching…") }
+        guard horizontalAccuracy <= RecordingFixPolicy.maximumHorizontalAccuracy else {
+            return String(localized: "Weak signal")
+        }
         let radius = Measurement(value: horizontalAccuracy, unit: UnitLength.meters)
             .formatted(.measurement(width: .abbreviated, usage: .road))
         return "±\(radius)"
@@ -90,7 +92,7 @@ struct RecordingStatsSection: View {
 /// so the per-fix redraw of ``RecordingStatsSection`` finds an unchanged
 /// recorder reference here and skips it.
 private struct RecordingDurationFigure: View {
-    private static let label = "Duration"
+    private static let label: LocalizedStringKey = "Duration"
 
     let recorder: HikeRecorder
     /// Read here, on the render path, unlike ``MapView/Coordinator``'s

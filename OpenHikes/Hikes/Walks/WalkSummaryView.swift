@@ -131,7 +131,7 @@ struct WalkSummaryView: View {
                 HikeHeaderSymbol(hike: hike)
             }
         } title: {
-            Text(hike?.displayTitle ?? "Hike")
+            Text(hike?.displayTitle ?? String(localized: "Hike"))
                 .accessibilityAddTraits(.isHeader)
         } subtitle: {
             Text(walk.startedAt.formatted(date: .complete, time: .shortened))
@@ -224,8 +224,10 @@ struct WalkSummaryView: View {
             .disabled(hike == nil || walk.coverage.ranges.isEmpty || !routeMatchesWalk)
             .accessibilityIdentifier("walk-show-on-map")
             if trailHasChanged {
-                Text("This trail has changed since the hike, so the stretches "
-                    + "it covered can no longer be drawn along it.")
+                Text("""
+                This trail has changed since the hike, so the stretches \
+                it covered can no longer be drawn along it.
+                """)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)

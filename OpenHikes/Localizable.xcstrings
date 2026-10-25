@@ -17,6 +17,16 @@
         }
       }
     },
+    "%@ · %@ left" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ left"
+          }
+        }
+      }
+    },
     "%@ · by %@" : {
       "localizations" : {
         "en" : {
@@ -51,6 +61,32 @@
     "%@ along the route" : {
 
     },
+    "%@ at %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ at %2$@"
+          }
+        }
+      }
+    },
+    "%@ at %@, %@ along the trail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ at %2$@, %3$@ along the trail"
+          }
+        }
+      }
+    },
+    "%@ covered" : {
+
+    },
+    "%@ left" : {
+
+    },
     "%@ of climb" : {
 
     },
@@ -61,6 +97,15 @@
 
     },
     "%@ off trail" : {
+
+    },
+    "%@ remaining" : {
+
+    },
+    "%@ up" : {
+
+    },
+    "%@ uses no downloadable tiles, so nothing is saved for this hike. Pick another map source in Settings to save one for offline use." : {
 
     },
     "%@, %@" : {
@@ -346,6 +391,29 @@
         }
       }
     },
+    "%lld percent hiked" : {
+
+    },
+    "%lld percent hiked, %@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld percent hiked, %2$@, %3$@"
+          }
+        }
+      }
+    },
+    "%lld percent, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld percent, %2$@"
+          }
+        }
+      }
+    },
     "%lld photographs" : {
       "localizations" : {
         "en" : {
@@ -519,6 +587,19 @@
     "%lld%%" : {
 
     },
+    "%lld%% hiked" : {
+
+    },
+    "%lld%% hiked · %@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld%% hiked · %2$@ · %3$@"
+          }
+        }
+      }
+    },
     "A hike is in progress on %@. End it there to hike this trail." : {
 
     },
@@ -537,10 +618,22 @@
     "About" : {
 
     },
+    "about %@ to go" : {
+
+    },
     "About the %@ License" : {
 
     },
     "Access" : {
+
+    },
+    "Accuracy" : {
+
+    },
+    "Active Time" : {
+
+    },
+    "Activities" : {
 
     },
     "Add" : {
@@ -619,7 +712,13 @@
     "Adds up everything you have hiked today." : {
 
     },
+    "Age" : {
+
+    },
     "All Hikes" : {
+
+    },
+    "All Time" : {
 
     },
     "Already Sent · Left Out" : {
@@ -688,7 +787,35 @@
     "At least one photo couldn’t be added to this hike. It’s still in your photo library." : {
 
     },
+    "Author" : {
+
+    },
     "Auto-Save Tiles" : {
+
+    },
+    "Auto-saved %lld tiles near the trail — storage limit reached." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Auto-saved %lld tile near the trail — storage limit reached."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Auto-saved %lld tiles near the trail — storage limit reached."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Auto-saving tiles near the trail as you browse (%lld so far)." : {
 
     },
     "Average Speed" : {
@@ -710,6 +837,9 @@
 
     },
     "Base" : {
+
+    },
+    "Between" : {
 
     },
     "Block" : {
@@ -820,6 +950,9 @@
     "Clear search" : {
 
     },
+    "Climb" : {
+
+    },
     "Climb, Highest and Steepest leave out activities along trails that have changed since you hiked them." : {
 
     },
@@ -830,6 +963,9 @@
 
     },
     "Close this trail?" : {
+
+    },
+    "Cloud cover" : {
 
     },
     "Color By" : {
@@ -940,6 +1076,9 @@
     "Current Hike Progress" : {
 
     },
+    "Current Speed" : {
+
+    },
     "Cycling" : {
 
     },
@@ -1012,6 +1151,9 @@
     "Details" : {
 
     },
+    "Dew point" : {
+
+    },
     "Difficulty" : {
 
     },
@@ -1063,6 +1205,9 @@
     "Dropped Pin" : {
 
     },
+    "Duration" : {
+
+    },
     "E" : {
 
     },
@@ -1096,10 +1241,19 @@
     "Elevation from %@." : {
 
     },
+    "Elevation Gain" : {
+
+    },
+    "Elevation Loss" : {
+
+    },
     "Elevation profile" : {
 
     },
     "Elevation, OpenHikes Pro" : {
+
+    },
+    "End" : {
 
     },
     "End and Save Hike" : {
@@ -1114,10 +1268,16 @@
     "End your hike on %@ and start recording?" : {
 
     },
+    "Ended" : {
+
+    },
     "ENE" : {
 
     },
     "ESE" : {
+
+    },
+    "Estimated Time" : {
 
     },
     "Every community hike is checked by a person before anyone else can see it." : {
@@ -1135,7 +1295,13 @@
     "Extreme" : {
 
     },
+    "Failed" : {
+
+    },
     "Fee" : {
+
+    },
+    "Feels like" : {
 
     },
     "Figures" : {
@@ -1198,6 +1364,9 @@
     "From OpenStreetMap" : {
 
     },
+    "Furthest Point" : {
+
+    },
     "Get Elevation with OpenHikes Pro" : {
 
     },
@@ -1238,6 +1407,9 @@
           }
         }
       }
+    },
+    "Highest" : {
+
     },
     "Hike" : {
 
@@ -1290,7 +1462,13 @@
     "Hillshaded terrain in natural colors, a softer look than Stadia Outdoors. Offline downloads are allowed, sharing Stadia’s 100 MB of saved tiles on this device with Stadia Outdoors." : {
 
     },
+    "History" : {
+
+    },
     "Hours" : {
+
+    },
+    "Humidity" : {
 
     },
     "Huts" : {
@@ -1334,6 +1512,9 @@
       }
     },
     "Import GPX file" : {
+
+    },
+    "Inferred Path" : {
 
     },
     "Issued by %@" : {
@@ -1388,6 +1569,9 @@
     "Keeps your Home Screen widget and Live Activity showing your progress along the selected trail even when OpenHikes isn’t open, using occasional, low-power location updates." : {
 
     },
+    "Keywords" : {
+
+    },
     "Kind" : {
 
     },
@@ -1398,6 +1582,9 @@
 
     },
     "Last synced %@." : {
+
+    },
+    "Last Year" : {
 
     },
     "Leave out any photo that shouldn’t be published. The rest still go." : {
@@ -1412,6 +1599,9 @@
     "Left" : {
 
     },
+    "Left open" : {
+
+    },
     "Left Out" : {
 
     },
@@ -1419,6 +1609,12 @@
       "comment" : "Link to Apple Weather's legal attribution page"
     },
     "Legs run along paths mapped in OpenStreetMap. Turn this off to draw straight lines." : {
+
+    },
+    "Light remaining" : {
+
+    },
+    "Light until" : {
 
     },
     "Line" : {
@@ -1437,6 +1633,9 @@
 
     },
     "Live for other hikers. Add photos you’ve taken since, or ask for the hike to be taken down." : {
+
+    },
+    "Live Progress" : {
 
     },
     "Live, and the photos you added are waiting for a person to check them. Opens a request to withdraw them, or the hike." : {
@@ -1460,6 +1659,9 @@
     "Location access is off" : {
 
     },
+    "Longest" : {
+
+    },
     "Looking around here…" : {
 
     },
@@ -1476,6 +1678,9 @@
 
     },
     "Low" : {
+
+    },
+    "Maintained by" : {
 
     },
     "Make a trail" : {
@@ -1511,10 +1716,19 @@
     "matched by both time and place" : {
 
     },
+    "Max Elevation" : {
+
+    },
+    "Max Speed" : {
+
+    },
     "Measuring" : {
 
     },
     "measuring the climb" : {
+
+    },
+    "Min Elevation" : {
 
     },
     "Moderate" : {
@@ -1550,6 +1764,18 @@
     "Move Up" : {
 
     },
+    "Moving" : {
+
+    },
+    "Moving Average Speed" : {
+
+    },
+    "Moving Avg Speed" : {
+
+    },
+    "Moving Time" : {
+
+    },
     "My Hikes" : {
 
     },
@@ -1581,6 +1807,9 @@
 
     },
     "Needs API key" : {
+
+    },
+    "Needs space" : {
 
     },
     "New place" : {
@@ -1617,6 +1846,9 @@
 
     },
     "No community hikes here" : {
+
+    },
+    "No elevation data" : {
 
     },
     "No elevation data for this hike" : {
@@ -1704,6 +1936,9 @@
 
     },
     "not pinned to the trail" : {
+
+    },
+    "Not saved" : {
 
     },
     "Note" : {
@@ -1938,6 +2173,12 @@
     "Over the Limit" : {
 
     },
+    "Overall Average Speed" : {
+
+    },
+    "Overall Avg Speed" : {
+
+    },
     "Parking" : {
 
     },
@@ -2132,7 +2373,19 @@
     "Plan a Trail Here" : {
 
     },
+    "Points" : {
+
+    },
+    "Precipitation" : {
+
+    },
+    "Preparing offline tiles…" : {
+
+    },
     "Press and hold the map to add a stop, or tap a gray route to take it instead. Press and hold a stop to drag it somewhere else." : {
+
+    },
+    "Pressure" : {
 
     },
     "Previous" : {
@@ -2238,10 +2491,19 @@
     "Record Hike" : {
 
     },
+    "Recorded" : {
+
+    },
     "Recording" : {
 
     },
     "Recording resumed after OpenHikes restarted." : {
+
+    },
+    "Recordings and GPX files with times count as hiked, and so does every activity along a saved trail. A trail you drew or saved counts once you hike it." : {
+
+    },
+    "Records" : {
 
     },
     "Recovered recording" : {
@@ -2355,6 +2617,9 @@
     "Route border" : {
 
     },
+    "Route changed" : {
+
+    },
     "Route color" : {
 
     },
@@ -2411,6 +2676,9 @@
     "Saved for offline" : {
 
     },
+    "Saved for offline use." : {
+
+    },
     "Saved Hikes Unavailable" : {
 
     },
@@ -2426,6 +2694,28 @@
     },
     "Saved tiles keep your hikes usable without a signal. The map cache is just what you’ve recently looked at — it’s kept under %@, oldest first, and clearing it costs you nothing offline. Photos are only removed when you delete them, or the hike they belong to." : {
 
+    },
+    "Saving %lld tiles…" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Saving %lld tile…"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Saving %lld tiles…"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "Says how far and how long you are into the hike you are recording." : {
 
@@ -2452,6 +2742,9 @@
 
     },
     "Searching" : {
+
+    },
+    "Searching…" : {
 
     },
     "Section" : {
@@ -2613,13 +2906,22 @@
     "Start Hike Recording" : {
 
     },
+    "Started" : {
+
+    },
     "Starts recording a hike and follows one of your saved trails." : {
 
     },
     "Starts recording a new hike, with the screen off and the phone in your pocket." : {
 
     },
+    "Statistics" : {
+
+    },
     "Status" : {
+
+    },
+    "Steepest" : {
 
     },
     "Steepness colors" : {
@@ -2638,6 +2940,9 @@
 
     },
     "Stop Hike Recording" : {
+
+    },
+    "Stopped" : {
 
     },
     "Stops the hike being recorded and saves it." : {
@@ -2662,6 +2967,12 @@
 
     },
     "Summits" : {
+
+    },
+    "Sunrise" : {
+
+    },
+    "Sunset" : {
 
     },
     "SW" : {
@@ -2879,6 +3190,9 @@
     "This trail couldn’t be saved." : {
 
     },
+    "This trail has changed since the hike, so the stretches it covered can no longer be drawn along it." : {
+
+    },
     "This trail is already in the community list. Opens a form to add your photos to it." : {
 
     },
@@ -2927,13 +3241,28 @@
     "Totals" : {
 
     },
+    "Track Points" : {
+
+    },
     "Track your hike with GPS. It keeps recording while your phone is locked." : {
 
     },
     "Trail" : {
 
     },
+    "Trail Ascent" : {
+
+    },
+    "Trail Distance" : {
+
+    },
+    "Trail Progress" : {
+
+    },
     "Trail routes from OpenStreetMap contributors." : {
+
+    },
+    "Trails" : {
 
     },
     "Travel Mode" : {
@@ -2946,6 +3275,9 @@
 
     },
     "Try again in a moment." : {
+
+    },
+    "Turn on Auto-Save, then pan and zoom around the trail to save its tiles for offline use." : {
 
     },
     "Turn on Follow in Details, then set off along the trail. Finished hikes are kept here." : {
@@ -2969,16 +3301,25 @@
     "Unlocks on every device signed in to your Apple Account." : {
 
     },
+    "Updated" : {
+
+    },
     "Uploaded, but not yet sent for review, so it can’t appear for other hikers. Finish sending it, or ask for it to be taken down." : {
 
     },
     "Uploaded, not yet sent for review" : {
 
     },
+    "UV index" : {
+
+    },
     "Version" : {
 
     },
     "Very High" : {
+
+    },
+    "Via" : {
 
     },
     "View" : {
@@ -3002,6 +3343,9 @@
     "Viewpoints" : {
 
     },
+    "Visibility" : {
+
+    },
     "W" : {
 
     },
@@ -3011,13 +3355,25 @@
     "Waiting for review" : {
 
     },
+    "Waiting for space to be freed…" : {
+
+    },
     "Waiting for your location" : {
 
     },
     "Walking" : {
 
     },
+    "Warnings" : {
+
+    },
     "Water" : {
+
+    },
+    "Waymark" : {
+
+    },
+    "Weak signal" : {
 
     },
     "Weather" : {
@@ -3069,6 +3425,9 @@
 
     },
     "Wikimedia Commons" : {
+
+    },
+    "Wind" : {
 
     },
     "Within" : {

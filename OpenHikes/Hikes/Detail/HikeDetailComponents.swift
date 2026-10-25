@@ -95,13 +95,13 @@ struct TrailProgressView: View {
             ?? profile.remainingDistanceMeters(atDistance: distance)
         let fraction = walked ?? profile.fractionComplete(atDistance: distance) ?? 0
         let percent = Int((fraction * 100).rounded())
-        let caption = walked == nil ? "\(percent)%" : "\(percent)% hiked"
+        let caption = walked == nil ? "\(percent)%" : String(localized: "\(percent)% hiked")
         // How long that is, while a walk is under way — the rest of the route
         // at this walk's own pace. Read here, per matched fix, for the reason
         // the coverage is: this row and nothing above it redraws.
         let timeLeft = walked == nil ? nil : walk?.secondsLeft()
-        let left = timeLeft.map { "\(Self.length(remaining)) · \(HikeFormat.travelTime($0)) left" }
-            ?? "\(Self.length(remaining)) left"
+        let left = timeLeft.map { String(localized: "\(Self.length(remaining)) · \(HikeFormat.travelTime($0)) left") }
+            ?? String(localized: "\(Self.length(remaining)) left")
 
         VStack(alignment: .leading, spacing: walked == nil ? 6 : 10) {
             if walked != nil {
@@ -165,22 +165,25 @@ struct TrailProgressView: View {
         timeLeft: TimeInterval?,
         remaining: Double
     ) -> String {
-        let remainingClause = "\(length(remaining)) remaining"
-        guard let covered else { return "\(percent) percent, \(remainingClause)" }
+        let remainingClause = String(localized: "\(length(remaining)) remaining")
+        guard let covered else { return String(localized: "\(percent) percent, \(remainingClause)") }
         // The time before the distance left rather than after it, so
         // "remaining" stays the last thing said — and the last field, which is
         // what the walk suite reads the distance off.
-        var clauses = ["\(percent) percent hiked", "\(length(covered)) covered"]
+        var clauses = [
+            String(localized: "\(percent) percent hiked"),
+            String(localized: "\(length(covered)) covered"),
+        ]
         if let timeLeft {
-            clauses.append("about \(HikeFormat.spokenTravelTime(timeLeft)) to go")
+            clauses.append(String(localized: "about \(HikeFormat.spokenTravelTime(timeLeft)) to go"))
         }
         clauses.append(remainingClause)
         return clauses.joined(separator: ", ")
     }
 
     private func title(walking: Bool, live: Bool) -> String {
-        if walking { return "Hike Progress" }
-        return live ? "Live Progress" : "Trail Progress"
+        if walking { return String(localized: "Hike Progress") }
+        return live ? String(localized: "Live Progress") : String(localized: "Trail Progress")
     }
 
     private func symbol(walking: Bool, live: Bool) -> String {
@@ -393,10 +396,10 @@ struct OfflineDownloadButton: View {
         switch downloader.phase {
         case .downloading:
             downloader.progress.formatted(.percent.precision(.fractionLength(0)))
-        case .finished: "Saved"
-        case .failed: "Failed"
-        case .needsSpace: "Needs space"
-        case .idle: "Not saved"
+        case .finished: String(localized: "Saved")
+        case .failed: String(localized: "Failed")
+        case .needsSpace: String(localized: "Needs space")
+        case .idle: String(localized: "Not saved")
         }
     }
 
@@ -436,13 +439,12 @@ struct OfflineDownloadStatus: View {
     private var note: String? {
         switch downloader.phase {
         case .failed(let message): message
-        case .finished: "Saved for offline use."
-        case .downloading: downloader.total == 0
-            ? "Preparing offline tiles…"
-            : "Saving \(downloader.total) tiles…"
+        case .finished: String(localized: "Saved for offline use.")
+        case .downloading where downloader.total == 0: String(localized: "Preparing offline tiles…")
+        case .downloading: String(localized: "Saving \(downloader.total) tiles…")
         // The confirmation carries the detail; this only has to stop the row
         // reading as idle while a dialog is up behind it.
-        case .needsSpace: "Waiting for space to be freed…"
+        case .needsSpace: String(localized: "Waiting for space to be freed…")
         case .idle: idleNote
         }
     }
@@ -491,17 +493,21 @@ struct OfflineStorageStatus: View {
 
     private var autoSaveNote: String? {
         if let systemMapName {
-            return "\(systemMapName) uses no downloadable tiles, so nothing is saved for this hike."
-                + " Pick another map source in Settings to save one for offline use."
+            return String(localized: """
+            \(systemMapName) uses no downloadable tiles, so nothing is saved for this hike. \
+            Pick another map source in Settings to save one for offline use.
+            """)
         }
         guard hike.autoSaveTilesEnabled else {
-            return "Turn on Auto-Save, then pan and zoom around the trail to save its tiles for offline use."
+            return String(localized: """
+            Turn on Auto-Save, then pan and zoom around the trail to save its tiles for offline use.
+            """)
         }
         let count = hike.autoSavedTileKeys.count
         if autoSave.isCapReached(for: hike) {
-            return "Auto-saved \(count) tiles near the trail — storage limit reached."
+            return String(localized: "Auto-saved \(count) tiles near the trail — storage limit reached.")
         }
-        return "Auto-saving tiles near the trail as you browse (\(count) so far)."
+        return String(localized: "Auto-saving tiles near the trail as you browse (\(count) so far).")
     }
 
     @ViewBuilder private var storedTilesRow: some View {
@@ -509,15 +515,15 @@ struct OfflineStorageStatus: View {
             HStack {
                 Label(
                     storedBytes.map { bytes in
-                        "Offline tiles · \(Self.byteText(bytes))"
-                    } ?? "Offline tiles",
+                        String(localized: "Offline tiles · \(Self.byteText(bytes))")
+                    } ?? String(localized: "Offline tiles"),
                     systemImage: "internaldrive"
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Offline tiles")
-                .accessibilityValue(storedBytes.map(Self.byteText) ?? "Measuring")
+                .accessibilityValue(storedBytes.map(Self.byteText) ?? String(localized: "Measuring"))
                 // A caption is 14 points tall, which is too small a region to
                 // land on — including for VoiceOver's own direct-touch
                 // exploration, which is what the hit-region audit measures.

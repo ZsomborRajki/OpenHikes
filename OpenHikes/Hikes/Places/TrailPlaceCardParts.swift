@@ -36,11 +36,11 @@ struct TrailPlaceFactsAndLocation: View {
         }
         StatList(title: String(localized: "Location")) {
             if let address {
-                StatRow(label: String(localized: "Address"), value: address)
+                StatRow(label: "Address", value: address)
                     .accessibilityIdentifier("trail-place-address")
             }
             StatRow(
-                label: String(localized: "Coordinates"),
+                label: "Coordinates",
                 value: TrailPlaceCoordinates.text(coordinate)
             )
             .textSelection(.enabled)
@@ -156,17 +156,17 @@ struct TrailPlaceFactRow: View {
             if let url = URL(string: fact.value), url.scheme?.hasPrefix("http") == true {
                 TrailPlaceLinkRow(label: fact.kind.label, title: fact.value, destination: url)
             } else {
-                StatRow(label: fact.kind.label, value: fact.value)
+                StatRow(verbatim: fact.kind.label, value: fact.value)
             }
         case .phone:
             let digits = fact.value.filter { $0.isNumber || $0 == "+" }
             if let url = URL(string: "tel:\(digits)"), !digits.isEmpty {
                 TrailPlaceLinkRow(label: fact.kind.label, title: fact.value, destination: url)
             } else {
-                StatRow(label: fact.kind.label, value: fact.value)
+                StatRow(verbatim: fact.kind.label, value: fact.value)
             }
         default:
-            StatRow(label: fact.kind.label, value: fact.displayValue)
+            StatRow(verbatim: fact.kind.label, value: fact.displayValue)
         }
     }
 }
