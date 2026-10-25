@@ -101,9 +101,11 @@ nonisolated struct WeatherAlertSummary: Codable, Equatable, Identifiable, Sendab
     var detailsURL: URL
     /// Who issued it, for the sheet to attribute the warning to somebody.
     var source: String
-    /// When it stops applying, where the authority said. `nil` for an alert
-    /// left open-ended, which is ordinary for a standing advisory.
-    var expires: Date?
+    // No end time, because WeatherKit carries none. An alert's
+    // `metadata.expirationDate` says when the *response* stops being
+    // current, not when the authority lifts the warning, and nothing here
+    // may read it as the latter. A warning stands for as long as WeatherKit
+    // keeps serving it.
 }
 
 /// What `.alerts` said about a place.
@@ -171,8 +173,7 @@ extension WeatherAlertSummary {
             summary: alert.summary,
             severity: WeatherAlertSeverity(alert.severity),
             detailsURL: alert.detailsURL,
-            source: alert.source,
-            expires: alert.metadata.expirationDate
+            source: alert.source
         )
     }
 }
