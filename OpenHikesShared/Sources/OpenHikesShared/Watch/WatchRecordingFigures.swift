@@ -137,7 +137,10 @@ public struct WatchRecordingFigures: Equatable, Sendable {
     /// where the documentation says the last. With the expiry last, a reading
     /// was judged at its sample time for as long as it stayed up. Followed by
     /// `distantFuture`, the expiry is drawn on time and stays drawn, under the
-    /// documented behavior and the measured one alike.
+    /// documented behavior and the measured one alike. The watchOS 27
+    /// simulator draws it too: a seeded reading showed its number ten seconds
+    /// after launch, and the dash at 130 and 180 seconds, with nothing else
+    /// redrawing the screen.
     public static func heartRateRedraws(sampledAt: Date?) -> [Date] {
         guard let sampledAt else { return [] }
         return [sampledAt, sampledAt.addingTimeInterval(heartRateFreshness), .distantFuture]
