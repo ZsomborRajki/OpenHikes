@@ -220,10 +220,11 @@ nonisolated enum SharedHikeCatalogPublisher {
     /// `BackgroundTrailTracker.match` already reads the tracked hike in.
     ///
     /// `@concurrent`, because a `nonisolated async` function runs on its
-    /// caller's executor. `nil` for a hike deleted since the widget was
-    /// configured, or one that cannot be read: nothing to draw and nothing to
-    /// report, since the prune after the sweep takes its file and the widget
-    /// shows its empty state.
+    /// caller's executor. `nil` for a hike deleted since its caller learned of
+    /// it — a widget configured, a watch's list published — or one that
+    /// cannot be read. Neither has anything to draw or report then: the prune
+    /// after the sweep takes a pinned trail's file and the widget shows its
+    /// empty state, and the watch draws its waiting state.
     ///
     /// - Parameter fetch: the store's fetch of one hike, a seam so a suite can
     ///   see which thread it ran on.
@@ -233,7 +234,7 @@ nonisolated enum SharedHikeCatalogPublisher {
         in container: ModelContainer,
         fetch: @Sendable (ModelContext, UUID) throws -> Hike? = fetchHike
     ) async -> HikeRouteInput? {
-        assertOffMainThread("Reading a pinned trail's route must stay off the main thread")
+        assertOffMainThread("Reading a hike's route for a widget or a watch must stay off the main thread")
         guard let hike = try? fetch(ModelContext(container), hikeID) else { return nil }
         return HikeRouteInput(hike: hike)
     }
