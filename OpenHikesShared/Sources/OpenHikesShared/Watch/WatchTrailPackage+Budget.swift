@@ -71,7 +71,8 @@ public extension WatchTrailPackage {
     /// going to the earlier one so that the same route always packages the
     /// same way. Both ends of each are kept. The rest of ``pointBudget`` is
     /// the same stride the widget uses, ``decimatedIndices(count:maxPoints:)``,
-    /// taken over the points that are not one of those ends. A route that
+    /// taken over the points that are not one of those ends, by the fill the
+    /// widget shares, ``decimatedIndices(count:maxPoints:keeping:)``. A route that
     /// fits therefore crosses whole, and a longer one as exactly
     /// ``pointBudget`` points, its first and last among them.
     ///
@@ -117,10 +118,10 @@ public extension WatchTrailPackage {
         // to every end it happened to keep: a route of 800 points with a pause
         // every 16 crossed as 714, and a 900-point file of 100 segments as
         // 700. The route's first and last points are kept either way, as the
-        // stride's own or as an end.
-        let others = (0..<runs.pointCount).filter { !ends.contains($0) }
-        let strided = decimatedIndices(count: others.count, maxPoints: max(2, pointBudget - ends.count))
-        let routeIndices = ends.union(strided.map { others[$0] }).sorted()
+        // stride's own or as an end. The ends leave the stride two points at
+        // least (`affordable` above), so only a budget below two is raised to
+        // that.
+        let routeIndices = decimatedIndices(count: runs.pointCount, maxPoints: max(2, pointBudget), keeping: ends)
         let pauseIndices = routeIndices.indices.filter { resumes.contains(routeIndices[$0]) }
         return KeptPoints(routeIndices: routeIndices, pauseIndices: pauseIndices)
     }

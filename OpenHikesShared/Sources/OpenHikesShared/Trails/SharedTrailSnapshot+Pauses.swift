@@ -70,7 +70,9 @@ public extension SharedTrailSnapshot {
     /// `pausedLegs`, in the order given, until `pauseEndBudget` points are
     /// spent, and the stride over the points that are not one of those ends.
     /// All of them for a route that fits in `maxPoints`, and exactly
-    /// `maxPoints` for a longer one.
+    /// `maxPoints` for a longer one: the fill is
+    /// ``decimatedIndices(count:maxPoints:keeping:)``, the watch's and the
+    /// elevation request's too, and only the choice of ends is the widget's.
     ///
     /// Internal so the bound can be tested without building a route.
     internal static func keptIndices(
@@ -89,13 +91,7 @@ public extension SharedTrailSnapshot {
             guard ends.count + added.count <= budget else { continue }
             ends.formUnion(added)
         }
-        // The stride never lands on an end, so none of its points is spent on
-        // one that is kept anyway. Taken over the whole route, it lost a point
-        // to every end it happened to keep, and the line came in short of
-        // `maxPoints`, as the watch's package did before #1053.
-        let others = (0..<count).filter { !ends.contains($0) }
-        let strided = decimatedIndices(count: others.count, maxPoints: maxPoints - ends.count)
-        return ends.union(strided.map { others[$0] }).sorted()
+        return decimatedIndices(count: count, maxPoints: maxPoints, keeping: ends)
     }
 
     private static func pausedLegsByLength<Element>(

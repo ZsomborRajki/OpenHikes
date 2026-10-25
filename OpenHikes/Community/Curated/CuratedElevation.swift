@@ -136,15 +136,11 @@ nonisolated enum CuratedElevationRequest {
     /// — the trailhead's height and the finish's — and because a series that
     /// stops short draws a chart whose x-axis disagrees with the route's own
     /// length. A route already short enough is asked about whole.
+    ///
+    /// The widget's stride, ``decimatedIndices(count:maxPoints:)``, rather
+    /// than a copy of it (#1084): one stride is one rounding.
     static func sampleIndexes(count: Int, limit: Int = maximumShapePoints) -> [Int] {
-        guard count > 0 else { return [] }
-        guard count > limit, limit > 1 else { return Array(0..<count) }
-        let last = count - 1
-        // `limit - 1` intervals over the route, so the first and last indexes
-        // are the two ends exactly rather than nearly.
-        return (0..<limit).map { step in
-            Int((Double(step) * Double(last) / Double(limit - 1)).rounded())
-        }
+        decimatedIndices(count: count, maxPoints: limit)
     }
 
     /// The indexes to ask about for `route`, never more than `limit`: both
@@ -184,9 +180,9 @@ nonisolated enum CuratedElevationRequest {
         // are not a pause's end, so no point is asked about twice and the
         // request comes to `limit` exactly. Its first and last are the
         // route's, as the plain spread's are, unless a pause's end already is.
-        let others = route.indices.filter { !pauseEnds.contains($0) }
-        let spreadOverOthers = sampleIndexes(count: others.count, limit: limit - pauseEnds.count)
-        return pauseEnds.union(spreadOverOthers.map { others[$0] }).sorted()
+        // The fill is the one the widget and the watch share; only the choice
+        // of ends is this request's.
+        return decimatedIndices(count: route.count, maxPoints: limit, keeping: pauseEnds)
     }
 
     /// The POST Stadia expects, with the key in the query and nowhere else.
