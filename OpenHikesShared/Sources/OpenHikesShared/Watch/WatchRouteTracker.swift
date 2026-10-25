@@ -50,6 +50,17 @@
 //  only the outbound leg. So until there is a position, a fix with no course
 //  sets none, and the first fix with a course does.
 //
+//  The guess is still the best one to hand. ``forgetPosition()`` keeps the
+//  position it lets go of, as a tie-break and never as a window: among legs a
+//  fix with no course cannot tell apart, the one nearest where the hiker last
+//  was wins, and the first candidate only on a fresh start, with nothing to go
+//  on. A hiker who has not moved since reads where they were. That matters
+//  most at a trailhead a loop or an out-and-back both starts and ends at. The
+//  watch's Stop is on the Record tab, so the map a hiker goes back to after it
+//  always starts with a forget (see `WatchFollowClaim`), and the first
+//  candidate there is the start: the whole trail still to walk, read off a
+//  walk that has just finished it.
+//
 //  The phone shares this file's constants but not, on every path, its rule
 //  (#836). Its foreground follow lets continuity decide and asks the course
 //  for a second opinion that wins only after a run of contrary fixes
@@ -180,9 +191,14 @@ public struct WatchRouteTracker: Sendable, Equatable {
     private let scale: Double
     private let totalDistanceMeters: Double
     /// Where the last accepted match landed, in *line* metres. `nil` until
-    /// there has been one, which is what makes the first fix a whole-line
-    /// search.
+    /// there has been one, and again after ``forgetPosition()``, which is what
+    /// makes the next fix a whole-line search.
     private var anchorLineDistance: Double?
+    /// The anchor ``forgetPosition()`` let go of. Never a window to search,
+    /// since the hiker may have walked on, but the tie-break between legs
+    /// until a fix with a course says which one they are on — see this file's
+    /// header.
+    private var forgottenAnchorLineDistance: Double?
 
     public init(_ package: WatchTrailPackage) {
         points = package.points
@@ -225,18 +241,22 @@ public struct WatchRouteTracker: Sendable, Equatable {
     public var isUsable: Bool { points.count > 1 }
 
     /// Forgets where the hiker was, so the next fix is searched against the
-    /// whole trail, and the first one with a course says where they are again
-    /// — see this file's header.
+    /// whole trail, and the first one with a course says where they are again.
+    /// Until then, where they were only breaks a tie — see this file's header.
     ///
     /// What a feed back after a gap wants, a resumed walk first among them:
     /// the stretch between a pause and a resume is unobserved by construction,
     /// and it can be longer than the continuity window — a hiker who paused at
     /// a saddle and resumed at the hut has moved further than any run of
     /// rejected fixes ever would. `WatchFollowClaim` names the other gaps.
-    public mutating func forgetPosition() { anchorLineDistance = nil }
+    public mutating func forgetPosition() {
+        if let anchorLineDistance { forgottenAnchorLineDistance = anchorLineDistance }
+        anchorLineDistance = nil
+    }
 
     /// Matches a fix, advancing the continuity anchor if it landed on the
-    /// trail.
+    /// trail. With no anchor, only a fix with a course sets one: one without
+    /// is a guess — see this file's header.
     ///
     /// - Parameter courseDegrees: the direction the hiker is travelling in,
     ///   clockwise from north. `nil` for a fix that does not carry one —
@@ -370,12 +390,13 @@ public struct WatchRouteTracker: Sendable, Equatable {
 
     /// The winner among candidates that are all as near the line as each
     /// other: the hiker's direction first, then continuity, then the one the
-    /// scan met first.
+    /// scan met first. With no position, continuity is with the one
+    /// ``forgetPosition()`` let go of, if there was one.
     private func preferred(among contenders: [Candidate]) -> Candidate? {
         guard contenders.count > 1 else { return contenders.first }
         let agreeing = contenders.filter(\.runsWithTheHiker)
         let shortlist = agreeing.isEmpty ? contenders : agreeing
-        guard let anchor = anchorLineDistance else { return shortlist.first }
+        guard let anchor = anchorLineDistance ?? forgottenAnchorLineDistance else { return shortlist.first }
         return shortlist.min { lhs, rhs in
             let left = abs(lhs.lineDistance - anchor)
             let right = abs(rhs.lineDistance - anchor)
