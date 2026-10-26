@@ -2,7 +2,8 @@
 //  HikeRecorder+PlaceName.swift
 //  OpenHikes
 //
-//  Naming a recording for the town it started in.
+//  The name a recording is offered: the trail it mostly followed, or else the
+//  town it started in.
 //
 //  A recording that followed no trail used to be named for the time of day
 //  alone — "Morning Hike – Oct 26, 2026" — which says the same of every walk
@@ -25,7 +26,8 @@
 //  asked again: the name it would have given is a nicety, and the name it
 //  falls back to is the one every recording had before this. A relaunch that
 //  recovers the walk asks once more, about the same first point, because the
-//  answer was only ever held in memory.
+//  answer was only ever held in memory. That includes a walk already stopped,
+//  which comes back to its route review, where no fix arrives to ask at.
 //
 //  ## Held, not written
 //
@@ -36,11 +38,55 @@
 //  Lock Screen relabeling itself, for a name the stop alert shows the hiker
 //  anyway.
 //
+//  ## What the stop alert shows is what is saved
+//
+//  The answer can still be on its way when the hiker stops: from a trailhead
+//  with poor signal, or soon after a relaunch. So the stop alert hands the
+//  recorder the name it showed, and a blank field saves that name even if the
+//  town answers while the alert is up or during the route review after it —
+//  see ``HikeRecorder/stop(customName:offeredTitle:)``. Only a Stop that
+//  showed no name, such as Siri's, takes whatever has arrived by the save.
+//
 
 import CoreLocation
 import Foundation
+import OpenHikesData
 
 extension HikeRecorder {
+    /// The name to offer this walk: the trail that covered enough of it to be
+    /// worth claiming — see ``RecordingTrailNames/coverageFloor`` — or else
+    /// the town it started in, ``startPlaceTitle``. `nil` when neither has
+    /// one, which leaves the draft's own name: the time of day and the date.
+    ///
+    /// The trail first, because it is the more particular of the two: a town
+    /// is where every walk from its station starts, and the trail is the one
+    /// this walk went along.
+    ///
+    /// Bounded through ``HikeTitle`` like every other name this app stores.
+    /// OpenStreetMap's `name` is somebody else's free text arriving over the
+    /// network, which is exactly the input that bound exists for, and a route
+    /// relation's name is occasionally a paragraph. The town's name is bounded
+    /// where it was made, in ``placeTitle(city:for:calendar:)``.
+    ///
+    /// - Parameter totalMeters: The walk's distance. Passed rather than read
+    ///   off ``stats`` so the two callers can each use the figure that is
+    ///   authoritative for them: the live accumulator's while the walk is
+    ///   still running, and the prepared recording's once it has been
+    ///   measured for the last time.
+    func suggestedTitle(forDistance totalMeters: Double) -> String? {
+        HikeTitle.bounded(trailNames.dominantName(of: totalMeters)) ?? startPlaceTitle
+    }
+
+    /// What the walk would be named if it ended now.
+    ///
+    /// Read when the hiker asks to stop, to fill the name field's placeholder.
+    /// Deliberately *not* read from inside a `body`: it reads
+    /// ``RecordingStats/distanceMeters``, which changes on every accepted fix,
+    /// and a body that observed it would re-run at fix rate.
+    var suggestedTitle: String? {
+        suggestedTitle(forDistance: stats.distanceMeters)
+    }
+
     /// Asks what town this recording started in, the first time it is called
     /// for a recording.
     ///

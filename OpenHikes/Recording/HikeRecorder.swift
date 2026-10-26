@@ -196,6 +196,15 @@ final class HikeRecorder: NSObject {
     /// Whether this walk has asked what town it started in, answered or not —
     /// the once in ``nameStartPlace(at:)``.
     @ObservationIgnored var hasAskedForStartPlace = false
+    /// The name the hiker was shown for a blank field when they stopped, and
+    /// so the name the save writes — see ``stop(customName:offeredTitle:)``.
+    /// `nil` before Stop, and after a Stop that offered nothing.
+    ///
+    /// Kept here beside the two names it was made from rather than carried
+    /// with the typed name, because it is read where they are: once, in
+    /// ``persist(_:prepared:customName:)``, whether the save follows Stop
+    /// straight away, a route review or a retry.
+    @ObservationIgnored var offeredTitle: String?
     @ObservationIgnored var liveMatchingTask: Task<Void, Never>?
     @ObservationIgnored var liveMatchingTaskID: UUID?
     @ObservationIgnored var liveMatchNeedsRun = false
@@ -240,40 +249,6 @@ final class HikeRecorder: NSObject {
         case .recovering: true
         case .waitingForFix, .recording, .paused, .saving, .reviewing, .failed: sessionID != nil || startRequested
         }
-    }
-
-    /// The name to offer this walk: the trail that covered enough of it to be
-    /// worth claiming — see ``RecordingTrailNames/coverageFloor`` — or else
-    /// the town it started in, ``startPlaceTitle``. `nil` when neither has
-    /// one, which leaves the draft's own name: the time of day and the date.
-    ///
-    /// The trail first, because it is the more particular of the two: a town
-    /// is where every walk from its station starts, and the trail is the one
-    /// this walk went along.
-    ///
-    /// Bounded through ``HikeTitle`` like every other name this app stores.
-    /// OpenStreetMap's `name` is somebody else's free text arriving over the
-    /// network, which is exactly the input that bound exists for, and a route
-    /// relation's name is occasionally a paragraph. The town's name is bounded
-    /// where it was made, in ``placeTitle(city:for:calendar:)``.
-    ///
-    /// - Parameter totalMeters: The walk's distance. Passed rather than read
-    ///   off ``stats`` so the two callers can each use the figure that is
-    ///   authoritative for them: the live accumulator's while the walk is
-    ///   still running, and the prepared recording's once it has been
-    ///   measured for the last time.
-    func suggestedTitle(forDistance totalMeters: Double) -> String? {
-        HikeTitle.bounded(trailNames.dominantName(of: totalMeters)) ?? startPlaceTitle
-    }
-
-    /// What the walk would be named if it ended now.
-    ///
-    /// Read when the hiker asks to stop, to fill the name field's placeholder.
-    /// Deliberately *not* read from inside a `body`: it reads
-    /// ``RecordingStats/distanceMeters``, which changes on every accepted fix,
-    /// and a body that observed it would re-run at fix rate.
-    var suggestedTitle: String? {
-        suggestedTitle(forDistance: stats.distanceMeters)
     }
 
     /// Waits out the automatic recovery pass, so ``phase`` answers about the
@@ -518,14 +493,27 @@ extension HikeRecorder {
         publishSharedRecordingSnapshot(force: true)
     }
 
+    /// Ends the walk, and saves it or opens its route review.
+    ///
+    /// - Parameters:
+    ///   - customName: The name the hiker typed, if any.
+    ///   - offeredTitle: The name the hiker was shown for leaving the field
+    ///     blank — the stop alert's placeholder — which the hike is then saved
+    ///     under, beneath any name they typed instead. A placeholder is a
+    ///     promise, and asking again at the save would break it: the town can
+    ///     answer, and the walk go on, while the alert is up. `nil` for a Stop
+    ///     that offered nothing, such as Siri's, which leaves the name to the
+    ///     save — see ``suggestedTitle(forDistance:)``.
     @discardableResult func stop(
-        customName: String? = nil
+        customName: String? = nil,
+        offeredTitle: String? = nil
     ) async throws -> RecordingStopOutcome {
         guard phase == .waitingForFix
             || phase == .recording
             || phase == .paused else { throw RecordingFailure.save(String(
                 localized: "No active recording is ready to stop."
             )) }
+        self.offeredTitle = HikeTitle.bounded(offeredTitle)
         guard let journal, sessionStartedAt != nil else {
             let failure = RecordingFailure.storageUnavailable
             fail(failure)

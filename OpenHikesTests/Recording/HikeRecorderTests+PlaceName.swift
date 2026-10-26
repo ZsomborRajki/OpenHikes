@@ -4,6 +4,8 @@
 //
 //  What a recording no trail named is called: the town it started in, asked
 //  about once, at the walk's first fix — see `HikeRecorder+PlaceName.swift`.
+//  A blank stop alert still saves the name it showed, however late the town
+//  answers.
 //
 //  The geocoder is a stub that answers with the town it is given and writes
 //  down every coordinate it was asked about, for the reason every transport
@@ -245,5 +247,101 @@ extension HikeRecorderTests {
 
         #expect(places.askedCoordinates.count == 1, "the fix after a recovered start is not another start")
         #expect(hike.title == HikeRecorder.placeTitle(city: "Budapest", for: hike.date))
+    }
+
+    /// A walk stopped and then closed during its route review comes back to
+    /// that review, where no fix arrives to ask at. The relaunch asks first,
+    /// so the review's save still has the town to name the walk for.
+    @Test("a walk recovered into its route review is named for its town")
+    func aWalkRecoveredIntoReviewIsNamedForItsTown() async throws {
+        let journal = TrackJournal(directory: directory, clock: clock.read)
+        try await journal.start(sessionID: UUID(), startedAt: clock.now)
+        try await journal.append(
+            RecordingPoint(latitude: 47.63, longitude: 12.86, timestamp: clock.now, horizontalAccuracy: 8)
+        )
+        clock.advance(by: 720)
+        try await journal.append(
+            RecordingPoint(latitude: 47.63, longitude: 12.864, timestamp: clock.now, horizontalAccuracy: 8)
+        )
+        try await journal.finish(at: clock.now)
+
+        let places = StubRecordingPlaceNaming(city: "Budapest")
+        let recorder = makeRecorder(
+            trailGraphProvider: StubTrailGraphProvider(graph: ambiguityGraph()),
+            placeNames: places
+        )
+        await recorder.recoverOpenSession()
+        #expect(recorder.phase == .reviewing)
+        await settleStartPlace(of: recorder)
+
+        let asked = try #require(places.askedCoordinates.first)
+        #expect(asked.latitude.isApproximatelyEqual(to: 47.63, absoluteTolerance: 1e-7))
+        #expect(asked.longitude.isApproximatelyEqual(to: 12.86, absoluteTolerance: 1e-7))
+        let hike = try await recorder.saveReviewedRecording()
+        #expect(hike.title == HikeRecorder.placeTitle(city: "Budapest", for: hike.date))
+    }
+
+    /// The stop alert's placeholder is a promise about what a blank field
+    /// saves. A hiker shown the time of day gets the time of day, even when
+    /// the town answers while the alert is up, as it can at a trailhead with
+    /// poor signal.
+    @Test("a blank stop alert saves the name it showed, though the town answers while it is up")
+    func aBlankStopAlertSavesTheNameItShowed() async throws {
+        let places = StubRecordingPlaceNaming(city: "Budapest")
+        places.holdsAnswers = true
+        let recorder = makeRecorder(placeNames: places)
+        await recorder.start()
+        source.deliver(fix(latitude: 47.63))
+        clock.advance(by: 60)
+        source.deliver(fix(latitude: 47.631))
+        await settleDelegateHop(until: "the town to be asked about") {
+            places.askedCoordinates.count == 1
+        }
+        // What the alert shows when Stop is tapped now: with no trail and no
+        // town yet, the draft's own name.
+        #expect(recorder.suggestedTitle == nil)
+        let shown = try #require(recorder.currentHike?.title)
+
+        places.releaseAnswers()
+        await settleStartPlace(of: recorder)
+        let hike = try savedHike(from: await recorder.stop(customName: "", offeredTitle: shown))
+
+        #expect(hike.title == shown)
+        #expect(hike.customName == nil, "nobody typed this name")
+    }
+
+    /// The same promise across a route review, where a late answer is the
+    /// likeliest to land: the hiker can sit in one for minutes.
+    @Test("the name a stop alert showed outlasts the route review")
+    func theShownNameOutlastsTheRouteReview() async throws {
+        let places = StubRecordingPlaceNaming(city: "Budapest")
+        places.holdsAnswers = true
+        let recorder = makeRecorder(
+            trailGraphProvider: StubTrailGraphProvider(graph: matchedPathGraph()),
+            placeNames: places
+        )
+        await recorder.start()
+        // The trace `HikeRecorderTests+Review.swift` walks, which the matcher
+        // moves onto the trail beside it.
+        source.deliver(fix(latitude: 47.63))
+        clock.advance(by: 10)
+        source.deliver(fix(latitude: 47.6302))
+        await settleDelegateHop(until: "the town to be asked about") {
+            places.askedCoordinates.count == 1
+        }
+        #expect(recorder.suggestedTitle == nil)
+        let shown = try #require(recorder.currentHike?.title)
+
+        guard case .needsReview = try await recorder.stop(offeredTitle: shown) else {
+            Issue.record("the moved route did not enter review")
+            return
+        }
+        places.releaseAnswers()
+        await settleDelegateHop(until: "the town to answer during the review") {
+            recorder.startPlaceTitle != nil
+        }
+        let hike = try await recorder.saveReviewedRecording()
+
+        #expect(hike.title == shown)
     }
 }
