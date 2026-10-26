@@ -148,6 +148,7 @@
       }
     },
     "Cancel" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -288,6 +289,7 @@
       }
     },
     "Hike" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -489,6 +491,7 @@
       }
     },
     "OpenHikes needs your location before it can record a hike." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -509,6 +512,7 @@
       }
     },
     "Pause Hike" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -549,6 +553,7 @@
       }
     },
     "Pauses the hike being recorded, from its Lock Screen panel." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -629,6 +634,7 @@
       }
     },
     "Resume Hike" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -659,6 +665,7 @@
       }
     },
     "Resumes the paused hike, from its Lock Screen panel." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -699,6 +706,7 @@
       }
     },
     "Shows a trail you choose, or your selected trail, or a hike currently being recorded." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -829,6 +837,7 @@
       }
     },
     "Toggle Hike Recording" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
