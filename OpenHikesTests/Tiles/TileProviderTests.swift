@@ -252,7 +252,7 @@ struct TileProviderTests {
     @Test("the satellite summary says it needs a connection")
     func satelliteSummaryWarnsOffline() {
         #expect(TileProvider.appleSatellite.summary.contains("connection"))
-        #expect(!TileProvider.appleSatellite.summary.contains("saves nothing"))
+        #expect(!TileProvider.appleSatellite.summary.contains("least battery"))
     }
 
     /// Cache keys are namespaced by provider id, so a duplicate id would make

@@ -839,6 +839,12 @@ a change to recording, the map, the sheet or the render path; the PR template,
     no second copy of their wording is checked in.
   - A count is a plural variation, never `if count == 1`.
   - Figures are formatted per locale and never catalogued.
+  - **Copy is a simple explanation.** A footer, alert or empty state says what
+    a control does, or what happened and what to do next, in a sentence or
+    two. The reasoning, the mechanism and the edge cases go in the code's
+    comments, or on the support page when a hiker needs them. A switch is
+    named for everything it controls. `StringCatalogTests` holds every English
+    value under a length ceiling.
 - **OpenHikes Pro is one monthly subscription.**
   - **`MapEntitlementStore.productID` (`…pro.maps.monthly`) never changes.**
     It is recorded against every purchase. The name customers read lives in the

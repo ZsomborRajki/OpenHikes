@@ -251,9 +251,8 @@ nonisolated extension CommunityPublishingEligibility.Reason {
             let who = author.map { name in String(localized: "\(name) shared it") }
                 ?? String(localized: "Another hiker shared it")
             return String(localized: """
-            \(who), and publishing it again would send their route and their notes \
-            under your name. Your photographs are a different matter — they’re yours, \
-            and they can go on the trail that’s already here.
+            \(who), so it can’t be published again under your name. Your own photos can \
+            go on the trail that’s already listed.
             """)
         case .tooShort(let meters):
             // `usage: .road`, which is what every other distance in the app
@@ -263,15 +262,12 @@ nonisolated extension CommunityPublishingEligibility.Reason {
             let floor = Self.road(CommunityPublishingEligibility.minimumDistanceMeters, locale)
             let walked = Self.road(meters, locale)
             return String(localized: """
-            Community hikes start at \(floor); this one is \(walked). Short hikes stay \
-            in your own list, where they’re still yours to keep, export and sync.
+            Community hikes start at \(floor); this one is \(walked). It stays in your own list.
             """)
         case .savedFromOpenStreetMap:
             return String(localized: """
-            You saved this from OpenStreetMap, where anybody can already find it — \
-            publishing a copy would put the same trail in this list twice. What \
-            OpenStreetMap hasn’t got is a single photograph of it, and yours can go \
-            on the trail that’s already here.
+            You saved this from OpenStreetMap, where anyone can already find it. Your own \
+            photos can go on the trail that’s already listed.
             """)
         case .retreads(let title):
             // The one reason that reaches both cases — an earlier hike that
@@ -280,11 +276,7 @@ nonisolated extension CommunityPublishingEligibility.Reason {
             // leaves the offer to the control under it. Promising the
             // photographs here would be a promise the waiting-for-review half
             // cannot keep.
-            return String(localized: """
-            \(title) covers the same ground, and two listings for one trail make it \
-            harder for anyone to find either. This hike stays in your own list, where \
-            it’s still yours to keep, export and sync.
-            """)
+            return String(localized: "\(title) already covers the same ground, so this hike stays in your own list.")
         }
     }
 

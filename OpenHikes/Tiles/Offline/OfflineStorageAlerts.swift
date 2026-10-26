@@ -90,13 +90,9 @@ private struct OfflineStorageAlerts: ViewModifier {
             countStyle: .file
         )
         return String(localized: """
-            \(shortfall.licenseHolder) allows \(limit) of saved maps on this device, across all \
-            its map styles, and that’s already in use. Saving this route will delete about \
-            \(freeing) of your least-recently-used saved tiles, whichever of its styles they \
-            were saved in.
-
-            The hikes they belong to keep their routes, and their maps \
-            refill the next time you view them online.
+            \(shortfall.licenseHolder) allows \(limit) of saved maps on this device, and that’s \
+            used up. Saving this route deletes about \(freeing) of the saved maps you’ve used \
+            least recently. Those hikes keep their routes.
             """)
     }
 }

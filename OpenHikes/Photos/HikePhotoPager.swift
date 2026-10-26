@@ -183,9 +183,8 @@ struct HikePhotoPage: View {
         } description: {
             Text(
                 """
-                This came from an imported GPX file, which records where a \
-                photo was taken but cannot carry the photo itself. Its place \
-                on the trail is on the map.
+                This came from a GPX file, which records where a photo was taken \
+                but not the photo itself. Its place is on the map.
                 """
             )
         }
@@ -207,13 +206,7 @@ struct HikePhotoPage: View {
         ContentUnavailableView {
             Label("Not on This Device", systemImage: "icloud.slash")
         } description: {
-            Text(
-                """
-                OpenHikes keeps photo files on the device they were added \
-                on \u{2014} only where and when the photo was taken travels \
-                with the hike.
-                """
-            )
+            Text("This photo is on the device it was added on. Only where and when it was taken syncs.")
         }
         .accessibilityIdentifier("photo-not-on-this-device")
         .environment(\.colorScheme, .dark)

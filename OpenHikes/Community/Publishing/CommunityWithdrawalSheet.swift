@@ -128,12 +128,7 @@ private extension CommunityWithdrawalSheet {
                 tint: AnyShapeStyle(.tint)
             )
         } footer: {
-            Text("""
-            Your request opens in your mail app so you can send it. It carries \
-            the record names a reviewer needs, which this hike is the only \
-            place holding. The hike stays on this device either way — deleting \
-            it here would not take the shared copy down.
-            """)
+            Text("Your request opens in your mail app. Deleting this hike doesn’t take the shared copy down.")
         }
     }
 }

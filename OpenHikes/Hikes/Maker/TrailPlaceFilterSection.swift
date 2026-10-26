@@ -68,20 +68,12 @@ struct TrailPlaceFilterSection: View {
                     if placesShown {
                         Text(
                             """
-                            The Search this area button on the map adds what \
-                            OpenStreetMap has mapped near your trail as pins you can tap, \
-                            and photos from Wikimedia Commons taken there. Choose what it \
-                            looks for. Turning one off also removes its pins from the map.
+                            Choose which places and photos the search on the map finds \
+                            near your trail. Turning one off also hides its pins.
                             """
                         )
                     } else {
-                        Text(
-                            """
-                            Places and photos are hidden from the map and won’t be \
-                            saved with this trail. Turn this on to show them and search \
-                            for more.
-                            """
-                        )
+                        Text("Places and photos are hidden and won’t be saved with this trail.")
                     }
                 }
                 .font(.footnote)

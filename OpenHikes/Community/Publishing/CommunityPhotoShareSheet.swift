@@ -317,10 +317,9 @@ private extension CommunityPhotoShareSheet {
             CommunityFootnoteLabel(
                 text: Text(
                     """
-                    You’ve already added photos from this hike. Sending again adds a \
-                    second set beside the first — it doesn’t replace it, and this app \
-                    can’t take that one down. Ask for it to be removed from this hike’s \
-                    own screen.
+                    You’ve already added photos from this hike. Sending again adds a second \
+                    set rather than replacing the first. To remove the first, ask from this \
+                    hike’s screen.
                     """
                 ),
                 systemImage: "exclamationmark.triangle",
@@ -342,10 +341,7 @@ private extension CommunityPhotoShareSheet {
     var nameSection: some View {
         CommunityCreditSection(
             authorName: $authorName,
-            footer: """
-            Shown publicly beside your photos, so other hikers can tell them from \
-            the ones whoever shared this trail took. You can leave it blank.
-            """,
+            footer: "Shown publicly beside your photos, so others can tell them apart. You can leave it blank.",
             identifier: "community-photos-author-field",
             phase: phase
         )
@@ -389,9 +385,8 @@ private extension CommunityPhotoShareSheet {
         CommunityFinishSendingSection(
             phase: phase,
             detail: """
-            Your photos are uploaded, but the request for a person to review them \
-            didn’t go through, so they won’t appear on this trail yet. Finishing \
-            sends only that request — nothing is uploaded again.
+            Your photos are uploaded, but the review request didn’t go through, so they \
+            won’t appear on this trail yet. Finishing sends only the request.
             """,
             identifiers: .init(
                 outcome: "community-photos-unfinished",
@@ -482,9 +477,8 @@ private extension CommunityPhotoShareSheet {
     static var publishedExplanation: String {
         String(
             localized: """
-            You’ve already published this hike, and a published hike can’t be \
-            amended — so its route, its name and its notes stay exactly as they \
-            are, and these photos go on as an addition to it.
+            You’ve already published this hike. Its route, name and notes stay as \
+            they are, and these photos are added to it.
             """
         )
     }

@@ -83,10 +83,7 @@ struct MapPaywallView: View {
         (
             "map.fill",
             "Thunderforest Outdoors",
-            """
-                Bright, high-contrast trail cartography that stays readable in sunlight. It keeps the \
-                tiles you’ve looked at; downloading a route ahead is Stadia only.
-                """
+            "Bright, high-contrast trail map that stays readable in sunlight. Routes can’t be downloaded ahead."
         ),
         (
             "arrow.down.circle.fill",
@@ -97,17 +94,14 @@ struct MapPaywallView: View {
             "chart.xyaxis.line",
             "Elevation Where There Is None",
             """
-                The climb, the elevation profile and steepness colors for trails you draw, routes found \
-                on OpenStreetMap and hikes whose file has no heights, from Stadia Maps.
+                Climb, elevation profile and steepness colors from Stadia Maps, for trails you draw and \
+                routes with no elevation data.
                 """
         ),
         (
             "heart.fill",
             "Keeps OpenStreetMap Free",
-            """
-                The paid maps are billed per view. Paying for those is what keeps the free map on \
-                donated servers OpenHikes doesn’t charge for.
-                """
+            "The paid maps are billed per view. Your subscription covers them, so OpenStreetMap stays free."
         ),
     ]
 
@@ -211,9 +205,8 @@ struct MapPaywallView: View {
             // who bought it for Thunderforest.
             Text(
                 """
-                    OpenStreetMap stays free and stays the default. Pro adds three commercial outdoor map \
-                    styles built for trails, and both Stadia styles download a whole route to your phone \
-                    for a hike with no signal.
+                    Pro adds three outdoor map styles built for trails, and both Stadia styles save a \
+                    whole route to your phone for a hike with no signal.
                     """
             )
             .font(.subheadline)

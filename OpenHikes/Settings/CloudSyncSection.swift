@@ -27,12 +27,12 @@ struct CloudSyncSection: View {
         } header: {
             Text("iCloud")
         } footer: {
+            // "Photos" rather than "photo files" for brevity: where and when
+            // each was taken does sync, and another device shows the picture
+            // as unavailable — see ``PhotoUnavailability``.
             Text("""
-            Your recorded and imported hikes, and where and when each of their \
-            photos was taken, are kept in your private iCloud storage and appear \
-            on your other devices. The photo files themselves are not — they stay \
-            on the device they were added on, as downloaded maps stay on the \
-            device that downloaded them.
+            Syncs your hikes to your other devices through your private iCloud storage. \
+            Photos and offline maps stay on the device that saved them.
             """)
         }
     }

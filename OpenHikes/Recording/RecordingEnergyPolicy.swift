@@ -74,7 +74,7 @@ nonisolated struct RecordingEnergyProfile: Equatable, Sendable {
         name: "paused-watch",
         desiredAccuracy: RecordingEnergyPolicy.pausedWatchAccuracy,
         distanceFilter: RecordingEnergyPolicy.pausedWatchDistanceFilter,
-        reason: String(localized: "Paused — watching for a hundred meters at a time in case you set off again.")
+        reason: String(localized: "Paused — checking now and then in case you set off again.")
     )
 }
 

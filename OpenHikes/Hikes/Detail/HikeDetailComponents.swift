@@ -495,8 +495,8 @@ struct OfflineStorageStatus: View {
     private var autoSaveNote: String? {
         if let systemMapName {
             return String(localized: """
-            \(systemMapName) uses no downloadable tiles, so nothing is saved for this hike. \
-            Pick another map source in Settings to save one for offline use.
+            \(systemMapName) uses no downloadable tiles. Choose another map in Settings to save \
+            this hike for offline use.
             """)
         }
         guard hike.autoSaveTilesEnabled else {

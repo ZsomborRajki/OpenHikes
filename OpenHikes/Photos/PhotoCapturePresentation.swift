@@ -140,12 +140,7 @@ private struct PhotoCaptureAlerts: ViewModifier {
                 OpenSettingsLink.link
                 Button("Not Now", role: .cancel) { /* dismiss */ }
             } message: {
-                Text(
-                    """
-                        OpenHikes needs the camera to take photos on a hike. You can turn it on in Settings. \
-                        Photos already on your device can still be added from your library.
-                        """
-                )
+                Text("OpenHikes needs the camera to take photos. You can still add photos from your library.")
             }
             // A capture that could not be encoded or written is simply gone:
             // the frame is not retained and there is no copy in the photo
