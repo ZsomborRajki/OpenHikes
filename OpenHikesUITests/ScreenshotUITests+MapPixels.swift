@@ -25,8 +25,8 @@ extension ScreenshotUITests {
     private static let mapSampleInset: CGFloat = 12
 
     @MainActor
-    private func screenshotPixels(in app: XCUIApplication) -> (bytes: [UInt8], width: Int, height: Int)? {
-        let shot = Self.screen(showing: app).screenshot().image
+    private func screenshotPixels(on display: ScreenshotDisplay) -> (bytes: [UInt8], width: Int, height: Int)? {
+        let shot = display.screen.screenshot().image
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         let normalized = UIGraphicsImageRenderer(size: shot.size, format: format).image { _ in
@@ -54,8 +54,10 @@ extension ScreenshotUITests {
     }
 
     @MainActor
-    func screenshotMapHasTiles(in app: XCUIApplication, requireTerrain: Bool = true) -> Bool {
-        guard let image = screenshotPixels(in: app) else { return false }
+    func screenshotMapHasTiles(
+        in app: XCUIApplication, on display: ScreenshotDisplay, requireTerrain: Bool = true
+    ) -> Bool {
+        guard let image = screenshotPixels(on: display) else { return false }
         let area = openMapArea(in: app)
         let region = area.insetBy(dx: Self.mapSampleInset, dy: Self.mapSampleInset)
             .intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
@@ -67,12 +69,18 @@ extension ScreenshotUITests {
             for column in stride(from: Int(region.minX), to: Int(region.maxX), by: Self.terrainSampleStride) {
                 let offset = (row * image.width + column) * 4
                 let channels = image.bytes[offset..<(offset + 3)]
-                if abs(Int(image.bytes[offset]) - Self.placeholderRed) <= Self.placeholderTolerance,
-                   abs(Int(image.bytes[offset + 1]) - Self.placeholderGreen) <= Self.placeholderTolerance,
-                   abs(Int(image.bytes[offset + 2]) - Self.placeholderBlue) <= Self.placeholderTolerance {
+                let lightGrid = abs(Int(image.bytes[offset]) - Self.placeholderRed) <= Self.placeholderTolerance
+                    && abs(Int(image.bytes[offset + 1]) - Self.placeholderGreen) <= Self.placeholderTolerance
+                    && abs(Int(image.bytes[offset + 2]) - Self.placeholderBlue) <= Self.placeholderTolerance
+                // Apple Maps follows the appearance. Its dark loading grid
+                // is neutral gray; loaded land and water have a color tint.
+                let high = channels.max() ?? 0
+                let low = channels.min() ?? 0
+                let darkGrid = high <= 60 && high - low <= 6
+                if lightGrid || darkGrid {
                     placeholder += 1
                 }
-                if let high = channels.max(), let low = channels.min(), high - low > Self.terrainColorSpread {
+                if high - low > Self.terrainColorSpread {
                     terrain += 1
                 }
                 samples += 1
@@ -84,8 +92,8 @@ extension ScreenshotUITests {
     }
 
     @MainActor
-    func recordedLineBounds(in app: XCUIApplication, within area: CGRect) -> CGRect? {
-        guard let image = screenshotPixels(in: app) else { return nil }
+    func recordedLineBounds(within area: CGRect, on display: ScreenshotDisplay) -> CGRect? {
+        guard let image = screenshotPixels(on: display) else { return nil }
         let width = image.width
         let height = image.height
         let pixels = image.bytes

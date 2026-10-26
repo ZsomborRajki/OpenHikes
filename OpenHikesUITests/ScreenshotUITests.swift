@@ -35,6 +35,8 @@ import CoreLocation
 import XCTest
 
 nonisolated final class ScreenshotUITests: XCTestCase {
+    @MainActor private var resolvedDisplay: ScreenshotDisplay?
+
     /// How many times ``revealCommunityPins(in:atLeast:)`` re-measures and
     /// pans before giving up.
     private static let centeringPasses = 5
@@ -490,7 +492,7 @@ extension ScreenshotUITests {
     /// half as much map again as the 6.9" phone without the step.
     @MainActor
     func frameCommunityPins(in app: XCUIApplication) {
-        let zoomOutSteps = Self.screen(showing: app) == XCUIScreen.main ? Self.nearbyZoomOutSteps : 0
+        let zoomOutSteps = screenshotDisplay(in: app).screen == XCUIScreen.main ? Self.nearbyZoomOutSteps : 0
         for _ in 0..<zoomOutSteps {
             guard let pin = visibleCommunityPins(in: app).first else { return }
             pin.twoFingerTap()
@@ -771,7 +773,7 @@ extension ScreenshotUITests {
     /// there. The app is asked only which screen that is.
     @MainActor
     func capture(as frame: Frame, of app: XCUIApplication) {
-        let shot = Self.screen(showing: app).screenshot()
+        let shot = screenshotDisplay(in: app).screen.screenshot()
         let attachment = XCTAttachment(screenshot: shot)
         attachment.name = frame.rawValue
         attachment.lifetime = .keepAlways
@@ -786,13 +788,20 @@ extension ScreenshotUITests {
     /// window is measured rather than `app.frame`, which on the Duo's inner
     /// display keeps that display's portrait size after it has turned.
     @MainActor
-    static func screen(showing app: XCUIApplication) -> XCUIScreen {
+    func screenshotDisplay(in app: XCUIApplication) -> ScreenshotDisplay {
         let window = app.windows.firstMatch
-        guard window.exists else { return .main }
-        let size = window.frame.size
-        return XCUIScreen.screens.first { screen in
-            let shown = screen.screenshot().image.size
-            return abs(shown.width - size.width) <= 1 && abs(shown.height - size.height) <= 1
-        } ?? .main
+        let size = window.exists ? window.frame.size : app.frame.size
+        if let resolvedDisplay, resolvedDisplay.windowSize == size { return resolvedDisplay }
+        for screen in XCUIScreen.screens {
+            let image = screen.screenshot().image
+            if abs(image.size.width - size.width) <= 1, abs(image.size.height - size.height) <= 1 {
+                let display = ScreenshotDisplay(screen: screen, image: image, windowSize: size)
+                resolvedDisplay = display
+                return display
+            }
+        }
+        let display = ScreenshotDisplay(screen: .main, image: XCUIScreen.main.screenshot().image, windowSize: size)
+        resolvedDisplay = display
+        return display
     }
 }

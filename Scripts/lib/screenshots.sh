@@ -171,7 +171,8 @@ Options:
   --prepared-device <udid>
                     Use a freshly acquired pool device without erasing it.
                     The caller owns its pool claim and releases it afterwards.
-  --device-type <t>  Simulator device type (default: iPhone 18 Pro Max)
+  --pool-owner <id>  Owner passed to sim-pool acquire (default: session/checkout)
+  --device-type <t>  iPhone 18 Pro Max (default) or iPhone Duo
   --pose <p>         For an iPhone Duo: closed (its inner display folded away,
                      as it boots) or open (unfolded). See Scripts/duo-pose.sh.
   --orientation <o>  With --pose open: portrait (default, the inner display
@@ -191,8 +192,8 @@ Options:
 The simulator starts clean before every run — a fresh clone of a settled
 template, or erased when --device names it by UDID — so a capture never
 inherits a tile cache, a photo library or a location from an earlier one. Logs and result
-bundles are kept under the derived-data directory; the path is printed at the
-end of every run.
+bundles for the last five completed runs are kept under the derived-data
+directory; the path is printed at the end of every run. Active runs are kept.
 EOF
 }
 
@@ -310,7 +311,7 @@ prepare_screenshot_device() {
 
 # Builds the app and its UI tests once, for every attempt that follows.
 build_screenshot_tests() {
-    local raw_log="$derived_data/Screenshots-$screenshot_appearance-$screenshot_run_id-build.log"
+    local raw_log="$screenshot_log_dir/build.log"
     echo "[$screenshot_appearance] building…" >&2
     set +e
     xcodebuild build-for-testing \
@@ -375,6 +376,10 @@ set_location_access() {
 # guesswork.
 export_screenshot_frames() {
     local result_bundle="$1" staging="$2"
+    local passed
+    passed="$(xcrun xcresulttool get test-results tests --path "$result_bundle" \
+        | swift "$screenshots_lib_dir/screenshot-passed-tests.swift")" || return 0
+    [[ -n "$passed" ]] || return 0
     rm -rf "$staging"
     xcrun xcresulttool export attachments \
         --path "$result_bundle" \
@@ -390,8 +395,13 @@ export_screenshot_frames() {
     # attachment. Asking about `attachments.0` stopped the whole walk at the
     # first test that shot nothing, which silently dropped every frame after
     # it.
-    local test_index=0 attachment_index exported readable frame
+    local test_index=0 attachment_index exported readable frame identifier
     while /usr/bin/plutil -extract "$test_index" raw -o /dev/null -- "$manifest" 2>/dev/null; do
+        identifier="$(/usr/bin/plutil -extract "$test_index.testIdentifier" raw -o - "$manifest" 2>/dev/null || true)"
+        if ! printf '%s\n' "$passed" | grep -Fxq -- "$identifier"; then
+            test_index=$((test_index + 1))
+            continue
+        fi
         attachment_index=0
         while exported="$(/usr/bin/plutil -extract "$test_index.attachments.$attachment_index.exportedFileName" raw -o - "$manifest" 2>/dev/null)"; do
             readable="$(/usr/bin/plutil -extract "$test_index.attachments.$attachment_index.suggestedHumanReadableName" raw -o - "$manifest" 2>/dev/null)"
@@ -417,7 +427,8 @@ export_screenshot_frames() {
 fit_screenshot_frame() {
     swift "$screenshots_lib_dir/fit-screenshot.swift" "${screenshot_store_sizes[@]}" -- "$1" >&2 || return 1
     local size accepted
-    size="$(/usr/bin/sips -g pixelWidth -g pixelHeight "$1" | awk '/pixel/ { print $2 }' | paste -sd x -)"
+    size="$(/usr/bin/sips -g pixelWidth -g pixelHeight "$1" \
+        | awk '$1 ~ /^pixel(Width|Height):$/ { print $2 }' | paste -sd x -)"
     for accepted in "${screenshot_store_sizes[@]}"; do
         if [[ "$size" == "$accepted" ]]; then return 0; fi
     done
@@ -434,8 +445,8 @@ run_screenshot_group() {
         only_testing+=("-only-testing:$screenshot_suite/$(screenshot_test_for_frame "$frame")")
     done
 
-    local result_bundle="$derived_data/Screenshots-$screenshot_appearance-$screenshot_run_id-$attempt.xcresult"
-    local raw_log="$derived_data/Screenshots-$screenshot_appearance-$screenshot_run_id-$attempt.log"
+    local result_bundle="$screenshot_log_dir/$attempt.xcresult"
+    local raw_log="$screenshot_log_dir/$attempt.log"
     rm -rf "$result_bundle"
 
     echo "[$screenshot_appearance] $attempt: frames ${frames[*]}" >&2
@@ -460,15 +471,27 @@ run_screenshot_group() {
     local statuses=("${PIPESTATUS[@]}")
     set -e
 
-    # A test host can crash after attaching a frame and Xcode can still print
-    # a green summary. Only a successful process may contribute upload images.
     if [[ ${statuses[0]} -ne 0 || ${statuses[1]} -ne 0 ]]; then
         echo "[$screenshot_appearance] $attempt failed (xcodebuild ${statuses[0]}, log ${statuses[1]}) — see $raw_log" >&2
-        return 0
+        # Exit 65 includes ordinary test failures. Export only frames whose
+        # own tests passed, never one attached by a failed or crashed test.
+        if [[ ${statuses[0]} -ne 65 || ${statuses[1]} -ne 0 ]]; then return 0; fi
     fi
 
     [[ -d "$result_bundle" ]] || return 0
-    export_screenshot_frames "$result_bundle" "$derived_data/attachments-$screenshot_appearance-$screenshot_run_id-$attempt"
+    export_screenshot_frames "$result_bundle" "$screenshot_log_dir/attachments-$attempt"
+}
+
+# Preserve evidence from five completed runs, including failures. An active
+# run has no marker, so another capture cannot prune its bundle mid-export.
+finish_screenshot_run() {
+    touch "$screenshot_log_dir/.complete"
+    local completed=0 directory
+    while IFS= read -r directory; do
+        [[ -f "$directory/.complete" ]] || continue
+        completed=$((completed + 1))
+        if (( completed > 5 )); then rm -rf "$directory"; fi
+    done < <(find "$screenshot_runs_dir" -mindepth 1 -maxdepth 1 -type d | sort -r)
 }
 
 # Shoots `frames` in two groups — without location, then with it — and prints
@@ -503,6 +526,7 @@ screenshots_main() {
     derived_data="$repository_root/DerivedData/Screenshots-$screenshot_appearance"
     keep_device=false
     prepared_device=false
+    pool_owner=""
     skip_photos=false
     retry=true
     # English and metric, without having to force the units to disagree with
@@ -534,6 +558,7 @@ screenshots_main() {
                 shift 2
                 ;;
             --device-type) device_type="${2:?--device-type needs a type}"; shift 2 ;;
+            --pool-owner) pool_owner="${2:?--pool-owner needs an owner}"; shift 2 ;;
             --pose)
                 pose="${2:?--pose needs open or closed}"
                 if [[ "$pose" != open && "$pose" != closed ]]; then
@@ -564,6 +589,10 @@ screenshots_main() {
         echo "--orientation needs --pose open: a closed Duo is shot upright." >&2
         exit 2
     fi
+    case "$device_type" in
+        'iPhone 18 Pro Max'|'iPhone Duo') ;;
+        *) echo "Unsupported screenshot device type: $device_type (iPhone 18 Pro Max or iPhone Duo)." >&2; exit 2 ;;
+    esac
 
     local frames=() frame entry
     if [[ ${#requested[@]} -eq 0 ]]; then
@@ -584,6 +613,10 @@ screenshots_main() {
     if [[ "$prepared_device" == true && -z "$udid" ]]; then
         echo "No available prepared iOS simulator with UDID $device_name." >&2
         exit 2
+    fi
+    if [[ "$prepared_device" == true ]]; then
+        OPENHIKES_SIM_POOL_DEVICE_TYPE="$device_type" "$repository_root/Scripts/sim-pool.sh" \
+            validate "$udid" ${pool_owner:+--owner "$pool_owner"} || exit 2
     fi
     device_pinned=false
     if [[ "$device_name" =~ ^[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$ ]]; then
@@ -629,6 +662,10 @@ screenshots_main() {
     fi
 
     mkdir -p "$output_dir" "$derived_data"
+    screenshot_runs_dir="$derived_data/ScreenshotRuns-$screenshot_appearance"
+    screenshot_log_dir="$screenshot_runs_dir/$screenshot_run_id"
+    mkdir -p "$screenshot_log_dir"
+    trap finish_screenshot_run EXIT
     build_screenshot_tests
     install_app
     # Only this appearance's copies of only the frames being shot: the other
@@ -671,13 +708,13 @@ screenshots_main() {
             if [[ -z "$screenshot_suffix" && "$entry" == *-dark.png ]]; then continue; fi
             local size
             size="$(/usr/bin/sips -g pixelWidth -g pixelHeight "$entry" 2>/dev/null \
-                | awk '/pixel/ { printf "%s ", $2 }')"
+                | awk '$1 ~ /^pixel(Width|Height):$/ { printf "%s ", $2 }')"
             printf '  %-44s %s\n' "$(basename "$entry")" "$size"
         done
     done
-    echo "Logs and result bundles: $derived_data/Screenshots-$screenshot_appearance-$screenshot_run_id-*"
+    echo "Logs and result bundles: $screenshot_log_dir"
 
-    if [[ "$keep_device" == false ]]; then
+    if [[ "$keep_device" == false && "$prepared_device" == false ]]; then
         xcrun simctl shutdown "$udid"
     fi
 
