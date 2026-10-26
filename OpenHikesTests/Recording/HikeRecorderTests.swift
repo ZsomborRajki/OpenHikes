@@ -314,6 +314,7 @@ final class HikeRecorderTests {
         sharedStateStore: (any RecordingSharedStateStoring)? = nil,
         liveActivityController: HikeLiveActivityController? = nil,
         movementReminders: MovementReminderController? = nil,
+        placeNames: (any RecordingPlaceNaming)? = nil,
         automaticallyRecovers: Bool = false,
         powerMonitor: PowerStateMonitor? = nil,
         saveModelContext: @escaping (ModelContext) throws -> Void = { context in
@@ -353,6 +354,7 @@ final class HikeRecorderTests {
             sharedStateStore: sharedStateStore,
             liveActivityController: liveActivityController,
             movementReminders: movementReminders,
+            placeNames: placeNames,
             journalDirectory: directory,
             openJournalHandle: openJournalHandle,
             clock: clock.read,

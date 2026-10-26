@@ -546,6 +546,8 @@ extension HikeRecorder {
         acceptedFixRevision = 0
         liveMatchWindow = []
         trailNames = RecordingTrailNames()
+        startPlaceTitle = nil
+        hasAskedForStartPlace = false
         liveMatchingTask?.cancel()
         liveMatchingTask = nil
         liveMatchingTaskID = nil
@@ -561,7 +563,7 @@ extension HikeRecorder {
         trace.reset()
     }
 
-    // MARK: Default title
+    // MARK: Default titles
 
     nonisolated private static let afternoonEndHour = 17
     nonisolated private static let eveningEndHour = 22
@@ -577,19 +579,38 @@ extension HikeRecorder {
         case Self.afternoonEndHour..<Self.eveningEndHour: timeOfDay = String(localized: "Evening Hike")
         default: timeOfDay = String(localized: "Hike")
         }
+        return "\(timeOfDay) – \(titleDate(date, calendar: calendar))"
+    }
 
-        // `Date.FormatStyle` rather than `DateFormatter`: the old formatter is
-        // an `NSObject` that had to be built and configured on every call, and
-        // this runs once per saved recording. A format style is a `Sendable`
-        // value, which is also what lets this stay `nonisolated` without
-        // parking a shared mutable formatter somewhere.
-        //
-        // `.abbreviated` is `DateFormatter`'s `.medium`. Locale and time zone
-        // stay at the system's, as they were.
-        let dateText = date.formatted(
-            Date.FormatStyle(date: .abbreviated, time: .omitted, calendar: calendar)
-        )
-        return "\(timeOfDay) – \(dateText)"
+    /// The name a walk takes from the town it started in: the shape of
+    /// ``defaultTitle(for:calendar:)``, with the town where the time of day
+    /// was — "Budapest – Oct 26, 2026". `nil` for a city that is only
+    /// whitespace, which would leave nothing but the date.
+    ///
+    /// Bounded through ``HikeTitle``, like every name this app did not get
+    /// from a keyboard: the city is MapKit's text, arriving over the network.
+    nonisolated static func placeTitle(
+        city: String,
+        for date: Date,
+        calendar: Calendar = .current
+    ) -> String? {
+        let name = city.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+        return HikeTitle.bounded("\(name) – \(titleDate(date, calendar: calendar))")
+    }
+
+    /// The date both default titles end with.
+    ///
+    /// `Date.FormatStyle` rather than `DateFormatter`: the old formatter is an
+    /// `NSObject` that had to be built and configured on every call, and this
+    /// runs once per saved recording. A format style is a `Sendable` value,
+    /// which is also what lets this stay `nonisolated` without parking a
+    /// shared mutable formatter somewhere.
+    ///
+    /// `.abbreviated` is `DateFormatter`'s `.medium`. Locale and time zone stay
+    /// at the system's, as they were.
+    nonisolated private static func titleDate(_ date: Date, calendar: Calendar) -> String {
+        date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, calendar: calendar))
     }
 
     // MARK: Session lifecycle helpers

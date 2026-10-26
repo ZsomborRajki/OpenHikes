@@ -82,6 +82,10 @@ extension HikeRecorder {
             }
             return
         }
+        // The town this walk started in was held by the launch that asked,
+        // and went with it. Asked again, about the same first point — after
+        // the finished case above, which saves before any answer could land.
+        nameStartPlace(at: session.points.first?.coordinate)
         let summary = RecordingRecoverySummary(
             startedAt: session.metadata.startedAt,
             lastUpdatedAt: recoveryLastUpdatedAt,
@@ -286,6 +290,10 @@ extension HikeRecorder {
             meters: accumulator.distanceMeters - distanceBeforeFix,
             on: stats.currentTrail?.name
         )
+        // The first fix a recording accepts is where the walk started, and
+        // its town names the walk when no trail does. Only that fix asks —
+        // see ``nameStartPlace(at:)``.
+        nameStartPlace(at: accepted.coordinate)
         // The accumulator's own answer rather than a second opinion: it is
         // already what the energy profile, the saved distance and the moving
         // time are decided by, and a stillness rule of this feature's own
