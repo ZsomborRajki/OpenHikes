@@ -26,6 +26,7 @@ extension ScreenshotUITests {
     private static let recoveredPointFloor = 100
     private static let recordingFrameMargin: CGFloat = 0.07
     private static let recordingPanPress: TimeInterval = 0.1
+    private static let recordingMinimumPan: CGFloat = 20
 
     /// A recording two hours in, half way up the climb to the alm.
     ///
@@ -89,8 +90,9 @@ extension ScreenshotUITests {
         notice.tap()
         XCTAssertTrue(notice.waitForNonExistence(timeout: UITestTimeout.existence), "and closes when asked")
         frameRecordedLine(in: app)
+        let display = screenshotDisplay(in: app)
         XCTAssertTrue(
-            waitUntil(timeout: UITestTimeout.trace) { screenshotMapHasTiles(in: app) },
+            waitUntil(timeout: UITestTimeout.trace) { screenshotMapHasTiles(in: app, on: display) },
             "the map should finish drawing its terrain after zooming"
         )
         capture(as: .recording, of: app)
@@ -101,7 +103,6 @@ extension ScreenshotUITests {
     /// the original detent is restored before the capture.
     @MainActor
     private func frameRecordedLine(in app: XCUIApplication) {
-        let map = mapElement(in: app)
         let window = windowFrame(of: app)
         let original = openMapArea(in: app)
         let panel = element("map-side-panel", in: app).exists
@@ -116,11 +117,12 @@ extension ScreenshotUITests {
         )
         collapseSheet(in: app)
         defer {
-            if !panel { dragSheet(in: app, to: (original.maxY - window.minY) / window.height) }
+            if !panel { restoreRecordingSheet(in: app, top: original.maxY, window: window) }
         }
         let visible = openMapArea(in: app).insetBy(dx: 2, dy: 2)
+        let display = screenshotDisplay(in: app)
         for _ in 0..<10 {
-            guard let bounds = recordedLineBounds(in: app, within: visible) else {
+            guard let bounds = recordedLineBounds(within: visible, on: display) else {
                 XCTFail("the recovered recording should draw a red line on the map")
                 return
             }
@@ -129,17 +131,54 @@ extension ScreenshotUITests {
             if clipped || bounds.width > target.width || bounds.height > target.height {
                 zoomRecordingMapOut(in: app)
             } else {
-                let anchor = CGPoint(x: visible.maxX - margin, y: visible.midY)
-                let landing = CGPoint(
-                    x: anchor.x + target.midX - bounds.midX,
-                    y: anchor.y + target.midY - bounds.midY
-                )
-                coordinate(at: anchor, on: map).press(
-                    forDuration: Self.recordingPanPress,
-                    thenDragTo: coordinate(at: landing, on: map)
-                )
+                panRecordedLine(in: app, from: bounds, into: target, within: visible.insetBy(dx: margin, dy: margin))
             }
         }
         XCTFail("the recording’s line should fit above the sheet before capture")
+    }
+
+    @MainActor
+    private func panRecordedLine(
+        in app: XCUIApplication, from bounds: CGRect, into target: CGRect, within area: CGRect
+    ) {
+        let dx = target.midX - bounds.midX
+        let dy = target.midY - bounds.midY
+        // A correction shorter than MapKit's touch slop becomes a tap.
+        // Another zoom creates enough slack to frame the line without one.
+        guard hypot(dx, dy) >= Self.recordingMinimumPan else {
+            zoomRecordingMapOut(in: app)
+            return
+        }
+        let anchor = CGPoint(
+            x: area.minX + area.width * (dx > 0 ? 0.25 : 0.75),
+            y: area.minY + area.height * (dy > 0 ? 0.25 : 0.75)
+        )
+        let landing = CGPoint(
+            x: min(max(anchor.x + dx, area.minX), area.maxX),
+            y: min(max(anchor.y + dy, area.minY), area.maxY)
+        )
+        let map = mapElement(in: app)
+        coordinate(at: anchor, on: map).press(
+            forDuration: Self.recordingPanPress,
+            thenDragTo: coordinate(at: landing, on: map),
+            withVelocity: .slow,
+            thenHoldForDuration: Self.recordingPanPress
+        )
+    }
+
+    @MainActor
+    private func restoreRecordingSheet(in app: XCUIApplication, top: CGFloat, window: CGRect) {
+        let grabber = app.buttons["Sheet Grabber"]
+        grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
+            forDuration: Self.recordingPanPress,
+            thenDragTo: coordinate(at: CGPoint(x: window.midX, y: top), on: app.windows.firstMatch),
+            withVelocity: .slow,
+            thenHoldForDuration: Self.recordingPanPress
+        )
+        let sheet = element("map-sheet", in: app)
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.navigation) { abs(sheet.frame.minY - top) < 8 },
+            "the recording sheet should return to its original detent before capture"
+        )
     }
 }

@@ -20,6 +20,7 @@ extension ScreenshotUITests {
             return
         }
         let container = scrollContainer(in: app)
+        let display = screenshotDisplay(in: app)
         for _ in 0..<12 {
             let viewport = container.frame.insetBy(dx: 0, dy: Self.landscapeContentMargin)
             let delta = viewport.maxY - Self.landscapeContentMargin - strip.frame.maxY
@@ -29,7 +30,7 @@ extension ScreenshotUITests {
             let distance = min(max(delta, -reach), reach)
             let start = CGPoint(x: container.frame.minX + 8, y: container.frame.midY)
             XCTAssertTrue(ScreenshotDisplayGesture.drag(
-                from: start, to: CGPoint(x: start.x, y: start.y + distance), on: Self.screen(showing: app)
+                from: start, to: CGPoint(x: start.x, y: start.y + distance), on: display
             ))
         }
         XCTFail("the photo gallery should be fully visible inside the side panel")
@@ -50,7 +51,7 @@ extension ScreenshotUITests {
             y: max(before.midY + margin, titleBottom + margin + before.height / 2)
         )
         XCTAssertTrue(ScreenshotDisplayGesture.drag(
-            from: CGPoint(x: before.midX, y: before.midY), to: target, on: Self.screen(showing: app)
+            from: CGPoint(x: before.midX, y: before.midY), to: target, on: screenshotDisplay(in: app)
         ))
         let controls = element("walk-share-controls", in: app)
         XCTAssertTrue(controls.waitForExistence(timeout: UITestTimeout.navigation))
@@ -66,13 +67,14 @@ extension ScreenshotUITests {
     @MainActor
     func zoomRecordingMapOut(in app: XCUIApplication) {
         let map = mapElement(in: app)
-        guard hitTestIsUnreliable(in: app, window: windowFrame(of: app)) else {
+        let display = screenshotDisplay(in: app)
+        guard display.screen != XCUIScreen.main else {
             map.twoFingerTap()
             return
         }
         let area = openMapArea(in: app)
         XCTAssertTrue(ScreenshotDisplayGesture.tapWithTwoFingers(
-            at: CGPoint(x: area.midX, y: area.midY), on: Self.screen(showing: app)
+            at: CGPoint(x: area.midX, y: area.midY), on: display
         ))
     }
 
@@ -91,11 +93,12 @@ extension ScreenshotUITests {
     /// Observe rendered tiles rather than capture a placeholder grid.
     @MainActor
     func settleNearbyMapTiles(in app: XCUIApplication) {
+        let display = screenshotDisplay(in: app)
         let ready = waitUntil(timeout: UITestTimeout.trace) {
-            screenshotMapHasTiles(in: app, requireTerrain: false)
+            screenshotMapHasTiles(in: app, on: display, requireTerrain: false)
         }
         if !ready {
-            let evidence = XCTAttachment(screenshot: Self.screen(showing: app).screenshot())
+            let evidence = XCTAttachment(screenshot: display.screen.screenshot())
             evidence.name = "Nearby map still loading"
             evidence.lifetime = .keepAlways
             add(evidence)

@@ -151,11 +151,16 @@ export OPENHIKES_SIM_POOL_DEVICE_TYPE='iPhone 18 Pro Max'
 owner="screenshots-$$"
 udid="$(Scripts/sim-pool.sh acquire --owner "$owner" --owner-pid "$$")"
 trap 'Scripts/sim-pool.sh release --owner "$owner"' EXIT
-Scripts/screenshots-light.sh --prepared-device "$udid"
+Scripts/screenshots-light.sh --prepared-device "$udid" --pool-owner "$owner"
 ```
 
 The caller releases that claim, including on failure. `--prepared-device`
 expects an empty photo library; use a fresh pool owner for the next batch.
+The device must belong to the configured pool, have an active claim for that
+owner, and match `--device-type`. Templates and other sessions’ devices are
+refused before preparation. The caller also shuts the device down by releasing
+the claim. Only `iPhone 18 Pro Max` and `iPhone Duo` are accepted; another type
+is rejected before a build instead of retrying images with unsupported sizes.
 When capturing both appearances on one prepared device, run each appearance
 on its own fresh claim so the stamped photographs are added only once.
 
@@ -178,8 +183,11 @@ photo access, adds the
 stamped photographs, runs `ScreenshotUITests`, and writes the PNGs to
 `Screenshots/Output/`. It only replaces its own appearance's files, and with
 `--frame` only that frame's. The raw `xcodebuild` log and result bundle of
-every attempt stay in `DerivedData/Screenshots-<appearance>/`, and the run
-prints the path.
+the last five completed runs stay under
+`DerivedData/Screenshots-<appearance>/ScreenshotRuns-<appearance>/`, and the run
+prints the path. Active runs are never pruned. A failing group still exports
+frames from tests whose structured result is `Passed`; failed and crashed
+tests contribute no images, and only missing frames are retried.
 
 **Permissions are granted, never prompted for** — and location only for the
 four frames that use it (03, 04, 05, 08), which run as a group of their own
@@ -311,8 +319,9 @@ its pins, since the map's own centre is under the sheet, and pans once. Frame
 05 measures the recording’s red stroke in the screenshot, zooming out and
 centering until it fits above the measured sheet. The sheet is collapsed
 temporarily to expose the map’s center for two-finger zoom-out taps, then
-returned to its original height before capturing. This replaces the fixed
-upward pan that left the line running off the top of the frame.
+returned to its original height, with the detent checked before capturing.
+This replaces the fixed upward pan that left the line running off the top of
+the frame.
 
 **Zoom with a double tap, never `XCUIElement.pinch`.** A pinch rotates the map
 a little, and that cost the most time here by far: a few degrees off north

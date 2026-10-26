@@ -130,6 +130,21 @@ if [[ "${1:-}" == "swiftc" ]]; then
     done
     exit 0
 fi
+if [[ -n "${STUB_SCREENSHOT_RESULTS:-}" ]]; then
+    case "$*" in
+        "xcresulttool get test-results tests"*) cat "$STUB_SCREENSHOT_RESULTS"; exit 0 ;;
+        "xcresulttool export attachments"*)
+            while [[ $# -gt 0 ]]; do
+                if [[ "$1" == --output-path ]]; then
+                    mkdir -p "$2"
+                    cp "$STUB_SCREENSHOT_ATTACHMENTS"/* "$2/"
+                    exit 0
+                fi
+                shift
+            done
+            ;;
+    esac
+fi
 # A recording, read back: `xctrace export` and `xcresulttool` answer from the
 # fixture files in STUB_TRACE_DIR, the table of contents or whichever table
 # the export names.
@@ -227,6 +242,12 @@ cat > "$stub_bin/xcodebuild" <<'STUB'
 printf 'xcodebuild %s\n' "$*" >> "$STUB_CALL_LOG"
 printf '%s\n' "${STUB_XCODEBUILD_OUTPUT:-Test Suite 'All tests' passed at 2026-08-30 12:00:00.000.}"
 if [[ "${1:-}" == test-without-building ]]; then
+    if [[ -n "${STUB_SCREENSHOT_RESULTS:-}" ]]; then
+        while [[ $# -gt 0 ]]; do
+            if [[ "$1" == -resultBundlePath ]]; then mkdir -p "$2"; break; fi
+            shift
+        done
+    fi
     exit "${STUB_XCODEBUILD_TEST_STATUS:-${STUB_XCODEBUILD_STATUS:-0}}"
 fi
 exit "${STUB_XCODEBUILD_STATUS:-0}"
@@ -370,6 +391,7 @@ pro_lock="$device_lock_dir/$pro_udid.lock"
 # reads to decide that a template has settled.
 export OPENHIKES_SIM_TEMPLATE_DIR="$work/sim-templates"
 export OPENHIKES_SIM_DEVICES_DIR="$work/sim-devices"
+export OPENHIKES_SIM_POOL_DIR="$work/sim-pool"
 # A template with nothing to download counts as settled at once, rather than
 # after the minute of quiet a real one is given.
 export OPENHIKES_SIM_TEMPLATE_IDLE_SECONDS=0
@@ -1995,17 +2017,67 @@ if expect_status 0 \
     pass
 fi
 
+run_script "screenshots refuses unsupported dimensions before preparing or building" \
+    "$screenshots_dark" --frame 3 --device-type 'iPhone 18 Pro'
+if expect_status 2 \
+    && expect_contains "$output" "Unsupported screenshot device type" "the error" \
+    && expect_absent "$calls" "simctl" "the recorded calls" \
+    && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
+    pass
+fi
+
+screens_prepared="$work/devices-screens-prepared.txt"
+screens_template_udid="EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE"
+cat > "$screens_prepared" <<EOF
+== Devices ==
+-- iOS 27.0 --
+    OpenHikes Pool 1 ($pro_udid) (Booted)
+    OpenHikes Template (iPhone 18 Pro Max, iOS 27.0) ($screens_template_udid) (Shutdown)
+EOF
+mkdir -p "$OPENHIKES_SIM_POOL_DIR" "$OPENHIKES_SIM_DEVICES_DIR/$pro_udid"
+printf 'owner=screenshot-tests\npid=\nstarted=\nclaimed=0\n' > "$OPENHIKES_SIM_POOL_DIR/$pro_udid.claim"
+printf '{"deviceType":"com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro-Max"}' \
+    > "$OPENHIKES_SIM_DEVICES_DIR/$pro_udid/device.plist"
+export STUB_DEVICES="$screens_prepared"
+
 run_script "screenshots uses an acquired pool device without erasing it" \
     "$screenshots_light" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
-    --derived-data "$screens_dd" --output "$work/screens-out"
+    --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 1 \
     && expect_contains "$calls" "simctl bootstatus $pro_udid -b" "the recorded calls" \
     && expect_contains "$calls" "simctl ui $pro_udid appearance light" "the recorded calls" \
     && expect_contains "$calls" "-skipPackagePluginValidation" "the recorded calls" \
     && expect_absent "$calls" "simctl erase" "the recorded calls" \
+    && expect_absent "$calls" "simctl shutdown" "the recorded calls" \
     && expect_absent "$calls" "simctl clone" "the recorded calls"; then
     pass
 fi
+
+run_script "screenshots refuses a template as a prepared device" \
+    "$screenshots_light" --prepared-device "$screens_template_udid" --pool-owner screenshot-tests
+if expect_status 2 \
+    && expect_contains "$output" "is not a device in the" "the error" \
+    && expect_absent "$calls" "simctl bootstatus" "the recorded calls"; then pass; fi
+
+run_script "screenshots refuses another owner's prepared device" \
+    "$screenshots_light" --prepared-device "$pro_udid" --pool-owner another-session
+if expect_status 2 \
+    && expect_contains "$output" "needs an active pool claim" "the error" \
+    && expect_absent "$calls" "simctl bootstatus" "the recorded calls"; then pass; fi
+
+run_script "screenshots refuses a prepared device with the wrong type" \
+    "$screenshots_light" --prepared-device "$pro_udid" --device-type 'iPhone Duo' --pool-owner screenshot-tests
+if expect_status 2 \
+    && expect_contains "$output" "expected iPhone Duo" "the error" \
+    && expect_absent "$calls" "simctl bootstatus" "the recorded calls"; then pass; fi
+
+printf 'owner=screenshot-tests\nreleased=1\n' > "$OPENHIKES_SIM_POOL_DIR/$pro_udid.claim"
+run_script "screenshots refuses a released pool claim" \
+    "$screenshots_light" --prepared-device "$pro_udid" --pool-owner screenshot-tests
+if expect_status 2 \
+    && expect_contains "$output" "needs an active pool claim" "the error" \
+    && expect_absent "$calls" "simctl bootstatus" "the recorded calls"; then pass; fi
+printf 'owner=screenshot-tests\npid=\nstarted=\nclaimed=0\n' > "$OPENHIKES_SIM_POOL_DIR/$pro_udid.claim"
 
 run_script "screenshots refuses a prepared device that is not a UDID" \
     "$screenshots_light" --prepared-device 'OpenHikes Pool 1'
@@ -2033,20 +2105,23 @@ fi
 
 run_script "screenshots selects a repeated frame only once" \
     "$screenshots_light" --frame 7 --frame 07 --no-photos --no-retry --prepared-device "$pro_udid" \
-    --derived-data "$screens_dd" --output "$work/screens-out"
+    --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
 selections="$(printf '%s\n' "$calls" | grep -o 'only-testing:OpenHikesUITests/ScreenshotUITests/testCapturesWalkHistory' \
     | wc -l | tr -d ' ')"
-if expect_status 1 && [[ "$selections" == 1 ]]; then pass; fi
+if expect_status 1; then
+    if [[ "$selections" == 1 ]]; then pass; else fail "selected the repeated frame $selections times" "$calls"; fi
+fi
 
 STUB_XCODEBUILD_TEST_STATUS=65 \
     run_script "screenshots rejects a failed process even when its summary says passed" \
     "$screenshots_light" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
-    --derived-data "$screens_dd" --output "$work/screens-out"
+    --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 1 \
     && expect_contains "$output" "failed (xcodebuild 65, log 0)" "the error" \
     && expect_absent "$calls" "xcresulttool export attachments" "the recorded calls"; then
     pass
 fi
+export STUB_DEVICES="$work/devices-two-booted.txt"
 
 # A device named rather than given by UDID is the harness's own, and it starts
 # clean as a clone of a settled template instead of an erase, which would
@@ -2379,6 +2454,89 @@ run_script "screenshots rejects a capture from a device with the wrong dimension
 if expect_status 1 \
     && expect_contains "$output" "is not an App Store screenshot size" "the error"; then
     pass
+fi
+
+mkdir -p "$fit_work/pixel captures"
+cp "$fit_work/inner-portrait.png" "$fit_work/pixel captures/frame.png"
+run_script "screenshots reads dimensions when the image path contains pixel and spaces" \
+    bash -c 'source "$1"; fit_screenshot_frame "$2"' _ \
+    "$repository_root/Scripts/lib/screenshots.sh" "$fit_work/pixel captures/frame.png"
+if expect_status 0; then pass; fi
+
+screens_attachments="$work/screens-attachments"
+mkdir -p "$screens_attachments"
+cp "$fit_work/inner-portrait.png" "$screens_attachments/passed.png"
+cp "$fit_work/inner-portrait.png" "$screens_attachments/failed.png"
+cat > "$screens_attachments/manifest.json" <<'EOF'
+[
+  {"testIdentifier":"ScreenshotUITests/testCapturesNearbyTrails()","attachments":[
+    {"exportedFileName":"passed.png","suggestedHumanReadableName":"03-nearby-trails_0_uuid.png"}]},
+  {"testIdentifier":"ScreenshotUITests/testCapturesRecordingAHike()","attachments":[
+    {"exportedFileName":"failed.png","suggestedHumanReadableName":"05-recording-a-hike_0_uuid.png"}]}
+]
+EOF
+cat > "$work/screens-results.json" <<'EOF'
+{"testNodes":[{"nodeType":"Test Plan","children":[{"nodeType":"Test Suite","children":[
+  {"nodeType":"Test Case","nodeIdentifier":"ScreenshotUITests/testCapturesNearbyTrails()","result":"Passed"},
+  {"nodeType":"Test Case","nodeIdentifier":"ScreenshotUITests/testCapturesRecordingAHike()","result":"Failed"}
+]}]}]}
+EOF
+STUB_DEVICES="$screens_prepared" STUB_SCREENSHOT_RESULTS="$work/screens-results.json" \
+STUB_SCREENSHOT_ATTACHMENTS="$screens_attachments" STUB_XCODEBUILD_TEST_STATUS=65 \
+    run_script "screenshots keeps passing frames from a failing group and retries only the failed frame" \
+    "$screenshots_light" --frame 3 --frame 5 --no-photos --prepared-device "$pro_udid" \
+    --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
+passed_selections="$(printf '%s\n' "$calls" | grep -o 'only-testing:OpenHikesUITests/ScreenshotUITests/testCapturesNearbyTrails' \
+    | wc -l | tr -d ' ')"
+failed_selections="$(printf '%s\n' "$calls" | grep -o 'only-testing:OpenHikesUITests/ScreenshotUITests/testCapturesRecordingAHike' \
+    | wc -l | tr -d ' ')"
+if expect_status 1 \
+    && expect_contains "$output" "FAILED — not shot: 05" "the output" \
+    && expect_absent "$output" "not shot: 03" "the output"; then
+    if [[ "$passed_selections" == 1 && "$failed_selections" == 2 \
+        && -f "$work/screens-out/03-nearby-trails.png" && ! -f "$work/screens-out/05-recording-a-hike.png" ]]; then
+        pass
+    else
+        fail "expected one passing-frame selection and two failed-frame selections; got $passed_selections/$failed_selections" \
+            "$output"
+    fi
+fi
+
+# A frame attached before a test fails or crashes is never an upload frame,
+# even if xcodebuild's printed summary is green and its exit status is zero.
+sed 's/"Passed"/"Failed"/g' "$work/screens-results.json" > "$work/screens-crashed.json"
+STUB_DEVICES="$screens_prepared" STUB_SCREENSHOT_RESULTS="$work/screens-crashed.json" \
+STUB_SCREENSHOT_ATTACHMENTS="$screens_attachments" \
+    run_script "screenshots rejects attachments from tests that did not pass despite a green process" \
+    "$screenshots_light" --frame 3 --no-photos --no-retry --prepared-device "$pro_udid" \
+    --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 1 \
+    && expect_contains "$output" "FAILED — not shot: 03" "the output" \
+    && expect_absent "$calls" "xcresulttool export attachments" "the recorded calls"; then pass; fi
+
+printf 'not a test result' > "$work/screens-invalid.json"
+run_script "screenshots refuses unreadable structured test results" \
+    bash -c 'swift "$1" < "$2"' _ \
+    "$repository_root/Scripts/lib/screenshot-passed-tests.swift" "$work/screens-invalid.json"
+if expect_status 1 && expect_contains "$output" "Could not read screenshot test results" "the error"; then pass; fi
+
+screens_runs="$work/screens-retention"
+for run_number in 01 02 03 04 05 06 07; do
+    mkdir -p "$screens_runs/$run_number"
+    touch "$screens_runs/$run_number/.complete"
+done
+mkdir -p "$screens_runs/08" "$screens_runs/active"
+run_script "screenshots retains five completed runs and leaves active evidence alone" \
+    bash -c 'source "$1"; screenshot_runs_dir="$2"; screenshot_log_dir="$2/08"; finish_screenshot_run' _ \
+    "$repository_root/Scripts/lib/screenshots.sh" "$screens_runs"
+if expect_status 0; then
+    retained="$(find "$screens_runs" -name .complete | wc -l | tr -d ' ')"
+    if [[ "$retained" == 5 && ! -d "$screens_runs/03" && -d "$screens_runs/04" \
+        && -d "$screens_runs/08" && -d "$screens_runs/active" ]]; then
+        pass
+    else
+        fail "expected only the five newest completed runs and the active run"
+    fi
 fi
 
 echo

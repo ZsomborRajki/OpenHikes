@@ -110,6 +110,7 @@ Commands:
   acquire              Claim a free pool simulator, replace it with a clean
                        clone if it changed hands, boot it, and print its UDID
   release              Shut down and give back the device this owner holds
+  validate <udid>      Check an active claim and the configured device type
   status               List the pool's devices, who holds each, and the
                        templates they are cloned from
   template             Settle the pool's template now, or refresh it if it is
@@ -151,6 +152,7 @@ owner_pid=""
 keep_data=false
 keep_free=2
 adopt_target=""
+validate_target=""
 
 require_value() {
     if [[ -z "${2:-}" ]]; then
@@ -185,6 +187,10 @@ while [[ $# -gt 0 ]]; do
             if [[ -n "$command_name" ]]; then echo "One command at a time." >&2; exit 2; fi
             require_value "$1" "${2:-}"
             command_name="adopt"; adopt_target="$2"; shift 2 ;;
+        validate)
+            if [[ -n "$command_name" ]]; then echo "One command at a time." >&2; exit 2; fi
+            require_value "$1" "${2:-}"
+            command_name="validate"; validate_target="$2"; shift 2 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
 done
@@ -367,6 +373,35 @@ release_pool_lock() {
 }
 
 # MARK: Commands
+
+validate() {
+    local file device_identifier expected
+    if ! pool_devices | cut -f1 | grep -Fxq -- "$validate_target"; then
+        echo "$validate_target is not a device in the $pool_prefix pool." >&2
+        return 1
+    fi
+    file="$(claim_file "$validate_target")"
+    if [[ ! -f "$file" || "$(claim_field "$file" owner)" != "$owner" \
+        || -n "$(claim_field "$file" released)" ]] || ! claim_pid_alive "$file"; then
+        echo "$validate_target needs an active pool claim owned by $owner." >&2
+        return 1
+    fi
+    if (( $(claim_age_minutes "$file") >= ttl_minutes )) && ! process_names "$validate_target"; then
+        echo "$validate_target has an expired pool claim; acquire it again first." >&2
+        return 1
+    fi
+    expected="com.apple.CoreSimulator.SimDeviceType.${device_type// /-}"
+    device_identifier="$(/usr/bin/plutil -extract deviceType raw -o - \
+        "$template_devices_root/$validate_target/device.plist" 2>/dev/null || true)"
+    if [[ "$device_identifier" != "$expected" ]]; then
+        echo "$validate_target is ${device_identifier:-an unknown device type}; expected $device_type." >&2
+        return 1
+    fi
+    if ui_test_run_holds "$validate_target"; then
+        echo "$validate_target is in use by a UI test run." >&2
+        return 1
+    fi
+}
 
 # The UDID of the settled template every pool device is cloned from, settling
 # it first if it needs it.
