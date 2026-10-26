@@ -164,6 +164,7 @@
       }
     },
     "Cancel" : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -194,6 +195,7 @@
       }
     },
     "Done" : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -234,6 +236,7 @@
       }
     },
     "Hike" : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -304,6 +307,7 @@
       }
     },
     "OpenHikes needs your location before it can record a hike." : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -324,6 +328,7 @@
       }
     },
     "Pause Hike" : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -354,6 +359,7 @@
       }
     },
     "Pauses the hike being recorded, from its Lock Screen panel." : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -364,6 +370,7 @@
       }
     },
     "Recording" : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -414,6 +421,7 @@
       }
     },
     "Resume Hike" : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -424,6 +432,7 @@
       }
     },
     "Resumes the paused hike, from its Lock Screen panel." : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -454,6 +463,7 @@
       }
     },
     "Shows a trail you choose, or your selected trail, or a hike currently being recorded." : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -524,6 +534,7 @@
       }
     },
     "Toggle Hike Recording" : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {

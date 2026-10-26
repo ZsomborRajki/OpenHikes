@@ -3846,6 +3846,7 @@
       }
     },
     "Done" : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -7957,6 +7958,7 @@
       }
     },
     "Pauses the hike being recorded, from its Lock Screen panel." : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -9337,6 +9339,7 @@
       }
     },
     "Resumes the paused hike, from its Lock Screen panel." : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10237,6 +10240,7 @@
       }
     },
     "Shows a trail you choose, or your selected trail, or a hike currently being recorded." : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -12024,6 +12028,7 @@
       }
     },
     "Toggle Hike Recording" : {
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
