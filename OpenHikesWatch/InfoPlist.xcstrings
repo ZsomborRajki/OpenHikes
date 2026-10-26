@@ -1,0 +1,78 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSHealthShareUsageDescription" : {
+      "comment" : "Privacy - Health Share Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes liest deine Herzfrequenz aus Health, während du eine Wanderung aufzeichnest, damit die Watch sie beim Wandern anzeigen kann. Sonst wird nichts aus Health gelesen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "OpenHikes reads your heart rate from Health while you are recording a hike, so the watch can show it as you hike. Nothing else in Health is read."
+          }
+        }
+      }
+    },
+    "NSHealthUpdateUsageDescription" : {
+      "comment" : "Privacy - Health Update Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes startet ein Wandertraining in Health, während du auf deiner Watch aufzeichnest – nur so läuft die Aufzeichnung bei ausgeschaltetem Bildschirm weiter. Das Training selbst wird nicht gespeichert – dein iPhone speichert die abgeschlossene Wanderung."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "OpenHikes starts a hiking workout in Health while you record on your watch, which is what keeps the recording running with the screen off. The workout itself is not saved — your iPhone saves the finished hike."
+          }
+        }
+      }
+    },
+    "NSLocationWhenInUseUsageDescription" : {
+      "comment" : "Privacy - Location When In Use Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes verwendet deinen Standort, um zu zeigen, wo du dich auf dem Weg befindest, dem du folgst, und um deine Wanderung aufzuzeichnen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "OpenHikes uses your location to show where you are on the trail you are following, and to record your hike."
+          }
+        }
+      }
+    },
+    "NSMotionUsageDescription" : {
+      "comment" : "Privacy - Motion Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes verwendet die Bewegungssensoren, um die auf deiner Wanderung aufgezeichnete Höhe zu verbessern."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "OpenHikes uses motion sensors to improve the elevation recorded on your hike."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

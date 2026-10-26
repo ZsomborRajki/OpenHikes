@@ -1,0 +1,248 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "How far did I hike today in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Wie weit bin ich heute in ${applicationName} gewandert",
+              "Meine Distanz heute in ${applicationName}"
+            ]
+          }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "How far did I hike today in ${applicationName}",
+              "My ${applicationName} distance today"
+            ]
+          }
+        }
+      }
+    },
+    "How far have I hiked in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Wie weit bin ich in ${applicationName} gewandert",
+              "Wie läuft meine Wanderung in ${applicationName}"
+            ]
+          }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "How far have I hiked in ${applicationName}",
+              "How is my ${applicationName} hike going"
+            ]
+          }
+        }
+      }
+    },
+    "How long was my hike in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Wie lange war meine Wanderung in ${applicationName}",
+              "Wie weit war meine Wanderung in ${applicationName}",
+              "Fasse eine Wanderung in ${applicationName} zusammen"
+            ]
+          }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "How long was my hike in ${applicationName}",
+              "How far was my hike in ${applicationName}",
+              "Summarize a hike in ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Open a hike in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Öffne eine Wanderung in ${applicationName}",
+              "Zeige eine Wanderung in ${applicationName}",
+              "Öffne ${hike} in ${applicationName}",
+              "Zeige mir ${hike} in ${applicationName}"
+            ]
+          }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Open a hike in ${applicationName}",
+              "Show a hike in ${applicationName}",
+              "Open ${hike} in ${applicationName}",
+              "Show me ${hike} in ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Pause my hike in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Pausiere meine Wanderung in ${applicationName}",
+              "Pausiere meine Aufzeichnung in ${applicationName}"
+            ]
+          }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Pause my hike in ${applicationName}",
+              "Pause my ${applicationName} recording"
+            ]
+          }
+        }
+      }
+    },
+    "Record along a trail in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Zeichne entlang eines Weges in ${applicationName} auf",
+              "Starte die Aufzeichnung entlang ${hike} in ${applicationName}",
+              "Wandere ${hike} mit ${applicationName}"
+            ]
+          }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Record along a trail in ${applicationName}",
+              "Start recording along ${hike} in ${applicationName}",
+              "Hike ${hike} with ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Resume my hike in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Setze meine Wanderung in ${applicationName} fort",
+              "Setze meine Aufzeichnung in ${applicationName} fort"
+            ]
+          }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Resume my hike in ${applicationName}",
+              "Resume my ${applicationName} recording"
+            ]
+          }
+        }
+      }
+    },
+    "Start a hike in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Starte eine Wanderung in ${applicationName}",
+              "Starte die Aufzeichnung einer Wanderung in ${applicationName}",
+              "Zeichne eine Wanderung mit ${applicationName} auf"
+            ]
+          }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Start a hike in ${applicationName}",
+              "Start recording a hike in ${applicationName}",
+              "Record a hike with ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Stop my hike in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Beende meine Wanderung in ${applicationName}",
+              "Schließe meine Wanderung in ${applicationName} ab",
+              "Speichere meine Wanderung in ${applicationName}"
+            ]
+          }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Stop my hike in ${applicationName}",
+              "Finish my hike in ${applicationName}",
+              "Save my hike in ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "What was my last hike in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Was war meine letzte Wanderung in ${applicationName}",
+              "Zeige meine letzte Wanderung in ${applicationName}"
+            ]
+          }
+        },
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "What was my last hike in ${applicationName}",
+              "Show my last hike in ${applicationName}"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

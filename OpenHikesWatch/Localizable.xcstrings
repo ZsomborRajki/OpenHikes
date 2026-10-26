@@ -12,10 +12,23 @@
       }
     },
     "%@ in all" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ insgesamt"
+          }
+        }
+      }
     },
     "%@ of climb, %@ of descent" : {
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ Aufstieg, %2$@ Abstieg"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -26,6 +39,24 @@
     },
     "%lld hikes waiting for your iPhone" : {
       "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Wanderung wartet auf dein iPhone"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Wanderungen warten auf dein iPhone"
+                }
+              }
+            }
+          }
+        },
         "en" : {
           "variations" : {
             "plural" : {
@@ -47,265 +78,875 @@
       }
     },
     "%lld percent" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld Prozent"
+          }
+        }
+      }
     },
     "A hike was interrupted — see Record" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Wanderung wurde unterbrochen – siehe „Aufzeichnen“"
+          }
+        }
+      }
     },
     "A workout couldn’t be started, so a recording wouldn’t survive the screen going dark." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Training konnte nicht gestartet werden, daher würde eine Aufzeichnung das Ausschalten des Bildschirms nicht überstehen."
+          }
+        }
+      }
     },
     "Asking your iPhone for your trails…" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein iPhone wird nach deinen Wegen gefragt …"
+          }
+        }
+      }
     },
     "Average Speed" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchschnittsgeschwindigkeit"
+          }
+        }
+      }
     },
     "Avg Speed" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ø Geschw."
+          }
+        }
+      }
     },
     "Bring your iPhone nearby, with OpenHikes installed, to send your trails over." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bring dein iPhone mit installiertem OpenHikes in die Nähe, um deine Wege zu übertragen."
+          }
+        }
+      }
     },
     "Cancel" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abbrechen"
+          }
+        }
+      }
     },
     "Climb" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufstieg"
+          }
+        }
+      }
     },
     "Continue" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weiter"
+          }
+        }
+      }
     },
     "Discard" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwerfen"
+          }
+        }
+      }
     },
     "Discard Hike" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wanderung verwerfen"
+          }
+        }
+      }
     },
     "Discard this hike?" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Wanderung verwerfen?"
+          }
+        }
+      }
     },
     "Distance" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Distanz"
+          }
+        }
+      }
     },
     "Done" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fertig"
+          }
+        }
+      }
     },
     "Fetching this trail from your iPhone…" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Weg wird von deinem iPhone geladen …"
+          }
+        }
+      }
     },
     "Finding you on the trail…" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Position auf dem Weg wird gesucht …"
+          }
+        }
+      }
     },
     "Finding your position…" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Position wird gesucht …"
+          }
+        }
+      }
     },
     "Finish" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ziel"
+          }
+        }
+      }
     },
     "Follow your location" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deinem Standort folgen"
+          }
+        }
+      }
     },
     "Heart" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puls"
+          }
+        }
+      }
     },
     "Hike" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wanderung"
+          }
+        }
+      }
     },
     "Hike Interrupted" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wanderung unterbrochen"
+          }
+        }
+      }
     },
     "Hike Kept" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wanderung behalten"
+          }
+        }
+      }
     },
     "Hike Not Saved" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wanderung nicht gespeichert"
+          }
+        }
+      }
     },
     "Import a GPX file or record a hike on your iPhone, and it will appear here." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importiere eine GPX-Datei oder zeichne eine Wanderung auf deinem iPhone auf, dann erscheint sie hier."
+          }
+        }
+      }
     },
     "Install OpenHikes on the iPhone paired with this watch to send trails across." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installiere OpenHikes auf dem iPhone, das mit dieser Watch gekoppelt ist, um Wege zu übertragen."
+          }
+        }
+      }
     },
     "It hasn’t been saved anywhere, so it can’t be recovered." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie wurde nirgends gespeichert und kann daher nicht wiederhergestellt werden."
+          }
+        }
+      }
     },
     "Last hike not saved" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Letzte Wanderung nicht gespeichert"
+          }
+        }
+      }
     },
     "Last on %@" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zuletzt auf %@"
+          }
+        }
+      }
     },
     "Left" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übrig"
+          }
+        }
+      }
     },
     "Location is off, so your position isn’t shown." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Standort ist deaktiviert, daher wird deine Position nicht angezeigt."
+          }
+        }
+      }
     },
     "Map of %@" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Karte von %@"
+          }
+        }
+      }
     },
     "No OpenHikes on Your iPhone" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein OpenHikes auf deinem iPhone"
+          }
+        }
+      }
     },
     "No Trails Yet" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch keine Wege"
+          }
+        }
+      }
     },
     "Not Recording" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Aufzeichnung"
+          }
+        }
+      }
     },
     "Off" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abseits"
+          }
+        }
+      }
     },
     "On" : {
-      "comment" : "The Off figure for a hiker who is on the trail"
+      "comment" : "The Off figure for a hiker who is on the trail",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf Kurs"
+          }
+        }
+      }
     },
     "On Your iPhone" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf deinem iPhone"
+          }
+        }
+      }
     },
     "OpenHikes needs location access to record a hike." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes braucht Standortzugriff, um eine Wanderung aufzuzeichnen."
+          }
+        }
+      }
     },
     "OpenHikes needs permission to start a workout, which is what keeps a recording running." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes braucht die Erlaubnis, ein Training zu starten – nur so läuft eine Aufzeichnung weiter."
+          }
+        }
+      }
     },
     "OpenHikes needs your location before it can record a hike." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes braucht deinen Standort, bevor es eine Wanderung aufzeichnen kann."
+          }
+        }
+      }
     },
     "Pause" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausieren"
+          }
+        }
+      }
     },
     "Pause Hike" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wanderung pausieren"
+          }
+        }
+      }
     },
     "Pause recording" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufzeichnung pausieren"
+          }
+        }
+      }
     },
     "Pause recording on your iPhone" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufzeichnung auf deinem iPhone pausieren"
+          }
+        }
+      }
     },
     "Paused. The ground you cover now isn’t part of the hike." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausiert. Die Strecke, die du jetzt zurücklegst, gehört nicht zur Wanderung."
+          }
+        }
+      }
     },
     "Pauses the hike being recorded, from its Lock Screen panel." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausiert die aufgezeichnete Wanderung über ihre Anzeige auf dem Sperrbildschirm."
+          }
+        }
+      }
     },
     "Progress along the trail" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fortschritt entlang des Weges"
+          }
+        }
+      }
     },
     "Record" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufzeichnen"
+          }
+        }
+      }
     },
     "Record This Hike" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Wanderung aufzeichnen"
+          }
+        }
+      }
     },
     "Recording" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufzeichnung"
+          }
+        }
+      }
     },
     "Recording stopped at %@. Everything before then is kept." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufzeichnung um %@ beendet. Alles davor bleibt erhalten."
+          }
+        }
+      }
     },
     "Records on this watch, with or without your iPhone. The hike goes to your iPhone when it’s back in range." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeichnet auf dieser Watch auf, mit oder ohne dein iPhone. Die Wanderung geht an dein iPhone, sobald es wieder in Reichweite ist."
+          }
+        }
+      }
     },
     "Resume" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fortsetzen"
+          }
+        }
+      }
     },
     "Resume Hike" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wanderung fortsetzen"
+          }
+        }
+      }
     },
     "Resume recording" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufzeichnung fortsetzen"
+          }
+        }
+      }
     },
     "Resume recording on your iPhone" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufzeichnung auf deinem iPhone fortsetzen"
+          }
+        }
+      }
     },
     "Resumes the paused hike, from its Lock Screen panel." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setzt die pausierte Wanderung über ihre Anzeige auf dem Sperrbildschirm fort."
+          }
+        }
+      }
     },
     "Save Hike" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wanderung speichern"
+          }
+        }
+      }
     },
     "Saving…" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird gespeichert …"
+          }
+        }
+      }
     },
     "Sent to your iPhone." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An dein iPhone gesendet."
+          }
+        }
+      }
     },
     "Shows a trail you choose, or your selected trail, or a hike currently being recorded." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeigt einen Weg deiner Wahl, deinen ausgewählten Weg oder eine Wanderung, die gerade aufgezeichnet wird."
+          }
+        }
+      }
     },
     "Start" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start"
+          }
+        }
+      }
     },
     "Start Hike" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wanderung starten"
+          }
+        }
+      }
     },
     "Starting…" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird gestartet …"
+          }
+        }
+      }
     },
     "Stop" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beenden"
+          }
+        }
+      }
     },
     "Stop following your location" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deinem Standort nicht mehr folgen"
+          }
+        }
+      }
     },
     "Stop recording" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufzeichnung beenden"
+          }
+        }
+      }
     },
     "Stop recording on your iPhone" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufzeichnung auf deinem iPhone beenden"
+          }
+        }
+      }
     },
     "That didn’t reach your iPhone." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das hat dein iPhone nicht erreicht."
+          }
+        }
+      }
     },
     "That hike was too short to keep." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Wanderung war zu kurz, um sie zu behalten."
+          }
+        }
+      }
     },
     "This watch can’t start a workout, so a recording couldn’t stay running." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Watch kann kein Training starten, daher könnte eine Aufzeichnung nicht weiterlaufen."
+          }
+        }
+      }
     },
     "This watch is out of storage. Free up some space, then try again." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Speicher dieser Watch ist voll. Gib etwas Speicherplatz frei und versuche es dann erneut."
+          }
+        }
+      }
     },
     "Time hiking" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wanderzeit"
+          }
+        }
+      }
     },
     "Toggle Hike Recording" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wanderaufzeichnung umschalten"
+          }
+        }
+      }
     },
     "Trail" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weg"
+          }
+        }
+      }
     },
     "Trail figures" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Werte des Weges"
+          }
+        }
+      }
     },
     "Trails" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wege"
+          }
+        }
+      }
     },
     "Try Again" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erneut versuchen"
+          }
+        }
+      }
     },
     "Turn the map as you hike" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Karte beim Wandern drehen"
+          }
+        }
+      }
     },
     "Waiting for Your iPhone" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warten auf dein iPhone"
+          }
+        }
+      }
     },
     "Waiting for your iPhone to come back in range…" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warten, bis dein iPhone wieder in Reichweite ist …"
+          }
+        }
+      }
     },
     "Waiting for your iPhone. It’ll go across on its own." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warten auf dein iPhone. Die Übertragung erfolgt von selbst."
+          }
+        }
+      }
     },
     "Your iPhone couldn’t answer that." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein iPhone konnte darauf nicht antworten."
+          }
+        }
+      }
     },
     "Your iPhone is out of range." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein iPhone ist außer Reichweite."
+          }
+        }
+      }
     },
     "Your iPhone is recording" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein iPhone zeichnet auf"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

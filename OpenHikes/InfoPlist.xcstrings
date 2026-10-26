@@ -1,0 +1,168 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSCameraUsageDescription" : {
+      "comment" : "Privacy - Camera Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes verwendet die Kamera, damit du unterwegs Fotos deiner Wanderung aufnehmen kannst. Fotos werden bei dieser Wanderung aufbewahrt und an der Stelle des Weges verortet, die du ausgewählt hattest."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "OpenHikes uses the camera so you can photograph a hike while you are on it. Photos are kept with that hike, and pinned to the point on the trail you had selected."
+          }
+        }
+      }
+    },
+    "NSHealthShareUsageDescription" : {
+      "comment" : "Privacy - Health Share Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes verbindet sich mit Health, um deine abgeschlossenen Wanderungen als Trainings zu speichern, einschließlich Distanz und Route, wenn du „Wanderungen in Health speichern“ aktivierst. OpenHikes liest auf deinem iPhone nichts aus Health."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "OpenHikes connects to Health to save your finished hikes as workouts, including distance and route, when you turn on Save Hikes to Health. OpenHikes reads nothing from Health on your iPhone."
+          }
+        }
+      }
+    },
+    "NSHealthUpdateUsageDescription" : {
+      "comment" : "Privacy - Health Update Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes speichert deine abgeschlossenen Wanderungen als Wandertrainings in Health, mit Distanz und Route, wenn du „Wanderungen in Health speichern“ aktivierst. OpenHikes liest auf deinem iPhone nichts aus Health."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "OpenHikes saves your finished hikes to Health as hiking workouts, with their distance and route, when you turn on Save Hikes to Health. OpenHikes reads nothing from Health on your iPhone."
+          }
+        }
+      }
+    },
+    "NSLocationAlwaysAndWhenInUseUsageDescription" : {
+      "comment" : "Privacy - Location Always and When In Use Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes verwendet den Standortzugriff „Immer“ nur, wenn du in den Einstellungen „Wegverfolgung im Hintergrund“ aktivierst, damit dein Home-Bildschirm-Widget und deine Live-Aktivität deinen Fortschritt entlang des Weges anzeigen, während die App nicht geöffnet ist."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "OpenHikes uses Always location, only when you turn on Background Trail Tracking in Settings, to keep your Home Screen widget and Live Activity showing your progress along the trail while the app isn’t open."
+          }
+        }
+      }
+    },
+    "NSLocationWhenInUseUsageDescription" : {
+      "comment" : "Privacy - Location When In Use Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes verwendet deinen Standort, um zu zeigen, wo du auf der Karte bist, und um Wanderungen aufzuzeichnen, die du startest."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "OpenHikes uses your location to show where you are on the map and record hikes you choose to start."
+          }
+        }
+      }
+    },
+    "NSMotionUsageDescription" : {
+      "comment" : "Privacy - Motion Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes verwendet die Bewegungssensoren, um die aufgezeichnete Höhe zu verbessern und den gewanderten Weg über GPS-Lücken hinweg zu erschließen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "OpenHikes uses motion sensors to improve recorded elevation and infer the trail hiked through GPS gaps."
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryAddUsageDescription" : {
+      "comment" : "Privacy - Photo Library Additions Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktiviere „Auch in Fotos speichern“, um eine Kopie jedes Wanderfotos in deiner Mediathek abzulegen, versehen mit Zeit und Ort der Aufnahme."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turn on “Also Save to Photos” to keep a copy of each hike photo in your photo library, stamped with when and where it was taken."
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryUsageDescription" : {
+      "comment" : "Privacy - Photo Library Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes durchsucht deine Mediathek nach Bildern, die du während einer Wanderung aufgenommen hast, um jedes an der Stelle des Weges zu verorten, an der du gestanden hast. Es liest nur Fotos, die während dieser Wanderung aufgenommen wurden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "OpenHikes looks through your photo library for pictures you took while on a hike, so it can pin each one to the point on the trail you were standing on. It only reads photos taken during that hike."
+          }
+        }
+      }
+    },
+    "RecordHike" : {
+      "comment" : "The precise-location purpose of the same name, in NSLocationTemporaryUsageDescriptionDictionary. Core Location looks the purpose key up in this table.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes braucht deinen genauen Standort, um den Weg aufzuzeichnen, den du wanderst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes needs your precise location to record the trail you hike."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
