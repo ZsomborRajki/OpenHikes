@@ -841,9 +841,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     package declarations. The sync script derives temporary typed literals
     from them and asks the compiler to extract those for all four catalogs;
     no second copy of their wording is checked in. An IDE build never sees
-    them, so it marks them stale wherever the target does not use the same
-    words itself; run the sync script after it rather than committing the
-    marks, which `--check` rejects.
+    them, so wherever the target does not use the same words itself, their
+    entry is marked `"extractionState" : "manual"`, which the IDE leaves
+    alone. A new one needs the same mark, or every IDE build marks it stale.
   - A count is a plural variation, never `if count == 1`.
   - Figures are formatted per locale and never catalogued.
   - **Copy is a simple explanation.** A footer, alert or empty state says what
