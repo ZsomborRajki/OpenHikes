@@ -2,8 +2,9 @@
 //  StringCatalogTests.swift
 //  OpenHikesTests
 //
-//  What the app's String Catalog changes at run time, while English is the
-//  only language (#32).
+//  What the app's String Catalog changes at run time in English, the
+//  development language (#32). The German is held to the English in
+//  `StringCatalogTests+German.swift`.
 //
 //  Not whether every string is *in* it. An English key with no English entry
 //  of its own is not compiled into the bundle at all — the key is the
@@ -18,7 +19,7 @@ import Testing
 
 @Suite("String catalog")
 struct StringCatalogTests {
-    nonisolated private static let catalogFolders = [
+    nonisolated static let catalogFolders = [
         "OpenHikes", "OpenWidget", "OpenHikesWatch", "OpenHikesWatchWidgets"
     ]
 
@@ -220,9 +221,9 @@ struct StringCatalogTests {
         #expect(entry["extractionState"] as? String != "stale")
     }
 
-    /// The checkout this file was compiled from, which the catalogs and the
-    /// lint configuration are read out of.
-    private static var sourceRoot: URL {
+    /// The checkout this file was compiled from, which the catalogs, the
+    /// lint configuration and the sources they translate are read out of.
+    static var sourceRoot: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     }
@@ -238,10 +239,10 @@ struct StringCatalogTests {
         return try Regex(String(quoted[1]))
     }
 
-    /// `folder`'s catalog as the source tree has it: every key, with its
-    /// entry.
-    static func catalog(in folder: String) throws -> [String: Any] {
-        let data = try Data(contentsOf: sourceRoot.appending(path: "\(folder)/Localizable.xcstrings"))
+    /// `folder`'s catalog for `table` as the source tree has it: every key,
+    /// with its entry.
+    static func catalog(in folder: String, table: String = "Localizable") throws -> [String: Any] {
+        let data = try Data(contentsOf: sourceRoot.appending(path: "\(folder)/\(table).xcstrings"))
         let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         return try #require(json["strings"] as? [String: Any])
     }

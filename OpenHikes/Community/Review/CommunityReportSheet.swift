@@ -201,6 +201,7 @@ private extension CommunityReportSheet {
         CommunityMailOutcomeSections(
             outcome: outcome,
             noun: String(localized: "Report"),
+            handoffDetail: Text("The report reaches the reviewer only once you send it there."),
             plainText: report.plainText,
             identifiers: .init(
                 handedOff: "community-report-handed-off",

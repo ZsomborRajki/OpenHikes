@@ -12,7 +12,9 @@
 //  it, same way back to the form. What genuinely differed between the two
 //  copies was one noun and five accessibility identifiers.
 //
-//  The noun is a parameter. The identifiers are passed in one by one rather
+//  The noun is a parameter, and so is the one sentence that names it, whole:
+//  English lowercases the noun mid-sentence and German, which capitalizes
+//  every noun, must not. The identifiers are passed in one by one rather
 //  than built from a prefix, deliberately: `community-withdrawal-fallback-text`
 //  is what two UI test files look for, and a `"\(prefix)-fallback-text"` here
 //  would mean the string they search for exists nowhere in the app.
@@ -69,8 +71,10 @@ struct CommunityMailOutcomeSections: View {
 
     let outcome: CommunityMailOutcome
     /// What this sheet calls the thing it is sending, capitalised: "Report",
-    /// "Request". Used in a sentence and on two buttons.
+    /// "Request". Used on two buttons.
     let noun: String
+    /// The line under a handoff, which names the thing sent in a sentence.
+    let handoffDetail: Text
     let plainText: String
     let identifiers: Identifiers
     /// Back to the form, with what the hiker typed still in it.
@@ -90,7 +94,7 @@ struct CommunityMailOutcomeSections: View {
             symbol: "envelope",
             tint: AnyShapeStyle(.tint),
             headline: Text("Opened in your mail app"),
-            detail: Text("The \(noun.lowercased()) reaches the reviewer only once you send it there."),
+            detail: handoffDetail,
             identifier: identifiers.handedOff,
             moment: .outcomeSucceeded
         )

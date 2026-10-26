@@ -822,8 +822,12 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **Background location is described in three places, and they must agree:**
   the `Info.plist` purpose strings, the Background Trail Tracking footer, and
   App Review's notes in App Store Connect. Always access is for the widget and
-  the Live Activity; the `location` background mode is for the recorder.
-- **Strings live in String Catalogs, and English is the only language.**
+  the Live Activity; the `location` background mode is for the recorder. Their
+  German must agree too: the prompts in `OpenHikes/InfoPlist.xcstrings`, the
+  footer in the app's catalog.
+- **Strings live in String Catalogs, in English and German.** English is the
+  development language. The app, the widget, the watch, Siri and the
+  permission prompts all follow the device's language.
   - `xcodebuild` does not merge extracted strings the way the IDE does. After
     changing text, build, then run
     `Scripts/sync-string-catalogs.sh <derived-data>`. CI's `--check` exits 2
@@ -845,6 +849,30 @@ a change to recording, the map, the sheet or the render path; the PR template,
     comments, or on the support page when a hiker needs them. A switch is
     named for everything it controls. `StringCatalogTests` holds every English
     value under a length ceiling.
+  - **Every string gets its German in the same change.** Sync the new key
+    into its catalog, then give it a `de` localization with
+    `"state" : "translated"`. `StringCatalogTests+German.swift` fails on a key
+    with no German, and on German that drops or retypes a placeholder (a
+    singular may leave the count out, as the English one does). The shared App
+    Intent and `RoleButton` wording sits in all four catalogs, so it is
+    translated in all four.
+  - **The German says *du*, and keeps one word for each thing:** *Wanderung*
+    (hike), *Weg* (trail), *Route* (route), *Ort* (place), *Aufzeichnung*
+    (recording), *Stopp* (a stop on a drawn trail), *Kachel* (map tile),
+    *Mediathek* (the photo library). Quotes are „…“, a dash is a spaced –, and
+    an ellipsis follows a space.
+  - **A sentence never changes the case of a catalogued word**, because German
+    capitalizes every noun. A sentence that names something is passed whole
+    (`CommunityMailOutcomeSections.handoffDetail`).
+  - **Two catalogs have no sync.** The permission prompts are translated in
+    `InfoPlist.xcstrings` (the app's and the watch's), and the Siri phrases in
+    `OpenHikes/AppShortcuts.xcstrings`, one entry per shortcut keyed by its
+    first phrase. The IDE extracts into both and `xcodebuild` into neither, so
+    an edited purpose string or phrase means editing its catalog's English and
+    German by hand. The German tests hold each to its `Info.plist` and to
+    `OpenHikesShortcuts.swift`.
+  - The hosted tests and the UI suites assert English copy, so they assume a
+    simulator whose language is English, as CI's is.
 - **OpenHikes Pro is one monthly subscription.**
   - **`MapEntitlementStore.productID` (`…pro.maps.monthly`) never changes.**
     It is recorded against every purchase. The name customers read lives in the

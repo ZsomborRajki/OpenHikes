@@ -142,6 +142,7 @@ private extension CommunityWithdrawalSheet {
         CommunityMailOutcomeSections(
             outcome: outcome,
             noun: String(localized: "Request"),
+            handoffDetail: Text("The request reaches the reviewer only once you send it there."),
             plainText: composed.plainText,
             identifiers: .init(
                 handedOff: "community-withdrawal-handed-off",
