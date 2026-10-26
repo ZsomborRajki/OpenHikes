@@ -20,11 +20,17 @@ import Testing
 extension StringCatalogTests {
     @Test("every catalogued string has German", arguments: Self.catalogFolders)
     func everyStringHasGerman(folder: String) throws {
-        let missing = try Self.catalog(in: folder).compactMap { key, value -> String? in
-            guard let entry = value as? [String: Any], Self.needsTranslation(key, entry) else { return nil }
-            return Self.localization("de", of: entry).isEmpty ? key : nil
-        }
+        let missing = try Self.untranslated(in: Self.catalog(in: folder))
         #expect(missing.isEmpty, "no German in \(folder) for: \(missing.sorted())")
+    }
+
+    /// An Info.plist catalog holds more than the prompts checked below: the
+    /// IDE extracts the bundle's name into it, and the name Files shows for a
+    /// GPX file. Each needs German, or to be marked as not translated.
+    @Test("every Info.plist string has German", arguments: ["OpenHikes", "OpenHikesWatch"])
+    func everyInfoPlistStringHasGerman(folder: String) throws {
+        let missing = try Self.untranslated(in: Self.catalog(in: folder, table: "InfoPlist"))
+        #expect(missing.isEmpty, "no German in \(folder)/InfoPlist.xcstrings for: \(missing.sorted())")
     }
 
     @Test("German keeps the placeholders its English is handed", arguments: Self.catalogFolders)
@@ -109,6 +115,14 @@ extension StringCatalogTests {
     /// The `language` localization of a catalog entry, empty when it has none.
     static func localization(_ language: String, of entry: [String: Any]) -> [String: Any] {
         (entry["localizations"] as? [String: Any])?[language] as? [String: Any] ?? [:]
+    }
+
+    /// The keys of `strings` a translator has words in that have no German.
+    static func untranslated(in strings: [String: Any]) -> [String] {
+        strings.compactMap { key, value -> String? in
+            guard let entry = value as? [String: Any], needsTranslation(key, entry) else { return nil }
+            return localization("de", of: entry).isEmpty ? key : nil
+        }
     }
 
     /// A key a translator has words in: still extracted, not marked for no

@@ -11,10 +11,18 @@
             "value" : "OpenHikes"
           }
         }
-      }
+      },
+      "shouldTranslate" : false
     },
     "GPS Exchange File" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPX-Datei"
+          }
+        }
+      }
     },
     "NSCameraUsageDescription" : {
       "comment" : "Privacy - Camera Usage Description",
