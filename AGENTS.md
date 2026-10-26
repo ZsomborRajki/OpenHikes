@@ -840,7 +840,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
     Shared App Intent metadata and `RoleButton` defaults must remain in their
     package declarations. The sync script derives temporary typed literals
     from them and asks the compiler to extract those for all four catalogs;
-    no second copy of their wording is checked in.
+    no second copy of their wording is checked in. An IDE build never sees
+    them, so it marks them stale wherever the target does not use the same
+    words itself; run the sync script after it rather than committing the
+    marks, which `--check` rejects.
   - A count is a plural variation, never `if count == 1`.
   - Figures are formatted per locale and never catalogued.
   - **Copy is a simple explanation.** A footer, alert or empty state says what
@@ -870,7 +873,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     first phrase. The IDE extracts into both and `xcodebuild` into neither, so
     an edited purpose string or phrase means editing its catalog's English and
     German by hand. The German tests hold each to its `Info.plist` and to
-    `OpenHikesShortcuts.swift`.
+    `OpenHikesShortcuts.swift`. The IDE also extracts the bundle's name and
+    the GPX type's into `InfoPlist.xcstrings`: a name gets German, or
+    `"shouldTranslate" : false` when it stays as it is, as *OpenHikes* does.
   - The hosted tests and the UI suites assert English copy, so they assume a
     simulator whose language is English, as CI's is.
 - **OpenHikes Pro is one monthly subscription.**
