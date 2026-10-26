@@ -1460,7 +1460,7 @@
 			repositoryURL = "https://github.com/apple/swift-collections/";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.7.3;
+				minimumVersion = 1.7.4;
 			};
 		};
 		F9B04210302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-algorithms" */ = {
