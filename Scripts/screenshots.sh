@@ -15,6 +15,12 @@
 set -uo pipefail
 
 scripts="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+for option in "$@"; do
+    if [[ "$option" == --prepared-device ]]; then
+        echo "Use screenshots-light.sh and screenshots-dark.sh on separate fresh pool claims with --prepared-device." >&2
+        exit 2
+    fi
+done
 light=0
 dark=0
 "$scripts/screenshots-light.sh" "$@" || light=$?

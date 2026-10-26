@@ -226,6 +226,9 @@ cat > "$stub_bin/xcodebuild" <<'STUB'
 #!/usr/bin/env bash
 printf 'xcodebuild %s\n' "$*" >> "$STUB_CALL_LOG"
 printf '%s\n' "${STUB_XCODEBUILD_OUTPUT:-Test Suite 'All tests' passed at 2026-08-30 12:00:00.000.}"
+if [[ "${1:-}" == test-without-building ]]; then
+    exit "${STUB_XCODEBUILD_TEST_STATUS:-${STUB_XCODEBUILD_STATUS:-0}}"
+fi
 exit "${STUB_XCODEBUILD_STATUS:-0}"
 STUB
 
@@ -1992,6 +1995,59 @@ if expect_status 0 \
     pass
 fi
 
+run_script "screenshots uses an acquired pool device without erasing it" \
+    "$screenshots_light" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 1 \
+    && expect_contains "$calls" "simctl bootstatus $pro_udid -b" "the recorded calls" \
+    && expect_contains "$calls" "simctl ui $pro_udid appearance light" "the recorded calls" \
+    && expect_contains "$calls" "-skipPackagePluginValidation" "the recorded calls" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls" \
+    && expect_absent "$calls" "simctl clone" "the recorded calls"; then
+    pass
+fi
+
+run_script "screenshots refuses a prepared device that is not a UDID" \
+    "$screenshots_light" --prepared-device 'OpenHikes Pool 1'
+if expect_status 2 \
+    && expect_contains "$output" "--prepared-device needs a pool device’s UDID" "the error"; then
+    pass
+fi
+
+run_script "screenshots requires separate prepared libraries for the two appearances" \
+    "$repository_root/Scripts/screenshots.sh" --prepared-device "$pro_udid"
+if expect_status 2 \
+    && expect_contains "$output" "separate fresh pool claims" "the error" \
+    && expect_absent "$calls" "simctl" "the recorded calls"; then
+    pass
+fi
+
+run_script "screenshots refuses an unavailable prepared device before changing a simulator" \
+    "$screenshots_light" --prepared-device FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF
+if expect_status 2 \
+    && expect_contains "$output" "No available prepared iOS simulator" "the error" \
+    && expect_absent "$calls" "simctl bootstatus" "the recorded calls" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls"; then
+    pass
+fi
+
+run_script "screenshots selects a repeated frame only once" \
+    "$screenshots_light" --frame 7 --frame 07 --no-photos --no-retry --prepared-device "$pro_udid" \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+selections="$(printf '%s\n' "$calls" | grep -o 'only-testing:OpenHikesUITests/ScreenshotUITests/testCapturesWalkHistory' \
+    | wc -l | tr -d ' ')"
+if expect_status 1 && [[ "$selections" == 1 ]]; then pass; fi
+
+STUB_XCODEBUILD_TEST_STATUS=65 \
+    run_script "screenshots rejects a failed process even when its summary says passed" \
+    "$screenshots_light" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 1 \
+    && expect_contains "$output" "failed (xcodebuild 65, log 0)" "the error" \
+    && expect_absent "$calls" "xcresulttool export attachments" "the recorded calls"; then
+    pass
+fi
+
 # A device named rather than given by UDID is the harness's own, and it starts
 # clean as a clone of a settled template instead of an erase, which would
 # download its models again on the next boot. The template does not exist
@@ -2310,6 +2366,19 @@ if expect_absent "$fit_output" "phone.png" "the output"; then
     else
         fail "phone.png was rewritten"
     fi
+fi
+
+run_script "screenshots accepts a fitted App Store frame" \
+    bash -c 'source "$1"; fit_screenshot_frame "$2"' _ \
+    "$repository_root/Scripts/lib/screenshots.sh" "$fit_work/inner-portrait.png"
+if expect_status 0; then pass; fi
+
+run_script "screenshots rejects a capture from a device with the wrong dimensions" \
+    bash -c 'source "$1"; fit_screenshot_frame "$2"' _ \
+    "$repository_root/Scripts/lib/screenshots.sh" "$fit_work/phone.png"
+if expect_status 1 \
+    && expect_contains "$output" "is not an App Store screenshot size" "the error"; then
+    pass
 fi
 
 echo
