@@ -30,7 +30,8 @@ struct RecordingCard: View {
     /// a `@State`: ``HikeRecorder/suggestedTitle`` reads the live distance,
     /// and a body observing that re-runs on every accepted fix. A button's
     /// action is not a body, so reading it there costs one look and creates
-    /// no dependency. `nil` when no trail covered enough of the walk.
+    /// no dependency. `nil` when neither a trail nor the town the walk started
+    /// in named it.
     @State private var stopNameSuggestion: String?
 
     /// Reads `phase`, the recovery state and whether a save can be retried —
@@ -75,11 +76,12 @@ struct RecordingCard: View {
             Text("The recorded track cannot be recovered after it is discarded.")
         }
         .alert("Name Your Hike", isPresented: $showStopAlert) {
-            // The trail the walk mostly followed, when there is one, and the
-            // draft's own name — the time of day and the date — when there
-            // is not. A placeholder is a promise about what happens if the
-            // hiker types nothing, so this is the same answer ``persist``
-            // writes, measured moments earlier against the live distance.
+            // The trail the walk mostly followed, when there is one, then the
+            // town it started in, and the draft's own name — the time of day
+            // and the date — when there is neither. A placeholder is a
+            // promise about what happens if the hiker types nothing, so this
+            // is the same answer ``persist`` writes, measured moments earlier
+            // against the live distance.
             TextField(
                 stopNameSuggestion ?? recorder.currentHike?.title ?? String(localized: "Hike name"),
                 text: $stopNameDraft

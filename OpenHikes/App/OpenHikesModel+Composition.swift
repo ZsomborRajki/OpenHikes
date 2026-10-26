@@ -456,7 +456,12 @@ private extension OpenHikesModel {
             liveActivityController: liveActivityController,
             movementReminders: movementReminders,
             workoutWriter: workoutWriter,
-            weatherState: weatherState
+            weatherState: weatherState,
+            // Not under tests, for the reason ``makeTrailStopNaming()`` gives:
+            // MapKit answers with whatever town is under the runner's
+            // simulated coordinate, which no suite should be asserting on. A
+            // recording there is named as it was before the town was asked.
+            placeNames: AppLaunchEnvironment.isRunningTests ? nil : GeocodedRecordingPlaceNames()
         )
     }
 

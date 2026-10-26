@@ -5,14 +5,15 @@
 //  *What is here*, asked of MapKit on every release the app supports, and
 //  what an answer says, read the same way on each.
 //
-//  Three things ask: the trail maker naming a tapped stop, the community
-//  list's header naming the searched area, and the forecast naming its place.
-//  On iOS 26 and later they ask `MKReverseGeocodingRequest` and read the
-//  answer's `MKAddress`, `addressRepresentations` and `location`. None of
-//  those exist below 26, so there the question goes to `CLGeocoder` — which
-//  26 deprecates for exactly this replacement, and which is only reached
-//  below it — and the answer comes back as a placemark wrapped in an
-//  `MKMapItem`, read through `MKMapItem.placemark`.
+//  Four things ask: the trail maker naming a tapped stop, the community list's
+//  header naming the searched area, the forecast naming its place, and a
+//  recording naming the town it started in. On iOS 26 and later they ask
+//  `MKReverseGeocodingRequest` and read the answer's `MKAddress`,
+//  `addressRepresentations` and `location`. None of those exist below 26, so
+//  there the question goes to `CLGeocoder` — which 26 deprecates for exactly
+//  this replacement, and which is only reached below it — and the answer comes
+//  back as a placemark wrapped in an `MKMapItem`, read through
+//  `MKMapItem.placemark`.
 //
 //  The two answers are not the same shape, measured side by side on
 //  2026-10-25 for the pins `TrailStopNameTests` records. The city is the

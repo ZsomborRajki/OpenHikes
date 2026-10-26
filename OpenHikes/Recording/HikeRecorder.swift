@@ -106,6 +106,10 @@ final class HikeRecorder: NSObject {
     /// ``MovementReminderController`` for why a recording and a followed trail
     /// cannot each have their own.
     @ObservationIgnored let movementReminders: MovementReminderController?
+    /// What the town a recording started in is called, or `nil` for a launch
+    /// that must not ask — see ``RecordingPlaceNaming``, and
+    /// ``nameStartPlace(at:)`` for when it is asked.
+    @ObservationIgnored let placeNames: (any RecordingPlaceNaming)?
     /// Told the id of every recording once it is saved, which is the walk
     /// session's cue not to start a walk along the line the hiker has just
     /// finished — see ``TrailWalkSession/recordingDidSave(hikeID:)``. A
@@ -181,6 +185,17 @@ final class HikeRecorder: NSObject {
     /// Nothing draws it. It is read twice — once when the hiker asks to stop,
     /// and once when the hike is written — both outside a `body`.
     @ObservationIgnored var trailNames = RecordingTrailNames()
+    /// What the town this walk started in names it — "Budapest – Oct 26,
+    /// 2026" — once the geocoder has answered, and `nil` before that or when
+    /// there was no town to give. See ``nameStartPlace(at:)``, and
+    /// ``suggestedTitle(forDistance:)`` for where it ranks.
+    ///
+    /// `@ObservationIgnored` for the reason ``trailNames`` is: nothing draws
+    /// it, and it is read at Stop and at save, both outside a `body`.
+    @ObservationIgnored var startPlaceTitle: String?
+    /// Whether this walk has asked what town it started in, answered or not —
+    /// the once in ``nameStartPlace(at:)``.
+    @ObservationIgnored var hasAskedForStartPlace = false
     @ObservationIgnored var liveMatchingTask: Task<Void, Never>?
     @ObservationIgnored var liveMatchingTaskID: UUID?
     @ObservationIgnored var liveMatchNeedsRun = false
@@ -227,13 +242,20 @@ final class HikeRecorder: NSObject {
         }
     }
 
-    /// The name to offer this walk, or `nil` when no trail covered enough of
-    /// it to be worth claiming — see ``RecordingTrailNames/coverageFloor``.
+    /// The name to offer this walk: the trail that covered enough of it to be
+    /// worth claiming — see ``RecordingTrailNames/coverageFloor`` — or else
+    /// the town it started in, ``startPlaceTitle``. `nil` when neither has
+    /// one, which leaves the draft's own name: the time of day and the date.
+    ///
+    /// The trail first, because it is the more particular of the two: a town
+    /// is where every walk from its station starts, and the trail is the one
+    /// this walk went along.
     ///
     /// Bounded through ``HikeTitle`` like every other name this app stores.
     /// OpenStreetMap's `name` is somebody else's free text arriving over the
     /// network, which is exactly the input that bound exists for, and a route
-    /// relation's name is occasionally a paragraph.
+    /// relation's name is occasionally a paragraph. The town's name is bounded
+    /// where it was made, in ``placeTitle(city:for:calendar:)``.
     ///
     /// - Parameter totalMeters: The walk's distance. Passed rather than read
     ///   off ``stats`` so the two callers can each use the figure that is
@@ -241,7 +263,7 @@ final class HikeRecorder: NSObject {
     ///   still running, and the prepared recording's once it has been
     ///   measured for the last time.
     func suggestedTitle(forDistance totalMeters: Double) -> String? {
-        HikeTitle.bounded(trailNames.dominantName(of: totalMeters))
+        HikeTitle.bounded(trailNames.dominantName(of: totalMeters)) ?? startPlaceTitle
     }
 
     /// What the walk would be named if it ended now.
@@ -337,6 +359,7 @@ final class HikeRecorder: NSObject {
         movementReminders: MovementReminderController? = nil,
         workoutWriter: (any HikeWorkoutWriting)? = nil,
         weatherState: @escaping () -> WeatherBadgeState = { .idle },
+        placeNames: (any RecordingPlaceNaming)? = nil,
         journalDirectory: URL? = nil,
         openJournalHandle: @escaping @Sendable (URL) throws -> any TrackJournalHandle = { url in
             try FileHandle(forWritingTo: url)
@@ -371,6 +394,7 @@ final class HikeRecorder: NSObject {
         self.movementReminders = movementReminders
         self.workoutWriter = workoutWriter
         self.weatherState = weatherState
+        self.placeNames = placeNames
         journal = resolvedDirectory.map { directory in
             TrackJournal(directory: directory, clock: clock, openHandle: openJournalHandle)
         }

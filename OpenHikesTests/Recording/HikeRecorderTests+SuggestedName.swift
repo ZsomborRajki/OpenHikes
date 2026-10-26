@@ -33,7 +33,10 @@ extension HikeRecorderTests {
     /// The trail is published *before* the fix, because the metres a fix buys
     /// are credited to the trail the matcher had already named — a verdict
     /// arriving after them belongs to the ground after them.
-    private func walk(
+    ///
+    /// Shared with `HikeRecorderTests+PlaceName.swift`, where the trail is
+    /// what outranks the town a walk started in.
+    func walk(
         _ recorder: HikeRecorder,
         to latitude: Double,
         on trailName: String?
