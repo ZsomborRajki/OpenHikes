@@ -21,18 +21,11 @@ extension ScreenshotUITests {
     private static let walkerCoordinate = CLLocationCoordinate2D(latitude: walkerLatitude, longitude: walkerLongitude)
     private static let walkerAltitude: CLLocationDistance = 1322
 
-    /// How far up the frame drags its map, as a share of the screen, to bring
-    /// the walker and the fresh end of the line out from under the sheet.
-    private static let recordingLift: CGFloat = 0.2
-    /// Where the drag starts: clear of the walker, the weather badge and the
-    /// map's controls.
-    private static let liftAnchorX: CGFloat = 0.7
-    private static let liftAnchorY: CGFloat = 0.34
-    /// Long enough for the drag to be taken as a drag rather than a tap.
-    private static let liftPressDuration = 0.1
     /// Fewer points than the seeded stretch holds, so a count above it means
     /// the recording on screen is the recovered one rather than a new one.
     private static let recoveredPointFloor = 100
+    private static let recordingFrameMargin: CGFloat = 0.07
+    private static let recordingPanPress: TimeInterval = 0.1
 
     /// A recording two hours in, half way up the climb to the alm.
     ///
@@ -95,29 +88,58 @@ extension ScreenshotUITests {
         XCTAssertTrue(notice.waitForExistence(timeout: UITestTimeout.existence), "a resumed recording says so")
         notice.tap()
         XCTAssertTrue(notice.waitForNonExistence(timeout: UITestTimeout.existence), "and closes when asked")
-        liftRecordedLineClearOfTheSheet(in: app)
+        frameRecordedLine(in: app)
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.trace) { screenshotMapHasTiles(in: app) },
+            "the map should finish drawing its terrain after zooming"
+        )
         capture(as: .recording, of: app)
     }
 
-    /// Drags the map up so the walker and the line behind them sit in the
-    /// band the sheet is not over.
-    ///
-    /// A fixed pan, unlike every other framing gesture in the set, and not for
-    /// want of trying: the recorded line is an `MKPolyline`, which is drawn
-    /// rather than exposed, so there is no element to measure and nothing to
-    /// correct against. What is known is the geometry — the recording map
-    /// keeps the walker at the *window's* centre, which is behind a sheet
-    /// resting at its middle detent, so the freshest end of the line is the
-    /// part a reader cannot see.
+    /// Fits the red stroke into the map above the measured sheet. Collapsing
+    /// it temporarily exposes the map's center for two-finger zoom-out taps;
+    /// the original detent is restored before the capture.
     @MainActor
-    private func liftRecordedLineClearOfTheSheet(in app: XCUIApplication) {
+    private func frameRecordedLine(in app: XCUIApplication) {
         let map = mapElement(in: app)
-        map.coordinate(withNormalizedOffset: CGVector(dx: Self.liftAnchorX, dy: Self.liftAnchorY))
-            .press(
-                forDuration: Self.liftPressDuration,
-                thenDragTo: map.coordinate(
-                    withNormalizedOffset: CGVector(dx: Self.liftAnchorX, dy: Self.liftAnchorY - Self.recordingLift)
+        let window = windowFrame(of: app)
+        let original = openMapArea(in: app)
+        let panel = element("map-side-panel", in: app).exists
+        let margin = original.width * Self.recordingFrameMargin
+        let weather = element("weather-badge", in: app)
+        let top = max(original.minY + margin, weather.exists ? weather.frame.maxY + margin : original.minY)
+        let target = CGRect(
+            x: original.minX + margin,
+            y: top,
+            width: original.width - margin * 2,
+            height: original.maxY - top - margin
+        )
+        collapseSheet(in: app)
+        defer {
+            if !panel { dragSheet(in: app, to: (original.maxY - window.minY) / window.height) }
+        }
+        let visible = openMapArea(in: app).insetBy(dx: 2, dy: 2)
+        for _ in 0..<10 {
+            guard let bounds = recordedLineBounds(in: app, within: visible) else {
+                XCTFail("the recovered recording should draw a red line on the map")
+                return
+            }
+            if target.contains(bounds) { return }
+            let clipped = !visible.insetBy(dx: margin, dy: margin).contains(bounds)
+            if clipped || bounds.width > target.width || bounds.height > target.height {
+                zoomRecordingMapOut(in: app)
+            } else {
+                let anchor = CGPoint(x: visible.maxX - margin, y: visible.midY)
+                let landing = CGPoint(
+                    x: anchor.x + target.midX - bounds.midX,
+                    y: anchor.y + target.midY - bounds.midY
                 )
-            )
+                coordinate(at: anchor, on: map).press(
+                    forDuration: Self.recordingPanPress,
+                    thenDragTo: coordinate(at: landing, on: map)
+                )
+            }
+        }
+        XCTFail("the recording’s line should fit above the sheet before capture")
     }
 }

@@ -128,7 +128,9 @@ other frame too.
 
 **10, the share card**, opens the summary of the walk that covered the whole
 trail, *Share*, and the sixth of its photographs — the viewing platform with
-the lake below — and shoots the editor as it opens, with no box selected.
+the lake below — and shoots the editor with no box selected. This temporary
+hike is renamed to *Königssee via Kühroint* through the normal title editor
+first, so the card’s single title line can show the whole name.
 
 ## Capturing
 
@@ -138,6 +140,24 @@ Scripts/screenshots-dark.sh              # the dark set, files suffixed -dark
 Scripts/screenshots.sh                   # both, one after the other
 Scripts/screenshots-dark.sh --frame 03   # one frame, while debugging it
 ```
+
+To use a simulator claimed from the pool, acquire a fresh owner for each batch
+and pass its UDID with `--prepared-device`. This keeps the clean clone the
+pool prepared instead of erasing it and downloading its system models again:
+
+```sh
+export OPENHIKES_SIM_POOL_PREFIX='OpenHikes Capture'
+export OPENHIKES_SIM_POOL_DEVICE_TYPE='iPhone 18 Pro Max'
+owner="screenshots-$$"
+udid="$(Scripts/sim-pool.sh acquire --owner "$owner" --owner-pid "$$")"
+trap 'Scripts/sim-pool.sh release --owner "$owner"' EXIT
+Scripts/screenshots-light.sh --prepared-device "$udid"
+```
+
+The caller releases that claim, including on failure. `--prepared-device`
+expects an empty photo library; use a fresh pool owner for the next batch.
+When capturing both appearances on one prepared device, run each appearance
+on its own fresh claim so the stamped photographs are added only once.
 
 Each appearance has a script, a simulator (`OpenHikes Screenshots Light` /
 `… Dark`, both `iPhone 18 Pro Max`), a derived-data directory and a set of
@@ -180,6 +200,12 @@ politeness: the community frame waits on a seeded browse answering, and that
 wait can lose to a busy machine rather than to a bug. Each frame also has a
 five-minute allowance, so a stuck one is killed with a spindump rather than
 holding the pass.
+
+A nonzero `xcodebuild` exit rejects that group's captures even if it printed
+a passing summary or attached images before its host crashed. Those frames
+are retried together; raw logs and result bundles remain available to inspect.
+Each invocation gives its logs and result bundles a timestamp and process ID,
+so a targeted recapture preserves the evidence from the previous batch.
 
 `simctl addmedia` is given the whole library in one call with a deadline. One
 photograph at a time, straight after boot, it once hung on the fourth for
@@ -281,9 +307,12 @@ So the hero frame, and frame 06 after it, pans and zooms the map by hand,
 measuring the photo pins between gestures and correcting. The measuring
 matters — a drag lands short of the vector it is given, and a zoom doubles
 whatever is left off-centre. Frame 03 zooms out with a two-finger tap on one of
-its pins, since the map's own centre is under the sheet, and pans once; frame
-05 drags the recording's map up by a fixed fifth, because a recorded line is
-drawn rather than exposed and has nothing to measure.
+its pins, since the map's own centre is under the sheet, and pans once. Frame
+05 measures the recording’s red stroke in the screenshot, zooming out and
+centering until it fits above the measured sheet. The sheet is collapsed
+temporarily to expose the map’s center for two-finger zoom-out taps, then
+returned to its original height before capturing. This replaces the fixed
+upward pan that left the line running off the top of the frame.
 
 **Zoom with a double tap, never `XCUIElement.pinch`.** A pinch rotates the map
 a little, and that cost the most time here by far: a few degrees off north
@@ -351,6 +380,13 @@ shape: *Zoom* fits the route beside the panel, the sheet is never collapsed
 and the route never expanded, and the nearby frame centres its pins in the map
 the panel leaves open.
 
+The gallery is positioned inside the panel’s scrolling viewport, and the
+share editor’s figures are moved beside its route. The hero opens the next
+photo pin down: a callout on the topmost one makes MapKit push the trail’s
+finish off the bottom on this display.
+The nearby frame selects the free Apple Maps style through Settings on this
+display, avoiding the raster map’s stalled top row after the camera move.
+
 **Three things XCTest does differently on a Duo**, each answered in the test
 class or the export rather than worked around in a frame:
 
@@ -368,6 +404,14 @@ class or the export rather than worked around in a frame:
   panel. The shared helpers measure the window instead, and take a centre in
   it as reachable where the hit test is wrong — see
   `OpenHikesUITests/WindowSupport.swift`.
+
+Two-finger element gestures can also resolve against the inactive cover.
+The recording’s zoom and the landscape gallery/card drags use
+`ScreenshotDisplayGesture`, which sends touch paths to the screenshot’s
+explicit display ID and converts points using its image orientation. These
+private XCTest selectors are checked before use and live only in the UI
+test target. After zooming, the recording waits for colored map terrain to
+replace the placeholder grid before capture.
 
 **The cover display is 678 points tall**, against 956 on the 6.9" phone, and a
 swipe flings content further than that screen shows: *Find Photos* went from

@@ -35,6 +35,15 @@ extension ScreenshotUITests {
         openHikeDetail(in: app, titled: Self.routeTitle)
         try importDiscoveredPhotos(in: app)
 
+        // The full GPX title is longer than the card's single title line.
+        // Rename this in-memory hike through the same editor a hiker uses.
+        scrollToTap(app.buttons["Rename hike"], in: app, attempts: 12)
+        let name = element("hike-title-field", in: app)
+        XCTAssertTrue(name.waitForExistence(timeout: UITestTimeout.navigation))
+        XCTAssertTrue(replaceText(of: name, with: "Königssee via Kühroint"))
+        submitKeyboardEdit(in: app)
+        XCTAssertTrue(name.waitForNonExistence(timeout: UITestTimeout.navigation))
+
         app.segmentedControls["walk-segment"].buttons["History"].tap()
         let row = app.descendants(matching: .any).matching(identifier: "walk-row").firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: UITestTimeout.existence), "the seeded walk should be listed")
@@ -59,6 +68,7 @@ extension ScreenshotUITests {
             "the editor should open on the photograph"
         )
         XCTAssertTrue(walkShareBox(.route, in: app).exists, "and the line walked beside the figures")
+        arrangeLandscapeShareCard(in: app)
         capture(as: .share, of: app)
     }
 }

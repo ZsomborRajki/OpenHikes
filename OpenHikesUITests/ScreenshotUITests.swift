@@ -71,13 +71,6 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// purpose, because a tap on the drawn route opens its hike.
     private static let zoomTapPoint = CGVector(dx: heroRouteCenterX + 0.2, dy: heroRouteCenter)
 
-    /// Where on the elevation chart the photographs frame leaves its tracker,
-    /// as a share of the chart element's width: the high point by the alm,
-    /// five kilometres of the walk's ten and a half, so the card under the
-    /// chart reads as part of a walk rather than a grey 0%. The plot ends at
-    /// about 0.88 of the element, where the height labels begin.
-    private static let summitChartPosition: CGFloat = 0.42
-
     /// Long enough for the drag to be taken as a drag rather than a tap.
     private static let dragPressDuration = 0.1
     /// Near the bottom edge, so the sheet is dragged past the middle detent
@@ -136,7 +129,10 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         // its top edge.
         let pins = photoPins(in: app)
         XCTAssertFalse(pins.isEmpty, "the map should be showing photo pins")
-        pins[0].tap()
+        // The topmost callout makes MapKit pan a landscape Duo's route off
+        // the bottom. The next photograph has room above it in that layout.
+        let chosen = element("map-side-panel", in: app).exists ? pins.dropFirst().first ?? pins[0] : pins[0]
+        chosen.tap()
         XCTAssertTrue(
             element("photo-pin-preview", in: app)
                 .waitForExistence(timeout: UITestTimeout.existence),
@@ -170,12 +166,8 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         try importDiscoveredPhotos(in: app)
         // The tracker to the alm, so the chart points at somewhere and the
         // progress card under it has a distance to report.
-        let chart = element("elevation-chart", in: app)
-        XCTAssertTrue(scrollIntoView(chart, in: app), "the hike should draw its elevation chart")
-        let atStart = chart.value as? String ?? ""
-        chart.coordinate(withNormalizedOffset: CGVector(dx: Self.summitChartPosition, dy: 0.5)).tap()
-        XCTAssertTrue(waitUntilValueChanges(from: atStart, on: chart), "a tap should move the tracker")
-        scrollIntoView(element("hike-photo-strip", in: app), in: app)
+        selectChartProgress(48, in: app)
+        positionScreenshotGallery(in: app)
         capture(as: .photos, of: app)
     }
 
@@ -209,6 +201,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         setSimulatedLocation(Self.schoenau)
         defer { XCUIDevice.shared.location = nil }
         launch(app)
+        prepareNearbyLandscapeMap(in: app)
         selectCommunityTab(in: app)
         let anyRow = app.descendants(matching: .any)
             .matching(identifier: "community-hike-row")
@@ -219,6 +212,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         )
         frameCommunityPins(in: app)
         revealCommunityPins(in: app, atLeast: Self.minimumVisiblePins)
+        settleNearbyMapTiles(in: app)
         capture(as: .nearby, of: app)
     }
 
@@ -569,7 +563,7 @@ extension ScreenshotUITests {
     /// missing element gives — and which filters out every pin on screen
     /// while looking exactly like a map that has none.
     @MainActor
-    private func openMapArea(in app: XCUIApplication) -> CGRect {
+    func openMapArea(in app: XCUIApplication) -> CGRect {
         let window = windowFrame(of: app)
         let panel = element("map-side-panel", in: app)
         if panel.exists, panel.frame.width > 0 {
@@ -591,7 +585,7 @@ extension ScreenshotUITests {
     /// `point`, in the window, as a coordinate of `element`: absolute, where a
     /// normalized offset is a share of whatever size `element` is.
     @MainActor
-    private func coordinate(at point: CGPoint, on element: XCUIElement) -> XCUICoordinate {
+    func coordinate(at point: CGPoint, on element: XCUIElement) -> XCUICoordinate {
         let frame = element.frame
         return element.coordinate(withNormalizedOffset: .zero)
             .withOffset(CGVector(dx: point.x - frame.minX, dy: point.y - frame.minY))
@@ -733,7 +727,7 @@ extension ScreenshotUITests {
     /// `extension PhotoUITests`, deliberately, so `--suite PhotoUITests` still
     /// selects the whole class.
     @MainActor
-    private func dragSheet(in app: XCUIApplication, to target: CGFloat) {
+    func dragSheet(in app: XCUIApplication, to target: CGFloat) {
         let grabber = app.buttons["Sheet Grabber"]
         XCTAssertTrue(
             grabber.waitForExistence(timeout: UITestTimeout.navigation),

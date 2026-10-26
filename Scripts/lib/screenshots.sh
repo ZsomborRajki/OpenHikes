@@ -168,6 +168,9 @@ Options:
                      app's matcher can place them on the trail.
   --device <name>    Simulator name to create and reuse
                      (default: "$screenshot_default_device")
+  --prepared-device <udid>
+                    Use a freshly acquired pool device without erasing it.
+                    The caller owns its pool claim and releases it afterwards.
   --device-type <t>  Simulator device type (default: iPhone 18 Pro Max)
   --pose <p>         For an iPhone Duo: closed (its inner display folded away,
                      as it boots) or open (unfolded). See Scripts/duo-pose.sh.
@@ -252,9 +255,10 @@ reset_screenshot_device() {
 # over from a clean device — a half-filled library is not something to add to,
 # because the frames pick photographs by their position in it.
 prepare_screenshot_device() {
-    reset_screenshot_device
-    # `bootstatus` is what makes the wait an observation rather than a guess.
-    xcrun simctl boot "$udid"
+    if [[ "$prepared_device" == false ]]; then
+        reset_screenshot_device
+    fi
+    # `bootstatus -b` also boots a shutdown device; a pooled one is already up.
     xcrun simctl bootstatus "$udid" -b >/dev/null
 
     xcrun simctl status_bar "$udid" override \
@@ -306,18 +310,19 @@ prepare_screenshot_device() {
 
 # Builds the app and its UI tests once, for every attempt that follows.
 build_screenshot_tests() {
-    local raw_log="$derived_data/Screenshots-$screenshot_appearance-build.log"
+    local raw_log="$derived_data/Screenshots-$screenshot_appearance-$screenshot_run_id-build.log"
     echo "[$screenshot_appearance] building…" >&2
     set +e
     xcodebuild build-for-testing \
         -project "$screenshot_project" \
         -scheme "$screenshot_scheme" \
+        -skipPackagePluginValidation \
         -destination "platform=iOS Simulator,id=$udid" \
         -derivedDataPath "$derived_data" 2>&1 \
         | format_xcodebuild_stream "$raw_log" >&2
-    local status=${PIPESTATUS[0]}
+    local statuses=("${PIPESTATUS[@]}")
     set -e
-    if [[ $status -ne 0 ]]; then
+    if [[ ${statuses[0]} -ne 0 || ${statuses[1]} -ne 0 ]]; then
         echo "[$screenshot_appearance] the build failed — see $raw_log" >&2
         exit 1
     fi
@@ -393,9 +398,10 @@ export_screenshot_frames() {
             # "01-trail-and-its-photos_0_<uuid>.png" -> "01-trail-and-its-photos"
             frame="${readable%%_*}"
             if [[ -f "$staging/$exported" && "$frame" =~ ^[0-9][0-9]- ]]; then
-                mv -f "$staging/$exported" "$output_dir/$frame$screenshot_suffix.png"
-                fit_screenshot_frame "$output_dir/$frame$screenshot_suffix.png"
-                printf '%s\n' "${frame%%-*}"
+                if fit_screenshot_frame "$staging/$exported"; then
+                    mv -f "$staging/$exported" "$output_dir/$frame$screenshot_suffix.png"
+                    printf '%s\n' "${frame%%-*}"
+                fi
             fi
             attachment_index=$((attachment_index + 1))
         done
@@ -409,7 +415,14 @@ export_screenshot_frames() {
 # Scripts/lib/fit-screenshot.swift — and leaves every other frame as it was.
 # Says what it changed on stderr, since stdout is the list of frames shot.
 fit_screenshot_frame() {
-    swift "$screenshots_lib_dir/fit-screenshot.swift" "${screenshot_store_sizes[@]}" -- "$1" >&2
+    swift "$screenshots_lib_dir/fit-screenshot.swift" "${screenshot_store_sizes[@]}" -- "$1" >&2 || return 1
+    local size accepted
+    size="$(/usr/bin/sips -g pixelWidth -g pixelHeight "$1" | awk '/pixel/ { print $2 }' | paste -sd x -)"
+    for accepted in "${screenshot_store_sizes[@]}"; do
+        if [[ "$size" == "$accepted" ]]; then return 0; fi
+    done
+    echo "Rejected $(basename "$1"): $size is not an App Store screenshot size." >&2
+    return 1
 }
 
 # One xcodebuild run over `frames`, exported. Prints the frames it shot.
@@ -421,8 +434,8 @@ run_screenshot_group() {
         only_testing+=("-only-testing:$screenshot_suite/$(screenshot_test_for_frame "$frame")")
     done
 
-    local result_bundle="$derived_data/Screenshots-$screenshot_appearance-$attempt.xcresult"
-    local raw_log="$derived_data/Screenshots-$screenshot_appearance-$attempt.log"
+    local result_bundle="$derived_data/Screenshots-$screenshot_appearance-$screenshot_run_id-$attempt.xcresult"
+    local raw_log="$derived_data/Screenshots-$screenshot_appearance-$screenshot_run_id-$attempt.log"
     rm -rf "$result_bundle"
 
     echo "[$screenshot_appearance] $attempt: frames ${frames[*]}" >&2
@@ -434,6 +447,7 @@ run_screenshot_group() {
     xcodebuild test-without-building \
         -project "$screenshot_project" \
         -scheme "$screenshot_scheme" \
+        -skipPackagePluginValidation \
         -destination "platform=iOS Simulator,id=$udid" \
         -derivedDataPath "$derived_data" \
         -resultBundlePath "$result_bundle" \
@@ -443,10 +457,18 @@ run_screenshot_group() {
         -maximum-test-execution-time-allowance "$frame_time_allowance_seconds" \
         "${only_testing[@]}" 2>&1 \
         | format_xcodebuild_stream "$raw_log" >&2
+    local statuses=("${PIPESTATUS[@]}")
     set -e
 
+    # A test host can crash after attaching a frame and Xcode can still print
+    # a green summary. Only a successful process may contribute upload images.
+    if [[ ${statuses[0]} -ne 0 || ${statuses[1]} -ne 0 ]]; then
+        echo "[$screenshot_appearance] $attempt failed (xcodebuild ${statuses[0]}, log ${statuses[1]}) — see $raw_log" >&2
+        return 0
+    fi
+
     [[ -d "$result_bundle" ]] || return 0
-    export_screenshot_frames "$result_bundle" "$derived_data/attachments-$screenshot_appearance-$attempt"
+    export_screenshot_frames "$result_bundle" "$derived_data/attachments-$screenshot_appearance-$screenshot_run_id-$attempt"
 }
 
 # Shoots `frames` in two groups — without location, then with it — and prints
@@ -474,11 +496,13 @@ run_screenshot_attempt() {
 
 screenshots_main() {
     device_name="${OPENHIKES_SCREENSHOT_DEVICE:-$screenshot_default_device}"
+    screenshot_run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
     device_type="${OPENHIKES_SCREENSHOT_DEVICE_TYPE:-iPhone 18 Pro Max}"
     output_dir="$repository_root/Screenshots/Output"
     photo_dir="$repository_root/Screenshots/Stamped"
     derived_data="$repository_root/DerivedData/Screenshots-$screenshot_appearance"
     keep_device=false
+    prepared_device=false
     skip_photos=false
     retry=true
     # English and metric, without having to force the units to disagree with
@@ -499,7 +523,16 @@ screenshots_main() {
             --frame) requested+=("${2:?--frame needs a number}"); shift 2 ;;
             --output) output_dir="${2:?--output needs a directory}"; shift 2 ;;
             --photos) photo_dir="${2:?--photos needs a directory}"; shift 2 ;;
-            --device) device_name="${2:?--device needs a name}"; shift 2 ;;
+            --device) device_name="${2:?--device needs a name}"; prepared_device=false; shift 2 ;;
+            --prepared-device)
+                device_name="${2:?--prepared-device needs a UDID}"
+                if ! [[ "$device_name" =~ ^[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$ ]]; then
+                    echo "--prepared-device needs a pool device’s UDID." >&2
+                    exit 2
+                fi
+                prepared_device=true
+                shift 2
+                ;;
             --device-type) device_type="${2:?--device-type needs a type}"; shift 2 ;;
             --pose)
                 pose="${2:?--pose needs open or closed}"
@@ -543,17 +576,25 @@ screenshots_main() {
                 echo "Unknown frame: $frame (expected 01-10)" >&2
                 exit 2
             fi
-            frames+=("$frame")
+            if [[ " ${frames[*]:-} " != *" $frame "* ]]; then frames+=("$frame"); fi
         done
     fi
 
     udid="$(resolve_simulator_udid "$device_name" 2>/dev/null || true)"
+    if [[ "$prepared_device" == true && -z "$udid" ]]; then
+        echo "No available prepared iOS simulator with UDID $device_name." >&2
+        exit 2
+    fi
     device_pinned=false
     if [[ "$device_name" =~ ^[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$ ]]; then
         device_pinned=true
     fi
 
     if ! prepare_screenshot_device; then
+        if [[ "$prepared_device" == true ]]; then
+            echo "The photo library could not be filled; acquire a clean pool device before retrying." >&2
+            exit 1
+        fi
         echo "Starting over from a clean device." >&2
         prepare_screenshot_device || { echo "The photo library could not be filled." >&2; exit 1; }
     fi
@@ -634,7 +675,7 @@ screenshots_main() {
             printf '  %-44s %s\n' "$(basename "$entry")" "$size"
         done
     done
-    echo "Logs and result bundles: $derived_data/Screenshots-$screenshot_appearance-*"
+    echo "Logs and result bundles: $derived_data/Screenshots-$screenshot_appearance-$screenshot_run_id-*"
 
     if [[ "$keep_device" == false ]]; then
         xcrun simctl shutdown "$udid"

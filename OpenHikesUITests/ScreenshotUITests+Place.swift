@@ -17,14 +17,6 @@ extension ScreenshotUITests {
     private static let placeName = "Above the Königssee"
     private static let placeNote = "The whole lake below, and the boats in to St. Bartholomä."
 
-    /// Where on the elevation chart the place is put, as a share of the
-    /// chart element's width: six and a half kilometres in, where the walk
-    /// comes out over the lake at the top of the Rinnkendlsteig. The plot
-    /// stops at about 0.88 of the element — the elevation labels stand to the
-    /// right of it — and a tap on them selects nothing, which is how 0.97
-    /// failed.
-    private static let placeChartPosition: CGFloat = 0.53
-
     /// Which of the stamped photographs the place is given, by where the
     /// system picker lists them: newest first, so the second and the third
     /// are the two taken from up here — the lake from above, once over the
@@ -72,14 +64,8 @@ extension ScreenshotUITests {
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
 
-        let chart = element("elevation-chart", in: app)
-        XCTAssertTrue(scrollIntoView(chart, in: app), "the hike should draw its elevation chart")
-        let atStart = chart.value as? String ?? ""
-        chart.coordinate(withNormalizedOffset: CGVector(dx: Self.placeChartPosition, dy: 0.5)).tap()
-        XCTAssertTrue(
-            waitUntilValueChanges(from: atStart, on: chart),
-            "a tap on the chart should move the tracker out over the lake"
-        )
+        // The viewpoint is three fifths of the way along this trail.
+        selectChartProgress(60, in: app)
 
         let addPlace = element("map-add-place-button", in: app)
         XCTAssertTrue(
