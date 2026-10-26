@@ -172,12 +172,13 @@ extension HikeRecorder {
     ) throws(RecordingFailure) -> Hike {
         let hikeID = session.metadata.sessionID
         stats.dominantTrailName = prepared.matchedTrailName
-        // Measured against the prepared distance rather than the live one:
-        // this is the last word on how long the walk was, and the share the
-        // floor is applied to should be a share of it. The figure the stop
-        // alert previewed was the accumulator's, moments earlier and by the
-        // same rule — see ``HikeRecorder/suggestedTitle``.
-        let suggestedTitle = suggestedTitle(forDistance: prepared.distanceMeters)
+        // The name the stop alert showed, when the hiker was shown one — see
+        // ``HikeRecorder/stop(customName:offeredTitle:)``. Otherwise — Siri,
+        // the watch, a recovered walk — measured against the prepared distance
+        // rather than the live one: this is the last word on how long the
+        // walk was, and the share the floor is applied to should be a share
+        // of it.
+        let suggestedTitle = offeredTitle ?? suggestedTitle(forDistance: prepared.distanceMeters)
         if let existing = try existingHike(sessionID: hikeID) {
             guard existing.isRecording else { return existing }
             let finalized = try finalizeDraft(
@@ -548,6 +549,7 @@ extension HikeRecorder {
         trailNames = RecordingTrailNames()
         startPlaceTitle = nil
         hasAskedForStartPlace = false
+        offeredTitle = nil
         liveMatchingTask?.cancel()
         liveMatchingTask = nil
         liveMatchingTaskID = nil
