@@ -22,6 +22,11 @@ struct StringCatalogTests {
         "OpenHikes", "OpenWidget", "OpenHikesWatch", "OpenHikesWatchWidgets"
     ]
 
+    /// The ceiling ``catalogsKeepCopyShort(folder:)`` holds copy under: a
+    /// little above the longest message the app needs, which is a
+    /// reviewer's alert about a take-down that only half finished.
+    nonisolated private static let longestCopy = 220
+
     @Test("the app is developed in English")
     func englishIsTheDevelopmentLanguage() {
         #expect(Bundle.main.developmentLocalization == "en")
@@ -117,6 +122,18 @@ struct StringCatalogTests {
         #expect(offenders.isEmpty, "British spellings in \(folder): \(offenders.sorted())")
     }
 
+    /// Copy is a simple explanation (*Platform contracts* in the repository
+    /// instructions): what a control does, or what happened and what to do
+    /// next. Settings once carried a reminders footer of over six hundred
+    /// characters, most of a phone's screen in footnote type, and a Health
+    /// footer of eight lines. A sentence or two fits under this ceiling; a
+    /// footer like either of those does not.
+    @Test("no English value runs past a sentence or two", arguments: Self.catalogFolders)
+    func catalogsKeepCopyShort(folder: String) throws {
+        let long = try Self.englishStrings(in: folder).filter { $0.count > Self.longestCopy }
+        #expect(long.isEmpty, "copy over \(Self.longestCopy) characters in \(folder): \(long.sorted())")
+    }
+
     /// The word `WatchRecordingFiguresTests` cannot reach (#1028). The watch
     /// once drew its average speed under "Pace", a word for time per
     /// distance. The shared package now picks only which caption a figure
@@ -157,10 +174,10 @@ struct StringCatalogTests {
     /// key, so, as for the watch's caption above, this reads the catalog that
     /// sync leaves behind.
     @Test("the settings, sync and offline-map words are in the app's catalog", arguments: [
-        "The hiking routes are the only map tiles OpenHikes downloads, caches and auto-saves while this is selected.",
+        "Maps with a lock need OpenHikes Pro.",
         "Map cache",
         "Subscribed",
-        "Requires OpenHikes Pro. Opens the unlock screen.",
+        "Requires OpenHikes Pro. Opens the subscription screen.",
         "OpenHikes doesn’t have Always location access, so this can’t run. Turn it on in Settings.",
         "Sync Off",
         "Last synced %@.",

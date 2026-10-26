@@ -110,7 +110,9 @@ struct MapStylePicker: View {
     private static func hint(for tap: PaidFeatureTap) -> Text {
         switch tap {
         case .allow: Text(verbatim: "")
-        case .unlock: Text("Requires OpenHikes Pro. Opens the unlock screen.")
+        // "Subscription screen", as the About row's hint names it: "unlock
+        // screen" is a word away from the Lock Screen when it is heard.
+        case .unlock: Text("Requires OpenHikes Pro. Opens the subscription screen.")
         case .wait: Text("Checking your subscription.")
         }
     }

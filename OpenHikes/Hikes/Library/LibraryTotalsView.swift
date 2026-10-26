@@ -135,8 +135,7 @@ private struct LibraryTotalsContent: View {
             }
             VStack(alignment: .leading, spacing: Self.footnoteSpacing) {
                 Text("""
-                Recordings and GPX files with times count as hiked, \
-                and so does every activity along a saved trail. \
+                Recordings, GPX files with times and hikes along saved trails count. \
                 A trail you drew or saved counts once you hike it.
                 """)
                 if totals.allTime.outingsWithoutClimb > 0 {

@@ -68,8 +68,7 @@ struct BackgroundTrackingSection: View {
             Text(
                 """
                 Keeps your Home Screen widget and Live Activity showing your \
-                progress along the selected trail even when OpenHikes isn’t \
-                open, using occasional, low-power location updates.
+                progress along the selected trail while OpenHikes is closed.
                 """
             )
         }

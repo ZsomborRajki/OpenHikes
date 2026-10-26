@@ -603,42 +603,23 @@ extension HikeDetailView {
     private static func livenessMessage(_ answer: CommunityLivenessAnswer) -> String {
         switch answer {
         case .live:
-            String(
-                localized: """
-                This hike is still live for other hikers, so it’s still \
-                somewhere your photos can go.
-                """
-            )
+            String(localized: "This hike is still live, so you can add photos to it.")
         case .takenDown:
             String(
                 localized: """
-                This hike isn’t in the community list any more. You can reset \
-                it here, which forgets that it was ever sent and lets you \
-                share a corrected hike — but it also forgets the details a \
-                removal request needs, so only do it if you no longer want \
-                this one back.
+                This hike isn’t in the community list any more. Resetting lets you \
+                share it again, but forgets the details needed to ask for its removal.
                 """
             )
         case .failed:
-            String(
-                localized: """
-                Couldn’t reach the community list just now, so this hike still \
-                reads the way it did. Try again when you’re back online.
-                """
-            )
+            String(localized: "Couldn’t reach the community list, so nothing changed. Try again when you’re online.")
         }
     }
 
     /// What a refused *Reset* says. It names what did not happen and what did
     /// not change, and the way back to it: a new check from the same menu.
     private static var resetRefusalMessage: String {
-        String(
-            localized: """
-            Couldn’t save the reset just now, so this hike still reads the \
-            way it did and nothing was forgotten. Check again from the same \
-            menu to try once more.
-            """
-        )
+        String(localized: "Couldn’t save the reset, so nothing changed. Check again from the same menu to retry.")
     }
 }
 

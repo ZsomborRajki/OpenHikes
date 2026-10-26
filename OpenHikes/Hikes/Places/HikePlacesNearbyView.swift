@@ -107,13 +107,7 @@ struct HikePlacesNearbyView: View {
     }
 
     private var footer: some View {
-        Text(
-            """
-            Places from OpenStreetMap, in the area the map shows. Move the map \
-            and tap Search This Area to look somewhere else, or press and hold \
-            it to add a place of your own.
-            """
-        )
+        Text("Places from OpenStreetMap in the area on the map. Press and hold the map to add your own.")
         .font(.footnote)
         .foregroundStyle(.secondary)
     }

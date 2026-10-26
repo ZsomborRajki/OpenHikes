@@ -41,25 +41,21 @@ enum LocationAccessNeed {
         }
     }
 
-    /// Names the three things the grant buys and the one place it can be
-    /// given back. Deliberately not a list of settings taps: the path through
-    /// the Settings app is Apple's to change, and a stale set of directions
-    /// is worse than none when the button beside this text goes straight
-    /// there.
+    /// Names what the grant buys, in a sentence or two. Deliberately not a
+    /// list of settings taps: the path through the Settings app is Apple's to
+    /// change, and a stale set of directions is worse than none when the
+    /// button beside this text goes straight there.
     var message: String {
         switch self {
         case .always:
             String(localized: """
-            Background Trail Tracking needs Always location access, which \
-            OpenHikes doesn’t have. Without it your widget and Live Activity \
-            stop updating as soon as you close the app. You can grant it in \
-            Settings.
+            Background Trail Tracking needs Always location access to keep your \
+            widget and Live Activity updating while OpenHikes is closed.
             """)
         case .whileUsing:
             String(localized: """
-            OpenHikes can’t show where you are, center the map on you, or \
-            report the weather where you’re standing. Turn on Location \
-            Access for OpenHikes in Settings to use the location button.
+            OpenHikes needs location access to show where you are and the weather \
+            around you. Turn it on in Settings.
             """)
         }
     }

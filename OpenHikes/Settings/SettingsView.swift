@@ -208,7 +208,8 @@ struct SettingsView: View {
                         previews: TileProvider.all.filter(Secrets.canLoadTiles).map(\.attribution)
                     ))
                 }
-                mapTilesCostNote
+                // What each map saves for offline use is said once, in the
+                // selected map's summary above, rather than again down here.
                 if TileProvider.all.contains(where: { !Secrets.canLoadTiles($0) }) {
                     // A sentence a hiker can act on, and — under `#if DEBUG`
                     // — the one a contributor needs. It used to be the second
@@ -228,11 +229,7 @@ struct SettingsView: View {
                 }
                 if !entitlement.isEntitled,
                    TileProvider.all.contains(where: \.requiresPaidAccess) {
-                    Text("""
-                    Maps with a lock are commercial map services that bill OpenHikes for every map \
-                    view, every month. Subscribing pays for that, and keeps the free OpenStreetMap \
-                    option free.
-                    """)
+                    Text("Maps with a lock need OpenHikes Pro.")
                 }
             }
         }
@@ -315,10 +312,9 @@ struct SettingsView: View {
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
                 Text("""
-                Saved tiles keep your hikes usable without a signal. The map cache is just what \
-                you’ve recently looked at — it’s kept under \(Self.byteText(TileCache.cacheByteLimit)), \
-                oldest first, and clearing it costs you nothing offline. Photos are only removed when \
-                you delete them, or the hike they belong to.
+                Saved maps keep your hikes usable without a signal. The map cache holds recently \
+                viewed maps, up to \(Self.byteText(TileCache.cacheByteLimit)). Clearing it doesn’t \
+                touch saved maps.
                 """)
                 if let quota = DurableTileQuota.all.first {
                     // Named rather than described in general terms: a ceiling
@@ -327,10 +323,9 @@ struct SettingsView: View {
                     // because one figure covering two of them is the part
                     // nobody would guess.
                     Text("""
-                    The \(quota.holder) license allows \(Self.byteText(quota.byteLimit)) of saved tiles \
+                    The \(quota.holder) license allows \(Self.byteText(quota.byteLimit)) of saved maps \
                     on this device, shared by \(quota.providers.map(\.name).formatted(.list(type: .and))). \
-                    Once that’s used, saving a new route asks before replacing your least-recently-used \
-                    saved tiles. Other sources are unlimited.
+                    Other map styles have no limit.
                     """)
                 }
             }
@@ -374,10 +369,8 @@ private extension SettingsView {
             Text("Photos")
         } footer: {
             Text("""
-            Photos you take on a hike are always kept in OpenHikes and shown \
-            with that hike. Turn this on to put a copy in your photo library \
-            too, stamped with when and where you took it. You’ll be asked \
-            for permission the first time one is saved.
+            Photos you take on a hike are always kept with the hike. Turn this on to also \
+            save a copy to your photo library.
             """)
         }
     }
@@ -391,13 +384,12 @@ private extension SettingsView {
     /// the hiker's most sensitive store and the app has no business writing to
     /// it because they recorded a walk.
     ///
-    /// The footer says three things a hiker deciding this needs, and says them
-    /// because each one is a thing they cannot check from here: what goes,
-    /// what is read back — nothing on the phone, and the heart rate on a watch
-    /// recording, which this switch does not control — and when they will be
-    /// asked. The last is the
-    /// same promise *Also Save to Photos* makes, kept the same way — the
-    /// prompt comes at the first write, not at the flick of this switch.
+    /// The footer says what goes and what a delete takes back, and nothing
+    /// more. What is read — nothing on the phone — is the purpose string's to
+    /// say, and the prompt comes at the first write rather than at the flick
+    /// of this switch, as it does for *Also Save to Photos*. It promises
+    /// nothing about Activity rings: the workout carries no energy, so whether
+    /// it moves one is Health's call, not this app's.
     @ViewBuilder var healthSection: some View {
         #if os(iOS)
         Section {
@@ -407,13 +399,8 @@ private extension SettingsView {
             Text("Health")
         } footer: {
             Text("""
-            Writes each hike you finish recording to the Health app as a hiking \
-            workout, with its distance, time, climb and route — so it counts \
-            towards your rings and sits beside your other activity. Deleting a \
-            hike removes its workout from Health too. OpenHikes reads nothing \
-            from Health on your iPhone; on Apple Watch a recording reads your \
-            heart rate to show it while you hike. You’ll be asked for permission \
-            the first time a hike is saved.
+            Saves each hike you record to the Health app as a hiking workout with its route. \
+            Deleting the hike also removes the workout.
             """)
         }
         #endif
@@ -426,10 +413,10 @@ private extension SettingsView {
 /// view's own body for length; it is a section like any other.
 private extension SettingsView {
     /// On by default — see ``SettingsDefault/liveActivitiesEnabled``. The
-    /// switch is the app's half of the answer, so it says so rather than
-    /// pretending it is the only one: a hiker who turned Live Activities off
-    /// for OpenHikes in the system's own Settings will see nothing however
-    /// this reads, and the footer is where they find out why.
+    /// switch is the app's half of the answer: a hiker who turned Live
+    /// Activities off for OpenHikes in the system's own Settings sees nothing
+    /// however this reads. The support page says so; the footer says only
+    /// what the switch shows.
     @ViewBuilder var liveActivitySection: some View {
         #if os(iOS)
         Section {
@@ -439,9 +426,8 @@ private extension SettingsView {
             Text("Live Activity")
         } footer: {
             Text("""
-            Puts your distance, elapsed time and progress along the trail on the Lock Screen \
-            and in the Dynamic Island while you are recording or following a hike. \
-            iOS Settings › OpenHikes can turn these off for the app entirely.
+            Shows your distance, time and trail progress on the Lock Screen and in the \
+            Dynamic Island while you record or follow a trail.
             """)
         }
         #endif
@@ -451,38 +437,29 @@ private extension SettingsView {
 
 // MARK: - Movement reminders
 
-/// The switch over the two banners a hike can put up. A section like any
-/// other, kept out of the view's body for length.
+/// The switch over the banners a hike can put up. A section like any other,
+/// kept out of the view's body for length.
 private extension SettingsView {
-    /// On by default — see ``SettingsDefault/movementRemindersEnabled``. The
-    /// footer says what is watched and what it costs, because both are
-    /// surprising: a paused recording keeps a location feed alive when it
-    /// otherwise would not, and a paused *walk* is watched only by fixes that
-    /// were arriving anyway, so the two are not equally reliable and saying so
-    /// is cheaper than a hiker discovering it on a trail. That is why the
-    /// footer names the walk's case in its own sentence rather than letting the
-    /// recording's "without Always access" clause stand for both: for a walk
-    /// there is no such feed to fall back on, and a phone in a pocket with
-    /// Background Trail Tracking off will hear nothing at all.
+    /// On by default — see ``SettingsDefault/movementRemindersEnabled``.
+    ///
+    /// One switch for every reminder ``MovementReminderController`` decides:
+    /// resume and pause for a recording, resume for a walk, and the two a
+    /// followed trail adds — off the trail, and finishing after dark. It was
+    /// named for the first two alone and the other two arrived behind it, so
+    /// it is named for all of them now, and the footer lists each in a clause.
+    /// The fifteen minutes is ``MovementReminderPolicy/stillFor``. Severe
+    /// weather is not behind this switch, and the footer does not claim it.
     @ViewBuilder var movementReminderSection: some View {
         #if os(iOS)
         Section {
-            Toggle("Remind Me to Pause and Resume", isOn: $movementRemindersEnabled)
+            Toggle("Hike Reminders", isOn: $movementRemindersEnabled)
                 .accessibilityIdentifier("movement-reminders-toggle")
         } header: {
             Text("Reminders")
         } footer: {
             Text("""
-            Notices when a paused hike has moved half a kilometer — or a \
-            quarter of one at cycling pace — and asks whether you meant to \
-            resume, with a button that does it without unlocking the phone. \
-            It also offers to pause a recording you have not moved on for \
-            fifteen minutes. A paused recording is watched either way: with \
-            Always location access that costs nothing, and without it the \
-            pause keeps a coarse location feed running. A paused hike along a \
-            trail starts no feed of its own — it is watched while OpenHikes is \
-            open, and behind it only with Background Trail Tracking on, so a \
-            pocketed phone may not be reminded.
+            Notifies you when you set off while a hike is paused, stop for 15 minutes while \
+            recording, leave the trail you’re following, or may finish after dark.
             """)
         }
         #endif
@@ -495,11 +472,10 @@ private extension SettingsView {
 /// the one whose footer has to say what it costs.
 private extension SettingsView {
     /// Off by default — see ``SettingsDefault/keepScreenAwake``. The footer
-    /// names the scope in full because the scope is what makes the switch
-    /// affordable: it holds the display only on the screens where a live hike
-    /// is being read, only while that hike is live, and only while the app is
-    /// in front. A hiker who reads "keep the screen on" as "for the whole
-    /// hike" would decline something they would in fact want.
+    /// names the scope because the scope is what makes the switch affordable:
+    /// it holds the display only while a hike is live and the app is in
+    /// front. A hiker who reads "keep the screen on" as "for the whole hike"
+    /// would decline something they would in fact want.
     @ViewBuilder var displaySection: some View {
         #if os(iOS)
         Section {
@@ -509,12 +485,8 @@ private extension SettingsView {
             Text("Display")
         } footer: {
             Text("""
-            Stops the screen dimming while you are on the recording screen, or on a \
-            trail you are hiking. Only while OpenHikes is open and the hike is \
-            under way — the screen locks as usual everywhere else, and once the \
-            phone is back in your pocket. The display is the hungriest thing on \
-            the device, so leave this off unless you are navigating with the map \
-            in your hand.
+            Keeps the screen on while you record or hike a trail with OpenHikes open. \
+            This uses more battery.
             """)
         }
         #endif
@@ -634,48 +606,4 @@ private extension SettingsView {
         cloudSync: CloudSyncCoordinator(defaults: .standard, isSyncingThisLaunch: false),
         entitlement: MapEntitlementStore(currentEntitlements: { false })
     )
-}
-
-// MARK: - Map tiles footer
-
-// A same-file extension, so it can read the view's private settings, and one
-// rather than more of the footer's closure, which is over
-// `closure_body_length`'s limit with it inline.
-extension SettingsView {
-    /// Whether the map draws the hiking routes.
-    private var drawsHikingRoutes: Bool { TileLayer.shown(isOn: showsHikingRoutes) != nil }
-
-    /// What the selected map costs in tiles, where that is worth saying.
-    @ViewBuilder private var mapTilesCostNote: some View {
-        // "Apart from the previews": the cards above fetch every
-        // source's tiles whichever map is selected. Neither sentence
-        // is true with the hiking routes drawn — those are tiles, and
-        // they are cached and auto-saved like any map's.
-        switch drawsHikingRoutes ? nil : selectedProvider.systemStyle {
-        case .standard:
-            Text("""
-            Apart from the previews above, OpenHikes downloads, caches and auto-saves \
-            no map tiles while this is selected, so it uses the least battery and \
-            data — but the map needs \
-            a signal where the system hasn’t already cached it. \
-            Tiles already saved by other sources are kept, and listed below.
-            """)
-        case .hybrid:
-            // Not the wording above: imagery is the heaviest thing
-            // the map can stream, and MapKit offers no way to keep it.
-            Text("""
-            Apart from the previews above, OpenHikes downloads, caches and auto-saves \
-            no map tiles while this is selected. Apple streams the imagery itself \
-            and none of it can be saved for offline use, so the map needs a signal. \
-            Tiles already saved by other sources are kept, and listed below.
-            """)
-        case nil:
-            if drawsHikingRoutes, selectedProvider.usesSystemBaseMap {
-                Text("""
-                The hiking routes are the only map tiles OpenHikes downloads, caches \
-                and auto-saves while this is selected.
-                """)
-            }
-        }
-    }
 }

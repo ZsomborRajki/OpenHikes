@@ -410,8 +410,8 @@ private extension CommunityShareSheet {
         CommunityCreditSection(
             authorName: $authorName,
             footer: """
-            Shown publicly next to your hike. It doesn’t have to be your real \
-            name, and you can leave it blank to share without one.
+            Shown publicly next to your hike. It doesn’t have to be your real name, and you can \
+            leave it blank.
             """,
             identifier: "community-author-field",
             phase: phase
@@ -480,10 +480,8 @@ private extension CommunityShareSheet {
                 CommunityFootnoteLabel(
                     text: Text(
                         """
-                        You’ve already shared this hike. Sending it again adds a \
-                        second copy for other hikers — it doesn’t replace or update \
-                        the first, and this app can’t take that one down. Ask for it \
-                        to be removed by reporting it from its own screen.
+                        You’ve already shared this hike. Sending it again adds a second \
+                        copy rather than replacing the first. To remove the first, report it.
                         """
                     ),
                     systemImage: "exclamationmark.triangle",
@@ -544,11 +542,7 @@ private extension CommunityShareSheet {
             }
             .accessibilityIdentifier("community-share-contribute")
         } footer: {
-            Text("""
-            Your photographs are yours, and \(target.title) is already in the list. \
-            They go on it with the spot each one was taken, and a person reviews them \
-            before anybody else sees them.
-            """)
+            Text("\(target.title) is already in the list. Your photos can go on it, and a person checks them first.")
         }
     }
 
@@ -568,9 +562,8 @@ private extension CommunityShareSheet {
         CommunityFinishSendingSection(
             phase: phase,
             detail: """
-            Your hike and its photos are uploaded, but the request for a person to \
-            review them didn’t go through, so it won’t appear for other hikers yet. \
-            Finishing sends only that request — nothing is uploaded again.
+            Your hike and photos are uploaded, but the review request didn’t go through, \
+            so other hikers can’t see it yet. Finishing sends only the request.
             """,
             identifiers: .init(
                 outcome: "community-share-unfinished",

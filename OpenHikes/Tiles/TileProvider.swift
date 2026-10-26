@@ -147,10 +147,7 @@ nonisolated extension TileProvider {
     static let openStreetMap = TileProvider(
         id: "osm",
         name: String(localized: "OpenStreetMap", comment: "The name of a map style in Settings"),
-        summary: String(localized: """
-            Standard street map. Its tile policy disallows bulk downloads, \
-            so viewed tiles are auto-saved for offline use instead.
-            """),
+        summary: String(localized: "Standard street map. Tiles you view are auto-saved for offline use."),
         urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         maximumZ: osmMaximumZ,
         attribution: TileAttribution([.openStreetMap]),
@@ -177,8 +174,8 @@ nonisolated extension TileProvider {
         id: "apple_maps",
         name: String(localized: "Apple Maps", comment: "The name of a map style in Settings"),
         summary: String(localized: """
-            The system’s built-in map. Downloads no tiles and saves nothing to disk, \
-            so it uses the least battery and data.
+            The system’s built-in map. Uses the least battery and data, but OpenHikes \
+            can’t save it for offline use.
             """),
         urlTemplate: "",
         maximumZ: 0,
@@ -203,13 +200,13 @@ nonisolated extension TileProvider {
     /// Unlike ``appleMaps``, though, it is not cheap to look at and it is not
     /// there offline: MapKit streams the imagery itself and offers no public
     /// way to download it, so the summary says it needs a connection rather
-    /// than borrowing Apple Maps' "saves nothing" wording.
+    /// than borrowing Apple Maps' "least battery and data" wording.
     static let appleSatellite = TileProvider(
         id: "apple_satellite",
         name: String(localized: "Apple Satellite", comment: "The name of a map style in Settings"),
         summary: String(localized: """
-            Satellite imagery with road and place names. Shows forest, rock and clearings, \
-            but needs a connection: none of it can be saved for offline use.
+            Satellite imagery with road and place names. Needs a connection, and can’t be \
+            saved for offline use.
             """),
         urlTemplate: "",
         maximumZ: 0,
@@ -229,9 +226,8 @@ nonisolated extension TileProvider {
         id: "stadia_outdoors",
         name: String(localized: "Stadia Outdoors", comment: "The name of a map style in Settings"),
         summary: String(localized: """
-            Topographic map tuned for hiking, with contour lines and trails. Offline \
-            downloads are allowed, sharing Stadia’s 100 MB of saved tiles on this device \
-            with Stamen Terrain.
+            Topographic hiking map with contour lines and trails. Routes can be downloaded \
+            for offline use.
             """),
         urlTemplate: "https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}.png?api_key={key}",
         maximumZ: stadiaMaximumZ,
@@ -255,11 +251,7 @@ nonisolated extension TileProvider {
     static let stamenTerrain = TileProvider(
         id: "stadia_stamen_terrain",
         name: String(localized: "Stamen Terrain", comment: "The name of a map style in Settings"),
-        summary: String(localized: """
-            Hillshaded terrain in natural colors, a softer look than Stadia Outdoors. \
-            Offline downloads are allowed, sharing Stadia’s 100 MB of saved tiles on this \
-            device with Stadia Outdoors.
-            """),
+        summary: String(localized: "Hillshaded terrain in natural colors. Routes can be downloaded for offline use."),
         urlTemplate: "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png?api_key={key}",
         maximumZ: stadiaMaximumZ,
         attribution: TileAttribution([.stadiaMaps, .stamenDesign, .openMapTiles, .openStreetMap]),
@@ -284,8 +276,8 @@ nonisolated extension TileProvider {
         id: "thunderforest_outdoors",
         name: String(localized: "Thunderforest Outdoors", comment: "The name of a map style in Settings"),
         summary: String(localized: """
-            Topographic map with deep zoom for sharp close-up detail. Its plan \
-            disallows bulk downloads, so viewed tiles are auto-saved for offline use instead.
+            Topographic map with sharp close-up detail. Tiles you view are auto-saved for \
+            offline use.
             """),
         urlTemplate: "https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey={key}",
         maximumZ: thunderforestMaximumZ,

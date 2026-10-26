@@ -47,11 +47,7 @@ struct BlockedHikersSection: View {
             } header: {
                 Text("Blocked")
             } footer: {
-                Text("""
-                Their community hikes don’t appear on this device. Blocking is kept \
-                on this device only, and doesn’t remove anything for anyone else — \
-                to have a hike taken down, report it from the hike’s own screen.
-                """)
+                Text("Their hikes and photos are hidden on this device only. To have something taken down, report it.")
             }
             .confirmationDialog(
                 "Unblock everyone?",

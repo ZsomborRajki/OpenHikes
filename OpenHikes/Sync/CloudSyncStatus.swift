@@ -168,12 +168,11 @@ final class CloudSyncStatus {
         case .failed(let reason):
             reason
         case .idle:
+            // Without a time to show, only where the hikes are: the
+            // section's footer already says what stays on the device.
             lastSyncedAt.map { date in
                 String(localized: "Last synced \(HikeFormat.timestamp(date)).")
-            } ?? String(localized: """
-                Your hikes and photo details are kept in your private iCloud storage. \
-                Photo files stay on the device they were added on.
-                """)
+            } ?? String(localized: "Your hikes are kept in your private iCloud storage.")
         case .paused:
             String(localized: "Your hikes stay on this device only.")
         case .retrying:

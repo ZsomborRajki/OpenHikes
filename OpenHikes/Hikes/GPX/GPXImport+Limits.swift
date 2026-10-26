@@ -134,12 +134,7 @@ nonisolated extension GPXImport {
             )
             // No number in the copy: the message has to be true of both bounds,
             // and the hiker can act on it without knowing which one was hit.
-            case .tooLarge: String(
-                localized: """
-                    A single hike is a few megabytes at most, and a file holds a few dozen tracks at most. \
-                    This one is past what can be imported at once.
-                    """
-            )
+            case .tooLarge: String(localized: "Try a smaller file, or one with fewer tracks.")
             case .tooShort: String(localized: "A hike needs at least two points to have a route.")
             case .unreadable: String(localized: "Check that it’s a .gpx file and isn’t damaged.")
             }

@@ -227,21 +227,9 @@ struct RouteColoringPicker: View {
     private func caption(for coloring: RouteColoring) -> Text {
         switch coloring {
         case .difficulty:
-            Text(
-                """
-                Colors each stretch of the line by its OpenStreetMap \
-                difficulty grade, as in the Difficulty section. Ungraded \
-                stretches keep the route color. Applies to every hike.
-                """
-            )
+            Text("Colors the line by its OpenStreetMap difficulty grade. Applies to every hike.")
         case .elevation:
-            Text(
-                """
-                Colors each stretch of the line by how steep it is, uphill \
-                or down. Stretches without elevation data keep the route \
-                color. Applies to every hike.
-                """
-            )
+            Text("Colors the line by how steep it is, uphill or down. Applies to every hike.")
         case .off:
             Text("Every hike is drawn in its own route color.")
         }

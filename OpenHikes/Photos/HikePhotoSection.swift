@@ -186,9 +186,8 @@ struct HikePhotoSection: View {
         guard !photos.isEmpty else {
             return String(
                 localized: """
-                    OpenHikes can look through your photo library for pictures \
-                    taken while you were on this hike, and pin each one to the \
-                    point of the trail you were on.
+                    OpenHikes can find photos in your library taken during this hike, \
+                    and pin each one to the trail.
                     """
             )
         }

@@ -146,13 +146,7 @@ struct PhotoDiscoverySheet: View {
     }
 
     private var footnote: some View {
-        Text(
-            """
-            OpenHikes matched these to the moment each point of this hike was \
-            recorded. Photos your camera saved a location with are checked \
-            against the route as well. Nothing is added until you tap Add.
-            """
-        )
+        Text("Matched by the time and place each photo was taken. Nothing is added until you tap Add.")
         .font(.caption2)
         .foregroundStyle(.secondary)
     }
@@ -215,13 +209,13 @@ struct PhotoDiscoverySheet: View {
         ContentUnavailableView {
             Label("No Times on This Route", systemImage: "clock.badge.questionmark")
         } description: {
+            // The words of the hike's own photo caption for the same case
+            // (``HikePhotoSection``), so the two say it alike.
             Text(
                 """
-                This hike\u{2019}s route doesn\u{2019}t record when each point \
-                was reached, so there is nothing to match a photo\u{2019}s own \
-                timestamp against. Hikes you record in OpenHikes always carry \
-                those times \u{2014} and on an imported trail, hiking it with \
-                OpenHikes gives this the times it needs.
+                This hike\u{2019}s route doesn\u{2019}t record when each point was \
+                reached, so photos can\u{2019}t be matched to it by time. Hike it \
+                with OpenHikes and they can.
                 """
             )
         }
@@ -329,10 +323,8 @@ private struct DiscoveryEmptyState: View {
     /// library as a whole, because the app is in no position to make one.
     private static let limitedMessage = String(
         localized: """
-            OpenHikes can only see the photos you have shared with it, and none \
-            of those were taken while you were out on this hike. If your \
-            pictures of this hike are elsewhere in your library, share them and \
-            OpenHikes will look again.
+            OpenHikes can only see the photos you’ve shared with it, and none of \
+            those were taken during this hike. Share more to look again.
             """
     )
 }

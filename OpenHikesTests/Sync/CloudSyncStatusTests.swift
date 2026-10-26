@@ -181,11 +181,7 @@ struct CloudSyncStatusTests {
         // Being ready is not having synced: nothing has come back with a time
         // to show, so the row must not invent one.
         #expect(status.lastSyncedAt == nil)
-        #expect(
-            status.detail
-                == "Your hikes and photo details are kept in your private iCloud storage. "
-                + "Photo files stay on the device they were added on."
-        )
+        #expect(status.detail == "Your hikes are kept in your private iCloud storage.")
     }
 
     /// Mirroring carries a photo's metadata and never its file, so a pass in

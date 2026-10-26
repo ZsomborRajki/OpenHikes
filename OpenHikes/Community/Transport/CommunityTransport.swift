@@ -120,8 +120,8 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
             reason.explanation()
         case .noPhotosToShare:
             String(localized: """
-            Add photos to this hike first, or check that they aren’t on the device \
-            they were taken on — a photo’s file stays where it was added.
+            Add photos to this hike first. Photos added on another device can only be \
+            shared from that device.
             """)
         case .nothingToShare:
             String(localized: "Record or import a route first.")
