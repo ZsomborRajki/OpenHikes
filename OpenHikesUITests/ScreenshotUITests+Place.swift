@@ -153,10 +153,7 @@ extension ScreenshotUITests {
         // still empty. Wait for every tile we need, not just its first image.
         let lastIndex = indexes.max() ?? 0
         guard waitUntil(timeout: UITestTimeout.trace, { photos.count > lastIndex }) else {
-            let evidence = XCTAttachment(screenshot: screenshotDisplay(in: app).screen.screenshot())
-            evidence.name = "Photo picker did not load its library"
-            evidence.lifetime = .keepAlways
-            add(evidence)
+            attachScreenshotEvidence(named: "Photo picker did not load its library", in: app)
             XCTFail("the photo picker should list the stamped library — check that Scripts/screenshots.sh added it")
             return
         }

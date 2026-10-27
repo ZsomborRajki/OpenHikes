@@ -64,18 +64,37 @@ extension ScreenshotUITests {
         requireTerrain: Bool = true,
         rejectSmallLoadingPatches: Bool = false
     ) -> Bool {
-        guard let image = screenshotPixels(on: display) else { return false }
+        screenshotMapSample(
+            in: app,
+            on: display,
+            requireTerrain: requireTerrain,
+            rejectSmallLoadingPatches: rejectSmallLoadingPatches
+        )?.hasTiles == true
+    }
+
+    /// Palette and signature describe the same rendered frame. Two separate
+    /// screenshots could straddle the redraw we are trying to wait for.
+    @MainActor
+    func screenshotMapSample(
+        in app: XCUIApplication,
+        on display: ScreenshotDisplay,
+        requireTerrain: Bool = false,
+        rejectSmallLoadingPatches: Bool = false
+    ) -> (hasTiles: Bool, signature: Int)? {
+        guard let image = screenshotPixels(on: display) else { return nil }
         let area = openMapArea(in: app)
         let region = area.insetBy(dx: Self.mapSampleInset, dy: Self.mapSampleInset)
             .intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        guard !region.isEmpty else { return false }
+        guard !region.isEmpty else { return nil }
         var terrain = 0
         var placeholder = 0
         var samples = 0
+        var signature = Hasher()
         for row in stride(from: Int(region.minY), to: Int(region.maxY), by: Self.terrainSampleStride) {
             for column in stride(from: Int(region.minX), to: Int(region.maxX), by: Self.terrainSampleStride) {
                 let offset = (row * image.width + column) * 4
                 let channels = image.bytes[offset..<(offset + 3)]
+                for channel in channels { signature.combine(channel) }
                 let lightGrid = abs(Int(image.bytes[offset]) - Self.placeholderRed) <= Self.placeholderTolerance
                     && abs(Int(image.bytes[offset + 1]) - Self.placeholderGreen) <= Self.placeholderTolerance
                     && abs(Int(image.bytes[offset + 2]) - Self.placeholderBlue) <= Self.placeholderTolerance
@@ -94,28 +113,10 @@ extension ScreenshotUITests {
             }
         }
         let maximum = rejectSmallLoadingPatches ? Self.maximumSmallPatchFraction : Self.maximumPlaceholderFraction
-        return samples > 0
+        let hasTiles = samples > 0
             && (!requireTerrain || Double(terrain) / Double(samples) >= Self.minimumTerrainFraction)
             && Double(placeholder) / Double(samples) < maximum
-    }
-
-    /// A nonblank map can still be replacing an enlarged ancestor tile with
-    /// its final detail. Compare the rendered map across polls as well as
-    /// checking its palette, so that intermediate frame is not exported.
-    @MainActor
-    func screenshotMapSignature(in app: XCUIApplication, on display: ScreenshotDisplay) -> Int? {
-        guard let image = screenshotPixels(on: display) else { return nil }
-        let region = openMapArea(in: app).insetBy(dx: Self.mapSampleInset, dy: Self.mapSampleInset)
-            .intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        guard !region.isEmpty else { return nil }
-        var signature = Hasher()
-        for row in stride(from: Int(region.minY), to: Int(region.maxY), by: Self.terrainSampleStride) {
-            for column in stride(from: Int(region.minX), to: Int(region.maxX), by: Self.terrainSampleStride) {
-                let offset = (row * image.width + column) * 4
-                for channel in image.bytes[offset..<(offset + 3)] { signature.combine(channel) }
-            }
-        }
-        return signature.finalize()
+        return (hasTiles, signature.finalize())
     }
 
     @MainActor

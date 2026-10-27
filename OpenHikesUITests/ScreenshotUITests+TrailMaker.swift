@@ -196,7 +196,7 @@ extension ScreenshotUITests {
     @MainActor
     private func waitForTheWalkedRoute(in app: XCUIApplication) {
         let header = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label == 'Route'"))
+            .matching(NSPredicate(format: "label == %@", screenshotText("Route")))
             .firstMatch
         let climbSuffix = screenshotText("%@ of climb")
             .replacingOccurrences(of: "%@", with: "").trimmingCharacters(in: .whitespaces)
