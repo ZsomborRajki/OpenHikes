@@ -128,14 +128,24 @@ jobs:
 
       - uses: ./.github/actions/verify-xcode
 
+      # The version is the SwiftLintPlugins pin in Package.resolved, the
+      # SwiftLint the Xcode build's plugin runs, asked of the same script a
+      # developer lints with. The checksum is SwiftLint.pkg's at that version,
+      # so the plugin bump Dependabot opens fails here until it is replaced:
+      # the one hand edit a SwiftLint upgrade still needs, and the check that
+      # the installer is the one somebody looked at.
       - name: Install pinned SwiftLint
         run: |
-          version="$(cat .swiftlint-version)"
+          version="$(Scripts/lint.sh --pinned-version)"
           curl --fail --location --retry 3 \
             --output SwiftLint.pkg \
             "https://github.com/realm/SwiftLint/releases/download/${version}/SwiftLint.pkg"
-          echo "3fb0202842701762880cc2cf04fc394398bab3f16a04dd76e000e02d07e32486  SwiftLint.pkg" \
-            | shasum --algorithm 256 --check
+          if ! echo "3fb0202842701762880cc2cf04fc394398bab3f16a04dd76e000e02d07e32486  SwiftLint.pkg" \
+              | shasum --algorithm 256 --check; then
+            digest="$(shasum --algorithm 256 SwiftLint.pkg | cut -d ' ' -f 1)"
+            echo "::error::SwiftLint.pkg ${version} is not the installer this checksum names. If Package.resolved moved SwiftLint to ${version}, compare ${digest} with the digest on that release, then put it here."
+            exit 1
+          fi
           sudo installer -pkg SwiftLint.pkg -target /
           rm SwiftLint.pkg
 

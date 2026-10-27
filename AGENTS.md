@@ -354,10 +354,14 @@ a change to recording, the map, the sheet or the render path; the PR template,
 
 ### Lint and tools
 
-- **`Scripts/lint.sh`** runs strict SwiftLint at the version in
-  `.swiftlint-version`. It exits 0 when clean, 2 on violations, and 1 when it
-  could not lint at all (SwiftLint reads an unparseable `.swiftlint.yml` as a
-  warning and lints against its defaults).
+- **`Scripts/lint.sh`** runs strict SwiftLint at the pinned version. It exits
+  0 when clean, 2 on violations, and 1 when it could not lint at all (SwiftLint
+  reads an unparseable `.swiftlint.yml` as a warning and lints against its
+  defaults).
+  - The version is the SwiftLintPlugins pin in the app's `Package.resolved`,
+    the SwiftLint the build plugin runs, so Dependabot's bump of the plugin
+    moves the CLI too. CI's install step then fails until the `SwiftLint.pkg`
+    checksum beside it in `ci.yml` is updated for the new release.
   - Strict mode makes the *warning* thresholds fail. The ones a large change
     hits are `line_length` 120 (comments exempt), `file_length` 500,
     `type_body_length` 300, `function_body_length` 60, `closure_body_length` 40

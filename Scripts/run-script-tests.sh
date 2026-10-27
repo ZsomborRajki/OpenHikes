@@ -1290,7 +1290,8 @@ fi
 echo "Lint argument handling"
 
 lint="$repository_root/Scripts/lint.sh"
-export STUB_SWIFTLINT_VERSION="$(cat "$repository_root/.swiftlint-version")"
+# The pin, asked of the script that reads it out of Package.resolved.
+export STUB_SWIFTLINT_VERSION="$("$lint" --pinned-version)"
 unset STUB_SWIFTLINT_STATUS STUB_SWIFTLINT_OUTPUT || true
 
 run_script "lint with no arguments lints once and reports clean" "$lint"
@@ -1343,11 +1344,89 @@ if expect_status 2 && expect_contains "$output" "unknown option '--strict'" "the
     pass
 fi
 
+# The version comes out of Package.resolved, from SwiftLintPlugins' pin
+# wherever it sits among the others, and CI's install step asks for it this
+# way before any SwiftLint is installed.
+cat > "$work/resolved-with-swiftlint.json" <<'FIXTURE'
+{
+  "originHash" : "0",
+  "pins" : [
+    {
+      "identity" : "swift-algorithms",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-algorithms",
+      "state" : {
+        "revision" : "0000000000000000000000000000000000000001",
+        "version" : "1.2.1"
+      }
+    },
+    {
+      "identity" : "swiftlintplugins",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SimplyDanny/SwiftLintPlugins",
+      "state" : {
+        "revision" : "0000000000000000000000000000000000000002",
+        "version" : "9.8.7"
+      }
+    }
+  ],
+  "version" : 3
+}
+FIXTURE
+OPENHIKES_SWIFTLINT_RESOLVED="$work/resolved-with-swiftlint.json" \
+    run_script "lint --pinned-version prints SwiftLintPlugins' pin without linting" \
+    "$lint" --pinned-version
+if expect_status 0 \
+    && expect_contains "$output" "9.8.7" "the output" \
+    && expect_absent "$output" "1.2.1" "the output" \
+    && expect_absent "$calls" "swiftlint" "the recorded calls"; then
+    pass
+fi
+
+# No SwiftLintPlugins pin leaves no version to lint at, and that is a lint that
+# could not run rather than a clean one.
+cat > "$work/resolved-without-swiftlint.json" <<'FIXTURE'
+{
+  "pins" : [
+    {
+      "identity" : "swift-algorithms",
+      "state" : {
+        "version" : "1.2.1"
+      }
+    }
+  ],
+  "version" : 3
+}
+FIXTURE
+OPENHIKES_SWIFTLINT_RESOLVED="$work/resolved-without-swiftlint.json" \
+    run_script "lint refuses to run without a SwiftLintPlugins pin" "$lint"
+if expect_status 1 \
+    && expect_contains "$output" "pins no version of SwiftLintPlugins" "the error" \
+    && expect_absent "$calls" "swiftlint lint" "the recorded calls"; then
+    pass
+fi
+
+run_script "lint --pinned-version takes no --fix" "$lint" --pinned-version --fix
+if expect_status 2 && expect_absent "$calls" "swiftlint" "the recorded calls"; then
+    pass
+fi
+
+# The project's own Package.resolved has to give a version that the release
+# URL in ci.yml can be built from.
+run_script "lint --pinned-version reads the project's own Package.resolved" "$lint" --pinned-version
+if expect_status 0; then
+    if [[ "$output" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        pass
+    else
+        fail "expected a release version such as 0.65.1" "$output"
+    fi
+fi
+
 # The verdict has to name the version that ran. Crediting it to the pin tells a
 # reader a clean run happened at the version CI will use when it did not, and
 # the drift warning printed just above says in so many words that the two
 # versions do not agree on the rules.
-pinned_version="$(cat "$repository_root/.swiftlint-version")"
+pinned_version="$("$lint" --pinned-version)"
 export STUB_SWIFTLINT_VERSION="$pinned_version-drifted"
 
 run_script "lint credits a clean verdict to the version that ran" "$lint"
